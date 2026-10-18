@@ -11,6 +11,8 @@ let package = Package(
     targets: [
         .target(name: "PiopioKit"),
         .executableTarget(name: "piopio-cli", dependencies: ["PiopioKit"]),
+        // Spike S2: transcript rendering benchmarks (docs/spec/09-roadmap.md).
+        .executableTarget(name: "TranscriptLab", dependencies: ["PiopioKit"]),
         .testTarget(name: "PiopioKitTests", dependencies: ["PiopioKit"]),
     ]
 )

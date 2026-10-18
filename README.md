@@ -16,7 +16,7 @@ See the full specification in [docs/spec](docs/spec/README.md).
 
 | Path | What |
 |---|---|
-| `apps/mac` | Swift package: `PiopioKit` (engine client, protocol types, transcript) and `piopio-cli`. The SwiftUI app target comes in Phase 1. |
+| `apps/mac` | Swift package: `PiopioKit` (engine client, protocol types, transcript, streaming markdown), `piopio-cli`, and `TranscriptLab` (rendering benchmarks, spike S2). The SwiftUI app target comes in Phase 1 and needs Xcode. |
 | `packages/protocol` | Engine Protocol schemas (TypeBox → JSON Schema) |
 | `packages/engine` | Local Engine: Node daemon hosting pi-durable (Threads) and pi-coding-agent (Build) behind JSON-RPC over a Unix socket |
 | `packages/runtime`, `packages/cloud`, `packages/extensions` | Placeholders for later phases |

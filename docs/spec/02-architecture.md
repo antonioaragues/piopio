@@ -46,12 +46,12 @@ piopio/
   - `EngineClient`: a JSON-RPC client with request/response correlation, notification fan-out, reconnect with backoff, and backpressure. One client per engine (local, cloud).
   - `Protocol` types: **generated** from `packages/protocol` JSON Schema (CI fails if they drift).
   - Stores: `@Observable` classes (`CatalogStore`, `SessionStore`, `ApprovalStore`, `ModelStore`, `AgentStore`…). They hold **projections** of engine state. The engine is the source of truth.
-- **UI**: SwiftUI views, with AppKit bridges where SwiftUI falls short (transcript list virtualization, text input with completion, terminal).
+- **UI**: SwiftUI views, with AppKit bridges where SwiftUI falls short: the **transcript is a TextKit 2 document** (Spike S2), plus text input with completion and the terminal.
 
 ### 3.2 Key libraries (to validate in Phase 0)
 | Need | Candidate | Notes |
 |---|---|---|
-| Markdown rendering (streaming) | Apple `swift-markdown` (cmark-gfm) + custom SwiftUI/TextKit 2 renderer | Must handle incremental deltas. Spike S2 |
+| Markdown rendering (streaming) | `PiopioKit.MarkdownStream` (block splitter) + Foundation inline markdown → `NSAttributedString` in a **TextKit 2** `NSTextView` | Decided in Spike S2 (docs/spikes/s2) |
 | Code highlighting | tree-sitter (SwiftTreeSitter) or Highlightr | Prefer tree-sitter for diffs too |
 | Terminal | SwiftTerm | Local PTY in v1 (see 05-build) |
 | Diff view | Custom, on top of tree-sitter highlighting | Side-by-side + unified |

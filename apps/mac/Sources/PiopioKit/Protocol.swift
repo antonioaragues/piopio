@@ -36,9 +36,13 @@ public struct AssistantPart: Codable, Sendable, Hashable {
     public var type: PartType
     public var text: String
     public var redacted: Bool?
+    public init(type: PartType, text: String, redacted: Bool? = nil) { self.type = type; self.text = text; self.redacted = redacted }
 }
 
-public struct UserItem: Codable, Sendable, Hashable { public var id, at, text: String }
+public struct UserItem: Codable, Sendable, Hashable {
+    public var id, at, text: String
+    public init(id: String, at: String, text: String) { self.id = id; self.at = at; self.text = text }
+}
 
 public struct AssistantItem: Codable, Sendable, Hashable {
     public enum Status: String, Codable, Sendable { case streaming, done, error, aborted }
@@ -49,6 +53,9 @@ public struct AssistantItem: Codable, Sendable, Hashable {
     public var status: Status
     public var error: String?
     public var text: String { parts.filter { $0.type == .text }.map(\.text).joined() }
+    public init(id: String, at: String, parts: [AssistantPart], model: String? = nil, usage: Usage? = nil, status: Status, error: String? = nil) {
+        self.id = id; self.at = at; self.parts = parts; self.model = model; self.usage = usage; self.status = status; self.error = error
+    }
 }
 
 public struct ToolItem: Codable, Sendable, Hashable {
@@ -60,6 +67,10 @@ public struct ToolItem: Codable, Sendable, Hashable {
     public var details: JSONValue?
     public var durationMs: Double?
     public var parentCallId: String?
+    public init(id: String, at: String, callId: String, tool: String, args: JSONValue? = nil, status: Status, output: String? = nil, details: JSONValue? = nil, durationMs: Double? = nil, parentCallId: String? = nil) {
+        self.id = id; self.at = at; self.callId = callId; self.tool = tool; self.args = args; self.status = status
+        self.output = output; self.details = details; self.durationMs = durationMs; self.parentCallId = parentCallId
+    }
 }
 
 public struct SystemItem: Codable, Sendable, Hashable {

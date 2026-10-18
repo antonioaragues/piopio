@@ -1,0 +1,46 @@
+{
+  "characters" : 2236662,
+  "fling" : {
+    "droppedFraction" : 0.03216758230452943,
+    "frames" : 233,
+    "hitchMsPerSec" : 17.556853904685187,
+    "maxMs" : 40.78316666709725,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 36.672958347480744,
+    "seconds" : 4.012402625012328
+  },
+  "footprintAfterLoadMB" : 202.87602996826172,
+  "footprintEndMB" : 911.7064666748047,
+  "items" : 2000,
+  "loadSyncMs" : 449.5088750118157,
+  "loadToFrameMs" : 654.5511250005802,
+  "notes" : [
+
+  ],
+  "refreshHz" : 60,
+  "renderer" : "swiftui-list",
+  "scroll" : {
+    "droppedFraction" : 0.4020693938879457,
+    "frames" : 347,
+    "hitchMsPerSec" : 391.9743953354668,
+    "maxMs" : 3688.8937916664872,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 40.03870833548717,
+    "seconds" : 9.672248375005438
+  },
+  "stream" : {
+    "droppedFraction" : 0.005666633973747004,
+    "frames" : 1245,
+    "hitchMsPerSec" : 5.2310261099809185,
+    "maxMs" : 134.1623750049621,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.666000010445714,
+    "seconds" : 20.868252750005922
+  },
+  "streamAppendAvgMs" : 0.24951216144609062,
+  "streamAppendMaxMs" : 0.6318333325907588,
+  "streamCharsPerSec" : 600
+}

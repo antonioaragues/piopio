@@ -1,0 +1,46 @@
+{
+  "characters" : 2236662,
+  "fling" : {
+    "droppedFraction" : 0,
+    "frames" : 241,
+    "hitchMsPerSec" : 0,
+    "maxMs" : 16.796500000054948,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.666000010445714,
+    "seconds" : 4.016636499989545
+  },
+  "footprintAfterLoadMB" : 125.29779052734375,
+  "footprintEndMB" : 245.7510757446289,
+  "items" : 2000,
+  "loadSyncMs" : 517.195874999743,
+  "loadToFrameMs" : 569.6834999980638,
+  "notes" : [
+
+  ],
+  "refreshHz" : 60,
+  "renderer" : "textkit",
+  "scroll" : {
+    "droppedFraction" : 3.499987722310749e-06,
+    "frames" : 360,
+    "hitchMsPerSec" : 0,
+    "maxMs" : 16.79658333887346,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.666000010445714,
+    "seconds" : 6.000020999999833
+  },
+  "stream" : {
+    "droppedFraction" : 0.0008025268961595611,
+    "frames" : 1251,
+    "hitchMsPerSec" : 0.4055695416161689,
+    "maxMs" : 33.46291666093748,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.666000010445714,
+    "seconds" : 20.866746125000645
+  },
+  "streamAppendAvgMs" : 1.0160506381796215,
+  "streamAppendMaxMs" : 1.9312500080559403,
+  "streamCharsPerSec" : 600
+}
