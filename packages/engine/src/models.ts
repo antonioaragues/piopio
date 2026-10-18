@@ -6,7 +6,7 @@
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { SECRET_OPENROUTER, type ModelRef } from "@piopio/protocol";
+import { SECRET_OPENROUTER, type ModelInfo, type ModelRef } from "@piopio/protocol";
 import type { SecretBroker } from "./secrets.js";
 
 export const DEFAULT_MODEL: ModelRef = { provider: "openrouter", id: "anthropic/claude-haiku-5.5" };
@@ -46,6 +46,31 @@ export class ModelHub {
 		const key = await this.secrets.get(secretName, `Model requests to ${provider}`);
 		if (!key) throw new EngineError("AUTH", `No API key for ${provider}. Add one in Settings › Models.`);
 		await this.credentials.modify(provider, async () => ({ type: "api_key", key }));
+	}
+
+	/** Chat models of the configured providers (OpenRouter's catalog; the faux model in dev). */
+	async listModels(refresh = false): Promise<ModelInfo[]> {
+		if (refresh) await this.models.refresh({ providers: ["openrouter"] }).catch(() => undefined);
+		const providers = this.faux ? ["faux", "openrouter"] : ["openrouter"];
+		return providers.flatMap((provider) =>
+			this.models.getModels(provider).map((m) => ({
+				provider,
+				id: m.id,
+				name: m.name,
+				contextWindow: m.contextWindow,
+				maxOutputTokens: m.maxTokens,
+				pricing: { input: m.cost.input, output: m.cost.output, cacheRead: m.cost.cacheRead, cacheWrite: m.cost.cacheWrite },
+				supports: { vision: m.input.includes("image"), reasoning: m.reasoning },
+			})),
+		);
+	}
+
+	/** Drops cached credentials after the client changed a secret. */
+	async forgetSecret(name: string): Promise<void> {
+		this.secrets.forget(name);
+		for (const [provider, secret] of Object.entries(SECRET_BY_PROVIDER)) {
+			if (secret === name) await this.credentials.delete(provider);
+		}
 	}
 
 	/** ModelRuntime for pi-coding-agent sessions, sharing the same credentials. */

@@ -30,7 +30,7 @@ export class BuildRuntime implements Runtime {
 		readonly ref: ContainerRef,
 		private readonly hub: ModelHub,
 		private readonly session: AgentSession,
-		private readonly model: ModelRef,
+		private model: ModelRef,
 	) {
 		this.builder = new TimelineBuilder(ref);
 	}
@@ -61,6 +61,7 @@ export class BuildRuntime implements Runtime {
 	private attach(): void {
 		const messages = this.session.messages as unknown as PiMessage[];
 		this.builder.reset(messages, (i) => SdkEventMapper.idOf(i), false);
+		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel });
 		this.builder.flush();
 		const mapper = new SdkEventMapper(this.builder, messages.length);
 		const record = recorder("pi-sdk", this.ref.id);
@@ -98,6 +99,18 @@ export class BuildRuntime implements Runtime {
 
 	async abort(): Promise<void> {
 		await this.session.abort();
+	}
+
+	async configure(change: { model?: ModelRef; thinking?: string }): Promise<void> {
+		if (change.model) {
+			const model = (await this.hub.buildRuntime()).getModel(change.model.provider, change.model.id);
+			if (!model) throw new EngineError("INVALID", `Unknown model ${change.model.provider}/${change.model.id}`);
+			await this.session.setModel(model);
+			this.model = change.model;
+		}
+		if (change.thinking) this.session.setThinkingLevel(change.thinking as never);
+		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel });
+		this.emitter.emit(this.builder.flush());
 	}
 
 	async close(): Promise<void> {

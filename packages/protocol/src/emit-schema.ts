@@ -13,6 +13,8 @@ const definitions: Record<string, unknown> = {
 	Snapshot: P.Snapshot,
 	SessionSummary: P.SessionSummary,
 	SessionEventsNotification: P.SessionEventsNotification,
+	ModelInfo: P.ModelInfo,
+	CatalogChanged: P.CatalogChanged,
 };
 for (const [name, m] of Object.entries(P.methods)) {
 	definitions[`${name}.params`] = m.params;

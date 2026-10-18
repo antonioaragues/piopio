@@ -1,4 +1,4 @@
-import type { ContainerRef, SessionEvent, Snapshot } from "@piopio/protocol";
+import type { ContainerRef, ModelRef, SessionEvent, Snapshot } from "@piopio/protocol";
 
 export type WhenBusy = "followUp" | "steer" | "reject";
 
@@ -10,6 +10,8 @@ export interface Runtime {
 	onEvents(listener: (events: SessionEvent[]) => void): () => void;
 	submit(text: string, options: { whenBusy: WhenBusy; requestId?: string }): Promise<{ disposition: "started" | "queued" }>;
 	abort(): Promise<void>;
+	/** Changes the model and/or thinking level for the next request. */
+	configure(change: { model?: ModelRef; thinking?: string }): Promise<void>;
 	close(): Promise<void>;
 }
 

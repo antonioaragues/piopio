@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import PiopioKit
+import PiopioTranscript
 import SwiftUI
 
 // Candidate A: SwiftUI ScrollView + LazyVStack, one view per timeline item, one view per markdown block.

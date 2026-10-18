@@ -21,3 +21,7 @@ DerivedData/
 
 # macOS
 .DS_Store
+
+# Generated Xcode project (apps/mac/App/project.yml is the source)
+apps/mac/App/Piopio.xcodeproj/
+apps/mac/App/build/

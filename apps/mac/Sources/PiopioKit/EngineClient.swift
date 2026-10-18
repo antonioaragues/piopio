@@ -4,7 +4,8 @@ import Network
 public struct EngineError: Error, Sendable, CustomStringConvertible {
     public var code: String
     public var message: String
-    public var description: String { "\(code): \(message)" }
+    public var description: String { message }
+    public init(code: String, message: String) { self.code = code; self.message = message }
 }
 
 /// Answers engine → client requests (e.g. `secrets.get`). Returns the JSON `result`.
@@ -14,6 +15,8 @@ public typealias ReverseRequestHandler = @Sendable (_ method: String, _ params: 
 public actor EngineClient {
     public nonisolated let sessionEvents: AsyncStream<SessionEventsNotification>
     private let eventsContinuation: AsyncStream<SessionEventsNotification>.Continuation
+    public nonisolated let catalogChanges: AsyncStream<CatalogChanged>
+    private let catalogContinuation: AsyncStream<CatalogChanged>.Continuation
 
     private let socketPath: String
     private let queue = DispatchQueue(label: "piopio.engine-client")
@@ -28,6 +31,7 @@ public actor EngineClient {
     public init(socketPath: String) {
         self.socketPath = socketPath
         (sessionEvents, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
+        (catalogChanges, catalogContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
 
     /// Default Local Engine socket: `$PIOPIO_HOME/engine.sock` or `~/Library/Application Support/Piopio/engine.sock`.
@@ -113,6 +117,10 @@ public actor EngineClient {
                     if let n = try? decoder.decode(NotificationEnvelope<SessionEventsNotification>.self, from: line) {
                         eventsContinuation.yield(n.params)
                     }
+                } else if method == "catalog.changed" {
+                    if let n = try? decoder.decode(NotificationEnvelope<CatalogChanged>.self, from: line) {
+                        catalogContinuation.yield(n.params)
+                    }
                 } else if let id = head.id {
                     await answerReverse(id: id, method: method, line: line)
                 }
@@ -147,6 +155,7 @@ public actor EngineClient {
         pending.removeAll()
         for cont in waiting.values { cont.resume(throwing: error) }
         eventsContinuation.finish()
+        catalogContinuation.finish()
     }
 }
 

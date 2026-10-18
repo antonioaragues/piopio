@@ -2,10 +2,11 @@ import Foundation
 import Security
 
 /// Generic-password items under service "Piopio", account = secret name (e.g. provider.openrouter.apiKey).
-enum Keychain {
-    static let service = "Piopio"
+/// The app owns secrets; the engine asks for them with `secrets.get`.
+public enum Keychain {
+    public static let service = "Piopio"
 
-    static func read(_ account: String) -> String? {
+    public static func read(_ account: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -18,12 +19,19 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
-    static func write(_ account: String, value: String) throws {
+    public static func write(_ account: String, value: String) throws {
         let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
         SecItemDelete(base as CFDictionary)
         var add = base
         add[kSecValueData as String] = Data(value.utf8)
         let status = SecItemAdd(add as CFDictionary, nil)
         guard status == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
+    }
+}
+
+extension Keychain {
+    public static func delete(_ account: String) {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+        SecItemDelete(query as CFDictionary)
     }
 }

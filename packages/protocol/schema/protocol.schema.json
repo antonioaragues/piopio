@@ -4696,6 +4696,196 @@
 				}
 			}
 		},
+		"ModelInfo": {
+			"type": "object",
+			"required": [
+				"provider",
+				"id",
+				"name",
+				"contextWindow",
+				"maxOutputTokens",
+				"pricing",
+				"supports"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"id": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"contextWindow": {
+					"type": "number"
+				},
+				"maxOutputTokens": {
+					"type": "number"
+				},
+				"pricing": {
+					"type": "object",
+					"required": [
+						"input",
+						"output",
+						"cacheRead",
+						"cacheWrite"
+					],
+					"properties": {
+						"input": {
+							"type": "number"
+						},
+						"output": {
+							"type": "number"
+						},
+						"cacheRead": {
+							"type": "number"
+						},
+						"cacheWrite": {
+							"type": "number"
+						}
+					}
+				},
+				"supports": {
+					"type": "object",
+					"required": [
+						"vision",
+						"reasoning"
+					],
+					"properties": {
+						"vision": {
+							"type": "boolean"
+						},
+						"reasoning": {
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"CatalogChanged": {
+			"type": "object",
+			"required": [
+				"upserted",
+				"removed"
+			],
+			"properties": {
+				"upserted": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"ref",
+							"title",
+							"createdAt",
+							"updatedAt"
+						],
+						"properties": {
+							"ref": {
+								"type": "object",
+								"required": [
+									"kind",
+									"id"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "build"
+											},
+											{
+												"type": "string",
+												"const": "thread"
+											},
+											{
+												"type": "string",
+												"const": "space"
+											},
+											{
+												"type": "string",
+												"const": "agent"
+											}
+										]
+									},
+									"id": {
+										"type": "string"
+									},
+									"conversationId": {
+										"type": "string"
+									}
+								}
+							},
+							"title": {
+								"type": "string"
+							},
+							"createdAt": {
+								"type": "string"
+							},
+							"updatedAt": {
+								"type": "string"
+							},
+							"cwd": {
+								"type": "string"
+							},
+							"model": {
+								"type": "object",
+								"required": [
+									"provider",
+									"id"
+								],
+								"properties": {
+									"provider": {
+										"type": "string"
+									},
+									"id": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				},
+				"removed": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"kind",
+							"id"
+						],
+						"properties": {
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "build"
+									},
+									{
+										"type": "string",
+										"const": "thread"
+									},
+									{
+										"type": "string",
+										"const": "space"
+									},
+									{
+										"type": "string",
+										"const": "agent"
+									}
+								]
+							},
+							"id": {
+								"type": "string"
+							},
+							"conversationId": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
 		"engine.hello.params": {
 			"type": "object",
 			"required": [
@@ -6274,6 +6464,286 @@
 			}
 		},
 		"sessions.abort.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.configure.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"model": {
+					"type": "object",
+					"required": [
+						"provider",
+						"id"
+					],
+					"properties": {
+						"provider": {
+							"type": "string"
+						},
+						"id": {
+							"type": "string"
+						}
+					}
+				},
+				"thinking": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.configure.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.rename.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"title"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"title": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.rename.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.delete.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.delete.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"models.list.params": {
+			"type": "object",
+			"properties": {
+				"refresh": {
+					"type": "boolean"
+				}
+			}
+		},
+		"models.list.result": {
+			"type": "object",
+			"required": [
+				"models",
+				"defaultModel"
+			],
+			"properties": {
+				"models": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"provider",
+							"id",
+							"name",
+							"contextWindow",
+							"maxOutputTokens",
+							"pricing",
+							"supports"
+						],
+						"properties": {
+							"provider": {
+								"type": "string"
+							},
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"contextWindow": {
+								"type": "number"
+							},
+							"maxOutputTokens": {
+								"type": "number"
+							},
+							"pricing": {
+								"type": "object",
+								"required": [
+									"input",
+									"output",
+									"cacheRead",
+									"cacheWrite"
+								],
+								"properties": {
+									"input": {
+										"type": "number"
+									},
+									"output": {
+										"type": "number"
+									},
+									"cacheRead": {
+										"type": "number"
+									},
+									"cacheWrite": {
+										"type": "number"
+									}
+								}
+							},
+							"supports": {
+								"type": "object",
+								"required": [
+									"vision",
+									"reasoning"
+								],
+								"properties": {
+									"vision": {
+										"type": "boolean"
+									},
+									"reasoning": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					}
+				},
+				"defaultModel": {
+					"type": "object",
+					"required": [
+						"provider",
+						"id"
+					],
+					"properties": {
+						"provider": {
+							"type": "string"
+						},
+						"id": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"secrets.changed.params": {
+			"type": "object",
+			"required": [
+				"name"
+			],
+			"properties": {
+				"name": {
+					"type": "string"
+				}
+			}
+		},
+		"secrets.changed.result": {
 			"type": "object",
 			"properties": {}
 		},

@@ -28,6 +28,7 @@ export class Engine {
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
+	private authed = new Set<RpcConnection>();
 	private readonly startedAt = Date.now();
 	private readonly log: (line: string) => void;
 
@@ -39,10 +40,16 @@ export class Engine {
 			...(options.piSessionDir ? { piSessionDir: options.piSessionDir } : {}),
 			...(options.piAgentDir ? { piAgentDir: options.piAgentDir } : {}),
 		});
+		this.sessions.onChange((change) => {
+			for (const conn of this.authed) conn.notify("catalog.changed", change);
+		});
 	}
 
 	async listen(): Promise<void> {
 		const { socket } = this.options.paths;
+		if (Buffer.byteLength(socket) > 103) {
+			throw new Error(`Socket path is ${Buffer.byteLength(socket)} bytes; macOS allows 103. Use a shorter PIOPIO_HOME.`);
+		}
 		if (existsSync(socket)) {
 			if (await isAlive(socket)) throw new Error(`Another engine is already listening on ${socket}`);
 			unlinkSync(socket);
@@ -81,6 +88,7 @@ export class Engine {
 				const p = params as Params<"engine.hello">;
 				if (p.token !== this.token) throw new EngineError("AUTH", "Bad engine token.");
 				authed = true;
+				this.authed.add(conn);
 				unregisterSecrets = this.secrets.addRequester(async (name, purpose) => {
 					const res = (await conn.request("secrets.get", { name, purpose } satisfies Params<never> | object)) as { value: string | null };
 					return Value.Check(reverseMethods["secrets.get"].result, res) ? res.value : null;
@@ -92,6 +100,7 @@ export class Engine {
 		});
 
 		conn.onClose(() => {
+			this.authed.delete(conn);
 			unregisterSecrets?.();
 			for (const id of owned) {
 				this.subscriptions.get(id)?.();
@@ -154,6 +163,30 @@ export class Engine {
 			case "sessions.abort": {
 				const p = params as Params<"sessions.abort">;
 				await (await this.sessions.runtime(p.ref)).abort();
+				return {};
+			}
+			case "sessions.configure": {
+				const p = params as Params<"sessions.configure">;
+				await this.sessions.configure(p.ref, { ...(p.model ? { model: p.model } : {}), ...(p.thinking ? { thinking: p.thinking } : {}) });
+				return {};
+			}
+			case "sessions.rename": {
+				const p = params as Params<"sessions.rename">;
+				this.sessions.rename(p.ref, p.title);
+				return {};
+			}
+			case "sessions.delete": {
+				const p = params as Params<"sessions.delete">;
+				await this.sessions.delete(p.ref);
+				return {};
+			}
+			case "models.list": {
+				const p = params as Params<"models.list">;
+				return { models: await this.hub.listModels(p.refresh ?? false), defaultModel: this.hub.defaultModel } satisfies Result<"models.list">;
+			}
+			case "secrets.changed": {
+				const p = params as Params<"secrets.changed">;
+				await this.hub.forgetSecret(p.name);
 				return {};
 			}
 			default:

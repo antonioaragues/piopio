@@ -1,0 +1,352 @@
+import AppKit
+import PiopioKit
+
+/// A session's transcript as one windowed TextKit 2 document (docs/spikes/s2).
+///
+/// - Holds the newest `windowSize` items; older history is prepended in `pageSize` pages, built off the
+///   main thread, when the viewport nears the top. The visible text stays anchored.
+/// - Applies engine events as minimal edits. A streaming answer re-renders only its open markdown block;
+///   everything else is appended at the end, which is cheap (inserting costs O(text after the insert)).
+/// - Follows the bottom while the user is there ("following"); scrolling up stops following.
+@MainActor
+public final class TranscriptDocument {
+    public let scrollView: NSScrollView
+    let textView: NSTextView
+    private let layoutDelegate = CardLayoutDelegate()
+    private let renderer = ItemRenderer()
+    private let windowSize: Int
+    private let pageSize: Int
+
+    /// Every item of the session, oldest first; `items[windowStart...]` are in the document.
+    private var items: [TimelineItem] = []
+    private var windowStart = 0
+    /// Document order and rendered length of each item in the window.
+    private(set) var documentIDs: [String] = []
+    private var lengths: [String: Int] = [:]
+    private var streams: [String: StreamingItem] = [:]
+
+    private var loading = false
+    private var pendingEvents: [SessionEvent] = []
+    private var prefetched: (text: SendableText, lengths: [Int], ids: [String])?
+    private var prefetching = false
+    private var boundsObserver: NSObjectProtocol?
+
+    public private(set) var isFollowing = true {
+        didSet { if oldValue != isFollowing { onFollowingChange?(isFollowing) } }
+    }
+    public var onFollowingChange: ((Bool) -> Void)?
+
+    public init(windowSize: Int = 300, pageSize: Int = 10) {
+        self.windowSize = windowSize
+        self.pageSize = pageSize
+        scrollView = NSTextView.scrollableTextView()
+        textView = scrollView.documentView as! NSTextView
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.allowsUndo = false
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: 16, height: 20)
+        precondition(textView.textLayoutManager != nil, "TranscriptDocument needs TextKit 2")
+        textView.textLayoutManager!.delegate = layoutDelegate
+        scrollView.drawsBackground = false
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        boundsObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.isFollowing = self.atBottom
+                self.loadOlderIfNeeded()
+            }
+        }
+    }
+
+    private var storage: NSTextStorage { textView.textStorage! }
+    private var layoutManager: NSTextLayoutManager { textView.textLayoutManager! }
+
+    /// The document's plain text (tests, copy-all).
+    public var text: String { storage.string }
+
+    // MARK: Loading
+
+    /// Replaces the document with a snapshot: the newest window is built off the main thread.
+    public func load(_ snapshot: Snapshot) async {
+        loading = true
+        streams = [:]
+        prefetched = nil
+        items = snapshot.items
+        windowStart = max(0, items.count - windowSize)
+        let window = Array(items[windowStart...])
+        let renderer = self.renderer
+        let built = await Task.detached(priority: .userInitiated) { () -> (SendableText, [Int]) in
+            var lengths: [Int] = []
+            let out = NSMutableAttributedString()
+            for item in window {
+                let r = renderer.render(item)
+                lengths.append(r.length)
+                out.append(r)
+            }
+            return (SendableText(value: out), lengths)
+        }.value
+        storage.setAttributedString(built.0.value)
+        documentIDs = window.map(\.id)
+        lengths = Dictionary(uniqueKeysWithValues: zip(documentIDs, built.1))
+        for item in window { if case .assistant(let a) = item, a.status == .streaming { startStream(a) } }
+        wireCards(in: NSRange(location: 0, length: storage.length))
+        scrollToLatest()
+        loading = false
+        let queued = pendingEvents
+        pendingEvents = []
+        apply(queued)
+        prefetchOlder()
+    }
+
+    public func scrollToLatest() {
+        textView.scrollToEndOfDocument(nil)
+        isFollowing = true
+    }
+
+    // MARK: Events
+
+    public func apply(_ events: [SessionEvent]) {
+        guard !loading else {
+            pendingEvents += events
+            return
+        }
+        let follow = isFollowing
+        for event in events { apply(event) }
+        if follow, !events.isEmpty { textView.scrollToEndOfDocument(nil) }
+    }
+
+    private func apply(_ event: SessionEvent) {
+        switch event {
+        case .itemAdded(let item):
+            if let i = items.firstIndex(where: { $0.id == item.id }) {
+                items[i] = item
+                replace(item)
+            } else {
+                items.append(item)
+                append(item)
+            }
+        case .itemUpdated(let item):
+            guard let i = items.lastIndex(where: { $0.id == item.id }) else { return }
+            items[i] = item
+            replace(item)
+        case .itemReplaced(let oldId, let item):
+            guard let i = items.lastIndex(where: { $0.id == oldId }) else {
+                items.append(item)
+                append(item)
+                return
+            }
+            items[i] = item
+            if let d = documentIDs.firstIndex(of: oldId) {
+                documentIDs[d] = item.id
+                lengths[item.id] = lengths.removeValue(forKey: oldId)
+                streams[item.id] = streams.removeValue(forKey: oldId)
+            }
+            replace(item)
+        case .itemRemoved(let id):
+            items.removeAll { $0.id == id }
+            if let d = documentIDs.firstIndex(of: id) {
+                edit(NSRange(location: offset(ofIndex: d), length: lengths[id] ?? 0), with: NSAttributedString())
+                documentIDs.remove(at: d)
+                lengths[id] = nil
+                streams[id] = nil
+            }
+        case .itemDelta(let id, _, let partType, let delta):
+            guard let i = items.lastIndex(where: { $0.id == id }), case .assistant(var a) = items[i] else { return }
+            if let p = a.parts.lastIndex(where: { $0.type == partType }) { a.parts[p].text += delta } else { a.parts.append(AssistantPart(type: partType, text: delta)) }
+            items[i] = .assistant(a)
+            streamDelta(id: id, partType: partType, delta: delta)
+        case .resnapshot(let snapshot):
+            Task { await load(snapshot) }
+        case .state, .unknown:
+            break
+        }
+    }
+
+    // MARK: Segments
+
+    private func offset(ofIndex index: Int) -> Int {
+        documentIDs[..<index].reduce(0) { $0 + (lengths[$1] ?? 0) }
+    }
+
+    private func append(_ item: TimelineItem) {
+        let text = renderer.render(item)
+        documentIDs.append(item.id)
+        lengths[item.id] = text.length
+        edit(NSRange(location: storage.length, length: 0), with: text)
+        if case .assistant(let a) = item, a.status == .streaming { startStream(a) }
+    }
+
+    /// Re-renders an item in place. A finished answer replaces its streamed rendering with the final one.
+    private func replace(_ item: TimelineItem) {
+        guard let d = documentIDs.firstIndex(of: item.id) else { return } // outside the window: data only
+        if case .assistant(let a) = item, a.status == .streaming, streams[item.id] != nil { return } // deltas drive it
+        streams[item.id] = nil
+        let text = renderer.render(item)
+        edit(NSRange(location: offset(ofIndex: d), length: lengths[item.id] ?? 0), with: text)
+        lengths[item.id] = text.length
+        if case .assistant(let a) = item, a.status == .streaming { startStream(a) }
+    }
+
+    private func edit(_ range: NSRange, with text: NSAttributedString) {
+        storage.beginEditing()
+        storage.replaceCharacters(in: range, with: text)
+        storage.endEditing()
+        wireCards(in: NSRange(location: range.location, length: text.length))
+    }
+
+    // MARK: Streaming
+
+    /// Rendering state of an answer that is still streaming. Its segment is `[thinking card][closed blocks][open block]`.
+    private final class StreamingItem {
+        var markdown = MarkdownStream()
+        var renderedClosed = 0
+        var thinking: DisclosureCard?
+        var thinkingLength = 0
+        var closedLength = 0
+    }
+
+    private func startStream(_ a: AssistantItem) {
+        let s = StreamingItem()
+        // An item that already has content (snapshot mid-answer) was rendered whole; restart its segment.
+        streams[a.id] = s
+        guard let d = documentIDs.firstIndex(of: a.id) else { return }
+        let range = NSRange(location: offset(ofIndex: d), length: lengths[a.id] ?? 0)
+        let thinkingText = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
+        let out = NSMutableAttributedString()
+        if !thinkingText.isEmpty {
+            let card = DisclosureCard(kind: .thinking, title: "Thinking…", body: thinkingText)
+            s.thinking = card
+            let t = renderer.thinkingCard(card)
+            s.thinkingLength = t.length
+            out.append(t)
+        }
+        s.markdown.append(a.text)
+        let closed = renderer.render(s.markdown.closed)
+        s.renderedClosed = s.markdown.closed.count
+        s.closedLength = closed.length
+        out.append(closed)
+        if let open = s.markdown.open { out.append(renderer.render(open)) }
+        edit(range, with: out)
+        lengths[a.id] = out.length
+    }
+
+    private func streamDelta(id: String, partType: AssistantPart.PartType, delta: String) {
+        guard let s = streams[id], let d = documentIDs.firstIndex(of: id) else { return }
+        let start = offset(ofIndex: d)
+        let length = lengths[id] ?? 0
+        if partType == .thinking {
+            if let card = s.thinking {
+                card.body += delta
+                if card.expanded { relayout(card) }
+            } else {
+                let card = DisclosureCard(kind: .thinking, title: "Thinking…", body: delta)
+                s.thinking = card
+                let t = renderer.thinkingCard(card)
+                edit(NSRange(location: start, length: 0), with: t)
+                s.thinkingLength = t.length
+                lengths[id] = length + t.length
+            }
+            return
+        }
+        s.markdown.append(delta)
+        let tailStart = start + s.thinkingLength + s.closedLength
+        let tail = NSMutableAttributedString()
+        tail.append(renderer.render(s.markdown.closed[s.renderedClosed...]))
+        let newlyClosed = tail.length
+        if let open = s.markdown.open { tail.append(renderer.render(open)) }
+        edit(NSRange(location: tailStart, length: start + length - tailStart), with: tail)
+        s.closedLength += newlyClosed
+        s.renderedClosed = s.markdown.closed.count
+        lengths[id] = s.thinkingLength + s.closedLength + (tail.length - newlyClosed)
+    }
+
+    // MARK: Paging older history
+
+    private var atBottom: Bool {
+        scrollView.contentView.bounds.maxY >= textView.frame.height - 30
+    }
+
+    private func prefetchOlder() {
+        guard !prefetching, prefetched == nil, windowStart > 0 else { return }
+        prefetching = true
+        let slice = Array(items[max(0, windowStart - pageSize)..<windowStart])
+        let renderer = self.renderer
+        Task {
+            let (text, lengths) = await Task.detached(priority: .userInitiated) { () -> (SendableText, [Int]) in
+                let out = NSMutableAttributedString()
+                var lengths: [Int] = []
+                for item in slice {
+                    let r = renderer.render(item)
+                    lengths.append(r.length)
+                    out.append(r)
+                }
+                return (SendableText(value: out), lengths)
+            }.value
+            prefetched = (text, lengths, slice.map(\.id))
+            prefetching = false
+            loadOlderIfNeeded()
+        }
+    }
+
+    func loadOlderIfNeeded(force: Bool = false) {
+        let clip = scrollView.contentView
+        guard !loading, force || clip.bounds.minY < 4000, let next = prefetched else { return }
+        prefetched = nil
+        let page = Array(items[(windowStart - next.ids.count)..<windowStart])
+        guard page.map(\.id) == next.ids else {
+            prefetchOlder() // history changed while prefetching
+            return
+        }
+        let heightBefore = textView.frame.height
+        let y0 = clip.bounds.minY
+        storage.insert(next.text.value, at: 0)
+        wireCards(in: NSRange(location: 0, length: next.text.value.length))
+        documentIDs.insert(contentsOf: next.ids, at: 0)
+        for (id, length) in zip(next.ids, next.lengths) { lengths[id] = length }
+        windowStart -= next.ids.count
+        if let content = layoutManager.textContentManager,
+           let end = content.location(content.documentRange.location, offsetBy: next.text.value.length),
+           let inserted = NSTextRange(location: content.documentRange.location, end: end) {
+            layoutManager.ensureLayout(for: inserted)
+        }
+        layoutManager.textViewportLayoutController.layoutViewport()
+        clip.scroll(to: NSPoint(x: 0, y: y0 + textView.frame.height - heightBefore))
+        scrollView.reflectScrolledClipView(clip)
+        prefetchOlder()
+    }
+
+    /// Test hooks.
+    var renderedLength: Int { documentIDs.reduce(0) { $0 + (lengths[$1] ?? 0) } }
+    var hasPrefetchedPage: Bool { prefetched != nil }
+
+    // MARK: Cards
+
+    private func wireCards(in range: NSRange) {
+        guard range.length > 0 else { return }
+        storage.enumerateAttribute(.attachment, in: range) { value, _, _ in
+            (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
+        }
+    }
+
+    private func relayout(_ card: DisclosureCard) {
+        var location: Int?
+        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length), options: .reverse) { value, range, stop in
+            if (value as? DisclosureAttachment)?.card === card { location = range.location; stop.pointee = true }
+        }
+        guard let location, let content = layoutManager.textContentManager,
+              let start = content.location(content.documentRange.location, offsetBy: location),
+              let end = content.location(start, offsetBy: 1),
+              let range = NSTextRange(location: start, end: end) else { return }
+        layoutManager.invalidateLayout(for: range)
+        layoutManager.textViewportLayoutController.layoutViewport()
+    }
+}
+
+extension ItemRenderer {
+    func render(_ blocks: some Sequence<MarkdownBlock>) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+        for b in blocks { out.append(render(b)) }
+        return out
+    }
+}

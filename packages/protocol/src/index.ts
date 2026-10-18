@@ -150,6 +150,21 @@ export const SessionSummary = Type.Object({
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
+export const ModelInfo = Type.Object({
+	provider: Type.String(),
+	id: Type.String(),
+	name: Type.String(),
+	contextWindow: Type.Number(),
+	maxOutputTokens: Type.Number(),
+	/** USD per million tokens. */
+	pricing: Type.Object({ input: Type.Number(), output: Type.Number(), cacheRead: Type.Number(), cacheWrite: Type.Number() }),
+	supports: Type.Object({ vision: Type.Boolean(), reasoning: Type.Boolean() }),
+});
+export type ModelInfo = Static<typeof ModelInfo>;
+
+export const CatalogChanged = Type.Object({ upserted: Type.Array(SessionSummary), removed: Type.Array(ContainerRef) });
+export type CatalogChanged = Static<typeof CatalogChanged>;
+
 // ── Methods (client → engine) ───────────────────────────────────────────────
 
 export const EngineCapabilities = Type.Object({ runtimes: Type.Array(ContainerKind), models: Type.Array(Type.String()) });
@@ -202,6 +217,28 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({}),
 	},
+	"sessions.configure": {
+		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()) }),
+		result: Type.Object({}),
+	},
+	"sessions.rename": {
+		params: Type.Object({ ref: ContainerRef, title: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Threads: deletes the history. Build sessions: forgets the session; the pi session file stays. */
+	"sessions.delete": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({}),
+	},
+	"models.list": {
+		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),
+		result: Type.Object({ models: Type.Array(ModelInfo), defaultModel: ModelRef }),
+	},
+	/** The client changed a secret (e.g. a new API key): drop cached copies. */
+	"secrets.changed": {
+		params: Type.Object({ name: Type.String() }),
+		result: Type.Object({}),
+	},
 } satisfies Record<string, { params: TSchema; result: TSchema }>;
 
 export type MethodName = keyof typeof methods;
@@ -225,6 +262,7 @@ export type ReverseResult<M extends ReverseMethodName> = Static<(typeof reverseM
 
 export const notifications = {
 	"session.events": SessionEventsNotification,
+	"catalog.changed": CatalogChanged,
 } satisfies Record<string, TSchema>;
 
 // ── JSON-RPC envelope ───────────────────────────────────────────────────────

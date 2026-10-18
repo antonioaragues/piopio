@@ -39,6 +39,10 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 - With only the Command Line Tools installed, `swift test` needs an explicit swift-testing plugin path (`scripts/swift-test.sh`). The SwiftUI app target will need Xcode.
 
 ## Phase 1 — Chat: Threads (first daily driver)
+
+**Status (2026-10-19): milestone 1.1 done.** The app (SwiftUI + XcodeGen) starts or attaches to the engine and keeps the sidebar live via `catalog.changed` (rename/delete). Threads stream into the windowed TextKit 2 transcript (`PiopioTranscript`). It has a composer (Enter send/queue, ⇧Enter newline, Esc stop), a searchable model picker per thread, a default model setting, a cost display, OpenRouter key onboarding (Keychain), and plain-text auto titles. Verified with the scripted model (`scripts/app-smoke.sh`).
+Next milestones: **1.2** edit/regenerate/fork (T5), thinking level (T3), queue UI (T4), error states with a real key. **1.3** attachments (T8), web search/fetch (T9), export (T11). **1.4** Quick Chat (§4), ⌘K palette, global search (catalog.db + FTS5), notifications. **1.5** packaging (S5: bundled Node + engine, notarized DMG).
+
 Scope: 04-chat §1 (T1–T12), Quick Chat (§4), 07-shared §1 (models, costs), §8 onboarding, 08-app-shell core (window, sidebar, transcript, composer, ⌘K, ⌘⇧F, notifications).
 **Acceptance:** for a week the author uses Piopio instead of a web chat app. 1,000-message threads stay smooth. Forking and edit/regenerate work. Costs match OpenRouter's dashboard within 2%.
 

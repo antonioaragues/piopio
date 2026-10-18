@@ -1,5 +1,6 @@
 import AppKit
 import PiopioKit
+import PiopioTranscript
 
 // Candidate B: the whole transcript in one TextKit 2 NSTextView (viewport-based layout).
 // Streaming replaces only the attributed range of the open tail block.

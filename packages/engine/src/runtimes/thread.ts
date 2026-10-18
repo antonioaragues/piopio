@@ -22,7 +22,8 @@ export class ThreadRuntime implements Runtime {
 		private readonly hub: ModelHub,
 		private readonly harness: Harness,
 		private readonly root: Conversation,
-		private readonly model: ModelRef,
+		private model: ModelRef,
+		private thinking?: string,
 	) {
 		this.builder = new TimelineBuilder(ref);
 		this.mapper = new DurableEventMapper(this.builder);
@@ -33,7 +34,7 @@ export class ThreadRuntime implements Runtime {
 		const harness = await Harness.open(storage, { models: options.hub.models, registry: createRegistry() }, ctx);
 		const agent = { model: { provider: options.model.provider, modelId: options.model.id }, ...(options.thinking ? { thinkingLevel: options.thinking } : {}) };
 		const root = await harness.root(ctx, { agent } as Parameters<Harness["root"]>[1]);
-		const runtime = new ThreadRuntime(options.ref, options.hub, harness, root, options.model);
+		const runtime = new ThreadRuntime(options.ref, options.hub, harness, root, options.model, options.thinking);
 		await runtime.attach();
 		// Finish any run a previous process left behind (needs the key, so ask first).
 		await options.hub.ensureCredential(options.model.provider).catch(() => undefined);
@@ -46,6 +47,7 @@ export class ThreadRuntime implements Runtime {
 		const record = recorder("pi-durable", this.ref.id);
 		record?.(this.stream.snapshot);
 		this.mapper.applySnapshot(this.stream.snapshot as never, false);
+		this.builder.setState({ model: this.model, ...(this.thinking ? { thinking: this.thinking } : {}) });
 		this.builder.flush();
 		this.stream.start(async (events) => {
 			for (const event of events) {
@@ -78,6 +80,23 @@ export class ThreadRuntime implements Runtime {
 
 	async abort(): Promise<void> {
 		await this.root.abort(ctx);
+	}
+
+	async configure(change: { model?: ModelRef; thinking?: string }): Promise<void> {
+		if (change.model && !this.hub.models.getModel(change.model.provider, change.model.id)) {
+			throw new EngineError("INVALID", `Unknown model ${change.model.provider}/${change.model.id}`);
+		}
+		await this.root.configure(
+			{
+				...(change.model ? { model: { provider: change.model.provider, modelId: change.model.id } } : {}),
+				...(change.thinking ? { thinkingLevel: change.thinking } : {}),
+			} as Parameters<Conversation["configure"]>[0],
+			ctx,
+		);
+		if (change.model) this.model = change.model;
+		if (change.thinking) this.thinking = change.thinking;
+		this.builder.setState({ model: this.model, ...(this.thinking ? { thinking: this.thinking } : {}) });
+		this.emitter.emit(this.builder.flush());
 	}
 
 	async close(): Promise<void> {

@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import PiopioKit
+import PiopioTranscript
 import SwiftUI
 
 // Spike S2b: TextKit 2 transcript with card chrome.

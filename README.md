@@ -8,7 +8,7 @@ A native macOS app with a front-end for the [pi](https://pi.dev) agent harnesses
 
 Models come through OpenRouter (bring your own key).
 
-> Status: **Phase 0**: foundations and spikes. Nothing is usable yet.
+> Status: **Phase 1, milestone 1.1**: the Mac app runs Chat threads end to end (dev builds only).
 
 See the full specification in [docs/spec](docs/spec/README.md).
 
@@ -16,14 +16,15 @@ See the full specification in [docs/spec](docs/spec/README.md).
 
 | Path | What |
 |---|---|
-| `apps/mac` | Swift package: `PiopioKit` (engine client, protocol types, transcript, streaming markdown), `piopio-cli`, and `TranscriptLab` (rendering benchmarks, spike S2). The SwiftUI app target comes in Phase 1 and needs Xcode. |
+| `apps/mac/App` | The SwiftUI app (`project.yml` → XcodeGen; the `.xcodeproj` is generated, not committed) |
+| `apps/mac` | Swift package: `PiopioKit` (engine client, protocol types, Keychain, streaming markdown), `PiopioTranscript` (windowed TextKit 2 transcript), `piopio-cli`, and `TranscriptLab` (spike S2 benchmarks) |
 | `packages/protocol` | Engine Protocol schemas (TypeBox → JSON Schema) |
 | `packages/engine` | Local Engine: Node daemon hosting pi-durable (Threads) and pi-coding-agent (Build) behind JSON-RPC over a Unix socket |
 | `packages/runtime`, `packages/cloud`, `packages/extensions` | Placeholders for later phases |
 
 ## Development
 
-Requirements: macOS 27, Node ≥ 22.19, pnpm 11 (`corepack enable` provides it), Swift 6.2+ (Command Line Tools are enough for now).
+Requirements: macOS 27, Xcode 27, XcodeGen (`brew install xcodegen`), Node ≥ 22.19, pnpm 11 (`corepack enable` provides it).
 
 ```bash
 pnpm install
@@ -31,7 +32,11 @@ pnpm build
 pnpm test          # engine tests (scripted model, no key needed)
 pnpm test:swift    # PiopioKit tests
 pnpm demo:s1       # Swift CLI ↔ engine, both runtimes, scripted model
+scripts/build-app.sh   # builds the engine and Piopio.app (Debug); prints the .app path
+scripts/app-smoke.sh   # launches the app on a scratch data folder with the scripted model and saves a snapshot
 ```
+
+Dev builds run the engine from `packages/engine/dist` with Node from Homebrew (`/opt/homebrew/bin/node`). On first launch the app asks for your OpenRouter key and stores it in the Keychain. Set `PIOPIO_FAUX=1` (in the Xcode scheme) to use the scripted echo model instead.
 
 To talk to a real model, store your OpenRouter key in the Keychain, then run the demo against OpenRouter:
 

@@ -7,6 +7,7 @@ export class TestClient {
 	private id = 1;
 	private waiters = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
 	readonly events: SessionEventsNotification[] = [];
+	readonly notifications: { method: string; params: any }[] = [];
 	private eventListeners: ((n: SessionEventsNotification) => void)[] = [];
 	secrets: Record<string, string> = {};
 
@@ -59,6 +60,7 @@ export class TestClient {
 	}
 
 	private onMessage(m: any) {
+		if (m.method && !("id" in m)) this.notifications.push({ method: m.method, params: m.params });
 		if (m.method === "session.events") {
 			this.events.push(m.params);
 			for (const l of this.eventListeners) l(m.params);

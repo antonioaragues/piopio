@@ -29,6 +29,10 @@ public struct Usage: Codable, Sendable, Hashable {
     public var cacheReadTokens: Double
     public var cacheWriteTokens: Double
     public var costUsd: Double
+    public init(inputTokens: Double, outputTokens: Double, cacheReadTokens: Double, cacheWriteTokens: Double, costUsd: Double) {
+        self.inputTokens = inputTokens; self.outputTokens = outputTokens; self.cacheReadTokens = cacheReadTokens
+        self.cacheWriteTokens = cacheWriteTokens; self.costUsd = costUsd
+    }
 }
 
 public struct AssistantPart: Codable, Sendable, Hashable {
@@ -140,12 +144,16 @@ public struct SessionState: Codable, Sendable, Hashable {
     public var model: ModelRef?
     public var thinking: String?
     public var usage: Usage
+    public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, usage: Usage) {
+        self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.usage = usage
+    }
 }
 
 public struct Snapshot: Codable, Sendable, Hashable {
     public var ref: ContainerRef
     public var items: [TimelineItem]
     public var state: SessionState
+    public init(ref: ContainerRef, items: [TimelineItem], state: SessionState) { self.ref = ref; self.items = items; self.state = state }
 }
 
 public enum SessionEvent: Decodable, Sendable, Hashable {
@@ -234,3 +242,40 @@ public struct SubmitParams: Encodable, Sendable {
 }
 public struct SubmitResult: Decodable, Sendable { public var accepted: Bool; public var disposition: String }
 public struct Empty: Codable, Sendable { public init() {} }
+
+// MARK: Phase 1 additions
+
+public struct ModelInfo: Codable, Sendable, Hashable, Identifiable {
+    public struct Pricing: Codable, Sendable, Hashable { public var input, output, cacheRead, cacheWrite: Double }
+    public struct Supports: Codable, Sendable, Hashable { public var vision, reasoning: Bool }
+    public var provider: String
+    public var id: String
+    public var name: String
+    public var contextWindow: Double
+    public var maxOutputTokens: Double
+    public var pricing: Pricing
+    public var supports: Supports
+    public var ref: ModelRef { ModelRef(provider: provider, id: id) }
+}
+
+public struct ModelsListParams: Encodable, Sendable { public var refresh: Bool?; public init(refresh: Bool? = nil) { self.refresh = refresh } }
+public struct ModelsListResult: Decodable, Sendable { public var models: [ModelInfo]; public var defaultModel: ModelRef }
+
+public struct ConfigureParams: Encodable, Sendable {
+    public var ref: ContainerRef
+    public var model: ModelRef?
+    public var thinking: String?
+    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil) { self.ref = ref; self.model = model; self.thinking = thinking }
+}
+public struct RenameParams: Encodable, Sendable {
+    public var ref: ContainerRef
+    public var title: String
+    public init(ref: ContainerRef, title: String) { self.ref = ref; self.title = title }
+}
+public struct SecretChangedParams: Encodable, Sendable { public var name: String; public init(name: String) { self.name = name } }
+public struct UnsubscribeParams: Encodable, Sendable { public var subscriptionId: String; public init(subscriptionId: String) { self.subscriptionId = subscriptionId } }
+
+public struct CatalogChanged: Decodable, Sendable {
+    public var upserted: [SessionSummary]
+    public var removed: [ContainerRef]
+}

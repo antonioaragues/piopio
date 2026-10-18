@@ -2,16 +2,16 @@ import AppKit
 import Foundation
 
 /// Token spans for lightweight syntax highlighting (a stand-in for tree-sitter in the spike).
-enum CodeToken { case keyword, string, comment, number }
+public enum CodeToken { case keyword, string, comment, number }
 
-nonisolated enum Highlighter {
+public nonisolated enum Highlighter {
     private static let keywords: Set<String> = [
         "let", "var", "func", "struct", "class", "enum", "return", "if", "else", "for", "in", "where", "try", "await", "async",
         "import", "export", "const", "function", "def", "lambda", "true", "false", "nil", "null", "self", "case", "switch", "as", "default",
     ]
 
     /// UTF-16 ranges, so they apply directly to NSString / NSAttributedString.
-    static func tokens(_ code: String) -> [(NSRange, CodeToken)] {
+    public static func tokens(_ code: String) -> [(NSRange, CodeToken)] {
         var out: [(NSRange, CodeToken)] = []
         let s = code.utf16
         var i = s.startIndex
@@ -60,7 +60,7 @@ nonisolated enum Highlighter {
     private static func isIdentStart(_ c: UInt16) -> Bool { (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || c == 0x5F }
     private static func isIdent(_ c: UInt16) -> Bool { isIdentStart(c) || (c >= 0x30 && c <= 0x39) }
 
-    static func color(_ t: CodeToken) -> NSColor {
+    public static func color(_ t: CodeToken) -> NSColor {
         switch t {
         case .keyword: .systemPink
         case .string: .systemGreen
@@ -72,20 +72,20 @@ nonisolated enum Highlighter {
 
 extension NSFont {
     /// Thread-safe trait conversion (NSFontManager is main-thread only).
-    func adding(_ traits: NSFontDescriptor.SymbolicTraits) -> NSFont {
+    public func adding(_ traits: NSFontDescriptor.SymbolicTraits) -> NSFont {
         NSFont(descriptor: fontDescriptor.withSymbolicTraits(fontDescriptor.symbolicTraits.union(traits)), size: pointSize) ?? self
     }
 }
 
-nonisolated enum Inline {
+public nonisolated enum Inline {
     /// Inline markdown (bold, italic, code spans, links) → AttributedString. Falls back to plain text.
-    static func attributed(_ markdown: String) -> AttributedString {
+    public static func attributed(_ markdown: String) -> AttributedString {
         (try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)))
             ?? AttributedString(markdown)
     }
 
     /// Same, with AppKit fonts/colors resolved for TextKit.
-    static func ns(_ markdown: String, font: NSFont, color: NSColor = .labelColor) -> NSMutableAttributedString {
+    public static func ns(_ markdown: String, font: NSFont, color: NSColor = .labelColor) -> NSMutableAttributedString {
         let a = attributed(markdown)
         let out = NSMutableAttributedString()
         for run in a.runs {

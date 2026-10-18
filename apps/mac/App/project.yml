@@ -1,0 +1,57 @@
+# Xcode project for the Piopio app. Generate with: scripts/build-app.sh (or `xcodegen` in this folder).
+# The .xcodeproj is not committed; this file is the source of truth.
+name: Piopio
+options:
+  bundleIdPrefix: app.piopio
+  deploymentTarget:
+    macOS: "27.0"
+  createIntermediateGroups: true
+packages:
+  PiopioPackage:
+    path: ..
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "27.0"
+targets:
+  Piopio:
+    type: application
+    platform: macOS
+    sources: [Piopio]
+    dependencies:
+      - package: PiopioPackage
+        product: PiopioKit
+      - package: PiopioPackage
+        product: PiopioTranscript
+    info:
+      path: Piopio/Info.plist
+      properties:
+        CFBundleDisplayName: Piopio
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: MIT License
+        # Dev builds run the engine from the repo; release builds will bundle it (spike S5).
+        PiopioEngineMain: $(PIOPIO_ENGINE_MAIN)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.piopio.Piopio
+        PRODUCT_NAME: Piopio
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        PIOPIO_ENGINE_MAIN: $(SRCROOT)/../../../packages/engine/dist/main.js
+schemes:
+  Piopio:
+    build:
+      targets:
+        Piopio: all
+    run:
+      config: Debug
+      environmentVariables:
+        - variable: PIOPIO_FAUX
+          value: "1"
+          isEnabled: false
