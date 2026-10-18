@@ -1,0 +1,23 @@
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+.pnpm-store/
+
+# Swift
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Local dev
+.env
+.env.*
+.dev.vars
+*.sqlite
+*.sqlite-*
+.piopio-dev/
+
+# macOS
+.DS_Store
