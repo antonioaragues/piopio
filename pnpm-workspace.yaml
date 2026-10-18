@@ -1,0 +1,7 @@
+packages:
+  - "packages/*"
+
+# Build scripts of SDK deps behind pi-ai's lazy providers; not needed.
+allowBuilds:
+  "@google/genai": false
+  protobufjs: false

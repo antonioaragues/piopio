@@ -1,0 +1,120 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`pi SDK mapper > pi-sdk-chat-faux: streamed timeline equals a fresh snapshot of the same transcript 1`] = `
+[
+  {
+    "id": "m1",
+    "kind": "user",
+    "text": "hello piopio",
+  },
+  {
+    "id": "m2",
+    "kind": "assistant",
+    "model": "faux/faux-1",
+    "parts": [
+      {
+        "text": "Echo: hello piopio",
+        "type": "text",
+      },
+    ],
+    "status": "done",
+    "usage": {
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 2069,
+      "costUsd": 0,
+      "inputTokens": 2069,
+      "outputTokens": 5,
+    },
+  },
+]
+`;
+
+exports[`pi SDK mapper > pi-sdk-tools-faux: streamed timeline equals a fresh snapshot of the same transcript 1`] = `
+[
+  {
+    "id": "m1",
+    "kind": "user",
+    "text": "run a tool",
+  },
+  {
+    "id": "m2",
+    "kind": "assistant",
+    "model": "faux/faux-1",
+    "parts": [
+      {
+        "text": "Let me check.",
+        "type": "text",
+      },
+    ],
+    "status": "done",
+    "usage": {
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 2068,
+      "costUsd": 0,
+      "inputTokens": 2068,
+      "outputTokens": 12,
+    },
+  },
+  {
+    "args": {
+      "command": "echo from-tool",
+    },
+    "callId": "tool:1792354431185:qn5fm0bzw5",
+    "durationMs": 12,
+    "id": "tool:tool:1792354431185:qn5fm0bzw5",
+    "kind": "tool",
+    "output": "from-tool
+",
+    "status": "done",
+    "tool": "bash",
+  },
+  {
+    "id": "m4",
+    "kind": "assistant",
+    "model": "faux/faux-1",
+    "parts": [
+      {
+        "text": "The tool said from-tool.",
+        "type": "text",
+      },
+    ],
+    "status": "done",
+    "usage": {
+      "cacheReadTokens": 2068,
+      "cacheWriteTokens": 22,
+      "costUsd": 0,
+      "inputTokens": 22,
+      "outputTokens": 6,
+    },
+  },
+]
+`;
+
+exports[`pi-durable mapper > pi-durable-chat-faux: items use committed entry ids 1`] = `
+[
+  {
+    "id": "7",
+    "kind": "user",
+    "text": "hello piopio",
+  },
+  {
+    "id": "10",
+    "kind": "assistant",
+    "model": "faux/faux-1",
+    "parts": [
+      {
+        "text": "Echo: hello piopio",
+        "type": "text",
+      },
+    ],
+    "status": "done",
+    "usage": {
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 5,
+      "costUsd": 0,
+      "inputTokens": 5,
+      "outputTokens": 5,
+    },
+  },
+]
+`;

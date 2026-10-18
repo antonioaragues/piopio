@@ -1,0 +1,22 @@
+{
+  "name": "piopio",
+  "private": true,
+  "packageManager": "pnpm@11.28.6",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:swift": "scripts/swift-test.sh",
+    "schema": "pnpm --filter @piopio/protocol build && pnpm --filter @piopio/protocol schema",
+    "demo:s1": "scripts/s1-demo.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

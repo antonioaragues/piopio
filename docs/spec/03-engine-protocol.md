@@ -120,6 +120,7 @@ type SessionEvent =
   | { type: "item.delta";   itemId; partIndex; textDelta }        // streaming text/thinking
   | { type: "item.updated"; item: TimelineItem }                  // status/output changes
   | { type: "item.removed"; itemId }                              // reset/branch switch
+  | { type: "item.replaced"; oldId; item }                        // provisional id → durable id, same position
   | { type: "state";        state: SessionState }                 // idle/running/waiting_approval/error, queue, model, usage
   | { type: "branch";       activeLeafId; branches }              // fork navigation
   | { type: "resnapshot";   snapshot }                            // engine-side restart → client replaces state
@@ -131,17 +132,24 @@ type SessionEvent =
 
 ## 6. Mapping notes
 
-| Source | Maps to |
-|---|---|
-| pi SDK `message_update` / `text_delta` | `item.delta` |
-| pi SDK `message_end` | `item.updated` (status done) |
-| pi SDK tool execution events, `bash_execution_update` | `tool` items + `item.updated` |
-| pi SDK `agent_settled` | `state` (idle) |
-| pi SDK `compaction_start/end` | `compaction` item |
-| pi `extension_ui_request` (confirm) from the approvals extension | `approval.requested` + `tool.status = pending_approval` |
-| pi-durable `watchEvents` agent-style events | same as pi SDK rows |
-| pi-durable entries `pi.user/assistant/tool-result/compaction/reset` | snapshot items |
-| pi-durable custom entries `piopio.routing`, `piopio.agent-msg` | `routing`, `agent_msg` items |
-| pi-durable `pi.usage` doc | `state.usage` |
+Verified against pi 1.3.0 in Spike S1 (`packages/engine/src/timeline/`, fixtures in `packages/engine/test/fixtures/`). Both runtimes feed one `TimelineBuilder` through a thin adapter each, because their event shapes differ even though they share names.
 
-The exact upstream event names MUST be verified in Spike S1. The table above follows current docs.
+| pi-coding-agent SDK (`AgentSessionEvent`) | pi-durable (`watchEvents`) | Maps to |
+|---|---|---|
+| `agent_start` / `agent_settled` | `run_start` / `run_end` | `state` running / idle |
+| `message_start` (user) | `message_end` with a `pi.user` entry | `item.added` user |
+| `message_start` (assistant) | `message_start` (assistant) | `item.added` assistant (pi-durable: provisional `gen:N` id) |
+| `message_update.assistantMessageEvent` `text_delta` / `thinking_delta` | `message_update.changes[]` `text_start`/`text_delta`/`thinking_*` | `item.delta` |
+| `message_end` (assistant message) | `message_end` with a `pi.assistant` entry | `item.updated` (SDK) / `item.replaced` gen:N → entry id (pi-durable) |
+| `tool_execution_start/update/end` (`partialResult`, `result`) | `tool_execution_start/update/end` (`output` trim/append, result `entry`) | `tool` item + `item.updated` |
+| `queue_update {steering, followUp}` | `inbox_update {items}` | `state.queue` |
+| `compaction_end` | `entry_appended` (`pi.compaction`), `compaction_end` (errors) | `compaction` / `system` item |
+| `auto_retry_start/end` | `auto_retry_start`, `task_failed`, `submission` (`unanswered`) | `system` item |
+| `session.messages` (snapshot) | `snapshot.entries` (+ `generation` partial) | `resnapshot` / initial snapshot |
+| pi `extension_ui_request` (confirm), from the approvals extension | — | `approval.requested` (Phase 2) |
+
+**Item ids.** pi-durable items use the committed entry id (stringified). pi SDK messages carry no ids, so items are numbered by transcript position (`m<index>`, counting system messages). Tests check that both stay stable across an engine restart.
+
+**Usage** is summed from each assistant message's `usage` (identical for both runtimes) rather than read from `pi.usage`.
+
+**System messages:** the pi SDK emits the system prompt as a `system` role message (with `sections`). It is not shown in the timeline.

@@ -19,6 +19,23 @@ Solo developer, no deadline (X9). **Start with the easiest mode.** Each phase en
 
 Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swift build), MIT license, README.
 
+### Phase 0 status (2026-10-18)
+| Item | Status |
+|---|---|
+| Monorepo scaffold, MIT license, README | ✅ |
+| **S1** Engine skeleton | ✅ with the scripted model: `piopio-cli` streams from pi-durable Threads and pi-coding-agent Build sessions over UDS JSON-RPC (`scripts/s1-demo.sh`). Fixtures recorded. **Pending:** a run against OpenRouter (`scripts/s1-demo.sh --real`, plus `RECORD_FIXTURES=real` for real fixtures). |
+| Protocol package | ✅ TypeBox schemas + JSON Schema export. **Swift codegen pending:** Swift types are hand-written for the S1 subset. |
+| S2 Native transcript, S3 OpenRouter details, S4 PiHarness on Cloudflare, S5 Packaging | ⏳ Not started |
+| CI | ⏳ Not started (needs a macOS 27 runner for the Swift side) |
+
+**S1 findings**
+- pi 1.3.0 SDK and pi-durable share event *names* but not *shapes* (deltas in `assistantMessageEvent` vs `changes[]`, messages vs committed entries). Hence one builder with two adapters.
+- pi-durable commits partial answers every 100 ms (`settings.progress`), so very short answers arrive with no deltas. Clients must render a completed message even if they never saw a delta.
+- pi-durable entry ids are numbers. The protocol stringifies them.
+- In SDK mode, pi still discovers user-level skills (`~/.agents/skills`) even with a custom `agentDir`. Engine tests are therefore not fully hermetic, and the fixture recorder strips system prompts.
+- One `InMemoryCredentialStore`, filled on demand via the `secrets.get` reverse request, serves both pi-ai `Models` (pi-durable) and `ModelRuntime` (SDK).
+- With only the Command Line Tools installed, `swift test` needs an explicit swift-testing plugin path (`scripts/swift-test.sh`). The SwiftUI app target will need Xcode.
+
 ## Phase 1 — Chat: Threads (first daily driver)
 Scope: 04-chat §1 (T1–T12), Quick Chat (§4), 07-shared §1 (models, costs), §8 onboarding, 08-app-shell core (window, sidebar, transcript, composer, ⌘K, ⌘⇧F, notifications).
 **Acceptance:** for a week the author uses Piopio instead of a web chat app. 1,000-message threads stay smooth. Forking and edit/regenerate work. Costs match OpenRouter's dashboard within 2%.
