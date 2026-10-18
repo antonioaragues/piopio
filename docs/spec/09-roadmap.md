@@ -23,7 +23,7 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 | Item | Status |
 |---|---|
 | Monorepo scaffold, MIT license, README | ✅ |
-| **S1** Engine skeleton | ✅ with the scripted model: `piopio-cli` streams from pi-durable Threads and pi-coding-agent Build sessions over UDS JSON-RPC (`scripts/s1-demo.sh`). Fixtures recorded. **Pending:** a run against OpenRouter (`scripts/s1-demo.sh --real`, plus `RECORD_FIXTURES=real` for real fixtures). |
+| **S1** Engine skeleton | ✅ with the scripted model: `piopio-cli` streams from pi-durable Threads and pi-coding-agent Build sessions over UDS JSON-RPC (`scripts/s1-demo.sh`). Fixtures recorded. The pi-durable thread path is verified against OpenRouter through the app (Phase 1.1). **Pending:** Build sessions against OpenRouter, and real-model fixtures (`RECORD_FIXTURES=real`). |
 | Protocol package | ✅ TypeBox schemas + JSON Schema export. **Swift codegen pending:** Swift types are hand-written for the S1 subset. |
 | **S2** Native transcript | ✅ Decision: **TextKit 2 transcript** (one `NSTextView`, custom layout fragments + attachment views for cards). SwiftUI `LazyVStack`/`List` hitch while scrolling at 2,000 items; TextKit 2 had 0 hitches. See [docs/spikes/s2](../spikes/s2/README.md). |
 | **S2b** Card chrome, attachments, progressive load | ✅ Card fragments + tool-card attachment views (AppKit or SwiftUI, same cost) stay at 0–8 ms/s hitch. Prepending into a large document is O(text after the insert), so the transcript is a **windowed document** (newest 300 items, 10-item pages on demand, ~9 ms each, 0 anchor drift); tail on screen in ~140 ms for 2,000 items. 120 Hz still untested. |
@@ -40,7 +40,7 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 
 ## Phase 1 — Chat: Threads (first daily driver)
 
-**Status (2026-10-19): milestone 1.1 done.** The app (SwiftUI + XcodeGen) starts or attaches to the engine and keeps the sidebar live via `catalog.changed` (rename/delete). Threads stream into the windowed TextKit 2 transcript (`PiopioTranscript`). It has a composer (Enter send/queue, ⇧Enter newline, Esc stop), a searchable model picker per thread, a default model setting, a cost display, OpenRouter key onboarding (Keychain), and plain-text auto titles. Verified with the scripted model (`scripts/app-smoke.sh`).
+**Status (2026-10-19): milestone 1.1 done.** The app (SwiftUI + XcodeGen) starts or attaches to the engine and keeps the sidebar live via `catalog.changed` (rename/delete). Threads stream into the windowed TextKit 2 transcript (`PiopioTranscript`). It has a composer (Enter send/queue, ⇧Enter newline, Esc stop), a searchable model picker per thread, a default model setting, a cost display, OpenRouter key onboarding (Keychain), and plain-text auto titles. Verified with the scripted model (`scripts/app-smoke.sh`) and by the author against OpenRouter (2026-10-19: model switch to `deepseek/deepseek-v4.1-flash`, streaming answer, cost display).
 Next milestones: **1.2** edit/regenerate/fork (T5), thinking level (T3), queue UI (T4), error states with a real key. **1.3** attachments (T8), web search/fetch (T9), export (T11). **1.4** Quick Chat (§4), ⌘K palette, global search (catalog.db + FTS5), notifications. **1.5** packaging (S5: bundled Node + engine, notarized DMG).
 
 Scope: 04-chat §1 (T1–T12), Quick Chat (§4), 07-shared §1 (models, costs), §8 onboarding, 08-app-shell core (window, sidebar, transcript, composer, ⌘K, ⌘⇧F, notifications).
