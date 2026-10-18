@@ -85,6 +85,22 @@ struct LabResults: Codable {
     var streamAppendAvgMs: Double = 0
     var streamAppendMaxMs: Double = 0
     var footprintEndMB: Double = 0
+    // S2b
+    var tailToFrameMs: Double?
+    var backfillTotalMs: Double?
+    var backfill: FrameStats?
+    var prependMaxMs: Double?
+    var toggle: FrameStats?
+    var toggleAvgMs: Double?
+    var toggleMaxMs: Double?
+    var longStream: FrameStats?
+    var longStreamChars: Int?
+    var longStreamAppendAvgMs: Double?
+    var longStreamAppendMaxMs: Double?
+    var pageLoads: Int?
+    var pageLoadAvgMs: Double?
+    var pageLoadMaxMs: Double?
+    var pageAnchorDriftChars: Int?
     var notes: [String] = []
 }
 

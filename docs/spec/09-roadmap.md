@@ -25,7 +25,8 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 | Monorepo scaffold, MIT license, README | ✅ |
 | **S1** Engine skeleton | ✅ with the scripted model: `piopio-cli` streams from pi-durable Threads and pi-coding-agent Build sessions over UDS JSON-RPC (`scripts/s1-demo.sh`). Fixtures recorded. **Pending:** a run against OpenRouter (`scripts/s1-demo.sh --real`, plus `RECORD_FIXTURES=real` for real fixtures). |
 | Protocol package | ✅ TypeBox schemas + JSON Schema export. **Swift codegen pending:** Swift types are hand-written for the S1 subset. |
-| **S2** Native transcript | ✅ Decision: **TextKit 2 transcript** (one `NSTextView`, custom layout fragments + attachment views for cards). SwiftUI `LazyVStack`/`List` hitch while scrolling at 2,000 items; TextKit 2 had 0 hitches. See [docs/spikes/s2](../spikes/s2/README.md). Follow-up **S2b**: card chrome, off-main-thread building, 120 Hz. |
+| **S2** Native transcript | ✅ Decision: **TextKit 2 transcript** (one `NSTextView`, custom layout fragments + attachment views for cards). SwiftUI `LazyVStack`/`List` hitch while scrolling at 2,000 items; TextKit 2 had 0 hitches. See [docs/spikes/s2](../spikes/s2/README.md). |
+| **S2b** Card chrome, attachments, progressive load | ✅ Card fragments + tool-card attachment views (AppKit or SwiftUI, same cost) stay at 0–8 ms/s hitch. Prepending into a large document is O(text after the insert), so the transcript is a **windowed document** (newest 300 items, 10-item pages on demand, ~9 ms each, 0 anchor drift); tail on screen in ~140 ms for 2,000 items. 120 Hz still untested. |
 | S3 OpenRouter details, S4 PiHarness on Cloudflare, S5 Packaging | ⏳ Not started |
 | CI | ⏳ Not started (needs a macOS 27 runner for the Swift side) |
 

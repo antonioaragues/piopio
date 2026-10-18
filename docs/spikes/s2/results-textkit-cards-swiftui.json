@@ -1,0 +1,83 @@
+{
+  "backfill" : {
+    "droppedFraction" : 0,
+    "frames" : 0,
+    "hitchMsPerSec" : 0,
+    "maxMs" : 0,
+    "p50Ms" : 0,
+    "p95Ms" : 0,
+    "p99Ms" : 0,
+    "seconds" : 0
+  },
+  "backfillTotalMs" : 152.63458332628943,
+  "characters" : 2236662,
+  "fling" : {
+    "droppedFraction" : 0,
+    "frames" : 241,
+    "hitchMsPerSec" : 0,
+    "maxMs" : 16.796249998151325,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.666000010445714,
+    "seconds" : 4.016636250002193
+  },
+  "footprintAfterLoadMB" : 98.71964263916016,
+  "footprintEndMB" : 431.12632751464844,
+  "items" : 2000,
+  "loadSyncMs" : 152.7828749967739,
+  "loadToFrameMs" : 202.62195832037833,
+  "longStream" : {
+    "droppedFraction" : 4.972288738969155e-06,
+    "frames" : 2438,
+    "hitchMsPerSec" : 0,
+    "maxMs" : 16.796875002910383,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.666000010445714,
+    "seconds" : 40.6335353750037
+  },
+  "longStreamAppendAvgMs" : 0.9723824793477657,
+  "longStreamAppendMaxMs" : 2.3438750067725778,
+  "longStreamChars" : 121834,
+  "notes" : [
+
+  ],
+  "refreshHz" : 60,
+  "renderer" : "textkit-cards-swiftui",
+  "scroll" : {
+    "droppedFraction" : 0.011114565341193816,
+    "frames" : 356,
+    "hitchMsPerSec" : 8.332637558634014,
+    "maxMs" : 49.99800000223331,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.79620832146611,
+    "seconds" : 6.000020958323148
+  },
+  "stream" : {
+    "droppedFraction" : 0,
+    "frames" : 1251,
+    "hitchMsPerSec" : 0,
+    "maxMs" : 16.796958341728896,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.666000010445714,
+    "seconds" : 20.849950750009157
+  },
+  "streamAppendAvgMs" : 1.142690229145386,
+  "streamAppendMaxMs" : 2.346958324778825,
+  "streamCharsPerSec" : 600,
+  "tailToFrameMs" : 138.05166665406432,
+  "toggle" : {
+    "droppedFraction" : 0,
+    "frames" : 95,
+    "hitchMsPerSec" : 0,
+    "maxMs" : 16.666000010445714,
+    "p50Ms" : 16.6659999958938,
+    "p95Ms" : 16.666000010445714,
+    "p99Ms" : 16.666000010445714,
+    "seconds" : 1.5832699999882607
+  },
+  "toggleAvgMs" : 2.603135416393343,
+  "toggleMaxMs" : 3.9281666686292738
+}

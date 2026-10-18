@@ -13,7 +13,7 @@
 - Common: search field (filters the sidebar; ⌘⇧F opens global search), drag to reorder pins, context menus (rename, pin, archive, export, delete, reveal in Finder).
 
 ## 3. Transcript
-- **TR1** One TextKit 2 document per session (viewport-based layout; Spike S2 measured 0 ms/s hitches at 2,000 items / 2.2 M chars). Card chrome comes from custom layout fragments, and interactive cards are attachment views. It must stay < 5 ms/s hitch time while scrolling and streaming. The scroll position is kept when streaming above the fold.
+- **TR1** One **windowed** TextKit 2 document per session (Spikes S2/S2b). It holds the newest ~300 items, and older history is prepended in small pages (≈10 items, built off the main thread) as the user nears the top, keeping the visible text anchored. Jumping to an old item re-windows around it. Card chrome comes from custom layout fragments, and interactive cards (tool, routing, approval) are attachment views that may host SwiftUI. Budget: < 5 ms/s hitch time while scrolling and streaming; the tail is on screen in < 200 ms when opening a session. The scroll position is kept when streaming above the fold.
 - **TR2** Auto-scroll follows the stream unless the user scrolls up. A "Jump to latest" pill appears when not following.
 - **TR3** Item renderers are listed in 03-engine-protocol §4. Each tool card is collapsible, with a global "Collapse tool calls" toggle.
 - **TR4** Message actions on hover: copy, edit (user), regenerate (assistant), fork from here, copy as markdown, show raw.

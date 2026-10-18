@@ -4,7 +4,7 @@ import Foundation
 /// Token spans for lightweight syntax highlighting (a stand-in for tree-sitter in the spike).
 enum CodeToken { case keyword, string, comment, number }
 
-enum Highlighter {
+nonisolated enum Highlighter {
     private static let keywords: Set<String> = [
         "let", "var", "func", "struct", "class", "enum", "return", "if", "else", "for", "in", "where", "try", "await", "async",
         "import", "export", "const", "function", "def", "lambda", "true", "false", "nil", "null", "self", "case", "switch", "as", "default",
@@ -70,7 +70,14 @@ enum Highlighter {
     }
 }
 
-enum Inline {
+extension NSFont {
+    /// Thread-safe trait conversion (NSFontManager is main-thread only).
+    func adding(_ traits: NSFontDescriptor.SymbolicTraits) -> NSFont {
+        NSFont(descriptor: fontDescriptor.withSymbolicTraits(fontDescriptor.symbolicTraits.union(traits)), size: pointSize) ?? self
+    }
+}
+
+nonisolated enum Inline {
     /// Inline markdown (bold, italic, code spans, links) → AttributedString. Falls back to plain text.
     static func attributed(_ markdown: String) -> AttributedString {
         (try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)))
@@ -86,8 +93,8 @@ enum Inline {
             var f = font
             var attrs: [NSAttributedString.Key: Any] = [.foregroundColor: color]
             if let intent = run.inlinePresentationIntent {
-                if intent.contains(.stronglyEmphasized) { f = NSFontManager.shared.convert(f, toHaveTrait: .boldFontMask) }
-                if intent.contains(.emphasized) { f = NSFontManager.shared.convert(f, toHaveTrait: .italicFontMask) }
+                if intent.contains(.stronglyEmphasized) { f = f.adding(.bold) }
+                if intent.contains(.emphasized) { f = f.adding(.italic) }
                 if intent.contains(.code) {
                     f = .monospacedSystemFont(ofSize: font.pointSize * 0.92, weight: .regular)
                     attrs[.backgroundColor] = NSColor.quaternaryLabelColor
