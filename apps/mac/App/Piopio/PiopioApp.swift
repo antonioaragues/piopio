@@ -12,7 +12,9 @@ struct PiopioApp: App {
                 .frame(minWidth: 760, minHeight: 480)
                 .task {
                     appDelegate.engine = engine
-                    await engine.start()
+                    if QuickChatController.shared == nil { _ = QuickChatController(engine: engine) }
+                    Notifier.shared.setUp()
+                    if engine.status != .ready { await engine.start() }
                     DebugAutomation.run(engine: engine)
                 }
         }
@@ -21,6 +23,13 @@ struct PiopioApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New Thread") { NotificationCenter.default.post(name: .newThread, object: nil) }
                     .keyboardShortcut("n")
+                Button("Quick Chat") { QuickChatController.shared?.show() }
+            }
+            CommandGroup(after: .textEditing) {
+                Button("Command Palette") { NotificationCenter.default.post(name: .showPalette, object: false) }
+                    .keyboardShortcut("k")
+                Button("Search Messages") { NotificationCenter.default.post(name: .showPalette, object: true) }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
             }
         }
 
@@ -33,7 +42,13 @@ struct PiopioApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor var engine: EngineController?
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// Quick Chat keeps working with the main window closed.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { QuickChatShortcut.current == .off }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows { MainActor.assumeIsolated { WindowOpener.shared.showMain() } }
+        return true
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated { engine?.stop() }
@@ -42,4 +57,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension Notification.Name {
     static let newThread = Notification.Name("piopio.newThread")
+    /// Object: `true` opens message search.
+    static let showPalette = Notification.Name("piopio.showPalette")
 }

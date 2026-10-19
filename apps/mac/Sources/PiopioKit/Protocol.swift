@@ -356,3 +356,23 @@ public struct QueueRemoveParams: Encodable, Sendable {
     public var ref: ContainerRef; public var queueId: String
     public init(ref: ContainerRef, queueId: String) { self.ref = ref; self.queueId = queueId }
 }
+
+// MARK: Milestone 1.4: search
+
+public struct SearchParams: Encodable, Sendable {
+    public var query: String; public var limit: Int?
+    public init(query: String, limit: Int? = nil) { self.query = query; self.limit = limit }
+}
+
+public struct SearchResult: Decodable, Sendable, Hashable, Identifiable {
+    public enum Kind: String, Decodable, Sendable { case title, user, assistant }
+    public var ref: ContainerRef
+    public var title: String
+    public var itemId: String?
+    public var kind: Kind
+    /// Matches are wrapped in U+0002 … U+0003.
+    public var snippet: String
+    public var at: String
+    public var id: String { "\(ref.id)/\(itemId ?? "title")" }
+}
+public struct SearchResults: Decodable, Sendable { public var results: [SearchResult] }

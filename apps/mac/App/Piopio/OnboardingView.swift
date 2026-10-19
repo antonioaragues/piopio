@@ -49,6 +49,7 @@ struct SettingsView: View {
     @State private var key = ""
     @State private var saved = false
     @State private var showModels = false
+    @State private var shortcutTick = 0
 
     var body: some View {
         Form {
@@ -71,6 +72,18 @@ struct SettingsView: View {
                     }
                 }
                 if saved { Text("Saved.").foregroundStyle(.secondary) }
+            }
+            Section("General") {
+                Picker("Quick Chat shortcut", selection: Binding(get: { QuickChatShortcut.current }, set: { value in
+                    UserDefaults.standard.set(value.rawValue, forKey: "quickChatShortcut")
+                    QuickChatController.shared?.applyShortcut()
+                    shortcutTick += 1
+                })) {
+                    ForEach(QuickChatShortcut.allCases) { Text($0.label).tag($0) }
+                }
+                .id(shortcutTick)
+                Toggle("Notify when an answer finishes while I'm elsewhere", isOn: Binding(get: { Notifier.enabled }, set: { UserDefaults.standard.set($0, forKey: "notifyAnswers"); shortcutTick += 1 }))
+                    .id(shortcutTick)
             }
             Section("Chat") {
                 LabeledContent("Default model for new threads") {

@@ -8315,6 +8315,106 @@
 			"type": "object",
 			"properties": {}
 		},
+		"catalog.search.params": {
+			"type": "object",
+			"required": [
+				"query"
+			],
+			"properties": {
+				"query": {
+					"type": "string"
+				},
+				"limit": {
+					"type": "number"
+				}
+			}
+		},
+		"catalog.search.result": {
+			"type": "object",
+			"required": [
+				"results"
+			],
+			"properties": {
+				"results": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"ref",
+							"title",
+							"kind",
+							"snippet",
+							"at"
+						],
+						"properties": {
+							"ref": {
+								"type": "object",
+								"required": [
+									"kind",
+									"id"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "build"
+											},
+											{
+												"type": "string",
+												"const": "thread"
+											},
+											{
+												"type": "string",
+												"const": "space"
+											},
+											{
+												"type": "string",
+												"const": "agent"
+											}
+										]
+									},
+									"id": {
+										"type": "string"
+									},
+									"conversationId": {
+										"type": "string"
+									}
+								}
+							},
+							"title": {
+								"type": "string"
+							},
+							"itemId": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "title"
+									},
+									{
+										"type": "string",
+										"const": "user"
+									},
+									{
+										"type": "string",
+										"const": "assistant"
+									}
+								]
+							},
+							"snippet": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
 		"models.list.params": {
 			"type": "object",
 			"properties": {

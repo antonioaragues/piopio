@@ -128,6 +128,45 @@ public final class TranscriptDocument {
         prefetchOlder()
     }
 
+    /// Scrolls to an item and flashes it (search results, links). Older items are paged in first.
+    public func reveal(_ itemId: String) {
+        guard !loading, let index = items.lastIndex(where: { $0.id == itemId }) else { return }
+        if index < windowStart { extendWindow(from: index) }
+        guard let d = documentIDs.firstIndex(of: itemId) else { return }
+        let start = offset(ofIndex: d)
+        let length = lengths[itemId] ?? 0
+        if let content = layoutManager.textContentManager,
+           let from = content.location(content.documentRange.location, offsetBy: start),
+           let to = content.location(from, offsetBy: length),
+           let range = NSTextRange(location: from, end: to) {
+            layoutManager.ensureLayout(for: range)
+        }
+        textView.scrollRangeToVisible(NSRange(location: start, length: min(length, 1)))
+        // Flash the first line of the item, skipping attachment characters.
+        let ns = storage.string as NSString
+        var first = start
+        while first < start + length, ns.character(at: first) == 0xFFFC || ns.character(at: first) == 0x0A { first += 1 }
+        let lineEnd = ns.rangeOfCharacter(from: CharacterSet(charactersIn: "\n\u{2028}"), options: [], range: NSRange(location: first, length: max(0, start + length - first))).location
+        let flashLength = min(120, (lineEnd == NSNotFound ? start + length : lineEnd) - first)
+        if flashLength > 0 { textView.showFindIndicator(for: NSRange(location: first, length: flashLength)) }
+        isFollowing = atBottom
+    }
+
+    /// Synchronously prepends everything from `index` up to the window (rare: jumping to old history).
+    private func extendWindow(from index: Int) {
+        prefetched = nil
+        let page = Array(items[index..<windowStart])
+        let rendered = page.map { renderer.render($0) }
+        let text = NSMutableAttributedString()
+        for r in rendered { text.append(r) }
+        storage.insert(text, at: 0)
+        wireCards(in: NSRange(location: 0, length: text.length))
+        documentIDs.insert(contentsOf: page.map(\.id), at: 0)
+        for (item, r) in zip(page, rendered) { lengths[item.id] = r.length }
+        windowStart = index
+        prefetchOlder()
+    }
+
     public func scrollToLatest() {
         textView.scrollToEndOfDocument(nil)
         isFollowing = true

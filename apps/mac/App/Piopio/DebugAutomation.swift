@@ -30,6 +30,16 @@ enum DebugAutomation {
                         await thread.send(edit)
                     }
                 }
+                // PIOPIO_DEMO_SEARCH: open message search with this query.
+                if let search = env["PIOPIO_DEMO_SEARCH"] {
+                    await waitIdle(thread)
+                    NotificationCenter.default.post(name: .showPalette, object: search)
+                }
+                // PIOPIO_DEMO_QUICK: ask this in the Quick Chat panel (snapshot shows the panel).
+                if let quick = env["PIOPIO_DEMO_QUICK"] {
+                    QuickChatController.shared?.show()
+                    QuickChatController.shared?.ask(quick)
+                }
             }
         }
         if let path = env["PIOPIO_SNAPSHOT"] {
@@ -50,7 +60,8 @@ enum DebugAutomation {
     }
 
     private static func snapshot(to url: URL) {
-        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && !($0 is NSPanel) }),
+        let wantsPanel = ProcessInfo.processInfo.environment["PIOPIO_DEMO_QUICK"] != nil
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && ($0 is NSPanel) == wantsPanel }),
               let view = window.contentView?.superview ?? window.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)

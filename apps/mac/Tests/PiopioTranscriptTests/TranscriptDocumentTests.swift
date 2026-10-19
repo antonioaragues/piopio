@@ -120,3 +120,13 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     if case .tool(let t) = search { #expect(ItemRenderer.toolTitle(t) == ("Searched the web", "swift 6.4")) }
     expectConsistent(doc)
 }
+
+@MainActor @Test func revealPagesInOldItems() async {
+    let items = (0..<400).map { i in i % 2 == 0 ? user("\(i)", "message \(i)") : answer("\(i)", "answer \(i)") }
+    let doc = await loaded(items, window: 300, page: 10)
+    #expect(doc.documentIDs.first == "100")
+    doc.reveal("20")
+    #expect(doc.documentIDs.first == "20")
+    #expect(doc.documentIDs.count == 380)
+    expectConsistent(doc)
+}

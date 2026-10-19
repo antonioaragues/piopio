@@ -215,6 +215,20 @@ final class EngineController {
         }
     }
 
+    // MARK: Attention
+
+    /// The thread shown in the main window (notifications skip it while the app is active).
+    var selectedThreadId: String?
+
+    func answerFinished(in thread: ThreadModel) {
+        guard !(NSApp.isActive && selectedThreadId == thread.ref.id) else { return }
+        guard case .assistant(let a)? = thread.document.lastItem else { return }
+        let title = threads.first { $0.ref.id == thread.ref.id }?.title ?? "Piopio"
+        let failed = a.status == .error
+        let body = failed ? (a.error ?? "The request failed.") : String(a.text.replacingOccurrences(of: "\n", with: " ").prefix(180))
+        Notifier.shared.answer(threadId: thread.ref.id, title: title, body: body, failed: failed)
+    }
+
     // MARK: Secrets
 
     func saveKey(_ key: String) async throws {

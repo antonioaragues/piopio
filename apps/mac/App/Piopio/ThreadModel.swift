@@ -21,9 +21,14 @@ final class ThreadModel {
     @ObservationIgnored private weak var engine: EngineController?
     @ObservationIgnored private var subscriptionId: String?
 
-    init(ref: ContainerRef, engine: EngineController) {
+    /// Pending item to scroll to once the transcript is loaded (search results).
+    @ObservationIgnored private var pendingReveal: String?
+    @ObservationIgnored private let notifies: Bool
+
+    init(ref: ContainerRef, engine: EngineController, notifies: Bool = true) {
         self.ref = ref
         self.engine = engine
+        self.notifies = notifies
         document.onFollowingChange = { [weak self] following in self?.isFollowing = following }
         document.onAction = { [weak self] action in self?.handle(action) }
     }
@@ -50,6 +55,10 @@ final class ThreadModel {
             state = sub.snapshot.state
             await document.load(sub.snapshot)
             loaded = true
+            if let pendingReveal {
+                self.pendingReveal = nil
+                document.reveal(pendingReveal)
+            }
         } catch {
             self.error = String(describing: error)
         }
@@ -62,8 +71,14 @@ final class ThreadModel {
 
     private func apply(_ events: [SessionEvent]) {
         document.apply(events)
+        let wasRunning = state?.status == .running
         for case .state(let s) in events { state = s }
         for case .resnapshot(let snap) in events { state = snap.state }
+        if wasRunning, state?.status == .idle, notifies { engine?.answerFinished(in: self) }
+    }
+
+    func reveal(_ itemId: String) {
+        if loaded { document.reveal(itemId) } else { pendingReveal = itemId }
     }
 
     /// Sends a message: a new version of the edited message when editing; otherwise a new message

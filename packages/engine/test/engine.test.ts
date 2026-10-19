@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionEvent, Snapshot } from "@piopio/protocol";
@@ -312,4 +312,36 @@ describe("milestone 1.3", () => {
 		const jsonl = await a.client.call("sessions.export", { ref, format: "jsonl" });
 		expect(jsonl.content.trim().split("\n").map((l: string) => JSON.parse(l).kind)).toEqual(["user", "assistant"]);
 	});
+});
+
+test("search finds messages across threads, follows renames and deletes, and backfills", async () => {
+	const a = await start();
+	const ask = async (text: string) => {
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text } });
+		for (let i = 0; i < 100; i++) {
+			const s: Snapshot = await a.client.call("sessions.open", { ref });
+			if (s.state.status === "idle" && s.items.at(-1)?.kind === "assistant") break;
+			await new Promise((r) => setTimeout(r, 30));
+		}
+		return ref;
+	};
+	const kitchen = await ask("Where should the dishwasher go?");
+	const rust = await ask("Explain lifetimes in Rust");
+
+	let { results } = await a.client.call("catalog.search", { query: "dishwash" });
+	expect(results.map((r: { kind: string }) => r.kind).sort()).toEqual(["assistant", "title", "user"]);
+	expect(results.find((r: { kind: string }) => r.kind === "user")).toMatchObject({ ref: kitchen, title: "Where should the dishwasher go?", snippet: expect.stringContaining("\u0002dishwasher\u0003") });
+
+	await a.client.call("sessions.rename", { ref: rust, title: "Borrow checker" });
+	expect((await a.client.call("catalog.search", { query: "borrow" })).results[0]).toMatchObject({ ref: rust, kind: "title" });
+	await a.client.call("sessions.delete", { ref: kitchen });
+	expect((await a.client.call("catalog.search", { query: "dishwasher" })).results).toEqual([]);
+
+	await stop(a);
+	for (const f of ["search.db", "search.db-wal", "search.db-shm"]) rmSync(join(a.home, f), { force: true });
+	const b = await start(a.home);
+	expect(await b.engine.backfill).toBe(1);
+	expect((await b.client.call("catalog.search", { query: "lifetimes" })).results.map((r: { kind: string }) => r.kind).sort()).toEqual(["assistant", "user"]);
 });

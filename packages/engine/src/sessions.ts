@@ -14,6 +14,8 @@ import { DatabaseSync } from "node:sqlite";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
+import { SearchIndex } from "./search.js";
+import type { SessionEvent } from "@piopio/protocol";
 
 type CatalogEntry = SessionSummary & { thinking?: string; file?: string; sessionFile?: string; branches?: BranchState; web?: boolean };
 
@@ -25,6 +27,7 @@ export class Sessions {
 	private entries = new Map<string, CatalogEntry>();
 	private open = new Map<string, Promise<Runtime>>();
 	private listeners = new Set<CatalogListener>();
+	readonly search: SearchIndex;
 
 	constructor(
 		private readonly paths: EnginePaths,
@@ -32,6 +35,7 @@ export class Sessions {
 		private readonly piOverrides: { piSessionDir?: string; piAgentDir?: string } = {},
 		private readonly webOptions: WebOptions = {},
 	) {
+		this.search = new SearchIndex(join(paths.home, "search.db"));
 		if (existsSync(paths.catalogIndex)) {
 			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) this.entries.set(e.ref.id, e);
 		}
@@ -71,8 +75,59 @@ export class Sessions {
 	rename(ref: ContainerRef, title: string): void {
 		const entry = this.entry(ref);
 		entry.title = title.trim().slice(0, 120) || entry.title;
+		this.search.setTitle(ref.id, entry.title, entry.updatedAt);
 		this.save();
 		this.changed(entry);
+	}
+
+	/** Full-text search across sessions, with the catalog's titles and refs. */
+	find(query: string, limit = 30) {
+		return this.search.search(query, limit).flatMap((hit) => {
+			const entry = this.entries.get(hit.sessionId);
+			return entry ? [{ ref: entry.ref, title: entry.title, ...(hit.itemId ? { itemId: hit.itemId } : {}), kind: hit.kind, snippet: hit.snippet, at: hit.at }] : [];
+		});
+	}
+
+	/** Indexes threads that were never indexed (or with an older index version), one at a time. */
+	async backfillSearch(): Promise<number> {
+		let count = 0;
+		for (const entry of [...this.entries.values()]) {
+			if (entry.ref.kind !== "thread" || this.search.isIndexed(entry.ref.id) || !this.entries.has(entry.ref.id)) continue;
+			const wasOpen = this.open.has(entry.ref.id);
+			try {
+				const runtime = await this.runtime(entry.ref); // indexes on open
+				if (!wasOpen && this.open.get(entry.ref.id)) {
+					this.open.delete(entry.ref.id);
+					await runtime.close();
+				}
+				count++;
+			} catch {
+				// unreadable session: skip; it is retried on the next start
+			}
+		}
+		return count;
+	}
+
+	/** Keeps the search index in step with what the session shows. */
+	private index(entry: CatalogEntry, events: readonly SessionEvent[]): void {
+		const id = entry.ref.id;
+		for (const event of events) {
+			switch (event.type) {
+				case "item.added":
+				case "item.updated":
+					this.search.upsertItem(id, event.item);
+					break;
+				case "item.replaced":
+					this.search.upsertItem(id, event.item, event.oldId);
+					break;
+				case "item.removed":
+					this.search.removeItem(id, event.itemId);
+					break;
+				case "resnapshot":
+					this.search.replaceSession(id, entry.title, entry.updatedAt, event.snapshot.items);
+					break;
+			}
+		}
 	}
 
 	/**
@@ -124,6 +179,7 @@ export class Sessions {
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
 		if (entry.file) for (const suffix of ["", "-wal", "-shm"]) rmSync(entry.file + suffix, { force: true });
+		this.search.deleteSession(ref.id);
 		this.entries.delete(ref.id);
 		this.save();
 		for (const l of this.listeners) l({ upserted: [], removed: [entry.ref] });
@@ -174,6 +230,7 @@ export class Sessions {
 		entry.updatedAt = new Date().toISOString();
 		if (firstInput && (entry.title === "New thread" || entry.title === "New session")) {
 			entry.title = titleFrom(firstInput) || entry.title;
+			this.search.setTitle(ref.id, entry.title, entry.updatedAt);
 		}
 		this.save();
 		this.changed(entry);
@@ -183,9 +240,17 @@ export class Sessions {
 		const runtimes = await Promise.allSettled(this.open.values());
 		this.open.clear();
 		await Promise.allSettled(runtimes.map((r) => (r.status === "fulfilled" ? r.value.close() : undefined)));
+		this.search.close();
 	}
 
 	private async openRuntime(entry: CatalogEntry): Promise<Runtime> {
+		const runtime = await this.createRuntime(entry);
+		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
+		runtime.onEvents((events) => this.index(entry, events));
+		return runtime;
+	}
+
+	private async createRuntime(entry: CatalogEntry): Promise<Runtime> {
 		const model = entry.model ?? this.hub.defaultModel;
 		if (entry.ref.kind === "thread") {
 			return ThreadRuntime.open({

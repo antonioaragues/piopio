@@ -55,7 +55,14 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 - **Export:** Markdown, HTML and JSONL for the active branch, plus Copy as Markdown.
 - Not verified against live OpenRouter: the web plugin response format is per its docs, and the parser is unit-tested on that shape.
 
-Next milestones: **1.4** Quick Chat (§4), ⌘K palette, global search (catalog.db + FTS5), notifications. **1.5** packaging (S5: bundled Node + engine, notarized DMG).
+**Milestone 1.4 done (2026-10-20).**
+- **Global search:** SQLite FTS5 (Node's built-in SQLite) in `search.db` holds titles, your messages and finished answers of each thread's active branch. It's kept current from session events, rebuilt on branch switches, and backfilled for older threads at engine start. Matching is by word prefix and ignores accents.
+- **⌘K palette:** commands, threads by title and message hits in one list. ⇧⌘F opens message search; choosing a hit opens the thread, pages in older history if needed, and flashes the message.
+- **Quick Chat:** a floating non-activating panel on a global hotkey (Carbon; ⌥Space by default, configurable or off). The last quick thread is reused for 10 minutes, and ⌘↩ opens it in the main window. With Quick Chat on, the app keeps running when its window closes.
+- **Notifications:** sent when an answer finishes or fails while you're elsewhere; clicking opens the thread. Can be turned off in Settings.
+- Not verified: the notification permission prompt and banners. Automation can't click them.
+
+Next milestones: **1.5** packaging (S5: bundled Node + engine, notarized DMG, Sparkle).
 
 Scope: 04-chat §1 (T1–T12), Quick Chat (§4), 07-shared §1 (models, costs), §8 onboarding, 08-app-shell core (window, sidebar, transcript, composer, ⌘K, ⌘⇧F, notifications).
 **Acceptance:** for a week the author uses Piopio instead of a web chat app. 1,000-message threads stay smooth. Forking and edit/regenerate work. Costs match OpenRouter's dashboard within 2%.

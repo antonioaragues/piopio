@@ -294,6 +294,13 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({}),
 	},
+	/** Full-text search over session titles and messages (active branches). Snippets mark matches with \u0002…\u0003. */
+	"catalog.search": {
+		params: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Number()) }),
+		result: Type.Object({
+			results: Type.Array(Type.Object({ ref: ContainerRef, title: Type.String(), itemId: Type.Optional(Type.String()), kind: literals("title", "user", "assistant"), snippet: Type.String(), at: Type.String() })),
+		}),
+	},
 	"models.list": {
 		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({ models: Type.Array(ModelInfo), defaultModel: ModelRef }),

@@ -32,6 +32,8 @@ export class Engine {
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
 	private authed = new Set<RpcConnection>();
+	/** Resolves when older threads are indexed for search (tests wait on it). */
+	backfill: Promise<number> = Promise.resolve(0);
 	private readonly startedAt = Date.now();
 	private readonly log: (line: string) => void;
 
@@ -65,9 +67,12 @@ export class Engine {
 		});
 		chmodSync(socket, 0o600);
 		this.log(`piopio-engine ${ENGINE_VERSION} listening on ${socket}${this.options.faux ? " (faux models)" : ""}`);
+		// Index older threads for search in the background.
+		this.backfill = this.sessions.backfillSearch().catch(() => 0);
 	}
 
 	async stop(): Promise<void> {
+		await this.backfill;
 		for (const off of this.subscriptions.values()) off();
 		this.subscriptions.clear();
 		await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()));
@@ -227,6 +232,10 @@ export class Engine {
 			case "sessions.export": {
 				const p = params as Params<"sessions.export">;
 				return (await this.sessions.export(p.ref, p.format)) satisfies Result<"sessions.export">;
+			}
+			case "catalog.search": {
+				const p = params as Params<"catalog.search">;
+				return { results: this.sessions.find(p.query, p.limit ?? 30) } satisfies Result<"catalog.search">;
 			}
 			case "models.list": {
 				const p = params as Params<"models.list">;

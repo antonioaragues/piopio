@@ -5,6 +5,9 @@ struct RootView: View {
     let engine: EngineController
     @State private var selection: String?
     @State private var showOnboarding = false
+    @State private var palette: CommandPalette.Mode?
+    @State private var paletteQuery = ""
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         NavigationSplitView {
@@ -13,8 +16,23 @@ struct RootView: View {
         } detail: {
             detail
         }
+        .overlay(alignment: .top) {
+            if let mode = palette, engine.status == .ready {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.001).onTapGesture { palette = nil }
+                    CommandPalette(engine: engine, thread: selectedThread, close: { palette = nil }, newThread: newThread, openThread: open(_:item:), mode: mode, query: paletteQuery)
+                        .padding(.top, 80)
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in newThread() }
         .onReceive(NotificationCenter.default.publisher(for: .selectThread)) { note in selection = note.object as? String }
+        .onReceive(NotificationCenter.default.publisher(for: .showPalette)) { note in
+            paletteQuery = (note.object as? String) ?? ""
+            palette = (note.object as? Bool) == true || note.object is String ? .messages : .all
+        }
+        .onChange(of: selection) { _, id in engine.selectedThreadId = id }
+        .onAppear { WindowOpener.shared.openMain = { [openWindow] in openWindow(id: "main") } }
         .onChange(of: engine.status) { _, status in
             if status == .ready, engine.needsKey { showOnboarding = true }
             if status == .ready, selection == nil { selection = engine.threads.first?.ref.id }
@@ -50,6 +68,17 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    private var selectedThread: ThreadModel? {
+        guard let id = selection, let summary = engine.threads.first(where: { $0.ref.id == id }) else { return nil }
+        return engine.thread(summary.ref)
+    }
+
+    private func open(_ threadId: String, item: String?) {
+        selection = threadId
+        guard let item, let summary = engine.threads.first(where: { $0.ref.id == threadId }) else { return }
+        engine.thread(summary.ref).reveal(item)
     }
 
     private func newThread() {
