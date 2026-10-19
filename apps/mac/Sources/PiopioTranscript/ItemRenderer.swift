@@ -20,7 +20,12 @@ nonisolated struct ItemRenderer: Sendable {
         switch item {
         case .user(let u):
             // Your own words, as typed: no markdown interpretation (pasted fences and tables stay readable).
-            let text = NSAttributedString(string: u.text.replacingOccurrences(of: "\n", with: lineSeparator), attributes: [.font: body, .foregroundColor: NSColor.labelColor])
+            let text = NSMutableAttributedString()
+            if let files = u.attachments, !files.isEmpty {
+                let chips = files.map { "\($0.kind == .image ? "🖼" : "📄") \($0.name)" }.joined(separator: "     ")
+                text.append(NSAttributedString(string: chips + lineSeparator, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: NSColor.secondaryLabelColor]))
+            }
+            text.append(NSAttributedString(string: u.text.replacingOccurrences(of: "\n", with: lineSeparator), attributes: [.font: body, .foregroundColor: NSColor.labelColor]))
             let out = NSMutableAttributedString(attributedString: card(text, .user, spacingAfter: 2))
             out.append(userFooter(u))
             return out
@@ -33,7 +38,8 @@ nonisolated struct ItemRenderer: Sendable {
             if a.status != .streaming { out.append(answerFooter(a)) }
             return out
         case .tool(let t):
-            let card = DisclosureCard(kind: .tool, title: t.tool, detail: t.status.rawValue, body: t.output ?? "")
+            let (title, detail) = Self.toolTitle(t)
+            let card = DisclosureCard(kind: .tool, title: title, detail: detail, body: t.output ?? "")
             return attachmentParagraph(DisclosureAttachment(card: card))
         case .system(let s):
             if s.level == .error { return card(NSAttributedString(string: s.text, attributes: [.font: body, .foregroundColor: NSColor.systemRed]), .error) }
@@ -63,6 +69,22 @@ nonisolated struct ItemRenderer: Sendable {
             return line(NSAttributedString(string: "Stopped", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor.tertiaryLabelColor]), style())
         case .done, .streaming:
             return NSAttributedString()
+        }
+    }
+
+    /// Human titles for known tools ("Searched the web" + the query); others show their name and status.
+    static func toolTitle(_ t: ToolItem) -> (String, String) {
+        let running = t.status == .running
+        switch t.tool {
+        case "web_search":
+            let query = t.args?["query"]?.stringValue ?? ""
+            return (running ? "Searching the web…" : t.status == .error ? "Web search failed" : "Searched the web", query)
+        case "web_fetch":
+            let url = t.args?["url"]?.stringValue ?? ""
+            let host = URL(string: url)?.host() ?? url
+            return (running ? "Reading…" : t.status == .error ? "Couldn't read the page" : "Read", host)
+        default:
+            return (t.tool, t.status.rawValue)
         }
     }
 

@@ -68,15 +68,43 @@ final class ThreadModel {
 
     /// Sends a message: a new version of the edited message when editing; otherwise a new message
     /// (queued after the current answer, or steering it with `steer`).
-    func send(_ text: String, steer: Bool = false) async {
+    func send(_ text: String, attachments: [Attachment] = [], steer: Bool = false) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if let editing {
             self.editing = nil
             await call("sessions.edit", EditParams(ref: ref, itemId: editing.itemId, text: trimmed))
         } else {
-            await call("sessions.submit", SubmitParams(ref: ref, text: trimmed, whenBusy: steer ? .steer : .followUp, clientRequestId: UUID().uuidString))
+            await call("sessions.submit", SubmitParams(ref: ref, text: trimmed, attachments: attachments, whenBusy: steer ? .steer : .followUp, clientRequestId: UUID().uuidString))
         }
+    }
+
+    var webEnabled: Bool { state?.tools?.web ?? true }
+
+    func setWeb(_ enabled: Bool) async {
+        await call("sessions.configure", ConfigureParams(ref: ref, web: enabled))
+    }
+
+    /// Asks where to save, then writes the export.
+    func export(_ format: ExportParams.Format) async {
+        guard let client = engine?.client else { return }
+        do {
+            let result = try await client.call("sessions.export", ExportParams(ref: ref, format: format), as: ExportResult.self)
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = result.filename
+            panel.canCreateDirectories = true
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            try result.content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            report(error)
+        }
+    }
+
+    func copyAsMarkdown() async {
+        guard let client = engine?.client,
+              let result = try? await client.call("sessions.export", ExportParams(ref: ref, format: .markdown), as: ExportResult.self) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(result.content, forType: .string)
     }
 
     func cancelEditing() { editing = nil }

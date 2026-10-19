@@ -62,6 +62,39 @@
 						"text": {
 							"type": "string"
 						},
+						"attachments": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"name",
+									"kind"
+								],
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "image"
+											},
+											{
+												"type": "string",
+												"const": "text"
+											}
+										]
+									},
+									"mimeType": {
+										"type": "string"
+									},
+									"size": {
+										"type": "number"
+									}
+								}
+							}
+						},
 						"branch": {
 							"type": "object",
 							"required": [
@@ -528,6 +561,17 @@
 				"thinking": {
 					"type": "string"
 				},
+				"tools": {
+					"type": "object",
+					"required": [
+						"web"
+					],
+					"properties": {
+						"web": {
+							"type": "boolean"
+						}
+					}
+				},
 				"usage": {
 					"type": "object",
 					"required": [
@@ -593,6 +637,39 @@
 										},
 										"text": {
 											"type": "string"
+										},
+										"attachments": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"name",
+													"kind"
+												],
+												"properties": {
+													"name": {
+														"type": "string"
+													},
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "image"
+															},
+															{
+																"type": "string",
+																"const": "text"
+															}
+														]
+													},
+													"mimeType": {
+														"type": "string"
+													},
+													"size": {
+														"type": "number"
+													}
+												}
+											}
 										},
 										"branch": {
 											"type": "object",
@@ -1058,6 +1135,39 @@
 										"text": {
 											"type": "string"
 										},
+										"attachments": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"name",
+													"kind"
+												],
+												"properties": {
+													"name": {
+														"type": "string"
+													},
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "image"
+															},
+															{
+																"type": "string",
+																"const": "text"
+															}
+														]
+													},
+													"mimeType": {
+														"type": "string"
+													},
+													"size": {
+														"type": "number"
+													}
+												}
+											}
+										},
 										"branch": {
 											"type": "object",
 											"required": [
@@ -1504,6 +1614,39 @@
 										},
 										"text": {
 											"type": "string"
+										},
+										"attachments": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"name",
+													"kind"
+												],
+												"properties": {
+													"name": {
+														"type": "string"
+													},
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "image"
+															},
+															{
+																"type": "string",
+																"const": "text"
+															}
+														]
+													},
+													"mimeType": {
+														"type": "string"
+													},
+													"size": {
+														"type": "number"
+													}
+												}
+											}
 										},
 										"branch": {
 											"type": "object",
@@ -1984,6 +2127,17 @@
 								"thinking": {
 									"type": "string"
 								},
+								"tools": {
+									"type": "object",
+									"required": [
+										"web"
+									],
+									"properties": {
+										"web": {
+											"type": "boolean"
+										}
+									}
+								},
 								"usage": {
 									"type": "object",
 									"required": [
@@ -2094,6 +2248,39 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"attachments": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																}
+															}
+														}
 													},
 													"branch": {
 														"type": "object",
@@ -2562,6 +2749,17 @@
 										"thinking": {
 											"type": "string"
 										},
+										"tools": {
+											"type": "object",
+											"required": [
+												"web"
+											],
+											"properties": {
+												"web": {
+													"type": "boolean"
+												}
+											}
+										},
 										"usage": {
 											"type": "object",
 											"required": [
@@ -2665,6 +2863,39 @@
 									},
 									"text": {
 										"type": "string"
+									},
+									"attachments": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"name",
+												"kind"
+											],
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"kind": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "image"
+														},
+														{
+															"type": "string",
+															"const": "text"
+														}
+													]
+												},
+												"mimeType": {
+													"type": "string"
+												},
+												"size": {
+													"type": "number"
+												}
+											}
+										}
 									},
 									"branch": {
 										"type": "object",
@@ -3133,6 +3364,17 @@
 						"thinking": {
 							"type": "string"
 						},
+						"tools": {
+							"type": "object",
+							"required": [
+								"web"
+							],
+							"properties": {
+								"web": {
+									"type": "boolean"
+								}
+							}
+						},
 						"usage": {
 							"type": "object",
 							"required": [
@@ -3289,6 +3531,39 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"attachments": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																}
+															}
+														}
 													},
 													"branch": {
 														"type": "object",
@@ -3754,6 +4029,39 @@
 													"text": {
 														"type": "string"
 													},
+													"attachments": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																}
+															}
+														}
+													},
 													"branch": {
 														"type": "object",
 														"required": [
@@ -4200,6 +4508,39 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"attachments": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																}
+															}
+														}
 													},
 													"branch": {
 														"type": "object",
@@ -4680,6 +5021,17 @@
 											"thinking": {
 												"type": "string"
 											},
+											"tools": {
+												"type": "object",
+												"required": [
+													"web"
+												],
+												"properties": {
+													"web": {
+														"type": "boolean"
+													}
+												}
+											},
 											"usage": {
 												"type": "object",
 												"required": [
@@ -4790,6 +5142,39 @@
 																},
 																"text": {
 																	"type": "string"
+																},
+																"attachments": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"name",
+																			"kind"
+																		],
+																		"properties": {
+																			"name": {
+																				"type": "string"
+																			},
+																			"kind": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "image"
+																					},
+																					{
+																						"type": "string",
+																						"const": "text"
+																					}
+																				]
+																			},
+																			"mimeType": {
+																				"type": "string"
+																			},
+																			"size": {
+																				"type": "number"
+																			}
+																		}
+																	}
 																},
 																"branch": {
 																	"type": "object",
@@ -5257,6 +5642,17 @@
 													},
 													"thinking": {
 														"type": "string"
+													},
+													"tools": {
+														"type": "object",
+														"required": [
+															"web"
+														],
+														"properties": {
+															"web": {
+																"type": "boolean"
+															}
+														}
 													},
 													"usage": {
 														"type": "object",
@@ -5907,6 +6303,39 @@
 									"text": {
 										"type": "string"
 									},
+									"attachments": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"name",
+												"kind"
+											],
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"kind": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "image"
+														},
+														{
+															"type": "string",
+															"const": "text"
+														}
+													]
+												},
+												"mimeType": {
+													"type": "string"
+												},
+												"size": {
+													"type": "number"
+												}
+											}
+										}
+									},
 									"branch": {
 										"type": "object",
 										"required": [
@@ -6374,6 +6803,17 @@
 						"thinking": {
 							"type": "string"
 						},
+						"tools": {
+							"type": "object",
+							"required": [
+								"web"
+							],
+							"properties": {
+								"web": {
+									"type": "boolean"
+								}
+							}
+						},
 						"usage": {
 							"type": "object",
 							"required": [
@@ -6526,6 +6966,39 @@
 											},
 											"text": {
 												"type": "string"
+											},
+											"attachments": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"name",
+														"kind"
+													],
+													"properties": {
+														"name": {
+															"type": "string"
+														},
+														"kind": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "image"
+																},
+																{
+																	"type": "string",
+																	"const": "text"
+																}
+															]
+														},
+														"mimeType": {
+															"type": "string"
+														},
+														"size": {
+															"type": "number"
+														}
+													}
+												}
 											},
 											"branch": {
 												"type": "object",
@@ -6994,6 +7467,17 @@
 								"thinking": {
 									"type": "string"
 								},
+								"tools": {
+									"type": "object",
+									"required": [
+										"web"
+									],
+									"properties": {
+										"web": {
+											"type": "boolean"
+										}
+									}
+								},
 								"usage": {
 									"type": "object",
 									"required": [
@@ -7092,6 +7576,60 @@
 					"properties": {
 						"text": {
 							"type": "string"
+						},
+						"attachments": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"name",
+											"mimeType",
+											"data"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "image"
+											},
+											"name": {
+												"type": "string"
+											},
+											"mimeType": {
+												"type": "string"
+											},
+											"data": {
+												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"name",
+											"text"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "text"
+											},
+											"name": {
+												"type": "string"
+											},
+											"mimeType": {
+												"type": "string"
+											},
+											"text": {
+												"type": "string"
+											}
+										}
+									}
+								]
+							}
 						}
 					}
 				},
@@ -7532,6 +8070,85 @@
 			"type": "object",
 			"properties": {}
 		},
+		"sessions.export.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"format"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"format": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "markdown"
+						},
+						{
+							"type": "string",
+							"const": "html"
+						},
+						{
+							"type": "string",
+							"const": "jsonl"
+						}
+					]
+				}
+			}
+		},
+		"sessions.export.result": {
+			"type": "object",
+			"required": [
+				"filename",
+				"mimeType",
+				"content"
+			],
+			"properties": {
+				"filename": {
+					"type": "string"
+				},
+				"mimeType": {
+					"type": "string"
+				},
+				"content": {
+					"type": "string"
+				}
+			}
+		},
 		"sessions.configure.params": {
 			"type": "object",
 			"required": [
@@ -7590,6 +8207,9 @@
 				},
 				"thinking": {
 					"type": "string"
+				},
+				"web": {
+					"type": "boolean"
 				}
 			}
 		},

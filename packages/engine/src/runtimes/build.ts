@@ -5,7 +5,7 @@ import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder, type PiMessage } from "../timeline/builder.js";
 import { SdkEventMapper } from "../timeline/pi-sdk.js";
 import { recorder } from "./recorder.js";
-import { Emitter, type Runtime, type WhenBusy } from "./runtime.js";
+import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
 export type BuildOpenOptions = {
 	ref: ContainerRef;
@@ -80,7 +80,8 @@ export class BuildRuntime implements Runtime {
 		return this.emitter.on(listener);
 	}
 
-	async submit(text: string, options: { whenBusy: WhenBusy; requestId?: string }) {
+	async submit(text: string, options: SubmitOptions) {
+		if (options.attachments?.length) throw new EngineError("INVALID", "Build sessions don't take attachments yet; mention files with @ instead.");
 		await this.hub.ensureCredential(this.model.provider);
 		if (this.session.isStreaming) {
 			if (options.whenBusy === "reject") throw new EngineError("BUSY", "The session is busy.");

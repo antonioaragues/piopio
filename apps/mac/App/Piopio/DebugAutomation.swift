@@ -16,7 +16,9 @@ enum DebugAutomation {
                 NotificationCenter.default.post(name: .selectThread, object: ref.id)
                 let thread = engine.thread(ref)
                 await thread.open()
-                await thread.send(prompt)
+                // PIOPIO_DEMO_ATTACH: colon-separated file paths attached to the first message.
+                let files = (env["PIOPIO_DEMO_ATTACH"] ?? "").split(separator: ":").compactMap { try? AttachmentLoader.load(URL(fileURLWithPath: String($0))).attachment }
+                await thread.send(prompt, attachments: files)
                 // PIOPIO_DEMO_FOLLOWUP: a second message; PIOPIO_DEMO_EDIT: then edit it into this text.
                 if let followUp = env["PIOPIO_DEMO_FOLLOWUP"] {
                     await waitIdle(thread)

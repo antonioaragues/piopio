@@ -12,8 +12,10 @@ import { BuildRuntime } from "./runtimes/build.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
+import type { WebOptions } from "./tools/web.js";
+import { exportTranscript, type ExportFormat } from "./export.js";
 
-type CatalogEntry = SessionSummary & { thinking?: string; file?: string; sessionFile?: string; branches?: BranchState };
+type CatalogEntry = SessionSummary & { thinking?: string; file?: string; sessionFile?: string; branches?: BranchState; web?: boolean };
 
 export const newId = (prefix: string) => `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 20)}`;
 
@@ -28,6 +30,7 @@ export class Sessions {
 		private readonly paths: EnginePaths,
 		private readonly hub: ModelHub,
 		private readonly piOverrides: { piSessionDir?: string; piAgentDir?: string } = {},
+		private readonly webOptions: WebOptions = {},
 	) {
 		if (existsSync(paths.catalogIndex)) {
 			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) this.entries.set(e.ref.id, e);
@@ -54,9 +57,10 @@ export class Sessions {
 		for (const l of this.listeners) l({ upserted: [summary(entry)], removed: [] });
 	}
 
-	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string }): Promise<void> {
+	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean }): Promise<void> {
 		const entry = this.entry(ref);
 		if (this.open.has(ref.id)) await (await this.runtime(ref)).configure(change);
+		if (change.web !== undefined) entry.web = change.web;
 		if (change.model) entry.model = change.model;
 		if (change.thinking === "default") delete entry.thinking;
 		else if (change.thinking) entry.thinking = change.thinking;
@@ -106,6 +110,11 @@ export class Sessions {
 		}
 		this.changed(copy);
 		return copy.ref;
+	}
+
+	async export(ref: ContainerRef, format: ExportFormat) {
+		const entry = this.entry(ref);
+		return exportTranscript(entry.title, (await this.runtime(ref)).snapshot().items, format);
 	}
 
 	/** Threads lose their history file; build sessions only leave the catalog (pi owns the JSONL). */
@@ -190,6 +199,8 @@ export class Sessions {
 					entry.branches = state;
 					this.save();
 				},
+				web: entry.web ?? true,
+				webOptions: this.webOptions,
 			});
 		}
 		const runtime = await BuildRuntime.open({

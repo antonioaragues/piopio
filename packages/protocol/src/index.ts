@@ -65,11 +65,23 @@ export const BranchInfo = Type.Object({
 });
 export type BranchInfo = Static<typeof BranchInfo>;
 
+/** A file sent with a message, as the transcript shows it. */
+export const AttachmentInfo = Type.Object({ name: Type.String(), kind: literals("image", "text"), mimeType: Type.Optional(Type.String()), size: Type.Optional(Type.Number()) });
+export type AttachmentInfo = Static<typeof AttachmentInfo>;
+
+/** A file to send. Clients prepare it: images as base64 (already downscaled), documents as extracted text. */
+export const Attachment = Type.Union([
+	Type.Object({ kind: Type.Literal("image"), name: Type.String(), mimeType: Type.String(), data: Type.String() }),
+	Type.Object({ kind: Type.Literal("text"), name: Type.String(), mimeType: Type.Optional(Type.String()), text: Type.String() }),
+]);
+export type Attachment = Static<typeof Attachment>;
+
 export const UserItem = Type.Object({
 	kind: Type.Literal("user"),
 	id: Type.String(),
 	at: Type.String(),
 	text: Type.String(),
+	attachments: Type.Optional(Type.Array(AttachmentInfo)),
 	branch: Type.Optional(BranchInfo),
 });
 
@@ -136,6 +148,8 @@ export const SessionState = Type.Object({
 	queue: Type.Array(QueuedInput),
 	model: Type.Optional(ModelRef),
 	thinking: Type.Optional(Type.String()),
+	/** Optional tool sets enabled for this session. */
+	tools: Type.Optional(Type.Object({ web: Type.Boolean() })),
 	usage: Usage,
 });
 export type SessionState = Static<typeof SessionState>;
@@ -225,7 +239,7 @@ export const methods = {
 	"sessions.submit": {
 		params: Type.Object({
 			ref: ContainerRef,
-			input: Type.Object({ text: Type.String() }),
+			input: Type.Object({ text: Type.String(), attachments: Type.Optional(Type.Array(Attachment)) }),
 			whenBusy: Type.Optional(Type.Union([Type.Literal("followUp"), Type.Literal("steer"), Type.Literal("reject")])),
 			clientRequestId: Type.Optional(Type.String()),
 		}),
@@ -263,8 +277,12 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({}),
 	},
+	"sessions.export": {
+		params: Type.Object({ ref: ContainerRef, format: literals("markdown", "html", "jsonl") }),
+		result: Type.Object({ filename: Type.String(), mimeType: Type.String(), content: Type.String() }),
+	},
 	"sessions.configure": {
-		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()) }),
+		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()), web: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({}),
 	},
 	"sessions.rename": {

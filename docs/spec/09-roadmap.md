@@ -49,7 +49,13 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 - **Reconnect:** the engine connection is restored automatically.
 - The transcript has action links (Copy, Edit, Regenerate, Fork) and model/cost footers.
 
-Next milestones: **1.3** attachments (T8), web search/fetch (T9), export (T11). **1.4** Quick Chat (§4), ⌘K palette, global search (catalog.db + FTS5), notifications. **1.5** packaging (S5: bundled Node + engine, notarized DMG).
+**Milestone 1.3 done (2026-10-19).**
+- **Attachments:** images are downscaled to JPEG ≤ 2048 px by the app; PDFs are sent as text via PDFKit, and text files as-is. They're sent as content blocks with the words last, and shown as chips through a `piopio.user` display entry. Edits keep the attachments, and images need a vision model.
+- **Web tools:** `web_search` uses OpenRouter's web plugin on a cheap model (`PIOPIO_SEARCH_MODEL`) and returns `url_citation` sources. `web_fetch` returns page markdown, refusing private and local addresses even through redirects. Both can be toggled per thread (globe button). Search cost isn't counted in the thread cost yet.
+- **Export:** Markdown, HTML and JSONL for the active branch, plus Copy as Markdown.
+- Not verified against live OpenRouter: the web plugin response format is per its docs, and the parser is unit-tested on that shape.
+
+Next milestones: **1.4** Quick Chat (§4), ⌘K palette, global search (catalog.db + FTS5), notifications. **1.5** packaging (S5: bundled Node + engine, notarized DMG).
 
 Scope: 04-chat §1 (T1–T12), Quick Chat (§4), 07-shared §1 (models, costs), §8 onboarding, 08-app-shell core (window, sidebar, transcript, composer, ⌘K, ⌘⇧F, notifications).
 **Acceptance:** for a week the author uses Piopio instead of a web chat app. 1,000-message threads stay smooth. Forking and edit/regenerate work. Costs match OpenRouter's dashboard within 2%.

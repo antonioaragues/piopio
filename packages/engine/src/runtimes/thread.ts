@@ -3,22 +3,24 @@
  * the active branch; edits and regenerations fork new conversations (see branches.ts).
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation } from "@earendil-works/pi-durable";
+import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import type { ContainerRef, ModelRef, Snapshot } from "@piopio/protocol";
+import type { Attachment, ContainerRef, ModelRef, Snapshot } from "@piopio/protocol";
+import { asSubmitted, buildInput, isUserEntry, withText, type BuiltInput } from "../input.js";
+import { createWebExtension, type WebOptions } from "../tools/web.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock } from "../timeline/builder.js";
 import { DurableEventMapper } from "../timeline/pi-durable.js";
 import { computeBranches, type ConversationNode, type ViewEntry } from "./branches.js";
 import { recorder } from "./recorder.js";
-import { Emitter, type Runtime, type WhenBusy } from "./runtime.js";
+import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
 const ctx = BACKGROUND_CONTEXT;
 
 /** What the catalog remembers about a thread's branches. */
 export type BranchState = { active?: string; activity: Record<string, number> };
 
-type RawEntry = { id: string | number; kind: string; conversationId: string | number; model?: { role: string; content: unknown }[] };
+type RawEntry = { id: string | number; kind: string; conversationId: string | number; data?: unknown; model?: { role: string; content: unknown }[] };
 
 export type ThreadOpenOptions = {
 	ref: ContainerRef;
@@ -29,6 +31,9 @@ export type ThreadOpenOptions = {
 	branches?: BranchState;
 	/** Persists branch state changes (active branch, last activity). */
 	onBranchState?: (state: BranchState) => void;
+	/** Web tools on (default) or off. */
+	web?: boolean;
+	webOptions?: WebOptions;
 };
 
 export class ThreadRuntime implements Runtime {
@@ -49,6 +54,8 @@ export class ThreadRuntime implements Runtime {
 		private thinking: string | undefined,
 		branches: BranchState | undefined,
 		private readonly onBranchState: ((state: BranchState) => void) | undefined,
+		private web: boolean,
+		private readonly webExtension: Extension,
 	) {
 		this.builder = new TimelineBuilder(ref);
 		this.mapper = new DurableEventMapper(this.builder, (id) => this.queueTexts.get(id));
@@ -57,8 +64,11 @@ export class ThreadRuntime implements Runtime {
 
 	static async open(options: ThreadOpenOptions): Promise<ThreadRuntime> {
 		const storage = await openNodeSqliteStorage(options.file);
-		const harness = await Harness.open(storage, { models: options.hub.models, registry: createRegistry() }, ctx);
-		const runtime = new ThreadRuntime(options.ref, options.hub, harness, options.model, options.thinking, options.branches, options.onBranchState);
+		const registry = createRegistry();
+		const webExtension = createWebExtension(options.hub, options.webOptions) as unknown as Extension;
+		registry.install(webExtension as never);
+		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
+		const runtime = new ThreadRuntime(options.ref, options.hub, harness, options.model, options.thinking, options.branches, options.onBranchState, options.web ?? true, webExtension);
 		const root = await harness.root(ctx, { agent: runtime.agent() } as Parameters<Harness["root"]>[1]);
 		const saved = options.branches?.active ? await harness.conversation(Number(options.branches.active) as never, ctx) : undefined;
 		await runtime.attach(saved ?? root, false);
@@ -72,10 +82,27 @@ export class ThreadRuntime implements Runtime {
 		return { model: { provider: this.model.provider, modelId: this.model.id }, ...(this.thinking ? { thinkingLevel: this.thinking } : {}) };
 	}
 
+	/** The thread's settings, applied to whichever branch is shown (branches made earlier may differ). */
+	private async applySettings(conversation: Conversation): Promise<void> {
+		await conversation.configure(
+			{
+				model: { provider: this.model.provider, modelId: this.model.id },
+				thinkingLevel: this.thinking ?? null,
+				extensions: this.web ? null : { remove: [this.webExtension] },
+			} as unknown as Parameters<Conversation["configure"]>[0],
+			ctx,
+		);
+	}
+
+	private stateSettings() {
+		return { model: this.model, thinking: this.thinking ?? "default", tools: { web: this.web } };
+	}
+
 	/** Shows `conversation`: a fresh snapshot (with branch switchers) replaces the transcript. */
 	private async attach(conversation: Conversation, emit: boolean): Promise<void> {
 		await this.stream?.stop();
 		this.active = conversation;
+		await this.applySettings(conversation);
 		const view = await conversation.viewState(ctx);
 		const inbox = (view.value.docs as Record<string, { items?: { id: unknown; content?: unknown }[] } | undefined>)["pi.inbox"]?.items ?? [];
 		for (const item of inbox) {
@@ -88,7 +115,7 @@ export class ThreadRuntime implements Runtime {
 		const record = recorder("pi-durable", this.ref.id);
 		record?.(stream.snapshot);
 		this.mapper.applySnapshot(stream.snapshot as never, false);
-		this.builder.setState({ model: this.model, ...(this.thinking ? { thinking: this.thinking } : {}) });
+		this.builder.setState(this.stateSettings());
 		this.builder.annotateBranches(await this.branches(), false);
 		this.builder.flush();
 		if (emit) this.emitter.emit([{ type: "resnapshot", snapshot: this.builder.snapshot() }]);
@@ -132,12 +159,24 @@ export class ThreadRuntime implements Runtime {
 		return this.emitter.on(listener);
 	}
 
-	async submit(text: string, options: { whenBusy: WhenBusy; requestId?: string }) {
-		await this.switching;
-		await this.hub.ensureCredential(this.model.provider);
+	async submit(text: string, options: SubmitOptions) {
 		const busy = this.builder.status === "running";
+		await this.submitInput(buildInput(text, options.attachments), text, options);
+		return { disposition: busy ? ("queued" as const) : ("started" as const) };
+	}
+
+	private async submitInput(input: BuiltInput, text: string, options: Omit<SubmitOptions, "attachments">): Promise<void> {
+		await this.switching;
+		if (Array.isArray(input.content) && input.content.some((b) => b.type === "image")) {
+			const model = this.hub.models.getModel(this.model.provider, this.model.id);
+			if (model && !model.input.includes("image")) throw new EngineError("INVALID", `${model.name} can't read images. Pick a model with vision.`);
+		}
+		await this.hub.ensureCredential(this.model.provider);
 		try {
-			const submission = await this.active.submit({ type: "input", content: text, whenBusy: options.whenBusy, ...(options.requestId ? { requestId: options.requestId } : {}) }, ctx);
+			const submission = await this.active.submit(
+				{ type: "input", content: input.content, ...(input.entry ? { entry: input.entry } : {}), whenBusy: options.whenBusy, ...(options.requestId ? { requestId: options.requestId } : {}) } as Parameters<Conversation["submit"]>[0],
+				ctx,
+			);
 			this.queueTexts.set(String(submission.id), text);
 			this.mapper.refreshQueue();
 			this.emitter.emit(this.builder.flush());
@@ -146,27 +185,21 @@ export class ThreadRuntime implements Runtime {
 			throw error;
 		}
 		this.touch(String(this.active.id));
-		return { disposition: busy ? ("queued" as const) : ("started" as const) };
 	}
 
 	async abort(): Promise<void> {
 		await this.active.abort(ctx);
 	}
 
-	async configure(change: { model?: ModelRef; thinking?: string }): Promise<void> {
+	async configure(change: { model?: ModelRef; thinking?: string; web?: boolean }): Promise<void> {
 		if (change.model && !this.hub.models.getModel(change.model.provider, change.model.id)) {
 			throw new EngineError("INVALID", `Unknown model ${change.model.provider}/${change.model.id}`);
 		}
 		if (change.model) this.model = change.model;
 		if (change.thinking) this.thinking = change.thinking === "default" ? undefined : change.thinking;
-		await this.active.configure(
-			{
-				...(change.model ? { model: { provider: change.model.provider, modelId: change.model.id } } : {}),
-				...(change.thinking ? { thinkingLevel: change.thinking === "default" ? null : change.thinking } : {}),
-			} as Parameters<Conversation["configure"]>[0],
-			ctx,
-		);
-		this.builder.setState({ model: this.model, thinking: this.thinking ?? "default" });
+		if (change.web !== undefined) this.web = change.web;
+		await this.applySettings(this.active);
+		this.builder.setState(this.stateSettings());
 		this.emitter.emit(this.builder.flush());
 	}
 
@@ -188,15 +221,18 @@ export class ThreadRuntime implements Runtime {
 		const at = entries.findIndex((e) => String(e.id) === itemId);
 		if (at < 0) throw new EngineError("NOT_FOUND", `No message ${itemId} in this branch`);
 		let userIndex = at;
-		while (userIndex >= 0 && entries[userIndex]!.kind !== "pi.user") userIndex--;
+		while (userIndex >= 0 && !isUserEntry(entries[userIndex]!.kind)) userIndex--;
 		if (userIndex < 0) throw new EngineError("INVALID", "There is no message to ask again from.");
-		const original = contentText(entries[userIndex]!.model?.[0]?.content as string | PiContentBlock[]);
+		const userEntry = entries[userIndex]!;
+		const stored = userEntry.model?.[0]?.content;
+		const input = text === undefined ? asSubmitted(stored, userEntry) : withText(stored, userEntry, text);
+		const displayText = text ?? (userEntry.kind === "piopio.user" ? (userEntry.data as { text: string }).text : contentText(stored as string | PiContentBlock[]));
 		const previous = entries[userIndex - 1];
 		const branch = previous
 			? await this.active.fork(previous.id as never, { ownership: { kind: "ownerless" } } as never, ctx)
 			: await this.harness.createConversation({ ownership: { kind: "ownerless" }, agent: this.agent() } as never, ctx);
 		await this.switchTo(branch);
-		await this.submit(text ?? original, { whenBusy: "followUp" });
+		await this.submitInput(input, displayText, { whenBusy: "followUp" });
 	}
 
 	async switchBranch(branch: string): Promise<void> {

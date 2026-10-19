@@ -18,6 +18,8 @@ export type EngineOptions = {
 	faux?: boolean;
 	piSessionDir?: string;
 	piAgentDir?: string;
+	/** Let web_fetch read localhost (tests). */
+	allowPrivateFetch?: boolean;
 	log?: (line: string) => void;
 };
 
@@ -40,7 +42,7 @@ export class Engine {
 		this.sessions = new Sessions(options.paths, this.hub, {
 			...(options.piSessionDir ? { piSessionDir: options.piSessionDir } : {}),
 			...(options.piAgentDir ? { piAgentDir: options.piAgentDir } : {}),
-		});
+		}, { allowPrivate: options.allowPrivateFetch ?? false });
 		this.sessions.onChange((change) => {
 			for (const conn of this.authed) conn.notify("catalog.changed", change);
 		});
@@ -163,7 +165,11 @@ export class Engine {
 				const p = params as Params<"sessions.submit">;
 				const runtime = await this.sessions.runtime(p.ref);
 				const isFirst = runtime.snapshot().items.length === 0;
-				const { disposition } = await runtime.submit(p.input.text, { whenBusy: p.whenBusy ?? "followUp", ...(p.clientRequestId ? { requestId: p.clientRequestId } : {}) });
+				const { disposition } = await runtime.submit(p.input.text, {
+					whenBusy: p.whenBusy ?? "followUp",
+					...(p.clientRequestId ? { requestId: p.clientRequestId } : {}),
+					...(p.input.attachments ? { attachments: p.input.attachments } : {}),
+				});
 				this.sessions.touch(p.ref, isFirst ? p.input.text : undefined);
 				return { accepted: true, disposition } satisfies Result<"sessions.submit">;
 			}
@@ -205,7 +211,7 @@ export class Engine {
 			}
 			case "sessions.configure": {
 				const p = params as Params<"sessions.configure">;
-				await this.sessions.configure(p.ref, { ...(p.model ? { model: p.model } : {}), ...(p.thinking ? { thinking: p.thinking } : {}) });
+				await this.sessions.configure(p.ref, { ...(p.model ? { model: p.model } : {}), ...(p.thinking ? { thinking: p.thinking } : {}), ...(p.web !== undefined ? { web: p.web } : {}) });
 				return {};
 			}
 			case "sessions.rename": {
@@ -217,6 +223,10 @@ export class Engine {
 				const p = params as Params<"sessions.delete">;
 				await this.sessions.delete(p.ref);
 				return {};
+			}
+			case "sessions.export": {
+				const p = params as Params<"sessions.export">;
+				return (await this.sessions.export(p.ref, p.format)) satisfies Result<"sessions.export">;
 			}
 			case "models.list": {
 				const p = params as Params<"models.list">;

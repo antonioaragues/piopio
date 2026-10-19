@@ -1,5 +1,9 @@
 /** Maps pi-durable `watchEvents` agent events onto the timeline builder. */
+import type { AttachmentInfo } from "@piopio/protocol";
 import { contentText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
+
+const USER_ENTRY = "piopio.user";
+type UserData = { text: string; attachments?: AttachmentInfo[] };
 
 type AnyEvent = { type: string; [key: string]: unknown };
 type Entry = { id: string | number; kind: string; model?: PiMessage[]; data?: unknown };
@@ -12,7 +16,13 @@ export function messagesFromEntries(entries: readonly Entry[]): { messages: PiMe
 		if (e.kind === "pi.compaction") continue;
 		for (const [i, m] of (e.model ?? []).entries()) {
 			if (m.role !== "user" && m.role !== "assistant" && m.role !== "toolResult") continue;
-			messages.push(m);
+			if (e.kind === USER_ENTRY && m.role === "user") {
+				// Show the words and file names, not the attachment blocks the model reads.
+				const data = e.data as UserData;
+				messages.push({ role: "user", content: data.text, attachments: data.attachments, timestamp: m.timestamp });
+			} else {
+				messages.push(m);
+			}
 			ids.push(i === 0 ? String(e.id) : `${e.id}:${i}`);
 		}
 	}
@@ -88,7 +98,10 @@ export class DurableEventMapper {
 				const entry = event.entry as Entry;
 				const message = entry.model?.[0];
 				if (!message) break;
-				if (message.role === "user") b.user(String(entry.id), contentText(message.content as string | PiContentBlock[]), message.timestamp as number | undefined);
+				if (message.role === "user" && entry.kind === USER_ENTRY) {
+					const data = entry.data as UserData;
+					b.user(String(entry.id), data.text, message.timestamp as number | undefined, data.attachments);
+				} else if (message.role === "user") b.user(String(entry.id), contentText(message.content as string | PiContentBlock[]), message.timestamp as number | undefined);
 				else if (message.role === "assistant") b.assistantEnd(message as Extract<PiMessage, { role: "assistant" }>, String(entry.id));
 				break;
 			}

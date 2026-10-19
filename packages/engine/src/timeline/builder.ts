@@ -2,7 +2,7 @@
  * Runtime-neutral timeline model. Adapters (pi SDK, pi-durable) translate upstream events into
  * calls on this builder. It keeps the current items and collects SessionEvents until flush().
  */
-import type { AssistantItem, AssistantPart, BranchInfo, SessionEvent, SessionState, Snapshot, TimelineItem, ToolItem, Usage, ContainerRef, UserItem } from "@piopio/protocol";
+import type { AssistantItem, AssistantPart, AttachmentInfo, BranchInfo, SessionEvent, SessionState, Snapshot, TimelineItem, ToolItem, Usage, ContainerRef, UserItem } from "@piopio/protocol";
 import { describeModelError } from "./errors.js";
 
 /** Minimal structural views of pi-ai messages (avoid coupling to upstream unions). */
@@ -87,7 +87,8 @@ export class TimelineBuilder {
 		messages.forEach((m, i) => {
 			const id = idOf(i, m);
 			if (m.role === "user") {
-				this.push({ kind: "user", id, at: iso(m.timestamp as number | undefined), text: contentText(m.content as string | PiContentBlock[]) });
+				const attachments = (m as { attachments?: AttachmentInfo[] }).attachments;
+				this.push({ kind: "user", id, at: iso(m.timestamp as number | undefined), text: contentText(m.content as string | PiContentBlock[]), ...(attachments?.length ? { attachments } : {}) });
 			} else if (m.role === "assistant") {
 				const a = m as Extract<PiMessage, { role: "assistant" }>;
 				this.push(this.assistantItem(id, a));
@@ -134,9 +135,9 @@ export class TimelineBuilder {
 
 	// ── Incremental ────────────────────────────────────────────────────────
 
-	user(id: string, text: string, at?: number): void {
+	user(id: string, text: string, at?: number, attachments?: AttachmentInfo[]): void {
 		if (this.index.has(id)) return;
-		const item: TimelineItem = { kind: "user", id, at: iso(at), text };
+		const item: TimelineItem = { kind: "user", id, at: iso(at), text, ...(attachments?.length ? { attachments } : {}) };
 		this.push(item);
 		this.pending.push({ type: "item.added", item: structuredClone(item) });
 	}

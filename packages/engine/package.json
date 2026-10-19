@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "piopio-engine": "./dist/main.js" },
+  "bin": {
+    "piopio-engine": "./dist/main.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -16,6 +18,8 @@
     "@earendil-works/pi-coding-agent": "1.3.0",
     "@earendil-works/pi-durable": "1.3.0",
     "@piopio/protocol": "workspace:*",
+    "marked": "^18.1.1",
+    "node-html-parser": "^9.0.4",
     "typebox": "1.3.27"
   }
 }

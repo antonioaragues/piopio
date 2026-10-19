@@ -63,6 +63,18 @@ struct ThreadView: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
+                    Divider()
+                    Button("Export as Markdown…") { Task { await thread.export(.markdown) } }
+                    Button("Export as HTML…") { Task { await thread.export(.html) } }
+                    Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
+                } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                .help("Copy or export this thread")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 if let usage = thread.state?.usage, usage.inputTokens + usage.outputTokens > 0 {
                     Text(cost(usage))
                         .font(.callout.monospacedDigit())

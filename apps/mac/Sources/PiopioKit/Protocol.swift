@@ -54,10 +54,23 @@ public struct BranchInfo: Codable, Sendable, Hashable {
     }
 }
 
+/// A file sent with a message, as the transcript shows it.
+public struct AttachmentInfo: Codable, Sendable, Hashable {
+    public enum Kind: String, Codable, Sendable { case image, text }
+    public var name: String
+    public var kind: Kind
+    public var mimeType: String?
+    public var size: Double?
+    public init(name: String, kind: Kind, mimeType: String? = nil, size: Double? = nil) { self.name = name; self.kind = kind; self.mimeType = mimeType; self.size = size }
+}
+
 public struct UserItem: Codable, Sendable, Hashable {
     public var id, at, text: String
+    public var attachments: [AttachmentInfo]?
     public var branch: BranchInfo?
-    public init(id: String, at: String, text: String, branch: BranchInfo? = nil) { self.id = id; self.at = at; self.text = text; self.branch = branch }
+    public init(id: String, at: String, text: String, attachments: [AttachmentInfo]? = nil, branch: BranchInfo? = nil) {
+        self.id = id; self.at = at; self.text = text; self.attachments = attachments; self.branch = branch
+    }
 }
 
 /// Why a model request failed.
@@ -161,9 +174,11 @@ public struct SessionState: Codable, Sendable, Hashable {
     public var queue: [QueuedInput]
     public var model: ModelRef?
     public var thinking: String?
+    public struct Tools: Codable, Sendable, Hashable { public var web: Bool }
+    public var tools: Tools?
     public var usage: Usage
-    public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, usage: Usage) {
-        self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.usage = usage
+    public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, tools: Tools? = nil, usage: Usage) {
+        self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.tools = tools; self.usage = usage
     }
 }
 
@@ -247,15 +262,32 @@ public struct SubscribeResult: Decodable, Sendable { public var subscriptionId: 
 public struct ListSessionsParams: Encodable, Sendable { public var kind: ContainerKind?; public init(kind: ContainerKind? = nil) { self.kind = kind } }
 public struct ListSessionsResult: Decodable, Sendable { public var sessions: [SessionSummary] }
 
+/// A file to send: images as base64 (prepared by the client), documents as extracted text.
+public enum Attachment: Encodable, Sendable, Hashable {
+    case image(name: String, mimeType: String, data: String)
+    case text(name: String, mimeType: String?, text: String)
+
+    private enum Key: String, CodingKey { case kind, name, mimeType, data, text }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        switch self {
+        case .image(let name, let mime, let data):
+            try c.encode("image", forKey: .kind); try c.encode(name, forKey: .name); try c.encode(mime, forKey: .mimeType); try c.encode(data, forKey: .data)
+        case .text(let name, let mime, let text):
+            try c.encode("text", forKey: .kind); try c.encode(name, forKey: .name); try c.encodeIfPresent(mime, forKey: .mimeType); try c.encode(text, forKey: .text)
+        }
+    }
+}
+
 public struct SubmitParams: Encodable, Sendable {
     public enum WhenBusy: String, Encodable, Sendable { case followUp, steer, reject }
-    public struct Input: Encodable, Sendable { public var text: String }
+    public struct Input: Encodable, Sendable { public var text: String; public var attachments: [Attachment]? }
     public var ref: ContainerRef
     public var input: Input
     public var whenBusy: WhenBusy?
     public var clientRequestId: String?
-    public init(ref: ContainerRef, text: String, whenBusy: WhenBusy? = nil, clientRequestId: String? = nil) {
-        self.ref = ref; self.input = Input(text: text); self.whenBusy = whenBusy; self.clientRequestId = clientRequestId
+    public init(ref: ContainerRef, text: String, attachments: [Attachment] = [], whenBusy: WhenBusy? = nil, clientRequestId: String? = nil) {
+        self.ref = ref; self.input = Input(text: text, attachments: attachments.isEmpty ? nil : attachments); self.whenBusy = whenBusy; self.clientRequestId = clientRequestId
     }
 }
 public struct SubmitResult: Decodable, Sendable { public var accepted: Bool; public var disposition: String }
@@ -283,8 +315,16 @@ public struct ConfigureParams: Encodable, Sendable {
     public var ref: ContainerRef
     public var model: ModelRef?
     public var thinking: String?
-    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil) { self.ref = ref; self.model = model; self.thinking = thinking }
+    public var web: Bool?
+    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil, web: Bool? = nil) { self.ref = ref; self.model = model; self.thinking = thinking; self.web = web }
 }
+
+public struct ExportParams: Encodable, Sendable {
+    public enum Format: String, Encodable, Sendable { case markdown, html, jsonl }
+    public var ref: ContainerRef; public var format: Format
+    public init(ref: ContainerRef, format: Format) { self.ref = ref; self.format = format }
+}
+public struct ExportResult: Decodable, Sendable { public var filename: String; public var mimeType: String; public var content: String }
 public struct RenameParams: Encodable, Sendable {
     public var ref: ContainerRef
     public var title: String

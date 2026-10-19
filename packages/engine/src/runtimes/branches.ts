@@ -33,7 +33,7 @@ export function computeBranches(active: string, view: readonly ViewEntry[], conv
 
 	const out = new Map<string, BranchInfo>();
 	view.forEach((entry, i) => {
-		if (entry.kind !== "pi.user") return;
+		if (entry.kind !== "pi.user" && entry.kind !== "piopio.user") return;
 		const forkPoint = i > 0 ? view[i - 1]!.id : START;
 		const forks = groups.get(forkPoint);
 		if (!forks) return;

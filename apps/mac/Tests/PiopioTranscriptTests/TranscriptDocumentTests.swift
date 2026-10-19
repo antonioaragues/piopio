@@ -110,3 +110,13 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     #expect(actions == [.edit(itemId: "21")])
     expectConsistent(doc)
 }
+
+@MainActor @Test func userBubblesShowAttachmentChipsAndWebToolsHaveTitles() async {
+    let user = TimelineItem.user(UserItem(id: "1", at: "", text: "Summarize", attachments: [AttachmentInfo(name: "notes.md", kind: .text), AttachmentInfo(name: "photo.jpg", kind: .image)]))
+    let search = TimelineItem.tool(ToolItem(id: "t1", at: "", callId: "c1", tool: "web_search", args: .object(["query": .string("swift 6.4")]), status: .done, output: "results"))
+    let doc = await loaded([user, search])
+    #expect(doc.text.contains("📄 notes.md"))
+    #expect(doc.text.contains("🖼 photo.jpg"))
+    if case .tool(let t) = search { #expect(ItemRenderer.toolTitle(t) == ("Searched the web", "swift 6.4")) }
+    expectConsistent(doc)
+}
