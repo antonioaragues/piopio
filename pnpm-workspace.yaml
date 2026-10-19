@@ -5,3 +5,7 @@ packages:
 allowBuilds:
   "@google/genai": false
   protobufjs: false
+  core-js-pure: false
+  # wrangler/Miniflare (packages/cloud) need their platform binaries.
+  esbuild: true
+  workerd: true

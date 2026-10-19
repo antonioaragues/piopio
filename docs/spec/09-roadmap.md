@@ -27,7 +27,8 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 | Protocol package | ✅ TypeBox schemas + JSON Schema export. **Swift codegen pending:** Swift types are hand-written for the S1 subset. |
 | **S2** Native transcript | ✅ Decision: **TextKit 2 transcript** (one `NSTextView`, custom layout fragments + attachment views for cards). SwiftUI `LazyVStack`/`List` hitch while scrolling at 2,000 items; TextKit 2 had 0 hitches. See [docs/spikes/s2](../spikes/s2/README.md). |
 | **S2b** Card chrome, attachments, progressive load | ✅ Card fragments + tool-card attachment views (AppKit or SwiftUI, same cost) stay at 0–8 ms/s hitch. Prepending into a large document is O(text after the insert), so the transcript is a **windowed document** (newest 300 items, 10-item pages on demand, ~9 ms each, 0 anchor drift); tail on screen in ~140 ms for 2,000 items. 120 Hz still untested. |
-| S3 OpenRouter details, S4 PiHarness on Cloudflare, S5 Packaging | ⏳ Not started |
+| **S4** PiHarness on Cloudflare | ✅ locally (2026-10-19), in workerd via Miniflare with the faux model: `packages/cloud` (Worker + SQLite `AgentDO` on `PiHarness`, hibernatable WS with `engine.hello`/`sessions.subscribe`/`sessions.submit`). Verified: hibernation + wake on a WS message, alarm-driven resume after eviction, reconnect → fresh snapshot, OpenRouter request path from workerd (dummy key → clean 401). Token deploy script (`scripts/deploy.ts`, Cloudflare REST API) is tested against a fake API only. **Pending:** first deploy to a real account, a real OpenRouter answer (opt-in test exists), and a run longer than 15 min. See [packages/cloud](../../packages/cloud/README.md). |
+| S3 OpenRouter details, S5 Packaging | ⏳ Not started |
 | CI | ⏳ Not started (needs a macOS 27 runner for the Swift side) |
 
 **S1 findings**
@@ -37,6 +38,14 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 - In SDK mode, pi still discovers user-level skills (`~/.agents/skills`) even with a custom `agentDir`. Engine tests are therefore not fully hermetic, and the fixture recorder strips system prompts.
 - One `InMemoryCredentialStore`, filled on demand via the `secrets.get` reverse request, serves both pi-ai `Models` (pi-durable) and `ModelRuntime` (SDK).
 - With only the Command Line Tools installed, `swift test` needs an explicit swift-testing plugin path (`scripts/swift-test.sh`). The SwiftUI app target will need Xcode.
+
+**S4 findings**
+- PiHarness runs on a plain `DurableObject` (`Lifecycle.install(this).use(harness).use(webSockets)`). The `Agent` class isn't needed.
+- **Needs the `no_nodejs_global_timers` compatibility flag.** Under `nodejs_compat`, workerd timers have a no-op `unref()`. pi-durable's `unref`'d 10-minute document-sweep timer then pins the object, so it never hibernates. Without Node timers, pi-durable uses its Workers path (no timer). Worth reporting upstream.
+- pi event streams are memory-only. Subscriptions are kept in the socket attachment, and every wake reopens the streams and sends a `resnapshot` (seq continues). Reconnects get a full snapshot. There is no cursor.
+- An eviction mid-run aborts the alarm PiHarness awaits the run in. workerd retried it at once and pi finished the run, with the 30 s heartbeat alarm as fallback. The 15-min alarm limit is handled by a 10-min wait budget per alarm (from the source; not testable locally).
+- pi-ai's OpenRouter provider runs unchanged in workerd (a dummy key reached OpenRouter and got a clean 401; a real answer is untested). Bundle: 3.3 MB, 540 KB gzipped.
+- wrangler 4.151 ships Miniflare 5 (beta, new options shape: `convertV4MiniflareOptions`). `@cloudflare/vitest-pool-workers` needs vitest 4, so tests drive Miniflare from Node.
 
 ## Phase 1 — Chat: Threads (first daily driver)
 
