@@ -208,7 +208,7 @@ export const methods = {
 	},
 	"engine.status": {
 		params: Type.Object({}),
-		result: Type.Object({ uptimeMs: Type.Number(), openSessions: Type.Number(), subscriptions: Type.Number() }),
+		result: Type.Object({ uptimeMs: Type.Number(), openSessions: Type.Number(), subscriptions: Type.Number(), runtime: Type.String(), memoryMB: Type.Number(), dataPath: Type.String() }),
 	},
 	"sessions.list": {
 		params: Type.Object({ kind: Type.Optional(ContainerKind) }),
@@ -300,6 +300,11 @@ export const methods = {
 		result: Type.Object({
 			results: Type.Array(Type.Object({ ref: ContainerRef, title: Type.String(), itemId: Type.Optional(Type.String()), kind: literals("title", "user", "assistant"), snippet: Type.String(), at: Type.String() })),
 		}),
+	},
+	/** Checks a provider key without saving it (welcome, settings). */
+	"models.verifyKey": {
+		params: Type.Object({ provider: Type.String(), key: Type.String() }),
+		result: Type.Object({ ok: Type.Boolean(), message: Type.Optional(Type.String()), label: Type.Optional(Type.String()), usageUsd: Type.Optional(Type.Number()), limitUsd: Type.Optional(Type.Union([Type.Number(), Type.Null()])) }),
 	},
 	"models.list": {
 		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),

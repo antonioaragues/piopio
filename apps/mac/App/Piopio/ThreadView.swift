@@ -2,84 +2,28 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
+/// A thread (docs/design 8a): 60pt header, centered transcript, floating glass composer.
 struct ThreadView: View {
     let engine: EngineController
     let thread: ThreadModel
-    let title: String
-    @State private var showModels = false
+    let summary: SessionSummary
 
     var body: some View {
         VStack(spacing: 0) {
+            header
             ZStack(alignment: .bottom) {
                 TranscriptView(document: thread.document)
-                if !thread.isFollowing {
-                    Button { thread.scrollToLatest() } label: {
-                        Label("Jump to latest", systemImage: "arrow.down")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .padding(.bottom, 10)
-                }
-            }
-            if let error = thread.error {
-                HStack {
-                    Text(error).font(.callout).foregroundStyle(.red)
-                    Spacer()
-                    if thread.errorIsAuth { Button("Open Settings") { ThreadModel.openSettings() }.controlSize(.small) }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-            }
-            Composer(thread: thread)
-        }
-        .navigationTitle(title)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { showModels = true } label: {
-                    Label(modelName, systemImage: "cpu").labelStyle(.titleAndIcon)
-                }
-                .help("Change model")
-                .popover(isPresented: $showModels, arrowEdge: .bottom) {
-                    ModelPicker(engine: engine, selected: thread.state?.model) { model in
-                        showModels = false
-                        Task { await thread.setModel(model) }
-                    }
-                }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                if thread.supportsThinking {
-                    Menu {
-                        ForEach(Self.thinkingLevels, id: \.value) { level in
-                            Button {
-                                Task { await thread.setThinking(level.value) }
-                            } label: {
-                                if (thread.state?.thinking ?? "default") == level.value { Label(level.title, systemImage: "checkmark") } else { Text(level.title) }
-                            }
+                VStack(spacing: 8) {
+                    if !thread.isFollowing {
+                        Button { thread.scrollToLatest() } label: {
+                            Label("Jump to latest", systemImage: "arrow.down").font(.system(size: 12, weight: .medium))
                         }
-                    } label: {
-                        Label("Thinking: \(Self.thinkingTitle(thread.state?.thinking))", systemImage: "brain")
+                        .buttonStyle(PillStyle(kind: .toolbar, compact: true))
                     }
-                    .help("How much the model reasons before answering")
-                }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
-                    Divider()
-                    Button("Export as Markdown…") { Task { await thread.export(.markdown) } }
-                    Button("Export as HTML…") { Task { await thread.export(.html) } }
-                    Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
-                } label: {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-                .help("Copy or export this thread")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                if let usage = thread.state?.usage, usage.inputTokens + usage.outputTokens > 0 {
-                    Text(cost(usage))
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .help("\(Int(usage.inputTokens)) in · \(Int(usage.outputTokens)) out · \(Int(usage.cacheReadTokens)) cached tokens")
+                    Composer(engine: engine, thread: thread)
+                        .frame(maxWidth: 636)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 20)
                 }
             }
         }
@@ -95,20 +39,43 @@ struct ThreadView: View {
         }
     }
 
-    private static let thinkingLevels: [(value: String, title: String)] = [
-        ("default", "Model default"), ("off", "Off"), ("low", "Low"), ("medium", "Medium"), ("high", "High"), ("xhigh", "Maximum"),
-    ]
-
-    private static func thinkingTitle(_ value: String?) -> String {
-        thinkingLevels.first { $0.value == (value ?? "default") }.map { $0.value == "default" ? "Default" : $0.title } ?? (value ?? "Default")
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
+            }
+            Spacer(minLength: 12)
+            Menu {
+                Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
+                Divider()
+                Button("Export as Markdown…") { Task { await thread.export(.markdown) } }
+                Button("Export as HTML…") { Task { await thread.export(.html) } }
+                Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
+            } label: {
+                Image(systemName: "square.and.arrow.up").font(.system(size: 12, weight: .medium))
+            }
+            .menuStyle(.button)
+            .buttonStyle(PillStyle(kind: .toolbar))
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Copy or export this thread")
+        }
+        .padding(.leading, 24)
+        .padding(.trailing, 16)
+        .frame(height: 60)
+        .contentShape(Rectangle())
+        .gesture(WindowDragGesture())
     }
 
-    private var modelName: String {
-        guard let ref = thread.state?.model else { return "Model" }
-        return engine.model(ref)?.name ?? ref.id
-    }
-
-    private func cost(_ u: Usage) -> String {
-        u.costUsd < 0.01 ? String(format: "$%.4f", u.costUsd) : String(format: "$%.2f", u.costUsd)
+    private var subtitle: String {
+        var parts = ["Thread"]
+        let files = thread.attachmentCount
+        if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
+        if let usage = thread.state?.usage, usage.costUsd > 0 {
+            parts.append(usage.costUsd < 0.01 ? String(format: "$%.4f", usage.costUsd) : String(format: "$%.2f", usage.costUsd))
+        }
+        if thread.state?.status == .running { parts.append("answering…") }
+        return parts.joined(separator: " · ")
     }
 }

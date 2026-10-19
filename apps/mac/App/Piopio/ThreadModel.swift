@@ -17,6 +17,8 @@ final class ThreadModel {
     private(set) var editing: (itemId: String, original: String)?
     /// Raw provider error shown by "Details".
     var errorDetail: String?
+    /// Opens the composer's model picker ("Use another model" in error cards).
+    var showModelPicker = false
 
     @ObservationIgnored private weak var engine: EngineController?
     @ObservationIgnored private var subscriptionId: String?
@@ -31,9 +33,11 @@ final class ThreadModel {
         self.notifies = notifies
         document.onFollowingChange = { [weak self] following in self?.isFollowing = following }
         document.onAction = { [weak self] action in self?.handle(action) }
+        document.bottomInset = 150 // the floating composer sits over the bottom of the transcript
     }
 
     var isRunning: Bool { state?.status == .running }
+    var attachmentCount: Int { _ = state; return document.attachmentCount }
     var queue: [QueuedInput] { state?.queue ?? [] }
     var supportsThinking: Bool { engine?.model(state?.model)?.supports.reasoning ?? false }
 
@@ -75,6 +79,10 @@ final class ThreadModel {
         for case .state(let s) in events { state = s }
         for case .resnapshot(let snap) in events { state = snap.state }
         if wasRunning, state?.status == .idle, notifies { engine?.answerFinished(in: self) }
+        if notifies, let status = state?.status {
+            let failed: Bool = if case .assistant(let a)? = document.lastItem { a.status == .error } else { false }
+            engine?.liveStatus[ref.id] = failed && status == .idle ? .error : status
+        }
     }
 
     func reveal(_ itemId: String) {
@@ -138,6 +146,8 @@ final class ThreadModel {
             Task { await call("sessions.switchBranch", SwitchBranchParams(ref: ref, branch: branch)) }
         case .openSettings:
             Self.openSettings()
+        case .chooseModel:
+            showModelPicker = true
         case .showErrorDetail(let id):
             if case .assistant(let a) = document.item(id) { errorDetail = a.errorDetail ?? a.error }
         case .copy:

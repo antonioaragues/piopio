@@ -42,6 +42,13 @@ enum DebugAutomation {
                 }
             }
         }
+        // PIOPIO_DEMO_SETTINGS=1: open Settings (snapshot it with PIOPIO_SNAPSHOT_WINDOW=key).
+        if env["PIOPIO_DEMO_SETTINGS"] == "1" {
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                ThreadModel.openSettings()
+            }
+        }
         if let path = env["PIOPIO_SNAPSHOT"] {
             let delay = Double(env["PIOPIO_SNAPSHOT_DELAY"] ?? "") ?? 6
             Task {
@@ -60,8 +67,14 @@ enum DebugAutomation {
     }
 
     private static func snapshot(to url: URL) {
-        let wantsPanel = ProcessInfo.processInfo.environment["PIOPIO_DEMO_QUICK"] != nil
-        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && ($0 is NSPanel) == wantsPanel }),
+        let env = ProcessInfo.processInfo.environment
+        let wantsPanel = env["PIOPIO_DEMO_QUICK"] != nil
+        let target: NSWindow? = switch env["PIOPIO_SNAPSHOT_WINDOW"] {
+        case "sheet": NSApp.windows.compactMap(\.attachedSheet).first
+        case "key": NSApp.keyWindow
+        default: NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && ($0 is NSPanel) == wantsPanel && $0.attachedSheet == nil || ($0.isVisible && $0.attachedSheet != nil) })
+        }
+        guard let window = target,
               let view = window.contentView?.superview ?? window.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)

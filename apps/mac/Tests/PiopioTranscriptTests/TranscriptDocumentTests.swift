@@ -103,7 +103,13 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, _, _ in if let u = value as? URL { urls.append(u) } }
     let parsed = urls.compactMap(TranscriptAction.init(url:))
     #expect(parsed.contains(.switchBranch("1")))
-    #expect(parsed.contains(.edit(itemId: "21")))
+    // Edit is hover-revealed: present but inactive until the pointer is over the message.
+    #expect(!parsed.contains(.edit(itemId: "21")))
+    var hidden: [URL] = []
+    storage.enumerateAttribute(.piopioFooterLink, in: NSRange(location: 0, length: storage.length)) { value, _, _ in if let u = value as? URL { hidden.append(u) } }
+    #expect(hidden.compactMap(TranscriptAction.init(url:)).contains(.edit(itemId: "21")))
+    // The latest answer keeps its actions visible.
+    #expect(parsed.contains(.regenerate(itemId: "24")))
     #expect(parsed.contains(.openSettings))
     #expect(parsed.contains(.showErrorDetail(itemId: "24")))
     doc.handle(.edit(itemId: "21"))
@@ -115,8 +121,8 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     let user = TimelineItem.user(UserItem(id: "1", at: "", text: "Summarize", attachments: [AttachmentInfo(name: "notes.md", kind: .text), AttachmentInfo(name: "photo.jpg", kind: .image)]))
     let search = TimelineItem.tool(ToolItem(id: "t1", at: "", callId: "c1", tool: "web_search", args: .object(["query": .string("swift 6.4")]), status: .done, output: "results"))
     let doc = await loaded([user, search])
-    #expect(doc.text.contains("📄 notes.md"))
-    #expect(doc.text.contains("🖼 photo.jpg"))
+    #expect(doc.text.contains("notes.md"))
+    #expect(doc.text.contains("photo.jpg"))
     if case .tool(let t) = search { #expect(ItemRenderer.toolTitle(t) == ("Searched the web", "swift 6.4")) }
     expectConsistent(doc)
 }

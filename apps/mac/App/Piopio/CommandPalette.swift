@@ -1,8 +1,9 @@
 import PiopioKit
+import PiopioTranscript
 import SwiftUI
 
-/// ⌘K: commands, threads by title, and message search in one keyboard-driven list.
-/// ⌘⇧F opens it in message search mode.
+/// ⌘K (docs/design 3b): one list of actions and destinations. Actions first, then "Go to"
+/// (threads and messages). Each row shows where it belongs on the right. ⇥ switches All / Messages.
 struct CommandPalette: View {
     enum Mode { case all, messages, models }
 
@@ -23,56 +24,87 @@ struct CommandPalette: View {
         let id: String
         let icon: String
         let title: String
-        var subtitle: AttributedString?
-        var shortcut: String?
+        var detail: AttributedString?
+        var trailing: String?
         let run: () -> Void
+    }
+
+    struct Group: Identifiable {
+        let id: String
+        let rows: [Row]
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: mode == .models ? "cpu" : "magnifyingglass").foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                Image(systemName: mode == .models ? "cpu" : "magnifyingglass").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
                 TextField(placeholder, text: $query)
                     .textFieldStyle(.plain)
-                    .font(.title3)
+                    .font(.system(size: 16))
                     .focused($focused)
                     .onKeyPress(.downArrow) { move(1); return .handled }
                     .onKeyPress(.upArrow) { move(-1); return .handled }
                     .onKeyPress(.return) { runSelected(); return .handled }
+                    .onKeyPress(.tab) {
+                        guard mode != .models else { return .ignored }
+                        mode = mode == .all ? .messages : .all
+                        scheduleSearch(query)
+                        return .handled
+                    }
                     .onKeyPress(.escape) {
                         if mode == .models { mode = .all; query = ""; return .handled }
                         close(); return .handled
                     }
+                Text(scope).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.badge))
             }
-            .padding(14)
-            Divider()
+            .padding(.horizontal, 16)
+            .frame(height: 52)
+            Rectangle().fill(Color.dsLine).frame(height: 0.5)
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                            rowView(row, selected: index == selection)
-                                .id(index)
-                                .onTapGesture { row.run() }
+                    VStack(alignment: .leading, spacing: 1) {
+                        let groups = self.groups
+                        let flat = groups.flatMap(\.rows)
+                        ForEach(groups) { group in
+                            Text(group.id).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                                .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 4)
+                            ForEach(group.rows) { row in
+                                let index = flat.firstIndex { $0.id == row.id } ?? 0
+                                rowView(row, selected: index == selection)
+                                    .id(index)
+                                    .onTapGesture { row.run() }
+                            }
                         }
-                        if rows.isEmpty {
+                        if flat.isEmpty {
                             Text(query.isEmpty ? "Type to search" : "No matches")
-                                .foregroundStyle(.secondary)
-                                .padding(14)
+                                .font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(14)
                         }
                     }
-                    .padding(6)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
                 }
                 .onChange(of: selection) { _, s in proxy.scrollTo(s) }
             }
-            .frame(height: min(380, CGFloat(max(rows.count, 1)) * 54 + 12))
+            .frame(height: min(400, listHeight))
+            Rectangle().fill(Color.dsLine).frame(height: 0.5)
+            HStack(spacing: 14) {
+                Text("↑↓ navigate"); Text("↩ run"); Text("esc close")
+                Spacer()
+                if mode != .models { Text("⇥ \(mode == .all ? "messages only" : "everything")") }
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(Color.dsFg3)
+            .padding(.horizontal, 16)
+            .frame(height: 32)
         }
-        .frame(width: 600)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.separator))
-        .shadow(radius: 24, y: 8)
+        .frame(width: 560)
+        .glassPanel(radius: 16, material: .regularMaterial)
+        .shadow(color: .black.opacity(0.18), radius: 30, y: 12)
         .onAppear {
             focused = true
-            scheduleSearch(query) // a query passed in (⇧⌘F with a selection, automation)
+            scheduleSearch(query) // a query passed in (automation)
         }
         .onChange(of: query) { _, q in
             selection = 0
@@ -83,39 +115,55 @@ struct CommandPalette: View {
 
     private var placeholder: String {
         switch mode {
-        case .all: "Search threads, messages and commands"
+        case .all: "Search actions, threads and messages"
         case .messages: "Search messages"
         case .models: "Pick a model"
         }
     }
 
+    private var scope: String {
+        switch mode {
+        case .all: "All"
+        case .messages: "Messages"
+        case .models: "Models"
+        }
+    }
+
+    private var listHeight: CGFloat {
+        let g = groups
+        return CGFloat(g.flatMap(\.rows).count) * 40 + CGFloat(g.count) * 30 + 16
+    }
+
     // MARK: Rows
 
-    private var rows: [Row] {
+    private var groups: [Group] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         func matches(_ s: String) -> Bool { q.isEmpty || q.split(separator: " ").allSatisfy { s.lowercased().contains($0) } }
         switch mode {
         case .models:
-            return engine.models.filter { matches($0.name + " " + $0.id) }.prefix(60).map { m in
-                Row(id: "m:\(m.provider)/\(m.id)", icon: m.supports.reasoning ? "brain" : "cpu", title: m.name, subtitle: AttributedString(m.id)) {
+            let rows = engine.models.filter { matches($0.name + " " + $0.id) }.prefix(60).map { m in
+                Row(id: "m:\(m.provider)/\(m.id)", icon: m.supports.reasoning ? "brain" : "cpu", title: ModelChip.short(m), detail: AttributedString(" · \(m.id)"), trailing: price(m)) {
                     if let thread { Task { await thread.setModel(m.ref) } }
                     close()
                 }
             }
+            return rows.isEmpty ? [] : [Group(id: "Models", rows: Array(rows))]
         case .messages:
-            return messageRows
+            let rows = messageRows
+            return rows.isEmpty ? [] : [Group(id: "Messages", rows: rows)]
         case .all:
-            let commands = self.commands.filter { matches($0.title) }
-            let threads = engine.threads.filter { matches($0.title) }.prefix(q.isEmpty ? 6 : 12).map { t in
-                Row(id: "t:\(t.ref.id)", icon: "bubble.left", title: t.title) { openThread(t.ref.id, nil); close() }
+            let actions = commands.filter { matches($0.title) }
+            let threads = engine.threads.filter { matches($0.title) }.prefix(q.isEmpty ? 6 : 10).map { t in
+                Row(id: "t:\(t.ref.id)", icon: "bubble.left", title: t.title, trailing: "Thread") { openThread(t.ref.id, nil); close() }
             }
-            return commands + threads + (q.count >= 2 ? messageRows : [])
+            let goTo = Array(threads) + (q.count >= 2 ? messageRows : [])
+            return [Group(id: "Actions", rows: actions), Group(id: "Go to", rows: goTo)].filter { !$0.rows.isEmpty }
         }
     }
 
     private var messageRows: [Row] {
-        hits.filter { $0.kind != .title || mode == .messages }.map { hit in
-            Row(id: "s:\(hit.id)", icon: hit.kind == .user ? "person" : hit.kind == .assistant ? "sparkles" : "text.bubble", title: hit.title, subtitle: highlighted(hit.snippet)) {
+        hits.filter { $0.kind != .title }.map { hit in
+            Row(id: "s:\(hit.id)", icon: hit.kind == .user ? "person" : "sparkles", title: hit.title, detail: AttributedString(" · ") + highlighted(hit.snippet), trailing: hit.kind == .user ? "You" : "Answer") {
                 openThread(hit.ref.id, hit.itemId)
                 close()
             }
@@ -124,18 +172,18 @@ struct CommandPalette: View {
 
     private var commands: [Row] {
         var rows: [Row] = [
-            Row(id: "c:new", icon: "square.and.pencil", title: "New Thread", shortcut: "⌘N") { newThread(); close() },
-            Row(id: "c:quick", icon: "bolt", title: "Quick Chat", shortcut: QuickChatController.shortcutLabel) { QuickChatController.shared?.show(); close() },
-            Row(id: "c:search", icon: "text.magnifyingglass", title: "Search Messages", shortcut: "⇧⌘F") { mode = .messages; query = "" },
-            Row(id: "c:settings", icon: "gearshape", title: "Settings", shortcut: "⌘,") { ThreadModel.openSettings(); close() },
+            Row(id: "c:new", icon: "square.and.pencil", title: "New Thread", trailing: "⌘N") { newThread(); close() },
+            Row(id: "c:quick", icon: "bolt", title: "Quick Chat", trailing: QuickChatController.shortcutLabel) { QuickChatController.shared?.show(); close() },
+            Row(id: "c:search", icon: "text.magnifyingglass", title: "Search Messages", trailing: "⇧⌘F") { mode = .messages; query = "" },
+            Row(id: "c:settings", icon: "gearshape", title: "Settings", trailing: "⌘,") { ThreadModel.openSettings(); close() },
         ]
         if let thread {
             rows += [
-                Row(id: "c:model", icon: "cpu", title: "Change Model…") { mode = .models; query = "" },
-                Row(id: "c:web", icon: "globe", title: thread.webEnabled ? "Turn Off Web Tools" : "Turn On Web Tools") { Task { await thread.setWeb(!thread.webEnabled) }; close() },
-                Row(id: "c:copy", icon: "doc.on.doc", title: "Copy Thread as Markdown") { Task { await thread.copyAsMarkdown() }; close() },
-                Row(id: "c:export-md", icon: "square.and.arrow.up", title: "Export Thread as Markdown…") { close(); Task { await thread.export(.markdown) } },
-                Row(id: "c:export-html", icon: "square.and.arrow.up", title: "Export Thread as HTML…") { close(); Task { await thread.export(.html) } },
+                Row(id: "c:model", icon: "cpu", title: "Change Model…", trailing: "Thread") { mode = .models; query = "" },
+                Row(id: "c:web", icon: "globe", title: thread.webEnabled ? "Turn Off Web Search" : "Turn On Web Search", trailing: "Thread") { Task { await thread.setWeb(!thread.webEnabled) }; close() },
+                Row(id: "c:copy", icon: "doc.on.doc", title: "Copy Thread as Markdown", trailing: "Thread") { Task { await thread.copyAsMarkdown() }; close() },
+                Row(id: "c:export-md", icon: "square.and.arrow.up", title: "Export Thread as Markdown…", trailing: "Thread") { close(); Task { await thread.export(.markdown) } },
+                Row(id: "c:export-html", icon: "square.and.arrow.up", title: "Export Thread as HTML…", trailing: "Thread") { close(); Task { await thread.export(.html) } },
             ]
         }
         return rows
@@ -143,33 +191,33 @@ struct CommandPalette: View {
 
     private func rowView(_ row: Row, selected: Bool) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: row.icon).frame(width: 18).foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.title).lineLimit(1)
-                if let subtitle = row.subtitle {
-                    Text(subtitle).font(.callout).lineLimit(2).foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.secondary))
-                }
+            RoundedRectangle(cornerRadius: DS.Radius.badge)
+                .fill(selected ? Color.white.opacity(0.22) : Color.dsChip)
+                .frame(width: 22, height: 22)
+                .overlay(Image(systemName: row.icon).font(.system(size: 10.5, weight: .medium)).foregroundStyle(selected ? .white : Color.dsFg2))
+            Text(rowText(row, selected: selected)).lineLimit(1)
+            Spacer(minLength: 8)
+            if let trailing = row.trailing {
+                Text(selected && row.id.hasPrefix("c:") ? "↩" : trailing).font(.system(size: 11.5)).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.dsFg3)
             }
-            Spacer()
-            if let shortcut = row.shortcut { Text(shortcut).font(.callout).foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.8)) : AnyShapeStyle(.tertiary)) }
         }
-        .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+        .foregroundStyle(selected ? Color.white : Color.dsFg)
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
+        .frame(height: 38)
+        .background(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: DS.Radius.row))
         .contentShape(Rectangle())
     }
 
     // MARK: Behavior
 
     private func move(_ delta: Int) {
-        let count = rows.count
+        let count = groups.flatMap(\.rows).count
         guard count > 0 else { return }
         selection = (selection + delta + count) % count
     }
 
     private func runSelected() {
-        let rows = self.rows
+        let rows = groups.flatMap(\.rows)
         guard rows.indices.contains(selection) else { return }
         rows[selection].run()
     }
@@ -188,14 +236,37 @@ struct CommandPalette: View {
         }
     }
 
-    /// Bold the matches marked by the engine (U+0002 … U+0003).
+    private func price(_ m: ModelInfo) -> String {
+        m.pricing.input == 0 && m.pricing.output == 0 ? "free" : String(format: "$%.2f/$%.2f", m.pricing.input, m.pricing.output)
+    }
+
+    private func rowText(_ row: Row, selected: Bool) -> AttributedString {
+        var title = bolded(row.title)
+        title.font = title.font ?? .system(size: 13)
+        var detail = row.detail ?? AttributedString()
+        detail.foregroundColor = selected ? .white.opacity(0.8) : .dsFg3
+        for run in detail.runs where run.font == nil { detail[run.range].font = .system(size: 12) }
+        return title + detail
+    }
+
+    /// The typed letters in bold (first match per word).
+    private func bolded(_ title: String) -> AttributedString {
+        var out = AttributedString(title)
+        out.font = .system(size: 13)
+        for word in query.lowercased().split(separator: " ") {
+            if let r = out.range(of: String(word), options: .caseInsensitive) { out[r].font = .system(size: 13, weight: .semibold) }
+        }
+        return out
+    }
+
+    /// Bold the matches the engine marked (U+0002 … U+0003).
     private func highlighted(_ snippet: String) -> AttributedString {
         var out = AttributedString()
         var bold = false
         var current = ""
         func flush() {
             var part = AttributedString(current)
-            if bold { part.font = .callout.bold() }
+            if bold { part.font = .system(size: 12, weight: .semibold) }
             out += part
             current = ""
         }

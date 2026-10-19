@@ -5981,7 +5981,10 @@
 			"required": [
 				"uptimeMs",
 				"openSessions",
-				"subscriptions"
+				"subscriptions",
+				"runtime",
+				"memoryMB",
+				"dataPath"
 			],
 			"properties": {
 				"uptimeMs": {
@@ -5992,6 +5995,15 @@
 				},
 				"subscriptions": {
 					"type": "number"
+				},
+				"runtime": {
+					"type": "string"
+				},
+				"memoryMB": {
+					"type": "number"
+				},
+				"dataPath": {
+					"type": "string"
 				}
 			}
 		},
@@ -8412,6 +8424,51 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"models.verifyKey.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"key"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"key": {
+					"type": "string"
+				}
+			}
+		},
+		"models.verifyKey.result": {
+			"type": "object",
+			"required": [
+				"ok"
+			],
+			"properties": {
+				"ok": {
+					"type": "boolean"
+				},
+				"message": {
+					"type": "string"
+				},
+				"label": {
+					"type": "string"
+				},
+				"usageUsd": {
+					"type": "number"
+				},
+				"limitUsd": {
+					"anyOf": [
+						{
+							"type": "number"
+						},
+						{
+							"type": "null"
+						}
+					]
 				}
 			}
 		},

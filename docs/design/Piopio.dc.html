@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;
+--accent:#0a84ff;
+--canvas:radial-gradient(1200px 800px at 15% 10%,oklch(0.9 0.035 250),transparent 60%),radial-gradient(1000px 900px at 85% 90%,oklch(0.9 0.035 300),transparent 60%),oklch(0.93 0.012 270);
+--win:#fdfdfc;--glass:rgba(242,242,246,.72);--glassEdge:rgba(255,255,255,.85);--pill:rgba(255,255,255,.78);--pillEdge:rgba(0,0,0,.07);
+--fg:#1d1d1f;--fg2:#5b5b61;--fg3:#8e8e93;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.05);--card:#ffffff;--chip:rgba(0,0,0,.045);--bubble:#f1f1f3;--inv:#1d1d1f;--invfg:#fff;
+--green:oklch(0.64 0.15 150);--amber:oklch(0.74 0.15 70);--red:oklch(0.62 0.18 25);--addbg:oklch(0.96 0.035 150);--delbg:oklch(0.96 0.03 25);
+--winshadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.22),0 8px 24px rgba(20,20,40,.1);--panelshadow:0 0 0 .5px rgba(0,0,0,.08),0 8px 30px rgba(0,0,0,.08);
+background:var(--canvas);color:var(--fg)}
+body[data-theme="dark"]{--canvas:radial-gradient(1200px 800px at 15% 10%,oklch(0.28 0.05 260),transparent 60%),radial-gradient(1000px 900px at 85% 90%,oklch(0.26 0.05 310),transparent 60%),#101014;
+--win:#1a1a1c;--glass:rgba(40,40,44,.8);--glassEdge:rgba(255,255,255,.13);--pill:rgba(74,74,78,.88);--pillEdge:rgba(255,255,255,.1);
+--fg:#f5f5f7;--fg2:#b8b8bd;--fg3:#8e8e93;--line:rgba(255,255,255,.12);--line2:rgba(255,255,255,.07);--card:#242426;--chip:rgba(255,255,255,.08);--bubble:#2e2e31;--inv:#f5f5f7;--invfg:#1d1d1f;
+--addbg:oklch(0.32 0.06 150);--delbg:oklch(0.32 0.06 25);--winshadow:0 0 0 .5px rgba(255,255,255,.14),0 30px 80px rgba(0,0,0,.6);--panelshadow:0 0 0 .5px rgba(255,255,255,.08),0 8px 30px rgba(0,0,0,.3)}
+body{--accentSoft:color-mix(in oklch,var(--accent) 16%,transparent);--accentLine:color-mix(in oklch,var(--accent) 45%,transparent)}
+body[data-theme="dark"]{--accentSoft:color-mix(in oklch,var(--accent) 26%,transparent);--accentLine:color-mix(in oklch,var(--accent) 60%,transparent)}
+a{color:var(--accent)}a:hover{opacity:.8}
+</style>
+</helmet>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:880px">
+<div style="font-size:13px;color:var(--fg2);letter-spacing:.02em">Piopio for macOS · Turn 8 · <a href="#8a">8a</a> Thread · <a href="#8b">8b</a> Contact conversation · <a href="#8c">8c</a> WhatsApp setup · <a href="#8d">8d</a> Errors · <a href="#8e">8e</a> Components</div>
+<div style="font-size:40px;font-weight:700;letter-spacing:-.025em">Filling the gaps</div>
+<div style="font-size:17px;color:var(--fg2);line-height:1.5;text-wrap:pretty">The last flows, how errors look, and a sheet of the building blocks to take into SwiftUI.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:72px;align-items:flex-start">
+
+<div id="8a" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">8a</div><div style="font-size:20px;font-weight:600">Chat · Thread with attachments and an artifact</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip)"><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Build</div><div style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Chat</div><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Agents</div></div>
+<div style="padding:16px 8px 4px;display:flex;flex-direction:column;gap:1px">
+<div style="padding:0 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Spaces</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><div style="width:16px;height:16px;border-radius:5px;background:var(--fg3);opacity:.55"></div>Home renovation</div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Today</div>
+<div style="padding:6px 8px;border-radius:8px;background:var(--accentSoft);font-weight:500">Compare lease offers</div>
+<div style="padding:6px 8px;color:var(--fg2)">CRDTs vs. OT, simply</div>
+<div style="padding:6px 8px;color:var(--fg2)">Translate lease clause</div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Yesterday</div>
+<div style="padding:6px 8px;color:var(--fg2)">Swift actors refresher</div>
+</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:10px">
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Compare lease offers</div><div style="font-size:11px;color:var(--fg3)">Thread · 2 files</div></div>
+<div style="margin-left:auto;display:flex;gap:8px"><div style="padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;font-size:12px">Move to Space…</div><div style="padding:6px 11px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;font-size:12px">◫</div></div>
+</div>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:640px;padding:8px 28px 0;display:flex;flex-direction:column;gap:14px">
+<div style="align-self:flex-end;display:flex;gap:8px">
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:var(--card);border:.5px solid var(--line)"><div style="width:26px;height:32px;border-radius:4px;background:var(--chip);font-size:8px;font-weight:700;color:var(--red);display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px;box-sizing:border-box">PDF</div><div style="display:flex;flex-direction:column;gap:1px;font-size:12px"><span style="font-weight:500">Oferta_Chamberí.pdf</span><span style="color:var(--fg3)">6 pages</span></div></div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:var(--card);border:.5px solid var(--line)"><div style="width:26px;height:32px;border-radius:4px;background:var(--chip);font-size:8px;font-weight:700;color:var(--red);display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px;box-sizing:border-box">PDF</div><div style="display:flex;flex-direction:column;gap:1px;font-size:12px"><span style="font-weight:500">Oferta_Lavapiés.pdf</span><span style="color:var(--fg3)">4 pages</span></div></div>
+</div>
+<div style="align-self:flex-end;max-width:78%;background:var(--bubble);padding:10px 14px;border-radius:16px 16px 4px 16px;line-height:1.5">Compare these two leases. What's the real yearly cost and which clauses should worry me?</div>
+<div style="line-height:1.6;font-size:13.5px">Lavapiés is cheaper on paper, but Chamberí ends up <b>€640 cheaper per year</b> once you count the community fees and the deposit terms. I've put the full comparison in a table.</div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;border:1px solid var(--accentLine);background:var(--card)"><div style="width:34px;height:34px;border-radius:9px;background:var(--accentSoft);display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700">▦</div><div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">Lease comparison</span><span style="font-size:12px;color:var(--fg2)">Table · v2 · open on the right</span></div><span style="margin-left:auto;font-size:12px;color:var(--fg3)">v1 · v2</span></div>
+<div style="line-height:1.6;font-size:13.5px">Watch clause 9.2 in Lavapiés: it lets the landlord pass on any building repair to you.</div>
+</div>
+</div>
+<div style="padding:12px 28px 20px;display:flex;justify-content:center">
+<div style="width:100%;max-width:584px;border-radius:20px;background:var(--glass);backdrop-filter:blur(24px);border:.5px solid var(--glassEdge);box-shadow:var(--panelshadow);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;gap:6px"><div style="display:flex;align-items:center;gap:6px;padding:4px 6px 4px 4px;border-radius:9px;background:var(--card);border:.5px solid var(--line);font-size:12px"><div style="width:22px;height:22px;border-radius:5px;background:repeating-linear-gradient(135deg,var(--chip) 0 3px,transparent 3px 6px)"></div>floorplan.jpg<span style="color:var(--fg3)">✕</span></div></div>
+<div style="color:var(--fg3);font-size:13.5px">Add a row for the commute from each flat…</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2)"><div style="width:26px;height:26px;border-radius:50%;background:var(--chip);display:flex;align-items:center;justify-content:center">+</div><div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Sonnet 4.5</div><div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Web search</div><div style="margin-left:auto;width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-weight:600">↑</div></div>
+</div>
+</div>
+</div>
+<div style="width:420px;flex-shrink:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--card);box-shadow:var(--panelshadow);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:14px 16px;display:flex;align-items:center;gap:8px;border-bottom:.5px solid var(--line2)"><span style="font-weight:600">Lease comparison</span><span style="font-size:11px;padding:2px 7px;border-radius:999px;background:var(--chip);color:var(--fg2)">v2</span><span style="margin-left:auto;display:flex;gap:6px;font-size:12px"><span style="padding:3px 10px;border-radius:999px;background:var(--chip)">Copy</span><span style="padding:3px 10px;border-radius:999px;background:var(--chip)">Export CSV</span></span></div>
+<div style="padding:12px 16px;font-size:12.5px">
+<div style="display:grid;grid-template-columns:1.3fr 1fr 1fr;border-radius:10px;border:.5px solid var(--line);overflow:hidden">
+<sc-for list="{{ leaseRows }}" as="lr" hint-placeholder-count="7">
+<div style="padding:8px 10px;border-bottom:.5px solid var(--line2);font-weight:{{ lr.w }};color:{{ lr.c0 }};background:{{ lr.bg }}">{{ lr.a }}</div>
+<div style="padding:8px 10px;border-bottom:.5px solid var(--line2);text-align:right;font-weight:{{ lr.w }};color:{{ lr.c1 }};background:{{ lr.bg }}">{{ lr.b }}</div>
+<div style="padding:8px 10px;border-bottom:.5px solid var(--line2);text-align:right;font-weight:{{ lr.w }};color:{{ lr.c2 }};background:{{ lr.bg }}">{{ lr.c }}</div>
+</sc-for>
+</div>
+<div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;color:var(--fg2);line-height:1.45">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">Sources</div>
+<div>Oferta_Chamberí.pdf · p.2, p.4</div>
+<div>Oferta_Lavapiés.pdf · p.1, p.3 (clause 9.2)</div>
+</div>
+</div>
+</div>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">A Thread is the simplest unit: files attach as chips, and anything structured (a table, document or code) becomes an artifact. It shows as a card in the transcript and opens in the right panel with versions and sources. "Move to Space…" promotes the thread when it outgrows itself.</div>
+</div>
+
+<div id="8b" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">8b</div><div style="font-size:20px;font-weight:600">Agents · Conversations with a contact</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="padding:4px 16px 10px;display:flex;align-items:center;gap:10px"><div style="width:28px;height:28px;border-radius:50%;background:oklch(0.62 0.13 255);color:#fff;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:center">A</div><div style="display:flex;flex-direction:column;gap:1px"><b>Atlas</b><span style="font-size:11px;color:var(--fg3)">Conversations · 6</span></div></div>
+<div style="margin:0 12px 8px;padding:6px 10px;border-radius:8px;background:var(--chip);color:var(--fg3)">Search contacts</div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ convos }}" as="cv" hint-placeholder-count="5">
+<div style="display:flex;gap:10px;padding:8px;border-radius:9px;background:{{ cv.bg }}"><div style="width:30px;height:30px;border-radius:50%;background:var(--chip);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;color:var(--fg2);flex-shrink:0">{{ cv.initial }}</div><div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1"><div style="display:flex"><span style="font-weight:500">{{ cv.name }}</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">{{ cv.time }}</span></div><div style="font-size:11px;color:var(--fg3)">{{ cv.channel }}</div><div style="font-size:12px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cv.last }}</div></div></div>
+</sc-for>
+</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:10px;border-bottom:.5px solid var(--line2)">
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Marta Ruiz</div><div style="font-size:11px;color:var(--fg3)">WhatsApp · +34 6•• ••• 201 · known contact</div></div>
+<div style="margin-left:auto;display:flex;gap:8px;align-items:center"><div style="display:flex;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;font-size:12px">Atlas replies<div style="width:30px;height:18px;border-radius:999px;background:var(--accent);padding:2px;box-sizing:border-box;display:flex;justify-content:flex-end"><div style="width:14px;height:14px;border-radius:50%;background:#fff"></div></div></div></div>
+</div>
+<div style="flex:1;overflow:hidden;padding:20px 28px;display:flex;flex-direction:column;gap:8px">
+<div style="align-self:center;font-size:11px;color:var(--fg3);padding:4px 0">Tuesday</div>
+<div style="align-self:flex-start;max-width:62%;background:var(--bubble);padding:9px 13px;border-radius:16px 16px 16px 4px;line-height:1.45">Hi! Is Luis free Thursday afternoon for the photo session?</div>
+<div style="align-self:flex-end;max-width:62%;background:var(--accentSoft);padding:9px 13px;border-radius:16px 16px 4px 16px;line-height:1.45">Confirmed for Thursday at 18:00, see you then!<div style="font-size:10.5px;color:var(--fg3);margin-top:3px;text-align:right">Atlas · approved by you · ✓✓</div></div>
+<div style="align-self:center;font-size:11px;color:var(--fg3);padding:8px 0 4px">Today</div>
+<div style="align-self:flex-start;max-width:62%;background:var(--bubble);padding:9px 13px;border-radius:16px 16px 16px 4px;line-height:1.45">Can we push it to 18:30? Traffic is awful 😅</div>
+<div style="align-self:flex-end;max-width:62%;background:var(--accentSoft);padding:9px 13px;border-radius:16px 16px 4px 16px;line-height:1.45">No problem, moved to 18:30.<div style="font-size:10.5px;color:var(--fg3);margin-top:3px;text-align:right">Atlas · auto · ✓✓</div></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);padding:6px 12px;border-radius:999px;background:var(--chip);align-self:flex-end"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div>Moved calendar event to 18:30–20:00</div>
+<div style="align-self:flex-end;max-width:62%;background:var(--inv);color:var(--invfg);padding:9px 13px;border-radius:16px 16px 4px 16px;line-height:1.45">I'll bring the reflector, Marta.<div style="font-size:10.5px;opacity:.6;margin-top:3px;text-align:right">You · sent via Atlas</div></div>
+</div>
+<div style="padding:12px 28px 20px">
+<div style="border-radius:20px;background:var(--glass);backdrop-filter:blur(24px);border:.5px solid var(--glassEdge);box-shadow:var(--panelshadow);padding:12px 14px;display:flex;align-items:center;gap:8px;font-size:12px">
+<div style="display:flex;padding:2px;border-radius:999px;background:var(--chip)"><div style="padding:3px 10px;border-radius:999px;background:var(--pill);font-weight:600">Reply as you</div><div style="padding:3px 10px;color:var(--fg2)">Instruct Atlas</div></div>
+<span style="color:var(--fg3);font-size:13px;margin-left:6px">Message Marta on WhatsApp…</span>
+<div style="margin-left:auto;width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-weight:600">↑</div>
+</div>
+</div>
+</div>
+<sc-if value="{{ showInspector }}" hint-placeholder-val="{{ true }}">
+<div style="width:280px;flex-shrink:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 8px;font-weight:600">Contact</div>
+<div style="padding:0 16px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px"><span style="color:var(--fg2)">Role</span><span>Photographer</span><span style="color:var(--fg2)">Trust</span><span>Known · can book</span><span style="color:var(--fg2)">Channels</span><span>WhatsApp, Email</span><span style="color:var(--fg2)">Since</span><span>Sep 2026</span></div>
+<div style="padding:18px 16px 8px;font-weight:600">What Atlas knows</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:8px;font-size:12px;line-height:1.45">
+<div>Prefers late-afternoon sessions</div>
+<div>Invoices through Ledger, net 30</div>
+<div style="color:var(--accent)">Edit contact memory</div>
+</div>
+<div style="margin-top:auto;padding:14px 16px;border-top:.5px solid var(--line);font-size:12px;color:var(--fg2);line-height:1.45">Turn off "Atlas replies" to take over. Atlas keeps reading but won't answer until you turn it back on.</div>
+</div>
+</sc-if>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Shows the real conversation as the contact sees it. Every outgoing message says who wrote it: Atlas on its own, Atlas after your approval, or you. You can take over at any time ("Atlas replies" switch), or switch the composer to give Atlas instructions without the contact seeing them.</div>
+</div>
+
+<div id="8c" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">8c</div><div style="font-size:20px;font-weight:600">Add channel · WhatsApp Business</div></div>
+<div style="width:820px;height:640px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;flex-direction:column;font-size:13px">
+<div style="padding:22px 28px 0;display:flex;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:20px;font-weight:700">Connect WhatsApp to Atlas</div><div style="color:var(--fg2)">Uses the official WhatsApp Business Platform through your Meta account.</div></div><span style="margin-left:auto;font-size:12px;color:var(--fg3)">Step 3 of 4</span></div>
+<div style="margin:16px 28px 0;display:flex;gap:6px"><div style="flex:1;height:4px;border-radius:2px;background:var(--accent)"></div><div style="flex:1;height:4px;border-radius:2px;background:var(--accent)"></div><div style="flex:1;height:4px;border-radius:2px;background:var(--accent)"></div><div style="flex:1;height:4px;border-radius:2px;background:var(--chip)"></div></div>
+<div style="margin:18px 28px 0;display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--chip)"><span style="color:var(--green);font-weight:600">✓</span>Meta Business account<span style="margin-left:auto;font-size:12px;color:var(--fg2)">Estudio Luis M.</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--chip)"><span style="color:var(--green);font-weight:600">✓</span>Phone number<span style="margin-left:auto;font-size:12px;color:var(--fg2)">+34 6•• ••• 410 · verified by SMS</span></div>
+</div>
+<div style="margin:18px 28px 0;display:flex;flex-direction:column;gap:10px;flex:1">
+<div style="display:flex;flex-direction:column;gap:4px"><b style="font-size:14px">Message templates</b><span style="color:var(--fg2);line-height:1.5">WhatsApp only lets Atlas start a conversation, or reply after 24 hours of silence, with templates approved by Meta. Free replies are fine inside the 24-hour window.</span></div>
+<div style="border-radius:12px;border:.5px solid var(--line);background:var(--card);overflow:hidden">
+<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:.5px solid var(--line2)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;width:170px">appointment_reminder</span><span style="color:var(--fg2);flex:1;font-size:12px">Hi &#123;&#123;1&#125;&#125;, a reminder of your session on &#123;&#123;2&#125;&#125; at &#123;&#123;3&#125;&#125;.</span><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--green);font-weight:500">Approved</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:.5px solid var(--line2)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;width:170px">follow_up</span><span style="color:var(--fg2);flex:1;font-size:12px">Hi &#123;&#123;1&#125;&#125;, just checking in about &#123;&#123;2&#125;&#125;.</span><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--amber);font-weight:500">In review</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;color:var(--accent);font-size:12px">+ Draft a template with Atlas</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--chip);font-size:12px;color:var(--fg2)"><span style="font-weight:600;color:var(--fg)">Cost</span>Meta charges per conversation started with a template. Replies within 24h are free. Billed by Meta, not Piopio.</div>
+</div>
+<div style="padding:14px 28px;border-top:.5px solid var(--line);display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:var(--fg3)">You can continue while templates are in review</span><span style="margin-left:auto;padding:6px 16px;border-radius:999px;background:var(--chip)">Back</span><span style="padding:6px 16px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Continue</span></div>
+</div>
+<div style="max-width:820px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Four steps: Meta account, number, templates, test message. The template step explains the 24-hour rule in plain words, because it's the main surprise when an agent goes quiet. Template approval runs in the background and doesn't block setup.</div>
+</div>
+
+<div id="8d" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">8d</div><div style="font-size:20px;font-weight:600">Error states</div></div>
+<div style="width:1280px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;font-size:13px">
+<div style="border-radius:18px;background:var(--win);box-shadow:var(--winshadow);padding:22px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">IN THE TRANSCRIPT · PROVIDER ERROR</div>
+<div style="border-radius:12px;border:.5px solid var(--line);background:var(--card);padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:var(--red)"></div><b>OpenRouter is rate-limiting this model</b><span style="margin-left:auto;font-size:11px;color:var(--fg3)">429 · retried 3×</span></div>
+<div style="color:var(--fg2);line-height:1.5">Nothing was lost. Your message is still queued and will send as soon as you choose.</div>
+<div style="display:flex;gap:6px;font-size:12px"><span style="padding:5px 12px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Retry now</span><span style="padding:5px 12px;border-radius:999px;background:var(--chip)">Use Haiku 4.5 instead</span><span style="padding:5px 12px;border-radius:999px;background:var(--chip)">Details</span></div>
+</div>
+</div>
+<div style="border-radius:18px;background:var(--win);box-shadow:var(--winshadow);padding:22px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">WINDOW BANNER · LOCAL ENGINE STOPPED</div>
+<div style="border-radius:12px;background:color-mix(in oklch,var(--red) 12%,var(--card));border:.5px solid color-mix(in oklch,var(--red) 35%,transparent);padding:10px 14px;display:flex;align-items:center;gap:10px">
+<div style="width:8px;height:8px;border-radius:50%;background:var(--red)"></div><span><b>Local engine stopped unexpectedly.</b> <span style="color:var(--fg2)">2 Build sessions paused at their last checkpoint.</span></span>
+<span style="margin-left:auto;padding:4px 12px;border-radius:999px;background:var(--inv);color:var(--invfg);font-size:12px;font-weight:500">Restart</span><span style="font-size:12px;color:var(--fg2)">Logs</span>
+</div>
+<div style="font-size:12px;color:var(--fg3);line-height:1.5">Shown above the content area of every mode until resolved. Cloud agents keep running.</div>
+</div>
+<div style="border-radius:18px;background:var(--win);box-shadow:var(--winshadow);padding:22px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">DEPLOY FAILED · IN THE NEW-AGENT SHEET</div>
+<div style="border-radius:12px;background:var(--card);border:.5px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:7px;font-size:12px">
+<div style="display:flex;align-items:center;font-weight:600;font-size:13px">Deploy failed<span style="margin-left:auto;font-weight:400;color:var(--fg3);font-size:11px">Cloudflare</span></div>
+<div style="display:flex;gap:8px"><span style="color:var(--green);width:12px">✓</span>Bundled agent definition</div>
+<div style="display:flex;gap:8px"><span style="color:var(--green);width:12px">✓</span>Uploaded Worker piopio-muse</div>
+<div style="display:flex;gap:8px;color:var(--red)"><span style="width:12px">✕</span>Durable Objects need the Workers Paid plan</div>
+<div style="display:flex;gap:6px;margin-top:4px"><span style="padding:5px 12px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Upgrade plan ↗</span><span style="padding:5px 12px;border-radius:999px;background:var(--chip)">Retry</span><span style="padding:5px 12px;border-radius:999px;background:var(--chip)">Run on this Mac instead</span></div>
+</div>
+</div>
+<div style="border-radius:18px;background:var(--win);box-shadow:var(--winshadow);padding:22px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">AGENT BUDGET REACHED · ACTIVITY FEED</div>
+<div style="display:flex;gap:14px;align-items:flex-start;padding:12px;border-radius:12px;background:color-mix(in oklch,var(--amber) 14%,var(--card))">
+<div style="width:30px;height:30px;border-radius:9px;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--amber);font-weight:700">$</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:6px"><b>Atlas paused · October budget reached</b><span style="color:var(--fg2);line-height:1.45">$10.00 of $10.00 used. 3 incoming messages are waiting and will get an automatic "back soon" reply.</span>
+<div style="display:flex;gap:6px;font-size:12px"><span style="padding:5px 12px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Raise to $15</span><span style="padding:5px 12px;border-radius:999px;background:var(--chip)">Resume once</span><span style="padding:5px 12px;border-radius:999px;background:var(--chip)">Keep paused</span></div></div>
+</div>
+</div>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Same three-part pattern every time: what happened, in plain words; what's safe (nothing lost, cloud still running); and one main action plus alternatives. Red only for failures, amber for limits you set yourself.</div>
+</div>
+
+<div id="8e" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">8e</div><div style="font-size:20px;font-weight:600">Components &amp; tokens</div></div>
+<div style="width:1280px;border-radius:18px;background:var(--win);box-shadow:var(--winshadow);padding:32px;box-sizing:border-box;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 32px;font-size:13px">
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">COLOR</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+<sc-for list="{{ swatches }}" as="sw" hint-placeholder-count="12">
+<div style="display:flex;flex-direction:column;gap:5px"><div style="height:44px;border-radius:10px;background:{{ sw.v }};border:.5px solid var(--line)"></div><span style="font-size:11px;font-family:ui-monospace,Menlo,monospace;color:var(--fg2)">{{ sw.n }}</span></div>
+</sc-for>
+</div>
+<div style="font-size:12px;color:var(--fg3);line-height:1.5">accent follows the system accent color. Status colors map to SwiftUI .green / .orange / .red.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">TYPE · SF PRO</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:28px;font-weight:700;letter-spacing:-.02em">Title</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">28 bold · onboarding</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:20px;font-weight:700">Sheet title</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">20 bold</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:15px;font-weight:600">Toolbar title</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">15 semibold</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:13.5px">Transcript body</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">13.5 / 1.6</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:13px">UI body</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">13 regular</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:11px;font-weight:600;color:var(--fg3)">Section label</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">11 semibold · fg3</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:12px;font-family:ui-monospace,Menlo,monospace">code · paths</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">SF Mono 12</span></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">SURFACES · RADII</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div style="height:70px;border-radius:14px;background:var(--glass);border:.5px solid var(--glassEdge);box-shadow:var(--panelshadow);padding:8px 10px;box-sizing:border-box;font-size:11px;color:var(--fg2)">Glass panel<br>14 · inset 8</div>
+<div style="height:70px;border-radius:12px;background:var(--card);border:.5px solid var(--line);padding:8px 10px;box-sizing:border-box;font-size:11px;color:var(--fg2)">Card<br>12 · hairline</div>
+<div style="height:70px;border-radius:20px;background:var(--glass);border:.5px solid var(--glassEdge);box-shadow:var(--panelshadow);padding:8px 12px;box-sizing:border-box;font-size:11px;color:var(--fg2)">Composer<br>20</div>
+<div style="height:70px;border-radius:18px;background:var(--win);box-shadow:var(--winshadow);padding:8px 12px;box-sizing:border-box;font-size:11px;color:var(--fg2)">Window / sheet<br>18</div>
+</div>
+<div style="font-size:12px;color:var(--fg3);line-height:1.5">Spacing on a 4pt grid: 4 · 8 · 12 · 16 · 22 · 28.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">BUTTONS · PILLS</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px">
+<span style="padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Primary</span>
+<span style="padding:6px 14px;border-radius:999px;background:var(--inv);color:var(--invfg);font-weight:500">Strong</span>
+<span style="padding:6px 14px;border-radius:999px;background:var(--chip)">Secondary</span>
+<span style="padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06)">Toolbar pill</span>
+<span style="padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500;opacity:.45">Disabled</span>
+</div>
+<div style="display:flex;padding:3px;border-radius:999px;background:var(--chip);width:fit-content;font-size:12px"><div style="padding:4px 14px;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Segment</div><div style="padding:4px 14px;color:var(--fg2)">Segment</div><div style="padding:4px 14px;color:var(--fg2)">Segment</div></div>
+<div style="display:flex;gap:6px;font-size:11px;font-weight:500"><span style="padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--green)">Allow</span><span style="padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--amber)">Ask</span><span style="padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--red)">Never</span><span style="padding:2px 6px;border-radius:5px;background:var(--chip);color:var(--fg2);font-size:10px;font-weight:600">CLOUD</span><span style="padding:1px 7px;border-radius:999px;background:var(--accent);color:#fff">3</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">STATUS</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:10px"><div style="width:9px;height:9px;border-radius:50%;background:var(--amber)"></div>Waiting on you</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:9px;height:9px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;box-sizing:border-box"></div>Running</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:9px;height:9px;border-radius:50%;background:var(--green)"></div>Live / done</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:9px;height:9px;border-radius:50%;background:var(--fg3);opacity:.5"></div>Idle</div>
+<div style="display:flex;align-items:center;gap:10px"><div style="width:9px;height:9px;border-radius:50%;background:var(--red)"></div>Failed</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">TRANSCRIPT</div>
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:8px 12px;border-radius:16px 16px 4px 16px">User bubble</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--card);display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px"><span style="color:var(--fg3)">›</span><span style="font-weight:500">Tool card</span><span style="margin-left:auto;color:var(--fg3)">0.2s</span></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);padding:6px 12px;border-radius:999px;background:var(--chip);align-self:flex-start"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div>System note (routing, memory, actions)</div>
+<div style="border:1px solid var(--accentLine);border-radius:12px;background:var(--card);padding:8px 12px;box-shadow:0 0 0 4px var(--accentSoft);font-size:12px;display:flex;align-items:center;gap:8px"><div style="width:7px;height:7px;border-radius:50%;background:var(--amber)"></div>Needs-decision card · accent halo</div>
+</div>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The whole design comes down to these pieces. In SwiftUI: glass panels → <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px">.background(.regularMaterial)</span> with a 14pt radius, pills → capsule shapes, accent → <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px">Color.accentColor</span>. Only the halo on decision cards is custom.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:880px">
+<div style="font-size:13px;color:var(--fg2);letter-spacing:.02em">Piopio for macOS · Turn 7 · <a href="#7a">7a</a> New session · <a href="#7b">7b</a> Pull request</div>
+<div style="font-size:40px;font-weight:700;letter-spacing:-.025em">Build, start to merge</div>
+<div style="font-size:17px;color:var(--fg2);line-height:1.5;text-wrap:pretty">Also in this turn: providers and cloud targets are now lists everywhere (<a href="#5a">5a</a>, <a href="#5b">5b</a>, <a href="#4b">4b</a>, <a href="#3d">3d</a>). OpenRouter and Cloudflare are the first entries, not fixed fields.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:72px;align-items:flex-start">
+
+<div id="7a" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">7a</div><div style="font-size:20px;font-weight:600">Build · new session</div></div>
+<div style="width:1000px;height:640px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px;position:relative">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge)"></div>
+<div style="position:absolute;inset:0;background:rgba(0,0,0,.2)"></div>
+<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:600px;border-radius:0 0 18px 18px;background:var(--win);box-shadow:var(--winshadow);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:22px 24px 6px;display:flex;flex-direction:column;gap:4px"><div style="font-size:18px;font-weight:700">New session in piopio</div><div style="color:var(--fg2)">~/code/piopio · main is clean</div></div>
+<div style="margin:14px 24px 0;border-radius:14px;border:1.5px solid var(--accent);box-shadow:0 0 0 4px var(--accentSoft);background:var(--card);padding:12px 14px;min-height:72px;line-height:1.5">Add Sparkle-based auto updates with a beta channel toggle in Settings<span style="display:inline-block;width:1.5px;height:15px;background:var(--accent);vertical-align:-2px;margin-left:1px"></span></div>
+<div style="padding:16px 24px 0;display:grid;grid-template-columns:110px 1fr;gap:10px 14px;align-items:center">
+<span style="color:var(--fg2)">Work on</span>
+<div style="display:flex;padding:3px;border-radius:999px;background:var(--chip);font-size:12px;width:fit-content"><div style="padding:4px 12px;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">New branch</div><div style="padding:4px 12px;color:var(--fg2)">Worktree</div><div style="padding:4px 12px;color:var(--fg2)">Current branch</div></div>
+<span style="color:var(--fg2)">Branch</span>
+<div style="display:flex;align-items:center;gap:8px"><div style="padding:6px 10px;border-radius:8px;background:var(--chip);font-family:ui-monospace,Menlo,monospace;font-size:12px">pi/sparkle-updates</div><span style="font-size:12px;color:var(--fg3)">from main · named from your prompt</span></div>
+<span style="color:var(--fg2)">Permissions</span>
+<div style="display:flex;padding:3px;border-radius:999px;background:var(--chip);font-size:12px;width:fit-content"><div style="padding:4px 12px;color:var(--fg2)">Read only</div><div style="padding:4px 12px;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Ask before edits</div><div style="padding:4px 12px;color:var(--fg2)">Auto</div></div>
+<span style="color:var(--fg2)">Model</span>
+<div style="display:flex;gap:8px;font-size:12px"><span style="padding:5px 10px;border-radius:8px;background:var(--chip)">Sonnet 4.5 · OpenRouter ⌄</span><span style="padding:5px 10px;border-radius:8px;background:var(--chip)">Think · medium ⌄</span></div>
+<span style="color:var(--fg2)">Context</span>
+<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px"><span style="padding:4px 10px;border-radius:999px;background:var(--chip)">AGENTS.md</span><span style="padding:4px 10px;border-radius:999px;background:var(--chip)">MCP · GitHub, Linear</span><span style="padding:4px 10px;border-radius:999px;background:var(--chip)">Linear PIO-88 ✓</span><span style="padding:4px 10px;border-radius:999px;color:var(--accent)">+ Attach</span></div>
+</div>
+<div style="margin-top:22px;padding:14px 24px;border-top:.5px solid var(--line);display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:var(--fg3)">Defaults saved per project</span><span style="margin-left:auto;padding:6px 16px;border-radius:999px;background:var(--chip)">Cancel</span><span style="padding:6px 16px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Start ⌘↩</span></div>
+</div>
+</div>
+<div style="max-width:1000px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The prompt comes first, and everything below already has sensible defaults, so ⌘↩ starts right away. The branch name is suggested from the prompt. Worktree lets you run several sessions in parallel on the same repo. The model picker lists models from all connected providers.</div>
+</div>
+
+<div id="7b" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">7b</div><div style="font-size:20px;font-weight:600">Build · pull request in the inspector</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip)"><div style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Build</div><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Chat</div><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Agents</div></div>
+<div style="padding:16px 8px 4px;display:flex;flex-direction:column;gap:1px">
+<div style="padding:0 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Projects</div>
+<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-weight:600"><span style="color:var(--fg3);font-size:10px">▾</span><div style="width:16px;height:13px;border-radius:3px;background:var(--accent)"></div>piopio</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 34px;color:var(--fg2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--amber)"></div>Wire engine protocol</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 34px;border-radius:8px;background:var(--accentSoft);font-weight:500"><div style="width:9px;height:9px;border-radius:50%;background:var(--green)"></div>Transcript windowing<span style="margin-left:auto;font-size:11px;color:var(--fg2);font-weight:400">#51</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 34px;color:var(--fg2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--fg3);opacity:.5"></div>Sparkle updates</div>
+</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:10px">
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Transcript windowing</div><div style="font-size:11px;color:var(--fg3)">piopio · PR #51 open</div></div>
+<div style="margin-left:auto;padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:12px">⑂ pi/transcript-window</div>
+</div>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:680px;padding:8px 32px 0;display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--fg3)"><div style="flex:1;height:.5px;background:var(--line)"></div>PR #51 opened · 3 commits<div style="flex:1;height:.5px;background:var(--line)"></div></div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--card);padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:8px;font-size:12px"><div style="width:20px;height:20px;border-radius:50%;background:oklch(0.66 0.12 30);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center">N</div><b>nadia</b><span style="color:var(--fg3)">commented on TranscriptView.swift:88 · GitHub</span></div>
+<div style="line-height:1.5">Can we keep the scroll position when a long tool output expands? Right now it jumps.</div>
+</div>
+<div style="line-height:1.6;font-size:13.5px">Good catch. I'll anchor on the first visible row before expanding and restore its offset after layout.</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--card)"><div style="display:flex;align-items:center;gap:10px;padding:9px 12px;font-size:12px"><span style="color:var(--fg3)">›</span><span style="font-weight:500">Edit</span><span style="font-family:ui-monospace,Menlo,monospace;color:var(--fg2)">TranscriptView.swift</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace"><span style="color:var(--green)">+14</span> <span style="color:var(--red)">−3</span></span></div></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);padding:7px 12px;border-radius:999px;background:var(--chip);align-self:flex-start"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div>Pushed 1 commit and replied to nadia on GitHub</div>
+</div>
+</div>
+<div style="padding:12px 32px 20px;display:flex;justify-content:center"><div style="width:100%;max-width:616px;border-radius:20px;background:var(--glass);backdrop-filter:blur(24px);border:.5px solid var(--glassEdge);box-shadow:var(--panelshadow);padding:14px 16px;color:var(--fg3)">Ask, @mention files, or /command…</div></div>
+</div>
+<sc-if value="{{ showInspector }}" hint-placeholder-val="{{ true }}">
+<div style="width:300px;flex-shrink:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:14px 16px 0;display:flex;gap:14px;font-size:12px;color:var(--fg2)"><span>Changes</span><span>Checkpoints</span><span style="color:var(--fg);font-weight:600">Pull request</span></div>
+<div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;padding:2px 8px;border-radius:999px;background:var(--green);color:#fff;font-weight:600">Open</span><span style="font-weight:600">#51</span><span style="margin-left:auto;font-size:12px;color:var(--accent)">GitHub ↗</span></div>
+<div style="font-weight:600;font-size:14px;line-height:1.35">Window long transcripts and keep scroll anchored</div>
+<div style="font-size:12px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">pi/transcript-window → main</div>
+</div>
+<div style="padding:16px 16px 6px;font-size:11px;font-weight:600;color:var(--fg3)">Checks</div>
+<div style="padding:0 12px;display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ checks }}" as="ck" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:9px;padding:6px 6px"><div style="width:10px;height:10px;border-radius:50%;background:{{ ck.bg }};border:{{ ck.border }};box-sizing:border-box"></div><span>{{ ck.name }}</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">{{ ck.meta }}</span></div>
+</sc-for>
+</div>
+<div style="padding:16px 16px 6px;font-size:11px;font-weight:600;color:var(--fg3)">Review</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:8px;font-size:12px">
+<div style="display:flex;align-items:center;gap:8px"><div style="width:20px;height:20px;border-radius:50%;background:oklch(0.66 0.12 30);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center">N</div>nadia<span style="margin-left:auto;color:var(--amber)">Changes requested</span></div>
+<div style="display:flex;color:var(--fg2)">Comments<span style="margin-left:auto;color:var(--fg)">2 of 3 resolved</span></div>
+</div>
+<div style="margin-top:auto;padding:14px 16px;border-top:.5px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:12px">
+<div style="text-align:center;padding:7px 0;border-radius:999px;background:var(--chip)">Address remaining comment</div>
+<div style="text-align:center;padding:7px 0;border-radius:999px;background:var(--inv);color:var(--invfg);font-weight:500;opacity:.45">Merge · waiting on checks</div>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Once the session opens a PR, the inspector gains a Pull request tab with checks and review status. Reviewer comments show up in the transcript as normal turns the agent can answer. Merge stays disabled until the checks pass, and the reason is written on the button.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:880px">
+<div style="font-size:13px;color:var(--fg2);letter-spacing:.02em">Piopio for macOS · Turn 6 · <a href="#6a">6a</a> Agent definition · <a href="#6b">6b</a> Terminal drawer · <a href="#6c">6c</a> Notifications</div>
+<div style="font-size:40px;font-weight:700;letter-spacing:-.025em">Editing and following along</div>
+<div style="font-size:17px;color:var(--fg2);line-height:1.5;text-wrap:pretty">How you shape an agent, see what a Build session runs, and keep track of things when Piopio isn't in front.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:72px;align-items:flex-start">
+
+<div id="6a" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">6a</div><div style="font-size:20px;font-weight:600">Agents · Definition tab</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip)"><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Build</div><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Chat</div><div style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Agents</div></div>
+<div style="padding:16px 8px 4px;display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 8px;font-weight:500"><div style="width:16px;height:12px;border-radius:3px;border:1.5px solid var(--fg2);box-sizing:border-box"></div>Inbox<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--accent);color:#fff">3</span></div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Agents</div>
+<sc-for list="{{ agents }}" as="ag" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;background:{{ ag.sel }}"><div style="width:24px;height:24px;border-radius:50%;background:{{ ag.color }};color:#fff;font-weight:600;font-size:11px;display:flex;align-items:center;justify-content:center">{{ ag.initial }}</div>{{ ag.name }}<span style="margin-left:auto;font-size:10px;font-weight:600;padding:2px 6px;border-radius:5px;background:var(--chip);color:var(--fg2)">{{ ag.where }}</span></div>
+</sc-for>
+</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:12px">
+<div style="width:32px;height:32px;border-radius:50%;background:oklch(0.62 0.13 255);color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center">A</div>
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Atlas</div><div style="font-size:11px;color:var(--amber)">● 2 unsaved changes · live is v14</div></div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:8px"><div style="padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;font-size:12px">Test in sandbox</div><div style="padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:500">Deploy v15</div></div>
+</div>
+<div style="padding:0 22px;display:flex;gap:22px;border-bottom:.5px solid var(--line);color:var(--fg2)"><div style="padding:10px 0">Activity</div><div style="padding:10px 0">Conversations</div><div style="padding:10px 0">Memory</div><div style="padding:10px 0;color:var(--fg);font-weight:600;border-bottom:2px solid var(--accent)">Definition</div></div>
+<div style="flex:1;overflow:hidden;padding:20px 22px;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center"><span style="font-weight:600">Instructions</span><span style="margin-left:auto;font-size:12px;color:var(--fg3)">Markdown · 412 tokens</span></div>
+<div style="border-radius:12px;border:.5px solid var(--line);background:var(--card);padding:14px 16px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.75;color:var(--fg2)">
+<div style="color:var(--fg)"># Atlas</div>
+<div>You are Luis's personal assistant. Be brief; Spanish with Luis, match the language of others.</div>
+<div>&nbsp;</div>
+<div style="color:var(--fg)">## Scheduling</div>
+<div>- Only offer slots that are free in Google Calendar.</div>
+<div style="background:var(--addbg);margin:0 -16px;padding:0 16px">- Never book before 09:30 or on Sundays.</div>
+<div style="background:var(--addbg);margin:0 -16px;padding:0 16px">- Ask Luis before confirming anything with someone new.</div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+<div style="display:flex;flex-direction:column;gap:8px"><span style="font-weight:600">Model</span><div style="padding:10px 12px;border-radius:10px;background:var(--chip);display:flex">Claude Sonnet 4.5<span style="margin-left:auto;color:var(--fg3)">⌄</span></div><div style="font-size:12px;color:var(--fg3)">Avg. $0.012 per run over the last 7 days</div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><span style="font-weight:600">Tools</span><div style="display:flex;flex-wrap:wrap;gap:6px;font-size:12px"><span style="padding:4px 10px;border-radius:999px;background:var(--chip)">Google Calendar</span><span style="padding:4px 10px;border-radius:999px;background:var(--chip)">Web search</span><span style="padding:4px 10px;border-radius:999px;background:var(--chip)">Ask agent: Ledger</span><span style="padding:4px 10px;border-radius:999px;color:var(--accent)">+ Add</span></div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<span style="font-weight:600">Approval rules</span>
+<div style="border-radius:12px;border:.5px solid var(--line);background:var(--card);overflow:hidden">
+<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:.5px solid var(--line2)">Reply to known contacts<span style="margin-left:auto;font-size:11px;padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--green);font-weight:500">Allow</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:.5px solid var(--line2)">Reply to new contacts<span style="margin-left:auto;font-size:11px;padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--amber);font-weight:500">Ask</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px 14px">Create or move calendar events<span style="margin-left:auto;font-size:11px;padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--amber);font-weight:500">Ask</span></div>
+</div>
+</div>
+</div>
+</div>
+<sc-if value="{{ showInspector }}" hint-placeholder-val="{{ true }}">
+<div style="width:300px;flex-shrink:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 10px;display:flex;align-items:center"><span style="font-weight:600">Sandbox</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">uses unsaved draft</span></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip);font-size:12px"><div style="flex:1;text-align:center;padding:4px 0;border-radius:999px;background:var(--pill);font-weight:600">As new contact</div><div style="flex:1;text-align:center;padding:4px 0;color:var(--fg2)">As Luis</div></div>
+<div style="flex:1;padding:14px 12px;display:flex;flex-direction:column;gap:8px">
+<div style="align-self:flex-end;max-width:85%;background:var(--accent);color:#fff;padding:8px 12px;border-radius:14px 14px 4px 14px;line-height:1.45">Can we meet Sunday at 10?</div>
+<div style="align-self:flex-start;max-width:85%;background:var(--bubble);padding:8px 12px;border-radius:14px 14px 14px 4px;line-height:1.45">Sundays don't work. Monday at 10:00 or 12:30?</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg2);padding:6px 10px;border-radius:999px;background:var(--chip);align-self:flex-start"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span>Would ask Luis first · new contact</div>
+</div>
+<div style="margin:0 12px 12px;padding:10px 12px;border-radius:14px;background:var(--card);border:.5px solid var(--line);color:var(--fg3)">Message the draft…</div>
+</div>
+</sc-if>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Edits are a draft until you deploy: the header shows how far the draft is from the live version, and new lines are highlighted. The sandbox on the right runs the draft, posing as a new contact or as you, and says when the agent would ask for approval.</div>
+</div>
+
+<div id="6b" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">6b</div><div style="font-size:20px;font-weight:600">Build · terminal drawer</div></div>
+<div style="width:1000px;height:620px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;flex-direction:column;font-size:13px">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:10px"><div style="display:flex;gap:8px;margin-right:12px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div><div style="font-size:15px;font-weight:600">Wire engine protocol</div><div style="margin-left:auto;padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;font-size:12px;font-family:ui-monospace,Menlo,monospace">⑂ pi/engine-protocol</div></div>
+<div style="flex:1;display:flex;justify-content:center;overflow:hidden">
+<div style="width:100%;max-width:680px;padding:4px 32px;display:flex;flex-direction:column;gap:12px">
+<div style="line-height:1.6">Running the transport tests now.</div>
+<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;border:1px solid var(--accentLine);background:var(--card);font-size:12px"><div style="width:10px;height:10px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;box-sizing:border-box"></div><span style="font-weight:500">bash</span><span style="font-family:ui-monospace,Menlo,monospace;color:var(--fg2)">pnpm vitest run engine/transport</span><span style="margin-left:auto;color:var(--accent)">Live below ↓</span></div>
+</div>
+</div>
+<div style="height:300px;flex-shrink:0;margin:0 8px 8px;border-radius:14px;background:#141416;color:#e5e5ea;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--panelshadow)">
+<div style="display:flex;align-items:center;gap:4px;padding:8px 10px;border-bottom:.5px solid rgba(255,255,255,.08);font-size:12px">
+<div style="padding:4px 10px;border-radius:7px;background:rgba(255,255,255,.1);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span>vitest · agent</div>
+<div style="padding:4px 10px;color:#a1a1a6">dev server</div>
+<div style="padding:4px 10px;color:#a1a1a6">zsh · you</div>
+<div style="padding:4px 8px;color:#a1a1a6">+</div>
+<div style="margin-left:auto;display:flex;gap:6px;color:#a1a1a6"><span style="padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.08)">Send output to agent</span><span style="padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.08)">Stop ⌃C</span></div>
+</div>
+<div style="flex:1;padding:12px 16px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.7">
+<div style="color:#8e8e93">$ pnpm vitest run engine/transport</div>
+<div><span style="color:#30d158">✓</span> transport/stdio.test.ts <span style="color:#8e8e93">(6 tests) 41ms</span></div>
+<div><span style="color:#30d158">✓</span> transport/ws.test.ts › connects and handshakes <span style="color:#8e8e93">12ms</span></div>
+<div><span style="color:#30d158">✓</span> transport/ws.test.ts › resumes from last acked seq <span style="color:#8e8e93">88ms</span></div>
+<div><span style="color:#ff453a">✗</span> transport/ws.test.ts › backs off with jitter</div>
+<div style="color:#ff9f0a;padding-left:16px">expected delay ≤ 30000, received 64000</div>
+<div style="color:#8e8e93">Tests  1 failed | 8 passed (9)</div>
+<div style="display:flex;align-items:center;gap:6px"><span style="color:#8e8e93">›</span><span style="display:inline-block;width:7px;height:14px;background:#e5e5ea;opacity:.7"></span></div>
+</div>
+</div>
+</div>
+<div style="max-width:1000px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">A dark drawer under the transcript (⌃`). The agent's own processes and your shell sit in tabs side by side, marked agent or you. "Send output to agent" turns a failure into the next turn without copy-pasting.</div>
+</div>
+
+<div id="6c" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">6c</div><div style="font-size:20px;font-weight:600">Notifications</div></div>
+<div style="width:460px;height:620px;border-radius:18px;background:var(--chip);border:.5px dashed var(--line);padding:20px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;font-size:13px">
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--fg3);padding-bottom:4px">top-right of the desktop</div>
+<sc-for list="{{ notifs }}" as="nt" hint-placeholder-count="4">
+<div style="border-radius:16px;background:var(--glass);backdrop-filter:blur(40px) saturate(1.8);border:.5px solid var(--glassEdge);box-shadow:var(--panelshadow);padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;gap:10px">
+<div style="width:34px;height:34px;border-radius:9px;background:repeating-linear-gradient(135deg,var(--chip) 0 4px,transparent 4px 8px);border:.5px solid var(--line);flex-shrink:0"></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex"><span style="font-weight:600">{{ nt.title }}</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">{{ nt.time }}</span></div><div style="color:var(--fg2);line-height:1.4">{{ nt.body }}</div></div>
+</div>
+<sc-if value="{{ nt.actions }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:6px;font-size:12px"><span style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--chip)">{{ nt.a2 }}</span><span style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">{{ nt.a1 }}</span></div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+<div style="max-width:460px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Notifications only for three things: a decision is needed, a long job finished, or something failed. Approvals can be answered from the notification itself. Routine agent replies stay in the Activity feed.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:880px">
+<div style="font-size:13px;color:var(--fg2);letter-spacing:.02em">Piopio for macOS · Turn 5 · <a href="#5a">5a</a> Model key · <a href="#5b">5b</a> Cloudflare · <a href="#5c">5c</a> Empty states</div>
+<div style="font-size:40px;font-weight:700;letter-spacing:-.025em">First run</div>
+<div style="font-size:17px;color:var(--fg2);line-height:1.5;text-wrap:pretty">Two steps, and only the first one is required. Each empty mode explains in one line what goes there and offers one way to start. Dark Mode contrast is tuned too: switch Appearance → Dark in Tweaks to see every screen.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:72px;align-items:flex-start">
+
+<div id="5a" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">5a</div><div style="font-size:20px;font-weight:600">Welcome · model key</div></div>
+<div style="width:760px;height:560px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;flex-direction:column;font-size:13px;position:relative">
+<div style="padding:16px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:var(--chip)"></div><div style="width:12px;height:12px;border-radius:50%;background:var(--chip)"></div></div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;padding:12px 80px 0;gap:14px;text-align:center">
+<div style="width:84px;height:84px;border-radius:22px;background:repeating-linear-gradient(135deg,var(--chip) 0 6px,transparent 6px 12px);border:.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:9px;color:var(--fg3)">app icon</div>
+<div style="font-size:28px;font-weight:700;letter-spacing:-.02em">Welcome to Piopio</div>
+<div style="color:var(--fg2);font-size:14px;line-height:1.5;max-width:460px;text-wrap:pretty">Build, chat and run agents on the pi harness. Everything stays on this Mac or in your own accounts.</div>
+<div style="width:100%;max-width:460px;margin-top:14px;display:flex;flex-direction:column;gap:8px;text-align:left">
+<div style="font-weight:600">Connect a model provider</div>
+<div style="border-radius:12px;border:.5px solid var(--line);background:var(--card);overflow:hidden">
+<div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:var(--accentSoft);border-bottom:.5px solid var(--line2)"><div style="display:flex;align-items:center;gap:10px"><div style="width:14px;height:14px;border-radius:50%;border:4px solid var(--accent);box-sizing:border-box"></div><b>OpenRouter</b><span style="font-size:12px;color:var(--fg2)">API key · many models</span><span style="margin-left:auto;font-size:12px;color:var(--green);font-weight:500">✓ Verified</span></div><div style="margin-left:24px;padding:7px 10px;border-radius:8px;background:var(--card);border:.5px solid var(--line);font-family:ui-monospace,Menlo,monospace;font-size:12px">sk-or-v1-••••••••••••3f9a</div></div>
+<div style="padding:10px 12px;display:flex;align-items:center;gap:10px;color:var(--fg2)"><div style="width:14px;height:14px;border-radius:50%;border:1.5px solid var(--fg3);box-sizing:border-box"></div><span style="color:var(--fg)">ChatGPT subscription</span><span style="font-size:12px">Sign in with OpenAI</span><span style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip)">Soon</span></div>
+</div>
+<div style="display:flex;font-size:12px;color:var(--fg2)">Stored in your Keychain. You can add more providers later.</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:6px;padding:10px 12px;border-radius:10px;background:var(--chip)"><div style="width:14px;height:14px;border-radius:4px;background:var(--accent);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center">✓</div><div style="display:flex;flex-direction:column;gap:1px"><span>Import pi CLI sessions</span><span style="font-size:11px;color:var(--fg3)">Found 37 sessions in 6 folders under ~/.pi/agent/sessions</span></div></div>
+</div>
+</div>
+<div style="padding:16px 22px;border-top:.5px solid var(--line);display:flex;align-items:center;gap:8px"><div style="display:flex;gap:6px"><div style="width:18px;height:6px;border-radius:3px;background:var(--accent)"></div><div style="width:6px;height:6px;border-radius:3px;background:var(--line)"></div><div style="width:6px;height:6px;border-radius:3px;background:var(--line)"></div></div><span style="margin-left:auto;padding:7px 18px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Continue</span></div>
+</div>
+<div style="max-width:760px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The provider is a choice, not a fixed field: OpenRouter is the first one available, and subscriptions like ChatGPT slot into the same list. Keys are checked as you paste them. Existing pi CLI sessions are found and imported, so Build isn't empty on first launch.</div>
+</div>
+
+<div id="5b" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">5b</div><div style="font-size:20px;font-weight:600">Optional · cloud target</div></div>
+<div style="width:760px;height:560px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;flex-direction:column;font-size:13px">
+<div style="padding:16px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:var(--chip)"></div><div style="width:12px;height:12px;border-radius:50%;background:var(--chip)"></div></div>
+<div style="flex:1;padding:8px 80px 0;display:flex;flex-direction:column;gap:14px">
+<div style="font-size:24px;font-weight:700;letter-spacing:-.02em;text-align:center">Keep agents running with your Mac closed</div>
+<div style="color:var(--fg2);font-size:14px;line-height:1.5;text-align:center;text-wrap:pretty">Connect a cloud target to deploy agents there. You can do this later from Settings.</div>
+<div style="display:flex;gap:8px;justify-content:center;font-size:12px"><span style="padding:5px 14px;border-radius:999px;background:var(--inv);color:var(--invfg);font-weight:500">Cloudflare</span><span style="padding:5px 14px;border-radius:999px;background:var(--chip);color:var(--fg3)">More targets soon</span></div>
+<div style="margin-top:4px;border-radius:12px;border:.5px solid var(--line);background:var(--card);overflow:hidden">
+<div style="padding:10px 14px;font-size:11px;font-weight:600;color:var(--fg3);border-bottom:.5px solid var(--line2)">What Piopio will create in your Cloudflare account</div>
+<div style="display:flex;gap:12px;padding:10px 14px;border-bottom:.5px solid var(--line2)"><span style="width:120px;color:var(--fg2)">Worker</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">piopio-engine</span></div>
+<div style="display:flex;gap:12px;padding:10px 14px;border-bottom:.5px solid var(--line2)"><span style="width:120px;color:var(--fg2)">Durable Objects</span><span>One per agent, with its own SQLite</span></div>
+<div style="display:flex;gap:12px;padding:10px 14px"><span style="width:120px;color:var(--fg2)">Plan</span><span>Workers Paid ($5/mo) needed for Durable Objects</span></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+<div style="padding:12px 14px;border-radius:12px;border:1.5px solid var(--accent);background:var(--accentSoft);display:flex;flex-direction:column;gap:4px"><b>Sign in with Cloudflare</b><span style="font-size:12px;color:var(--fg2)">Opens the browser, scoped token</span></div>
+<div style="padding:12px 14px;border-radius:12px;border:.5px solid var(--line);display:flex;flex-direction:column;gap:4px"><b>Paste an API token</b><span style="font-size:12px;color:var(--fg2)">Workers + DO edit permissions</span></div>
+</div>
+</div>
+<div style="padding:16px 22px;border-top:.5px solid var(--line);display:flex;align-items:center;gap:8px"><div style="display:flex;gap:6px"><div style="width:6px;height:6px;border-radius:3px;background:var(--line)"></div><div style="width:18px;height:6px;border-radius:3px;background:var(--accent)"></div><div style="width:6px;height:6px;border-radius:3px;background:var(--line)"></div></div><span style="margin-left:auto;padding:7px 18px;border-radius:999px;background:var(--chip)">Skip for now</span><span style="padding:7px 18px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Connect</span></div>
+</div>
+<div style="max-width:760px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Before you connect, the screen lists exactly what will be created in your account and what it costs. "Skip for now" sits next to Connect, so the cloud is clearly optional.</div>
+</div>
+
+<div id="5c" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">5c</div><div style="font-size:20px;font-weight:600">Empty states · content area</div></div>
+<div style="display:flex;gap:24px;flex-wrap:wrap">
+<div style="width:440px;height:400px;border-radius:18px;background:var(--win);box-shadow:var(--winshadow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;box-sizing:border-box;text-align:center;font-size:13px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">BUILD</div>
+<div style="font-size:18px;font-weight:700">Open a folder to start building</div>
+<div style="color:var(--fg2);line-height:1.5">Each folder becomes a Project. Sessions run with pi-coding-agent inside it.</div>
+<div style="margin-top:8px;width:100%;height:110px;border-radius:14px;border:1.5px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--fg2)">Drop a folder here<span style="padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Open Folder… ⌘O</span></div>
+<div style="font-size:12px;color:var(--fg3)">or clone from GitHub</div>
+</div>
+<div style="width:440px;height:400px;border-radius:18px;background:var(--win);box-shadow:var(--winshadow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;box-sizing:border-box;text-align:center;font-size:13px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">CHAT</div>
+<div style="font-size:18px;font-weight:700">Start a thread, or a Space</div>
+<div style="color:var(--fg2);line-height:1.5">A thread is one conversation. A Space keeps a long-running subject organized into topics.</div>
+<div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;text-align:left">
+<div style="padding:14px;border-radius:12px;background:var(--card);border:.5px solid var(--line);display:flex;flex-direction:column;gap:4px"><b>New thread</b><span style="font-size:12px;color:var(--fg2)">⌘N</span></div>
+<div style="padding:14px;border-radius:12px;background:var(--card);border:.5px solid var(--line);display:flex;flex-direction:column;gap:4px"><b>New Space</b><span style="font-size:12px;color:var(--fg2)">⌘⇧N</span></div>
+</div>
+<div style="font-size:12px;color:var(--fg3)">Tip: ⌥Space opens Quick Chat from any app</div>
+</div>
+<div style="width:440px;height:400px;border-radius:18px;background:var(--win);box-shadow:var(--winshadow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:32px;box-sizing:border-box;text-align:center;font-size:13px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">AGENTS</div>
+<div style="font-size:18px;font-weight:700">Create your first agent</div>
+<div style="color:var(--fg2);line-height:1.5">Agents live in your messaging apps, run on schedules and keep their own memory.</div>
+<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;width:100%;text-align:left">
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;background:var(--card);border:.5px solid var(--line)"><b>Personal assistant</b><span style="font-size:12px;color:var(--fg3)">Telegram · calendar</span><span style="margin-left:auto;color:var(--fg3)">›</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;background:var(--card);border:.5px solid var(--line)"><b>Repo watcher</b><span style="font-size:12px;color:var(--fg3)">GitHub triggers</span><span style="margin-left:auto;color:var(--fg3)">›</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;border:1.5px dashed var(--line);color:var(--fg2)">Start from scratch<span style="margin-left:auto">›</span></div>
+</div>
+</div>
+</div>
+<div style="max-width:1368px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Same pattern in each mode: a small label, a one-line title, one sentence on what the mode is, and one or two ways to start. Agents offers templates because a blank definition is the hardest start.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:880px">
+<div style="font-size:13px;color:var(--fg2);letter-spacing:.02em">Piopio for macOS · Turn 4 · <a href="#4a">4a</a> MCP · <a href="#4b">4b</a> Engines &amp; keys · <a href="#4c">4c</a> Diff review · <a href="#4d">4d</a> Agents inbox · <a href="#4e">4e</a> Space memory</div>
+<div style="font-size:40px;font-weight:700;letter-spacing:-.025em">Settings, review and memory</div>
+<div style="font-size:17px;color:var(--fg2);line-height:1.5;text-wrap:pretty">The screens where you control and check what the agents are doing: what they can reach, where they run, what they changed, what's waiting on you, and what they remember.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:72px;align-items:flex-start">
+
+<div id="4a" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">4a</div><div style="font-size:20px;font-weight:600">Settings · MCP servers</div></div>
+<div style="width:1000px;height:660px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:220px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;padding-bottom:10px">
+<div style="padding:16px 16px 14px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ settingsNavMcp }}" as="sn" hint-placeholder-count="8">
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;background:{{ sn.bg }};font-weight:{{ sn.weight }}"><div style="width:20px;height:20px;border-radius:6px;background:{{ sn.color }}"></div>{{ sn.name }}</div>
+</sc-for>
+</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden">
+<div style="padding:22px 28px 14px;display:flex;align-items:flex-end;gap:12px">
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:20px;font-weight:700;letter-spacing:-.01em">MCP servers</div><div style="color:var(--fg2)">Shared by every mode. Choose where each one is available and which tools need approval.</div></div>
+<div style="margin-left:auto;padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:500;flex-shrink:0">Add server…</div>
+</div>
+<div style="margin:0 28px;border-radius:12px;border:.5px solid var(--line);background:var(--card);overflow:hidden">
+<sc-for list="{{ mcp }}" as="m" hint-placeholder-count="5">
+<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:.5px solid var(--line2);background:{{ m.rowbg }}">
+<div style="width:30px;height:30px;border-radius:8px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;color:var(--fg2)">{{ m.initial }}</div>
+<div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:600">{{ m.name }}</span><span style="width:6px;height:6px;border-radius:50%;background:{{ m.dot }}"></span><span style="font-size:11px;color:var(--fg3)">{{ m.state }}</span></div><div style="font-size:11.5px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">{{ m.sub }}</div></div>
+<div style="font-size:12px;color:var(--fg2);width:70px">{{ m.tools }}</div>
+<div style="font-size:11px;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--fg2);width:112px;text-align:center">{{ m.scope }}</div>
+<div style="width:34px;height:20px;border-radius:999px;background:{{ m.tbg }};padding:2px;box-sizing:border-box;display:flex;justify-content:{{ m.tjust }}"><div style="width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)"></div></div>
+</div>
+</sc-for>
+</div>
+<div style="margin:16px 28px 0;display:flex;align-items:center;gap:8px"><span style="font-weight:600">GitHub · tools</span><span style="color:var(--fg3);font-size:12px">38 · showing those with custom rules</span><span style="margin-left:auto;font-size:12px;color:var(--accent)">Set all to Ask</span></div>
+<div style="margin:8px 28px 0;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+<sc-for list="{{ mcpTools }}" as="tl" hint-placeholder-count="6">
+<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;background:var(--chip)"><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ tl.name }}</span><span style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--card);color:{{ tl.color }};font-weight:500">{{ tl.perm }} ⌄</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="max-width:1000px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Each server shows where it can be used (all modes, Build only, specific agents) and has an on/off switch. Each tool can be set to Allow, Ask or Never, which ties straight into the approvals in Build.</div>
+</div>
+
+<div id="4b" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">4b</div><div style="font-size:20px;font-weight:600">Settings · Engines &amp; keys</div></div>
+<div style="width:1000px;height:660px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:220px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column">
+<div style="padding:16px 16px 14px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ settingsNavEng }}" as="sn" hint-placeholder-count="8">
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;background:{{ sn.bg }};font-weight:{{ sn.weight }}"><div style="width:20px;height:20px;border-radius:6px;background:{{ sn.color }}"></div>{{ sn.name }}</div>
+</sc-for>
+</div>
+</div>
+<div style="flex:1;padding:22px 28px;display:flex;flex-direction:column;gap:18px;min-width:0">
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:20px;font-weight:700;letter-spacing:-.01em">Engines &amp; keys</div><div style="color:var(--fg2)">Where agent logic runs, and the keys it uses. Everything stays in your own accounts.</div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div style="border-radius:14px;border:.5px solid var(--line);background:var(--card);padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:8px"><b style="font-size:14px">Local engine</b><span style="margin-left:auto;font-size:11px;color:var(--green)">● Running</span></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px"><span style="color:var(--fg2)">Runtime</span><span>Node 22.11 · bundled</span><span style="color:var(--fg2)">Sessions</span><span>2 running · 14 idle</span><span style="color:var(--fg2)">Memory</span><span>184 MB</span><span style="color:var(--fg2)">Data</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">~/.pi/agent</span></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding-top:10px;border-top:.5px solid var(--line2)">Keep running when window closes<div style="margin-left:auto;width:34px;height:20px;border-radius:999px;background:var(--accent);padding:2px;box-sizing:border-box;display:flex;justify-content:flex-end"><div style="width:16px;height:16px;border-radius:50%;background:#fff"></div></div></div>
+<div style="display:flex;gap:6px;font-size:12px"><span style="padding:4px 12px;border-radius:999px;background:var(--chip)">Restart</span><span style="padding:4px 12px;border-radius:999px;background:var(--chip)">View logs</span></div>
+</div>
+<div style="border-radius:14px;border:.5px solid var(--line);background:var(--card);padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:8px"><b style="font-size:14px">Cloud · Cloudflare</b><span style="margin-left:auto;font-size:11px;color:var(--green)">● Connected</span></div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px"><span style="color:var(--fg2)">Account</span><span>luis@… · Workers Paid</span><span style="color:var(--fg2)">Version</span><span>0.4.2 · up to date</span><span style="color:var(--fg2)">Agents</span><span>2 deployed · Atlas, Ledger</span><span style="color:var(--fg2)">Region</span><span>Auto (EU hint)</span></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding-top:10px;border-top:.5px solid var(--line2)">Latency<span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace">38 ms</span></div>
+<div style="display:flex;gap:6px;font-size:12px"><span style="padding:4px 12px;border-radius:999px;background:var(--chip)">Open dashboard</span><span style="padding:4px 12px;border-radius:999px;background:var(--chip)">Disconnect</span><span style="margin-left:auto;padding:4px 0;color:var(--accent)">+ Add target</span></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center"><span style="font-weight:600">Model providers</span><span style="margin-left:auto;font-size:12px;color:var(--accent)">+ Add provider</span></div>
+<div style="border-radius:12px;border:.5px solid var(--line);background:var(--card);overflow:hidden">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:.5px solid var(--line2)"><b style="width:110px">OpenRouter</b><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--fg2)">sk-or-v1-••••••••••3f9a</span><span style="font-size:11px;color:var(--green)">✓ Verified</span><span style="margin-left:auto;font-size:12px;color:var(--fg2)">$18.40 this month</span><span style="font-size:12px;color:var(--accent)">Replace</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:.5px solid var(--line2)"><b style="width:110px">Default model</b><span style="padding:4px 10px;border-radius:7px;background:var(--chip)">Claude Sonnet 4.5 ⌄</span><span style="color:var(--fg3);font-size:12px">Quick Chat uses</span><span style="padding:4px 10px;border-radius:7px;background:var(--chip)">Haiku 4.5 ⌄</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:.5px solid var(--line2);color:var(--fg2)"><b style="width:110px;color:var(--fg)">ChatGPT</b>Subscription · sign in with OpenAI<span style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip)">Soon</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;color:var(--fg2)"><b style="width:110px;color:var(--fg)">Fallback</b>If a provider fails, retry with<span style="padding:4px 10px;border-radius:7px;background:var(--chip);color:var(--fg)">None ⌄</span></div>
+</div>
+<div style="font-size:12px;color:var(--fg3)">Keys are stored in the macOS Keychain. Cloud agents receive them as secrets on their target, which you can revoke at any time.</div>
+</div>
+</div>
+</div>
+<div style="max-width:1000px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Local and each cloud target use the same card layout, so new targets just add a card. Model providers are a list too: OpenRouter today, subscriptions like ChatGPT later, each with a default model.</div>
+</div>
+
+<div id="4c" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">4c</div><div style="font-size:20px;font-weight:600">Build · reviewing the session's changes</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="padding:4px 16px 12px;display:flex;align-items:center;gap:8px;color:var(--fg2)"><span>‹</span>Wire engine protocol</div>
+<div style="margin:0 12px 10px;display:flex;padding:3px;border-radius:999px;background:var(--chip);font-size:12px"><div style="flex:1;text-align:center;padding:4px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Whole session</div><div style="flex:1;text-align:center;padding:4px 0;color:var(--fg2)">Last turn</div></div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:1px;font-family:ui-monospace,Menlo,monospace;font-size:12px">
+<sc-for list="{{ diffFiles }}" as="f" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;background:{{ f.bg }}"><div style="width:14px;height:14px;border-radius:4px;border:1.5px solid {{ f.check }};background:{{ f.checkbg }};box-sizing:border-box"></div><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span>{{ f.name }}</span><span style="font-size:10.5px;color:var(--fg3)">{{ f.dir }}</span></div><span style="margin-left:auto;font-size:11px;color:var(--green)">{{ f.add }}</span><span style="font-size:11px;color:var(--red)">{{ f.del }}</span></div>
+</sc-for>
+</div>
+<div style="margin-top:auto;padding:12px 16px;border-top:.5px solid var(--line);font-size:12px;color:var(--fg2);display:flex">3 of 4 files selected<span style="margin-left:auto;color:var(--accent)">Select all</span></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:10px">
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600;font-family:ui-monospace,Menlo,monospace">engine/transport/ws.ts</div><div style="font-size:11px;color:var(--fg3)">Added in turn 3 · +64</div></div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+<div style="display:flex;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px"><div style="padding:6px 11px;font-weight:600">Unified</div><div style="padding:6px 11px;border-left:.5px solid var(--line);color:var(--fg2)">Split</div></div>
+<div style="padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px">Restore checkpoint…</div>
+<div style="padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:500">Commit 3 files…</div>
+</div>
+</div>
+<div style="flex:1;margin:0 16px 16px;border-radius:12px;border:.5px solid var(--line);background:var(--card);overflow:hidden;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.75">
+<div style="padding:6px 14px;background:var(--chip);color:var(--fg3);font-size:11px">@@ 0,0 +1,64 @@</div>
+<sc-for list="{{ diffLines }}" as="ln" hint-placeholder-count="18">
+<div style="display:flex;background:{{ ln.bg }}"><span style="width:44px;flex-shrink:0;text-align:right;padding-right:12px;color:var(--fg3)">{{ ln.n }}</span><span style="width:16px;flex-shrink:0;color:{{ ln.signColor }}">{{ ln.sign }}</span><span style="white-space:pre;color:{{ ln.color }}">{{ ln.text }}</span></div>
+<sc-if value="{{ ln.comment }}" hint-placeholder-val="{{ false }}">
+<div style="margin:6px 14px 8px 60px;padding:10px 12px;border-radius:10px;border:1px solid var(--accentLine);background:var(--win);font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12.5px;line-height:1.5;display:flex;flex-direction:column;gap:8px;box-shadow:0 0 0 4px var(--accentSoft)">
+<div>Cap the backoff at 30s and add jitter, otherwise many clients reconnect at once.</div>
+<div style="display:flex;gap:6px;font-size:12px"><span style="color:var(--fg3)">Sent to the agent as a follow-up with this line attached</span><span style="margin-left:auto;padding:3px 10px;border-radius:999px;background:var(--chip)">Cancel</span><span style="padding:3px 10px;border-radius:999px;background:var(--accent);color:#fff">Ask agent ↩</span></div>
+</div>
+</sc-if>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The sidebar turns into the session's file list (whole session or last turn), with checkboxes for a partial commit. A comment on any line goes back to the agent as a follow-up, so review and conversation stay in one loop. Restoring a checkpoint is always one click away.</div>
+</div>
+
+<div id="4d" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">4d</div><div style="font-size:20px;font-weight:600">Agents · Inbox</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip)"><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Build</div><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Chat</div><div style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Agents</div></div>
+<div style="margin:12px 12px 8px;padding:6px 10px;border-radius:8px;background:var(--chip);color:var(--fg3);display:flex">Search<span style="margin-left:auto;font-size:11px">⌘⇧F</span></div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;background:var(--accentSoft);font-weight:600"><div style="width:16px;height:12px;border-radius:3px;border:1.5px solid var(--fg);box-sizing:border-box"></div>Inbox<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--accent);color:#fff">3</span></div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Agents</div>
+<sc-for list="{{ agentsPlain }}" as="ag" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:10px;padding:7px 8px"><div style="width:24px;height:24px;border-radius:50%;background:{{ ag.color }};color:#fff;font-weight:600;font-size:11px;display:flex;align-items:center;justify-content:center">{{ ag.initial }}</div>{{ ag.name }}<span style="margin-left:auto;font-size:10px;font-weight:600;padding:2px 6px;border-radius:5px;background:var(--chip);color:var(--fg2)">{{ ag.where }}</span></div>
+</sc-for>
+</div>
+</div>
+<div style="width:380px;flex-shrink:0;display:flex;flex-direction:column;border-right:.5px solid var(--line)">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px"><div style="font-size:15px;font-weight:600">Inbox</div><div style="margin-left:auto;display:flex;padding:2px;border-radius:999px;background:var(--chip);font-size:12px"><div style="padding:3px 10px;border-radius:999px;background:var(--pill);font-weight:500">Needs you</div><div style="padding:3px 10px;color:var(--fg2)">All</div></div></div>
+<div style="padding:0 10px;display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ inbox }}" as="it" hint-placeholder-count="6">
+<div style="display:flex;gap:11px;padding:11px 12px;border-radius:12px;background:{{ it.bg }}">
+<div style="width:30px;height:30px;border-radius:50%;background:{{ it.color }};color:#fff;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ it.initial }}</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+<div style="display:flex;gap:6px;align-items:center"><span style="font-weight:600">{{ it.title }}</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">{{ it.time }}</span></div>
+<div style="display:flex;gap:6px;align-items:center;font-size:11px"><span style="width:6px;height:6px;border-radius:50%;background:{{ it.dot }}"></span><span style="color:var(--fg2)">{{ it.kind }}</span></div>
+<div style="color:var(--fg2);font-size:12px;line-height:1.4">{{ it.preview }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 20px;gap:10px;border-bottom:.5px solid var(--line2)">
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Marta · WhatsApp</div><div style="font-size:11px;color:var(--fg3)">Atlas wants to reply and add a calendar event</div></div>
+<div style="margin-left:auto;padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;font-size:12px">Open conversation</div>
+</div>
+<div style="flex:1;padding:20px 28px;display:flex;flex-direction:column;gap:10px;overflow:hidden">
+<div style="align-self:flex-start;max-width:70%;background:var(--bubble);padding:9px 13px;border-radius:16px 16px 16px 4px;line-height:1.45">Hi! Is Luis free Thursday afternoon for the photo session?</div>
+<div style="align-self:flex-start;max-width:70%;background:var(--bubble);padding:9px 13px;border-radius:16px 16px 16px 4px;line-height:1.45">Around 6 would be perfect 🙏</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);padding:7px 12px;border-radius:999px;background:var(--chip);align-self:flex-start;margin-top:6px"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div>Atlas checked Google Calendar: Thursday 17:30–20:00 is free</div>
+<div style="margin-top:auto;border:1px solid var(--accentLine);border-radius:14px;background:var(--card);padding:14px;display:flex;flex-direction:column;gap:12px;box-shadow:0 0 0 4px var(--accentSoft)">
+<div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:var(--amber)"></div><span style="font-weight:600">Proposed by Atlas</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">2 actions</span></div>
+<div style="padding:10px 12px;border-radius:10px;background:var(--chip);line-height:1.5"><span style="font-size:11px;color:var(--fg3);display:block;margin-bottom:2px">Reply on WhatsApp</span>Confirmed for Thursday at 18:00, see you then!</div>
+<div style="padding:10px 12px;border-radius:10px;background:var(--chip);line-height:1.5"><span style="font-size:11px;color:var(--fg3);display:block;margin-bottom:2px">Create event · Google Calendar</span>Photo session with Marta · Thu 23 Oct, 18:00–19:30</div>
+<div style="display:flex;gap:8px;font-size:12px;align-items:center"><span style="padding:6px 14px;border-radius:999px;background:var(--chip)">Reject</span><span style="padding:6px 14px;border-radius:999px;background:var(--chip)">Edit</span><span style="color:var(--fg3);margin-left:8px">☐ Always allow calendar replies from Marta</span><span style="margin-left:auto;padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Approve both ↩</span></div>
+</div>
+</div>
+</div>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">One inbox for every agent: approvals, messages addressed to you, and failed runs. The detail pane shows the original conversation, what the agent checked, and the exact actions it proposes, each of which can be edited before approving.</div>
+</div>
+
+<div id="4e" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">4e</div><div style="font-size:20px;font-weight:600">Chat · Space memory</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip)"><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Build</div><div style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Chat</div><div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Agents</div></div>
+<div style="padding:16px 8px 4px;display:flex;flex-direction:column;gap:1px">
+<div style="padding:0 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Spaces</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px;font-weight:600"><div style="width:16px;height:16px;border-radius:5px;background:var(--accent);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center">H</div>Home renovation</div>
+<div style="padding:5px 8px 5px 33px;color:var(--fg2)">Main</div>
+<div style="padding:5px 8px 5px 33px;color:var(--fg2)">Kitchen budget</div>
+<div style="padding:5px 8px 5px 33px;color:var(--fg2)">Contractors</div>
+<div style="padding:5px 8px 5px 33px;color:var(--fg2)">Permits</div>
+<div style="padding:6px 8px 6px 33px;border-radius:8px;background:var(--accentSoft);font-weight:500;display:flex">Memory<span style="margin-left:auto;font-size:11px;color:var(--fg2);font-weight:400">23</span></div>
+</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:10px">
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Memory</div><div style="font-size:11px;color:var(--fg3)">Home renovation · 23 facts · read by every topic</div></div>
+<div style="margin-left:auto;display:flex;gap:8px;align-items:center"><div style="padding:6px 12px;border-radius:999px;background:var(--chip);color:var(--fg3);font-size:12px;width:160px">Search memory</div><div style="padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;font-size:12px">+ Add fact</div></div>
+</div>
+<div style="padding:0 22px 10px;display:flex;gap:6px;font-size:12px">
+<span style="padding:4px 11px;border-radius:999px;background:var(--inv);color:var(--invfg)">All</span><span style="padding:4px 11px;border-radius:999px;background:var(--chip)">Pinned · 4</span><span style="padding:4px 11px;border-radius:999px;background:var(--chip)">Kitchen budget</span><span style="padding:4px 11px;border-radius:999px;background:var(--chip)">Contractors</span><span style="padding:4px 11px;border-radius:999px;background:var(--chip)">Permits</span><span style="padding:4px 11px;border-radius:999px;background:var(--chip)">Added by you</span>
+</div>
+<div style="flex:1;overflow:hidden;padding:4px 22px;display:flex;flex-direction:column;gap:18px">
+<sc-for list="{{ memGroups }}" as="g" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:4px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3);padding:0 2px 4px">{{ g.name }}</div>
+<sc-for list="{{ g.items }}" as="mi" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;background:{{ mi.bg }};border:.5px solid {{ mi.border }}">
+<div style="width:8px;height:8px;border-radius:50%;background:{{ mi.dot }};flex-shrink:0"></div>
+<div style="flex:1;min-width:0;line-height:1.45">{{ mi.text }}</div>
+<div style="font-size:11px;color:var(--fg3);flex-shrink:0">{{ mi.meta }}</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{ showInspector }}" hint-placeholder-val="{{ true }}">
+<div style="width:300px;flex-shrink:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3)">Fact</div>
+<div style="padding:10px 12px;border-radius:10px;background:var(--card);border:.5px solid var(--line);line-height:1.5;font-size:13.5px">Quote B: 14.2k cabinets + counters, valid until Nov 30</div>
+<div style="display:flex;gap:6px;font-size:12px"><span style="padding:4px 11px;border-radius:999px;background:var(--chip)">Edit</span><span style="padding:4px 11px;border-radius:999px;background:var(--chip)">Pin</span><span style="margin-left:auto;padding:4px 11px;border-radius:999px;background:var(--chip);color:var(--red)">Forget</span></div>
+</div>
+<div style="padding:4px 16px 8px;font-size:11px;font-weight:600;color:var(--fg3)">Where it came from</div>
+<div style="margin:0 16px;padding:10px 12px;border-radius:10px;background:var(--chip);font-size:12px;line-height:1.5;color:var(--fg2)">“The second quote came in at 14.2k for cabinets and counters…”<div style="margin-top:6px;color:var(--accent)">Jump to message in Kitchen budget →</div></div>
+<div style="padding:16px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px"><span style="color:var(--fg2)">Written by</span><span>Organizer</span><span style="color:var(--fg2)">Model</span><span>Sonnet 4.5</span><span style="color:var(--fg2)">When</span><span>Today 10:31</span><span style="color:var(--fg2)">Used in</span><span>2 replies since</span></div>
+<div style="margin-top:auto;padding:14px 16px;border-top:.5px solid var(--line);font-size:12px;color:var(--fg2);line-height:1.45">Memory is a plain table in this Space's SQLite file. <span style="color:var(--accent)">Reveal in Finder</span></div>
+</div>
+</sc-if>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Memory is just another entry in the Space's sidebar. Every fact shows which topic it came from and who wrote it, and links back to the original message. Edit, pin and forget are always visible, which keeps the "no hidden prompt injection" principle.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:880px">
+<div style="font-size:13px;color:var(--fg2);letter-spacing:.02em">Piopio for macOS · Turn 3 · <a href="#3a">3a</a> Quick Chat · <a href="#3b">3b</a> Command palette · <a href="#3c">3c</a> Menu bar · <a href="#3d">3d</a> New agent</div>
+<div style="font-size:40px;font-weight:700;letter-spacing:-.025em">Around the window</div>
+<div style="font-size:17px;color:var(--fg2);line-height:1.5;text-wrap:pretty">The surfaces outside the main window use the same glass, pills and status colors, so moving between them feels like one app.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:72px;align-items:flex-start">
+
+<div id="3a" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">3a</div><div style="font-size:20px;font-weight:600">Quick Chat · ⌥Space</div></div>
+<div style="width:720px;height:440px;border-radius:18px;background:var(--chip);border:.5px dashed var(--line);display:flex;align-items:center;justify-content:center;position:relative;font-size:13px">
+<div style="position:absolute;top:14px;left:18px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--fg3)">any app in front</div>
+<div style="width:620px;border-radius:22px;background:var(--glass);backdrop-filter:blur(40px) saturate(1.8);border:.5px solid var(--glassEdge);box-shadow:var(--winshadow);display:flex;flex-direction:column;overflow:hidden">
+<div style="display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:.5px solid var(--line)">
+<div style="width:22px;height:22px;border-radius:7px;background:var(--accent);flex-shrink:0"></div>
+<div style="font-size:17px;flex:1">What's the difference between actors and Sendable?</div>
+<div style="font-size:11px;padding:3px 8px;border-radius:999px;background:var(--chip);color:var(--fg2)">Haiku 4.5</div>
+</div>
+<div style="padding:16px 18px 18px 52px;display:flex;flex-direction:column;gap:10px;line-height:1.6;font-size:13.5px">
+<div><b>Sendable</b> is a promise that a value is safe to pass between concurrency domains. An <b>actor</b> is a domain: it owns mutable state and serializes access to it.</div>
+<div style="color:var(--fg2)">So you send Sendable values <i>into</i> actors; the actor itself is implicitly Sendable because callers can only reach its state through <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:1px 5px;border-radius:4px;background:var(--chip)">await</span><span style="display:inline-block;width:7px;height:14px;margin-left:3px;vertical-align:-2px;background:var(--accent);border-radius:1px"></span></div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:.5px solid var(--line);font-size:12px;color:var(--fg2)">
+<div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Open in Piopio ⌘O</div>
+<div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Move to Space…</div>
+<div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Copy ⌘C</div>
+<div style="margin-left:auto;color:var(--fg3)">esc to dismiss · saved as thread</div>
+</div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">A Spotlight-style panel with a fast model by default. The answer streams under the question; every quick chat becomes a Thread, so nothing is lost and it can be promoted into a Space later.</div>
+</div>
+
+<div id="3b" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">3b</div><div style="font-size:20px;font-weight:600">Command palette · ⌘K</div></div>
+<div style="width:720px;height:440px;border-radius:18px;background:var(--win);box-shadow:var(--winshadow);display:flex;justify-content:center;position:relative;overflow:hidden;font-size:13px">
+<div style="position:absolute;inset:0;background:rgba(0,0,0,.12)"></div>
+<div style="position:relative;margin-top:44px;width:560px;height:fit-content;border-radius:16px;background:var(--glass);backdrop-filter:blur(40px) saturate(1.8);border:.5px solid var(--glassEdge);box-shadow:var(--winshadow);overflow:hidden">
+<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:.5px solid var(--line)"><span style="color:var(--fg3)">⌕</span><span style="font-size:16px">depl</span><span style="display:inline-block;width:1.5px;height:18px;background:var(--accent);margin-left:-8px"></span><span style="margin-left:auto;font-size:11px;padding:2px 7px;border-radius:5px;background:var(--chip);color:var(--fg2)">All</span></div>
+<div style="padding:8px;display:flex;flex-direction:column;gap:1px">
+<div style="padding:6px 10px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Actions</div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;background:var(--accent);color:#fff"><div style="width:22px;height:22px;border-radius:6px;background:rgba(255,255,255,.22)"></div><span><b>Depl</b>oy Atlas</span><span style="opacity:.8;font-size:12px">· 2 changes since v14</span><span style="margin-left:auto;font-size:11px;opacity:.85">↩</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px"><div style="width:22px;height:22px;border-radius:6px;background:var(--chip)"></div><span><b>Depl</b>oy all cloud agents</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">Agents</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px"><div style="width:22px;height:22px;border-radius:6px;background:var(--chip)"></div><span>View <b>depl</b>oy logs</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">Cloud engine</span></div>
+<div style="padding:10px 10px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Go to</div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px"><div style="width:22px;height:22px;border-radius:6px;background:var(--chip)"></div><span>Wire engine protocol</span><span style="color:var(--fg3);font-size:12px">· mentions “<b>depl</b>oyment”</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">Build</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px"><div style="width:22px;height:22px;border-radius:6px;background:var(--chip)"></div><span>cloud-engine › <b>Depl</b>oy script</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">Build</span></div>
+</div>
+<div style="display:flex;gap:14px;padding:9px 16px;border-top:.5px solid var(--line);font-size:11px;color:var(--fg3)"><span>↑↓ navigate</span><span>↩ run</span><span>⌘↩ run in background</span><span style="margin-left:auto">⇥ filter by mode</span></div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">One list for actions and destinations. Actions come first, and each row shows its mode on the right, so the palette works the same from Build, Chat or Agents.</div>
+</div>
+
+<div id="3c" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">3c</div><div style="font-size:20px;font-weight:600">Menu bar extra</div></div>
+<div style="width:720px;height:620px;border-radius:18px;background:var(--chip);border:.5px dashed var(--line);position:relative;overflow:hidden;font-size:13px">
+<div style="height:30px;background:var(--glass);backdrop-filter:blur(30px);display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:0 16px;font-size:12px;border-bottom:.5px solid var(--line)"><span style="color:var(--fg2)">⌁</span><span style="padding:2px 7px;border-radius:5px;background:var(--sel,rgba(0,0,0,.08));display:flex;align-items:center;gap:5px;font-weight:600"><span style="width:12px;height:12px;border-radius:4px;background:var(--fg);display:inline-block"></span>2</span><span style="color:var(--fg2)">Sun 19 Oct 10:42</span></div>
+<div style="position:absolute;top:36px;right:60px;width:360px;border-radius:16px;background:var(--glass);backdrop-filter:blur(40px) saturate(1.8);border:.5px solid var(--glassEdge);box-shadow:var(--winshadow);overflow:hidden">
+<div style="padding:14px 16px 8px;display:flex;align-items:center"><span style="font-weight:600">Piopio</span><span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg2)"><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>Local · Cloud</span></div>
+<div style="padding:4px 16px 6px;font-size:11px;font-weight:600;color:var(--fg3)">Needs you</div>
+<div style="margin:0 8px;padding:10px;border-radius:11px;background:var(--card);border:.5px solid var(--line);display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;gap:8px;align-items:center"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber)"></span><span style="font-weight:500">Wire engine protocol</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">Build</span></div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--fg2)">pnpm vitest run engine/transport</div>
+<div style="display:flex;gap:6px;font-size:12px"><span style="padding:4px 12px;border-radius:999px;background:var(--chip)">Deny</span><span style="margin-left:auto;padding:4px 12px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Allow once</span></div>
+</div>
+<div style="margin:6px 8px 0;padding:10px;border-radius:11px;background:var(--card);border:.5px solid var(--line);display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;gap:8px;align-items:center"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber)"></span><span style="font-weight:500">Atlas</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">WhatsApp reply</span></div>
+<div style="color:var(--fg2);font-size:12px;line-height:1.45">“Confirmed for Thursday at 18:00, see you then!” → Marta</div>
+<div style="display:flex;gap:6px;font-size:12px"><span style="padding:4px 12px;border-radius:999px;background:var(--chip)">Edit</span><span style="margin-left:auto;padding:4px 12px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Send</span></div>
+</div>
+<div style="padding:14px 16px 6px;font-size:11px;font-weight:600;color:var(--fg3)">Running</div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><div style="width:9px;height:9px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;box-sizing:border-box"></div>Transcript windowing<span style="margin-left:auto;font-size:11px;color:var(--fg3)">6 min</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><div style="width:9px;height:9px;border-radius:50%;background:var(--green)"></div>Atlas, Ledger<span style="margin-left:auto;font-size:11px;color:var(--fg3)">cloud · idle</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><div style="width:9px;height:9px;border-radius:50%;background:var(--amber)"></div>Scout<span style="margin-left:auto;font-size:11px;color:var(--fg3)">local · paused</span></div>
+</div>
+<div style="margin-top:8px;padding:8px;border-top:.5px solid var(--line);display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;padding:6px 8px;border-radius:7px">Quick Chat<span style="margin-left:auto;color:var(--fg3)">⌥Space</span></div>
+<div style="display:flex;padding:6px 8px;border-radius:7px">Open Piopio<span style="margin-left:auto;color:var(--fg3)">⌘0</span></div>
+<div style="display:flex;padding:6px 8px;border-radius:7px;color:var(--fg2)">Today: $0.91 · 38 runs</div>
+</div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Whatever needs a decision comes first and can be answered right here, without opening the window. The menu bar icon shows the count of pending items, matching the Dock badge.</div>
+</div>
+
+<div id="3d" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">3d</div><div style="font-size:20px;font-weight:600">New agent — last step, deploying to Cloudflare</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px;position:relative">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge)"></div>
+<div style="position:absolute;inset:0;background:rgba(0,0,0,.2)"></div>
+<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:820px;height:640px;border-radius:0 0 18px 18px;background:var(--win);box-shadow:var(--winshadow);display:flex;overflow:hidden">
+<div style="width:220px;flex-shrink:0;background:var(--chip);padding:24px 14px;display:flex;flex-direction:column;gap:2px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3);padding:0 10px 10px">New agent</div>
+<sc-for list="{{ steps }}" as="st" hint-placeholder-count="6">
+<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:{{ st.bg }};font-weight:{{ st.weight }}"><div style="width:18px;height:18px;border-radius:50%;background:{{ st.dotbg }};color:{{ st.dotfg }};font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ st.mark }}</div><div style="display:flex;flex-direction:column;gap:1px"><span>{{ st.name }}</span><span style="font-size:11px;color:var(--fg3);font-weight:400">{{ st.sub }}</span></div></div>
+</sc-for>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="padding:26px 30px 0;display:flex;flex-direction:column;gap:6px">
+<div style="font-size:20px;font-weight:700;letter-spacing:-.01em">Where should Muse run?</div>
+<div style="color:var(--fg2);line-height:1.5">You can move it later; the session travels with it.</div>
+</div>
+<div style="padding:18px 30px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div style="padding:14px;border-radius:12px;border:.5px solid var(--line);display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:50%;border:1.5px solid var(--fg3);box-sizing:border-box"></div><b>This Mac</b></div><div style="font-size:12px;color:var(--fg2);line-height:1.45">Runs in the local engine. Stops when the Mac sleeps.</div></div>
+<div style="padding:14px;border-radius:12px;border:1.5px solid var(--accent);background:var(--accentSoft);display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:50%;border:4px solid var(--accent);box-sizing:border-box"></div><b>Cloud</b><span style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--card)">Cloudflare ⌄</span></div><div style="font-size:12px;color:var(--fg2);line-height:1.45">Always on, works with the Mac closed. Target picked from your connected ones.</div></div>
+</div>
+<div style="padding:16px 30px 0;display:grid;grid-template-columns:110px 1fr;gap:10px 14px;align-items:center;font-size:12.5px">
+<span style="color:var(--fg2)">Account</span><div style="padding:6px 10px;border-radius:7px;background:var(--chip);display:flex">luis@… · Workers Paid<span style="margin-left:auto;color:var(--fg3)">⌄</span></div>
+<span style="color:var(--fg2)">Worker</span><div style="padding:6px 10px;border-radius:7px;background:var(--chip);font-family:ui-monospace,Menlo,monospace;font-size:12px">piopio-muse</div>
+<span style="color:var(--fg2)">Secrets</span><div style="display:flex;gap:6px;font-size:12px"><span style="padding:3px 9px;border-radius:999px;background:var(--chip)">Provider key ✓</span><span style="padding:3px 9px;border-radius:999px;background:var(--chip)">TELEGRAM_TOKEN ✓</span></div>
+<span style="color:var(--fg2)">Budget</span><div style="padding:6px 10px;border-radius:7px;background:var(--chip);width:120px">$10 / month</div>
+</div>
+<div style="margin:18px 30px 0;border-radius:12px;background:var(--card);border:.5px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:7px;font-size:12px">
+<div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px">Deploying<span style="margin-left:auto;font-weight:400;color:var(--fg3);font-size:11px">12s</span></div>
+<div style="height:4px;border-radius:2px;background:var(--chip);overflow:hidden"><div style="width:68%;height:100%;background:var(--accent)"></div></div>
+<sc-for list="{{ deployLog }}" as="dl" hint-placeholder-count="4">
+<div style="display:flex;gap:8px;align-items:center;color:{{ dl.color }}"><span style="width:12px;text-align:center">{{ dl.mark }}</span>{{ dl.text }}<span style="margin-left:auto;color:var(--fg3);font-family:ui-monospace,Menlo,monospace;font-size:11px">{{ dl.t }}</span></div>
+</sc-for>
+</div>
+<div style="margin-top:auto;padding:16px 30px;border-top:.5px solid var(--line);display:flex;gap:8px;align-items:center;font-size:13px"><span style="color:var(--fg3);font-size:12px">Est. idle cost: under $1/month</span><span style="margin-left:auto;padding:6px 16px;border-radius:999px;background:var(--chip)">Back</span><span style="padding:6px 16px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500;opacity:.55">Finish</span></div>
+</div>
+</div>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">A sheet with six steps: identity, model, tools &amp; MCP, channels, contacts, and where it runs. Choosing Local or Cloud is one decision among the others, and the deploy runs inside the sheet with a visible log, so there's no terminal to leave for.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:880px">
+<div style="font-size:13px;color:var(--fg2);letter-spacing:.02em">Piopio for macOS · Turn 2 · <a href="#2a">2a</a> Build · <a href="#2b">2b</a> Chat · <a href="#2c">2c</a> Agents</div>
+<div style="font-size:40px;font-weight:700;letter-spacing:-.025em">One window, three modes</div>
+<div style="font-size:17px;color:var(--fg2);line-height:1.5;text-wrap:pretty">Sidebar | content | inspector, with the sidebar and inspector as floating glass panels over a quiet canvas. The mode switcher lives in the sidebar header (⌘1/2/3). Color is reserved for the system accent and status; everything else is neutral, so tool calls, approvals and costs read clearly.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:72px;align-items:flex-start">
+
+<div id="2a" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">2a</div><div style="font-size:20px;font-weight:600">Build — session with approval pending</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px;position:relative">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip)">
+<div style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Build</div>
+<div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Chat</div>
+<div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Agents</div>
+</div>
+<div style="margin:12px 12px 8px;padding:6px 10px;border-radius:8px;background:var(--chip);color:var(--fg3);display:flex">Search<span style="margin-left:auto;font-size:11px">⌘⇧F</span></div>
+<div style="flex:1;padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<div style="padding:8px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Projects</div>
+<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-weight:600"><span style="color:var(--fg3);font-size:10px">▾</span><div style="width:16px;height:13px;border-radius:3px;background:var(--accent)"></div>piopio<span style="margin-left:auto;font-size:11px;color:var(--fg3);font-weight:400;font-family:ui-monospace,Menlo,monospace">main</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 34px;border-radius:8px;background:var(--accentSoft);font-weight:500"><div style="width:9px;height:9px;border-radius:50%;background:var(--amber)"></div>Wire engine protocol<span style="margin-left:auto;font-size:11px;color:var(--fg2)">1</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 34px"><div style="width:9px;height:9px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent;box-sizing:border-box"></div>Transcript windowing</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 34px;color:var(--fg2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--fg3);opacity:.5"></div>Sparkle updates</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 34px;color:var(--fg2)"><div style="width:9px;height:9px;border-radius:50%;background:var(--fg3);opacity:.5"></div>Menu bar extra</div>
+<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-top:4px"><span style="color:var(--fg3);font-size:10px">▸</span><div style="width:16px;height:13px;border-radius:3px;background:var(--fg3);opacity:.6"></div>pi-durable<span style="margin-left:auto;font-size:11px;color:var(--fg3)">3</span></div>
+<div style="display:flex;align-items:center;gap:8px;padding:6px 8px"><span style="color:var(--fg3);font-size:10px">▸</span><div style="width:16px;height:13px;border-radius:3px;background:var(--fg3);opacity:.6"></div>cloud-engine<span style="margin-left:auto;font-size:11px;color:var(--fg3)">2</span></div>
+<div style="display:flex;align-items:center;gap:8px;padding:6px 8px"><span style="color:var(--fg3);font-size:10px">▸</span><div style="width:16px;height:13px;border-radius:3px;background:var(--fg3);opacity:.6"></div>dotfiles</div>
+</div>
+<div style="padding:12px 16px;border-top:.5px solid var(--line);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>Local engine<span style="margin-left:auto">5 MCP</span></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:10px">
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Wire engine protocol</div><div style="font-size:11px;color:var(--fg3)">piopio · started 24 min ago</div></div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+<div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-family:ui-monospace,Menlo,monospace;font-size:12px">⑂ pi/engine-protocol</div>
+<div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px">Ask before edits</div>
+<div style="display:flex;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px"><div style="padding:6px 11px">Open in Zed</div><div style="padding:6px 11px;border-left:.5px solid var(--line)">⇪</div><div style="padding:6px 11px;border-left:.5px solid var(--line)">◫</div></div>
+</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:8px 0 0;display:flex;justify-content:center">
+<div style="width:100%;max-width:700px;padding:0 32px;display:flex;flex-direction:column;gap:16px">
+<div style="align-self:flex-end;max-width:78%;background:var(--bubble);padding:10px 14px;border-radius:16px 16px 4px 16px;line-height:1.5">Implement the WebSocket transport for the Engine Protocol and add a test for reconnect with resume.</div>
+<div style="line-height:1.6;font-size:13.5px">I'll add a <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:1px 5px;border-radius:4px;background:var(--chip)">WebSocketTransport</span> next to the stdio one, sharing the frame codec. Resume uses the last acked sequence number.</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden">
+<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;font-size:12px"><span style="color:var(--fg3)">›</span><span style="font-weight:500">Read 3 files</span><span style="color:var(--fg3);font-family:ui-monospace,Menlo,monospace">protocol.ts, stdio.ts, codec.ts</span><span style="margin-left:auto;color:var(--fg3)">0.2s</span></div>
+</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden">
+<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;font-size:12px;border-bottom:.5px solid var(--line2)"><span style="color:var(--fg3)">⌄</span><span style="font-weight:500">Edit</span><span style="font-family:ui-monospace,Menlo,monospace;color:var(--fg2)">engine/transport/ws.ts</span><span style="margin-left:auto;color:var(--green);font-family:ui-monospace,Menlo,monospace">+64</span></div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.75;padding:6px 0">
+<div style="padding:0 14px;background:var(--addbg)">+ export class WebSocketTransport implements Transport {</div>
+<div style="padding:0 14px;background:var(--addbg)">+   private last&#65;ck = 0</div>
+<div style="padding:0 14px;background:var(--addbg)">+   async resume() { this.send({ type: 'resume', from: this.lastAck }) }</div>
+<div style="padding:0 14px;color:var(--fg3)">  … 58 more lines</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--fg3)"><div style="flex:1;height:.5px;background:var(--line)"></div>Checkpoint 3 · before turn<div style="flex:1;height:.5px;background:var(--line)"></div></div>
+<div style="border:1px solid var(--accentLine);border-radius:12px;background:var(--card);padding:14px;display:flex;flex-direction:column;gap:12px;box-shadow:0 0 0 4px var(--accentSoft)">
+<div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:var(--amber)"></div><span style="font-weight:600">Approval needed</span><span style="margin-left:auto;font-size:11px;color:var(--fg3)">bash</span></div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:9px 11px;border-radius:8px;background:var(--chip)">pnpm vitest run engine/transport</div>
+<div style="display:flex;gap:8px;font-size:12px"><div style="padding:6px 14px;border-radius:999px;background:var(--chip)">Deny</div><div style="margin-left:auto;padding:6px 14px;border-radius:999px;background:var(--chip)">Always for vitest</div><div style="padding:6px 14px;border-radius:999px;background:var(--accent);color:#fff;font-weight:500">Allow once ↩</div></div>
+</div>
+</div>
+</div>
+<div style="padding:0 32px 20px;display:flex;justify-content:center">
+<div style="width:100%;max-width:636px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);padding:0 6px"><span style="color:var(--fg3)">Queued</span>Then update docs/03-engine-protocol.md<span style="margin-left:auto;color:var(--fg3)">✕</span></div>
+<div style="border-radius:20px;background:var(--glass);backdrop-filter:blur(24px);border:.5px solid var(--glassEdge);box-shadow:var(--panelshadow);padding:14px 16px 10px;display:flex;flex-direction:column;gap:12px">
+<div style="color:var(--fg3);font-size:13.5px">Ask, @mention files, or /command…</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2)"><div style="width:26px;height:26px;border-radius:50%;background:var(--chip);display:flex;align-items:center;justify-content:center">+</div><div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Sonnet 4.5</div><div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Think · medium</div><div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Tools · 9</div><div style="margin-left:auto;font-size:11px;color:var(--fg3)">⌥↩ steer · esc abort</div><div style="width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-weight:600">↑</div></div>
+</div>
+</div>
+</div>
+</div>
+<sc-if value="{{ showInspector }}" hint-placeholder-val="{{ true }}">
+<div style="width:288px;flex-shrink:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 10px;display:flex;align-items:center"><span style="font-weight:600">Changes</span><span style="margin-left:auto;font-size:12px;font-family:ui-monospace,Menlo,monospace"><span style="color:var(--green)">+118</span> <span style="color:var(--red)">−12</span></span></div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:1px;font-family:ui-monospace,Menlo,monospace;font-size:12px">
+<div style="display:flex;padding:6px 8px;border-radius:7px;background:var(--chip)">transport/ws.ts<span style="margin-left:auto;color:var(--green)">A</span></div>
+<div style="display:flex;padding:6px 8px">transport/index.ts<span style="margin-left:auto;color:var(--amber)">M</span></div>
+<div style="display:flex;padding:6px 8px">codec.ts<span style="margin-left:auto;color:var(--amber)">M</span></div>
+<div style="display:flex;padding:6px 8px">ws.test.ts<span style="margin-left:auto;color:var(--green)">A</span></div>
+</div>
+<div style="margin:10px 16px 0;display:flex;gap:8px;font-size:12px"><div style="flex:1;text-align:center;padding:6px 0;border-radius:999px;background:var(--chip)">Review diff</div><div style="flex:1;text-align:center;padding:6px 0;border-radius:999px;background:var(--inv);color:var(--invfg);font-weight:500">Commit…</div></div>
+<div style="padding:20px 16px 8px;font-weight:600">Checkpoints</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:0">
+<sc-for list="{{ checkpoints }}" as="cp" hint-placeholder-count="3">
+<div style="display:flex;gap:10px;align-items:flex-start;padding:5px 0"><div style="width:9px;height:9px;margin-top:3px;border-radius:50%;border:2px solid var(--fg3);box-sizing:border-box"></div><div style="display:flex;flex-direction:column;gap:1px"><div>{{ cp.label }}</div><div style="font-size:11px;color:var(--fg3)">{{ cp.meta }}</div></div></div>
+</sc-for>
+</div>
+<div style="margin-top:auto;padding:14px 16px;border-top:.5px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:12px">
+<div style="display:flex;color:var(--fg2)">Context<span style="margin-left:auto;color:var(--fg)">41k / 200k</span></div>
+<div style="height:4px;border-radius:2px;background:var(--chip);overflow:hidden"><div style="width:21%;height:100%;background:var(--accent)"></div></div>
+<div style="display:flex;color:var(--fg2)">Spent this session<span style="margin-left:auto;color:var(--fg)">$0.38</span></div>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Status dots in the sidebar map to session state: amber = waiting on you, accent ring = running, grey = idle. Tool calls are quiet collapsible cards; only the approval gets the accent halo, so the eye lands on what needs a decision. Checkpoints sit inline in the transcript and in the inspector.</div>
+</div>
+
+<div id="2b" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">2b</div><div style="font-size:20px;font-weight:600">Chat — a Space, with the Organizer routing to Topics</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip)">
+<div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Build</div>
+<div style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Chat</div>
+<div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Agents</div>
+</div>
+<div style="margin:12px 12px 8px;padding:6px 10px;border-radius:8px;background:var(--chip);color:var(--fg3);display:flex">Search<span style="margin-left:auto;font-size:11px">⌘⇧F</span></div>
+<div style="flex:1;padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<div style="padding:8px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Pinned</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px">Reading list</div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Spaces</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;background:var(--accentSoft);font-weight:600"><div style="width:16px;height:16px;border-radius:5px;background:var(--accent);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center">H</div>Home renovation</div>
+<div style="padding:5px 8px 5px 33px;color:var(--fg2);display:flex">Kitchen budget<span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:5px"></span></div>
+<div style="padding:5px 8px 5px 33px;color:var(--fg2)">Contractors</div>
+<div style="padding:5px 8px 5px 33px;color:var(--fg2)">Permits</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><div style="width:16px;height:16px;border-radius:5px;background:var(--fg3);opacity:.55"></div>Health</div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Projects</div>
+<div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><div style="width:16px;height:13px;border-radius:3px;background:var(--fg3);opacity:.55"></div>notes-vault</div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Today</div>
+<div style="padding:5px 8px;color:var(--fg2)">CRDTs vs. OT, simply</div>
+<div style="padding:5px 8px;color:var(--fg2)">Translate lease clause</div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Yesterday</div>
+<div style="padding:5px 8px;color:var(--fg2)">Swift actors refresher</div>
+</div>
+<div style="padding:12px 16px;border-top:.5px solid var(--line);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>Local engine<span style="margin-left:auto">⌥Space Quick Chat</span></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:10px">
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Home renovation</div><div style="font-size:11px;color:var(--fg3)">Space · 4 topics · 23 memories</div></div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+<div style="padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px">Space memory</div>
+<div style="display:flex;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px"><div style="padding:6px 11px">⇪</div><div style="padding:6px 11px;border-left:.5px solid var(--line)">◫</div></div>
+</div>
+</div>
+<div style="display:flex;justify-content:center;padding:2px 0 10px">
+<div style="display:flex;gap:6px;font-size:12px">
+<div style="padding:5px 12px;border-radius:999px;background:var(--inv);color:var(--invfg);font-weight:500">Main</div>
+<div style="padding:5px 12px;border-radius:999px;background:var(--chip)">Kitchen budget</div>
+<div style="padding:5px 12px;border-radius:999px;background:var(--chip)">Contractors</div>
+<div style="padding:5px 12px;border-radius:999px;background:var(--chip)">Permits</div>
+<div style="padding:5px 12px;border-radius:999px;color:var(--fg2)">+ Topic</div>
+</div>
+</div>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:680px;padding:8px 32px 0;display:flex;flex-direction:column;gap:16px">
+<div style="align-self:flex-end;max-width:78%;background:var(--bubble);padding:10px 14px;border-radius:16px 16px 4px 16px;line-height:1.5">The second quote came in at 14.2k for cabinets and counters. Is that within what we planned?</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);padding:7px 12px;border-radius:999px;background:var(--chip);align-self:flex-start"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div>Organizer routed to <span style="color:var(--fg);font-weight:500">Kitchen budget</span><span style="color:var(--fg3)">· matched “quote”, “cabinets”</span><span style="color:var(--accent);margin-left:4px">Change</span></div>
+<div style="line-height:1.6;font-size:13.5px">It's <b>1.7k over</b> the 12.5k you set for cabinets and counters, but the total kitchen budget still has 2.1k of slack because the flooring came in low.</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--card);padding:4px 0;font-size:12.5px">
+<div style="display:grid;grid-template-columns:1fr auto auto;gap:4px 24px;padding:8px 14px">
+<span style="color:var(--fg3);font-size:11px">Line</span><span style="color:var(--fg3);font-size:11px;text-align:right">Planned</span><span style="color:var(--fg3);font-size:11px;text-align:right">Quoted</span>
+<span>Cabinets &amp; counters</span><span style="text-align:right">12,500</span><span style="text-align:right;color:var(--red)">14,200</span>
+<span>Flooring</span><span style="text-align:right">6,000</span><span style="text-align:right;color:var(--green)">4,200</span>
+<span>Appliances</span><span style="text-align:right">5,500</span><span style="text-align:right">5,100</span>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2)"><div style="width:14px;height:14px;border-radius:4px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:9px">✎</div>Saved to memory: “Quote B: 14.2k cabinets + counters, valid until Nov 30”<span style="color:var(--accent)">Undo</span></div>
+</div>
+</div>
+<div style="padding:12px 32px 20px;display:flex;justify-content:center">
+<div style="width:100%;max-width:616px;border-radius:20px;background:var(--glass);backdrop-filter:blur(24px);border:.5px solid var(--glassEdge);box-shadow:var(--panelshadow);padding:14px 16px 10px;display:flex;flex-direction:column;gap:12px">
+<div style="color:var(--fg3);font-size:13.5px">Message Home renovation — the Organizer picks the topic</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2)"><div style="width:26px;height:26px;border-radius:50%;background:var(--chip);display:flex;align-items:center;justify-content:center">+</div><div style="padding:4px 10px;border-radius:999px;background:var(--chip)">Sonnet 4.5</div><div style="padding:4px 10px;border-radius:999px;background:var(--chip)">@ Topic: auto</div><div style="margin-left:auto;width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-weight:600">↑</div></div>
+</div>
+</div>
+</div>
+<sc-if value="{{ showInspector }}" hint-placeholder-val="{{ true }}">
+<div style="width:288px;flex-shrink:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 10px;font-weight:600">Topics</div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ topics }}" as="t" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:2px;padding:7px 8px;border-radius:8px"><div style="display:flex;font-weight:500">{{ t.name }}<span style="margin-left:auto;font-size:11px;color:var(--fg3);font-weight:400">{{ t.when }}</span></div><div style="font-size:12px;color:var(--fg2)">{{ t.summary }}</div></div>
+</sc-for>
+</div>
+<div style="padding:18px 16px 8px;display:flex;align-items:center"><span style="font-weight:600">Recent memory</span><span style="margin-left:auto;font-size:12px;color:var(--accent)">All 23</span></div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:10px;font-size:12px">
+<div style="display:flex;flex-direction:column;gap:2px"><div>Quote B: 14.2k cabinets + counters, valid until Nov 30</div><div style="color:var(--fg3);font-size:11px">Kitchen budget · just now</div></div>
+<div style="display:flex;flex-direction:column;gap:2px"><div>Prefers matte finishes; no open shelving</div><div style="color:var(--fg3);font-size:11px">Main · 3 days ago</div></div>
+<div style="display:flex;flex-direction:column;gap:2px"><div>Permit office closes 2pm Fridays</div><div style="color:var(--fg3);font-size:11px">Permits · last week</div></div>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">A Space reads like one conversation with a row of topics on top. Every routing decision and memory write is shown inline, with a one-tap Change/Undo, to keep the transparency principle. Threads stay as a simple dated list below.</div>
+</div>
+
+<div id="2c" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">2c</div><div style="font-size:20px;font-weight:600">Agents — an agent's activity, channels and deployment</div></div>
+<div style="width:1280px;height:820px;border-radius:18px;overflow:hidden;background:var(--win);box-shadow:var(--winshadow);display:flex;font-size:13px">
+<div style="width:268px;flex-shrink:0;margin:8px 0 8px 8px;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 12px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="margin:0 12px;display:flex;padding:3px;border-radius:999px;background:var(--chip)">
+<div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Build</div>
+<div style="flex:1;text-align:center;padding:5px 0;color:var(--fg2)">Chat</div>
+<div style="flex:1;text-align:center;padding:5px 0;border-radius:999px;background:var(--pill);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600">Agents</div>
+</div>
+<div style="margin:12px 12px 8px;padding:6px 10px;border-radius:8px;background:var(--chip);color:var(--fg3);display:flex">Search<span style="margin-left:auto;font-size:11px">⌘⇧F</span></div>
+<div style="flex:1;padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;align-items:center;gap:9px;padding:7px 8px;font-weight:500"><div style="width:16px;height:12px;border-radius:3px;border:1.5px solid var(--fg2);box-sizing:border-box"></div>Inbox<span style="margin-left:auto;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--accent);color:#fff">3</span></div>
+<div style="padding:12px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)">Agents</div>
+<sc-for list="{{ agents }}" as="ag" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;background:{{ ag.sel }}">
+<div style="width:28px;height:28px;border-radius:50%;background:{{ ag.color }};color:#fff;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:center;position:relative">{{ ag.initial }}<div style="position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;background:{{ ag.dot }};border:2px solid var(--win)"></div></div>
+<div style="display:flex;flex-direction:column;gap:1px;min-width:0"><div style="font-weight:500">{{ ag.name }}</div><div style="font-size:11px;color:var(--fg2)">{{ ag.sub }}</div></div>
+<div style="margin-left:auto;font-size:10px;font-weight:600;letter-spacing:.03em;padding:2px 6px;border-radius:5px;background:var(--chip);color:var(--fg2)">{{ ag.where }}</div>
+</div>
+</sc-for>
+</div>
+<div style="padding:12px 16px;border-top:.5px solid var(--line);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>Cloud engine · eu<span style="margin-left:auto">$4.12 this month</span></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 22px;gap:12px">
+<div style="width:32px;height:32px;border-radius:50%;background:oklch(0.62 0.13 255);color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center">A</div>
+<div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:600">Atlas</div><div style="font-size:11px;color:var(--green)">● Running in Cloudflare · v14</div></div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+<div style="padding:6px 12px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px">Talk to Atlas</div>
+<div style="padding:6px 12px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:500">Deploy changes</div>
+<div style="padding:6px 11px;border-radius:999px;background:var(--pill);border:.5px solid var(--pillEdge);white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:12px">◫</div>
+</div>
+</div>
+<div style="padding:0 22px;display:flex;gap:22px;border-bottom:.5px solid var(--line);font-size:13px;color:var(--fg2)">
+<div style="padding:10px 0;color:var(--fg);font-weight:600;border-bottom:2px solid var(--accent)">Activity</div><div style="padding:10px 0">Conversations</div><div style="padding:10px 0">Memory</div><div style="padding:10px 0">Definition</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;gap:4px">
+<div style="font-size:11px;font-weight:600;color:var(--fg3);padding:0 0 6px">Today</div>
+<sc-for list="{{ runs }}" as="r" hint-placeholder-count="6">
+<div style="display:flex;gap:14px;align-items:flex-start;padding:11px 12px;border-radius:12px;background:{{ r.bg }}">
+<div style="width:30px;height:30px;border-radius:9px;background:var(--chip);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--fg2)">{{ r.icon }}</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+<div style="display:flex;gap:8px;align-items:baseline"><span style="font-weight:600">{{ r.title }}</span><span style="font-size:11px;color:var(--fg3)">{{ r.kind }}</span></div>
+<div style="color:var(--fg2);line-height:1.45">{{ r.body }}</div>
+</div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:11px;color:var(--fg3);flex-shrink:0"><span>{{ r.time }}</span><span style="font-family:ui-monospace,Menlo,monospace">{{ r.cost }}</span></div>
+</div>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{ showInspector }}" hint-placeholder-val="{{ true }}">
+<div style="width:288px;flex-shrink:0;margin:8px 8px 8px 0;border-radius:14px;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);box-shadow:var(--panelshadow);border:.5px solid var(--glassEdge);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 16px 10px;display:flex"><span style="font-weight:600">Channels</span><span style="margin-left:auto;font-size:12px;color:var(--accent)">Add</span></div>
+<div style="padding:0 12px;display:flex;flex-direction:column;gap:6px">
+<sc-for list="{{ channels }}" as="ch" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;background:var(--card);border:.5px solid var(--line)"><div style="width:8px;height:8px;border-radius:50%;background:{{ ch.dot }}"></div><div style="display:flex;flex-direction:column;gap:1px"><div style="font-weight:500">{{ ch.name }}</div><div style="font-size:11px;color:var(--fg3)">{{ ch.sub }}</div></div></div>
+</sc-for>
+</div>
+<div style="padding:18px 16px 8px;font-weight:600">Contacts</div>
+<div style="padding:0 16px;display:flex;gap:6px;flex-wrap:wrap;font-size:12px"><span style="padding:3px 9px;border-radius:999px;background:var(--accentSoft)">You · Owner</span><span style="padding:3px 9px;border-radius:999px;background:var(--chip)">Marta</span><span style="padding:3px 9px;border-radius:999px;background:var(--chip)">Ledger</span></div>
+<div style="padding:18px 16px 8px;font-weight:600">Schedules</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:6px;font-size:12px">
+<div style="display:flex">Morning brief<span style="margin-left:auto;color:var(--fg2)">Daily 08:00</span></div>
+<div style="display:flex">Inbox sweep<span style="margin-left:auto;color:var(--fg2)">Every 2h</span></div>
+</div>
+<div style="margin-top:auto;padding:14px 16px;border-top:.5px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:12px">
+<div style="display:flex;color:var(--fg2)">Budget · October<span style="margin-left:auto;color:var(--fg)">$2.31 / $10</span></div>
+<div style="height:4px;border-radius:2px;background:var(--chip);overflow:hidden"><div style="width:23%;height:100%;background:var(--accent)"></div></div>
+<div style="display:flex;color:var(--fg2)">Worker<span style="margin-left:auto;color:var(--fg);font-family:ui-monospace,Menlo,monospace;font-size:11px">piopio-atlas</span></div>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Each agent has an Activity feed: every scheduled run, trigger, agent-to-agent request and channel reply appears with its cost. Anything waiting on you is tinted. The Local/Cloud badge in the sidebar makes "where it runs" an attribute, not a separate place.</div>
+</div>
+
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;appearance&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Light&quot;,&quot;Dark&quot;],&quot;default&quot;:&quot;Light&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Blue&quot;,&quot;Purple&quot;,&quot;Orange&quot;,&quot;Graphite&quot;],&quot;default&quot;:&quot;Blue&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showInspector&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  apply() {
+    const b = document.body;
+    b.dataset.theme = (this.props.appearance ?? 'Light') === 'Dark' ? 'dark' : 'light';
+    b.style.setProperty('--accent', { Blue: '#0a84ff', Purple: '#9b5de5', Orange: '#f2711c', Graphite: '#6e6e73' }[this.props.accent ?? 'Blue']);
+  }
+  componentDidMount() { this.apply(); }
+  componentDidUpdate() { this.apply(); }
+  renderVals() {
+    const tint = 'var(--accentSoft)';
+    return {
+      showInspector: this.props.showInspector ?? true,
+      checkpoints: [
+        { label: 'Before turn 3', meta: '2 min ago · 4 files' },
+        { label: 'Before turn 2', meta: '11 min ago · 1 file' },
+        { label: 'Session start', meta: '24 min ago · clean' }
+      ],
+      topics: [
+        { name: 'Kitchen budget', when: 'now', summary: '1.7k over on cabinets; 2.1k slack overall' },
+        { name: 'Contractors', when: '2d', summary: 'Two quotes in, waiting on a third' },
+        { name: 'Permits', when: '1w', summary: 'Electrical permit filed Oct 9' },
+        { name: 'Main', when: 'now', summary: 'Front door; routes to topics' }
+      ],
+      agents: [
+        { name: 'Atlas', sub: 'Personal assistant', initial: 'A', color: 'oklch(0.62 0.13 255)', dot: 'var(--green)', where: 'CLOUD', sel: tint },
+        { name: 'Ledger', sub: 'Invoices & spend', initial: 'L', color: 'oklch(0.62 0.13 160)', dot: 'var(--green)', where: 'CLOUD', sel: 'transparent' },
+        { name: 'Scout', sub: 'Repo watcher', initial: 'S', color: 'oklch(0.66 0.13 60)', dot: 'var(--amber)', where: 'LOCAL', sel: 'transparent' },
+        { name: 'Muse', sub: 'Draft · not deployed', initial: 'M', color: 'oklch(0.62 0.12 320)', dot: 'var(--fg3)', where: 'LOCAL', sel: 'transparent' }
+      ],
+      runs: [
+        { icon: '?', title: 'Needs your OK', kind: 'Approval', body: 'Reply to Marta on WhatsApp confirming Thursday 18:00 and add it to your calendar?', time: '2 min', cost: '—', bg: tint },
+        { icon: '↔', title: 'Asked Ledger', kind: 'Agent to agent', body: 'Requested October invoice totals. Ledger answered: 3 unpaid, €1,240.', time: '41 min', cost: '$0.02', bg: 'transparent' },
+        { icon: '✈', title: 'Telegram · you', kind: 'Channel', body: '“Remind me to call the plumber after lunch.” Scheduled a one-off reminder for 14:30.', time: '1 h', cost: '$0.01', bg: 'transparent' },
+        { icon: '◷', title: 'Morning brief', kind: 'Scheduled', body: 'Sent a summary to Telegram: 4 emails need replies, 2 PRs waiting on review, rain after 17:00.', time: '08:00', cost: '$0.04', bg: 'transparent' },
+        { icon: '⚡', title: 'GitHub webhook', kind: 'Trigger', body: 'PR #48 merged in piopio. Noted in memory and skipped notifying you (quiet hours).', time: '07:12', cost: '$0.01', bg: 'transparent' }
+      ],
+      ...(() => {
+        const nav = (sel) => ['General', 'Providers', 'Engines', 'MCP servers', 'Channels', 'Approvals', 'Budgets', 'Privacy'].map((name, i) => ({
+          name, bg: name === sel ? 'var(--accentSoft)' : 'transparent', weight: name === sel ? 600 : 400,
+          color: ['#8e8e93', 'oklch(0.62 0.13 255)', 'oklch(0.62 0.13 160)', 'oklch(0.6 0.13 290)', 'oklch(0.66 0.13 200)', 'oklch(0.72 0.14 70)', 'oklch(0.62 0.15 25)', '#636366'][i]
+        }));
+        return { settingsNavMcp: nav('MCP servers'), settingsNavEng: nav('Engines') };
+      })(),
+      mcp: [
+        ['G', 'GitHub', 'http · api.githubcopilot.com/mcp', '38 tools', 'All modes', true, 'Connected', 'var(--accentSoft)'],
+        ['L', 'Linear', 'http · mcp.linear.app/sse', '22 tools', 'Build, Atlas', true, 'Connected', 'transparent'],
+        ['N', 'Notion', 'stdio · npx @notionhq/notion-mcp', '14 tools', 'Chat, Agents', true, 'Connected', 'transparent'],
+        ['C', 'Google Calendar', 'http · OAuth', '9 tools', 'Atlas only', true, 'Connected', 'transparent'],
+        ['P', 'Postgres (local)', 'stdio · uvx mcp-server-postgres', '6 tools', 'Build only', false, 'Off', 'transparent']
+      ].map(([initial, name, sub, tools, scope, on, state, rowbg]) => ({ initial, name, sub, tools, scope, state, rowbg,
+        dot: on ? 'var(--green)' : 'var(--fg3)', tbg: on ? 'var(--accent)' : 'var(--chip)', tjust: on ? 'flex-end' : 'flex-start' })),
+      mcpTools: [
+        ['search_code', 'Allow'], ['create_pull_request', 'Ask'], ['create_issue', 'Ask'], ['push_files', 'Ask'], ['merge_pull_request', 'Never'], ['delete_branch', 'Never']
+      ].map(([name, perm]) => ({ name, perm, color: perm === 'Allow' ? 'var(--green)' : perm === 'Ask' ? 'var(--amber)' : 'var(--red)' })),
+      diffFiles: [
+        ['ws.ts', 'engine/transport', '+64', '', true, true], ['index.ts', 'engine/transport', '+3', '−1', true, false],
+        ['codec.ts', 'engine', '+9', '−11', true, false], ['ws.test.ts', 'engine/transport', '+42', '', false, false]
+      ].map(([name, dir, add, del, chk, sel]) => ({ name, dir, add, del, bg: sel ? 'var(--accentSoft)' : 'transparent',
+        check: chk ? 'var(--accent)' : 'var(--fg3)', checkbg: chk ? 'var(--accent)' : 'transparent' })),
+      diffLines: [
+        "import { Transport, Frame } from './index'",
+        "import { encode, decode } from '../codec'",
+        "",
+        "export class WebSocketTransport implements Transport {",
+        "  private ws?: WebSocket",
+        "  private lastAck = 0",
+        "  private retry = 0",
+        "",
+        "  constructor(private url: string) {}",
+        "",
+        "  connect() {",
+        "    this.ws = new WebSocket(this.url)",
+        "    this.ws.onmessage = (e) => this.onFrame(decode(e.data))",
+        "    this.ws.onclose = () => this.reconnect()",
+        "  }",
+        "",
+        "  private reconnect() {",
+        "    const delay = 2 ** this.retry++ * 250",
+        "    setTimeout(() => { this.connect(); this.resume() }, delay)",
+        "  }",
+        "",
+        "  resume() { this.send({ type: 'resume', from: this.lastAck }) }"
+      ].map((text, i) => {
+        const c = i === 17;
+        return { n: i + 1, sign: '+', text: text || ' ', comment: c, bg: c ? 'color-mix(in oklch, var(--accent) 14%, var(--addbg))' : 'var(--addbg)', signColor: 'var(--green)', color: 'var(--fg)' };
+      }),
+      agentsPlain: [
+        { name: 'Atlas', initial: 'A', color: 'oklch(0.62 0.13 255)', where: 'CLOUD' },
+        { name: 'Ledger', initial: 'L', color: 'oklch(0.62 0.13 160)', where: 'CLOUD' },
+        { name: 'Scout', initial: 'S', color: 'oklch(0.66 0.13 60)', where: 'LOCAL' },
+        { name: 'Muse', initial: 'M', color: 'oklch(0.62 0.12 320)', where: 'CLOUD' }
+      ],
+      inbox: [
+        ['A', 'oklch(0.62 0.13 255)', 'Atlas', 'Approval · WhatsApp', 'var(--amber)', 'Reply to Marta and add Thursday 18:00 to your calendar', '2 min', true],
+        ['L', 'oklch(0.62 0.13 160)', 'Ledger', 'Approval · Email', 'var(--amber)', 'Send payment reminder to Estudio Norte (invoice #0412, €480)', '25 min', false],
+        ['S', 'oklch(0.66 0.13 60)', 'Scout', 'Run failed', 'var(--red)', 'Nightly dependency check: GitHub rate limit. Retry or pause schedule?', '3 h', false],
+        ['A', 'oklch(0.62 0.13 255)', 'Atlas', 'Message for you', 'var(--accent)', 'Your passport expires in 5 months. Want me to book a renewal slot?', 'Yesterday', false],
+        ['M', 'oklch(0.62 0.12 320)', 'Muse', 'Deployed', 'var(--green)', 'v1 is live on Telegram. Say hi to @muse_piopio_bot', 'Yesterday', false]
+      ].map(([initial, color, title, kind, dot, preview, time, sel]) => ({ initial, color, title, kind, dot, preview, time, bg: sel ? 'var(--accentSoft)' : 'transparent' })),
+      memGroups: [
+        { name: 'Pinned', items: [['Total renovation budget is 48k, hard cap 52k', 'Added by you · Oct 2', 'var(--accent)', false], ['Prefers matte finishes; no open shelving', 'Main · 3 days ago', 'var(--accent)', false]] },
+        { name: 'Kitchen budget', items: [['Quote B: 14.2k cabinets + counters, valid until Nov 30', 'Organizer · just now', 'var(--fg3)', true], ['Flooring came in at 4.2k (planned 6k)', 'Organizer · 2 days ago', 'var(--fg3)', false]] },
+        { name: 'Contractors & permits', items: [['Waiting on third quote from Reformas Sol', 'Contractors · 2 days ago', 'var(--fg3)', false], ['Permit office closes 2pm Fridays', 'Permits · last week', 'var(--fg3)', false]] }
+      ].map(g => ({ name: g.name, items: g.items.map(([text, meta, dot, sel]) => ({ text, meta, dot,
+        bg: sel ? 'var(--accentSoft)' : 'var(--card)', border: sel ? 'var(--accentLine)' : 'var(--line)' })) })),
+      leaseRows: [
+        ['', 'Chamberí', 'Lavapiés', 1],
+        ['Monthly rent', '€1,350', '€1,240', 0],
+        ['Community fees', 'included', '€85/mo', 0, '', 'var(--red)'],
+        ['Deposit', '1 month', '2 months', 0],
+        ['Repairs', 'landlord', 'tenant (9.2)', 0, '', 'var(--red)'],
+        ['Notice period', '30 days', '60 days', 0],
+        ['Yearly cost', '€16,200', '€16,840', 1, 'var(--green)', '']
+      ].map(([a, b, c, h, c1, c2]) => ({ a, b, c, w: h ? 600 : 400, bg: h ? 'var(--chip)' : 'transparent',
+        c0: h || !a ? 'var(--fg)' : 'var(--fg2)', c1: c1 || 'var(--fg)', c2: c2 || 'var(--fg)' })),
+      convos: [
+        ['M', 'Marta Ruiz', 'WhatsApp', 'I\'ll bring the reflector, Marta.', '10:12', true],
+        ['L', '@lucia_m', 'Telegram', 'Perfecto, confirmado.', '09:40', false],
+        ['A', 'ana@ejemplo.com', 'Email', 'Could you send the invoice again?', 'Yest.', false],
+        ['Y', 'You', 'Telegram', 'Remind me to call the plumber', 'Yest.', false],
+        ['L', 'Ledger', 'Agent', 'October totals: 3 unpaid, €1,240', 'Mon', false]
+      ].map(([initial, name, channel, last, time, sel]) => ({ initial, name, channel, last, time, bg: sel ? 'var(--accentSoft)' : 'transparent' })),
+      swatches: [
+        ['accent', 'var(--accent)'], ['accentSoft', 'var(--accentSoft)'], ['green', 'var(--green)'], ['amber', 'var(--amber)'],
+        ['red', 'var(--red)'], ['fg', 'var(--fg)'], ['fg2', 'var(--fg2)'], ['fg3', 'var(--fg3)'],
+        ['win', 'var(--win)'], ['card', 'var(--card)'], ['chip', 'var(--chip)'], ['glass', 'var(--glass)']
+      ].map(([n, v]) => ({ n, v })),
+      checks: [
+        ['Build · macOS 15', '2m 14s', 'var(--green)', 'none'],
+        ['Unit tests', '58 passed', 'var(--green)', 'none'],
+        ['UI snapshot tests', 'running', 'transparent', '2px solid var(--accent)'],
+        ['SwiftLint', 'queued', 'transparent', '1.5px solid var(--fg3)']
+      ].map(([name, meta, bg, border]) => ({ name, meta, bg, border })),
+      notifs: [
+        { title: 'Approval · Wire engine protocol', body: 'Run pnpm vitest run engine/transport?', time: 'now', actions: true, a1: 'Allow once', a2: 'Deny' },
+        { title: 'Atlas · WhatsApp', body: 'Wants to confirm Thursday 18:00 with Marta and add it to your calendar.', time: '2m', actions: true, a1: 'Approve', a2: 'Open' },
+        { title: 'Transcript windowing finished', body: '7 files changed · tests passing · ready to review', time: '9m', actions: false },
+        { title: 'Scout · run failed', body: 'GitHub rate limit during nightly check. Will retry at 04:00.', time: '3h', actions: false }
+      ],
+      steps: [
+        ['Identity', 'Muse · writing partner'], ['Model', 'Sonnet 4.5 · OpenRouter'], ['Tools & MCP', 'Notion, web search'],
+        ['Channels', 'In-app, Telegram'], ['Contacts', 'Owner only'], ['Where it runs', 'Cloudflare']
+      ].map(([name, sub], i) => {
+        const cur = i === 5;
+        return { name, sub, mark: cur ? '6' : '✓', bg: cur ? 'var(--card)' : 'transparent', weight: cur ? 600 : 400,
+          dotbg: cur ? 'var(--accent)' : 'var(--green)', dotfg: '#fff' };
+      }),
+      deployLog: [
+        { mark: '✓', text: 'Bundled agent definition', t: '0.8s', color: 'var(--fg)' },
+        { mark: '✓', text: 'Uploaded Worker piopio-muse', t: '4.1s', color: 'var(--fg)' },
+        { mark: '◌', text: 'Creating Durable Object namespace', t: '…', color: 'var(--accent)' },
+        { mark: '·', text: 'Register Telegram webhook', t: '', color: 'var(--fg3)' }
+      ],
+      channels: [
+        { name: 'In-app', sub: 'Always on', dot: 'var(--green)' },
+        { name: 'Telegram', sub: '@atlas_piopio_bot', dot: 'var(--green)' },
+        { name: 'WhatsApp', sub: 'Business API · +34 ··· 410', dot: 'var(--green)' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

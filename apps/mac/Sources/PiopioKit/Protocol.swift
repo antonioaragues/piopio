@@ -376,3 +376,16 @@ public struct SearchResult: Decodable, Sendable, Hashable, Identifiable {
     public var id: String { "\(ref.id)/\(itemId ?? "title")" }
 }
 public struct SearchResults: Decodable, Sendable { public var results: [SearchResult] }
+
+// MARK: Keys and engine info
+
+public struct VerifyKeyParams: Encodable, Sendable {
+    public var provider: String; public var key: String
+    public init(provider: String, key: String) { self.provider = provider; self.key = key }
+}
+public struct VerifyKeyResult: Decodable, Sendable, Equatable {
+    public var ok: Bool; public var message: String?; public var label: String?; public var usageUsd: Double?; public var limitUsd: Double?
+}
+public struct EngineStatusResult: Decodable, Sendable {
+    public var uptimeMs: Double; public var openSessions: Int; public var subscriptions: Int; public var runtime: String; public var memoryMB: Double; public var dataPath: String
+}

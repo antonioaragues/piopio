@@ -102,3 +102,18 @@ export class EngineError extends Error {
 		super(message);
 	}
 }
+
+/** Checks an OpenRouter key against GET /api/v1/key (no completion, no cost). */
+export async function verifyProviderKey(provider: string, key: string, fetchImpl: typeof fetch = fetch): Promise<{ ok: boolean; message?: string; label?: string; usageUsd?: number; limitUsd?: number | null }> {
+	if (provider !== "openrouter") return { ok: false, message: `${provider} keys can't be checked yet.` };
+	if (!key.trim()) return { ok: false, message: "Paste a key first." };
+	try {
+		const response = await fetchImpl("https://openrouter.ai/api/v1/key", { headers: { authorization: `Bearer ${key.trim()}` }, signal: AbortSignal.timeout(15_000) });
+		if (response.status === 401 || response.status === 403) return { ok: false, message: "OpenRouter didn't accept this key." };
+		if (!response.ok) return { ok: false, message: `OpenRouter answered ${response.status}. Try again in a moment.` };
+		const data = ((await response.json()) as { data?: { label?: string; usage?: number; limit?: number | null } }).data ?? {};
+		return { ok: true, ...(data.label ? { label: data.label } : {}), ...(typeof data.usage === "number" ? { usageUsd: data.usage } : {}), limitUsd: data.limit ?? null };
+	} catch {
+		return { ok: false, message: "Can't reach OpenRouter. Check your connection." };
+	}
+}

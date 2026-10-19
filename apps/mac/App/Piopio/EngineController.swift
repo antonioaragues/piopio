@@ -13,6 +13,11 @@ final class EngineController {
     private(set) var models: [ModelInfo] = []
     private(set) var defaultModel: ModelRef?
     private(set) var hasKey = Keychain.read(secretOpenRouter) != nil
+    /// The engine has worked in this run (so a failure now is a crash, shown as a banner).
+    private(set) var wasReady = false
+    /// Latest session status per open thread (sidebar status dots).
+    var liveStatus: [String: SessionStatus] = [:]
+    var isLost: Bool { if case .failed = status { wasReady } else { false } }
     /// Scripted echo model instead of OpenRouter (`PIOPIO_FAUX=1`), for development.
     let faux = ProcessInfo.processInfo.environment["PIOPIO_FAUX"] == "1"
 
@@ -47,9 +52,14 @@ final class EngineController {
             models = list.models.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             defaultModel = list.defaultModel
             status = .ready
+            wasReady = true
         } catch {
             status = .failed(String(describing: error))
         }
+    }
+
+    func revealLogs() {
+        NSWorkspace.shared.activateFileViewerSelecting([home.appending(path: "logs/engine.log")])
     }
 
     func stop() {
@@ -169,6 +179,7 @@ final class EngineController {
 
     /// The model new threads start with: the user's choice, else the engine default.
     var preferredModel: ModelRef? {
+        _ = preferenceTick
         if let raw = UserDefaults.standard.string(forKey: "defaultChatModel"), let i = raw.firstIndex(of: "/") {
             return ModelRef(provider: String(raw[..<i]), id: String(raw[raw.index(after: i)...]))
         }
@@ -177,6 +188,35 @@ final class EngineController {
 
     func setPreferredModel(_ model: ModelRef) {
         UserDefaults.standard.set("\(model.provider)/\(model.id)", forKey: "defaultChatModel")
+        preferenceTick += 1
+    }
+
+    /// Quick Chat's model (a fast one by choice); defaults to the default model.
+    var quickChatModel: ModelRef? {
+        _ = preferenceTick
+        if let raw = UserDefaults.standard.string(forKey: "quickChatModel"), let i = raw.firstIndex(of: "/") {
+            return ModelRef(provider: String(raw[..<i]), id: String(raw[raw.index(after: i)...]))
+        }
+        return preferredModel
+    }
+
+    func setQuickChatModel(_ model: ModelRef) {
+        UserDefaults.standard.set("\(model.provider)/\(model.id)", forKey: "quickChatModel")
+        preferenceTick += 1
+    }
+
+    private var preferenceTick = 0
+
+    /// Stops the engine this app started and starts it again.
+    func restart() {
+        Task { await client?.close() }
+        process?.terminate()
+        process = nil
+        client = nil
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            await start()
+        }
     }
 
     func model(_ ref: ModelRef?) -> ModelInfo? {

@@ -5,6 +5,7 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
+
 // MARK: Global hotkey (Carbon: works without Accessibility permission)
 
 @MainActor
@@ -113,18 +114,20 @@ final class QuickChatController {
     }
 
     private func makePanel() -> NSPanel {
-        let panel = QuickPanel(contentRect: NSRect(x: 0, y: 0, width: 680, height: 460), styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .resizable], backing: .buffered, defer: false)
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
+        let panel = QuickPanel(contentRect: NSRect(x: 0, y: 0, width: 620, height: 72), styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView], backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.standardWindowButton(.closeButton)?.isHidden = true
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
-        panel.contentView = NSHostingView(rootView: QuickChatView(model: model))
+        let host = NSHostingController(rootView: QuickChatView(model: model))
+        host.sizingOptions = [.preferredContentSize]
+        host.view.wantsLayer = true
+        host.view.layer?.backgroundColor = .clear
+        panel.contentViewController = host
         return panel
     }
 }
@@ -162,13 +165,24 @@ final class QuickChatModel {
         UserDefaults.standard.set(Date(), forKey: "quickChatLastUsed")
         Task {
             if thread == nil {
-                guard let ref = await engine.createThread() else { return }
+                guard let ref = await engine.createThread(model: engine.quickChatModel) else { return }
                 let t = ThreadModel(ref: ref, engine: engine, notifies: false)
                 thread = t
                 await t.open()
             }
             await thread?.send(message)
         }
+    }
+
+    var modelName: String {
+        let ref = thread?.state?.model ?? engine.quickChatModel
+        return engine.model(ref).map(ModelChip.short) ?? ref?.id ?? ""
+    }
+
+    func copyAnswer() {
+        guard case .assistant(let a)? = thread?.document.lastItem else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(a.text, forType: .string)
     }
 
     func newChat() {
@@ -186,42 +200,52 @@ final class QuickChatModel {
     }
 }
 
+/// docs/design 3a: the question in the header, the answer streaming below, a few actions.
 struct QuickChatView: View {
     let model: QuickChatModel
     @FocusState private var focused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "bolt.fill").foregroundStyle(.tint)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                RoundedRectangle(cornerRadius: 5).fill(Color.accentColor).frame(width: 20, height: 20).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 4 }
                 TextField("Ask anything…", text: Bindable(model).text, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.title3)
+                    .font(.system(size: 17))
                     .lineLimit(1...6)
                     .focused($focused)
                     .onKeyPress(.return, phases: .down) { press in
                         if press.modifiers.contains(.shift) { return .ignored }
-                        if press.modifiers.contains(.command) { model.openInMain() } else { model.send() }
+                        model.send()
                         return .handled
                     }
+                Text(model.modelName).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Color.dsChip, in: Capsule())
             }
-            .padding(16)
+            .padding(.horizontal, 18)
+            .frame(minHeight: 64)
             if let thread = model.thread {
-                Divider()
+                Rectangle().fill(Color.dsLine).frame(height: 0.5)
                 TranscriptView(document: thread.document)
-                    .frame(minHeight: 240)
-                Divider()
-                HStack {
-                    Text(model.engine.model(thread.state?.model)?.name ?? "").font(.caption).foregroundStyle(.secondary)
+                    .frame(height: 300)
+                Rectangle().fill(Color.dsLine).frame(height: 0.5)
+                HStack(spacing: 6) {
+                    Button("Open in Piopio ⌘O") { model.openInMain() }.keyboardShortcut("o")
+                    Button("Copy ⌘C") { model.copyAnswer() }.keyboardShortcut("c", modifiers: [.command, .shift])
+                    Button("New chat") { model.newChat() }.keyboardShortcut("n")
                     Spacer()
-                    Button("New Chat") { model.newChat() }.controlSize(.small)
-                    Button("Open in Piopio  ⌘↩") { model.openInMain() }.controlSize(.small)
+                    Text("esc to dismiss · saved as thread").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .buttonStyle(PillStyle(compact: true))
+                .padding(.horizontal, 14)
+                .frame(height: 46)
             }
         }
-        .background(.regularMaterial)
+        .frame(width: 620)
+        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous).strokeBorder(Color.dsGlassEdge, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous))
         .onAppear { focused = true }
         .onChange(of: model.focusToken) { _, _ in focused = true }
     }

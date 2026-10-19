@@ -7,6 +7,7 @@ public enum TranscriptAction: Equatable, Sendable {
     case fork(itemId: String)
     case switchBranch(String)
     case openSettings
+    case chooseModel
     case showErrorDetail(itemId: String)
     case copy(itemId: String)
 
@@ -21,6 +22,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .fork(let id): c.host = "fork"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .switchBranch(let b): c.host = "branch"; c.queryItems = [URLQueryItem(name: "to", value: b)]
         case .openSettings: c.host = "settings"
+        case .chooseModel: c.host = "model"
         case .showErrorDetail(let id): c.host = "error"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .copy(let id): c.host = "copy"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         }
@@ -36,6 +38,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "fork": guard let id = q("item") else { return nil }; self = .fork(itemId: id)
         case "branch": guard let b = q("to") else { return nil }; self = .switchBranch(b)
         case "settings": self = .openSettings
+        case "model": self = .chooseModel
         case "error": guard let id = q("item") else { return nil }; self = .showErrorDetail(itemId: id)
         case "copy": guard let id = q("item") else { return nil }; self = .copy(itemId: id)
         default: return nil

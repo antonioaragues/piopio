@@ -18,7 +18,9 @@ struct PiopioApp: App {
                     DebugAutomation.run(engine: engine)
                 }
         }
-        .defaultSize(width: 1100, height: 760)
+        .defaultSize(width: 1280, height: 820)
+        .windowStyle(.hiddenTitleBar)
+        .windowBackgroundDragBehavior(.enabled)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Thread") { NotificationCenter.default.post(name: .newThread, object: nil) }

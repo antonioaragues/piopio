@@ -4,7 +4,7 @@ import { existsSync, unlinkSync, chmodSync } from "node:fs";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
-import { EngineError, ModelHub } from "./models.js";
+import { EngineError, ModelHub, verifyProviderKey } from "./models.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
@@ -136,7 +136,14 @@ export class Engine {
 	private async handle(method: MethodName, params: unknown, conn: RpcConnection, owned: Set<string>): Promise<unknown> {
 		switch (method) {
 			case "engine.status":
-				return { uptimeMs: Date.now() - this.startedAt, openSessions: this.sessions.openCount, subscriptions: this.subscriptions.size } satisfies Result<"engine.status">;
+				return {
+					uptimeMs: Date.now() - this.startedAt,
+					openSessions: this.sessions.openCount,
+					subscriptions: this.subscriptions.size,
+					runtime: `Node ${process.versions.node}`,
+					memoryMB: Math.round(process.memoryUsage().rss / 1_048_576),
+					dataPath: this.options.paths.home,
+				} satisfies Result<"engine.status">;
 			case "sessions.list": {
 				const p = params as Params<"sessions.list">;
 				return { sessions: this.sessions.list(p.kind) } satisfies Result<"sessions.list">;
@@ -236,6 +243,10 @@ export class Engine {
 			case "catalog.search": {
 				const p = params as Params<"catalog.search">;
 				return { results: this.sessions.find(p.query, p.limit ?? 30) } satisfies Result<"catalog.search">;
+			}
+			case "models.verifyKey": {
+				const p = params as Params<"models.verifyKey">;
+				return (await verifyProviderKey(p.provider, p.key)) satisfies Result<"models.verifyKey">;
 			}
 			case "models.list": {
 				const p = params as Params<"models.list">;

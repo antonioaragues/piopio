@@ -63,3 +63,12 @@ test("attachments become content blocks with the words last; edits keep them", (
 	expect(edited.entry?.data.attachments).toHaveLength(2);
 	expect(buildInput("plain")).toEqual({ content: "plain" });
 });
+
+test("provider keys are verified against OpenRouter's key endpoint", async () => {
+	const { verifyProviderKey } = await import("../src/models.js");
+	const ok = (async () => new Response(JSON.stringify({ data: { label: "sk-or-v1-abc...", usage: 18.4, limit: null } }), { status: 200 })) as typeof fetch;
+	const bad = (async () => new Response("{}", { status: 401 })) as typeof fetch;
+	expect(await verifyProviderKey("openrouter", "sk-or-v1-x", ok)).toEqual({ ok: true, label: "sk-or-v1-abc...", usageUsd: 18.4, limitUsd: null });
+	expect(await verifyProviderKey("openrouter", "nope", bad)).toEqual({ ok: false, message: "OpenRouter didn't accept this key." });
+	expect((await verifyProviderKey("openrouter", "  ", ok)).ok).toBe(false);
+});

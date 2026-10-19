@@ -85,7 +85,7 @@ public nonisolated enum Inline {
     }
 
     /// Same, with AppKit fonts/colors resolved for TextKit.
-    public static func ns(_ markdown: String, font: NSFont, color: NSColor = .labelColor) -> NSMutableAttributedString {
+    public static func ns(_ markdown: String, font: NSFont, color: NSColor = DS.fg) -> NSMutableAttributedString {
         let a = attributed(markdown)
         let out = NSMutableAttributedString()
         for run in a.runs {
@@ -96,14 +96,15 @@ public nonisolated enum Inline {
                 if intent.contains(.stronglyEmphasized) { f = f.adding(.bold) }
                 if intent.contains(.emphasized) { f = f.adding(.italic) }
                 if intent.contains(.code) {
-                    f = .monospacedSystemFont(ofSize: font.pointSize * 0.92, weight: .regular)
-                    attrs[.backgroundColor] = NSColor.quaternaryLabelColor
+                    f = .monospacedSystemFont(ofSize: font.pointSize * 0.9, weight: .regular)
+                    attrs[.backgroundColor] = DS.chip
                 }
             }
             if let link = run.link {
                 attrs[.link] = link
-                attrs[.foregroundColor] = NSColor.linkColor
+                attrs[.foregroundColor] = DS.accent
                 attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+                attrs[.underlineColor] = DS.accentLine
             }
             attrs[.font] = f
             out.append(NSAttributedString(string: text, attributes: attrs))

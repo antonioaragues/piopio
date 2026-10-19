@@ -30,6 +30,15 @@ public final class TranscriptDocument {
     private var prefetched: (text: SendableText, lengths: [Int], ids: [String])?
     private var prefetching = false
     private var boundsObserver: NSObjectProtocol?
+    private var frameObserver: NSObjectProtocol?
+    private let hover = HoverTracker()
+    private var hoveredItem: String?
+    private var shownFooters = Set<String>()
+    private var columnWidth: CGFloat = 0
+    /// Extra space at the bottom so the floating composer never covers the last line.
+    public var bottomInset: CGFloat = 24 { didSet { layoutColumn(force: true) } }
+    /// Widest the reading column gets (docs/design: 680–700).
+    public var maxColumnWidth: CGFloat = 700
 
     /// Clicks on action links (edit, regenerate, fork, branch switch, settings, error details).
     public var onAction: ((TranscriptAction) -> Void)?
@@ -49,7 +58,8 @@ public final class TranscriptDocument {
         textView.isSelectable = true
         textView.allowsUndo = false
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 16, height: 20)
+        textView.textContainerInset = NSSize(width: 32, height: 24)
+        textView.textContainer?.lineFragmentPadding = 0
         precondition(textView.textLayoutManager != nil, "TranscriptDocument needs TextKit 2")
         textView.textLayoutManager!.delegate = layoutDelegate
         // Links style themselves (markdown links blue, actions secondary); the view only adds the hand cursor.
@@ -57,7 +67,14 @@ public final class TranscriptDocument {
         textView.delegate = links
         links.document = self
         scrollView.drawsBackground = false
+        scrollView.automaticallyAdjustsContentInsets = false
         scrollView.contentView.postsBoundsChangedNotifications = true
+        scrollView.contentView.postsFrameChangedNotifications = true
+        frameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.layoutColumn() }
+        }
+        textView.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: hover, userInfo: nil))
+        hover.document = self
         boundsObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
@@ -76,6 +93,8 @@ public final class TranscriptDocument {
     /// The latest version of an item (in or out of the window).
     public func item(_ id: String) -> TimelineItem? { items.last { $0.id == id } }
     public var lastItem: TimelineItem? { items.last }
+    /// Files attached across the thread (header subtitle).
+    public var attachmentCount: Int { items.reduce(0) { n, i in if case .user(let u) = i { n + (u.attachments?.count ?? 0) } else { n } } }
     public var lastUser: TimelineItem? { items.last { if case .user = $0 { true } else { false } } }
 
     func handle(_ action: TranscriptAction) {
@@ -120,6 +139,9 @@ public final class TranscriptDocument {
         lengths = Dictionary(uniqueKeysWithValues: zip(documentIDs, built.1))
         for item in window { if case .assistant(let a) = item, a.status == .streaming { startStream(a) } }
         wireCards(in: NSRange(location: 0, length: storage.length))
+        layoutBubbles(in: NSRange(location: 0, length: storage.length))
+        shownFooters = [] // freshly rendered footers start hidden
+        refreshFooters()
         scrollToLatest()
         loading = false
         let queued = pendingEvents
@@ -161,6 +183,7 @@ public final class TranscriptDocument {
         for r in rendered { text.append(r) }
         storage.insert(text, at: 0)
         wireCards(in: NSRange(location: 0, length: text.length))
+        layoutBubbles(in: NSRange(location: 0, length: text.length))
         documentIDs.insert(contentsOf: page.map(\.id), at: 0)
         for (item, r) in zip(page, rendered) { lengths[item.id] = r.length }
         windowStart = index
@@ -181,6 +204,7 @@ public final class TranscriptDocument {
         }
         let follow = isFollowing
         for event in events { apply(event) }
+        if !events.isEmpty { refreshFooters() }
         if follow, !events.isEmpty { textView.scrollToEndOfDocument(nil) }
     }
 
@@ -257,10 +281,92 @@ public final class TranscriptDocument {
     }
 
     private func edit(_ range: NSRange, with text: NSAttributedString) {
+        // Re-rendered footers start hidden: forget them so the next refresh shows them again.
+        if text.length > 0 {
+            text.enumerateAttribute(.piopioFooter, in: NSRange(location: 0, length: text.length)) { value, _, _ in
+                if let id = value as? String { shownFooters.remove(id) }
+            }
+        }
         storage.beginEditing()
         storage.replaceCharacters(in: range, with: text)
         storage.endEditing()
         wireCards(in: NSRange(location: range.location, length: text.length))
+        layoutBubbles(in: NSRange(location: range.location, length: text.length))
+    }
+
+    // MARK: Column, bubbles, footers
+
+    /// Centers the reading column and re-fits user bubbles when the width changes.
+    private func layoutColumn(force: Bool = false) {
+        let width = scrollView.contentView.bounds.width
+        guard width > 0 else { return }
+        let inset = max(32, (width - maxColumnWidth) / 2)
+        let column = width - 2 * inset
+        guard force || abs(column - columnWidth) > 0.5 else { return }
+        columnWidth = column
+        textView.textContainerInset = NSSize(width: inset, height: 24)
+        if let tv = textView.enclosingScrollView { tv.contentInsets.bottom = bottomInset }
+        layoutBubbles(in: NSRange(location: 0, length: storage.length))
+    }
+
+    /// User bubbles hug their text on the right: indent = column − text width (up to 78% of the column).
+    private func layoutBubbles(in range: NSRange) {
+        let column = columnWidth > 0 ? columnWidth : (textView.textContainer?.size.width ?? 600)
+        guard range.length > 0, column > 100 else { return }
+        storage.beginEditing()
+        storage.enumerateAttribute(.piopioBubbleWidth, in: range) { value, run, _ in
+            guard let natural = (value as? NSNumber).map({ CGFloat($0.doubleValue) }),
+                  let style = (storage.attribute(.paragraphStyle, at: run.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { return }
+            let pad = CardLayoutFragment.bubblePadH
+            let indent = max(56, column - pad - min(natural, column * 0.78))
+            guard abs(style.headIndent - indent) > 0.5 else { return }
+            style.headIndent = indent
+            style.firstLineHeadIndent = indent
+            storage.addAttribute(.paragraphStyle, value: style, range: run)
+        }
+        storage.endEditing()
+    }
+
+    /// Footers show for the hovered message and the latest answer.
+    private func refreshFooters() {
+        var wanted = Set<String>()
+        if let hoveredItem { wanted.insert(hoveredItem) }
+        if let last = items.last(where: { if case .assistant(let a) = $0 { a.status != .streaming } else { false } }) { wanted.insert(last.id) }
+        guard wanted != shownFooters else { return }
+        let changed = wanted.symmetricDifference(shownFooters)
+        shownFooters = wanted
+        storage.beginEditing()
+        for id in changed {
+            guard let d = documentIDs.firstIndex(of: id) else { continue }
+            let range = NSRange(location: offset(ofIndex: d), length: lengths[id] ?? 0)
+            let show = wanted.contains(id)
+            storage.enumerateAttribute(.piopioFooter, in: range) { value, run, _ in
+                guard value as? String == id else { return }
+                let color = storage.attribute(.piopioFooterColor, at: run.location, effectiveRange: nil) as? NSColor
+                let link = storage.attribute(.piopioFooterLink, at: run.location, effectiveRange: nil)
+                storage.addAttribute(.foregroundColor, value: show ? (color ?? DS.fg3) : NSColor.clear, range: run)
+                if let link {
+                    if show { storage.addAttribute(.link, value: link, range: run) } else { storage.removeAttribute(.link, range: run) }
+                }
+            }
+        }
+        storage.endEditing()
+    }
+
+    func hover(at point: NSPoint?) {
+        var id: String?
+        if let point, let fragment = layoutManager.textLayoutFragment(for: point), let content = layoutManager.textContentManager {
+            let offset = content.offset(from: content.documentRange.location, to: fragment.rangeInElement.location)
+            var start = 0
+            for docId in documentIDs {
+                let end = start + (lengths[docId] ?? 0)
+                if offset >= start, offset < end { id = docId; break }
+                start = end
+            }
+        }
+        guard id != hoveredItem else { return }
+        hoveredItem = id
+        refreshFooters()
     }
 
     // MARK: Streaming
@@ -283,7 +389,7 @@ public final class TranscriptDocument {
         let thinkingText = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
         let out = NSMutableAttributedString()
         if !thinkingText.isEmpty {
-            let card = DisclosureCard(kind: .thinking, title: "Thinking…", body: thinkingText)
+            let card = DisclosureCard(kind: .thinking, title: "Thinking", detail: "…", body: thinkingText)
             s.thinking = card
             let t = renderer.thinkingCard(card)
             s.thinkingLength = t.length
@@ -308,7 +414,7 @@ public final class TranscriptDocument {
                 card.body += delta
                 if card.expanded { relayout(card) }
             } else {
-                let card = DisclosureCard(kind: .thinking, title: "Thinking…", body: delta)
+                let card = DisclosureCard(kind: .thinking, title: "Thinking", detail: "…", body: delta)
                 s.thinking = card
                 let t = renderer.thinkingCard(card)
                 edit(NSRange(location: start, length: 0), with: t)
@@ -370,6 +476,7 @@ public final class TranscriptDocument {
         let y0 = clip.bounds.minY
         storage.insert(next.text.value, at: 0)
         wireCards(in: NSRange(location: 0, length: next.text.value.length))
+        layoutBubbles(in: NSRange(location: 0, length: next.text.value.length))
         documentIDs.insert(contentsOf: next.ids, at: 0)
         for (id, length) in zip(next.ids, next.lengths) { lengths[id] = length }
         windowStart -= next.ids.count
@@ -428,5 +535,23 @@ private final class LinkHandler: NSObject, NSTextViewDelegate {
         guard let url, let action = TranscriptAction(url: url) else { return false } // regular links open in the browser
         document?.handle(action)
         return true
+    }
+}
+
+/// Receives mouse moves over the transcript to reveal message actions.
+@MainActor
+private final class HoverTracker: NSResponder {
+    weak var document: TranscriptDocument?
+
+    override func mouseMoved(with event: NSEvent) {
+        guard let document else { return }
+        let textView = document.textView
+        let p = textView.convert(event.locationInWindow, from: nil)
+        let inset = textView.textContainerInset
+        document.hover(at: NSPoint(x: p.x - inset.width, y: p.y - inset.height))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        document?.hover(at: nil)
     }
 }
