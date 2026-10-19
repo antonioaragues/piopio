@@ -142,3 +142,92 @@ test("titles are plain text", () => {
 	expect(titleFrom("Explain this:\n\n| Col | Val |\n|---|---|\n| x | 1 |")).toBe("Explain this:");
 	expect(titleFrom("a ".repeat(50)).length).toBeLessThanOrEqual(61);
 });
+
+describe("thread branches", () => {
+	const texts2 = (s: Snapshot) => s.items.filter((i) => i.kind !== "system").map((i) => (i.kind === "user" ? `> ${i.text}` : i.kind === "assistant" ? i.parts.map((p) => p.text).join("") : i.kind));
+
+	async function ask(a: Ctx, ref: unknown, sub: { subscriptionId: string }, text: string) {
+		const before = a.client.events.filter((n) => n.subscriptionId === sub.subscriptionId).length;
+		await a.client.call("sessions.submit", { ref, input: { text } });
+		await waitIdle(a, sub, before);
+	}
+
+	async function waitIdle(a: Ctx, sub: { subscriptionId: string }, afterBatches: number) {
+		await a.client.waitFor((n) => n.subscriptionId === sub.subscriptionId && a.client.events.filter((m) => m.subscriptionId === sub.subscriptionId).indexOf(n) >= afterBatches && n.events.some((e) => e.type === "item.replaced" || (e.type === "state" && e.state.status === "idle")) && n.events.some((e) => e.type === "state" && e.state.status === "idle"));
+	}
+
+	async function settle(a: Ctx, ref: unknown): Promise<Snapshot> {
+		for (let i = 0; i < 100; i++) {
+			const s: Snapshot = await a.client.call("sessions.open", { ref });
+			if (s.state.status === "idle" && s.items.at(-1)?.kind === "assistant") return s;
+			await new Promise((r) => setTimeout(r, 30));
+		}
+		throw new Error("did not settle");
+	}
+
+	test("edit, switch, regenerate the first message, and survive a restart", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		await ask(a, ref, sub, "first");
+		await ask(a, ref, sub, "second");
+		let s = await settle(a, ref);
+		const second = s.items.filter((i) => i.kind === "user")[1]!;
+
+		await a.client.call("sessions.edit", { ref, itemId: second.id, text: "second, edited" });
+		s = await settle(a, ref);
+		expect(texts2(s)).toEqual(["> first", "Echo: first", "> second, edited", "Echo: second, edited"]);
+		const edited = s.items.filter((i) => i.kind === "user")[1]!;
+		expect(edited.kind === "user" && edited.branch).toMatchObject({ index: 1, count: 2, previous: expect.any(String) });
+		expect(a.client.events.some((n) => n.events.some((e) => e.type === "resnapshot"))).toBe(true);
+
+		await a.client.call("sessions.switchBranch", { ref, branch: edited.kind === "user" ? edited.branch!.previous : "" });
+		s = await settle(a, ref);
+		expect(texts2(s)).toEqual(["> first", "Echo: first", "> second", "Echo: second"]);
+		const original = s.items.filter((i) => i.kind === "user")[1]!;
+		expect(original.kind === "user" && original.branch).toMatchObject({ index: 0, count: 2, next: expect.any(String) });
+
+		const firstAnswer = s.items.find((i) => i.kind === "assistant")!;
+		await a.client.call("sessions.regenerate", { ref, itemId: firstAnswer.id });
+		s = await settle(a, ref);
+		expect(texts2(s)).toEqual(["> first", "Echo: first"]);
+		const first = s.items.find((i) => i.kind === "user")!;
+		expect(first.kind === "user" && first.branch).toMatchObject({ index: 1, count: 2 });
+
+		await stop(a);
+		const b = await start(a.home);
+		s = await settle(b, ref);
+		expect(texts2(s)).toEqual(["> first", "Echo: first"]);
+	});
+
+	test("queued messages show their text and can be withdrawn", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: "a long first message that keeps the model busy for a little while" } });
+		await a.client.waitFor((n) => n.subscriptionId === sub.subscriptionId && n.events.some((e) => e.type === "state" && e.state.status === "running"));
+		await a.client.call("sessions.submit", { ref, input: { text: "queued one" } });
+		await a.client.waitFor((n) => n.subscriptionId === sub.subscriptionId && n.events.some((e) => e.type === "state" && e.state.queue.some((q) => q.text === "queued one")));
+		const queued = ((await a.client.call("sessions.open", { ref })) as Snapshot).state.queue[0]!;
+		await a.client.call("sessions.queue.remove", { ref, queueId: queued.id });
+		const s = await settle(a, ref);
+		expect(s.state.queue).toEqual([]);
+		expect(s.items.some((i) => i.kind === "user" && i.text === "queued one")).toBe(false);
+	});
+
+	test("fork copies a thread up to a message into a new thread", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		await ask(a, ref, sub, "one");
+		await ask(a, ref, sub, "two");
+		const s = await settle(a, ref);
+		const firstAnswer = s.items.find((i) => i.kind === "assistant")!;
+		const { ref: copy } = await a.client.call("sessions.fork", { ref, itemId: firstAnswer.id });
+		expect(copy.id).not.toBe(ref.id);
+		const forked: Snapshot = await a.client.call("sessions.open", { ref: copy });
+		expect(texts2(forked)).toEqual(["> one", "Echo: one"]);
+		expect(texts2(await settle(a, ref))).toEqual(["> one", "Echo: one", "> two", "Echo: two"]);
+		expect((await a.client.call("sessions.list")).sessions.map((x: { title: string }) => x.title)).toContain("one (branch)");
+	});
+});

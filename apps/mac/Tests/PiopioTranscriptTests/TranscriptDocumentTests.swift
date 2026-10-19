@@ -89,3 +89,24 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     #expect(doc.text.hasPrefix("message 40"))
     expectConsistent(doc)
 }
+
+@MainActor @Test func footersCarryActionLinksAndBranchSwitchers() async {
+    let edited = TimelineItem.user(UserItem(id: "21", at: "", text: "second, edited", branch: BranchInfo(index: 1, count: 2, previous: "1")))
+    let failed = TimelineItem.assistant(AssistantItem(id: "24", at: "", parts: [], status: .error, error: "OpenRouter rejected the API key.", errorKind: .auth, errorDetail: "401"))
+    let doc = await loaded([edited, failed])
+    #expect(doc.text.contains("2 / 2"))
+    #expect(doc.text.contains("Open Settings"))
+    var actions: [TranscriptAction] = []
+    doc.onAction = { actions.append($0) }
+    let storage = doc.textView.textStorage!
+    var urls: [URL] = []
+    storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, _, _ in if let u = value as? URL { urls.append(u) } }
+    let parsed = urls.compactMap(TranscriptAction.init(url:))
+    #expect(parsed.contains(.switchBranch("1")))
+    #expect(parsed.contains(.edit(itemId: "21")))
+    #expect(parsed.contains(.openSettings))
+    #expect(parsed.contains(.showErrorDetail(itemId: "24")))
+    doc.handle(.edit(itemId: "21"))
+    #expect(actions == [.edit(itemId: "21")])
+    expectConsistent(doc)
+}

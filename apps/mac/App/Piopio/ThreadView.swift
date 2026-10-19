@@ -22,12 +22,13 @@ struct ThreadView: View {
                 }
             }
             if let error = thread.error {
-                Text(error)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
+                HStack {
+                    Text(error).font(.callout).foregroundStyle(.red)
+                    Spacer()
+                    if thread.errorIsAuth { Button("Open Settings") { ThreadModel.openSettings() }.controlSize(.small) }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
             }
             Composer(thread: thread)
         }
@@ -46,6 +47,22 @@ struct ThreadView: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
+                if thread.supportsThinking {
+                    Menu {
+                        ForEach(Self.thinkingLevels, id: \.value) { level in
+                            Button {
+                                Task { await thread.setThinking(level.value) }
+                            } label: {
+                                if (thread.state?.thinking ?? "default") == level.value { Label(level.title, systemImage: "checkmark") } else { Text(level.title) }
+                            }
+                        }
+                    } label: {
+                        Label("Thinking: \(Self.thinkingTitle(thread.state?.thinking))", systemImage: "brain")
+                    }
+                    .help("How much the model reasons before answering")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
                 if let usage = thread.state?.usage, usage.inputTokens + usage.outputTokens > 0 {
                     Text(cost(usage))
                         .font(.callout.monospacedDigit())
@@ -55,6 +72,23 @@ struct ThreadView: View {
             }
         }
         .task { await thread.open() }
+        .alert("Error details", isPresented: Binding(get: { thread.errorDetail != nil }, set: { if !$0 { thread.errorDetail = nil } })) {
+            Button("Copy") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(thread.errorDetail ?? "", forType: .string)
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(thread.errorDetail ?? "")
+        }
+    }
+
+    private static let thinkingLevels: [(value: String, title: String)] = [
+        ("default", "Model default"), ("off", "Off"), ("low", "Low"), ("medium", "Medium"), ("high", "High"), ("xhigh", "Maximum"),
+    ]
+
+    private static func thinkingTitle(_ value: String?) -> String {
+        thinkingLevels.first { $0.value == (value ?? "default") }.map { $0.value == "default" ? "Default" : $0.title } ?? (value ?? "Default")
     }
 
     private var modelName: String {

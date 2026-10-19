@@ -8,6 +8,7 @@ import { EngineError, ModelHub } from "./models.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
+import type { Runtime } from "./runtimes/runtime.js";
 import { Sessions } from "./sessions.js";
 
 export const ENGINE_VERSION = "0.0.0";
@@ -119,6 +120,12 @@ export class Engine {
 		};
 	}
 
+	private async capability(ref: Params<"sessions.open">["ref"], name: "edit" | "regenerate" | "switchBranch" | "removeQueued" | "clearQueue"): Promise<Runtime> {
+		const runtime = await this.sessions.runtime(ref);
+		if (!runtime[name]) throw new EngineError("INVALID", `${ref.kind} sessions don't support ${name} yet.`);
+		return runtime;
+	}
+
 	private async handle(method: MethodName, params: unknown, conn: RpcConnection, owned: Set<string>): Promise<unknown> {
 		switch (method) {
 			case "engine.status":
@@ -163,6 +170,37 @@ export class Engine {
 			case "sessions.abort": {
 				const p = params as Params<"sessions.abort">;
 				await (await this.sessions.runtime(p.ref)).abort();
+				return {};
+			}
+			case "sessions.edit": {
+				const p = params as Params<"sessions.edit">;
+				await this.capability(p.ref, "edit").then((r) => r.edit!(p.itemId, p.text));
+				this.sessions.touch(p.ref);
+				return {};
+			}
+			case "sessions.regenerate": {
+				const p = params as Params<"sessions.regenerate">;
+				await this.capability(p.ref, "regenerate").then((r) => r.regenerate!(p.itemId));
+				this.sessions.touch(p.ref);
+				return {};
+			}
+			case "sessions.switchBranch": {
+				const p = params as Params<"sessions.switchBranch">;
+				await this.capability(p.ref, "switchBranch").then((r) => r.switchBranch!(p.branch));
+				return {};
+			}
+			case "sessions.fork": {
+				const p = params as Params<"sessions.fork">;
+				return { ref: await this.sessions.fork(p.ref, p.itemId) } satisfies Result<"sessions.fork">;
+			}
+			case "sessions.queue.remove": {
+				const p = params as Params<"sessions.queue.remove">;
+				await this.capability(p.ref, "removeQueued").then((r) => r.removeQueued!(p.queueId));
+				return {};
+			}
+			case "sessions.queue.clear": {
+				const p = params as Params<"sessions.queue.clear">;
+				await this.capability(p.ref, "clearQueue").then((r) => r.clearQueue!());
 				return {};
 			}
 			case "sessions.configure": {

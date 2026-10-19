@@ -28,6 +28,7 @@ A free-standing conversation. Backed by **one pi-durable session** (`threads/<id
 - **T3** Thinking/reasoning shown collapsed by default, with a per-session level picker (off/low/medium/high; mapped to pi `thinkingLevel`).
 - **T4** While the assistant is running: **Enter** queues a follow-up, **⌥Enter** steers, **Esc** aborts. The queue is shown above the composer and can be edited or cleared.
 - **T5** **Edit & resend** a user message → forks from the previous entry (pi-durable `fork`). **Regenerate** an assistant message → forks and resubmits. A branch switcher (`‹ 2/3 ›`) appears on forked messages.
+  *Implementation (1.2):* a thread is one pi-durable session; each version is a conversation forked just before the edited user message (`parent.at`), and the engine computes the switcher from pi-durable's conversation records (`packages/engine/src/runtimes/branches.ts`). The catalog remembers the active branch and when each branch was last used.
 - **T6** Switch model mid-thread (`sessions.configure`). The model used is shown per assistant message.
 - **T7** Auto-title after the first exchange, using the cheap "utility" model (07-shared §1.3). Can be renamed.
 - **T8** Attachments: drag & drop, paste, or 📎. Images go to vision models. PDFs are passed as files when the model supports it, otherwise text is extracted in the engine. Text/code files are inlined. Max size is configurable.

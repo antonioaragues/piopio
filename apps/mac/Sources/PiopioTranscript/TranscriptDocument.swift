@@ -31,6 +31,10 @@ public final class TranscriptDocument {
     private var prefetching = false
     private var boundsObserver: NSObjectProtocol?
 
+    /// Clicks on action links (edit, regenerate, fork, branch switch, settings, error details).
+    public var onAction: ((TranscriptAction) -> Void)?
+    private let links = LinkHandler()
+
     public private(set) var isFollowing = true {
         didSet { if oldValue != isFollowing { onFollowingChange?(isFollowing) } }
     }
@@ -48,6 +52,10 @@ public final class TranscriptDocument {
         textView.textContainerInset = NSSize(width: 16, height: 20)
         precondition(textView.textLayoutManager != nil, "TranscriptDocument needs TextKit 2")
         textView.textLayoutManager!.delegate = layoutDelegate
+        // Links style themselves (markdown links blue, actions secondary); the view only adds the hand cursor.
+        textView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
+        textView.delegate = links
+        links.document = self
         scrollView.drawsBackground = false
         scrollView.contentView.postsBoundsChangedNotifications = true
         boundsObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
@@ -64,6 +72,27 @@ public final class TranscriptDocument {
 
     /// The document's plain text (tests, copy-all).
     public var text: String { storage.string }
+
+    /// The latest version of an item (in or out of the window).
+    public func item(_ id: String) -> TimelineItem? { items.last { $0.id == id } }
+    public var lastItem: TimelineItem? { items.last }
+    public var lastUser: TimelineItem? { items.last { if case .user = $0 { true } else { false } } }
+
+    func handle(_ action: TranscriptAction) {
+        if case .copy(let id) = action {
+            let text: String? = switch item(id) {
+            case .user(let u): u.text
+            case .assistant(let a): a.text
+            default: nil
+            }
+            if let text {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            }
+            return
+        }
+        onAction?(action)
+    }
 
     // MARK: Loading
 
@@ -348,5 +377,17 @@ extension ItemRenderer {
         let out = NSMutableAttributedString()
         for b in blocks { out.append(render(b)) }
         return out
+    }
+}
+
+@MainActor
+private final class LinkHandler: NSObject, NSTextViewDelegate {
+    weak var document: TranscriptDocument?
+
+    func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))
+        guard let url, let action = TranscriptAction(url: url) else { return false } // regular links open in the browser
+        document?.handle(action)
+        return true
     }
 }

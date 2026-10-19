@@ -100,7 +100,11 @@ public nonisolated enum Inline {
                     attrs[.backgroundColor] = NSColor.quaternaryLabelColor
                 }
             }
-            if let link = run.link { attrs[.link] = link }
+            if let link = run.link {
+                attrs[.link] = link
+                attrs[.foregroundColor] = NSColor.linkColor
+                attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            }
             attrs[.font] = f
             out.append(NSAttributedString(string: text, attributes: attrs))
         }

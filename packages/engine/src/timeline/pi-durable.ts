@@ -21,16 +21,32 @@ export function messagesFromEntries(entries: readonly Entry[]): { messages: PiMe
 
 export class DurableEventMapper {
 	private provisional = 0;
-	constructor(private readonly builder: TimelineBuilder) {}
+	/** `queueText(id)` returns the text of a queued submission, when known. */
+	constructor(
+		private readonly builder: TimelineBuilder,
+		private readonly queueText: (submissionId: string) => string | undefined = () => undefined,
+	) {}
+
+	private lastInbox: { id: string | number; mode: string }[] = [];
+
+	/** Re-reads queue texts (a submission's text can become known after its inbox update). */
+	refreshQueue(): void {
+		this.builder.setState({ queue: this.queue(this.lastInbox) });
+	}
+
+	private queue(items: { id: string | number; mode: string }[]) {
+		this.lastInbox = items;
+		return items.map((q) => {
+			const text = this.queueText(String(q.id));
+			return { id: String(q.id), mode: q.mode === "steer" ? ("steer" as const) : ("followUp" as const), ...(text !== undefined ? { text } : {}) };
+		});
+	}
 
 	applySnapshot(event: AnyEvent, emit: boolean): void {
 		const { messages, ids } = messagesFromEntries((event.entries as Entry[]) ?? []);
 		this.builder.reset(messages, (i) => ids[i]!, emit);
 		const inbox = (event.inbox as { id: string; mode: string }[] | undefined) ?? [];
-		this.builder.setState({
-			status: event.run ? "running" : "idle",
-			queue: inbox.map((q) => ({ id: q.id, mode: q.mode === "steer" ? "steer" : "followUp" })),
-		});
+		this.builder.setState({ status: event.run ? "running" : "idle", queue: this.queue(inbox) });
 		const partial = (event.generation as { message?: PiMessage } | undefined)?.message;
 		if (partial && partial.role === "assistant") {
 			// Resume an in-flight answer: replay its blocks as deltas on a provisional item.
@@ -90,13 +106,15 @@ export class DurableEventMapper {
 				break;
 			}
 			case "inbox_update": {
-				const items = (event.items as { id: string; mode: string }[]) ?? [];
-				b.setState({ queue: items.map((q) => ({ id: q.id, mode: q.mode === "steer" ? "steer" : "followUp" })) });
+				b.setState({ queue: this.queue((event.items as { id: string; mode: string }[]) ?? []) });
 				break;
 			}
 			case "submission": {
 				const record = event.record as { id: string; status: string; reason?: string; detail?: string };
-				if (record.status === "unanswered") b.system(`sys:${record.id}`, "error", `Not answered (${record.reason ?? "unknown"})${record.detail ? `: ${record.detail}` : ""}`);
+				// Model errors already arrive as an assistant entry with the error; other reasons get a notice.
+				if (record.status === "unanswered" && record.reason !== "model_error" && record.reason !== "aborted") {
+					b.system(`sys:${record.id}`, "error", `Not answered (${record.reason ?? "unknown"})${record.detail ? `: ${record.detail}` : ""}`);
+				}
 				break;
 			}
 			case "auto_retry_start":

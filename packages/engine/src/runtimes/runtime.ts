@@ -13,6 +13,12 @@ export interface Runtime {
 	/** Changes the model and/or thinking level for the next request. */
 	configure(change: { model?: ModelRef; thinking?: string }): Promise<void>;
 	close(): Promise<void>;
+	// Optional capabilities (threads have all of them; build sessions only some, for now).
+	edit?(itemId: string, text: string): Promise<void>;
+	regenerate?(itemId: string): Promise<void>;
+	switchBranch?(branch: string): Promise<void>;
+	removeQueued?(queueId: string): Promise<void>;
+	clearQueue?(): Promise<void>;
 }
 
 export class Emitter {

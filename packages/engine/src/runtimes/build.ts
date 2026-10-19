@@ -113,6 +113,10 @@ export class BuildRuntime implements Runtime {
 		this.emitter.emit(this.builder.flush());
 	}
 
+	async clearQueue(): Promise<void> {
+		this.session.clearQueue();
+	}
+
 	async close(): Promise<void> {
 		this.unsubscribe?.();
 		this.session.dispose();

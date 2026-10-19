@@ -55,12 +55,27 @@ export const ToolDetails = Type.Union([
 ]);
 export type ToolDetails = Static<typeof ToolDetails>;
 
+/** Where a user message sits among alternative versions (edits/regenerations) at the same point. */
+export const BranchInfo = Type.Object({
+	index: Type.Number(), // 0-based position of the shown version
+	count: Type.Number(),
+	/** Branch ids to pass to `sessions.switchBranch` for the neighbouring versions. */
+	previous: Type.Optional(Type.String()),
+	next: Type.Optional(Type.String()),
+});
+export type BranchInfo = Static<typeof BranchInfo>;
+
 export const UserItem = Type.Object({
 	kind: Type.Literal("user"),
 	id: Type.String(),
 	at: Type.String(),
 	text: Type.String(),
+	branch: Type.Optional(BranchInfo),
 });
+
+/** Why a model request failed, so clients can offer the right fix. */
+export const ErrorKind = literals("auth", "credits", "model", "rate_limit", "provider", "network", "context", "other");
+export type ErrorKind = Static<typeof ErrorKind>;
 export const AssistantItem = Type.Object({
 	kind: Type.Literal("assistant"),
 	id: Type.String(),
@@ -70,6 +85,9 @@ export const AssistantItem = Type.Object({
 	usage: Type.Optional(Usage),
 	status: literals("streaming", "done", "error", "aborted"),
 	error: Type.Optional(Type.String()),
+	errorKind: Type.Optional(ErrorKind),
+	/** The provider's raw error, for "show details". */
+	errorDetail: Type.Optional(Type.String()),
 });
 export const ToolItem = Type.Object({
 	kind: Type.Literal("tool"),
@@ -214,6 +232,34 @@ export const methods = {
 		result: Type.Object({ accepted: Type.Boolean(), disposition: Type.Union([Type.Literal("started"), Type.Literal("queued")]) }),
 	},
 	"sessions.abort": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({}),
+	},
+	/** Re-asks from a user message with new text, as a new branch (threads). */
+	"sessions.edit": {
+		params: Type.Object({ ref: ContainerRef, itemId: Type.String(), text: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Asks again for a new answer: `itemId` is the answer, or the user message whose answer failed. */
+	"sessions.regenerate": {
+		params: Type.Object({ ref: ContainerRef, itemId: Type.String() }),
+		result: Type.Object({}),
+	},
+	"sessions.switchBranch": {
+		params: Type.Object({ ref: ContainerRef, branch: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Copies the conversation up to and including `itemId` into a new session of the same kind. */
+	"sessions.fork": {
+		params: Type.Object({ ref: ContainerRef, itemId: Type.String() }),
+		result: Type.Object({ ref: ContainerRef }),
+	},
+	/** Withdraws one queued input. */
+	"sessions.queue.remove": {
+		params: Type.Object({ ref: ContainerRef, queueId: Type.String() }),
+		result: Type.Object({}),
+	},
+	"sessions.queue.clear": {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({}),
 	},

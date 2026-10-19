@@ -17,6 +17,17 @@ enum DebugAutomation {
                 let thread = engine.thread(ref)
                 await thread.open()
                 await thread.send(prompt)
+                // PIOPIO_DEMO_FOLLOWUP: a second message; PIOPIO_DEMO_EDIT: then edit it into this text.
+                if let followUp = env["PIOPIO_DEMO_FOLLOWUP"] {
+                    await waitIdle(thread)
+                    await thread.send(followUp)
+                    if let edit = env["PIOPIO_DEMO_EDIT"] {
+                        await waitIdle(thread)
+                        guard case .user(let u)? = thread.document.lastUser else { return }
+                        thread.beginEditing(u.id, original: u.text)
+                        await thread.send(edit)
+                    }
+                }
             }
         }
         if let path = env["PIOPIO_SNAPSHOT"] {
@@ -26,6 +37,13 @@ enum DebugAutomation {
                 snapshot(to: URL(fileURLWithPath: path))
                 if env["PIOPIO_QUIT_AFTER_SNAPSHOT"] == "1" { NSApp.terminate(nil) }
             }
+        }
+    }
+
+    private static func waitIdle(_ thread: ThreadModel) async {
+        for _ in 0..<200 {
+            try? await Task.sleep(for: .milliseconds(50))
+            if thread.state?.status == .idle, case .assistant? = thread.document.lastItem { return }
         }
     }
 

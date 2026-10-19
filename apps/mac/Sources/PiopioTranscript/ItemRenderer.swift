@@ -21,13 +21,16 @@ nonisolated struct ItemRenderer: Sendable {
         case .user(let u):
             // Your own words, as typed: no markdown interpretation (pasted fences and tables stay readable).
             let text = NSAttributedString(string: u.text.replacingOccurrences(of: "\n", with: lineSeparator), attributes: [.font: body, .foregroundColor: NSColor.labelColor])
-            return card(text, .user, spacingAfter: 16)
+            let out = NSMutableAttributedString(attributedString: card(text, .user, spacingAfter: 2))
+            out.append(userFooter(u))
+            return out
         case .assistant(let a):
             let out = NSMutableAttributedString()
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: "Thinking", body: thinking))) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(footer(a))
+            if a.status != .streaming { out.append(answerFooter(a)) }
             return out
         case .tool(let t):
             let card = DisclosureCard(kind: .tool, title: t.tool, detail: t.status.rawValue, body: t.output ?? "")
@@ -44,12 +47,84 @@ nonisolated struct ItemRenderer: Sendable {
     func footer(_ a: AssistantItem) -> NSAttributedString {
         switch a.status {
         case .error:
-            return card(NSAttributedString(string: a.error ?? "The model returned an error.", attributes: [.font: body, .foregroundColor: NSColor.systemRed]), .error)
+            let m = NSMutableAttributedString(string: a.error ?? "The model returned an error.", attributes: [.font: body, .foregroundColor: NSColor.systemRed])
+            m.append(NSAttributedString(string: "   "))
+            if a.errorKind == .auth {
+                m.append(action("Open Settings", .openSettings, size: 13))
+            } else {
+                m.append(action("Retry", .regenerate(itemId: a.id), size: 13))
+            }
+            if a.errorDetail != nil {
+                m.append(NSAttributedString(string: "  ·  ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.tertiaryLabelColor]))
+                m.append(action("Details", .showErrorDetail(itemId: a.id), size: 13))
+            }
+            return card(m, .error)
         case .aborted:
             return line(NSAttributedString(string: "Stopped", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor.tertiaryLabelColor]), style())
         case .done, .streaming:
             return NSAttributedString()
         }
+    }
+
+    // MARK: Footers (actions under messages)
+
+    private var footerFont: NSFont { .systemFont(ofSize: 11.5) }
+
+    /// A clickable word handled by `TranscriptDocument` (not underlined, secondary color).
+    func action(_ title: String, _ action: TranscriptAction, size: CGFloat = 11.5, help: String? = nil) -> NSAttributedString {
+        var attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size, weight: .medium), .foregroundColor: NSColor.secondaryLabelColor, .link: action.url]
+        if let help { attrs[.toolTip] = help }
+        return NSAttributedString(string: title, attributes: attrs)
+    }
+
+    private func gap() -> NSAttributedString {
+        NSAttributedString(string: "    ", attributes: [.font: footerFont])
+    }
+
+    /// Under your message: version switcher (when there are versions), Edit, Copy. Right-aligned under the bubble.
+    func userFooter(_ u: UserItem) -> NSAttributedString {
+        let m = NSMutableAttributedString()
+        if let b = u.branch {
+            let dim: [NSAttributedString.Key: Any] = [.font: footerFont, .foregroundColor: NSColor.tertiaryLabelColor]
+            m.append(b.previous.map { action("‹", .switchBranch($0), size: 13, help: "Previous version") } ?? NSAttributedString(string: "‹", attributes: dim))
+            m.append(NSAttributedString(string: "  \(b.index + 1) / \(b.count)  ", attributes: [.font: footerFont, .foregroundColor: NSColor.secondaryLabelColor]))
+            m.append(b.next.map { action("›", .switchBranch($0), size: 13, help: "Next version") } ?? NSAttributedString(string: "›", attributes: dim))
+            m.append(gap())
+        }
+        m.append(action("Edit", .edit(itemId: u.id), help: "Edit and resend (keeps this version)"))
+        m.append(gap())
+        m.append(action("Copy", .copy(itemId: u.id)))
+        m.append(NSAttributedString(string: "\n"))
+        let p = NSMutableParagraphStyle()
+        p.alignment = .right
+        p.tailIndent = -(CardLayoutFragment.padding + 4)
+        p.paragraphSpacing = 16
+        m.addAttribute(.paragraphStyle, value: p, range: NSRange(location: 0, length: m.length))
+        return m
+    }
+
+    /// Under an answer: Copy, Regenerate, Fork, then the model and cost.
+    func answerFooter(_ a: AssistantItem) -> NSAttributedString {
+        let m = NSMutableAttributedString()
+        if !a.text.isEmpty {
+            m.append(action("Copy", .copy(itemId: a.id)))
+            m.append(gap())
+        }
+        m.append(action("Regenerate", .regenerate(itemId: a.id), help: "Ask again (keeps this version)"))
+        m.append(gap())
+        m.append(action("Fork", .fork(itemId: a.id), help: "Continue from here in a new thread"))
+        var meta: [String] = []
+        if let model = a.model { meta.append(model.split(separator: "/").dropFirst().joined(separator: "/").nilIfEmpty ?? model) }
+        if let u = a.usage, u.costUsd > 0 { meta.append(u.costUsd < 0.01 ? String(format: "$%.4f", u.costUsd) : String(format: "$%.2f", u.costUsd)) }
+        if !meta.isEmpty {
+            var attrs: [NSAttributedString.Key: Any] = [.font: footerFont, .foregroundColor: NSColor.tertiaryLabelColor]
+            if let u = a.usage { attrs[.toolTip] = "\(Int(u.inputTokens)) in · \(Int(u.outputTokens)) out · \(Int(u.cacheReadTokens)) cached tokens" }
+            m.append(gap())
+            m.append(NSAttributedString(string: meta.joined(separator: " · "), attributes: attrs))
+        }
+        m.append(NSAttributedString(string: "\n"))
+        m.addAttribute(.paragraphStyle, value: style(spacing: 18, before: 0), range: NSRange(location: 0, length: m.length))
+        return m
     }
 
     func thinkingCard(_ card: DisclosureCard) -> NSAttributedString {
@@ -132,4 +207,8 @@ nonisolated struct ItemRenderer: Sendable {
         m.addAttribute(.piopioCard, value: kind.rawValue, range: NSRange(location: 0, length: m.length))
         return m
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

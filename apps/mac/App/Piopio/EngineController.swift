@@ -53,9 +53,24 @@ final class EngineController {
     }
 
     func stop() {
+        stopping = true
         Task { await client?.close() }
         process?.terminate()
         process = nil
+    }
+
+    @ObservationIgnored private var stopping = false
+
+    /// Starts over after the engine connection drops; open threads re-subscribe when their views reappear.
+    private func connectionLost(_ lost: EngineClient) {
+        guard !stopping, client === lost else { return }
+        client = nil
+        handlers = [:]
+        orphans = [:]
+        for t in openThreads.values { t.close() }
+        openThreads = [:]
+        if let p = process, !p.isRunning { process = nil }
+        Task { await start() }
     }
 
     /// Connects to a running engine. Returns false when nothing is listening.
@@ -75,6 +90,8 @@ final class EngineController {
         self.client = client
         Task { [weak self] in
             for await batch in client.sessionEvents { self?.dispatch(batch) }
+            // The stream ends when the connection drops (engine crash, sleep, kill): reconnect.
+            self?.connectionLost(client)
         }
         Task { [weak self] in
             for await change in client.catalogChanges { self?.applyCatalog(change) }

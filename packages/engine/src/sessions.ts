@@ -10,9 +10,10 @@ import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import type { Runtime } from "./runtimes/runtime.js";
-import { ThreadRuntime } from "./runtimes/thread.js";
+import { DatabaseSync } from "node:sqlite";
+import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 
-type CatalogEntry = SessionSummary & { thinking?: string; file?: string; sessionFile?: string };
+type CatalogEntry = SessionSummary & { thinking?: string; file?: string; sessionFile?: string; branches?: BranchState };
 
 export const newId = (prefix: string) => `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 20)}`;
 
@@ -57,7 +58,8 @@ export class Sessions {
 		const entry = this.entry(ref);
 		if (this.open.has(ref.id)) await (await this.runtime(ref)).configure(change);
 		if (change.model) entry.model = change.model;
-		if (change.thinking) entry.thinking = change.thinking;
+		if (change.thinking === "default") delete entry.thinking;
+		else if (change.thinking) entry.thinking = change.thinking;
 		this.save();
 		this.changed(entry);
 	}
@@ -67,6 +69,43 @@ export class Sessions {
 		entry.title = title.trim().slice(0, 120) || entry.title;
 		this.save();
 		this.changed(entry);
+	}
+
+	/**
+	 * Copies a thread into a new one that continues from `itemId` (inclusive) of the active branch.
+	 * The SQLite file is copied with VACUUM INTO, so the source can stay open.
+	 */
+	async fork(ref: ContainerRef, itemId: string): Promise<ContainerRef> {
+		const source = this.entry(ref);
+		if (ref.kind !== "thread" || !source.file) throw new EngineError("INVALID", "Only threads can be branched into a new session for now.");
+		const runtime = await this.runtime(ref);
+		if (runtime.snapshot().state.status === "running") throw new EngineError("BUSY", "Wait for the answer to finish before branching into a new thread.");
+		const copy: CatalogEntry = {
+			...structuredClone(source),
+			ref: { kind: "thread", id: newId("thr") },
+			title: `${source.title} (branch)`,
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
+			branches: { ...(source.branches?.active ? { active: source.branches.active } : {}), activity: {} },
+		};
+		copy.file = join(this.paths.threadsDir, `${copy.ref.id}.sqlite`);
+		const db = new DatabaseSync(source.file, { readOnly: true });
+		try {
+			db.exec(`VACUUM INTO '${copy.file.replaceAll("'", "''")}'`);
+		} finally {
+			db.close();
+		}
+		this.entries.set(copy.ref.id, copy);
+		this.save();
+		try {
+			const forked = (await this.runtime(copy.ref)) as ThreadRuntime;
+			await forked.startAt(itemId);
+		} catch (error) {
+			await this.delete(copy.ref).catch(() => undefined);
+			throw error;
+		}
+		this.changed(copy);
+		return copy.ref;
 	}
 
 	/** Threads lose their history file; build sessions only leave the catalog (pi owns the JSONL). */
@@ -140,7 +179,18 @@ export class Sessions {
 	private async openRuntime(entry: CatalogEntry): Promise<Runtime> {
 		const model = entry.model ?? this.hub.defaultModel;
 		if (entry.ref.kind === "thread") {
-			return ThreadRuntime.open({ ref: entry.ref, file: entry.file!, hub: this.hub, model, ...(entry.thinking ? { thinking: entry.thinking } : {}) });
+			return ThreadRuntime.open({
+				ref: entry.ref,
+				file: entry.file!,
+				hub: this.hub,
+				model,
+				...(entry.thinking ? { thinking: entry.thinking } : {}),
+				...(entry.branches ? { branches: entry.branches } : {}),
+				onBranchState: (state) => {
+					entry.branches = state;
+					this.save();
+				},
+			});
 		}
 		const runtime = await BuildRuntime.open({
 			ref: entry.ref,

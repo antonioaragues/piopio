@@ -43,10 +43,25 @@ public struct AssistantPart: Codable, Sendable, Hashable {
     public init(type: PartType, text: String, redacted: Bool? = nil) { self.type = type; self.text = text; self.redacted = redacted }
 }
 
+/// Where a user message sits among alternative versions at the same point (edits, regenerations).
+public struct BranchInfo: Codable, Sendable, Hashable {
+    public var index: Int
+    public var count: Int
+    public var previous: String?
+    public var next: String?
+    public init(index: Int, count: Int, previous: String? = nil, next: String? = nil) {
+        self.index = index; self.count = count; self.previous = previous; self.next = next
+    }
+}
+
 public struct UserItem: Codable, Sendable, Hashable {
     public var id, at, text: String
-    public init(id: String, at: String, text: String) { self.id = id; self.at = at; self.text = text }
+    public var branch: BranchInfo?
+    public init(id: String, at: String, text: String, branch: BranchInfo? = nil) { self.id = id; self.at = at; self.text = text; self.branch = branch }
 }
+
+/// Why a model request failed.
+public enum ErrorKind: String, Codable, Sendable { case auth, credits, model, rateLimit = "rate_limit", provider, network, context, other }
 
 public struct AssistantItem: Codable, Sendable, Hashable {
     public enum Status: String, Codable, Sendable { case streaming, done, error, aborted }
@@ -56,9 +71,12 @@ public struct AssistantItem: Codable, Sendable, Hashable {
     public var usage: Usage?
     public var status: Status
     public var error: String?
+    public var errorKind: ErrorKind?
+    public var errorDetail: String?
     public var text: String { parts.filter { $0.type == .text }.map(\.text).joined() }
-    public init(id: String, at: String, parts: [AssistantPart], model: String? = nil, usage: Usage? = nil, status: Status, error: String? = nil) {
-        self.id = id; self.at = at; self.parts = parts; self.model = model; self.usage = usage; self.status = status; self.error = error
+    public init(id: String, at: String, parts: [AssistantPart], model: String? = nil, usage: Usage? = nil, status: Status, error: String? = nil, errorKind: ErrorKind? = nil, errorDetail: String? = nil) {
+        self.id = id; self.at = at; self.parts = parts; self.model = model; self.usage = usage; self.status = status
+        self.error = error; self.errorKind = errorKind; self.errorDetail = errorDetail
     }
 }
 
@@ -278,4 +296,23 @@ public struct UnsubscribeParams: Encodable, Sendable { public var subscriptionId
 public struct CatalogChanged: Decodable, Sendable {
     public var upserted: [SessionSummary]
     public var removed: [ContainerRef]
+}
+
+// MARK: Milestone 1.2: branches and queue
+
+public struct EditParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var itemId: String; public var text: String
+    public init(ref: ContainerRef, itemId: String, text: String) { self.ref = ref; self.itemId = itemId; self.text = text }
+}
+public struct ItemParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var itemId: String
+    public init(ref: ContainerRef, itemId: String) { self.ref = ref; self.itemId = itemId }
+}
+public struct SwitchBranchParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var branch: String
+    public init(ref: ContainerRef, branch: String) { self.ref = ref; self.branch = branch }
+}
+public struct QueueRemoveParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var queueId: String
+    public init(ref: ContainerRef, queueId: String) { self.ref = ref; self.queueId = queueId }
 }

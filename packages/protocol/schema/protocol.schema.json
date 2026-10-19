@@ -61,6 +61,27 @@
 						},
 						"text": {
 							"type": "string"
+						},
+						"branch": {
+							"type": "object",
+							"required": [
+								"index",
+								"count"
+							],
+							"properties": {
+								"index": {
+									"type": "number"
+								},
+								"count": {
+									"type": "number"
+								},
+								"previous": {
+									"type": "string"
+								},
+								"next": {
+									"type": "string"
+								}
+							}
 						}
 					}
 				},
@@ -177,6 +198,45 @@
 							]
 						},
 						"error": {
+							"type": "string"
+						},
+						"errorKind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "auth"
+								},
+								{
+									"type": "string",
+									"const": "credits"
+								},
+								{
+									"type": "string",
+									"const": "model"
+								},
+								{
+									"type": "string",
+									"const": "rate_limit"
+								},
+								{
+									"type": "string",
+									"const": "provider"
+								},
+								{
+									"type": "string",
+									"const": "network"
+								},
+								{
+									"type": "string",
+									"const": "context"
+								},
+								{
+									"type": "string",
+									"const": "other"
+								}
+							]
+						},
+						"errorDetail": {
 							"type": "string"
 						}
 					}
@@ -533,6 +593,27 @@
 										},
 										"text": {
 											"type": "string"
+										},
+										"branch": {
+											"type": "object",
+											"required": [
+												"index",
+												"count"
+											],
+											"properties": {
+												"index": {
+													"type": "number"
+												},
+												"count": {
+													"type": "number"
+												},
+												"previous": {
+													"type": "string"
+												},
+												"next": {
+													"type": "string"
+												}
+											}
 										}
 									}
 								},
@@ -649,6 +730,45 @@
 											]
 										},
 										"error": {
+											"type": "string"
+										},
+										"errorKind": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "auth"
+												},
+												{
+													"type": "string",
+													"const": "credits"
+												},
+												{
+													"type": "string",
+													"const": "model"
+												},
+												{
+													"type": "string",
+													"const": "rate_limit"
+												},
+												{
+													"type": "string",
+													"const": "provider"
+												},
+												{
+													"type": "string",
+													"const": "network"
+												},
+												{
+													"type": "string",
+													"const": "context"
+												},
+												{
+													"type": "string",
+													"const": "other"
+												}
+											]
+										},
+										"errorDetail": {
 											"type": "string"
 										}
 									}
@@ -937,6 +1057,27 @@
 										},
 										"text": {
 											"type": "string"
+										},
+										"branch": {
+											"type": "object",
+											"required": [
+												"index",
+												"count"
+											],
+											"properties": {
+												"index": {
+													"type": "number"
+												},
+												"count": {
+													"type": "number"
+												},
+												"previous": {
+													"type": "string"
+												},
+												"next": {
+													"type": "string"
+												}
+											}
 										}
 									}
 								},
@@ -1053,6 +1194,45 @@
 											]
 										},
 										"error": {
+											"type": "string"
+										},
+										"errorKind": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "auth"
+												},
+												{
+													"type": "string",
+													"const": "credits"
+												},
+												{
+													"type": "string",
+													"const": "model"
+												},
+												{
+													"type": "string",
+													"const": "rate_limit"
+												},
+												{
+													"type": "string",
+													"const": "provider"
+												},
+												{
+													"type": "string",
+													"const": "network"
+												},
+												{
+													"type": "string",
+													"const": "context"
+												},
+												{
+													"type": "string",
+													"const": "other"
+												}
+											]
+										},
+										"errorDetail": {
 											"type": "string"
 										}
 									}
@@ -1324,6 +1504,27 @@
 										},
 										"text": {
 											"type": "string"
+										},
+										"branch": {
+											"type": "object",
+											"required": [
+												"index",
+												"count"
+											],
+											"properties": {
+												"index": {
+													"type": "number"
+												},
+												"count": {
+													"type": "number"
+												},
+												"previous": {
+													"type": "string"
+												},
+												"next": {
+													"type": "string"
+												}
+											}
 										}
 									}
 								},
@@ -1440,6 +1641,45 @@
 											]
 										},
 										"error": {
+											"type": "string"
+										},
+										"errorKind": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "auth"
+												},
+												{
+													"type": "string",
+													"const": "credits"
+												},
+												{
+													"type": "string",
+													"const": "model"
+												},
+												{
+													"type": "string",
+													"const": "rate_limit"
+												},
+												{
+													"type": "string",
+													"const": "provider"
+												},
+												{
+													"type": "string",
+													"const": "network"
+												},
+												{
+													"type": "string",
+													"const": "context"
+												},
+												{
+													"type": "string",
+													"const": "other"
+												}
+											]
+										},
+										"errorDetail": {
 											"type": "string"
 										}
 									}
@@ -1854,6 +2094,27 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"branch": {
+														"type": "object",
+														"required": [
+															"index",
+															"count"
+														],
+														"properties": {
+															"index": {
+																"type": "number"
+															},
+															"count": {
+																"type": "number"
+															},
+															"previous": {
+																"type": "string"
+															},
+															"next": {
+																"type": "string"
+															}
+														}
 													}
 												}
 											},
@@ -1970,6 +2231,45 @@
 														]
 													},
 													"error": {
+														"type": "string"
+													},
+													"errorKind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "auth"
+															},
+															{
+																"type": "string",
+																"const": "credits"
+															},
+															{
+																"type": "string",
+																"const": "model"
+															},
+															{
+																"type": "string",
+																"const": "rate_limit"
+															},
+															{
+																"type": "string",
+																"const": "provider"
+															},
+															{
+																"type": "string",
+																"const": "network"
+															},
+															{
+																"type": "string",
+																"const": "context"
+															},
+															{
+																"type": "string",
+																"const": "other"
+															}
+														]
+													},
+													"errorDetail": {
 														"type": "string"
 													}
 												}
@@ -2365,6 +2665,27 @@
 									},
 									"text": {
 										"type": "string"
+									},
+									"branch": {
+										"type": "object",
+										"required": [
+											"index",
+											"count"
+										],
+										"properties": {
+											"index": {
+												"type": "number"
+											},
+											"count": {
+												"type": "number"
+											},
+											"previous": {
+												"type": "string"
+											},
+											"next": {
+												"type": "string"
+											}
+										}
 									}
 								}
 							},
@@ -2481,6 +2802,45 @@
 										]
 									},
 									"error": {
+										"type": "string"
+									},
+									"errorKind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "auth"
+											},
+											{
+												"type": "string",
+												"const": "credits"
+											},
+											{
+												"type": "string",
+												"const": "model"
+											},
+											{
+												"type": "string",
+												"const": "rate_limit"
+											},
+											{
+												"type": "string",
+												"const": "provider"
+											},
+											{
+												"type": "string",
+												"const": "network"
+											},
+											{
+												"type": "string",
+												"const": "context"
+											},
+											{
+												"type": "string",
+												"const": "other"
+											}
+										]
+									},
+									"errorDetail": {
 										"type": "string"
 									}
 								}
@@ -2929,6 +3289,27 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"branch": {
+														"type": "object",
+														"required": [
+															"index",
+															"count"
+														],
+														"properties": {
+															"index": {
+																"type": "number"
+															},
+															"count": {
+																"type": "number"
+															},
+															"previous": {
+																"type": "string"
+															},
+															"next": {
+																"type": "string"
+															}
+														}
 													}
 												}
 											},
@@ -3045,6 +3426,45 @@
 														]
 													},
 													"error": {
+														"type": "string"
+													},
+													"errorKind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "auth"
+															},
+															{
+																"type": "string",
+																"const": "credits"
+															},
+															{
+																"type": "string",
+																"const": "model"
+															},
+															{
+																"type": "string",
+																"const": "rate_limit"
+															},
+															{
+																"type": "string",
+																"const": "provider"
+															},
+															{
+																"type": "string",
+																"const": "network"
+															},
+															{
+																"type": "string",
+																"const": "context"
+															},
+															{
+																"type": "string",
+																"const": "other"
+															}
+														]
+													},
+													"errorDetail": {
 														"type": "string"
 													}
 												}
@@ -3333,6 +3753,27 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"branch": {
+														"type": "object",
+														"required": [
+															"index",
+															"count"
+														],
+														"properties": {
+															"index": {
+																"type": "number"
+															},
+															"count": {
+																"type": "number"
+															},
+															"previous": {
+																"type": "string"
+															},
+															"next": {
+																"type": "string"
+															}
+														}
 													}
 												}
 											},
@@ -3449,6 +3890,45 @@
 														]
 													},
 													"error": {
+														"type": "string"
+													},
+													"errorKind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "auth"
+															},
+															{
+																"type": "string",
+																"const": "credits"
+															},
+															{
+																"type": "string",
+																"const": "model"
+															},
+															{
+																"type": "string",
+																"const": "rate_limit"
+															},
+															{
+																"type": "string",
+																"const": "provider"
+															},
+															{
+																"type": "string",
+																"const": "network"
+															},
+															{
+																"type": "string",
+																"const": "context"
+															},
+															{
+																"type": "string",
+																"const": "other"
+															}
+														]
+													},
+													"errorDetail": {
 														"type": "string"
 													}
 												}
@@ -3720,6 +4200,27 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"branch": {
+														"type": "object",
+														"required": [
+															"index",
+															"count"
+														],
+														"properties": {
+															"index": {
+																"type": "number"
+															},
+															"count": {
+																"type": "number"
+															},
+															"previous": {
+																"type": "string"
+															},
+															"next": {
+																"type": "string"
+															}
+														}
 													}
 												}
 											},
@@ -3836,6 +4337,45 @@
 														]
 													},
 													"error": {
+														"type": "string"
+													},
+													"errorKind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "auth"
+															},
+															{
+																"type": "string",
+																"const": "credits"
+															},
+															{
+																"type": "string",
+																"const": "model"
+															},
+															{
+																"type": "string",
+																"const": "rate_limit"
+															},
+															{
+																"type": "string",
+																"const": "provider"
+															},
+															{
+																"type": "string",
+																"const": "network"
+															},
+															{
+																"type": "string",
+																"const": "context"
+															},
+															{
+																"type": "string",
+																"const": "other"
+															}
+														]
+													},
+													"errorDetail": {
 														"type": "string"
 													}
 												}
@@ -4250,6 +4790,27 @@
 																},
 																"text": {
 																	"type": "string"
+																},
+																"branch": {
+																	"type": "object",
+																	"required": [
+																		"index",
+																		"count"
+																	],
+																	"properties": {
+																		"index": {
+																			"type": "number"
+																		},
+																		"count": {
+																			"type": "number"
+																		},
+																		"previous": {
+																			"type": "string"
+																		},
+																		"next": {
+																			"type": "string"
+																		}
+																	}
 																}
 															}
 														},
@@ -4366,6 +4927,45 @@
 																	]
 																},
 																"error": {
+																	"type": "string"
+																},
+																"errorKind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "auth"
+																		},
+																		{
+																			"type": "string",
+																			"const": "credits"
+																		},
+																		{
+																			"type": "string",
+																			"const": "model"
+																		},
+																		{
+																			"type": "string",
+																			"const": "rate_limit"
+																		},
+																		{
+																			"type": "string",
+																			"const": "provider"
+																		},
+																		{
+																			"type": "string",
+																			"const": "network"
+																		},
+																		{
+																			"type": "string",
+																			"const": "context"
+																		},
+																		{
+																			"type": "string",
+																			"const": "other"
+																		}
+																	]
+																},
+																"errorDetail": {
 																	"type": "string"
 																}
 															}
@@ -5306,6 +5906,27 @@
 									},
 									"text": {
 										"type": "string"
+									},
+									"branch": {
+										"type": "object",
+										"required": [
+											"index",
+											"count"
+										],
+										"properties": {
+											"index": {
+												"type": "number"
+											},
+											"count": {
+												"type": "number"
+											},
+											"previous": {
+												"type": "string"
+											},
+											"next": {
+												"type": "string"
+											}
+										}
 									}
 								}
 							},
@@ -5422,6 +6043,45 @@
 										]
 									},
 									"error": {
+										"type": "string"
+									},
+									"errorKind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "auth"
+											},
+											{
+												"type": "string",
+												"const": "credits"
+											},
+											{
+												"type": "string",
+												"const": "model"
+											},
+											{
+												"type": "string",
+												"const": "rate_limit"
+											},
+											{
+												"type": "string",
+												"const": "provider"
+											},
+											{
+												"type": "string",
+												"const": "network"
+											},
+											{
+												"type": "string",
+												"const": "context"
+											},
+											{
+												"type": "string",
+												"const": "other"
+											}
+										]
+									},
+									"errorDetail": {
 										"type": "string"
 									}
 								}
@@ -5866,6 +6526,27 @@
 											},
 											"text": {
 												"type": "string"
+											},
+											"branch": {
+												"type": "object",
+												"required": [
+													"index",
+													"count"
+												],
+												"properties": {
+													"index": {
+														"type": "number"
+													},
+													"count": {
+														"type": "number"
+													},
+													"previous": {
+														"type": "string"
+													},
+													"next": {
+														"type": "string"
+													}
+												}
 											}
 										}
 									},
@@ -5982,6 +6663,45 @@
 												]
 											},
 											"error": {
+												"type": "string"
+											},
+											"errorKind": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "auth"
+													},
+													{
+														"type": "string",
+														"const": "credits"
+													},
+													{
+														"type": "string",
+														"const": "model"
+													},
+													{
+														"type": "string",
+														"const": "rate_limit"
+													},
+													{
+														"type": "string",
+														"const": "provider"
+													},
+													{
+														"type": "string",
+														"const": "network"
+													},
+													{
+														"type": "string",
+														"const": "context"
+													},
+													{
+														"type": "string",
+														"const": "other"
+													}
+												]
+											},
+											"errorDetail": {
 												"type": "string"
 											}
 										}
@@ -6464,6 +7184,351 @@
 			}
 		},
 		"sessions.abort.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.edit.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"itemId",
+				"text"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"itemId": {
+					"type": "string"
+				},
+				"text": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.edit.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.regenerate.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"itemId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"itemId": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.regenerate.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.switchBranch.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"branch"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"branch": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.switchBranch.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.fork.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"itemId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"itemId": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.fork.result": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.queue.remove.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"queueId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"queueId": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.queue.remove.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.queue.clear.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.queue.clear.result": {
 			"type": "object",
 			"properties": {}
 		},

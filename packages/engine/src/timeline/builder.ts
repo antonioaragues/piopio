@@ -2,7 +2,8 @@
  * Runtime-neutral timeline model. Adapters (pi SDK, pi-durable) translate upstream events into
  * calls on this builder. It keeps the current items and collects SessionEvents until flush().
  */
-import type { AssistantItem, AssistantPart, SessionEvent, SessionState, Snapshot, TimelineItem, ToolItem, Usage, ContainerRef } from "@piopio/protocol";
+import type { AssistantItem, AssistantPart, BranchInfo, SessionEvent, SessionState, Snapshot, TimelineItem, ToolItem, Usage, ContainerRef, UserItem } from "@piopio/protocol";
+import { describeModelError } from "./errors.js";
 
 /** Minimal structural views of pi-ai messages (avoid coupling to upstream unions). */
 export type PiContentBlock =
@@ -107,6 +108,23 @@ export class TimelineBuilder {
 			}
 		});
 		if (emit) this.pending.push({ type: "resnapshot", snapshot: this.snapshot() });
+	}
+
+	/** Sets the branch switcher info of user items (missing ids lose theirs). Emits updates for changed items. */
+	annotateBranches(branches: ReadonlyMap<string, BranchInfo>, emit = true): void {
+		for (const item of this.items) {
+			if (item.kind !== "user") continue;
+			const next = branches.get(item.id);
+			if (JSON.stringify(next) === JSON.stringify((item as UserItem).branch)) continue;
+			if (next) (item as UserItem).branch = next;
+			else delete (item as UserItem).branch;
+			if (emit) this.pending.push({ type: "item.updated", item: structuredClone(item) });
+		}
+	}
+
+	/** Items in order (read-only use). */
+	get currentItems(): readonly TimelineItem[] {
+		return this.items;
 	}
 
 	setState(patch: Partial<SessionState>): void {
@@ -233,7 +251,7 @@ export class TimelineBuilder {
 			status: assistantStatus(m.stopReason),
 			...(m.model ? { model: m.provider ? `${m.provider}/${m.model}` : m.model } : {}),
 			...(usage ? { usage } : {}),
-			...(m.errorMessage ? { error: m.errorMessage } : {}),
+			...(m.stopReason === "error" || m.errorMessage ? errorFields(m.errorMessage) : {}),
 		};
 	}
 
@@ -259,4 +277,9 @@ export class TimelineBuilder {
 		const i = this.index.get(id);
 		return i === undefined ? undefined : this.items[i];
 	}
+}
+
+function errorFields(raw: string | undefined): Pick<AssistantItem, "error" | "errorKind" | "errorDetail"> {
+	const { kind, message } = describeModelError(raw);
+	return { error: message, errorKind: kind, ...(raw ? { errorDetail: raw } : {}) };
 }
