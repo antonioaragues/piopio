@@ -81,6 +81,12 @@ The single contract between clients (Mac app, later the iOS app) and engines (Lo
 ### 3.11 Secrets (engine → app, reverse request)
 `secrets.get({name, purpose})` is sent by the engine to the app. The app reads the Keychain and may prompt. `secrets.set` goes the other way during onboarding.
 
+### 3.12 App services (engine → app, reverse requests)
+Things only the Mac app can do, asked for by the engine the same way:
+- `app.tool({name, args, agentId})` → `{result, card?, undo?}`: Apple app tools (06-agents §4.1: EventKit, Contacts, Notes, Music, Shortcuts). The app checks the agent's allowed tool groups and runs the call with the user's permissions. `undo` describes how to reverse a change (06-agents §4.2).
+- `app.utility({task, input})` → `{output}`: the on-device model (Apple Foundation Models) for utility work (07-shared-resources §1.3). The engine falls back to its OpenRouter utility model when the app is closed or the model is unavailable.
+- With no app connected (background mode, app closed), these return `unavailable` and the tools say so.
+
 ## 4. Timeline model (normalized)
 
 Everything a transcript shows is a `TimelineItem`:

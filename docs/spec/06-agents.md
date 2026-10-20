@@ -94,7 +94,39 @@ Custom entries: `piopio.channel-in` / `piopio.channel-out` (delivery metadata), 
 | `codemode` | pi-durable codemode (QuickJS sandbox; `RemoteCodemodeSandbox` on Cloudflare) that can call the agent's other tools. |
 | `files_*` | Agent workspace files (R2-backed in the cloud). |
 | MCP tools | From remote MCP servers in the definition. |
+| `apple_*`, `shortcuts_run` | Apple apps on the user's Mac (§4.1). Local agents directly; cloud agents through the Mac Bridge (§10). |
 | `mac_*` (later, Mac Bridge) | Local tools when the Mac is online (§10). |
+
+Actions that change something return a **result card** with Undo (§4.2).
+
+### 4.1 Apple apps as tools (native bridge)
+
+Agents that live on a Mac should work with the user's own data in Apple's apps. The engine is Node and can't use Apple frameworks, so **the Mac app serves these tools**: the engine sends a reverse request (like `secrets.get`, 03-engine-protocol), and the app runs it with the user's system permissions (TCC prompts appear in Piopio, once).
+
+| Tool group | Framework | Examples |
+|---|---|---|
+| `apple_reminders_*` | EventKit | list (by list, due, overdue), create, complete, reschedule, move between lists |
+| `apple_calendar_*` | EventKit | events in a range, create, move, free/busy |
+| `apple_contacts_*` | Contacts | find a person, read details (only fields the agent's policy allows) |
+| `apple_notes_*` | AppleScript / Shortcuts | search, read, append, create |
+| `apple_music_*` | MusicKit / AppleScript | play, queue, current track |
+| `apple_home_*` (later) | HomeKit | scenes and accessories |
+| `shortcuts_run(name, input?)` | Shortcuts | **any shortcut the user has** becomes a tool. Allowed shortcuts are listed in the agent definition (`tools.shortcuts`). |
+
+- **NB1** Opt-in per agent and per tool group in the definition (`tools.apple: ["reminders", "calendar"]`). Reading is allowed by default; changes follow the agent's approval policy (§9).
+- **NB2** Local agents reach the tools while the app is running. In background mode with the app closed, the tools answer "Piopio isn't open" (or the app relaunches as a login item helper, later).
+- **NB3** Cloud agents reach the same tools through the Mac Bridge (§10) while the Mac is online.
+- **NB4** Build and Chat can use the same bridge later (for example, "add a reminder for this TODO").
+
+### 4.2 Result cards and Undo
+
+Agents act on the user's behalf, so every action that changes something shows **what changed** and can be **undone**.
+
+- **RC1** Tools return a typed result card, not just text: a reminder/event card (the item, with the change shown as "Due Tue 11:00 → Wed 11:00"), a message-sent card, a link card, a file card. Cards render natively in the in-app chat, the Inbox, notifications and the menu bar extra.
+- **RC2** Each change records how to reverse it (the previous values, or the created item's id). The card's **Undo** reverts it, within a time window (default 24 h) and only while the item hasn't changed since. Undo is a tool call of its own, logged in Runs.
+- **RC3** Cards can be acted on in place when it's safe (tick a reminder, open, copy, share). Larger edits go back through the agent ("Ask Cobot to change this").
+- **RC4** The Inbox's "Proposed actions" card (docs/design 4d) uses the same card types before approval; after approval it becomes the result card with Undo.
+- **RC5** Undo is the counterpart of permissive approval modes: agents can act without asking for low-risk changes because every change is visible and reversible.
 
 ## 5. Channels (v1: In-app, Telegram, WhatsApp)
 
@@ -169,7 +201,7 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 - **AS4** **Kill switch:** "Pause agent" (app or `/pause` from the owner on any channel) stops all runs and outbound immediately.
 
 ## 10. Mac Bridge (later)
-While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud Engine and registers **bridge tools** (`mac_files`, `mac_calendar`/`mac_reminders` via EventKit, `mac_imessage_send`, `mac_shell` with mandatory approval). Cloud agents see these tools only while the bridge is connected. Otherwise the tool returns "Mac offline".
+While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud Engine and registers **bridge tools**: the Apple app tools of §4.1 (served by the Mac app), `mac_files`, `mac_imessage_send`, and `mac_shell` with mandatory approval. Cloud agents see these tools only while the bridge is connected. Otherwise the tool returns "Mac offline". The agent header says where an agent runs ("Cloud", "This Mac", or another of the user's Macs once multi-Mac exists).
 
 ## 11. Lifecycle: author → test → deploy
 
@@ -193,9 +225,19 @@ While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud En
 
 ## 12. Agents UI
 
-- Sidebar: agents list (status dot: live/paused/error; local/cloud badge; unread).
+- Sidebar: **Inbox** (count badge) at the top, then **Pinned** agents and the rest (status dot: live/paused/error; local/cloud badge; unread; last activity time), and Archived. Each agent has an **avatar** (generated or chosen).
 - Agent page tabs: **Chat** (owner conversation) · **Conversations** (per person/agent, read-only except owner) · **Runs** (schedule/trigger/heartbeat log with outcomes and cost) · **Memory** · **Definition** (form/JSON/instructions editor + history) · **Channels** (setup wizards, health) · **Costs**.
-- Global "Inbox": pending approvals and agent messages to the owner across agents.
+- **Inbox** (the name stays "Inbox"): pending approvals, questions and agent messages to the owner across agents (docs/design 4d). Its count also shows as a badge in the toolbar, the menu bar extra and the Dock.
+- **UI1 Agent header:** avatar, name, model (and fast mode), the approval mode as a badge (e.g. "Auto", "Asks first"), and where it runs (Cloud / This Mac). The header's menu switches model and mode.
+- **UI2 Compact progress:** in agent conversations (and Chat), a turn's tool calls collapse into one line, "Worked 18s · 2 steps" with the tools' icons, and thinking into "Thought for 6s". Clicking expands the steps. Result cards (§4.2) stay visible. Build keeps its detailed tool cards.
+- **UI3 Side by side:** open several agents (and Chat threads) in columns of the same window, each with its own composer, to watch one agent while talking to another. Columns close individually; a toolbar button collapses the extra ones. Pinned agents get keyboard shortcuts (⌥⌘1, ⌥⌘2…; ⌘1–3 stay the mode switcher).
+- **UI4 Links and files:** links in messages get a preview card (title, site, image, summary) with Open / Copy / Share. A side panel lists a conversation's links and files ("3 links · 2 files").
+- **UI5 Voice:** dictation in every composer (on-device speech recognition), and voice notes sent as audio and transcribed like channel voice notes (CH3). A hands-free voice mode comes later.
+- **UI6 Quick entry to an agent:** Quick Chat (04-chat §4) can address an agent ("@Cobot remind me…"), so the request goes to that agent instead of a new thread.
+
+## 12.1 Agent boards (later)
+
+A **board** of tasks for agents ("Projects" in Agents): columns To do / Doing / Done, with cards assigned to an agent. The agent picks up a card as a run, keeps its checklist on the card (the Build `todo` tool), moves it, and posts the result card when done. The owner can add, reorder or reassign cards; agents can add cards for each other (agent-to-agent, §7) within their budgets.
 
 ## 13. Resolved questions (Agents)
 - **AQ1** Telegram → **one bot per agent** (§5.2).

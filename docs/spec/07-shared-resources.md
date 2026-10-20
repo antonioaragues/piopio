@@ -21,7 +21,7 @@ Resources defined once and opted in per mode, project, space or agent (decision 
 | Chat | threads, topics | a strong general model |
 | Organizer | Space routing | a fast, cheap tool-capable model |
 | Agents | agent default | a cheap capable model |
-| Utility | titles, summaries, commit messages, topic summaries | the cheapest fast model |
+| Utility | titles, summaries, commit messages, topic summaries, routing hints, memory extraction | **Apple's on-device model** (Foundation Models, through the app) when available, else the cheapest fast OpenRouter model |
 
 Defaults are overridable per project, space, agent and session.
 

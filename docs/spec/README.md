@@ -55,5 +55,11 @@ Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release o
 | CQ3 | Web search: **OpenRouter web plugin** + optional dedicated key. | User |
 | AQ1–AQ3 | Telegram **bot per agent**. WhatsApp **one number → front agent**. **One conversation per person** across channels. | User |
 | AQ4 | **Spaces and Agents stay separate** (shared runtime code only). | User |
+| AQ5 | **Apple apps as agent tools**, served by the Mac app through reverse requests (Reminders, Calendar, Contacts, Notes, Music, Shortcuts); cloud agents through the Mac Bridge. | User |
+| AQ6 | **Result cards with Undo** for every change an agent makes. | User |
+| AQ7 | **On-device utility model** (Apple Foundation Models) first, OpenRouter fallback. | User |
+| AQ8 | Agent conversations show **compact progress lines** ("Worked 18s · 2 steps"); Build keeps detailed tool cards. | User |
+| AQ9 | The pending-items view is called **Inbox** (not "Waiting for You"). | User |
+| AQ10 | Later: side-by-side agents, link previews, voice, quick entry to an agent, agent boards. | User |
 
 Open questions found later are tracked in [09-roadmap.md § Open questions](09-roadmap.md#open-questions).

@@ -157,6 +157,8 @@ Scope: 04-chat §2–3 (organizer, topics, routing link cards, memory, files, Th
 
 ## Phase 4 — Agents (local)
 Scope: 06-agents §2–4, §6–9, §11 local part. In-app channel + simulator, schedules, heartbeat, triggers (local URL via tunnel optional), memory partitions, **agent-to-agent**, approvals, budgets. Background mode.
+Also (from the 2026-10-20 review of a similar app, see README decisions AQ5–AQ10): **Apple app tools served by the Mac app** (§4.1: Reminders, Calendar, Contacts, Notes, Music, Shortcuts), **result cards with Undo** (§4.2), **compact progress lines**, agent header and avatars, the **Inbox** with toolbar/menu bar/Dock badges (§12). Side-by-side agents, link previews, voice and quick entry to an agent (§12 UI3–UI6) if time allows; agent boards (§12.1) later.
+Cross-cutting (any phase): the **on-device utility model** (07-shared §1.3, 03-engine-protocol §3.12) for titles, commit messages, routing hints and summaries.
 **Acceptance:** two local agents run for a week on the author's Mac. Schedules fire with the app closed. Agent-to-agent delegation with loop guards is tested.
 
 ## Phase 5 — Agents (cloud) + channels
