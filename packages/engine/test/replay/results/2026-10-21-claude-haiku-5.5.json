@@ -1,0 +1,463 @@
+{
+	"at": "2026-10-20T23:02:28.860Z",
+	"organizerModel": {
+		"provider": "openrouter",
+		"id": "anthropic/claude-haiku-5.5"
+	},
+	"topicModel": {
+		"provider": "openrouter",
+		"id": "anthropic/claude-haiku-5.5"
+	},
+	"accuracy": 0.98,
+	"right": 49,
+	"total": 50,
+	"decisionSeconds": {
+		"median": 1.323,
+		"p90": 2.037,
+		"max": 3.459
+	},
+	"costUsd": 0.07102493999999997,
+	"results": [
+		{
+			"n": 1,
+			"text": "Can we fit a dishwasher if we move the sink 40cm to the left?",
+			"expected": "route Kitchen layout",
+			"got": "route Kitchen layout",
+			"right": true,
+			"ms": 1826,
+			"reason": "Question about where the dishwasher and sink go in the kitchen layout."
+		},
+		{
+			"n": 2,
+			"text": "The electrician can start on the 14th, the plumber not until the 21st.",
+			"expected": "route Contractors",
+			"got": "route Contractors",
+			"right": true,
+			"ms": 1115,
+			"reason": "Scheduling update: electrician starts on the 14th, plumber not until the 21st."
+		},
+		{
+			"n": 3,
+			"text": "How much have we spent so far in total?",
+			"expected": "route Budget",
+			"got": "route Budget",
+			"right": true,
+			"ms": 1115,
+			"reason": "Question about total spending so far, which the Budget topic tracks."
+		},
+		{
+			"n": 4,
+			"text": "Do we need a permit to remove the wall between the kitchen and the living room?",
+			"expected": "route Permits",
+			"got": "route Permits",
+			"right": true,
+			"ms": 1137,
+			"reason": "Question about whether removing the kitchen-living room wall needs a permit."
+		},
+		{
+			"n": 5,
+			"text": "I'd like a walk-in shower instead of the bathtub.",
+			"expected": "route Bathroom",
+			"got": "route Bathroom",
+			"right": true,
+			"ms": 1225,
+			"reason": "Preference for a walk-in shower instead of a bathtub in the bathroom redo."
+		},
+		{
+			"n": 6,
+			"text": "What topics do we have in this space?",
+			"expected": "answer",
+			"got": "answer",
+			"right": true,
+			"ms": 1115
+		},
+		{
+			"n": 7,
+			"text": "Island or peninsula for the kitchen? The room is 3.2m by 4m.",
+			"expected": "route Kitchen layout",
+			"got": "route Kitchen layout",
+			"right": true,
+			"ms": 1018,
+			"reason": "Island or peninsula question for the kitchen, room size 3.2m by 4m."
+		},
+		{
+			"n": 8,
+			"text": "Marco's quote for the bathroom tiling is 3,400€.",
+			"expected": "route Contractors | route Bathroom | route Budget",
+			"got": "route Contractors",
+			"right": true,
+			"ms": 1221,
+			"reason": "New quote: Marco's bathroom tiling at 3,400€, filed under contractor quotes."
+		},
+		{
+			"n": 9,
+			"text": "Thanks, that helps.",
+			"expected": "answer",
+			"got": "answer",
+			"right": true,
+			"ms": 1112
+		},
+		{
+			"n": 10,
+			"text": "We should start thinking about the garden: lawn or gravel at the back?",
+			"expected": "create",
+			"got": "create Garden",
+			"right": true,
+			"ms": 1114,
+			"reason": "New subject (garden) that needs its own topic."
+		},
+		{
+			"n": 11,
+			"text": "The inspector comes Thursday at 10am.",
+			"expected": "route Permits",
+			"got": "route Permits",
+			"right": true,
+			"ms": 1522,
+			"reason": "Inspection scheduled for Thursday at 10am, which is a permits and inspections matter."
+		},
+		{
+			"n": 12,
+			"text": "Which tile size makes a small bathroom look bigger?",
+			"expected": "route Bathroom",
+			"got": "route Bathroom",
+			"right": true,
+			"ms": 1220,
+			"reason": "Tile size for making the small bathroom look bigger belongs in the Bathroom topic."
+		},
+		{
+			"n": 13,
+			"text": "Add 1,200€ for the new boiler to the budget.",
+			"expected": "route Budget",
+			"got": "route Budget",
+			"right": true,
+			"ms": 1220,
+			"reason": "New planned cost: 1,200€ for a new boiler, for the budget."
+		},
+		{
+			"n": 14,
+			"text": "For the garden, which plants survive full sun with little water?",
+			"expected": "route @Garden",
+			"got": "route Garden",
+			"right": true,
+			"ms": 1124,
+			"reason": "Plant choice for full sun and low water belongs in the Garden topic."
+		},
+		{
+			"n": 15,
+			"text": "Summarize where we are across all topics.",
+			"expected": "answer",
+			"got": "answer",
+			"right": true,
+			"ms": 1523
+		},
+		{
+			"n": 16,
+			"text": "Can the fridge go right next to the oven, or is that a bad idea?",
+			"expected": "route Kitchen layout",
+			"got": "route Kitchen layout",
+			"right": true,
+			"ms": 1219,
+			"reason": "Question about placing the fridge next to the oven, part of the kitchen layout."
+		},
+		{
+			"n": 17,
+			"text": "The plumber didn't show up today, again. Should we look for another one?",
+			"expected": "route Contractors",
+			"got": "route Contractors",
+			"right": true,
+			"ms": 1321,
+			"reason": "The plumber missed another appointment, so the question is whether to replace them."
+		},
+		{
+			"n": 18,
+			"text": "We're moving out for three weeks during the works; we need to plan the move and storage.",
+			"expected": "create",
+			"got": "create Moving out and storage",
+			"right": true,
+			"ms": 1220,
+			"reason": "New subject (temporary move and storage) that needs its own planning topic."
+		},
+		{
+			"n": 19,
+			"text": "How should we label the boxes so unpacking is easy?",
+			"expected": "route @Moving",
+			"got": "route Moving out and storage",
+			"right": true,
+			"ms": 1118,
+			"reason": "Box labelling for the move belongs in the moving-out planning topic."
+		},
+		{
+			"n": 20,
+			"text": "Is an extractor fan in the bathroom required by code?",
+			"expected": "route Bathroom | route Permits",
+			"got": "route Permits",
+			"right": true,
+			"ms": 1221,
+			"reason": "Building code question on whether a bathroom extractor fan is required, a permits and building rules matter."
+		},
+		{
+			"n": 21,
+			"text": "What's 15% of 42,000?",
+			"expected": "answer",
+			"got": "answer",
+			"right": true,
+			"ms": 919
+		},
+		{
+			"n": 22,
+			"text": "Lighting plan for the kitchen: pendants over the island plus LEDs under the cabinets?",
+			"expected": "route Kitchen layout",
+			"got": "route Kitchen layout",
+			"right": true,
+			"ms": 1120,
+			"reason": "Kitchen lighting plan: pendants over the island plus under-cabinet LEDs, part of the kitchen layout."
+		},
+		{
+			"n": 23,
+			"text": "We're 2k over on the kitchen. Where can we cut?",
+			"expected": "route Budget | route Kitchen layout",
+			"got": "route Budget",
+			"right": true,
+			"ms": 3459,
+			"reason": "The kitchen is 2k over budget, so the Budget topic needs to find savings."
+		},
+		{
+			"n": 24,
+			"text": "Should the toilet be wall-hung or floor-standing?",
+			"expected": "route Bathroom",
+			"got": "route Bathroom",
+			"right": true,
+			"ms": 1323,
+			"reason": "Toilet type choice (wall-hung or floor-standing) belongs in the Bathroom topic."
+		},
+		{
+			"n": 25,
+			"text": "Get three quotes for the new windows.",
+			"expected": "route Contractors",
+			"got": "create New windows",
+			"right": false,
+			"ms": 1223,
+			"reason": "New subject (windows and quotes) that needs its own topic."
+		},
+		{
+			"n": 26,
+			"text": "Raised beds, or planting straight into the ground?",
+			"expected": "route @Garden",
+			"got": "route Garden",
+			"right": true,
+			"ms": 1324,
+			"reason": "Raised beds versus planting in the ground is a garden planning question."
+		},
+		{
+			"n": 27,
+			"text": "Remind me what we decided about the shower.",
+			"expected": "answer | route Bathroom",
+			"got": "answer",
+			"right": true,
+			"ms": 2871
+		},
+		{
+			"n": 28,
+			"text": "Home insurance: do we need to tell the insurer about the renovation?",
+			"expected": "create",
+			"got": "create Home insurance",
+			"right": true,
+			"ms": 1733,
+			"reason": "New subject (insurance during renovation) that needs its own topic."
+		},
+		{
+			"n": 29,
+			"text": "What does the policy cover if a contractor damages the neighbour's flat?",
+			"expected": "route @Insurance",
+			"got": "route Home insurance",
+			"right": true,
+			"ms": 1221,
+			"reason": "Question on whether the policy covers damage a contractor causes to the neighbour's flat, part of the insurance during works."
+		},
+		{
+			"n": 30,
+			"text": "The storage unit costs 90€ a month; book it for two months.",
+			"expected": "route @Moving | route Budget",
+			"got": "route Moving out and storage",
+			"right": true,
+			"ms": 1324,
+			"reason": "Booking the storage unit at 90€ a month for two months is part of the move-out and storage plan."
+		},
+		{
+			"n": 31,
+			"text": "Good morning!",
+			"expected": "answer",
+			"got": "answer",
+			"right": true,
+			"ms": 1632
+		},
+		{
+			"n": 32,
+			"text": "Can the kitchen drawers be 90cm wide?",
+			"expected": "route Kitchen layout",
+			"got": "route Kitchen layout",
+			"right": true,
+			"ms": 1325,
+			"reason": "Drawer width for the kitchen belongs in the kitchen layout and storage planning."
+		},
+		{
+			"n": 33,
+			"text": "Does the building need a permit for the new windows facing the street?",
+			"expected": "route Permits",
+			"got": "route Permits",
+			"right": true,
+			"ms": 2037,
+			"reason": "Whether new street-facing windows need a permit is a building rules question."
+		},
+		{
+			"n": 34,
+			"text": "Grout colour for white tiles: white or light grey?",
+			"expected": "route Bathroom",
+			"got": "route Bathroom",
+			"right": true,
+			"ms": 1529,
+			"reason": "Grout colour for the white bathroom tiles belongs in the Bathroom topic."
+		},
+		{
+			"n": 35,
+			"text": "The carpenter wants 30% upfront. Is that normal?",
+			"expected": "route Contractors",
+			"got": "route Contractors",
+			"right": true,
+			"ms": 2036,
+			"reason": "Carpenter's 30% upfront payment request is a contractor payment-terms question."
+		},
+		{
+			"n": 36,
+			"text": "Paid the 5,000€ deposit to the kitchen company today.",
+			"expected": "route Budget",
+			"got": "route Budget",
+			"right": true,
+			"ms": 1224,
+			"reason": "A 5,000€ kitchen deposit was paid today, which is a spending entry for the budget."
+		},
+		{
+			"n": 37,
+			"text": "Which grass seed works for a shady lawn?",
+			"expected": "route @Garden",
+			"got": "route Garden",
+			"right": true,
+			"ms": 1527,
+			"reason": "Grass seed for a shady lawn is a garden planning question."
+		},
+		{
+			"n": 38,
+			"text": "Let's plan the living room furniture: sofa size, rug and layout.",
+			"expected": "create",
+			"got": "create Living room furniture",
+			"right": true,
+			"ms": 2346,
+			"reason": "New subject (living room furniture) that needs its own planning topic."
+		},
+		{
+			"n": 39,
+			"text": "Is a 3m sofa too big for a 4.5m wall?",
+			"expected": "route @Living room",
+			"got": "route Living room furniture",
+			"right": true,
+			"ms": 1730,
+			"reason": "Sofa size against the wall length is part of the living room furniture planning."
+		},
+		{
+			"n": 40,
+			"text": "In which topic did we talk about the inspector?",
+			"expected": "answer",
+			"got": "answer",
+			"right": true,
+			"ms": 1125
+		},
+		{
+			"n": 41,
+			"text": "Can we put the washing machine in the bathroom?",
+			"expected": "route Bathroom | route Kitchen layout",
+			"got": "route Bathroom",
+			"right": true,
+			"ms": 1427,
+			"reason": "Question about putting the washing machine in the bathroom, part of the bathroom layout."
+		},
+		{
+			"n": 42,
+			"text": "The kitchen company is delaying delivery by two weeks.",
+			"expected": "route Contractors | route Kitchen layout",
+			"got": "route Contractors",
+			"right": true,
+			"ms": 1024,
+			"reason": "The kitchen company is delaying delivery by two weeks, which affects trade scheduling."
+		},
+		{
+			"n": 43,
+			"text": "Update: the permit was approved!",
+			"expected": "route Permits",
+			"got": "route Permits",
+			"right": true,
+			"ms": 2645,
+			"reason": "The user reports a permit was approved, so the Permits topic should record it."
+		},
+		{
+			"n": 44,
+			"text": "Move the movers' booking to the 3rd.",
+			"expected": "route @Moving",
+			"got": "route Moving out and storage",
+			"right": true,
+			"ms": 1450,
+			"reason": "Moving the movers' booking to the 3rd is part of the move-out planning."
+		},
+		{
+			"n": 45,
+			"text": "How much is left in the budget after the deposit?",
+			"expected": "route Budget",
+			"got": "route Budget",
+			"right": true,
+			"ms": 1427,
+			"reason": "Asking how much budget remains after the 5,000€ kitchen deposit."
+		},
+		{
+			"n": 46,
+			"text": "Heated towel rail: electric, or connected to the central heating?",
+			"expected": "route Bathroom",
+			"got": "route Bathroom",
+			"right": true,
+			"ms": 1428,
+			"reason": "Heated towel rail type (electric or central heating) is a bathroom fixture decision."
+		},
+		{
+			"n": 47,
+			"text": "Who is our insurance contact again?",
+			"expected": "route @Insurance | answer",
+			"got": "answer",
+			"right": true,
+			"ms": 1430
+		},
+		{
+			"n": 48,
+			"text": "What size rug goes under a 3m sofa?",
+			"expected": "route @Living room",
+			"got": "route Living room furniture",
+			"right": true,
+			"ms": 1325,
+			"reason": "Rug size under a 3m sofa is part of the living room furniture planning."
+		},
+		{
+			"n": 49,
+			"text": "Thanks for keeping all of this organized.",
+			"expected": "answer",
+			"got": "answer",
+			"right": true,
+			"ms": 1229
+		},
+		{
+			"n": 50,
+			"text": "Should the outdoor tap be by the kitchen door, for the garden?",
+			"expected": "route @Garden | route Kitchen layout",
+			"got": "route Garden",
+			"right": true,
+			"ms": 1326,
+			"reason": "Outdoor tap placement by the kitchen door is a garden planning question."
+		}
+	]
+}
