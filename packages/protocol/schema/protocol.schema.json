@@ -11581,7 +11581,9 @@
 							"addedAt",
 							"piConfig",
 							"approvalMode",
-							"rules"
+							"rules",
+							"trust",
+							"needsTrust"
 						],
 						"properties": {
 							"id": {
@@ -11660,6 +11662,25 @@
 									}
 								}
 							},
+							"trust": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "trusted"
+									},
+									{
+										"type": "string",
+										"const": "untrusted"
+									},
+									{
+										"type": "string",
+										"const": "undecided"
+									}
+								]
+							},
+							"needsTrust": {
+								"type": "boolean"
+							},
 							"missing": {
 								"type": "boolean"
 							}
@@ -11694,7 +11715,9 @@
 						"addedAt",
 						"piConfig",
 						"approvalMode",
-						"rules"
+						"rules",
+						"trust",
+						"needsTrust"
 					],
 					"properties": {
 						"id": {
@@ -11772,6 +11795,25 @@
 									}
 								}
 							}
+						},
+						"trust": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "trusted"
+								},
+								{
+									"type": "string",
+									"const": "untrusted"
+								},
+								{
+									"type": "string",
+									"const": "undecided"
+								}
+							]
+						},
+						"needsTrust": {
+							"type": "boolean"
 						},
 						"missing": {
 							"type": "boolean"
@@ -11807,6 +11849,16 @@
 				},
 				"removeRule": {
 					"type": "string"
+				},
+				"trust": {
+					"anyOf": [
+						{
+							"type": "boolean"
+						},
+						{
+							"type": "null"
+						}
+					]
 				}
 			}
 		},
@@ -11825,7 +11877,9 @@
 						"addedAt",
 						"piConfig",
 						"approvalMode",
-						"rules"
+						"rules",
+						"trust",
+						"needsTrust"
 					],
 					"properties": {
 						"id": {
@@ -11903,6 +11957,25 @@
 									}
 								}
 							}
+						},
+						"trust": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "trusted"
+								},
+								{
+									"type": "string",
+									"const": "untrusted"
+								},
+								{
+									"type": "string",
+									"const": "undecided"
+								}
+							]
+						},
+						"needsTrust": {
+							"type": "boolean"
 						},
 						"missing": {
 							"type": "boolean"
@@ -12867,6 +12940,272 @@
 					}
 				}
 			}
+		},
+		"projects.readFile.params": {
+			"type": "object",
+			"required": [
+				"cwd",
+				"path"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"path": {
+					"type": "string"
+				}
+			}
+		},
+		"projects.readFile.result": {
+			"type": "object",
+			"required": [
+				"content",
+				"size",
+				"truncated",
+				"binary"
+			],
+			"properties": {
+				"content": {
+					"type": "string"
+				},
+				"size": {
+					"type": "number"
+				},
+				"truncated": {
+					"type": "boolean"
+				},
+				"binary": {
+					"type": "boolean"
+				}
+			}
+		},
+		"projects.writeFile.params": {
+			"type": "object",
+			"required": [
+				"cwd",
+				"path",
+				"content"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"path": {
+					"type": "string"
+				},
+				"content": {
+					"type": "string"
+				}
+			}
+		},
+		"projects.writeFile.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"mcp.list.params": {
+			"type": "object",
+			"properties": {
+				"cwd": {
+					"type": "string"
+				}
+			}
+		},
+		"mcp.list.result": {
+			"type": "object",
+			"required": [
+				"servers",
+				"errors"
+			],
+			"properties": {
+				"servers": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name",
+							"scope",
+							"transport",
+							"enabled"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"scope": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "global"
+									},
+									{
+										"type": "string",
+										"const": "project"
+									}
+								]
+							},
+							"transport": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "stdio"
+									},
+									{
+										"type": "string",
+										"const": "http"
+									}
+								]
+							},
+							"command": {
+								"type": "string"
+							},
+							"args": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"url": {
+								"type": "string"
+							},
+							"enabled": {
+								"type": "boolean"
+							},
+							"description": {
+								"type": "string"
+							},
+							"override": {
+								"type": "boolean"
+							}
+						}
+					}
+				},
+				"errors": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"mcp.add.params": {
+			"type": "object",
+			"required": [
+				"scope",
+				"name"
+			],
+			"properties": {
+				"scope": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "global"
+						},
+						{
+							"type": "string",
+							"const": "project"
+						}
+					]
+				},
+				"cwd": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"command": {
+					"type": "string"
+				},
+				"args": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"url": {
+					"type": "string"
+				},
+				"env": {
+					"type": "object",
+					"patternProperties": {
+						"^.*$": {
+							"type": "string"
+						}
+					}
+				},
+				"description": {
+					"type": "string"
+				}
+			}
+		},
+		"mcp.add.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"mcp.remove.params": {
+			"type": "object",
+			"required": [
+				"scope",
+				"name"
+			],
+			"properties": {
+				"scope": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "global"
+						},
+						{
+							"type": "string",
+							"const": "project"
+						}
+					]
+				},
+				"cwd": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				}
+			}
+		},
+		"mcp.remove.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"mcp.setEnabled.params": {
+			"type": "object",
+			"required": [
+				"scope",
+				"name",
+				"enabled"
+			],
+			"properties": {
+				"scope": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "global"
+						},
+						{
+							"type": "string",
+							"const": "project"
+						}
+					]
+				},
+				"cwd": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"enabled": {
+					"type": "boolean"
+				}
+			}
+		},
+		"mcp.setEnabled.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"sessions.respond.params": {
 			"type": "object",

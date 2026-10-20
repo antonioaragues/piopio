@@ -9,13 +9,14 @@ struct SettingsView: View {
     @State private var section: Section = Section(rawValue: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Providers", approvals = "Approvals", engines = "Engines"
+        case general = "General", providers = "Providers", mcp = "MCP servers", approvals = "Approvals", engines = "Engines"
         var id: String { rawValue }
         var icon: (String, Color) {
             switch self {
             case .general: ("gearshape.fill", .gray)
             case .providers: ("key.fill", .blue)
             case .approvals: ("checkmark.shield.fill", .orange)
+            case .mcp: ("puzzlepiece.extension.fill", .purple)
             case .engines: ("cpu.fill", .green)
             }
         }
@@ -53,6 +54,7 @@ struct SettingsView: View {
                     case .general: GeneralPane()
                     case .providers: ProvidersPane(engine: engine)
                     case .approvals: ApprovalsPane(engine: engine)
+                    case .mcp: McpPane(engine: engine)
                     case .engines: EnginesPane(engine: engine)
                     }
                 }
@@ -132,6 +134,19 @@ private struct GeneralPane: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .font(.system(size: 13))
+                Spacer()
+            }
+            Row(title: "Open files in") {
+                if Editor.installed.isEmpty {
+                    Text("No supported editor found (Zed, VS Code, Cursor, Xcode, Sublime Text)").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                } else {
+                    Picker("", selection: Binding(get: { Editor.preferred?.id ?? "" }, set: { UserDefaults.standard.set($0, forKey: "editor"); tick += 1 })) {
+                        ForEach(Editor.installed) { Text($0.name).tag($0.id) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    Text("Build's “Open in” and the file viewer").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                }
                 Spacer()
             }
             Row(title: "Updates", last: true) {
@@ -249,6 +264,21 @@ private struct ApprovalsPane: View {
                 VStack(alignment: .leading, spacing: 6) {
                     SectionLabel(project.name)
                     ListCard {
+                        if project.needsTrust || project.trust != .undecided {
+                            Row(title: "Project setup") {
+                                Picker("", selection: Binding(get: { project.trust }, set: { value in
+                                    if value != .undecided { Task { await engine.setTrust(value == .trusted, for: project) } }
+                                })) {
+                                    Text("Trusted").tag(ProjectInfo.Trust.trusted)
+                                    Text("Not trusted").tag(ProjectInfo.Trust.untrusted)
+                                    if project.trust == .undecided { Text("Not decided").tag(ProjectInfo.Trust.undecided) }
+                                }
+                                .labelsHidden()
+                                .fixedSize()
+                                Text("Loads the project's .pi extensions, MCP servers, prompts and skills. Shared with the pi CLI.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
+                                Spacer()
+                            }
+                        }
                         Row(title: "New sessions", last: project.rules.isEmpty) {
                             Picker("", selection: Binding(get: { project.approvalMode }, set: { mode in Task { await engine.setApprovalMode(mode, for: project) } })) {
                                 ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0) }
@@ -276,6 +306,171 @@ private struct ApprovalsPane: View {
         }
         Text("Rules come from “Always for …” on an approval card. They apply to every session in the project.")
             .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10)
+    }
+}
+
+// MARK: MCP servers (docs/design 4a)
+
+/// Servers from pi's mcp.json files: global ones for every project, and each project's own (.pi/mcp.json).
+/// Build sessions connect to the enabled ones when they start.
+private struct McpPane: View {
+    let engine: EngineController
+    /// A server and, for project servers, the project whose .pi/mcp.json has it.
+    struct Entry: Identifiable {
+        let server: McpServerInfo
+        let project: ProjectInfo?
+        var id: String { "\(project?.id ?? "global"):\(server.name)" }
+    }
+    @State private var entries: [Entry] = []
+    @State private var errors: [String] = []
+    @State private var adding = false
+
+    var body: some View {
+        PaneTitle(title: "MCP servers", subtitle: "Tools from Model Context Protocol servers, for Build sessions. Same files as the pi CLI.")
+        HStack {
+            SectionLabel("Servers")
+            Spacer()
+            Button("+ Add server") { adding = true }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
+        }
+        .padding(.bottom, 6)
+        ListCard {
+            if entries.isEmpty {
+                Row(title: "None yet", last: true) {
+                    Text("Add one here, or with `pi mcp add` in a terminal.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    Spacer()
+                }
+            }
+            ForEach(entries) { entry in
+                let server = entry.server
+                Row(title: server.name, last: entry.id == entries.last?.id) {
+                    StatusDot(status: server.enabled ? .done : .idle, size: 6)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(server.url ?? ([server.command ?? ""] + (server.args ?? [])).joined(separator: " "))
+                            .font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1).truncationMode(.middle)
+                        if let description = server.description { Text(description).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1) }
+                    }
+                    Spacer()
+                    Text(entry.project.map { $0.name + (server.override == true ? " · override" : "") } ?? "All projects")
+                        .font(.system(size: 11)).padding(.horizontal, 8).frame(height: 20).background(Color.dsChip, in: Capsule()).foregroundStyle(Color.dsFg2)
+                    Toggle("", isOn: Binding(get: { server.enabled }, set: { on in Task { await setEnabled(entry, on) } }))
+                        .toggleStyle(.switch).controlSize(.mini).labelsHidden()
+                    Button { Task { await remove(entry) } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3) }
+                        .buttonStyle(.plain)
+                        .help("Remove from mcp.json")
+                }
+            }
+        }
+        ForEach(errors, id: \.self) { Text($0).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 6) }
+        Text("Changes apply to sessions you start or reopen. Tools reach the model through codemode by default; project servers load only in trusted projects.")
+            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10)
+            .task { await refresh() }
+            .sheet(isPresented: $adding) { AddMcpServerSheet(engine: engine) { Task { await refresh() } } }
+    }
+
+    private func refresh() async {
+        guard let client = engine.client else { return }
+        var all: [Entry] = []
+        var errs: [String] = []
+        if let global = try? await client.call("mcp.list", McpListParams(), as: McpListResult.self) {
+            all += global.servers.map { Entry(server: $0, project: nil) }
+            errs += global.errors
+        }
+        for project in engine.projects where project.missing != true {
+            if let result = try? await client.call("mcp.list", McpListParams(cwd: project.path), as: McpListResult.self) {
+                all += result.servers.filter { $0.scope == .project }.map { Entry(server: $0, project: project) }
+                errs += result.errors.filter { !errs.contains($0) }
+            }
+        }
+        entries = all
+        errors = errs
+    }
+
+    private func setEnabled(_ entry: Entry, _ on: Bool) async {
+        _ = try? await engine.client?.call("mcp.setEnabled", McpNameParams(scope: entry.server.scope, cwd: entry.project?.path, name: entry.server.name, enabled: on), as: Empty.self)
+        await refresh()
+    }
+
+    private func remove(_ entry: Entry) async {
+        _ = try? await engine.client?.call("mcp.remove", McpNameParams(scope: entry.server.scope, cwd: entry.project?.path, name: entry.server.name), as: Empty.self)
+        await refresh()
+    }
+}
+
+private struct AddMcpServerSheet: View {
+    let engine: EngineController
+    let added: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var remote = false
+    @State private var commandLine = ""
+    @State private var url = ""
+    @State private var description = ""
+    @State private var projectId = ""
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Add MCP server").font(.system(size: 15, weight: .semibold))
+            TextField("Name (letters, digits, - and _)", text: $name).textFieldStyle(.roundedBorder)
+            Picker("", selection: $remote) {
+                Text("Command (stdio)").tag(false)
+                Text("URL (HTTP)").tag(true)
+            }
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            if remote {
+                TextField("https://example.com/mcp", text: $url).textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
+            } else {
+                TextField("npx -y @modelcontextprotocol/server-filesystem .", text: $commandLine).textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
+            }
+            TextField("What it offers (optional, helps the model find its tools)", text: $description).textFieldStyle(.roundedBorder)
+            Picker("For", selection: $projectId) {
+                Text("All projects").tag("")
+                ForEach(engine.projects) { Text($0.name).tag($0.id) }
+            }
+            .fixedSize()
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
+                Button("Add") { Task { await add() } }.buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+                    .disabled(name.isEmpty || (remote ? url.isEmpty : commandLine.isEmpty))
+            }
+        }
+        .padding(20)
+        .frame(width: 480)
+    }
+
+    private func add() async {
+        let words = Self.split(commandLine)
+        let project = engine.projects.first { $0.id == projectId }
+        let params = McpAddParams(scope: project == nil ? .global : .project, cwd: project?.path, name: name.trimmingCharacters(in: .whitespaces),
+                                  command: remote ? nil : words.first, args: remote ? nil : Array(words.dropFirst()), url: remote ? url : nil,
+                                  description: description.isEmpty ? nil : description)
+        do {
+            _ = try await engine.client?.call("mcp.add", params, as: Empty.self)
+            added()
+            dismiss()
+        } catch {
+            self.error = String(describing: error)
+        }
+    }
+
+    /// Splits a command line on spaces, keeping quoted parts together.
+    static func split(_ line: String) -> [String] {
+        var words: [String] = [], current = "", quote: Character?
+        for ch in line {
+            if let q = quote {
+                if ch == q { quote = nil } else { current.append(ch) }
+            } else if ch == "\"" || ch == "'" {
+                quote = ch
+            } else if ch == " " {
+                if !current.isEmpty { words.append(current); current = "" }
+            } else {
+                current.append(ch)
+            }
+        }
+        if !current.isEmpty { words.append(current) }
+        return words
     }
 }
 

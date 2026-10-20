@@ -79,7 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        MainActor.assumeIsolated { engine?.stop() }
+        MainActor.assumeIsolated {
+            TerminalStore.shared.closeAll()
+            engine?.stop()
+        }
     }
 }
 

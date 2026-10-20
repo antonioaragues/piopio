@@ -12,6 +12,10 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     exactVersion: "2.10.0"
+  # Terminal drawer (docs/spec/05-build §9): local PTY terminals.
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    exactVersion: "1.11.2" # 1.12+ needs the Metal toolchain (GPU renderer)
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -39,6 +43,7 @@ targets:
       - package: PiopioPackage
         product: PiopioTranscript
       - package: Sparkle
+      - package: SwiftTerm
       - target: piopio-engine
         embed: true
         codeSign: false

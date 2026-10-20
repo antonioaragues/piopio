@@ -445,6 +445,11 @@ final class EngineController {
         _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, approvalMode: mode), as: ProjectsAddResult.self)
     }
 
+    /// pi project trust (saved in ~/.pi/agent/trust.json, shared with the pi CLI).
+    func setTrust(_ trusted: Bool, for project: ProjectInfo) async {
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, trust: trusted), as: ProjectsAddResult.self)
+    }
+
     func removeRule(_ rule: ApprovalRule, from project: ProjectInfo) async {
         _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, removeRule: rule.id), as: ProjectsAddResult.self)
     }

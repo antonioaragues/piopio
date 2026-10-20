@@ -32,7 +32,7 @@ overrides=(MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build")
 [[ -n "${PIOPIO_SPARKLE_PUBLIC_KEY:-}" ]] && overrides+=(SPARKLE_PUBLIC_KEY="$PIOPIO_SPARKLE_PUBLIC_KEY")
 (cd "$app_dir" && xcodegen generate --quiet)
 xcodebuild -project "$app_dir/Piopio.xcodeproj" -scheme Piopio -configuration Release -derivedDataPath "$app_dir/build" \
-	-destination "generic/platform=macOS" -quiet build "${overrides[@]}" 2>&1 | grep -v -e DVTPlugIn -e CoreSimulator -e CoreDevice -e '^Details:' || true
+	-destination "generic/platform=macOS" -quiet -skipPackagePluginValidation build "${overrides[@]}" 2>&1 | grep -v -e DVTPlugIn -e CoreSimulator -e CoreDevice -e '^Details:' || true
 built="$app_dir/build/Build/Products/Release/Piopio.app"
 [[ -x "$built/Contents/Helpers/node" ]] || { echo "release: the build has no bundled engine" >&2; exit 1; }
 

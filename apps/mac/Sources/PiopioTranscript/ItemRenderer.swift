@@ -189,6 +189,12 @@ nonisolated struct ItemRenderer: Sendable {
             card.expanded = t.tool == "propose_plan"
         }
         card.failed = failed
+        // Files the agent read or changed open in the viewer (BR4).
+        if ["read", "edit", "write"].contains(t.tool), let path = t.args?["path"]?.stringValue, t.status != .denied {
+            var line: Int?
+            if case .number(let offset)? = t.args?["offset"] { line = Int(offset) }
+            card.action = ("Open", .openFile(path: path, line: line))
+        }
         switch t.status {
         case .pendingApproval:
             card.waiting = true
@@ -237,6 +243,16 @@ nonisolated struct ItemRenderer: Sendable {
             return (running ? "Subagent working" : "Subagent", t.args?["description"]?.stringValue ?? "")
         case "propose_plan":
             return (running ? "Proposed a plan" : "Plan", t.args?["summary"]?.stringValue ?? "")
+        case "codemode":
+            let script = t.args?["code"]?.stringValue ?? t.args?["script"]?.stringValue ?? ""
+            return (running ? "Running a script" : "Ran a script", script.split(separator: "\n").first.map(String.init) ?? "")
+        case "tool_search":
+            return (running ? "Finding tools" : "Found tools", t.args?["query"]?.stringValue ?? "")
+        case let name where name.hasPrefix("mcp__"):
+            let parts = name.split(separator: "_", omittingEmptySubsequences: true)
+            let server = parts.count > 1 ? String(parts[1]) : "MCP"
+            let tool = name.components(separatedBy: "__").dropFirst(2).joined(separator: "__")
+            return (server, tool.isEmpty ? name : tool)
         case "ask_user":
             return (running ? "Waiting for your answer" : "Asked you", t.args?["question"]?.stringValue ?? "")
         case "notify_user":

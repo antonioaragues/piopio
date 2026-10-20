@@ -1,6 +1,7 @@
 /** Build projects: folders the user added (docs/spec/05-build BP1). Kept in projects.json. */
 import { existsSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { hasTrustRequiringProjectResources, ProjectTrustStore } from "@earendil-works/pi-coding-agent";
 import type { ApprovalMode, ApprovalRule, ProjectInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 import { newId } from "./sessions.js";
@@ -11,24 +12,37 @@ export class Projects {
 	private entries: StoredProject[] = [];
 	private listeners = new Set<(projects: ProjectInfo[]) => void>();
 
-	constructor(private readonly file: string) {
+	/** pi's project trust decisions (~/.pi/agent/trust.json), shared with the pi CLI. */
+	private readonly trust: ProjectTrustStore;
+
+	constructor(
+		private readonly file: string,
+		agentDir: string,
+	) {
 		if (existsSync(file)) this.entries = JSON.parse(readFileSync(file, "utf8")) as StoredProject[];
+		this.trust = new ProjectTrustStore(agentDir);
 	}
 
 	list(): ProjectInfo[] {
-		return this.entries.map(describe);
+		return this.entries.map((p) => this.describe(p));
+	}
+
+	private describe(p: StoredProject): ProjectInfo {
+		const exists = existsSync(p.path);
+		const decision = exists ? this.trust.get(p.path) : null;
+		return { ...describe(p), trust: decision === true ? "trusted" : decision === false ? "untrusted" : "undecided", needsTrust: exists && hasTrustRequiringProjectResources(p.path) };
 	}
 
 	get(id: string): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
-		return describe(entry);
+		return this.describe(entry);
 	}
 
 	/** The project folder that contains `cwd`, if any. */
 	containing(cwd: string): ProjectInfo | undefined {
 		const entry = this.entries.find((p) => cwd === p.path || cwd.startsWith(`${p.path}/`));
-		return entry && describe(entry);
+		return entry && this.describe(entry);
 	}
 
 	/** Adds a folder. Adding the same folder again returns the existing project. */
@@ -42,11 +56,11 @@ export class Projects {
 			throw new EngineError("INVALID", `Not a folder: ${path}`);
 		}
 		const existing = this.entries.find((p) => p.path === real);
-		if (existing) return describe(existing);
+		if (existing) return this.describe(existing);
 		const entry: StoredProject = { id: newId("prj"), path: real, name: basename(real), addedAt: new Date().toISOString() };
 		this.entries.push(entry);
 		this.save();
-		return describe(entry);
+		return this.describe(entry);
 	}
 
 	remove(id: string): ProjectInfo {
@@ -57,13 +71,15 @@ export class Projects {
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
 		if (change.approvalMode) entry.approvalMode = change.approvalMode;
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
+		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
+		if (change.trust !== undefined) this.trust.set(entry.path, change.trust);
 		this.save();
-		return describe(entry);
+		return this.describe(entry);
 	}
 
 	/** Tells clients again (the branch changed). */
@@ -115,7 +131,7 @@ export class Projects {
 	}
 }
 
-function describe(stored: StoredProject): ProjectInfo {
+function describe(stored: StoredProject): Omit<ProjectInfo, "trust" | "needsTrust"> {
 	const p = { ...stored, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [] };
 	if (!existsSync(p.path)) return { ...p, piConfig: false, missing: true };
 	const branch = gitBranch(p.path);

@@ -396,6 +396,45 @@ public struct FilesParams: Encodable, Sendable {
 }
 public struct FilesResult: Decodable, Sendable { public var files: [FileMatch] }
 
+// MARK: Files and MCP (Build)
+
+public struct ReadFileParams: Encodable, Sendable { public var cwd: String; public var path: String; public init(cwd: String, path: String) { self.cwd = cwd; self.path = path } }
+public struct ReadFileResult: Decodable, Sendable {
+    public var content: String; public var size: Int; public var truncated: Bool; public var binary: Bool
+    public init(content: String, size: Int, truncated: Bool, binary: Bool) { self.content = content; self.size = size; self.truncated = truncated; self.binary = binary }
+}
+public struct WriteFileParams: Encodable, Sendable {
+    public var cwd: String; public var path: String; public var content: String
+    public init(cwd: String, path: String, content: String) { self.cwd = cwd; self.path = path; self.content = content }
+}
+
+public struct McpServerInfo: Codable, Sendable, Hashable, Identifiable {
+    public enum Scope: String, Codable, Sendable { case global, project }
+    public var name: String
+    public var scope: Scope
+    public var transport: String
+    public var command: String?
+    public var args: [String]?
+    public var url: String?
+    public var enabled: Bool
+    public var description: String?
+    public var override: Bool?
+    public var id: String { "\(scope.rawValue):\(name)" }
+}
+public struct McpListParams: Encodable, Sendable { public var cwd: String?; public init(cwd: String? = nil) { self.cwd = cwd } }
+public struct McpListResult: Decodable, Sendable { public var servers: [McpServerInfo]; public var errors: [String] }
+public struct McpAddParams: Encodable, Sendable {
+    public var scope: McpServerInfo.Scope; public var cwd: String?; public var name: String
+    public var command: String?; public var args: [String]?; public var url: String?; public var description: String?
+    public init(scope: McpServerInfo.Scope, cwd: String?, name: String, command: String?, args: [String]?, url: String?, description: String?) {
+        self.scope = scope; self.cwd = cwd; self.name = name; self.command = command; self.args = args; self.url = url; self.description = description
+    }
+}
+public struct McpNameParams: Encodable, Sendable {
+    public var scope: McpServerInfo.Scope; public var cwd: String?; public var name: String; public var enabled: Bool?
+    public init(scope: McpServerInfo.Scope, cwd: String?, name: String, enabled: Bool? = nil) { self.scope = scope; self.cwd = cwd; self.name = name; self.enabled = enabled }
+}
+
 // MARK: Git (Build)
 
 /// Where a new Build session works.
@@ -599,7 +638,8 @@ public struct ProjectsConfigureParams: Encodable, Sendable {
     public var id: String
     public var approvalMode: ApprovalMode?
     public var removeRule: String?
-    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil) { self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule }
+    public var trust: Bool?
+    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil) { self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust }
 }
 
 /// A session needs you, or told you something (notify_user).
@@ -636,6 +676,10 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public var piConfig: Bool
     public var approvalMode: ApprovalMode
     public var rules: [ApprovalRule]
+    /// pi project trust (shared with the pi CLI): whether the project's .pi resources load; `needsTrust`: it has some.
+    public enum Trust: String, Codable, Sendable { case trusted, untrusted, undecided }
+    public var trust: Trust
+    public var needsTrust: Bool
     public var missing: Bool?
 }
 

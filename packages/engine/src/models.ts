@@ -109,6 +109,7 @@ export class ModelHub {
  *   todo: <item> (done) | <item> (in_progress) | <item>…   todo
  *   plan: <summary> | <step>…          propose_plan
  *   task: <title> | <prompt>           task (a subagent)
+ *   call: <tool> | <JSON arguments>    any tool (MCP tools in tests)
  */
 function installEcho(faux: FauxHandle): void {
 	const step = (context: { messages: readonly { role: string; content: unknown }[] }) => {
@@ -134,6 +135,9 @@ function scriptedTools(text: string): { name: string; args: Record<string, unkno
 		else if (line.startsWith("write: ")) {
 			const [path, content = ""] = parts(line.slice(7));
 			calls.push({ name: "write", args: { path, content } });
+		} else if (line.startsWith("call: ")) {
+			const at = line.indexOf("|");
+			calls.push({ name: line.slice(6, at).trim(), args: JSON.parse(line.slice(at + 1)) as Record<string, unknown> });
 		} else if (line.startsWith("todo: ")) {
 			const items = parts(line.slice(6)).map((p) => {
 				const m = /^(.*?)\s*\((done|in_progress|pending)\)$/.exec(p);

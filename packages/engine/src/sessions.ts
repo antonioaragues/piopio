@@ -550,6 +550,7 @@ export class Sessions {
 				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
 			},
 			checkpoints: this.checkpoints,
+			...(entry.projectPath ? { trustPath: entry.projectPath } : {}),
 			plan: {
 				active: () => entry.planMode ?? false,
 				setActive: (on) => {

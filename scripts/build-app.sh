@@ -11,5 +11,6 @@ fi
 (cd "$root" && corepack pnpm -r build >/dev/null)
 cd "$root/apps/mac/App"
 xcodegen generate --quiet
-xcodebuild -project Piopio.xcodeproj -scheme Piopio -configuration "$config" -derivedDataPath build -quiet build
+# SwiftTerm's build plugin only writes its own git version into a generated Swift file.
+xcodebuild -project Piopio.xcodeproj -scheme Piopio -configuration "$config" -derivedDataPath build -quiet -skipPackagePluginValidation build
 echo "$root/apps/mac/App/build/Build/Products/$config/Piopio.app"

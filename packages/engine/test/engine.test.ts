@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { SessionEvent, Snapshot } from "@piopio/protocol";
 import { afterEach, describe, expect, test } from "vitest";
@@ -812,5 +813,69 @@ describe("composer and extensions (milestone 2.5)", () => {
 		expect(files[0]).toEqual({ path: "src/transport/stdio.ts", kind: "file" });
 		expect((await b.client.call("projects.files", { cwd: s.folder, query: "srctr" })).files[0]).toMatchObject({ path: "src/transport" });
 		expect((await b.client.call("projects.files", { cwd: s.folder, query: "" })).files.map((f: { path: string }) => f.path)).toEqual(expect.arrayContaining(["README.md", "src", "a.txt"]));
+	});
+});
+
+describe("MCP, project trust and files (milestone 2.6)", () => {
+	test("Build sessions reach MCP servers from pi's mcp.json; Settings edits the file", async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-mcp-")));
+		await a.client.call("projects.add", { path: folder });
+		const server = fileURLToPath(new URL("./fixtures/echo-mcp-server.mjs", import.meta.url));
+		await a.client.call("mcp.add", { scope: "global", name: "test", command: process.execPath, args: [server], description: "Echoes text" });
+		// Direct exposure declares the tools to the model (default codemode keeps them behind a script tool).
+		const file = join(a.home, "pi-agent", "mcp.json");
+		const config = JSON.parse(readFileSync(file, "utf8"));
+		config.mcpServers.test.exposure = "direct";
+		writeFileSync(file, JSON.stringify(config));
+		expect((await a.client.call("mcp.list", {})).servers).toEqual([
+			{ name: "test", scope: "global", transport: "stdio", command: process.execPath, args: [server], enabled: true, description: "Echoes text" },
+		]);
+
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: "full_auto" });
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: mcp__test__echo | {"text":"hello mcp"}' } });
+		await a.client.waitFor(settled(sub.subscriptionId, 1), 30_000);
+		const tool = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.find((i) => i.kind === "tool");
+		expect(tool).toMatchObject({ tool: "mcp__test__echo", status: "done", output: expect.stringContaining("echo: hello mcp") });
+
+		await a.client.call("mcp.setEnabled", { scope: "global", name: "test", enabled: false });
+		expect((await a.client.call("mcp.list", {})).servers[0].enabled).toBe(false);
+		await a.client.call("mcp.remove", { scope: "global", name: "test" });
+		expect((await a.client.call("mcp.list", {})).servers).toEqual([]);
+		await expect(a.client.call("mcp.add", { scope: "global", name: "bad name", command: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+	}, 60_000);
+
+	test("project trust gates the project's .pi resources and is saved where the pi CLI reads it", async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-trust-")));
+		mkdirSync(join(folder, ".pi", "prompts"), { recursive: true });
+		writeFileSync(join(folder, ".pi", "prompts", "review.md"), "---\ndescription: Review the diff\n---\nReview it.\n");
+		const { project } = await a.client.call("projects.add", { path: folder });
+		expect(project).toMatchObject({ trust: "undecided", needsTrust: true });
+		const names = async () => {
+			const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+			return (await a.client.call("sessions.commands", { ref })).commands.map((c: { name: string }) => c.name);
+		};
+		expect(await names()).not.toContain("review");
+		const trusted = (await a.client.call("projects.configure", { id: project.id, trust: true })).project;
+		expect(trusted.trust).toBe("trusted");
+		expect(JSON.stringify(JSON.parse(readFileSync(join(a.home, "pi-agent", "trust.json"), "utf8")))).toContain(folder);
+		expect(await names()).toContain("review");
+	});
+
+	test("the file viewer reads and writes inside the project only", async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-files-")));
+		mkdirSync(join(folder, "src"));
+		writeFileSync(join(folder, "src", "a.ts"), "export const a = 1\n");
+		writeFileSync(join(folder, "blob.bin"), Buffer.from([1, 0, 2, 3]));
+		await a.client.call("projects.add", { path: folder });
+		expect(await a.client.call("projects.readFile", { cwd: folder, path: "src/a.ts" })).toEqual({ content: "export const a = 1\n", size: 19, truncated: false, binary: false });
+		expect(await a.client.call("projects.readFile", { cwd: folder, path: "blob.bin" })).toMatchObject({ binary: true, content: "" });
+		await a.client.call("projects.writeFile", { cwd: folder, path: "src/a.ts", content: "export const a = 2\n" });
+		expect(readFileSync(join(folder, "src", "a.ts"), "utf8")).toBe("export const a = 2\n");
+		await expect(a.client.call("projects.readFile", { cwd: folder, path: "../../etc/passwd" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		await expect(a.client.call("projects.writeFile", { cwd: folder, path: "/tmp/x", content: "" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 	});
 });

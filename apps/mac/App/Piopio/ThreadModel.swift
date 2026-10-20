@@ -160,6 +160,8 @@ final class ThreadModel {
             if case .checkpoint(let c) = document.item(id) { restoring = c }
         case .openSession(let id):
             NotificationCenter.default.post(name: .selectBuildSession, object: id)
+        case .openFile(let path, let line):
+            viewing = FileTarget(path: path, line: line)
         }
     }
 
@@ -224,8 +226,10 @@ final class ThreadModel {
     /// `"default"` returns to the model's default.
     // MARK: Composer, plan mode and tree (Build)
 
-    /// Text to put in the composer (a message brought back from the session tree).
+    /// Text to put in the composer (a message brought back from the session tree, terminal output).
     var draft: String?
+    /// The file shown in the viewer (BR4).
+    var viewing: FileTarget?
     var showTree = false
     var planMode: Bool { state?.planMode ?? false }
     var todos: [Todo] { state?.todos ?? [] }

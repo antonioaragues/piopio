@@ -182,6 +182,7 @@ struct BuildSessionView: View {
     @State private var reviewFile: String?
     @State private var git: GitModel?
     @State private var committing = false
+    @AppStorage("buildTerminal") private var showTerminal = false
 
     private var project: ProjectInfo? { engine.projects.first { $0.path == summary.cwd } }
 
@@ -201,10 +202,19 @@ struct BuildSessionView: View {
                         .padding(.horizontal, 24).padding(.bottom, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                if let project, project.needsTrust, project.trust == .undecided {
+                    TrustBanner(engine: engine, project: project)
+                        .padding(.horizontal, 24).padding(.bottom, 8)
+                }
                 if reviewing {
                     DiffReview(session: session, selected: reviewFile) { reviewing = false }
                 } else {
                     conversation
+                }
+                if showTerminal, let cwd = summary.cwd {
+                    TerminalDrawer(cwd: cwd, session: session) { showTerminal = false }
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 8)
                 }
             }
             if showInspector && !reviewing {
@@ -229,6 +239,12 @@ struct BuildSessionView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await git?.refresh() } }
         .sheet(isPresented: $committing) { if let git { CommitSheet(git: git) } }
+        .sheet(item: Binding(get: { session.viewing }, set: { session.viewing = $0 })) { target in
+            if let cwd = summary.cwd { FileViewer(engine: engine, cwd: cwd, target: target) }
+        }
+        .background {
+            Button("") { showTerminal.toggle() }.keyboardShortcut("`", modifiers: .control).hidden()
+        }
         .onChange(of: session.prompts.isEmpty) { _, empty in if empty { session.document.bottomInset = 150 } }
         .onReceive(NotificationCenter.default.publisher(for: .showCommit)) { note in
             if note.object as? String == session.ref.id { committing = true }
@@ -284,6 +300,12 @@ struct BuildSessionView: View {
             }
             ApprovalModeMenu(engine: engine, session: session, project: project)
             if let git { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
+            if let cwd = summary.cwd { OpenInEditorMenu(path: cwd) }
+            Button { showTerminal.toggle() } label: {
+                Image(systemName: "terminal").font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(PillStyle(kind: .toolbar))
+            .help(showTerminal ? "Hide the terminal (⌃`)" : "Terminal in this folder (⌃`)")
             if let cwd = summary.cwd {
                 Menu {
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) }
@@ -732,5 +754,30 @@ struct SessionTreePopover: View {
         .padding(14)
         .frame(width: 380)
         .task { nodes = await session.tree() }
+    }
+}
+
+/// The project has its own pi resources (.pi extensions, MCP servers, settings, prompts or skills) and no trust
+/// decision yet: they don't load until you trust it. The decision is pi's, so the pi CLI uses it too.
+struct TrustBanner: View {
+    let engine: EngineController
+    let project: ProjectInfo
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.shield").foregroundStyle(Color.dsAmber)
+            Text("**\(project.name)** has its own pi setup in .pi (extensions, MCP servers, prompts or skills). It loads only if you trust the project; extensions run code on your Mac.")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.dsFg)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button("Don't Trust") { Task { await engine.setTrust(false, for: project) } }.buttonStyle(PillStyle(compact: true))
+            Button("Trust Project") { Task { await engine.setTrust(true, for: project) } }.buttonStyle(PillStyle(kind: .strong, compact: true))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.dsAmber.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsAmber.opacity(0.35), lineWidth: 0.5))
+        .help("Applies to sessions you start or reopen from now on.")
     }
 }

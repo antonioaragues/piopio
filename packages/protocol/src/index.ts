@@ -309,6 +309,12 @@ export const ProjectInfo = Type.Object({
 	/** Approval mode new sessions start with (default: auto_edit). */
 	approvalMode: ApprovalMode,
 	rules: Type.Array(ApprovalRule),
+	/**
+	 * pi project trust (shared with the pi CLI, ~/.pi/agent/trust.json): whether the project's own .pi
+	 * extensions, MCP servers, settings, prompts and skills load. `needsTrust`: the project has such resources.
+	 */
+	trust: literals("trusted", "untrusted", "undecided"),
+	needsTrust: Type.Boolean(),
 	/** The folder no longer exists. */
 	missing: Type.Optional(Type.Boolean()),
 });
@@ -316,6 +322,21 @@ export type ProjectInfo = Static<typeof ProjectInfo>;
 
 export const ProjectsChanged = Type.Object({ projects: Type.Array(ProjectInfo) });
 export type ProjectsChanged = Static<typeof ProjectsChanged>;
+
+/** An MCP server as configured in a pi mcp.json (docs: pi-coding-agent docs/mcp.md). */
+export const McpServerInfo = Type.Object({
+	name: Type.String(),
+	scope: literals("global", "project"),
+	transport: literals("stdio", "http"),
+	command: Type.Optional(Type.String()),
+	args: Type.Optional(Type.Array(Type.String())),
+	url: Type.Optional(Type.String()),
+	enabled: Type.Boolean(),
+	description: Type.Optional(Type.String()),
+	/** A project entry that only overrides a global server's `enabled`/exposure. */
+	override: Type.Optional(Type.Boolean()),
+});
+export type McpServerInfo = Static<typeof McpServerInfo>;
 
 // ── Git (Build, docs/spec/05-build §8 G1–G3) ──────────────────────────────
 
@@ -479,7 +500,7 @@ export const methods = {
 	},
 	/** Default approval mode for the project's new sessions, and rule removal. */
 	"projects.configure": {
-		params: Type.Object({ id: Type.String(), approvalMode: Type.Optional(ApprovalMode), removeRule: Type.Optional(Type.String()) }),
+		params: Type.Object({ id: Type.String(), approvalMode: Type.Optional(ApprovalMode), removeRule: Type.Optional(Type.String()), trust: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])) }),
 		result: Type.Object({ project: ProjectInfo }),
 	},
 	/** Build: files that differ from the session's first checkpoint (or the latest), with line counts. */
@@ -540,6 +561,36 @@ export const methods = {
 	"projects.files": {
 		params: Type.Object({ cwd: Type.String(), query: Type.String(), limit: Type.Optional(Type.Number()) }),
 		result: Type.Object({ files: Type.Array(Type.Object({ path: Type.String(), kind: literals("file", "folder") })) }),
+	},
+	/** File viewer (BR4): a file of a project or worktree. Text only; large files are cut. */
+	"projects.readFile": {
+		params: Type.Object({ cwd: Type.String(), path: Type.String() }),
+		result: Type.Object({ content: Type.String(), size: Type.Number(), truncated: Type.Boolean(), binary: Type.Boolean() }),
+	},
+	/** File viewer quick edit (BR4). */
+	"projects.writeFile": { params: Type.Object({ cwd: Type.String(), path: Type.String(), content: Type.String() }), result: Type.Object({}) },
+	/** MCP servers from pi's mcp.json files: global (~/.pi/agent/mcp.json), and the project's (.pi/mcp.json) when `cwd` is given. */
+	"mcp.list": {
+		params: Type.Object({ cwd: Type.Optional(Type.String()) }),
+		result: Type.Object({ servers: Type.Array(McpServerInfo), errors: Type.Array(Type.String()) }),
+	},
+	"mcp.add": {
+		params: Type.Object({
+			scope: literals("global", "project"),
+			cwd: Type.Optional(Type.String()),
+			name: Type.String(),
+			command: Type.Optional(Type.String()),
+			args: Type.Optional(Type.Array(Type.String())),
+			url: Type.Optional(Type.String()),
+			env: Type.Optional(Type.Record(Type.String(), Type.String())),
+			description: Type.Optional(Type.String()),
+		}),
+		result: Type.Object({}),
+	},
+	"mcp.remove": { params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String() }), result: Type.Object({}) },
+	"mcp.setEnabled": {
+		params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String(), enabled: Type.Boolean() }),
+		result: Type.Object({}),
 	},
 	/** Answers a pending prompt (approval, question, confirm, select, input). */
 	"sessions.respond": {

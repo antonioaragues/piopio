@@ -72,6 +72,17 @@ enum DebugAutomation {
                 await session.open()
                 // PIOPIO_DEMO_PLAN=1: plan mode first; PIOPIO_DEMO_DRAFT: text left in the composer (shows @ and / suggestions).
                 if env["PIOPIO_DEMO_PLAN"] == "1" { await session.setPlanMode(true) }
+                // PIOPIO_DEMO_TERMINAL=<command>: open the terminal drawer and type it. PIOPIO_DEMO_VIEW=<path>[:line]: the file viewer.
+                if let command = env["PIOPIO_DEMO_TERMINAL"] {
+                    UserDefaults.standard.set(true, forKey: "buildTerminal")
+                    try? await Task.sleep(for: .seconds(2))
+                    TerminalStore.shared.tabs(for: session.cwd ?? folder).first?.view.send(txt: command + "\r")
+                }
+                if let view = env["PIOPIO_DEMO_VIEW"] {
+                    let parts = view.split(separator: ":")
+                    try? await Task.sleep(for: .seconds(1))
+                    session.viewing = FileTarget(path: String(parts[0]), line: parts.count > 1 ? Int(parts[1]) : nil)
+                }
                 if let draft = env["PIOPIO_DEMO_DRAFT"] {
                     try? await Task.sleep(for: .seconds(1))
                     session.draft = draft

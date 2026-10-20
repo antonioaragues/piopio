@@ -7,6 +7,7 @@
 //   <outDir>/package.json        {"type": "module"}, so node-worker.js loads as ESM
 //   <outDir>/main.js             the engine (run with the bundled node)
 //   <outDir>/node-worker.js      pi-durable's Photon image worker (resolved next to main.js)
+//   <outDir>/codemode-worker.js  pi's codemode script worker (resolved next to main.js)
 //   <outDir>/pi/                 pi-coding-agent's package.json, README, docs and examples (PI_PACKAGE_DIR)
 //   <outDir>/node_modules/…      the .wasm files pi resolves with require.resolve
 import { build } from "esbuild";
@@ -61,6 +62,9 @@ const common = {
 };
 await build({ ...common, entryPoints: { main: join(engineDir, "dist/main.js") }, outdir: out });
 await build({ ...common, entryPoints: { "node-worker": join(piDurable, "dist/images/node-worker.js") }, outdir: out, define: {} });
+// pi's codemode runs scripts in a worker it loads from a data: URL in bundled-Node mode (MCP tools are reached
+// through it): self-contained, so no banner (it uses import.meta, which a data: URL can't resolve against).
+await build({ ...common, banner: {}, entryPoints: { "codemode-worker": join(packageRoot("@earendil-works/pi-codemode", piCodingAgent), "dist/runtime/worker.js") }, outdir: out, define: {} });
 
 writeFileSync(join(out, "package.json"), `${JSON.stringify({ name: "piopio-engine", version, private: true, type: "module" }, null, "\t")}\n`);
 for (const item of ["package.json", "README.md", "docs", "examples"]) cpSync(join(piCodingAgent, item), join(out, "pi", item), { recursive: true });

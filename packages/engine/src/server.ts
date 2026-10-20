@@ -9,7 +9,9 @@ import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
 import type { Runtime } from "./runtimes/runtime.js";
-import { searchFiles } from "./files.js";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { readProjectFile, searchFiles, writeProjectFile } from "./files.js";
+import { McpConfig } from "./mcp.js";
 import * as gitOps from "./git.js";
 import { Projects } from "./projects.js";
 import { Sessions } from "./sessions.js";
@@ -36,6 +38,7 @@ export class Engine {
 	readonly hub: ModelHub;
 	readonly sessions: Sessions;
 	readonly projects: Projects;
+	readonly mcp: McpConfig;
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
@@ -60,7 +63,11 @@ export class Engine {
 		this.sessions.onAttention = (change) => {
 			for (const conn of this.authed) conn.notify("session.attention", change);
 		};
-		this.projects = new Projects(options.paths.projectsIndex);
+		// A test agent folder: pi's own lookups (MCP config, codemode) read it from the environment.
+		if (options.piAgentDir) process.env.PI_CODING_AGENT_DIR = options.piAgentDir;
+		const agentDir = options.piAgentDir ?? getAgentDir();
+		this.projects = new Projects(options.paths.projectsIndex, agentDir);
+		this.mcp = new McpConfig(agentDir);
 		this.sessions.policy = {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
 			modeFor: (cwd) => this.projects.modeFor(cwd),
@@ -283,7 +290,7 @@ export class Engine {
 			}
 			case "projects.configure": {
 				const p = params as Params<"projects.configure">;
-				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}) };
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
 			}
 			case "sessions.changes": {
@@ -318,6 +325,35 @@ export class Engine {
 			case "projects.files": {
 				const p = params as Params<"projects.files">;
 				return { files: await searchFiles(this.folder(p), p.query, p.limit ?? 30) } satisfies Result<"projects.files">;
+			}
+			case "projects.readFile": {
+				const p = params as Params<"projects.readFile">;
+				return (await readProjectFile(this.folder(p), p.path)) satisfies Result<"projects.readFile">;
+			}
+			case "projects.writeFile": {
+				const p = params as Params<"projects.writeFile">;
+				await writeProjectFile(this.folder(p), p.path, p.content);
+				return {};
+			}
+			case "mcp.list": {
+				const p = params as Params<"mcp.list">;
+				return this.mcp.list(p.cwd ? this.folder(p) : undefined) satisfies Result<"mcp.list">;
+			}
+			case "mcp.add": {
+				const p = params as Params<"mcp.add">;
+				const { scope, cwd, name, ...server } = p;
+				this.mcp.add(scope, cwd ? this.folder({ cwd }) : undefined, name, server);
+				return {};
+			}
+			case "mcp.remove": {
+				const p = params as Params<"mcp.remove">;
+				this.mcp.remove(p.scope, p.cwd ? this.folder(p) : undefined, p.name);
+				return {};
+			}
+			case "mcp.setEnabled": {
+				const p = params as Params<"mcp.setEnabled">;
+				this.mcp.setEnabled(p.scope, p.cwd ? this.folder(p) : undefined, p.name, p.enabled);
+				return {};
 			}
 			case "sessions.finish": {
 				const p = params as Params<"sessions.finish">;

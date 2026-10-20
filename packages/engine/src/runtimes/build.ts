@@ -1,7 +1,19 @@
 /** Build runtime: one pi-coding-agent SDK session, persisted as a pi CLI-compatible JSONL file. */
-import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager, SettingsManager, type AgentSession } from "@earendil-works/pi-coding-agent";
+import {
+	createAgentSession,
+	createCodemodeExtension,
+	createMcpExtension,
+	createToolSearchExtension,
+	DefaultResourceLoader,
+	getAgentDir,
+	ProjectTrustStore,
+	SessionManager,
+	SettingsManager,
+	type AgentSession,
+} from "@earendil-works/pi-coding-agent";
 import { approvalsExtension, checkpointsExtension, notifyExtension, planExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge } from "@piopio/pi-extensions";
 import type { ApprovalRule, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
+import { dirname } from "node:path";
 import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage } from "../timeline/builder.js";
@@ -33,6 +45,8 @@ export type BuildOpenOptions = {
 	onAttention?: (kind: "waiting" | "notify", message: string) => void;
 	/** Plan mode (piopio-plan), kept by the catalog so it survives a reopen. */
 	plan: { active(): boolean; setActive(on: boolean): void };
+	/** Where project trust is looked up (the project folder; differs from `cwd` for worktree sessions). */
+	trustPath?: string;
 	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
 	runTask?: SubagentBridge["run"];
 };
@@ -76,6 +90,11 @@ export class BuildRuntime implements Runtime {
 			agentDir,
 			settingsManager,
 			extensionFactories: [
+				// The pi CLI's built-ins (MCP servers, and codemode / tool search through which MCP tools are
+				// reached). Replaceable: a user extension that registers the same tools or /mcp takes over.
+				{ name: "codemode", factory: createCodemodeExtension(), replaceable: true, builtin: true },
+				{ name: "tool-search", factory: createToolSearchExtension(), replaceable: true, builtin: true },
+				{ name: "mcp", factory: createMcpExtension(), replaceable: true, builtin: true },
 				// First, so the snapshot is taken before anything else can change files.
 				checkpointsExtension({ snapshot: async (callId) => void (await runtime?.takeCheckpoint(callId)) }),
 				approvalsExtension({
@@ -125,7 +144,19 @@ export class BuildRuntime implements Runtime {
 				}),
 			],
 		});
-		await resourceLoader.reload();
+		// Project trust, as the pi CLI decides it: the closest saved decision (~/.pi/agent/trust.json) for the
+		// project or a parent, else trusted only with defaultProjectTrust "always". Untrusted projects don't
+		// load their .pi extensions, settings, MCP servers, prompts or skills.
+		const trustStore = new ProjectTrustStore(agentDir);
+		const projectTrusted = () => {
+			for (let dir = o.trustPath ?? o.cwd; ; dir = dirname(dir)) {
+				const decision = trustStore.get(dir);
+				if (decision !== null) return decision;
+				if (dir === dirname(dir)) break;
+			}
+			return settingsManager.getDefaultProjectTrust() === "always";
+		};
+		await resourceLoader.reload({ resolveProjectTrust: async () => projectTrusted() });
 		const { session } = await createAgentSession({
 			cwd: o.cwd,
 			agentDir,

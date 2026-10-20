@@ -3,8 +3,9 @@
  * so .gitignore applies; otherwise a bounded walk), matched fuzzily on the path.
  */
 import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { git } from "./git.js";
+import { EngineError } from "./models.js";
 
 const SKIP = new Set([".git", "node_modules", ".build", "DerivedData", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".turbo", ".cache"]);
 const MAX_FILES = 50_000;
@@ -79,4 +80,35 @@ function walk(root: string): string[] {
 	};
 	visit(root, "");
 	return out;
+}
+
+const MAX_READ = 2 * 1024 * 1024;
+
+/** A file of the folder for the viewer: text only, cut at 2 MB. The path must stay inside `cwd`. */
+export async function readProjectFile(cwd: string, path: string): Promise<{ content: string; size: number; truncated: boolean; binary: boolean }> {
+	const full = inside(cwd, path);
+	const { readFile, stat } = await import("node:fs/promises");
+	const info = await stat(full).catch(() => {
+		throw new EngineError("NOT_FOUND", `No file ${path}`);
+	});
+	if (!info.isFile()) throw new EngineError("INVALID", `${path} isn't a file.`);
+	const buffer = await readFile(full);
+	const head = buffer.subarray(0, Math.min(buffer.length, 8000));
+	if (head.includes(0)) return { content: "", size: info.size, truncated: false, binary: true };
+	const truncated = buffer.length > MAX_READ;
+	return { content: buffer.subarray(0, MAX_READ).toString("utf8"), size: info.size, truncated, binary: false };
+}
+
+/** Saves a quick edit from the viewer (BR4). */
+export async function writeProjectFile(cwd: string, path: string, content: string): Promise<void> {
+	const full = inside(cwd, path);
+	const { writeFile } = await import("node:fs/promises");
+	await writeFile(full, content);
+}
+
+function inside(cwd: string, path: string): string {
+	const root = resolve(cwd);
+	const full = resolve(root, path);
+	if (full !== root && !full.startsWith(`${root}/`)) throw new EngineError("INVALID", "That path is outside the project.");
+	return full;
 }

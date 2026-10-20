@@ -13,6 +13,8 @@ public enum TranscriptAction: Equatable, Sendable {
     case restoreCheckpoint(itemId: String)
     /// Opens another session (a subagent's).
     case openSession(String)
+    /// Opens a file of the session's folder in the viewer, at a line.
+    case openFile(path: String, line: Int?)
 
     static let scheme = "piopio-action"
 
@@ -30,6 +32,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .copy(let id): c.host = "copy"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .restoreCheckpoint(let id): c.host = "restore"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .openSession(let id): c.host = "session"; c.queryItems = [URLQueryItem(name: "id", value: id)]
+        case .openFile(let path, let line): c.host = "file"; c.queryItems = [URLQueryItem(name: "path", value: path)] + (line.map { [URLQueryItem(name: "line", value: "\($0)")] } ?? [])
         }
         return c.url!
     }
@@ -48,6 +51,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "copy": guard let id = q("item") else { return nil }; self = .copy(itemId: id)
         case "restore": guard let id = q("item") else { return nil }; self = .restoreCheckpoint(itemId: id)
         case "session": guard let id = q("id") else { return nil }; self = .openSession(id)
+        case "file": guard let path = q("path") else { return nil }; self = .openFile(path: path, line: q("line").flatMap(Int.init))
         default: return nil
         }
     }
