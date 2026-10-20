@@ -1,4 +1,5 @@
 import AppKit
+import PiopioKit
 import UserNotifications
 
 /// Notifies when an answer finishes or fails while you're elsewhere; clicking opens the thread.
@@ -15,7 +16,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         UNUserNotificationCenter.current().delegate = self
     }
 
-    func answer(threadId: String, title: String, body: String, failed: Bool) {
+    func answer(ref: ContainerRef, title: String, body: String, failed: Bool, sound: Bool = false) {
+        let threadId = ref.id
         guard Self.enabled else { return }
         Task {
             if authorized == nil {
@@ -25,18 +27,20 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             let content = UNMutableNotificationContent()
             content.title = failed ? "\(title): failed" : title
             content.body = body
-            content.sound = failed ? .default : nil
+            content.sound = failed || sound ? .default : nil
             content.threadIdentifier = threadId
-            content.userInfo = ["threadId": threadId]
+            content.userInfo = ["threadId": threadId, "kind": ref.kind.rawValue]
             try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         }
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let threadId = response.notification.request.content.userInfo["threadId"] as? String
+        let info = response.notification.request.content.userInfo
+        let threadId = info["threadId"] as? String
+        let build = info["kind"] as? String == "build"
         await MainActor.run {
             WindowOpener.shared.showMain()
-            if let threadId { NotificationCenter.default.post(name: .selectThread, object: threadId) }
+            if let threadId { NotificationCenter.default.post(name: build ? .selectBuildSession : .selectThread, object: threadId) }
         }
     }
 

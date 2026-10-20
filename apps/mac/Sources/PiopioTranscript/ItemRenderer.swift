@@ -138,7 +138,7 @@ nonisolated struct ItemRenderer: Sendable {
     static func toolCard(_ t: ToolItem) -> DisclosureCard {
         let (title, detail) = toolTitle(t)
         let duration = t.durationMs.map { $0 < 1000 ? String(format: "%.1fs", $0 / 1000) : String(format: "%.0fs", $0 / 1000) } ?? (t.status == .running ? "…" : "")
-        let failed = t.status == .error || t.status == .denied
+        let failed = t.status == .error
         let card: DisclosureCard
         switch t.typedDetails {
         case .diff(_, let patch) where !patch.isEmpty && !failed:
@@ -156,11 +156,24 @@ nonisolated struct ItemRenderer: Sendable {
             card = DisclosureCard(tool: title, detail: detail, trailing: duration, content: .text(t.output ?? ""))
         }
         card.failed = failed
+        switch t.status {
+        case .pendingApproval:
+            card.waiting = true
+            card.trailing = "waiting for you"
+        case .denied: card.trailing = "denied"
+        case .interrupted where t.output != nil: card.trailing = "stopped"
+        default: break
+        }
         return card
     }
 
     /// Human titles for known tools ("Searched the web" + the query); others show their name and status.
     static func toolTitle(_ t: ToolItem) -> (String, String) {
+        if t.status == .pendingApproval || t.status == .denied {
+            let (_, detail) = toolTitle(ToolItem(id: t.id, at: t.at, callId: t.callId, tool: t.tool, args: t.args, status: .done))
+            let verb = ["bash": "Run", "edit": "Edit", "write": "Write", "read": "Read", "web_fetch": "Open", "web_search": "Search the web"][t.tool] ?? t.tool
+            return (verb, detail)
+        }
         let running = t.status == .running
         let failed = t.status == .error
         let path = t.args?["path"]?.stringValue ?? ""
@@ -178,13 +191,17 @@ nonisolated struct ItemRenderer: Sendable {
             return (running ? "Writing" : failed ? "Write failed" : "Wrote", path)
         case "bash":
             let command = t.args?["command"]?.stringValue ?? ""
-            return (running ? "Running" : t.status == .denied ? "Not run" : "Ran", command.split(separator: "\n").first.map(String.init) ?? command)
+            return (running ? "Running" : "Ran", command.split(separator: "\n").first.map(String.init) ?? command)
         case "grep":
             return (running ? "Searching" : "Searched", t.args?["pattern"]?.stringValue ?? "")
         case "find":
             return (running ? "Finding files" : "Found files", t.args?["pattern"]?.stringValue ?? path)
         case "ls":
             return (running ? "Listing" : "Listed", path.isEmpty ? "." : path)
+        case "ask_user":
+            return (running ? "Waiting for your answer" : "Asked you", t.args?["question"]?.stringValue ?? "")
+        case "notify_user":
+            return ("Notified you", t.args?["message"]?.stringValue ?? "")
         case "web_search":
             let query = t.args?["query"]?.stringValue ?? ""
             return (running ? "Searching the web" : t.status == .error ? "Web search failed" : "Searched the web", query)

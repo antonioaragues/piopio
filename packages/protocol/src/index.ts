@@ -138,6 +138,51 @@ export type SystemItem = Static<typeof SystemItem>;
 // ── Session state & events ─────────────────────────────────────────────────
 
 export const SessionStatus = literals("idle", "running", "waiting_approval", "error");
+
+/** Build approval modes (docs/spec/05-build §6). */
+export const ApprovalMode = literals("ask", "auto_edit", "full_auto");
+export type ApprovalMode = Static<typeof ApprovalMode>;
+
+/** "Always allow" rules, per project (AP2): a bash command prefix, a tool name, or a path glob. */
+export const ApprovalRule = Type.Object({ id: Type.String(), kind: literals("command", "tool", "path"), pattern: Type.String(), createdAt: Type.String() });
+export type ApprovalRule = Static<typeof ApprovalRule>;
+
+/**
+ * Something the session waits on you for: a tool approval, an agent's question (`ask_user`), or an
+ * extension's confirm/select/input. Lives in the session state until answered, so it survives reconnects.
+ */
+export const PendingPrompt = Type.Object({
+	id: Type.String(),
+	kind: literals("approval", "question", "confirm", "select", "input"),
+	title: Type.String(),
+	message: Type.Optional(Type.String()),
+	/** Monospace detail: the command, or the path. */
+	detail: Type.Optional(Type.String()),
+	/** Approvals: the tool and its call (the tool card shows "waiting for approval"). */
+	tool: Type.Optional(Type.String()),
+	callId: Type.Optional(Type.String()),
+	/** Why it asks even though the mode would allow it (deny-list, outside the project). */
+	reason: Type.Optional(Type.String()),
+	/** Approvals: the rule "Always allow" would add; absent when it can't be made a rule (deny-list). */
+	rule: Type.Optional(Type.Object({ kind: literals("command", "tool", "path"), pattern: Type.String() })),
+	/** Questions and selects: the choices offered. */
+	options: Type.Optional(Type.Array(Type.String())),
+	placeholder: Type.Optional(Type.String()),
+	at: Type.String(),
+});
+export type PendingPrompt = Static<typeof PendingPrompt>;
+
+export const PromptResponse = Type.Object({
+	/** Approvals. "always" also adds the prompt's rule. */
+	decision: Type.Optional(literals("allow", "always", "deny")),
+	/** Deny: a note for the agent. Questions/inputs: the answer. */
+	text: Type.Optional(Type.String()),
+	/** Selects and questions with options: the chosen option. */
+	choice: Type.Optional(Type.String()),
+	/** Confirms. */
+	confirmed: Type.Optional(Type.Boolean()),
+});
+export type PromptResponse = Static<typeof PromptResponse>;
 export type SessionStatus = Static<typeof SessionStatus>;
 
 export const QueuedInput = Type.Object({ id: Type.String(), mode: Type.Union([Type.Literal("steer"), Type.Literal("followUp")]), text: Type.Optional(Type.String()) });
@@ -151,6 +196,9 @@ export const SessionState = Type.Object({
 	/** Optional tool sets enabled for this session. */
 	tools: Type.Optional(Type.Object({ web: Type.Boolean() })),
 	usage: Usage,
+	/** Build: approval mode and what the session is waiting on you for. */
+	approvalMode: Type.Optional(ApprovalMode),
+	prompts: Type.Optional(Type.Array(PendingPrompt)),
 	/** How full the model's context is (Build). `tokens` is null right after a compaction. */
 	context: Type.Optional(Type.Object({ tokens: Type.Union([Type.Number(), Type.Null()]), window: Type.Number() })),
 });
@@ -208,6 +256,9 @@ export const ProjectInfo = Type.Object({
 	contextFile: Type.Optional(Type.String()),
 	/** The folder has a pi project config (`.pi/`). */
 	piConfig: Type.Boolean(),
+	/** Approval mode new sessions start with (default: auto_edit). */
+	approvalMode: ApprovalMode,
+	rules: Type.Array(ApprovalRule),
 	/** The folder no longer exists. */
 	missing: Type.Optional(Type.Boolean()),
 });
@@ -304,14 +355,14 @@ export const methods = {
 		result: Type.Object({ filename: Type.String(), mimeType: Type.String(), content: Type.String() }),
 	},
 	"sessions.configure": {
-		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()), web: Type.Optional(Type.Boolean()) }),
+		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()), web: Type.Optional(Type.Boolean()), approvalMode: Type.Optional(ApprovalMode) }),
 		result: Type.Object({}),
 	},
 	"sessions.rename": {
 		params: Type.Object({ ref: ContainerRef, title: Type.String() }),
 		result: Type.Object({}),
 	},
-	/** Threads: deletes the history. Build sessions: forgets the session; the pi session file stays. */
+	/** Threads: deletes the history. Build sessions: moves the pi session file to the Trash. */
 	"sessions.delete": {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({}),
@@ -340,6 +391,16 @@ export const methods = {
 	"projects.add": {
 		params: Type.Object({ path: Type.String() }),
 		result: Type.Object({ project: ProjectInfo }),
+	},
+	/** Default approval mode for the project's new sessions, and rule removal. */
+	"projects.configure": {
+		params: Type.Object({ id: Type.String(), approvalMode: Type.Optional(ApprovalMode), removeRule: Type.Optional(Type.String()) }),
+		result: Type.Object({ project: ProjectInfo }),
+	},
+	/** Answers a pending prompt (approval, question, confirm, select, input). */
+	"sessions.respond": {
+		params: Type.Object({ ref: ContainerRef, promptId: Type.String(), response: PromptResponse }),
+		result: Type.Object({}),
 	},
 	/** Forgets a project. Its session files stay where pi keeps them. */
 	"projects.remove": {
@@ -376,6 +437,8 @@ export const notifications = {
 	"session.events": SessionEventsNotification,
 	"catalog.changed": CatalogChanged,
 	"projects.changed": ProjectsChanged,
+	/** A session needs you (it's waiting on a prompt) or told you something (notify_user). Sent to every client. */
+	"session.attention": Type.Object({ ref: ContainerRef, title: Type.String(), kind: literals("waiting", "notify"), message: Type.String() }),
 } satisfies Record<string, TSchema>;
 
 // ── JSON-RPC envelope ───────────────────────────────────────────────────────

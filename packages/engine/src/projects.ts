@@ -1,11 +1,11 @@
 /** Build projects: folders the user added (docs/spec/05-build BP1). Kept in projects.json. */
 import { existsSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import type { ProjectInfo } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ProjectInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 import { newId } from "./sessions.js";
 
-type StoredProject = { id: string; path: string; name: string; addedAt: string };
+type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[] };
 
 export class Projects {
 	private entries: StoredProject[] = [];
@@ -56,6 +56,39 @@ export class Projects {
 		return project;
 	}
 
+	/** Default approval mode, or rule removal (Settings / project menu). */
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string }): ProjectInfo {
+		const entry = this.entries.find((p) => p.id === id);
+		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
+		if (change.approvalMode) entry.approvalMode = change.approvalMode;
+		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
+		this.save();
+		return describe(entry);
+	}
+
+	/** Approval mode for new sessions in `cwd` (global default: auto-edit, BQ1). */
+	modeFor(cwd: string): ApprovalMode {
+		return this.entryFor(cwd)?.approvalMode ?? "auto_edit";
+	}
+
+	rulesFor(cwd: string): ApprovalRule[] {
+		return this.entryFor(cwd)?.rules ?? [];
+	}
+
+	/** "Always allow": adds a rule to the project that contains `cwd` (no duplicates). */
+	addRule(cwd: string, rule: { kind: ApprovalRule["kind"]; pattern: string }): void {
+		const entry = this.entryFor(cwd);
+		if (!entry) return;
+		entry.rules ??= [];
+		if (entry.rules.some((r) => r.kind === rule.kind && r.pattern === rule.pattern)) return;
+		entry.rules.push({ id: newId("rule"), ...rule, createdAt: new Date().toISOString() });
+		this.save();
+	}
+
+	private entryFor(cwd: string): StoredProject | undefined {
+		return this.entries.find((p) => cwd === p.path || cwd.startsWith(`${p.path}/`));
+	}
+
 	onChange(listener: (projects: ProjectInfo[]) => void): () => void {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
@@ -70,7 +103,8 @@ export class Projects {
 	}
 }
 
-function describe(p: StoredProject): ProjectInfo {
+function describe(stored: StoredProject): ProjectInfo {
+	const p = { ...stored, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [] };
 	if (!existsSync(p.path)) return { ...p, piConfig: false, missing: true };
 	const branch = gitBranch(p.path);
 	const contextFile = ["AGENTS.md", "CLAUDE.md"].find((name) => existsSync(join(p.path, name)));

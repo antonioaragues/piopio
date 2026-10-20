@@ -202,6 +202,9 @@ public struct SessionState: Codable, Sendable, Hashable {
     /// How full the model's context is (Build). `tokens` is nil right after a compaction.
     public struct Context: Codable, Sendable, Hashable { public var tokens: Double?; public var window: Double }
     public var context: Context?
+    /// Build: approval mode and what the session waits on you for.
+    public var approvalMode: ApprovalMode?
+    public var prompts: [PendingPrompt]?
     public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, tools: Tools? = nil, usage: Usage, context: Context? = nil) {
         self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.tools = tools; self.usage = usage; self.context = context
     }
@@ -341,7 +344,77 @@ public struct ConfigureParams: Encodable, Sendable {
     public var model: ModelRef?
     public var thinking: String?
     public var web: Bool?
-    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil, web: Bool? = nil) { self.ref = ref; self.model = model; self.thinking = thinking; self.web = web }
+    public var approvalMode: ApprovalMode?
+    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil, web: Bool? = nil, approvalMode: ApprovalMode? = nil) {
+        self.ref = ref; self.model = model; self.thinking = thinking; self.web = web; self.approvalMode = approvalMode
+    }
+}
+
+// MARK: Approvals (Build)
+
+public enum ApprovalMode: String, Codable, Sendable, CaseIterable, Identifiable {
+    case ask, autoEdit = "auto_edit", fullAuto = "full_auto"
+    public var id: String { rawValue }
+}
+
+public struct ApprovalRule: Codable, Sendable, Hashable, Identifiable {
+    public enum Kind: String, Codable, Sendable { case command, tool, path }
+    public var id: String
+    public var kind: Kind
+    public var pattern: String
+    public var createdAt: String
+}
+
+/// Something a session waits on you for: an approval, a question, or an extension's confirm/select/input.
+public struct PendingPrompt: Codable, Sendable, Hashable, Identifiable {
+    public enum Kind: String, Codable, Sendable { case approval, question, confirm, select, input }
+    public struct SuggestedRule: Codable, Sendable, Hashable { public var kind: ApprovalRule.Kind; public var pattern: String }
+    public var id: String
+    public var kind: Kind
+    public var title: String
+    public var message: String?
+    public var detail: String?
+    public var tool: String?
+    public var callId: String?
+    public var reason: String?
+    public var rule: SuggestedRule?
+    public var options: [String]?
+    public var placeholder: String?
+    public var at: String
+}
+
+public struct PromptResponse: Encodable, Sendable {
+    public enum Decision: String, Encodable, Sendable { case allow, always, deny }
+    public var decision: Decision?
+    public var text: String?
+    public var choice: String?
+    public var confirmed: Bool?
+    public init(decision: Decision? = nil, text: String? = nil, choice: String? = nil, confirmed: Bool? = nil) {
+        self.decision = decision; self.text = text; self.choice = choice; self.confirmed = confirmed
+    }
+}
+
+public struct RespondParams: Encodable, Sendable {
+    public var ref: ContainerRef
+    public var promptId: String
+    public var response: PromptResponse
+    public init(ref: ContainerRef, promptId: String, response: PromptResponse) { self.ref = ref; self.promptId = promptId; self.response = response }
+}
+
+public struct ProjectsConfigureParams: Encodable, Sendable {
+    public var id: String
+    public var approvalMode: ApprovalMode?
+    public var removeRule: String?
+    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil) { self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule }
+}
+
+/// A session needs you, or told you something (notify_user).
+public struct SessionAttention: Decodable, Sendable {
+    public enum Kind: String, Decodable, Sendable { case waiting, notify }
+    public var ref: ContainerRef
+    public var title: String
+    public var kind: Kind
+    public var message: String
 }
 
 public struct ExportParams: Encodable, Sendable {
@@ -367,6 +440,8 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public var branch: String?
     public var contextFile: String?
     public var piConfig: Bool
+    public var approvalMode: ApprovalMode
+    public var rules: [ApprovalRule]
     public var missing: Bool?
 }
 

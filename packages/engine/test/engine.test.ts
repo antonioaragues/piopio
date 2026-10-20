@@ -429,6 +429,7 @@ test("build tool cards: the scripted model edits, writes and runs commands; deta
 	writeFileSync(join(folder, "notes.txt"), "hello world\n");
 	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
 	const sub = await a.client.call("sessions.subscribe", { ref });
+	await a.client.call("sessions.configure", { ref, approvalMode: "full_auto" }); // cards, not approvals
 	const script = ["read: notes.txt", "edit: notes.txt | hello world | hello piopio", "write: new.md | # New\\nline two", "$ exit 3"].join("\n");
 	await a.client.call("sessions.submit", { ref, input: { text: script } });
 	await a.client.waitFor(settled(sub.subscriptionId, 1), 20_000);
@@ -446,4 +447,113 @@ test("build tool cards: the scripted model edits, writes and runs commands; deta
 	await stop(a);
 	const b = await start(a.home);
 	expect(details(await b.client.call("sessions.open", { ref }))).toEqual(details(live));
+});
+
+describe("approvals and questions (docs/spec/05-build §6)", () => {
+	type State = Snapshot["state"];
+	async function buildSession(a: Ctx, folder: string) {
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		return { ref, sub: sub.subscriptionId as string };
+	}
+	/** The latest state of a subscription once it satisfies `predicate`. */
+	async function stateWhere(a: Ctx, sub: string, predicate: (s: State) => boolean): Promise<State> {
+		const latest = () => a.client.events.filter((n) => n.subscriptionId === sub).flatMap((n) => n.events).filter((e) => e.type === "state").at(-1) as { state: State } | undefined;
+		await a.client.waitFor(() => Boolean(latest() && predicate(latest()!.state)), 15_000);
+		return latest()!.state;
+	}
+	const tools = async (a: Ctx, ref: unknown) => ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "tool" ? [i] : []));
+
+	async function newProject(a: Ctx) {
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-approvals-")));
+		const { project } = await a.client.call("projects.add", { path: folder });
+		return { folder, project };
+	}
+
+	test("auto-edit asks before commands; Always allow adds a project rule that later sessions use", async () => {
+		const a = await start();
+		const { folder, project } = await newProject(a);
+		expect(project.approvalMode).toBe("auto_edit");
+		const s = await buildSession(a, folder);
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "$ echo first" } });
+		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		expect(waiting.approvalMode).toBe("auto_edit");
+		const [prompt] = waiting.prompts!;
+		expect(prompt).toMatchObject({ kind: "approval", title: "Run a command", detail: "echo first", tool: "bash", rule: { kind: "command", pattern: "echo" } });
+		expect((await tools(a, s.ref))[0]?.status).toBe("pending_approval");
+
+		// A second client (the app after a restart) sees the same pending request.
+		const other = await TestClient.connect(a.engine["options"].paths.socket);
+		await other.call("engine.hello", { token: readFileSync(join(a.home, "engine.token"), "utf8").trim(), client: "test2", protocolVersion: "1.0" });
+		expect(((await other.call("sessions.subscribe", { ref: s.ref })).snapshot as Snapshot).state.prompts?.map((p) => p.id)).toEqual([prompt!.id]);
+		other.close();
+
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: prompt!.id, response: { decision: "always" } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle");
+		expect((await tools(a, s.ref))[0]).toMatchObject({ status: "done", output: expect.stringContaining("first") });
+		expect((await a.client.call("projects.list")).projects[0].rules).toMatchObject([{ kind: "command", pattern: "echo" }]);
+
+		const t = await buildSession(a, folder);
+		await a.client.call("sessions.submit", { ref: t.ref, input: { text: "$ echo second" } });
+		const done = await stateWhere(a, t.sub, (st) => st.status === "idle" || st.status === "waiting_approval");
+		expect(done.status).toBe("idle");
+		expect((await tools(a, t.ref))[0]?.status).toBe("done");
+	});
+
+	test("the deny-list asks even in full auto; Deny sends the note to the agent", async () => {
+		const a = await start();
+		const { folder, project } = await newProject(a);
+		await a.client.call("projects.configure", { id: project.id, approvalMode: "full_auto" });
+		const s = await buildSession(a, folder);
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "$ git push --force origin main" } });
+		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		expect(waiting.approvalMode).toBe("full_auto");
+		expect(waiting.prompts![0]).toMatchObject({ reason: "Force-pushes" });
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: waiting.prompts![0]!.id, response: { decision: "deny", text: "never force-push main" } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle");
+		const [tool] = await tools(a, s.ref);
+		expect(tool).toMatchObject({ status: "denied", output: "The user denied this tool call: never force-push main" });
+		// "denied" survives a reopen from the session file.
+		await stop(a);
+		const b = await start(a.home);
+		expect((await tools(b, s.ref))[0]?.status).toBe("denied");
+	});
+
+	test("ask mode asks before edits; switching the session to full auto stops asking", async () => {
+		const a = await start();
+		const { folder } = await newProject(a);
+		writeFileSync(join(folder, "a.txt"), "one\n");
+		const s = await buildSession(a, folder);
+		await a.client.call("sessions.configure", { ref: s.ref, approvalMode: "ask" });
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "edit: a.txt | one | two" } });
+		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		expect(waiting.prompts![0]).toMatchObject({ title: "Edit a file", detail: "a.txt" });
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: waiting.prompts![0]!.id, response: { decision: "allow" } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle");
+		expect(readFileSync(join(folder, "a.txt"), "utf8")).toBe("two\n");
+
+		await a.client.call("sessions.configure", { ref: s.ref, approvalMode: "full_auto" });
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "edit: a.txt | two | three" } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle" && st.approvalMode === "full_auto");
+		expect(readFileSync(join(folder, "a.txt"), "utf8")).toBe("three\n");
+	});
+
+	test("ask_user waits for an answer; stopping while waiting cancels the request", async () => {
+		const a = await start();
+		const { folder } = await newProject(a);
+		const s = await buildSession(a, folder);
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "ask: Which database? | Postgres | SQLite" } });
+		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		expect(waiting.prompts![0]).toMatchObject({ kind: "question", title: "Which database?", options: ["Postgres", "SQLite"] });
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: waiting.prompts![0]!.id, response: { choice: "SQLite" } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle");
+		expect((await tools(a, s.ref))[0]).toMatchObject({ tool: "ask_user", status: "done", output: "The user answered: SQLite" });
+
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "$ rm -rf /" } });
+		await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		await a.client.call("sessions.abort", { ref: s.ref });
+		const after = await stateWhere(a, s.sub, (st) => st.status === "idle");
+		expect(after.prompts).toEqual([]);
+		expect((await tools(a, s.ref)).at(-1)?.status).toBe("interrupted");
+	});
 });

@@ -599,6 +599,121 @@
 						}
 					}
 				},
+				"approvalMode": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "ask"
+						},
+						{
+							"type": "string",
+							"const": "auto_edit"
+						},
+						{
+							"type": "string",
+							"const": "full_auto"
+						}
+					]
+				},
+				"prompts": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"kind",
+							"title",
+							"at"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "approval"
+									},
+									{
+										"type": "string",
+										"const": "question"
+									},
+									{
+										"type": "string",
+										"const": "confirm"
+									},
+									{
+										"type": "string",
+										"const": "select"
+									},
+									{
+										"type": "string",
+										"const": "input"
+									}
+								]
+							},
+							"title": {
+								"type": "string"
+							},
+							"message": {
+								"type": "string"
+							},
+							"detail": {
+								"type": "string"
+							},
+							"tool": {
+								"type": "string"
+							},
+							"callId": {
+								"type": "string"
+							},
+							"reason": {
+								"type": "string"
+							},
+							"rule": {
+								"type": "object",
+								"required": [
+									"kind",
+									"pattern"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "command"
+											},
+											{
+												"type": "string",
+												"const": "tool"
+											},
+											{
+												"type": "string",
+												"const": "path"
+											}
+										]
+									},
+									"pattern": {
+										"type": "string"
+									}
+								}
+							},
+							"options": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"placeholder": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							}
+						}
+					}
+				},
 				"context": {
 					"type": "object",
 					"required": [
@@ -2187,6 +2302,121 @@
 										}
 									}
 								},
+								"approvalMode": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "ask"
+										},
+										{
+											"type": "string",
+											"const": "auto_edit"
+										},
+										{
+											"type": "string",
+											"const": "full_auto"
+										}
+									]
+								},
+								"prompts": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"id",
+											"kind",
+											"title",
+											"at"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"kind": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "approval"
+													},
+													{
+														"type": "string",
+														"const": "question"
+													},
+													{
+														"type": "string",
+														"const": "confirm"
+													},
+													{
+														"type": "string",
+														"const": "select"
+													},
+													{
+														"type": "string",
+														"const": "input"
+													}
+												]
+											},
+											"title": {
+												"type": "string"
+											},
+											"message": {
+												"type": "string"
+											},
+											"detail": {
+												"type": "string"
+											},
+											"tool": {
+												"type": "string"
+											},
+											"callId": {
+												"type": "string"
+											},
+											"reason": {
+												"type": "string"
+											},
+											"rule": {
+												"type": "object",
+												"required": [
+													"kind",
+													"pattern"
+												],
+												"properties": {
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "command"
+															},
+															{
+																"type": "string",
+																"const": "tool"
+															},
+															{
+																"type": "string",
+																"const": "path"
+															}
+														]
+													},
+													"pattern": {
+														"type": "string"
+													}
+												}
+											},
+											"options": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											},
+											"placeholder": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											}
+										}
+									}
+								},
 								"context": {
 									"type": "object",
 									"required": [
@@ -2831,6 +3061,121 @@
 												}
 											}
 										},
+										"approvalMode": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "ask"
+												},
+												{
+													"type": "string",
+													"const": "auto_edit"
+												},
+												{
+													"type": "string",
+													"const": "full_auto"
+												}
+											]
+										},
+										"prompts": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"id",
+													"kind",
+													"title",
+													"at"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "approval"
+															},
+															{
+																"type": "string",
+																"const": "question"
+															},
+															{
+																"type": "string",
+																"const": "confirm"
+															},
+															{
+																"type": "string",
+																"const": "select"
+															},
+															{
+																"type": "string",
+																"const": "input"
+															}
+														]
+													},
+													"title": {
+														"type": "string"
+													},
+													"message": {
+														"type": "string"
+													},
+													"detail": {
+														"type": "string"
+													},
+													"tool": {
+														"type": "string"
+													},
+													"callId": {
+														"type": "string"
+													},
+													"reason": {
+														"type": "string"
+													},
+													"rule": {
+														"type": "object",
+														"required": [
+															"kind",
+															"pattern"
+														],
+														"properties": {
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "command"
+																	},
+																	{
+																		"type": "string",
+																		"const": "tool"
+																	},
+																	{
+																		"type": "string",
+																		"const": "path"
+																	}
+																]
+															},
+															"pattern": {
+																"type": "string"
+															}
+														}
+													},
+													"options": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"placeholder": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													}
+												}
+											}
+										},
 										"context": {
 											"type": "object",
 											"required": [
@@ -3465,6 +3810,121 @@
 								},
 								"costUsd": {
 									"type": "number"
+								}
+							}
+						},
+						"approvalMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"prompts": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"kind",
+									"title",
+									"at"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "approval"
+											},
+											{
+												"type": "string",
+												"const": "question"
+											},
+											{
+												"type": "string",
+												"const": "confirm"
+											},
+											{
+												"type": "string",
+												"const": "select"
+											},
+											{
+												"type": "string",
+												"const": "input"
+											}
+										]
+									},
+									"title": {
+										"type": "string"
+									},
+									"message": {
+										"type": "string"
+									},
+									"detail": {
+										"type": "string"
+									},
+									"tool": {
+										"type": "string"
+									},
+									"callId": {
+										"type": "string"
+									},
+									"reason": {
+										"type": "string"
+									},
+									"rule": {
+										"type": "object",
+										"required": [
+											"kind",
+											"pattern"
+										],
+										"properties": {
+											"kind": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "command"
+													},
+													{
+														"type": "string",
+														"const": "tool"
+													},
+													{
+														"type": "string",
+														"const": "path"
+													}
+												]
+											},
+											"pattern": {
+												"type": "string"
+											}
+										}
+									},
+									"options": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"placeholder": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									}
 								}
 							}
 						},
@@ -5147,6 +5607,121 @@
 													}
 												}
 											},
+											"approvalMode": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "ask"
+													},
+													{
+														"type": "string",
+														"const": "auto_edit"
+													},
+													{
+														"type": "string",
+														"const": "full_auto"
+													}
+												]
+											},
+											"prompts": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"id",
+														"kind",
+														"title",
+														"at"
+													],
+													"properties": {
+														"id": {
+															"type": "string"
+														},
+														"kind": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "approval"
+																},
+																{
+																	"type": "string",
+																	"const": "question"
+																},
+																{
+																	"type": "string",
+																	"const": "confirm"
+																},
+																{
+																	"type": "string",
+																	"const": "select"
+																},
+																{
+																	"type": "string",
+																	"const": "input"
+																}
+															]
+														},
+														"title": {
+															"type": "string"
+														},
+														"message": {
+															"type": "string"
+														},
+														"detail": {
+															"type": "string"
+														},
+														"tool": {
+															"type": "string"
+														},
+														"callId": {
+															"type": "string"
+														},
+														"reason": {
+															"type": "string"
+														},
+														"rule": {
+															"type": "object",
+															"required": [
+																"kind",
+																"pattern"
+															],
+															"properties": {
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "command"
+																		},
+																		{
+																			"type": "string",
+																			"const": "tool"
+																		},
+																		{
+																			"type": "string",
+																			"const": "path"
+																		}
+																	]
+																},
+																"pattern": {
+																	"type": "string"
+																}
+															}
+														},
+														"options": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"placeholder": {
+															"type": "string"
+														},
+														"at": {
+															"type": "string"
+														}
+													}
+												}
+											},
 											"context": {
 												"type": "object",
 												"required": [
@@ -5788,6 +6363,121 @@
 															},
 															"costUsd": {
 																"type": "number"
+															}
+														}
+													},
+													"approvalMode": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "ask"
+															},
+															{
+																"type": "string",
+																"const": "auto_edit"
+															},
+															{
+																"type": "string",
+																"const": "full_auto"
+															}
+														]
+													},
+													"prompts": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"id",
+																"kind",
+																"title",
+																"at"
+															],
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "approval"
+																		},
+																		{
+																			"type": "string",
+																			"const": "question"
+																		},
+																		{
+																			"type": "string",
+																			"const": "confirm"
+																		},
+																		{
+																			"type": "string",
+																			"const": "select"
+																		},
+																		{
+																			"type": "string",
+																			"const": "input"
+																		}
+																	]
+																},
+																"title": {
+																	"type": "string"
+																},
+																"message": {
+																	"type": "string"
+																},
+																"detail": {
+																	"type": "string"
+																},
+																"tool": {
+																	"type": "string"
+																},
+																"callId": {
+																	"type": "string"
+																},
+																"reason": {
+																	"type": "string"
+																},
+																"rule": {
+																	"type": "object",
+																	"required": [
+																		"kind",
+																		"pattern"
+																	],
+																	"properties": {
+																		"kind": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "command"
+																				},
+																				{
+																					"type": "string",
+																					"const": "tool"
+																				},
+																				{
+																					"type": "string",
+																					"const": "path"
+																				}
+																			]
+																		},
+																		"pattern": {
+																			"type": "string"
+																		}
+																	}
+																},
+																"options": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"placeholder": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																}
 															}
 														}
 													},
@@ -6985,6 +7675,121 @@
 								}
 							}
 						},
+						"approvalMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"prompts": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"kind",
+									"title",
+									"at"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "approval"
+											},
+											{
+												"type": "string",
+												"const": "question"
+											},
+											{
+												"type": "string",
+												"const": "confirm"
+											},
+											{
+												"type": "string",
+												"const": "select"
+											},
+											{
+												"type": "string",
+												"const": "input"
+											}
+										]
+									},
+									"title": {
+										"type": "string"
+									},
+									"message": {
+										"type": "string"
+									},
+									"detail": {
+										"type": "string"
+									},
+									"tool": {
+										"type": "string"
+									},
+									"callId": {
+										"type": "string"
+									},
+									"reason": {
+										"type": "string"
+									},
+									"rule": {
+										"type": "object",
+										"required": [
+											"kind",
+											"pattern"
+										],
+										"properties": {
+											"kind": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "command"
+													},
+													{
+														"type": "string",
+														"const": "tool"
+													},
+													{
+														"type": "string",
+														"const": "path"
+													}
+												]
+											},
+											"pattern": {
+												"type": "string"
+											}
+										}
+									},
+									"options": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"placeholder": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									}
+								}
+							}
+						},
 						"context": {
 							"type": "object",
 							"required": [
@@ -7668,6 +8473,121 @@
 										},
 										"costUsd": {
 											"type": "number"
+										}
+									}
+								},
+								"approvalMode": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "ask"
+										},
+										{
+											"type": "string",
+											"const": "auto_edit"
+										},
+										{
+											"type": "string",
+											"const": "full_auto"
+										}
+									]
+								},
+								"prompts": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"id",
+											"kind",
+											"title",
+											"at"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"kind": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "approval"
+													},
+													{
+														"type": "string",
+														"const": "question"
+													},
+													{
+														"type": "string",
+														"const": "confirm"
+													},
+													{
+														"type": "string",
+														"const": "select"
+													},
+													{
+														"type": "string",
+														"const": "input"
+													}
+												]
+											},
+											"title": {
+												"type": "string"
+											},
+											"message": {
+												"type": "string"
+											},
+											"detail": {
+												"type": "string"
+											},
+											"tool": {
+												"type": "string"
+											},
+											"callId": {
+												"type": "string"
+											},
+											"reason": {
+												"type": "string"
+											},
+											"rule": {
+												"type": "object",
+												"required": [
+													"kind",
+													"pattern"
+												],
+												"properties": {
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "command"
+															},
+															{
+																"type": "string",
+																"const": "tool"
+															},
+															{
+																"type": "string",
+																"const": "path"
+															}
+														]
+													},
+													"pattern": {
+														"type": "string"
+													}
+												}
+											},
+											"options": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											},
+											"placeholder": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											}
 										}
 									}
 								},
@@ -8398,6 +9318,22 @@
 				},
 				"web": {
 					"type": "boolean"
+				},
+				"approvalMode": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "ask"
+						},
+						{
+							"type": "string",
+							"const": "auto_edit"
+						},
+						{
+							"type": "string",
+							"const": "full_auto"
+						}
+					]
 				}
 			}
 		},
@@ -8769,7 +9705,9 @@
 							"path",
 							"name",
 							"addedAt",
-							"piConfig"
+							"piConfig",
+							"approvalMode",
+							"rules"
 						],
 						"properties": {
 							"id": {
@@ -8792,6 +9730,61 @@
 							},
 							"piConfig": {
 								"type": "boolean"
+							},
+							"approvalMode": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "ask"
+									},
+									{
+										"type": "string",
+										"const": "auto_edit"
+									},
+									{
+										"type": "string",
+										"const": "full_auto"
+									}
+								]
+							},
+							"rules": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"kind",
+										"pattern",
+										"createdAt"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"kind": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "command"
+												},
+												{
+													"type": "string",
+													"const": "tool"
+												},
+												{
+													"type": "string",
+													"const": "path"
+												}
+											]
+										},
+										"pattern": {
+											"type": "string"
+										},
+										"createdAt": {
+											"type": "string"
+										}
+									}
+								}
 							},
 							"missing": {
 								"type": "boolean"
@@ -8825,7 +9818,9 @@
 						"path",
 						"name",
 						"addedAt",
-						"piConfig"
+						"piConfig",
+						"approvalMode",
+						"rules"
 					],
 					"properties": {
 						"id": {
@@ -8849,12 +9844,280 @@
 						"piConfig": {
 							"type": "boolean"
 						},
+						"approvalMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"rules": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"kind",
+									"pattern",
+									"createdAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "command"
+											},
+											{
+												"type": "string",
+												"const": "tool"
+											},
+											{
+												"type": "string",
+												"const": "path"
+											}
+										]
+									},
+									"pattern": {
+										"type": "string"
+									},
+									"createdAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
 						"missing": {
 							"type": "boolean"
 						}
 					}
 				}
 			}
+		},
+		"projects.configure.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"approvalMode": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "ask"
+						},
+						{
+							"type": "string",
+							"const": "auto_edit"
+						},
+						{
+							"type": "string",
+							"const": "full_auto"
+						}
+					]
+				},
+				"removeRule": {
+					"type": "string"
+				}
+			}
+		},
+		"projects.configure.result": {
+			"type": "object",
+			"required": [
+				"project"
+			],
+			"properties": {
+				"project": {
+					"type": "object",
+					"required": [
+						"id",
+						"path",
+						"name",
+						"addedAt",
+						"piConfig",
+						"approvalMode",
+						"rules"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"path": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"addedAt": {
+							"type": "string"
+						},
+						"branch": {
+							"type": "string"
+						},
+						"contextFile": {
+							"type": "string"
+						},
+						"piConfig": {
+							"type": "boolean"
+						},
+						"approvalMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"rules": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"kind",
+									"pattern",
+									"createdAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "command"
+											},
+											{
+												"type": "string",
+												"const": "tool"
+											},
+											{
+												"type": "string",
+												"const": "path"
+											}
+										]
+									},
+									"pattern": {
+										"type": "string"
+									},
+									"createdAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"missing": {
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"sessions.respond.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"promptId",
+				"response"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"promptId": {
+					"type": "string"
+				},
+				"response": {
+					"type": "object",
+					"properties": {
+						"decision": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "allow"
+								},
+								{
+									"type": "string",
+									"const": "always"
+								},
+								{
+									"type": "string",
+									"const": "deny"
+								}
+							]
+						},
+						"text": {
+							"type": "string"
+						},
+						"choice": {
+							"type": "string"
+						},
+						"confirmed": {
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"sessions.respond.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"projects.remove.params": {
 			"type": "object",

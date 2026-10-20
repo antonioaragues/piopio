@@ -187,6 +187,8 @@ public final class DisclosureCard: @unchecked Sendable {
     public var added = 0
     public var removed = 0
     public var failed = false
+    /// Waiting for your approval (amber dot).
+    public var waiting = false
     public var expanded = false
     /// The reader opened or closed it, so re-renders keep their choice.
     public var toggledByReader = false
@@ -336,6 +338,7 @@ struct DisclosureCardView: View {
                         .foregroundStyle(Color(nsColor: DS.fg3))
                         .frame(width: 10)
                     if card.failed { Circle().fill(Color(nsColor: DS.red)).frame(width: 6, height: 6) }
+                    if card.waiting { Circle().fill(Color(nsColor: DS.amber)).frame(width: 6, height: 6) }
                     Text(card.title).font(.system(size: 12, weight: .medium)).foregroundStyle(Color(nsColor: DS.fg))
                     if !card.detail.isEmpty {
                         Text(card.detail)
@@ -348,7 +351,7 @@ struct DisclosureCardView: View {
                     if card.added > 0 { Text("+\(card.added)").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(nsColor: DS.green)).monospacedDigit() }
                     if card.removed > 0 { Text("−\(card.removed)").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(nsColor: DS.red)).monospacedDigit() }
                     if !card.trailing.isEmpty {
-                        Text(card.trailing).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: card.failed ? DS.red : DS.fg3)).monospacedDigit()
+                        Text(card.trailing).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: card.failed ? DS.red : card.waiting ? DS.amber : DS.fg3)).monospacedDigit()
                     }
                 }
                 .padding(.horizontal, 12)

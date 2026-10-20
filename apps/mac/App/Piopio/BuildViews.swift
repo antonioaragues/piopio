@@ -183,6 +183,14 @@ struct BuildSessionView: View {
                         }
                         .buttonStyle(PillStyle(kind: .toolbar, compact: true))
                     }
+                    if !session.prompts.isEmpty {
+                        PromptStack(session: session)
+                            .frame(maxWidth: 636)
+                            .padding(.horizontal, 24)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                                session.document.bottomInset = 150 + height + 8
+                            }
+                    }
                     Composer(engine: engine, thread: session)
                         .frame(maxWidth: 636)
                         .padding(.horizontal, 24)
@@ -191,6 +199,7 @@ struct BuildSessionView: View {
             }
         }
         .task { await session.open() }
+        .onChange(of: session.prompts.isEmpty) { _, empty in if empty { session.document.bottomInset = 150 } }
     }
 
     private var header: some View {
@@ -200,6 +209,7 @@ struct BuildSessionView: View {
                 Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
             Spacer(minLength: 12)
+            ApprovalModeMenu(engine: engine, session: session, project: project)
             if let branch = project?.branch {
                 Label(branch, systemImage: "arrow.triangle.branch")
                     .font(.system(size: 12, design: .monospaced))
@@ -243,6 +253,7 @@ struct BuildSessionView: View {
             parts.append(usage.costUsd < 0.01 ? String(format: "$%.4f", usage.costUsd) : String(format: "$%.2f", usage.costUsd))
         }
         if session.state?.status == .running { parts.append("working…") }
+        if session.state?.status == .waitingApproval { parts.append("waiting for you") }
         return parts.joined(separator: " · ")
     }
 
@@ -305,6 +316,263 @@ struct BuildEmptyState: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: Approvals and questions (docs/design 2a approval card; docs/spec/05-build §6, AP1)
+
+/// What the session waits on you for, stacked above the composer: always visible, even when scrolled up.
+struct PromptStack: View {
+    let session: ThreadModel
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach(Array(session.prompts.enumerated()), id: \.element.id) { index, prompt in
+                PromptCard(session: session, prompt: prompt, primary: index == 0)
+            }
+        }
+    }
+}
+
+struct PromptCard: View {
+    let session: ThreadModel
+    let prompt: PendingPrompt
+    /// The first card answers ⌘↩.
+    let primary: Bool
+    @State private var denying = false
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Circle().fill(Color.dsAmber).frame(width: 7, height: 7)
+                Text(heading).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
+                Spacer()
+                if let tool = prompt.tool { Text(tool).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
+            }
+            if prompt.kind != .approval {
+                Text(prompt.title).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
+            }
+            if let message = prompt.message {
+                Text(message).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+            }
+            if let detail = prompt.detail, !detail.isEmpty {
+                ScrollView {
+                    Text(detail).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 90)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+            }
+            if let reason = prompt.reason {
+                Text("Always asks: \(reason.prefix(1).lowercased() + reason.dropFirst())").font(.system(size: 12)).foregroundStyle(Color.dsAmber)
+            }
+            actions
+        }
+        .padding(14)
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsAccentLine, lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: DS.Radius.card + 4).fill(Color.dsAccentSoft).padding(-4))
+    }
+
+    private var heading: String {
+        switch prompt.kind {
+        case .approval: prompt.title == "Run a command" || prompt.title.isEmpty ? "Approval needed" : "Approval needed · \(prompt.title.prefix(1).lowercased() + prompt.title.dropFirst())"
+        case .question: "The agent asks"
+        case .confirm, .select, .input: "An extension asks"
+        }
+    }
+
+    @ViewBuilder private var actions: some View {
+        switch prompt.kind {
+        case .approval: approvalActions
+        case .question, .select: choiceActions
+        case .confirm:
+            HStack {
+                Spacer()
+                Button("Cancel") { answer(PromptResponse(confirmed: false)) }.buttonStyle(PillStyle())
+                Button("Confirm") { answer(PromptResponse(confirmed: true)) }.buttonStyle(PillStyle(kind: .primary))
+                    .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
+            }
+        case .input: freeAnswer(placeholder: prompt.placeholder ?? "Your answer")
+        }
+    }
+
+    @ViewBuilder private var approvalActions: some View {
+        if denying {
+            HStack(spacing: 8) {
+                TextField("Tell the agent why, or what to do instead (optional)", text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12.5))
+                    .focused($focused)
+                    .onSubmit { answer(PromptResponse(decision: .deny, text: note)) }
+                    .onAppear { focused = true }
+                Button("Cancel") { denying = false; text = "" }.buttonStyle(PillStyle())
+                Button("Deny") { answer(PromptResponse(decision: .deny, text: note)) }.buttonStyle(PillStyle(kind: .strong))
+            }
+        } else {
+            HStack(spacing: 8) {
+                Button("Deny") { denying = true }.buttonStyle(PillStyle())
+                Spacer()
+                if let rule = prompt.rule {
+                    Button(Self.alwaysLabel(rule)) { answer(PromptResponse(decision: .always)) }
+                        .buttonStyle(PillStyle())
+                        .help("Adds a rule to this project (Settings › Approvals)")
+                }
+                Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Allow once ⌘↩" : "Allow once") }
+                    .buttonStyle(PillStyle(kind: .primary))
+                    .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
+            }
+        }
+    }
+
+    @ViewBuilder private var choiceActions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let options = prompt.options, !options.isEmpty {
+                FlowRow(options) { option in
+                    Button(option) { answer(PromptResponse(choice: option)) }.buttonStyle(PillStyle(kind: .secondary))
+                }
+            }
+            if prompt.kind == .question { freeAnswer(placeholder: prompt.options?.isEmpty == false ? "Or answer in your own words" : "Your answer") }
+        }
+    }
+
+    private func freeAnswer(placeholder: String) -> some View {
+        HStack(spacing: 8) {
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12.5))
+                .onSubmit { send() }
+            Button("Send") { send() }.buttonStyle(PillStyle(kind: .primary)).disabled(note == nil)
+        }
+    }
+
+    private var note: String? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+
+    private func send() {
+        guard let note else { return }
+        answer(PromptResponse(text: note))
+    }
+
+    private func answer(_ response: PromptResponse) {
+        Task { await session.respond(prompt, response) }
+    }
+
+    static func alwaysLabel(_ rule: PendingPrompt.SuggestedRule) -> String {
+        switch rule.kind {
+        case .command: "Always for \(rule.pattern)"
+        case .tool: "Always for \(rule.pattern)"
+        case .path: "Always in \(URL(fileURLWithPath: String(rule.pattern.dropLast(3))).lastPathComponent)"
+        }
+    }
+}
+
+/// Wraps its items onto as many lines as needed.
+private struct FlowRow<Item: Hashable, Content: View>: View {
+    let items: [Item]
+    let content: (Item) -> Content
+    init(_ items: [Item], @ViewBuilder content: @escaping (Item) -> Content) {
+        self.items = items
+        self.content = content
+    }
+
+    var body: some View {
+        FlowLayout(spacing: 6) { ForEach(items, id: \.self) { content($0) } }
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        return CGSize(width: proposal.width ?? rows.map(\.width).max() ?? 0, height: rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(0, rows.count - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
+        var current: (indices: [Int], width: CGFloat, height: CGFloat) = ([], 0, 0)
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            if !current.indices.isEmpty, current.width + spacing + size.width > width {
+                rows.append(current)
+                current = ([], 0, 0)
+            }
+            current.width += (current.indices.isEmpty ? 0 : spacing) + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
+}
+
+/// The session's approval mode (toolbar pill, docs/design 2a "Ask before edits").
+struct ApprovalModeMenu: View {
+    let engine: EngineController
+    let session: ThreadModel
+    let project: ProjectInfo?
+
+    var body: some View {
+        Menu {
+            ForEach(ApprovalMode.allCases) { mode in
+                Button {
+                    Task { await session.setApprovalMode(mode) }
+                } label: {
+                    Text(Self.title(mode) + (mode == session.approvalMode ? "  ✓" : ""))
+                    Text(Self.summary(mode))
+                }
+            }
+            if let project, project.approvalMode != session.approvalMode {
+                Divider()
+                Button("Use “\(Self.title(session.approvalMode))” for new sessions in \(project.name)") {
+                    Task { await engine.setApprovalMode(session.approvalMode, for: project) }
+                }
+            }
+        } label: {
+            Text(Self.title(session.approvalMode)).font(.system(size: 12, weight: .medium))
+        }
+        .menuStyle(.button)
+        .buttonStyle(PillStyle(kind: .toolbar))
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(Self.summary(session.approvalMode))
+    }
+
+    static func title(_ mode: ApprovalMode) -> String {
+        switch mode {
+        case .ask: "Ask before edits"
+        case .autoEdit: "Auto-edit"
+        case .fullAuto: "Full auto"
+        }
+    }
+
+    static func summary(_ mode: ApprovalMode) -> String {
+        switch mode {
+        case .ask: "Asks before every edit, command and web request. Reading is automatic."
+        case .autoEdit: "Edits files on its own. Asks before commands you haven't allowed."
+        case .fullAuto: "Doesn't ask, except for risky commands and writes outside the project."
         }
     }
 }

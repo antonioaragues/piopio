@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFi
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ContainerRef, ModelRef, SessionSummary } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, PromptResponse, SessionSummary } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { BuildRuntime } from "./runtimes/build.js";
@@ -27,6 +27,15 @@ type CatalogEntry = SessionSummary & {
 	onDisk?: boolean;
 	branches?: BranchState;
 	web?: boolean;
+	/** Build: the session's approval mode (new sessions take their project's). */
+	approvalMode?: ApprovalMode;
+};
+
+/** Where Build sessions get their default approval mode and "always allow" rules (the projects). */
+export type ApprovalPolicy = {
+	modeFor(cwd: string): ApprovalMode;
+	rulesFor(cwd: string): ApprovalRule[];
+	addRule(cwd: string, rule: { kind: ApprovalRule["kind"]; pattern: string }): void;
 };
 
 export const newId = (prefix: string) => `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 20)}`;
@@ -38,6 +47,9 @@ export class Sessions {
 	private open = new Map<string, Promise<Runtime>>();
 	private listeners = new Set<CatalogListener>();
 	readonly search: SearchIndex;
+	policy: ApprovalPolicy = { modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
+	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
+	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
 
 	constructor(
 		private readonly paths: EnginePaths,
@@ -71,8 +83,9 @@ export class Sessions {
 		for (const l of this.listeners) l({ upserted: [summary(entry)], removed: [] });
 	}
 
-	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean }): Promise<void> {
+	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean; approvalMode?: ApprovalMode }): Promise<void> {
 		const entry = this.entry(ref);
+		if (change.approvalMode) entry.approvalMode = change.approvalMode; // read by the runtime's approvals bridge
 		if (this.open.has(ref.id)) await (await this.runtime(ref)).configure(change);
 		if (change.web !== undefined) entry.web = change.web;
 		if (change.model) entry.model = change.model;
@@ -218,6 +231,7 @@ export class Sessions {
 			model: params.model ?? this.hub.defaultModel,
 			...(params.cwd ? { cwd: params.cwd } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
+			...(params.kind === "build" ? { approvalMode: this.policy.modeFor(params.cwd!) } : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
 		};
 		this.entries.set(ref.id, entry);
@@ -235,6 +249,13 @@ export class Sessions {
 			pending.catch(() => this.open.delete(ref.id));
 		}
 		return pending;
+	}
+
+	/** Answers a pending prompt of a Build session. */
+	async respond(ref: ContainerRef, promptId: string, response: PromptResponse): Promise<void> {
+		const runtime = await this.runtime(ref);
+		if (!(runtime instanceof BuildRuntime)) throw new EngineError("INVALID", "Only Build sessions ask for approval.");
+		runtime.respond(promptId, response);
 	}
 
 	/** Called after a submit: bumps recency and auto-titles from the first input. */
@@ -395,6 +416,12 @@ export class Sessions {
 			...(entry.thinking ? { thinking: entry.thinking } : {}),
 			...(entry.sessionFile ? { sessionFile: entry.sessionFile } : {}),
 			...this.piOverrides,
+			approvals: {
+				mode: () => entry.approvalMode ?? this.policy.modeFor(entry.cwd!),
+				rules: () => this.policy.rulesFor(entry.cwd!),
+				addRule: (rule) => this.policy.addRule(entry.cwd!, rule),
+			},
+			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 		});
 		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {
 			entry.sessionFile = runtime.sessionFile;

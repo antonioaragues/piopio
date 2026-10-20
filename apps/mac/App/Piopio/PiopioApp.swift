@@ -62,6 +62,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// Quitting stops sessions that are working or waiting on you, unless the engine runs in the background.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated {
+            guard let engine, !engine.runsInBackground, ProcessInfo.processInfo.environment["PIOPIO_QUIT_AFTER_SNAPSHOT"] == nil else { return .terminateNow }
+            let busy = engine.busySessions
+            guard !busy.isEmpty else { return .terminateNow }
+            let alert = NSAlert()
+            let waiting = busy.contains { engine.liveStatus[$0.ref.id] == .waitingApproval }
+            alert.messageText = busy.count == 1 ? "“\(busy[0].title)” is still \(waiting ? "waiting for you" : "working")" : "\(busy.count) sessions are still working"
+            alert.informativeText = "Quitting stops them\(waiting ? " and cancels what they're waiting for" : ""). Your sessions are saved, and you can ask the agent to continue later. To keep sessions running after you quit, turn on Settings › Engines › Keep running when Piopio quits."
+            alert.addButton(withTitle: "Quit Anyway")
+            alert.addButton(withTitle: "Cancel")
+            return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated { engine?.stop() }
     }

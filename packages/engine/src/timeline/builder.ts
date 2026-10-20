@@ -5,6 +5,7 @@
 import type { AssistantItem, AssistantPart, AttachmentInfo, BranchInfo, SessionEvent, SessionState, Snapshot, TimelineItem, ToolItem, Usage, ContainerRef, UserItem } from "@piopio/protocol";
 import { describeModelError } from "./errors.js";
 import { endDetails, startDetails, type PiToolResult } from "./tool-details.js";
+import { DENIED_PREFIX } from "@piopio/pi-extensions";
 
 /** Minimal structural views of pi-ai messages (avoid coupling to upstream unions). */
 export type PiContentBlock =
@@ -105,8 +106,8 @@ export class TimelineBuilder {
 				const r = m as Extract<PiMessage, { role: "toolResult" }>;
 				const t = tools.get(r.toolCallId);
 				if (t) {
-					t.status = r.isError ? "error" : "done";
 					t.output = contentText(r.content);
+					t.status = r.isError ? failedStatus(t.output) : "done";
 					const details = endDetails(t.tool, t.args, { details: r.details }, t.output, Boolean(r.isError));
 					if (details) t.details = details;
 				}
@@ -225,6 +226,14 @@ export class TimelineBuilder {
 		this.pending.push({ type: "item.added", item: structuredClone(item) });
 	}
 
+	/** Marks a tool waiting for approval, or running again once answered. */
+	toolStatus(callId: string, status: "pending_approval" | "running"): void {
+		const item = this.get(`tool:${callId}`) as ToolItem | undefined;
+		if (!item || item.status === status || (status === "running" && item.status !== "pending_approval")) return;
+		item.status = status;
+		this.pending.push({ type: "item.updated", item: structuredClone(item) });
+	}
+
 	toolOutput(callId: string, update: { set: string } | { trimStart?: number; append?: string }): void {
 		const item = this.get(`tool:${callId}`) as ToolItem | undefined;
 		if (!item) return;
@@ -241,8 +250,8 @@ export class TimelineBuilder {
 	toolEnd(callId: string, output: string | undefined, isError: boolean, durationMs?: number, result?: PiToolResult): void {
 		const item = this.get(`tool:${callId}`) as ToolItem | undefined;
 		if (!item) return;
-		item.status = isError ? "error" : "done";
 		if (output !== undefined) item.output = output;
+		item.status = isError ? failedStatus(item.output) : "done";
 		const details = endDetails(item.tool, item.args, result, item.output, isError);
 		if (details) item.details = details;
 		if (durationMs !== undefined) item.durationMs = durationMs;
@@ -292,4 +301,11 @@ export class TimelineBuilder {
 function errorFields(raw: string | undefined): Pick<AssistantItem, "error" | "errorKind" | "errorDetail"> {
 	const { kind, message } = describeModelError(raw);
 	return { error: message, errorKind: kind, ...(raw ? { errorDetail: raw } : {}) };
+}
+
+/** A failed call that the user denied, or that a stop cut short, isn't an error of the tool. */
+function failedStatus(output: string | undefined): ToolItem["status"] {
+	if (output?.startsWith(DENIED_PREFIX)) return "denied";
+	if (output === "Operation aborted") return "interrupted";
+	return "error";
 }

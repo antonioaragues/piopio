@@ -215,6 +215,19 @@ final class ThreadModel {
     }
 
     /// `"default"` returns to the model's default.
+    // MARK: Approvals and questions (Build)
+
+    var prompts: [PendingPrompt] { state?.prompts ?? [] }
+    var approvalMode: ApprovalMode { state?.approvalMode ?? .autoEdit }
+
+    func respond(_ prompt: PendingPrompt, _ response: PromptResponse) async {
+        await call("sessions.respond", RespondParams(ref: ref, promptId: prompt.id, response: response))
+    }
+
+    func setApprovalMode(_ mode: ApprovalMode) async {
+        await call("sessions.configure", ConfigureParams(ref: ref, approvalMode: mode))
+    }
+
     func setThinking(_ level: String) async {
         await call("sessions.configure", ConfigureParams(ref: ref, thinking: level))
     }

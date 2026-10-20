@@ -67,6 +67,16 @@ enum DebugAutomation {
                 let session = engine.thread(ref)
                 await session.open()
                 await session.send(prompt)
+                // PIOPIO_DEMO_RESPOND=allow|always|deny: answer the first approval the session asks for.
+                if let decision = env["PIOPIO_DEMO_RESPOND"].flatMap(PromptResponse.Decision.init(rawValue:)) {
+                    for _ in 0..<100 {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        if let first = session.prompts.first {
+                            await session.respond(first, PromptResponse(decision: decision))
+                            break
+                        }
+                    }
+                }
             }
         }
         // PIOPIO_DEMO_BACKGROUND=on|off: move the engine to launchd (SMAppService) or back into the app.

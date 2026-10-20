@@ -9,12 +9,13 @@ struct SettingsView: View {
     @State private var section: Section = Section(rawValue: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Providers", engines = "Engines"
+        case general = "General", providers = "Providers", approvals = "Approvals", engines = "Engines"
         var id: String { rawValue }
         var icon: (String, Color) {
             switch self {
             case .general: ("gearshape.fill", .gray)
             case .providers: ("key.fill", .blue)
+            case .approvals: ("checkmark.shield.fill", .orange)
             case .engines: ("cpu.fill", .green)
             }
         }
@@ -51,6 +52,7 @@ struct SettingsView: View {
                     switch section {
                     case .general: GeneralPane()
                     case .providers: ProvidersPane(engine: engine)
+                    case .approvals: ApprovalsPane(engine: engine)
                     case .engines: EnginesPane(engine: engine)
                     }
                 }
@@ -228,6 +230,52 @@ private struct ProvidersPane: View {
     private func refresh() async {
         guard engine.hasKey, let key = Keychain.read(secretOpenRouter), let client = engine.client else { return }
         info = try? await client.call("models.verifyKey", VerifyKeyParams(provider: "openrouter", key: key), as: VerifyKeyResult.self)
+    }
+}
+
+// MARK: Approvals
+
+/// Per project: the approval mode new sessions start with, and the "Always allow" rules (docs/spec/05-build §6, AP2).
+private struct ApprovalsPane: View {
+    let engine: EngineController
+
+    var body: some View {
+        PaneTitle(title: "Approvals", subtitle: "What Build sessions may do without asking. Risky commands and writes outside the project always ask.")
+        if engine.projects.isEmpty {
+            Text("Add a project in Build to set its approvals.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+        }
+        VStack(alignment: .leading, spacing: 18) {
+            ForEach(engine.projects) { project in
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionLabel(project.name)
+                    ListCard {
+                        Row(title: "New sessions", last: project.rules.isEmpty) {
+                            Picker("", selection: Binding(get: { project.approvalMode }, set: { mode in Task { await engine.setApprovalMode(mode, for: project) } })) {
+                                ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0) }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                            Text(ApprovalModeMenu.summary(project.approvalMode)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
+                            Spacer()
+                        }
+                        ForEach(project.rules) { rule in
+                            Row(title: rule.kind == .command ? "Command" : rule.kind == .tool ? "Tool" : "Path", last: rule.id == project.rules.last?.id) {
+                                Text(rule.pattern).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.middle)
+                                Spacer()
+                                Text(rule.kind == .command ? "and its arguments" : "always allowed").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                                Button { Task { await engine.removeRule(rule, from: project) } } label: {
+                                    Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove this rule: it will ask again")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Text("Rules come from “Always for …” on an approval card. They apply to every session in the project.")
+            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10)
     }
 }
 

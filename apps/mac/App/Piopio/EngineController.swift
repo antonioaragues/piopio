@@ -187,6 +187,9 @@ final class EngineController {
         Task { [weak self] in
             for await projects in client.projectChanges { self?.projects = projects }
         }
+        Task { [weak self] in
+            for await change in client.attention { self?.attention(change) }
+        }
         return hello
     }
 
@@ -409,10 +412,32 @@ final class EngineController {
     func answerFinished(in thread: ThreadModel) {
         guard !(NSApp.isActive && selectedThreadId == thread.ref.id) else { return }
         guard case .assistant(let a)? = thread.document.lastItem else { return }
-        let title = threads.first { $0.ref.id == thread.ref.id }?.title ?? "Piopio"
+        let title = (threads + buildSessions).first { $0.ref.id == thread.ref.id }?.title ?? "Piopio"
         let failed = a.status == .error
         let body = failed ? (a.error ?? "The request failed.") : String(a.text.replacingOccurrences(of: "\n", with: " ").prefix(180))
-        Notifier.shared.answer(threadId: thread.ref.id, title: title, body: body, failed: failed)
+        Notifier.shared.answer(ref: thread.ref, title: title, body: body, failed: failed)
+    }
+
+    /// A session waits for you (approval, question) or told you something: notify unless you're looking at it.
+    private func attention(_ change: SessionAttention) {
+        guard !(NSApp.isActive && selectedThreadId == change.ref.id) else { return }
+        let body = change.kind == .waiting ? "Waiting for you · \(change.message)" : change.message
+        Notifier.shared.answer(ref: change.ref, title: change.title, body: String(body.prefix(200)), failed: false, sound: change.kind == .waiting)
+    }
+
+    // MARK: Approval settings (per project)
+
+    func setApprovalMode(_ mode: ApprovalMode, for project: ProjectInfo) async {
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, approvalMode: mode), as: ProjectsAddResult.self)
+    }
+
+    func removeRule(_ rule: ApprovalRule, from project: ProjectInfo) async {
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, removeRule: rule.id), as: ProjectsAddResult.self)
+    }
+
+    /// Sessions working or waiting on you (quitting would stop them unless the engine runs in the background).
+    var busySessions: [SessionSummary] {
+        (threads + buildSessions).filter { [.running, .waitingApproval].contains(liveStatus[$0.ref.id]) }
     }
 
     // MARK: Secrets

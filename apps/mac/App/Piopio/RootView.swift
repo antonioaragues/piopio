@@ -58,7 +58,9 @@ struct RootView: View {
             paletteQuery = (note.object as? String) ?? ""
             palette = (note.object as? Bool) == true || note.object is String ? .messages : .all
         }
-        .onChange(of: selection) { _, id in engine.selectedThreadId = id }
+        .onChange(of: selection) { _, _ in updateSelected() }
+        .onChange(of: buildSelection) { _, _ in updateSelected() }
+        .onChange(of: mode) { _, _ in updateSelected() }
         .onAppear {
             WindowOpener.shared.openMain = { [openWindow] in openWindow(id: "main") }
             WindowOpener.shared.openSettings = { [openSettings] in openSettings() }
@@ -151,6 +153,11 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    /// What notifications treat as "you're looking at it".
+    private func updateSelected() {
+        engine.selectedThreadId = mode == .build ? buildSelection : mode == .chat ? selection : nil
     }
 
     private var selectedThread: ThreadModel? {

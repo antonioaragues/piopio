@@ -90,6 +90,7 @@ export class ModelHub {
  *   read: <path>                     read
  *   write: <path> | <content>        write (\n in content for new lines)
  *   edit: <path> | <old> | <new>     edit
+ *   ask: <question> | <option>…      ask_user
  */
 function installEcho(faux: FauxHandle): void {
 	const step = (context: { messages: readonly { role: string; content: unknown }[] }) => {
@@ -115,6 +116,9 @@ function scriptedTools(text: string): { name: string; args: Record<string, unkno
 		else if (line.startsWith("write: ")) {
 			const [path, content = ""] = parts(line.slice(7));
 			calls.push({ name: "write", args: { path, content } });
+		} else if (line.startsWith("ask: ")) {
+			const [question, ...options] = parts(line.slice(5));
+			calls.push({ name: "ask_user", args: { question, ...(options.length ? { options } : {}) } });
 		} else if (line.startsWith("edit: ")) {
 			const [path, oldText = "", newText = ""] = parts(line.slice(6));
 			calls.push({ name: "edit", args: { path, edits: [{ oldText, newText }] } });

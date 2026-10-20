@@ -55,7 +55,15 @@ export class Engine {
 		this.sessions.onChange((change) => {
 			for (const conn of this.authed) conn.notify("catalog.changed", change);
 		});
+		this.sessions.onAttention = (change) => {
+			for (const conn of this.authed) conn.notify("session.attention", change);
+		};
 		this.projects = new Projects(options.paths.projectsIndex);
+		this.sessions.policy = {
+			modeFor: (cwd) => this.projects.modeFor(cwd),
+			rulesFor: (cwd) => this.projects.rulesFor(cwd),
+			addRule: (cwd, rule) => this.projects.addRule(cwd, rule),
+		};
 		this.projects.onChange((projects) => {
 			for (const conn of this.authed) conn.notify("projects.changed", { projects });
 		});
@@ -238,7 +246,7 @@ export class Engine {
 			}
 			case "sessions.configure": {
 				const p = params as Params<"sessions.configure">;
-				await this.sessions.configure(p.ref, { ...(p.model ? { model: p.model } : {}), ...(p.thinking ? { thinking: p.thinking } : {}), ...(p.web !== undefined ? { web: p.web } : {}) });
+				await this.sessions.configure(p.ref, { ...(p.model ? { model: p.model } : {}), ...(p.thinking ? { thinking: p.thinking } : {}), ...(p.web !== undefined ? { web: p.web } : {}), ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}) });
 				return {};
 			}
 			case "sessions.rename": {
@@ -262,6 +270,16 @@ export class Engine {
 				const project = this.projects.add(p.path);
 				await this.sessions.syncFolder(project.path);
 				return { project } satisfies Result<"projects.add">;
+			}
+			case "projects.configure": {
+				const p = params as Params<"projects.configure">;
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}) };
+				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
+			}
+			case "sessions.respond": {
+				const p = params as Params<"sessions.respond">;
+				await this.sessions.respond(p.ref, p.promptId, p.response);
+				return {};
 			}
 			case "projects.remove": {
 				const p = params as Params<"projects.remove">;
