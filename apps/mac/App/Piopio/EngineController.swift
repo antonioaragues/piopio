@@ -448,6 +448,27 @@ final class EngineController {
         _ = try? await client?.call("spaces.configure", SpaceConfigureParams(ref: space, instructions: instructions), as: Empty.self)
     }
 
+    /// A Space method without a result (memory, topics, files, settings).
+    func spaceCall(_ method: String, _ params: some Encodable & Sendable) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call(method, params, as: Empty.self)
+    }
+
+    func memory(of space: ContainerRef) async -> MemoryResult? {
+        try? await client?.call("spaces.memory.get", RefParams(ref: space), as: MemoryResult.self)
+    }
+
+    func spaceFiles(_ space: ContainerRef) async -> [SpaceFile] {
+        (try? await client?.call("spaces.files.list", RefParams(ref: space), as: SpaceFilesResult.self).files) ?? []
+    }
+
+    /// Merges a topic into another; returns the summary that joined it.
+    func merge(_ topic: ContainerRef, into: String) async throws -> String {
+        guard let client else { return "" }
+        struct Result: Decodable { var summary: String }
+        return try await client.call("spaces.topics.merge", TopicMergeParams(ref: topic, into: into), as: Result.self).summary
+    }
+
     func subscribe(_ ref: ContainerRef, handler: @escaping ([SessionEvent]) -> Void) async throws -> SubscribeResult {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let sub = try await client.call("sessions.subscribe", RefParams(ref: ref), as: SubscribeResult.self)

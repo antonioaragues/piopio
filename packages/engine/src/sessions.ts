@@ -16,7 +16,7 @@ import { BuildRuntime } from "./runtimes/build.js";
 import type { TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
-import { SpaceRuntime, type TopicSummary } from "./runtimes/space.js";
+import { SpaceRuntime, type SpaceStats, type TopicSummary } from "./runtimes/space.js";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
@@ -39,6 +39,11 @@ type CatalogEntry = SessionSummary & {
 	readAt?: Record<string, string>;
 	/** Spaces: the topics as the runtime last reported them. */
 	topicState?: TopicSummary[];
+	/** Spaces: the organizer's model (default: `model`, the topics'), memory and auto-tidy (§3.6). */
+	organizerModel?: ModelRef;
+	memoryOff?: boolean;
+	autoTidy?: boolean;
+	stats?: SpaceStats;
 };
 
 /** At most this many subagents run at once per session (docs/spec/05-build §4). */
@@ -223,6 +228,7 @@ export class Sessions {
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
 		if (entry.file) for (const suffix of ["", "-wal", "-shm"]) rmSync(entry.file + suffix, { force: true });
+		if (entry.ref.kind === "space") rmSync(join(this.paths.spacesDir, entry.ref.id), { recursive: true, force: true });
 		if (entry.sessionFile && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
 		this.search.deleteSession(ref.id);
 		this.entries.delete(ref.id);
@@ -266,7 +272,7 @@ export class Sessions {
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.kind === "build" ? { approvalMode: params.approvalMode ?? this.policy.modeFor(params.cwd!), profile: params.profile ?? "build" } : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
-			...(params.kind === "space" ? { file: join(this.paths.spacesDir, `${ref.id}.sqlite`), topics: [], ...(params.instructions?.trim() ? { instructions: params.instructions.trim() } : {}) } : {}),
+			...(params.kind === "space" ? { file: join(this.paths.spacesDir, `${ref.id}.sqlite`), topics: [], space: { costUsd: 0, files: 0, memoryLines: 0, memory: true, autoTidy: false }, ...(params.instructions?.trim() ? { instructions: params.instructions.trim() } : {}) } : {}),
 		};
 		this.entries.set(ref.id, entry);
 		this.save();
@@ -390,14 +396,34 @@ export class Sessions {
 		this.updateTopics(entry, entry.topicState ?? []);
 	}
 
-	configureSpace(ref: ContainerRef, change: { instructions?: string }): void {
+	async configureSpace(ref: ContainerRef, change: { instructions?: string; organizerModel?: ModelRef; topicModel?: ModelRef; memory?: boolean; autoTidy?: boolean }): Promise<void> {
 		const entry = this.entry({ kind: "space", id: ref.id });
+		for (const m of [change.organizerModel, change.topicModel]) {
+			if (m && !this.hub.models.getModel(m.provider, m.id)) throw new EngineError("INVALID", `Unknown model ${m.provider}/${m.id}`);
+		}
 		if (change.instructions !== undefined) {
 			if (change.instructions.trim()) entry.instructions = change.instructions.trim();
 			else delete entry.instructions;
 		}
+		if (change.memory !== undefined) entry.memoryOff = !change.memory;
+		if (change.autoTidy !== undefined) entry.autoTidy = change.autoTidy;
+		const open = this.open.has(ref.id) ? await this.space(ref) : undefined;
+		if (change.organizerModel) {
+			entry.organizerModel = change.organizerModel;
+			await open?.setOrganizerModel(change.organizerModel);
+		}
+		if (change.topicModel) {
+			entry.model = change.topicModel;
+			await open?.setTopicModel(change.topicModel);
+		}
+		this.setSpaceInfo(entry);
 		this.save();
 		this.changed(entry);
+	}
+
+	private setSpaceInfo(entry: CatalogEntry): void {
+		const stats = entry.stats ?? { costUsd: 0, files: 0, memoryLines: 0 };
+		entry.space = { ...stats, ...(entry.organizerModel ? { organizerModel: entry.organizerModel } : {}), memory: !entry.memoryOff, autoTidy: entry.autoTidy ?? false };
 	}
 
 	private updateTopics(entry: CatalogEntry, topics: TopicSummary[]): void {
@@ -407,10 +433,13 @@ export class Sessions {
 			id: t.id,
 			title: t.title,
 			...(t.brief ? { brief: t.brief } : {}),
+			...(t.summary ? { summary: t.summary } : {}),
 			lastActiveAt: t.lastActiveAt,
+			...(t.archived ? { archived: true } : {}),
 			...(t.lastReplyAt && t.lastReplyAt > (read[t.id] ?? "") ? { unread: true } : {}),
 			...(t.running ? { running: true } : {}),
 		}));
+		this.setSpaceInfo(entry);
 		const latest = topics[0]?.lastActiveAt;
 		if (latest && latest > entry.updatedAt) entry.updatedAt = latest;
 		this.save();
@@ -576,10 +605,16 @@ export class Sessions {
 				file: entry.file!,
 				hub: this.hub,
 				model,
+				...(entry.organizerModel ? { organizerModel: entry.organizerModel } : {}),
+				filesDir: join(this.paths.spacesDir, entry.ref.id, "files"),
 				info: () => ({ name: entry.title, ...(entry.instructions ? { instructions: entry.instructions } : {}) }),
+				settings: () => ({ memory: !entry.memoryOff, autoTidy: entry.autoTidy ?? false }),
 				webOptions: this.webOptions,
-				onTopics: (topics) => {
-					if (this.entries.has(entry.ref.id) && JSON.stringify(topics) !== JSON.stringify(entry.topicState)) this.updateTopics(entry, topics);
+				onTopics: (topics, stats) => {
+					if (!this.entries.has(entry.ref.id)) return;
+					if (JSON.stringify(topics) === JSON.stringify(entry.topicState) && JSON.stringify(stats) === JSON.stringify(entry.stats)) return;
+					entry.stats = stats;
+					this.updateTopics(entry, topics);
 				},
 			});
 		}
@@ -640,7 +675,7 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, readAt: _r, topicState: _ts, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, readAt: _r, topicState: _ts, organizerModel: _o, memoryOff: _m, autoTidy: _a, stats: _st, ...rest }: CatalogEntry): SessionSummary {
 	return rest;
 }
 

@@ -6,32 +6,20 @@
  * `@Topic …`, `/new <title>` and `/main …` let you decide instead of the organizer (S3). Wrong topic moves a
  * routed message and leaves a hint the organizer reads from then on (S2).
  */
+import { randomUUID } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { Type } from "@earendil-works/pi-ai";
-import {
-	configure,
-	ConversationBusy,
-	createRegistry,
-	defineDoc,
-	defineExtension,
-	defineTool,
-	Harness,
-	section,
-	watchEvents,
-	type AgentEventStream,
-	type Conversation,
-	type ConversationId,
-	type Extension,
-	type Tx,
-} from "@earendil-works/pi-durable";
+import { configure, ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type ConversationId, type Extension, type Tx } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import type { ContainerRef, ModelRef, RoutingItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
+import type { ContainerRef, MemoryItem, ModelRef, RoutingItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
 import { buildInput, USER_ENTRY, type BuiltInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock } from "../timeline/builder.js";
 import { DurableEventMapper } from "../timeline/pi-durable.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
+import { SpaceFiles } from "./space-files.js";
+import { applyPatch, describe, diffFacts, lineCount, MemoryDoc, pushRevision, type MemoryAuthor, type MemoryState, type Proposal, type Revision } from "./space-memory.js";
+import { MEMORY_TOOLS, organizerExtension, ROUTE_TOOLS, sharedExtension, SpaceDoc, topicExtension, type Hint, type Route, type SpaceHost, type SpaceState, type TopicRecord } from "./space-tools.js";
 
 const ctx = BACKGROUND_CONTEXT;
 
@@ -39,38 +27,37 @@ const ctx = BACKGROUND_CONTEXT;
 const ROUTED_ENTRY = "piopio.routed";
 /** In Main: a message you sent to a topic yourself (@topic, /new). */
 const ROUTE_ENTRY = "piopio.route";
-const ORGANIZER_TOOLS = new Set(["route_to_topic", "create_topic"]);
 const MAX_HINTS = 20;
 
-type TopicRecord = { id: string; title: string; brief: string; status: "active" | "archived"; createdAt: string; lastActiveAt: string; lastReplyAt?: string };
-type Hint = { message: string; wrong: string; right: string; at: string };
-/** Where a routed message went: the organizer's tool result details, a route entry, or a reroute. */
-type Route = { decision: "route" | "create"; topicId: string; topicTitle: string; reason: string; message: string; submissionId?: string; forced?: boolean; movedFrom?: string; at?: string };
-type SpaceState = { topics: TopicRecord[]; hints: Hint[]; reroutes: Record<string, Route> };
-
-/** The Space's topics, routing hints and moved messages (`piopio.space`). */
-export const SpaceDoc = defineDoc<SpaceState>({ kind: "piopio.space", version: 1, scope: "session", initial: () => ({ topics: [], hints: [], reroutes: {} }) });
-
-export type TopicSummary = { id: string; title: string; brief: string; lastActiveAt: string; lastReplyAt?: string; running: boolean };
+export type TopicSummary = { id: string; title: string; brief: string; summary?: string; lastActiveAt: string; lastReplyAt?: string; running: boolean; archived: boolean };
+export type SpaceStats = { costUsd: number; files: number; memoryLines: number };
+export type SpaceSettings = { memory: boolean; autoTidy: boolean };
 
 export type SpaceOpenOptions = {
 	ref: ContainerRef;
 	file: string;
 	hub: ModelHub;
+	/** Topics' model (new topics), and the organizer's when it has none of its own. */
 	model: ModelRef;
+	organizerModel?: ModelRef;
+	filesDir: string;
 	/** The Space's name and instructions, read each request. */
 	info: () => { name: string; instructions?: string };
+	settings: () => SpaceSettings;
 	webOptions?: WebOptions;
-	/** The topics changed (sidebar). */
-	onTopics?: (topics: TopicSummary[]) => void;
+	/** The topics or the header's numbers changed (sidebar, header). */
+	onTopics?: (topics: TopicSummary[], stats: SpaceStats) => void;
 };
 
 type Live = { status: RoutingItem["status"]; preview?: string; replyItemId?: string };
 
-export class SpaceRuntime implements Runtime {
+export class SpaceRuntime implements Runtime, SpaceHost {
 	private readonly views = new Map<string, Promise<SpaceView>>();
 	private main!: SpaceView;
 	private state: SpaceState = { topics: [], hints: [], reroutes: {} };
+	private memory: MemoryState = { text: "", revisions: [], proposals: {} };
+	readonly files: SpaceFiles;
+	private readonly summarizing = new Set<string>();
 	/** Live status of routed messages, by submission id. */
 	private readonly live = new Map<string, Live>();
 	private readonly tracked = new Set<string>();
@@ -82,9 +69,12 @@ export class SpaceRuntime implements Runtime {
 		private readonly harness: Harness,
 		private readonly organizer: Extension,
 		private readonly topicExtension: Extension,
+		private readonly shared: Extension,
 		private readonly web: Extension,
 		private model: ModelRef,
-	) {}
+	) {
+		this.files = new SpaceFiles(options.filesDir);
+	}
 
 	get ref(): ContainerRef {
 		return this.options.ref;
@@ -96,13 +86,19 @@ export class SpaceRuntime implements Runtime {
 		// The extensions read the runtime through `host`, which is set once it exists.
 		let host!: SpaceRuntime;
 		const web = createWebExtension(options.hub, options.webOptions) as unknown as Extension;
-		const organizer = organizerExtension(() => host);
-		const topic = topicExtension(() => host);
-		for (const e of [web, organizer, topic]) registry.install(e as never);
-		const harness = await Harness.open(storage, { models: options.hub.models, registry, settings: { extensions: [web, topic] } } as never, ctx);
-		host = new SpaceRuntime(options, harness, organizer, topic, web, options.model);
-		const root = await harness.root(ctx, { agent: { model: modelOf(options.model), extensions: [organizer, web] } } as never);
+		const organizer = organizerExtension(() => host) as unknown as Extension;
+		const topic = topicExtension(() => host) as unknown as Extension;
+		const shared = sharedExtension(() => host) as unknown as Extension;
+		for (const e of [web, organizer, topic, shared]) registry.install(e as never);
+		const harness = await Harness.open(storage, { models: options.hub.models, registry, settings: { extensions: [web, shared, topic] } } as never, ctx);
+		host = new SpaceRuntime(options, harness, organizer, topic, shared, web, options.model);
+		const root = await harness.root(ctx, { agent: { model: modelOf(options.organizerModel ?? options.model), extensions: [organizer, shared, web] } } as never);
 		host.state = clone((await harness.snapshot(SpaceDoc, ctx)) ?? undefined);
+		// Spaces made before a tool set changed get the current one (a no-op when nothing changed).
+		await harness.commit(async (tx) => {
+			await configure(tx, root.id, { extensions: [organizer, shared, web] } as never);
+			for (const t of host.state.topics) await configure(tx, Number(t.id) as never, { extensions: [web, shared, topic] } as never);
+		}, ctx);
 		host.main = await SpaceView.attach(host, root, true);
 		host.views.set("main", Promise.resolve(host.main));
 		await host.watchState();
@@ -133,6 +129,14 @@ export class SpaceRuntime implements Runtime {
 		return pending;
 	}
 
+	get settings(): SpaceSettings {
+		return this.options.settings();
+	}
+
+	get memoryText(): string {
+		return this.memory.text;
+	}
+
 	topic(idOrTitle: string): TopicRecord | undefined {
 		const active = this.state.topics.filter((t) => t.status === "active");
 		return active.find((t) => t.id === idOrTitle) ?? active.find((t) => t.title.toLowerCase() === idOrTitle.trim().replace(/^“|”$/g, "").toLowerCase());
@@ -151,30 +155,59 @@ export class SpaceRuntime implements Runtime {
 	}
 
 	private async watchState(): Promise<void> {
-		// The watch needs the document to exist.
-		await this.harness.commit(async (tx) => void (await tx.doc(SpaceDoc)), ctx);
+		// The watches need the documents to exist.
+		await this.harness.commit(async (tx) => {
+			await tx.doc(SpaceDoc);
+			await tx.doc(MemoryDoc);
+		}, ctx);
+		this.memory = structuredClone((await this.harness.snapshot(MemoryDoc, ctx)) as MemoryState);
 		const watch = await this.harness.watchDoc(SpaceDoc, ctx);
-		if (!watch) return;
-		this.docWatch = watch;
-		watch.start(async (value) => {
-			this.state = clone(value ?? undefined);
-			this.main.refreshRoutes();
-			this.publishTopics();
-		});
+		if (watch) {
+			this.docWatch = watch;
+			watch.start(async (value) => {
+				this.state = clone(value ?? undefined);
+				this.refreshCards();
+				this.publishTopics();
+			});
+		}
+		const memory = await this.harness.watchDoc(MemoryDoc, ctx);
+		if (memory) {
+			this.memoryWatch = memory;
+			memory.start(async (value) => {
+				if (value) this.memory = structuredClone(value) as MemoryState;
+				this.refreshCards();
+				this.publishTopics();
+			});
+		}
+	}
+
+	private memoryWatch?: { stop(): Promise<unknown> };
+
+	/** Routing and memory cards changed status: every open view re-sends its cards. */
+	private refreshCards(): void {
+		this.main.refreshCards();
+		for (const view of this.openViews.values()) view.refreshCards();
 	}
 
 	private publishTopics(): void {
 		if (this.closed) return;
+		void this.publish();
+	}
+
+	private async publish(): Promise<void> {
 		const running = new Set<string>();
 		for (const route of this.main.routes()) {
 			const live = route.submissionId ? this.live.get(route.submissionId) : undefined;
 			if (live && (live.status === "thinking" || live.status === "replying")) running.add(route.topicId);
 		}
 		for (const [id, view] of this.openViews) if (view.snapshot().state.status === "running") running.add(id);
-		const topics = [...this.topics]
+		const topics = [...this.state.topics]
 			.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
-			.map((t) => ({ id: t.id, title: t.title, brief: t.brief, lastActiveAt: t.lastActiveAt, ...(t.lastReplyAt ? { lastReplyAt: t.lastReplyAt } : {}), running: running.has(t.id) }));
-		this.options.onTopics?.(topics);
+			.map((t) => ({ id: t.id, title: t.title, brief: t.brief, ...(t.summary ? { summary: t.summary } : {}), lastActiveAt: t.lastActiveAt, ...(t.lastReplyAt ? { lastReplyAt: t.lastReplyAt } : {}), running: running.has(t.id), archived: t.status === "archived" }));
+		const usage = (await this.harness.usage(ctx).catch(() => undefined)) as { models?: Record<string, { cost?: { total?: number } }>; tools?: Record<string, { cost?: { total?: number } }> } | undefined;
+		const costUsd = [...Object.values(usage?.models ?? {}), ...Object.values(usage?.tools ?? {})].reduce((sum, u) => sum + (u.cost?.total ?? 0), 0);
+		if (this.closed) return;
+		this.options.onTopics?.(topics, { costUsd, files: this.files.list().length, memoryLines: lineCount(this.memory.text) });
 	}
 
 	private openViews = new Map<string, SpaceView>();
@@ -193,7 +226,7 @@ export class SpaceRuntime implements Runtime {
 		const existing = doc.topics.find((t) => t.status === "active" && t.title.toLowerCase() === clean.toLowerCase());
 		if (existing) return { ...existing };
 		const record = await tx.createConversation({ ownership: { kind: "ownerless" } });
-		await configure(tx, record.id, { model: modelOf(this.model), extensions: [this.web, this.topicExtension] } as never);
+		await configure(tx, record.id, { model: modelOf(this.model), extensions: [this.web, this.shared, this.topicExtension] } as never);
 		const now = new Date().toISOString();
 		const topic: TopicRecord = { id: String(record.id), title: clean, brief: brief.trim(), status: "active", createdAt: now, lastActiveAt: now };
 		doc.topics.push(topic);
@@ -267,11 +300,244 @@ export class SpaceRuntime implements Runtime {
 		const preview = text.split("\n").find((l) => l.trim())?.trim().slice(0, 160);
 		this.setLive(submissionId, { status: "replied", ...(preview ? { preview } : {}), replyItemId: String(settled.answer) });
 		await this.touchTopic(topicId, true);
+		void this.summarize(topicId);
+	}
+
+	/** A topic answered (routed or direct): its one-line summary for the organizer and the sidebar. */
+	async summarize(topicId: string): Promise<void> {
+		if (this.summarizing.has(topicId) || this.closed) return;
+		this.summarizing.add(topicId);
+		try {
+			const lines = await this.conversationText(topicId, 12_000);
+			if (!lines.length) return;
+			const lastReply = [...lines].reverse().find((l) => l.role === "assistant")?.text ?? "";
+			const transcript = lines.map((l) => `${l.role === "user" ? "User" : "Assistant"}: ${l.text}`).join("\n\n");
+			const summary =
+				(await this.options.hub
+					.utility("You summarize a conversation in one line for a sidebar: where it stands now, in at most 100 characters. No quotes, no preamble.", transcript)
+					.catch(() => undefined)) ?? (lastReply.split("\n").find((l) => l.trim())?.trim() ?? "");
+			const line = summary.replace(/\s+/g, " ").trim().slice(0, 140);
+			if (!line || this.closed) return;
+			await this.harness.commit(async (tx) => {
+				const topic = (await tx.doc(SpaceDoc)).topics.find((t) => t.id === topicId);
+				if (topic) topic.summary = line;
+			}, ctx);
+		} finally {
+			this.summarizing.delete(topicId);
+		}
+	}
+
+	/** User and assistant messages of a conversation, oldest first, the newest `maxChars`. */
+	private async conversationText(conversationId: string, maxChars: number): Promise<{ role: "user" | "assistant"; text: string }[]> {
+		const out: { role: "user" | "assistant"; text: string }[] = [];
+		let total = 0;
+		await this.harness.commit(async (tx) => {
+			const page = await tx.scanEntries({ conversationId: Number(conversationId) as never, order: "descending" }, 400);
+			for (const entry of page.items) {
+				const line = entryText(entry as never);
+				if (!line) continue;
+				total += line.text.length;
+				if (total > maxChars && out.length) break;
+				out.unshift(line);
+			}
+		}, ctx);
+		return out;
+	}
+
+	// ── Memory (S8) ──────────────────────────────────────────────────────────
+
+	async updateMemory(by: MemoryAuthor, add: string[], remove: string[], section?: string): Promise<Revision> {
+		const revision = await this.harness.commit(async (tx) => {
+			const doc = await tx.doc(MemoryDoc);
+			const before = doc.text;
+			const patched = applyPatch(before, add, remove, section);
+			const revision: Revision = { id: randomUUID(), at: new Date().toISOString(), by, summary: describe(patched.added, patched.removed), added: patched.added, removed: patched.removed, before, after: patched.text };
+			if (!patched.added.length && !patched.removed.length) return revision;
+			doc.text = patched.text;
+			pushRevision(doc, revision);
+			return revision;
+		}, ctx);
+		await this.refreshMemory();
+		return revision;
+	}
+
+	/** Your edit in the memory editor. */
+	async setMemory(text: string): Promise<void> {
+		await this.harness.commit(async (tx) => {
+			const doc = await tx.doc(MemoryDoc);
+			const after = text.trim();
+			if (after === doc.text) return;
+			const { added, removed } = diffFacts(doc.text, after);
+			pushRevision(doc, { id: randomUUID(), at: new Date().toISOString(), by: { kind: "user" }, summary: added.length || removed.length ? describe(added, removed) : "Edited the text", added, removed, before: doc.text, after });
+			doc.text = after;
+		}, ctx);
+		await this.refreshMemory();
+	}
+
+	/** Undo on a memory card: takes that change back, keeping later ones. */
+	async undoMemory(revisionId: string): Promise<void> {
+		await this.harness.commit(async (tx) => {
+			const doc = await tx.doc(MemoryDoc);
+			const revision = doc.revisions.find((r) => r.id === revisionId);
+			if (!revision) throw new EngineError("NOT_FOUND", "That memory change is no longer in the history.");
+			if (revision.undone) return;
+			const patched = applyPatch(doc.text, revision.removed, revision.added);
+			revision.undone = true;
+			pushRevision(doc, { id: randomUUID(), at: new Date().toISOString(), by: { kind: "user" }, summary: `Undid: ${revision.summary}`, added: patched.added, removed: patched.removed, before: doc.text, after: patched.text });
+			doc.text = patched.text;
+		}, ctx);
+		await this.refreshMemory();
+	}
+
+	/** Puts the memory back as it was after a change (the editor's history). */
+	async restoreMemory(revisionId: string): Promise<void> {
+		const revision = this.memory.revisions.find((r) => r.id === revisionId);
+		if (!revision) throw new EngineError("NOT_FOUND", "That version is no longer in the history.");
+		await this.setMemory(revision.after);
+	}
+
+	async proposeMemory(topicId: string, add: string[], remove: string[], reason: string): Promise<Proposal> {
+		const topic = this.topic(topicId);
+		const proposal: Proposal = { id: randomUUID(), at: new Date().toISOString(), topicId, title: topic?.title ?? "a topic", added: add.map((a) => a.trim()).filter(Boolean), removed: remove.map((r) => r.trim()).filter(Boolean), reason, status: "pending" };
+		await this.harness.commit(async (tx) => {
+			(await tx.doc(MemoryDoc)).proposals[proposal.id] = proposal;
+		}, ctx);
+		await this.refreshMemory();
+		return proposal;
+	}
+
+	/** Save or Dismiss on a topic's proposal. */
+	async decideProposal(proposalId: string, accept: boolean): Promise<void> {
+		const proposal = this.memory.proposals[proposalId];
+		if (!proposal) throw new EngineError("NOT_FOUND", "No such proposal.");
+		if (proposal.status !== "pending") return;
+		const revision = accept ? await this.updateMemory({ kind: "topic", topicId: proposal.topicId, title: proposal.title }, proposal.added, proposal.removed) : undefined;
+		await this.harness.commit(async (tx) => {
+			const p = (await tx.doc(MemoryDoc)).proposals[proposalId];
+			if (!p) return;
+			p.status = accept ? "saved" : "dismissed";
+			if (revision) p.revisionId = revision.id;
+		}, ctx);
+		await this.refreshMemory();
+	}
+
+	memoryInfo(): { text: string; revisions: Omit<Revision, "before" | "after">[] } {
+		return { text: this.memory.text, revisions: [...this.memory.revisions].reverse().map(({ before: _b, after: _a, ...r }) => r) };
+	}
+
+	revision(id: string): Revision | undefined {
+		return this.memory.revisions.find((r) => r.id === id);
+	}
+
+	proposal(id: string): Proposal | undefined {
+		return this.memory.proposals[id];
+	}
+
+	private async refreshMemory(): Promise<void> {
+		this.memory = structuredClone((await this.harness.snapshot(MemoryDoc, ctx)) as MemoryState);
+		this.refreshCards();
+		this.publishTopics();
+	}
+
+	// ── Housekeeping (S9) ────────────────────────────────────────────────────
+
+	async renameTopic(topicId: string, title: string): Promise<void> {
+		const clean = title.trim().replace(/\s+/g, " ").slice(0, 80);
+		if (!clean) throw new EngineError("INVALID", "The topic needs a title.");
+		if (this.topics.some((t) => t.id !== topicId && t.title.toLowerCase() === clean.toLowerCase())) throw new EngineError("CONFLICT", `There is already a topic “${clean}”.`);
+		await this.editTopic(topicId, (t) => void (t.title = clean));
+	}
+
+	async archiveTopic(topicId: string, archived: boolean): Promise<void> {
+		await this.editTopic(topicId, (t) => {
+			t.status = archived ? "archived" : "active";
+			if (!archived) delete t.mergedInto;
+		});
+	}
+
+	/** Summarizes `from` into `into`'s brief and archives `from`. Returns the summary. */
+	async mergeTopics(fromId: string, intoId: string): Promise<string> {
+		if (fromId === intoId) throw new EngineError("INVALID", "A topic can't be merged into itself.");
+		const from = this.state.topics.find((t) => t.id === fromId), into = this.topic(intoId);
+		if (!from || !into) throw new EngineError("NOT_FOUND", "No such topic.");
+		const lines = await this.conversationText(fromId, 16_000);
+		const transcript = lines.map((l) => `${l.role === "user" ? "User" : "Assistant"}: ${l.text}`).join("\n\n");
+		const summary =
+			(transcript
+				? await this.options.hub
+						.utility("Summarize this conversation so another conversation can continue the subject: the decisions, facts and open questions, in at most 6 short bullet points. No preamble.", transcript)
+						.catch(() => undefined)
+				: undefined) ??
+			[from.brief, from.summary].filter(Boolean).join(" ") ??
+			"";
+		await this.harness.commit(async (tx) => {
+			const doc = await tx.doc(SpaceDoc);
+			const a = doc.topics.find((t) => t.id === intoId), b = doc.topics.find((t) => t.id === fromId);
+			if (!a || !b) return;
+			a.brief = `${a.brief}${a.brief ? "\n\n" : ""}Merged from “${b.title}”:\n${summary || "(no history)"}`.slice(0, 4000);
+			a.lastActiveAt = new Date().toISOString();
+			b.status = "archived";
+			b.mergedInto = intoId;
+		}, ctx);
+		await this.refreshState();
+		this.publishTopics();
+		return summary || "(no history)";
+	}
+
+	private async editTopic(topicId: string, change: (t: TopicRecord) => void): Promise<void> {
+		if (!this.state.topics.some((t) => t.id === topicId)) throw new EngineError("NOT_FOUND", `No topic ${topicId}`);
+		await this.harness.commit(async (tx) => {
+			const topic = (await tx.doc(SpaceDoc)).topics.find((t) => t.id === topicId);
+			if (topic) change(topic);
+		}, ctx);
+		await this.refreshState();
+		this.publishTopics();
+	}
+
+	/** search_space: lines of Main, every topic and the memory that contain `query`. */
+	async search(query: string, limit = 30): Promise<string[]> {
+		const q = query.trim().toLowerCase();
+		if (!q) return [];
+		const hits: string[] = [];
+		const add = (where: string, text: string) => {
+			for (const line of text.split("\n")) {
+				if (hits.length >= limit) return;
+				if (line.toLowerCase().includes(q)) hits.push(`${where}: ${line.trim().slice(0, 200)}`);
+			}
+		};
+		add("Memory", this.memory.text);
+		const conversations: [string, string][] = [["Main", String(this.main.conversationId)], ...this.state.topics.map((t): [string, string] => [`“${t.title}”${t.status === "archived" ? " (archived)" : ""}`, t.id])];
+		for (const [where, id] of conversations) {
+			for (const line of await this.conversationText(id, 200_000)) add(`${where} · ${line.role === "user" ? "you" : "assistant"}`, line.text);
+			if (hits.length >= limit) break;
+		}
+		return hits;
+	}
+
+	/** Files were added or removed (the header's count). */
+	filesChanged(): void {
+		this.publishTopics();
+	}
+
+	// ── Settings (§3.6) ──────────────────────────────────────────────────────
+
+	/** The organizer's model (Main). */
+	async setOrganizerModel(model: ModelRef): Promise<void> {
+		await this.main.configure({ model });
+	}
+
+	/** The topics' model: new topics, and every existing one. */
+	async setTopicModel(model: ModelRef): Promise<void> {
+		this.model = model;
+		await this.harness.commit(async (tx) => {
+			for (const t of this.state.topics) await configure(tx, Number(t.id) as never, { model: modelOf(model) } as never);
+		}, ctx);
+		for (const view of this.openViews.values()) await view.reloadSettings();
 	}
 
 	private setLive(submissionId: string, live: Live): void {
 		this.live.set(submissionId, live);
-		this.main.refreshRoutes();
+		this.main.refreshCards();
 		this.publishTopics();
 	}
 
@@ -342,7 +608,6 @@ export class SpaceRuntime implements Runtime {
 	}
 
 	async configure(change: { model?: ModelRef; thinking?: string }): Promise<void> {
-		if (change.model) this.model = change.model; // new topics
 		await this.main.configure(change);
 	}
 
@@ -365,6 +630,7 @@ export class SpaceRuntime implements Runtime {
 	async close(): Promise<void> {
 		this.closed = true;
 		await this.docWatch?.stop();
+		await this.memoryWatch?.stop();
 		for (const view of await Promise.allSettled(this.views.values())) if (view.status === "fulfilled") await view.value.stop();
 		await this.harness.close(ctx);
 	}
@@ -382,6 +648,8 @@ export class SpaceView implements Runtime {
 	/** Main: the organizer's routes by tool call id, and your own by route entry id. */
 	private readonly toolRoutes = new Map<string, Route>();
 	private readonly entryRoutes = new Map<string, Route>();
+	/** Memory tool results by call id: the revision (update_memory) or proposal (propose_memory). */
+	private readonly memoryCalls = new Map<string, { revisionId?: string; proposalId?: string }>();
 
 	private constructor(
 		private readonly space: SpaceRuntime,
@@ -396,6 +664,10 @@ export class SpaceView implements Runtime {
 		return this.isMain ? this.space.ref : { ...this.space.ref, conversationId: String(this.conversation.id) };
 	}
 
+	get conversationId(): ConversationId {
+		return this.conversation.id;
+	}
+
 	static async attach(space: SpaceRuntime, conversation: Conversation, isMain: boolean): Promise<SpaceView> {
 		const view = new SpaceView(space, conversation, isMain);
 		if (!isMain) space.registerView(String(conversation.id), view);
@@ -405,16 +677,23 @@ export class SpaceView implements Runtime {
 		await view.settings();
 		view.builder.flush();
 		stream.start(async (events) => {
+			let finished = false;
 			for (const event of events) {
 				const e = event as { type: string; entry?: RawEntry; toolCallId?: string };
 				if (e.type === "snapshot") {
 					view.load(event as never, true);
 					continue;
 				}
+				if (e.type === "run_end") finished = true;
 				if (e.entry) view.noteEntry(e.entry);
 				view.mapper.apply(event as never);
 			}
 			view.emit(view.builder.flush());
+			// A topic answered a message typed in it: unread dot and summary (routed ones are followed by `track`).
+			if (finished && !isMain) {
+				const id = String(conversation.id);
+				void space.touchTopic(id, true).then(() => space.summarize(id));
+			}
 		});
 		return view;
 	}
@@ -432,14 +711,17 @@ export class SpaceView implements Runtime {
 	private noteEntry(entry: RawEntry, live = true): void {
 		const id = String(entry.id);
 		this.kinds.set(id, entry.kind);
-		if (!this.isMain) return;
 		for (const m of entry.model ?? []) {
-			const result = m as { role: string; toolCallId?: string; toolName?: string; details?: Route };
-			if (result.role === "toolResult" && result.toolName && ORGANIZER_TOOLS.has(result.toolName) && result.details?.topicId) {
-				this.toolRoutes.set(result.toolCallId!, result.details);
-				this.space.track(result.details);
+			const result = m as { role: string; toolCallId?: string; toolName?: string; details?: unknown };
+			if (result.role !== "toolResult" || !result.toolName) continue;
+			if (MEMORY_TOOLS.has(result.toolName) && result.details) this.memoryCalls.set(result.toolCallId!, result.details as { revisionId?: string; proposalId?: string });
+			const route = result.details as Route | undefined;
+			if (this.isMain && ROUTE_TOOLS.has(result.toolName) && route?.topicId) {
+				this.toolRoutes.set(result.toolCallId!, route);
+				this.space.track(route);
 			}
 		}
+		if (!this.isMain) return;
 		if (entry.kind === ROUTE_ENTRY) {
 			const route = entry.data as Route & { text: string };
 			this.entryRoutes.set(id, route);
@@ -466,16 +748,40 @@ export class SpaceView implements Runtime {
 		return this.space.reroute(itemId) ?? original;
 	}
 
-	/** Statuses or moves changed: re-sends the routing cards. */
-	refreshRoutes(): void {
-		if (!this.isMain) return;
-		const items = this.builder.snapshot().items.filter((i) => i.kind === "tool" && (ORGANIZER_TOOLS.has(i.tool) || i.id.startsWith("route:")));
+	/** Statuses, moves or memory changed: re-sends the routing and memory cards. */
+	refreshCards(): void {
+		const items = this.builder.snapshot().items.filter((i) => i.kind === "tool" && (ROUTE_TOOLS.has(i.tool) || MEMORY_TOOLS.has(i.tool) || i.id.startsWith("route:")));
 		this.emitter.emit(items.map((item) => ({ type: "item.updated" as const, item: this.transform(item) })));
 	}
 
-	/** Main: organizer tool cards become routing cards. Topics: direct messages get their badge. */
+	async reloadSettings(): Promise<void> {
+		await this.settings();
+		this.emit(this.builder.flush());
+	}
+
+	/** A memory tool's card: what changed, and whether it stands (Undo) or waits for you (Save, Dismiss). */
+	private memoryCard(item: Extract<TimelineItem, { kind: "tool" }>): MemoryItem {
+		const call = this.memoryCalls.get(item.callId);
+		const args = (item.args ?? {}) as { add?: string[]; remove?: string[]; reason?: string };
+		const base = { kind: "memory" as const, id: item.id, at: item.at, action: item.tool === "propose_memory" ? ("proposed" as const) : ("saved" as const) };
+		if (item.status === "error" || (item.status !== "running" && item.status !== "pending_approval" && !call)) {
+			return { ...base, added: args.add ?? [], removed: args.remove ?? [], status: "failed", ...(item.output ? { reason: item.output } : {}) };
+		}
+		if (call?.proposalId) {
+			const p = this.space.proposal(call.proposalId);
+			return { ...base, added: p?.added ?? args.add ?? [], removed: p?.removed ?? args.remove ?? [], ...(p?.reason ? { reason: p.reason } : {}), status: p?.status ?? "pending", proposalId: call.proposalId, ...(p?.revisionId ? { revisionId: p.revisionId } : {}) };
+		}
+		if (call?.revisionId) {
+			const r = this.space.revision(call.revisionId);
+			return { ...base, added: r?.added ?? [], removed: r?.removed ?? [], status: r?.undone ? "undone" : "saved", revisionId: call.revisionId };
+		}
+		return { ...base, added: args.add ?? [], removed: args.remove ?? [], status: "pending" };
+	}
+
+	/** Main: organizer tool cards become routing cards. Memory tools become memory cards. Topics: direct messages get their badge. */
 	private transform(item: TimelineItem): TimelineItem {
-		if (this.isMain && item.kind === "tool" && (ORGANIZER_TOOLS.has(item.tool) || item.id.startsWith("route:"))) {
+		if (item.kind === "tool" && MEMORY_TOOLS.has(item.tool)) return this.memoryCard(item);
+		if (this.isMain && item.kind === "tool" && (ROUTE_TOOLS.has(item.tool) || item.id.startsWith("route:"))) {
 			const route = this.routeFor(item.id);
 			if (!route) {
 				const args = (item.args ?? {}) as { topic?: string; title?: string; reason?: string; message?: string };
@@ -634,106 +940,20 @@ export class SpaceView implements Runtime {
 
 type RawEntry = { id: string | number; kind: string; model?: { role: string }[]; data?: unknown };
 
-// ── Extensions ───────────────────────────────────────────────────────────────
-
-function organizerExtension(host: () => SpaceRuntime) {
-	const routeTool = defineTool({
-		name: "route_to_topic",
-		description: "Send the user's latest message to an existing topic. The topic's agent answers it there; you don't answer it yourself.",
-		parameters: Type.Object({
-			topic: Type.String({ description: "The topic's id or exact title" }),
-			reason: Type.String({ description: "One short line saying why it belongs there" }),
-			message: Type.Optional(Type.String({ description: "The message as the topic should get it. Default: the user's words as written. Rewrite only to add context from Main that the topic needs." })),
-		}),
-		execute: async (args, api, context) => {
-			const space = host();
-			const topic = space.topic(args.topic);
-			if (!topic) return { output: [{ type: "text", text: `No topic “${args.topic}”. Topics: ${space.topics.map((t) => `${t.id} “${t.title}”`).join(", ") || "none yet"}.` }], isError: true };
-			const message = args.message?.trim() || (await lastUserText(api, context));
-			const submissionId = await space.sendToTopic(topic.id, message, `route:${api.taskId}`, (id) => api.conversation(id, context) as never);
-			await space.touchTopic(topic.id);
-			const details: Route = { decision: "route", topicId: topic.id, topicTitle: topic.title, reason: args.reason, message, submissionId };
-			return { output: [{ type: "text", text: `Sent to “${topic.title}”. Its agent answers there.` }], details: details as never, control: { terminate: true } };
-		},
-	});
-
-	const createTool = defineTool({
-		name: "create_topic",
-		description: "Start a new topic for a new subject that will likely come back or needs depth, and send the user's latest message to it. Its agent answers there.",
-		parameters: Type.Object({
-			title: Type.String({ description: "A short title (2–5 words)" }),
-			brief: Type.String({ description: "One or two sentences: what this topic is about, for its agent" }),
-			reason: Type.String({ description: "One short line saying why this needs its own topic" }),
-			message: Type.Optional(Type.String({ description: "The message as the topic should get it. Default: the user's words as written." })),
-		}),
-		execute: async (args, api, context) => {
-			const space = host();
-			const topic = await api.commit((tx) => space.createTopic(tx, args.title, args.brief), context);
-			const message = args.message?.trim() || (await lastUserText(api, context));
-			const submissionId = await space.sendToTopic(topic.id, message, `route:${api.taskId}`, (id) => api.conversation(id, context) as never);
-			const details: Route = { decision: "create", topicId: topic.id, topicTitle: topic.title, reason: args.reason, message, submissionId };
-			return { output: [{ type: "text", text: `Created “${topic.title}” and sent the message there. Its agent answers there.` }], details: details as never, control: { terminate: true } };
-		},
-	});
-
-	return defineExtension({
-		name: "piopio-space-organizer",
-		tools: [routeTool, createTool],
-		sections: [section("space-organizer", () => organizerPrompt(host()))],
-	});
-}
-
-function organizerPrompt(space: SpaceRuntime): string {
-	const { name, instructions } = space.info;
-	const topics = space.topics.length
-		? [...space.topics]
-				.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
-				.map((t) => `- id ${t.id} · “${t.title}”${t.brief ? `: ${t.brief}` : ""} (last active ${t.lastActiveAt.slice(0, 16).replace("T", " ")})`)
-				.join("\n")
-		: "(no topics yet)";
-	const hints = space.hints.length ? `\n\nCorrections the user made (route similar messages the same way):\n${space.hints.map((h) => `- “${h.message}” belongs in “${h.right}”, not “${h.wrong}”`).join("\n")}` : "";
-	return `You are the organizer of the Space “${name}”, an area of the user's life or work. The user always writes to you, in Main. For each message, decide one of:
-1. Route it: when it continues the subject of an existing topic, call route_to_topic.
-2. Create a topic: when it starts a new subject that will likely come back or needs depth, call create_topic (it also sends the message there).
-3. Answer it yourself, here: quick one-offs, questions about the Space or its topics, and questions across topics. Call no tool then.
-When you route or create, the topic's agent answers in the topic, so don't answer the message yourself. The reason you give is shown to the user: one short line.${instructions ? `\n\nThe Space's instructions:\n${instructions}` : ""}
-
-Topics, most recently active first:
-${topics}${hints}`;
-}
-
-function topicExtension(host: () => SpaceRuntime) {
-	return defineExtension({
-		name: "piopio-space-topic",
-		sections: [
-			section("space-topic", (input) => {
-				const space = host();
-				const topic = space.topics.find((t) => t.id === String(input.conversationId));
-				if (!topic) return undefined;
-				const { name, instructions } = space.info;
-				return `You are the agent for the topic “${topic.title}” in the Space “${name}”.${topic.brief ? ` ${topic.brief}` : ""}
-Messages here come from the user: typed here, or routed from the Space's Main conversation by its organizer. Answer them fully here.${instructions ? `\n\nThe Space's instructions:\n${instructions}` : ""}`;
-			}),
-		],
-	});
-}
-
-/** The newest user message of the calling conversation (what the organizer is deciding about). */
-async function lastUserText(api: { commit: <T>(change: (tx: Tx) => Promise<T>, context: typeof ctx) => Promise<T>; conversationId: ConversationId }, context: typeof ctx): Promise<string> {
-	return api.commit(async (tx) => {
-		const page = await tx.scanEntries({ conversationId: api.conversationId, order: "descending" }, 50);
-		for (const entry of page.items) {
-			if (entry.kind === USER_ENTRY) return (entry.data as { text: string }).text;
-			if (entry.kind === "pi.user") return contentText(entry.model?.[0]?.content as string | PiContentBlock[]);
-		}
-		return "";
-	}, context);
-}
-
 function modelOf(model: ModelRef) {
 	return { provider: model.provider, modelId: model.id };
 }
 
 function clone(state: Readonly<SpaceState> | undefined): SpaceState {
 	return state ? (structuredClone(state) as SpaceState) : { topics: [], hints: [], reroutes: {} };
+}
+
+/** User and assistant text of entries, for search and summaries. */
+function entryText(entry: { kind: string; data?: unknown; model?: readonly { role: string; content?: unknown }[] }): { role: "user" | "assistant"; text: string } | undefined {
+	if (entry.kind === USER_ENTRY) return { role: "user", text: (entry.data as { text: string }).text };
+	const m = entry.model?.[0];
+	if (!m || (m.role !== "user" && m.role !== "assistant")) return undefined;
+	const content = m.content as string | PiContentBlock[];
+	const t = typeof content === "string" ? content : contentText(content.filter((b) => b.type === "text"));
+	return t.trim() ? { role: m.role, text: t } : undefined;
 }

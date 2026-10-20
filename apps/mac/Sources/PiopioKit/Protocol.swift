@@ -212,6 +212,19 @@ public struct RoutingItem: Codable, Sendable, Hashable {
     public var movedFrom: String?
 }
 
+/// A change to a Space's memory: saved by the organizer (Undo), or proposed by a topic (Save, Dismiss).
+public struct MemoryItem: Codable, Sendable, Hashable {
+    public enum Action: String, Codable, Sendable { case saved, proposed }
+    public enum Status: String, Codable, Sendable { case saved, undone, pending, dismissed, failed }
+    public var id, at: String
+    public var action: Action
+    public var added, removed: [String]
+    public var reason: String?
+    public var status: Status
+    public var revisionId: String?
+    public var proposalId: String?
+}
+
 public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case user(UserItem)
     case assistant(AssistantItem)
@@ -220,6 +233,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case compaction(CompactionItem)
     case checkpoint(CheckpointItem)
     case routing(RoutingItem)
+    case memory(MemoryItem)
 
     private enum Key: String, CodingKey { case kind }
 
@@ -233,6 +247,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case "compaction": self = .compaction(try CompactionItem(from: decoder))
         case "checkpoint": self = .checkpoint(try CheckpointItem(from: decoder))
         case "routing": self = .routing(try RoutingItem(from: decoder))
+        case "memory": self = .memory(try MemoryItem(from: decoder))
         default: throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown item kind \(kind)"))
         }
     }
@@ -247,6 +262,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .compaction(let v): try c.encode("compaction", forKey: .kind); try v.encode(to: encoder)
         case .checkpoint(let v): try c.encode("checkpoint", forKey: .kind); try v.encode(to: encoder)
         case .routing(let v): try c.encode("routing", forKey: .kind); try v.encode(to: encoder)
+        case .memory(let v): try c.encode("memory", forKey: .kind); try v.encode(to: encoder)
         }
     }
 
@@ -259,6 +275,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .compaction(let v): v.id
         case .checkpoint(let v): v.id
         case .routing(let v): v.id
+        case .memory(let v): v.id
         }
     }
 }
@@ -360,6 +377,17 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// Spaces: the topics, most recently active first, and the Space's instructions.
     public var topics: [TopicInfo]?
     public var instructions: String?
+    public var space: SpaceInfo?
+}
+
+/// A Space's header numbers and settings (04-chat S7, §3.6).
+public struct SpaceInfo: Codable, Sendable, Hashable {
+    public var costUsd: Double
+    public var files: Int
+    public var memoryLines: Int
+    public var organizerModel: ModelRef?
+    public var memory: Bool
+    public var autoTidy: Bool
 }
 
 extension SessionSummary: Identifiable {
@@ -372,7 +400,9 @@ public struct TopicInfo: Codable, Sendable, Hashable, Identifiable {
     public var id: String
     public var title: String
     public var brief: String?
+    public var summary: String?
     public var lastActiveAt: String
+    public var archived: Bool?
     public var unread: Bool?
     public var running: Bool?
 }
@@ -382,9 +412,39 @@ public struct RerouteParams: Encodable, Sendable {
     public init(ref: ContainerRef, itemId: String, toTopicId: String? = nil, newTopic: String? = nil) { self.ref = ref; self.itemId = itemId; self.toTopicId = toTopicId; self.newTopic = newTopic }
 }
 public struct SpaceConfigureParams: Encodable, Sendable {
-    public var ref: ContainerRef; public var instructions: String?
-    public init(ref: ContainerRef, instructions: String?) { self.ref = ref; self.instructions = instructions }
+    public var ref: ContainerRef
+    public var instructions: String?
+    public var organizerModel: ModelRef?
+    public var topicModel: ModelRef?
+    public var memory: Bool?
+    public var autoTidy: Bool?
+    public init(ref: ContainerRef, instructions: String? = nil, organizerModel: ModelRef? = nil, topicModel: ModelRef? = nil, memory: Bool? = nil, autoTidy: Bool? = nil) {
+        self.ref = ref; self.instructions = instructions; self.organizerModel = organizerModel; self.topicModel = topicModel; self.memory = memory; self.autoTidy = autoTidy
+    }
 }
+
+public struct MemoryRevision: Codable, Sendable, Hashable, Identifiable {
+    public struct Author: Codable, Sendable, Hashable { public var kind: String; public var topicId: String?; public var title: String? }
+    public var id, at: String
+    public var by: Author
+    public var summary: String
+    public var added, removed: [String]
+    public var undone: Bool?
+}
+public struct MemoryResult: Decodable, Sendable { public var text: String; public var revisions: [MemoryRevision] }
+public struct MemorySetParams: Encodable, Sendable { public var ref: ContainerRef; public var text: String; public init(ref: ContainerRef, text: String) { self.ref = ref; self.text = text } }
+public struct RevisionParams: Encodable, Sendable { public var ref: ContainerRef; public var revisionId: String; public init(ref: ContainerRef, revisionId: String) { self.ref = ref; self.revisionId = revisionId } }
+public struct DecideParams: Encodable, Sendable { public var ref: ContainerRef; public var proposalId: String; public var accept: Bool; public init(ref: ContainerRef, proposalId: String, accept: Bool) { self.ref = ref; self.proposalId = proposalId; self.accept = accept } }
+public struct TopicRenameParams: Encodable, Sendable { public var ref: ContainerRef; public var title: String; public init(ref: ContainerRef, title: String) { self.ref = ref; self.title = title } }
+public struct TopicArchiveParams: Encodable, Sendable { public var ref: ContainerRef; public var archived: Bool; public init(ref: ContainerRef, archived: Bool) { self.ref = ref; self.archived = archived } }
+public struct TopicMergeParams: Encodable, Sendable { public var ref: ContainerRef; public var into: String; public init(ref: ContainerRef, into: String) { self.ref = ref; self.into = into } }
+public struct SpaceFile: Codable, Sendable, Hashable, Identifiable { public var name: String; public var size: Double; public var addedAt: String; public var id: String { name } }
+public struct SpaceFilesResult: Decodable, Sendable { public var files: [SpaceFile] }
+public struct SpaceFileAddParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var name: String; public var path: String?; public var text: String?; public var extracted: String?
+    public init(ref: ContainerRef, name: String, path: String? = nil, text: String? = nil, extracted: String? = nil) { self.ref = ref; self.name = name; self.path = path; self.text = text; self.extracted = extracted }
+}
+public struct SpaceFileParams: Encodable, Sendable { public var ref: ContainerRef; public var name: String; public init(ref: ContainerRef, name: String) { self.ref = ref; self.name = name } }
 
 // MARK: Method params / results
 

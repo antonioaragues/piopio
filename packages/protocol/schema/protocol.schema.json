@@ -680,6 +680,87 @@
 							"type": "string"
 						}
 					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"id",
+						"at",
+						"action",
+						"added",
+						"removed",
+						"status"
+					],
+					"properties": {
+						"kind": {
+							"type": "string",
+							"const": "memory"
+						},
+						"id": {
+							"type": "string"
+						},
+						"at": {
+							"type": "string"
+						},
+						"action": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "saved"
+								},
+								{
+									"type": "string",
+									"const": "proposed"
+								}
+							]
+						},
+						"added": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"removed": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"reason": {
+							"type": "string"
+						},
+						"status": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "saved"
+								},
+								{
+									"type": "string",
+									"const": "undone"
+								},
+								{
+									"type": "string",
+									"const": "pending"
+								},
+								{
+									"type": "string",
+									"const": "dismissed"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								}
+							]
+						},
+						"revisionId": {
+							"type": "string"
+						},
+						"proposalId": {
+							"type": "string"
+						}
+					}
 				}
 			]
 		},
@@ -1635,6 +1716,87 @@
 											"type": "string"
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"action",
+										"added",
+										"removed",
+										"status"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "memory"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"action": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "saved"
+												},
+												{
+													"type": "string",
+													"const": "proposed"
+												}
+											]
+										},
+										"added": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"removed": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"reason": {
+											"type": "string"
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "saved"
+												},
+												{
+													"type": "string",
+													"const": "undone"
+												},
+												{
+													"type": "string",
+													"const": "pending"
+												},
+												{
+													"type": "string",
+													"const": "dismissed"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"revisionId": {
+											"type": "string"
+										},
+										"proposalId": {
+											"type": "string"
+										}
+									}
 								}
 							]
 						},
@@ -2333,6 +2495,87 @@
 											"type": "string"
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"action",
+										"added",
+										"removed",
+										"status"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "memory"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"action": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "saved"
+												},
+												{
+													"type": "string",
+													"const": "proposed"
+												}
+											]
+										},
+										"added": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"removed": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"reason": {
+											"type": "string"
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "saved"
+												},
+												{
+													"type": "string",
+													"const": "undone"
+												},
+												{
+													"type": "string",
+													"const": "pending"
+												},
+												{
+													"type": "string",
+													"const": "dismissed"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"revisionId": {
+											"type": "string"
+										},
+										"proposalId": {
+											"type": "string"
+										}
+									}
 								}
 							]
 						}
@@ -3008,6 +3251,87 @@
 											"type": "boolean"
 										},
 										"movedFrom": {
+											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"action",
+										"added",
+										"removed",
+										"status"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "memory"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"action": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "saved"
+												},
+												{
+													"type": "string",
+													"const": "proposed"
+												}
+											]
+										},
+										"added": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"removed": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"reason": {
+											"type": "string"
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "saved"
+												},
+												{
+													"type": "string",
+													"const": "undone"
+												},
+												{
+													"type": "string",
+													"const": "pending"
+												},
+												{
+													"type": "string",
+													"const": "dismissed"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"revisionId": {
+											"type": "string"
+										},
+										"proposalId": {
 											"type": "string"
 										}
 									}
@@ -4024,6 +4348,87 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"action",
+													"added",
+													"removed",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "memory"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"action": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "saved"
+															},
+															{
+																"type": "string",
+																"const": "proposed"
+															}
+														]
+													},
+													"added": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"removed": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"reason": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "saved"
+															},
+															{
+																"type": "string",
+																"const": "undone"
+															},
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "dismissed"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"revisionId": {
+														"type": "string"
+													},
+													"proposalId": {
+														"type": "string"
+													}
+												}
 											}
 										]
 									}
@@ -5018,6 +5423,87 @@
 										"type": "string"
 									}
 								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"action",
+									"added",
+									"removed",
+									"status"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "memory"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"action": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "saved"
+											},
+											{
+												"type": "string",
+												"const": "proposed"
+											}
+										]
+									},
+									"added": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"removed": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"reason": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "saved"
+											},
+											{
+												"type": "string",
+												"const": "undone"
+											},
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "dismissed"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											}
+										]
+									},
+									"revisionId": {
+										"type": "string"
+									},
+									"proposalId": {
+										"type": "string"
+									}
+								}
 							}
 						]
 					}
@@ -5468,8 +5954,14 @@
 							"brief": {
 								"type": "string"
 							},
+							"summary": {
+								"type": "string"
+							},
 							"lastActiveAt": {
 								"type": "string"
+							},
+							"archived": {
+								"type": "boolean"
 							},
 							"unread": {
 								"type": "boolean"
@@ -5482,6 +5974,48 @@
 				},
 				"instructions": {
 					"type": "string"
+				},
+				"space": {
+					"type": "object",
+					"required": [
+						"costUsd",
+						"files",
+						"memoryLines",
+						"memory",
+						"autoTidy"
+					],
+					"properties": {
+						"costUsd": {
+							"type": "number"
+						},
+						"files": {
+							"type": "number"
+						},
+						"memoryLines": {
+							"type": "number"
+						},
+						"organizerModel": {
+							"type": "object",
+							"required": [
+								"provider",
+								"id"
+							],
+							"properties": {
+								"provider": {
+									"type": "string"
+								},
+								"id": {
+									"type": "string"
+								}
+							}
+						},
+						"memory": {
+							"type": "boolean"
+						},
+						"autoTidy": {
+							"type": "boolean"
+						}
+					}
 				}
 			}
 		},
@@ -6153,6 +6687,87 @@
 														"type": "boolean"
 													},
 													"movedFrom": {
+														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"action",
+													"added",
+													"removed",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "memory"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"action": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "saved"
+															},
+															{
+																"type": "string",
+																"const": "proposed"
+															}
+														]
+													},
+													"added": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"removed": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"reason": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "saved"
+															},
+															{
+																"type": "string",
+																"const": "undone"
+															},
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "dismissed"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"revisionId": {
+														"type": "string"
+													},
+													"proposalId": {
 														"type": "string"
 													}
 												}
@@ -6854,6 +7469,87 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"action",
+													"added",
+													"removed",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "memory"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"action": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "saved"
+															},
+															{
+																"type": "string",
+																"const": "proposed"
+															}
+														]
+													},
+													"added": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"removed": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"reason": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "saved"
+															},
+															{
+																"type": "string",
+																"const": "undone"
+															},
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "dismissed"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"revisionId": {
+														"type": "string"
+													},
+													"proposalId": {
+														"type": "string"
+													}
+												}
 											}
 										]
 									}
@@ -7529,6 +8225,87 @@
 														"type": "boolean"
 													},
 													"movedFrom": {
+														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"action",
+													"added",
+													"removed",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "memory"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"action": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "saved"
+															},
+															{
+																"type": "string",
+																"const": "proposed"
+															}
+														]
+													},
+													"added": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"removed": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"reason": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "saved"
+															},
+															{
+																"type": "string",
+																"const": "undone"
+															},
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "dismissed"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"revisionId": {
+														"type": "string"
+													},
+													"proposalId": {
 														"type": "string"
 													}
 												}
@@ -8545,6 +9322,87 @@
 																	"type": "string"
 																}
 															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"action",
+																"added",
+																"removed",
+																"status"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "memory"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"action": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "saved"
+																		},
+																		{
+																			"type": "string",
+																			"const": "proposed"
+																		}
+																	]
+																},
+																"added": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"removed": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"reason": {
+																	"type": "string"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "saved"
+																		},
+																		{
+																			"type": "string",
+																			"const": "undone"
+																		},
+																		{
+																			"type": "string",
+																			"const": "pending"
+																		},
+																		{
+																			"type": "string",
+																			"const": "dismissed"
+																		},
+																		{
+																			"type": "string",
+																			"const": "failed"
+																		}
+																	]
+																},
+																"revisionId": {
+																	"type": "string"
+																},
+																"proposalId": {
+																	"type": "string"
+																}
+															}
 														}
 													]
 												}
@@ -9078,8 +9936,14 @@
 										"brief": {
 											"type": "string"
 										},
+										"summary": {
+											"type": "string"
+										},
 										"lastActiveAt": {
 											"type": "string"
+										},
+										"archived": {
+											"type": "boolean"
 										},
 										"unread": {
 											"type": "boolean"
@@ -9092,6 +9956,48 @@
 							},
 							"instructions": {
 								"type": "string"
+							},
+							"space": {
+								"type": "object",
+								"required": [
+									"costUsd",
+									"files",
+									"memoryLines",
+									"memory",
+									"autoTidy"
+								],
+								"properties": {
+									"costUsd": {
+										"type": "number"
+									},
+									"files": {
+										"type": "number"
+									},
+									"memoryLines": {
+										"type": "number"
+									},
+									"organizerModel": {
+										"type": "object",
+										"required": [
+											"provider",
+											"id"
+										],
+										"properties": {
+											"provider": {
+												"type": "string"
+											},
+											"id": {
+												"type": "string"
+											}
+										}
+									},
+									"memory": {
+										"type": "boolean"
+									},
+									"autoTidy": {
+										"type": "boolean"
+									}
+								}
 							}
 						}
 					}
@@ -9441,8 +10347,14 @@
 										"brief": {
 											"type": "string"
 										},
+										"summary": {
+											"type": "string"
+										},
 										"lastActiveAt": {
 											"type": "string"
+										},
+										"archived": {
+											"type": "boolean"
 										},
 										"unread": {
 											"type": "boolean"
@@ -9455,6 +10367,48 @@
 							},
 							"instructions": {
 								"type": "string"
+							},
+							"space": {
+								"type": "object",
+								"required": [
+									"costUsd",
+									"files",
+									"memoryLines",
+									"memory",
+									"autoTidy"
+								],
+								"properties": {
+									"costUsd": {
+										"type": "number"
+									},
+									"files": {
+										"type": "number"
+									},
+									"memoryLines": {
+										"type": "number"
+									},
+									"organizerModel": {
+										"type": "object",
+										"required": [
+											"provider",
+											"id"
+										],
+										"properties": {
+											"provider": {
+												"type": "string"
+											},
+											"id": {
+												"type": "string"
+											}
+										}
+									},
+									"memory": {
+										"type": "boolean"
+									},
+									"autoTidy": {
+										"type": "boolean"
+									}
+								}
 							}
 						}
 					}
@@ -10364,6 +11318,87 @@
 										"type": "boolean"
 									},
 									"movedFrom": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"action",
+									"added",
+									"removed",
+									"status"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "memory"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"action": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "saved"
+											},
+											{
+												"type": "string",
+												"const": "proposed"
+											}
+										]
+									},
+									"added": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"removed": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"reason": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "saved"
+											},
+											{
+												"type": "string",
+												"const": "undone"
+											},
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "dismissed"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											}
+										]
+									},
+									"revisionId": {
+										"type": "string"
+									},
+									"proposalId": {
 										"type": "string"
 									}
 								}
@@ -11407,6 +12442,87 @@
 												"type": "boolean"
 											},
 											"movedFrom": {
+												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"id",
+											"at",
+											"action",
+											"added",
+											"removed",
+											"status"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "memory"
+											},
+											"id": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											},
+											"action": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "saved"
+													},
+													{
+														"type": "string",
+														"const": "proposed"
+													}
+												]
+											},
+											"added": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											},
+											"removed": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											},
+											"reason": {
+												"type": "string"
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "saved"
+													},
+													{
+														"type": "string",
+														"const": "undone"
+													},
+													{
+														"type": "string",
+														"const": "pending"
+													},
+													{
+														"type": "string",
+														"const": "dismissed"
+													},
+													{
+														"type": "string",
+														"const": "failed"
+													}
+												]
+											},
+											"revisionId": {
+												"type": "string"
+											},
+											"proposalId": {
 												"type": "string"
 											}
 										}
@@ -14790,10 +15906,723 @@
 				},
 				"instructions": {
 					"type": "string"
+				},
+				"organizerModel": {
+					"type": "object",
+					"required": [
+						"provider",
+						"id"
+					],
+					"properties": {
+						"provider": {
+							"type": "string"
+						},
+						"id": {
+							"type": "string"
+						}
+					}
+				},
+				"topicModel": {
+					"type": "object",
+					"required": [
+						"provider",
+						"id"
+					],
+					"properties": {
+						"provider": {
+							"type": "string"
+						},
+						"id": {
+							"type": "string"
+						}
+					}
+				},
+				"memory": {
+					"type": "boolean"
+				},
+				"autoTidy": {
+					"type": "boolean"
 				}
 			}
 		},
 		"spaces.configure.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.memory.get.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"spaces.memory.get.result": {
+			"type": "object",
+			"required": [
+				"text",
+				"revisions"
+			],
+			"properties": {
+				"text": {
+					"type": "string"
+				},
+				"revisions": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"at",
+							"by",
+							"summary",
+							"added",
+							"removed"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"by": {
+								"type": "object",
+								"required": [
+									"kind"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "organizer"
+											},
+											{
+												"type": "string",
+												"const": "topic"
+											},
+											{
+												"type": "string",
+												"const": "user"
+											}
+										]
+									},
+									"topicId": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									}
+								}
+							},
+							"summary": {
+								"type": "string"
+							},
+							"added": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"removed": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"undone": {
+								"type": "boolean"
+							}
+						}
+					}
+				}
+			}
+		},
+		"spaces.memory.set.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"text"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"text": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.memory.set.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.memory.undo.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"revisionId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"revisionId": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.memory.undo.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.memory.restore.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"revisionId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"revisionId": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.memory.restore.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.memory.decide.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"proposalId",
+				"accept"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"proposalId": {
+					"type": "string"
+				},
+				"accept": {
+					"type": "boolean"
+				}
+			}
+		},
+		"spaces.memory.decide.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.topics.rename.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"title"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"title": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.topics.rename.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.topics.archive.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"archived"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"archived": {
+					"type": "boolean"
+				}
+			}
+		},
+		"spaces.topics.archive.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.topics.merge.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"into"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"into": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.topics.merge.result": {
+			"type": "object",
+			"required": [
+				"summary"
+			],
+			"properties": {
+				"summary": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.files.list.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"spaces.files.list.result": {
+			"type": "object",
+			"required": [
+				"files"
+			],
+			"properties": {
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name",
+							"size",
+							"addedAt"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"size": {
+								"type": "number"
+							},
+							"addedAt": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"spaces.files.add.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"name"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"name": {
+					"type": "string"
+				},
+				"path": {
+					"type": "string"
+				},
+				"text": {
+					"type": "string"
+				},
+				"extracted": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.files.add.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.files.remove.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"name"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"name": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.files.remove.result": {
 			"type": "object",
 			"properties": {}
 		},

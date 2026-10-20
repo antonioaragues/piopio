@@ -160,6 +160,12 @@ export class Engine {
 		};
 	}
 
+	/** A topic's conversation id, from its ref. */
+	private topicOf(ref: Params<"sessions.open">["ref"]): string {
+		if (ref.kind !== "space" || !ref.conversationId) throw new EngineError("INVALID", "Give a topic (a Space ref with its conversationId).");
+		return ref.conversationId;
+	}
+
 	private async capability(ref: Params<"sessions.open">["ref"], name: "edit" | "regenerate" | "switchBranch" | "removeQueued" | "clearQueue"): Promise<Runtime> {
 		const runtime = await this.sessions.runtime(ref);
 		if (!runtime[name]) throw new EngineError("INVALID", `${ref.kind} sessions don't support ${name} yet.`);
@@ -410,8 +416,64 @@ export class Engine {
 				return {};
 			}
 			case "spaces.configure": {
-				const p = params as Params<"spaces.configure">;
-				this.sessions.configureSpace(p.ref, { ...(p.instructions !== undefined ? { instructions: p.instructions } : {}) });
+				const { ref, ...change } = params as Params<"spaces.configure">;
+				await this.sessions.configureSpace(ref, change);
+				return {};
+			}
+			case "spaces.memory.get": {
+				const p = params as Params<"spaces.memory.get">;
+				return (await this.sessions.space(p.ref)).memoryInfo() satisfies Result<"spaces.memory.get">;
+			}
+			case "spaces.memory.set": {
+				const p = params as Params<"spaces.memory.set">;
+				await (await this.sessions.space(p.ref)).setMemory(p.text);
+				return {};
+			}
+			case "spaces.memory.undo": {
+				const p = params as Params<"spaces.memory.undo">;
+				await (await this.sessions.space(p.ref)).undoMemory(p.revisionId);
+				return {};
+			}
+			case "spaces.memory.restore": {
+				const p = params as Params<"spaces.memory.restore">;
+				await (await this.sessions.space(p.ref)).restoreMemory(p.revisionId);
+				return {};
+			}
+			case "spaces.memory.decide": {
+				const p = params as Params<"spaces.memory.decide">;
+				await (await this.sessions.space(p.ref)).decideProposal(p.proposalId, p.accept);
+				return {};
+			}
+			case "spaces.topics.rename": {
+				const p = params as Params<"spaces.topics.rename">;
+				await (await this.sessions.space(p.ref)).renameTopic(this.topicOf(p.ref), p.title);
+				return {};
+			}
+			case "spaces.topics.archive": {
+				const p = params as Params<"spaces.topics.archive">;
+				await (await this.sessions.space(p.ref)).archiveTopic(this.topicOf(p.ref), p.archived);
+				return {};
+			}
+			case "spaces.topics.merge": {
+				const p = params as Params<"spaces.topics.merge">;
+				return { summary: await (await this.sessions.space(p.ref)).mergeTopics(this.topicOf(p.ref), p.into) } satisfies Result<"spaces.topics.merge">;
+			}
+			case "spaces.files.list": {
+				const p = params as Params<"spaces.files.list">;
+				return { files: (await this.sessions.space(p.ref)).files.list() } satisfies Result<"spaces.files.list">;
+			}
+			case "spaces.files.add": {
+				const { ref, ...file } = params as Params<"spaces.files.add">;
+				const space = await this.sessions.space(ref);
+				space.files.add(file);
+				space.filesChanged();
+				return {};
+			}
+			case "spaces.files.remove": {
+				const p = params as Params<"spaces.files.remove">;
+				const space = await this.sessions.space(p.ref);
+				space.files.remove(p.name);
+				space.filesChanged();
 				return {};
 			}
 			case "projects.remove": {

@@ -171,7 +171,22 @@ export const RoutingItem = Type.Object({
 });
 export type RoutingItem = Static<typeof RoutingItem>;
 
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem]);
+/** A change to a Space's memory: saved by the organizer (Undo), or proposed by a topic (Save, Dismiss). 04-chat S8. */
+export const MemoryItem = Type.Object({
+	kind: Type.Literal("memory"),
+	id: Type.String(),
+	at: Type.String(),
+	action: literals("saved", "proposed"),
+	added: Type.Array(Type.String()),
+	removed: Type.Array(Type.String()),
+	reason: Type.Optional(Type.String()),
+	status: literals("saved", "undone", "pending", "dismissed", "failed"),
+	revisionId: Type.Optional(Type.String()),
+	proposalId: Type.Optional(Type.String()),
+});
+export type MemoryItem = Static<typeof MemoryItem>;
+
+export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem]);
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
@@ -300,12 +315,25 @@ export const TopicInfo = Type.Object({
 	id: Type.String(),
 	title: Type.String(),
 	brief: Type.Optional(Type.String()),
+	/** Where it stands, in a line (refreshed after each reply). */
+	summary: Type.Optional(Type.String()),
 	lastActiveAt: Type.String(),
+	archived: Type.Optional(Type.Boolean()),
 	/** A reply arrived since you last looked. */
 	unread: Type.Optional(Type.Boolean()),
 	running: Type.Optional(Type.Boolean()),
 });
 export type TopicInfo = Static<typeof TopicInfo>;
+
+export const SpaceInfo = Type.Object({
+	costUsd: Type.Number(),
+	files: Type.Number(),
+	memoryLines: Type.Number(),
+	organizerModel: Type.Optional(ModelRef),
+	memory: Type.Boolean(),
+	autoTidy: Type.Boolean(),
+});
+export type SpaceInfo = Static<typeof SpaceInfo>;
 
 export const SessionSummary = Type.Object({
 	ref: ContainerRef,
@@ -325,6 +353,8 @@ export const SessionSummary = Type.Object({
 	topics: Type.Optional(Type.Array(TopicInfo)),
 	/** Spaces: what every agent in the Space is told. */
 	instructions: Type.Optional(Type.String()),
+	/** Spaces: the header's numbers and the settings (04-chat S7, §3.6). */
+	space: Type.Optional(SpaceInfo),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -670,11 +700,60 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({}),
 	},
-	/** A Space's name and instructions. */
+	/** A Space's settings (§3.6). The topic model applies to new topics and every existing one. */
 	"spaces.configure": {
-		params: Type.Object({ ref: ContainerRef, instructions: Type.Optional(Type.String()) }),
+		params: Type.Object({
+			ref: ContainerRef,
+			instructions: Type.Optional(Type.String()),
+			organizerModel: Type.Optional(ModelRef),
+			topicModel: Type.Optional(ModelRef),
+			memory: Type.Optional(Type.Boolean()),
+			autoTidy: Type.Optional(Type.Boolean()),
+		}),
 		result: Type.Object({}),
 	},
+	/** The memory and its history, newest first (S8). */
+	"spaces.memory.get": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({
+			text: Type.String(),
+			revisions: Type.Array(
+				Type.Object({
+					id: Type.String(),
+					at: Type.String(),
+					by: Type.Object({ kind: literals("organizer", "topic", "user"), topicId: Type.Optional(Type.String()), title: Type.Optional(Type.String()) }),
+					summary: Type.String(),
+					added: Type.Array(Type.String()),
+					removed: Type.Array(Type.String()),
+					undone: Type.Optional(Type.Boolean()),
+				}),
+			),
+		}),
+	},
+	/** Your edit in the memory editor. */
+	"spaces.memory.set": { params: Type.Object({ ref: ContainerRef, text: Type.String() }), result: Type.Object({}) },
+	/** Undo on a memory card: takes that change back. */
+	"spaces.memory.undo": { params: Type.Object({ ref: ContainerRef, revisionId: Type.String() }), result: Type.Object({}) },
+	/** The memory as it was after a change in the history. */
+	"spaces.memory.restore": { params: Type.Object({ ref: ContainerRef, revisionId: Type.String() }), result: Type.Object({}) },
+	/** Save or Dismiss a topic's proposal. */
+	"spaces.memory.decide": { params: Type.Object({ ref: ContainerRef, proposalId: Type.String(), accept: Type.Boolean() }), result: Type.Object({}) },
+	/** Topic housekeeping (S9). `ref` is the topic's. */
+	"spaces.topics.rename": { params: Type.Object({ ref: ContainerRef, title: Type.String() }), result: Type.Object({}) },
+	"spaces.topics.archive": { params: Type.Object({ ref: ContainerRef, archived: Type.Boolean() }), result: Type.Object({}) },
+	/** Summarizes the topic into `into` (its brief) and archives it. */
+	"spaces.topics.merge": { params: Type.Object({ ref: ContainerRef, into: Type.String() }), result: Type.Object({ summary: Type.String() }) },
+	/** Space files: documents every topic can read. */
+	"spaces.files.list": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({ files: Type.Array(Type.Object({ name: Type.String(), size: Type.Number(), addedAt: Type.String() })) }),
+	},
+	/** Copies a file in (`path`), or writes a note (`text`). `extracted`: a document's text, read by the client. */
+	"spaces.files.add": {
+		params: Type.Object({ ref: ContainerRef, name: Type.String(), path: Type.Optional(Type.String()), text: Type.Optional(Type.String()), extracted: Type.Optional(Type.String()) }),
+		result: Type.Object({}),
+	},
+	"spaces.files.remove": { params: Type.Object({ ref: ContainerRef, name: Type.String() }), result: Type.Object({}) },
 	/** Forgets a project. Its session files stay where pi keeps them. */
 	"projects.remove": {
 		params: Type.Object({ id: Type.String() }),

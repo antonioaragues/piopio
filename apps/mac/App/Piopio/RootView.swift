@@ -73,7 +73,7 @@ struct RootView: View {
             editingInstructions = engine.space(note.object as? String ?? "")
         }
         .sheet(item: $editingInstructions) { space in
-            SpaceInstructionsSheet(engine: engine, space: space)
+            SpaceSettingsSheet(engine: engine, space: space)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openTopic)) { note in
             guard let target = note.object as? TopicTarget else { return }

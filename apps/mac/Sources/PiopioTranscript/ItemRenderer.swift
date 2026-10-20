@@ -53,7 +53,43 @@ nonisolated struct ItemRenderer: Sendable {
             return checkpointDivider(c)
         case .routing(let r):
             return routingCard(r)
+        case .memory(let m):
+            return memoryNote(m)
         }
+    }
+
+    /// "✎ Saved to memory: “…”  Undo" (docs/design 2b), or a topic's proposal with Save and Dismiss.
+    private func memoryNote(_ m: MemoryItem) -> NSAttributedString {
+        let facts = (m.added.map { "“\($0)”" } + m.removed.map { "removed “\($0)”" }).joined(separator: ", ")
+        let lead: String = switch (m.action, m.status) {
+        case (_, .failed): "Memory not changed: \(m.reason ?? "the change failed")"
+        case (_, .undone): "Undone: \(facts)"
+        case (.saved, _): "Saved to memory: \(facts)"
+        case (.proposed, .pending): "Proposed for memory: \(facts)"
+        case (.proposed, .saved): "Saved to memory: \(facts)"
+        case (.proposed, .dismissed): "Dismissed: \(facts)"
+        case (.proposed, _): "Proposed: \(facts)"
+        }
+        let m2 = NSMutableAttributedString(string: "✎  ", attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: DS.fg3])
+        m2.append(NSAttributedString(string: lead, attributes: [.font: small, .foregroundColor: m.status == .undone || m.status == .dismissed ? DS.fg3 : DS.fg2]))
+        if !compact {
+            let link: (String, TranscriptAction) -> NSAttributedString = { title, action in
+                NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: action.url])
+            }
+            if m.status == .saved, let revision = m.revisionId {
+                m2.append(NSAttributedString(string: "   ", attributes: [.font: small]))
+                m2.append(link("Undo", .undoMemory(revisionId: revision)))
+            } else if m.status == .pending, let proposal = m.proposalId {
+                m2.append(NSAttributedString(string: "   ", attributes: [.font: small]))
+                m2.append(link("Save", .decideMemory(proposalId: proposal, accept: true)))
+                m2.append(NSAttributedString(string: "   ", attributes: [.font: small]))
+                m2.append(link("Dismiss", .decideMemory(proposalId: proposal, accept: false)))
+            }
+        }
+        if let reason = m.reason, m.action == .proposed, m.status == .pending {
+            m2.append(NSAttributedString(string: lineSeparator + reason, attributes: [.font: NSFont.systemFont(ofSize: 11.5), .foregroundColor: DS.fg3]))
+        }
+        return line(m2, paragraph(spacing: 14, before: 4))
     }
 
     /// A Space's Main (04-chat S1): where a message went, a live status and one line of the reply,

@@ -19,6 +19,10 @@ public enum TranscriptAction: Equatable, Sendable {
     case openTopic(topicId: String, itemId: String?)
     /// Wrong topic: choose where a routed message should have gone.
     case wrongTopic(itemId: String)
+    /// Takes a memory change back.
+    case undoMemory(revisionId: String)
+    /// Saves or dismisses a topic's memory proposal.
+    case decideMemory(proposalId: String, accept: Bool)
 
     static let scheme = "piopio-action"
 
@@ -39,6 +43,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case .openFile(let path, let line): c.host = "file"; c.queryItems = [URLQueryItem(name: "path", value: path)] + (line.map { [URLQueryItem(name: "line", value: "\($0)")] } ?? [])
         case .openTopic(let topic, let item): c.host = "topic"; c.queryItems = [URLQueryItem(name: "id", value: topic)] + (item.map { [URLQueryItem(name: "item", value: $0)] } ?? [])
         case .wrongTopic(let id): c.host = "wrong-topic"; c.queryItems = [URLQueryItem(name: "item", value: id)]
+        case .undoMemory(let id): c.host = "undo-memory"; c.queryItems = [URLQueryItem(name: "revision", value: id)]
+        case .decideMemory(let id, let accept): c.host = "decide-memory"; c.queryItems = [URLQueryItem(name: "proposal", value: id), URLQueryItem(name: "accept", value: accept ? "1" : "0")]
         }
         return c.url!
     }
@@ -60,6 +66,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case "file": guard let path = q("path") else { return nil }; self = .openFile(path: path, line: q("line").flatMap(Int.init))
         case "topic": guard let id = q("id") else { return nil }; self = .openTopic(topicId: id, itemId: q("item"))
         case "wrong-topic": guard let id = q("item") else { return nil }; self = .wrongTopic(itemId: id)
+        case "undo-memory": guard let id = q("revision") else { return nil }; self = .undoMemory(revisionId: id)
+        case "decide-memory": guard let id = q("proposal") else { return nil }; self = .decideMemory(proposalId: id, accept: q("accept") == "1")
         default: return nil
         }
     }

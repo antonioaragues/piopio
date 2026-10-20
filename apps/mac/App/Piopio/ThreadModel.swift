@@ -166,8 +166,15 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: ref.id, topicId: topicId, itemId: itemId))
         case .wrongTopic(let itemId):
             chooseTopic(for: itemId)
+        case .undoMemory(let revisionId):
+            Task { do { try await engine?.spaceCall("spaces.memory.undo", RevisionParams(ref: spaceRef, revisionId: revisionId)) } catch { report(error) } }
+        case .decideMemory(let proposalId, let accept):
+            Task { do { try await engine?.spaceCall("spaces.memory.decide", DecideParams(ref: spaceRef, proposalId: proposalId, accept: accept)) } catch { report(error) } }
         }
     }
+
+    /// The Space this conversation belongs to (memory belongs to the Space, not the topic).
+    private var spaceRef: ContainerRef { ContainerRef(kind: .space, id: ref.id) }
 
     /// Wrong topic (04-chat S2): a menu of the other topics and New Topic…, at the pointer.
     private func chooseTopic(for itemId: String) {

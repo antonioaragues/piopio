@@ -1015,4 +1015,101 @@ describe("Spaces (milestone 3.2)", () => {
 		expect(routings(reopened).map((r) => r.topicTitle)).toEqual(["Garden", "Watering"]);
 		expect(reopened.items.map((i) => i.id)).toEqual(main.items.map((i) => i.id));
 	}, 60_000);
+
+	test("memory: the organizer saves facts, Undo takes them back, topics propose, and the editor keeps a history (3.3)", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
+		await a.client.call("sessions.subscribe", { ref });
+		const memoryCards = (s: Snapshot) => s.items.filter((i): i is Extract<Snapshot["items"][number], { kind: "memory" }> => i.kind === "memory");
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: update_memory | {"add":["Budget is 30k"],"section":"Decisions"}' } });
+		let main = await until(a, ref, (s) => memoryCards(s)[0]?.status === "saved" && s.state.status === "idle");
+		const saved = memoryCards(main)[0]!;
+		expect(saved).toMatchObject({ action: "saved", added: ["Budget is 30k"], removed: [] });
+		let memory = await a.client.call("spaces.memory.get", { ref });
+		expect(memory.text).toBe("## Decisions\n- Budget is 30k");
+		expect(memory.revisions[0]).toMatchObject({ by: { kind: "organizer" }, summary: "Added “Budget is 30k”" });
+		expect((await a.client.call("sessions.list", { kind: "space" })).sessions[0]!.space).toMatchObject({ memoryLines: 1, memory: true, autoTidy: false });
+
+		await a.client.call("spaces.memory.undo", { ref, revisionId: saved.revisionId! });
+		main = await until(a, ref, (s) => memoryCards(s)[0]?.status === "undone");
+		expect((await a.client.call("spaces.memory.get", { ref })).text).not.toContain("Budget");
+
+		// A topic proposes; you save it.
+		await a.client.call("sessions.submit", { ref, input: { text: "/new Finishes\nWhat look do we want?" } });
+		await until(a, ref, (s) => routings(s)[0]?.status === "replied");
+		const topicRef = { ...ref, conversationId: (await a.client.call("sessions.list", { kind: "space" })).sessions[0]!.topics![0]!.id };
+		await a.client.call("sessions.subscribe", { ref: topicRef });
+		await a.client.call("sessions.submit", { ref: topicRef, input: { text: 'call: propose_memory | {"add":["Prefers matte finishes"],"reason":"A preference for every room"}' } });
+		let topic = await until(a, topicRef, (s) => memoryCards(s)[0]?.status === "pending" && s.state.status === "idle");
+		const proposal = memoryCards(topic)[0]!;
+		expect(proposal).toMatchObject({ action: "proposed", added: ["Prefers matte finishes"], reason: "A preference for every room" });
+		await a.client.call("spaces.memory.decide", { ref, proposalId: proposal.proposalId!, accept: true });
+		topic = await until(a, topicRef, (s) => memoryCards(s)[0]?.status === "saved");
+		memory = await a.client.call("spaces.memory.get", { ref });
+		expect(memory.text).toContain("- Prefers matte finishes");
+		expect(memory.revisions[0]).toMatchObject({ by: { kind: "topic", title: "Finishes" } });
+
+		// Your edits, and restoring an older version.
+		await a.client.call("spaces.memory.set", { ref, text: "## Notes\n- Edited by hand" });
+		memory = await a.client.call("spaces.memory.get", { ref });
+		expect(memory.revisions[0]).toMatchObject({ by: { kind: "user" }, added: ["Edited by hand"], removed: ["Prefers matte finishes"] });
+		await a.client.call("spaces.memory.restore", { ref, revisionId: memory.revisions[1]!.id });
+		expect((await a.client.call("spaces.memory.get", { ref })).text).toContain("Prefers matte finishes");
+	}, 60_000);
+
+	test("ask_topic, search_space, files, housekeeping, summaries and settings (3.3)", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: "/new Kitchen\nThe sink is white" } });
+		await a.client.call("sessions.submit", { ref, input: { text: "/new Garden\nTomatoes or peppers?" } });
+		await until(a, ref, (s) => routings(s).length === 2 && routings(s).every((r) => r.status === "replied"));
+		const list = async () => (await a.client.call("sessions.list", { kind: "space" })).sessions[0]!;
+		const id = async (title: string) => (await list()).topics!.find((t) => t.title === title)!.id;
+		const kitchen = await id("Kitchen"), garden = await id("Garden");
+		// Summaries come after each reply (the scripted model has no utility model: the reply's first line).
+		for (let i = 0; i < 50 && !(await list()).topics!.every((t) => t.summary); i++) await new Promise((r) => setTimeout(r, 100));
+		expect((await list()).topics!.find((t) => t.id === kitchen)!.summary).toBe("Echo: The sink is white");
+
+		const tool = async (call: string) => {
+			const before = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.length;
+			await a.client.call("sessions.submit", { ref, input: { text: `call: ${call}` } });
+			const s = await until(a, ref, (s) => s.items.length > before + 2 && s.state.status === "idle");
+			return [...s.items].reverse().find((i) => i.kind === "tool") as Extract<Snapshot["items"][number], { kind: "tool" }>;
+		};
+		expect((await tool('ask_topic | {"topic":"Kitchen","question":"What color is the sink?"}')).output).toContain("“Kitchen” says:\nEcho: What color is the sink?");
+		expect(texts(await a.client.call("sessions.open", { ref: { ...ref, conversationId: kitchen } })).length).toBe(2);
+		expect((await tool('search_space | {"query":"tomatoes"}')).output).toContain("“Garden”");
+
+		await a.client.call("spaces.files.add", { ref, name: "notes.md", text: "Sink: 60 cm wide\nOven: 90 cm" });
+		const pdf = join(a.home, "quote.pdf");
+		writeFileSync(pdf, Buffer.from([0x25, 0x50, 0x44, 0x46, 0, 1, 2]));
+		await a.client.call("spaces.files.add", { ref, name: "quote.pdf", path: pdf, extracted: "Quote B: 14.2k" });
+		expect((await a.client.call("spaces.files.list", { ref })).files.map((f) => f.name)).toEqual(["notes.md", "quote.pdf"]);
+		expect((await tool('space_files_read | {"name":"quote.pdf"}')).output).toBe("Quote B: 14.2k");
+		expect((await tool('space_files_search | {"query":"oven"}')).output).toBe("notes.md:2: Oven: 90 cm");
+		for (let i = 0; i < 20 && (await list()).space!.files !== 2; i++) await new Promise((r) => setTimeout(r, 100));
+		expect((await list()).space!.files).toBe(2);
+
+		// The organizer only suggests tidying until auto-tidy is on.
+		expect((await tool('rename_topic | {"topic":"Garden","title":"Vegetable garden"}')).status).toBe("error");
+		await a.client.call("spaces.configure", { ref, autoTidy: true });
+		expect((await tool('rename_topic | {"topic":"Garden","title":"Vegetable garden"}')).output).toContain("Renamed “Garden” to “Vegetable garden”");
+		// Your own housekeeping.
+		await a.client.call("spaces.topics.rename", { ref: { ...ref, conversationId: garden }, title: "Veg garden" });
+		const { summary } = await a.client.call("spaces.topics.merge", { ref: { ...ref, conversationId: garden }, into: kitchen });
+		expect(summary).toContain("Tomatoes or peppers?");
+		let topics = (await list()).topics!;
+		expect(topics.find((t) => t.id === garden)).toMatchObject({ title: "Veg garden", archived: true });
+		expect(topics.find((t) => t.id === kitchen)!.brief).toContain("Merged from “Veg garden”");
+		await a.client.call("spaces.topics.archive", { ref: { ...ref, conversationId: garden }, archived: false });
+		topics = (await list()).topics!;
+		expect(topics.find((t) => t.id === garden)!.archived).toBeUndefined();
+
+		await a.client.call("spaces.configure", { ref, memory: false, organizerModel: { provider: "faux", id: "faux-1" } });
+		expect((await list()).space).toMatchObject({ memory: false, autoTidy: true, organizerModel: { provider: "faux", id: "faux-1" } });
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: update_memory | {"add":["x"]}' } });
+		const off = await until(a, ref, (s) => s.items.some((i) => i.kind === "memory") && s.state.status === "idle");
+		expect(off.items.find((i) => i.kind === "memory")).toMatchObject({ status: "failed", reason: "Memory is off for this Space." });
+	}, 90_000);
 });

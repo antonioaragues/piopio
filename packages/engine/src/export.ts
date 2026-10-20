@@ -45,6 +45,9 @@ export function toMarkdown(title: string, items: readonly TimelineItem[]): strin
 			case "compaction":
 				out.push(`> *Context compacted:* ${item.summary}`, "");
 				break;
+			case "memory":
+				out.push(`> ✎ ${item.action === "proposed" ? "Proposed for memory" : "Memory"}: ${[...item.added.map((a) => `+ ${a}`), ...item.removed.map((r) => `− ${r}`)].join("; ")} (${item.status})`, "");
+				break;
 			case "routing":
 				out.push(`> ↳ ${item.decision === "create" ? "New topic" : "Routed to"} **${item.topicTitle}**${item.reason ? ` (${item.reason})` : ""}`, "");
 				break;
