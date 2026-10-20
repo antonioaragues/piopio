@@ -66,6 +66,18 @@ export class Projects {
 		return describe(entry);
 	}
 
+	/** Tells clients again (the branch changed). */
+	touch(): void {
+		const projects = this.list();
+		for (const l of this.listeners) l(projects);
+	}
+
+	/** The project that contains `cwd`. */
+	projectFor(cwd: string): { id: string; path: string } | undefined {
+		const entry = this.entryFor(cwd);
+		return entry && { id: entry.id, path: entry.path };
+	}
+
 	/** Approval mode for new sessions in `cwd` (global default: auto-edit, BQ1). */
 	modeFor(cwd: string): ApprovalMode {
 		return this.entryFor(cwd)?.approvalMode ?? "auto_edit";

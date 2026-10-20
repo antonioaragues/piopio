@@ -303,6 +303,9 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var updatedAt: String
     public var cwd: String?
     public var model: ModelRef?
+    /// Build: the project folder (differs from `cwd` for worktree sessions), and the worktree if any.
+    public var projectPath: String?
+    public var worktree: WorktreeInfo?
 }
 
 // MARK: Method params / results
@@ -323,9 +326,91 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var model: ModelRef?
     public var thinking: String?
     public var title: String?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title
+    public var workOn: WorkOn?
+    public var approvalMode: ApprovalMode?
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, approvalMode: ApprovalMode? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode
     }
+}
+
+// MARK: Git (Build)
+
+/// Where a new Build session works.
+public enum WorkOn: Encodable, Sendable, Hashable {
+    case current
+    case branch(String, base: String?)
+    case worktree(String, base: String?)
+
+    private enum Key: String, CodingKey { case kind, branch, base }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        switch self {
+        case .current: try c.encode("current", forKey: .kind)
+        case .branch(let b, let base): try c.encode("branch", forKey: .kind); try c.encode(b, forKey: .branch); try c.encodeIfPresent(base, forKey: .base)
+        case .worktree(let b, let base): try c.encode("worktree", forKey: .kind); try c.encode(b, forKey: .branch); try c.encodeIfPresent(base, forKey: .base)
+        }
+    }
+}
+
+public struct WorktreeInfo: Codable, Sendable, Hashable {
+    public enum Finished: String, Codable, Sendable { case merged, discarded }
+    public var branch: String
+    public var base: String
+    public var finished: Finished?
+}
+
+public struct GitFile: Codable, Sendable, Hashable, Identifiable {
+    public enum Status: String, Codable, Sendable { case added, modified, deleted, renamed, conflicted, untracked }
+    public var path: String
+    public var status: Status
+    public var staged: Bool
+    public var from: String?
+    public var id: String { path }
+}
+
+public struct GitStatus: Codable, Sendable, Hashable {
+    public var repo: Bool
+    public var branch: String?
+    public var detached: Bool?
+    public var upstream: String?
+    public var ahead: Int
+    public var behind: Int
+    public var files: [GitFile]
+}
+
+public struct GitBranch: Codable, Sendable, Hashable, Identifiable {
+    public var name: String
+    public var upstream: String?
+    public var lastCommitAt: String?
+    public var current: Bool
+    public var id: String { name }
+}
+
+public struct CwdParams: Encodable, Sendable { public var cwd: String; public init(cwd: String) { self.cwd = cwd } }
+public struct GitBranchesResult: Decodable, Sendable { public var branches: [GitBranch] }
+public struct GitCheckoutParams: Encodable, Sendable {
+    public var cwd: String; public var branch: String; public var create: Bool?; public var base: String?
+    public init(cwd: String, branch: String, create: Bool? = nil, base: String? = nil) { self.cwd = cwd; self.branch = branch; self.create = create; self.base = base }
+}
+public struct GitCommitParams: Encodable, Sendable {
+    public var cwd: String; public var message: String; public var paths: [String]?; public var amend: Bool?
+    public init(cwd: String, message: String, paths: [String]? = nil, amend: Bool? = nil) { self.cwd = cwd; self.message = message; self.paths = paths; self.amend = amend }
+}
+public struct GitCommitResult: Decodable, Sendable { public var commit: String }
+public struct GitMessageParams: Encodable, Sendable { public var cwd: String; public var paths: [String]?; public init(cwd: String, paths: [String]? = nil) { self.cwd = cwd; self.paths = paths } }
+public struct GitMessageResult: Decodable, Sendable { public var message: String }
+public struct GitSyncParams: Encodable, Sendable {
+    public enum Action: String, Encodable, Sendable { case push, pull, fetch }
+    public var cwd: String; public var action: Action
+    public init(cwd: String, action: Action) { self.cwd = cwd; self.action = action }
+}
+public struct GitSyncResult: Decodable, Sendable { public var output: String }
+public struct SuggestBranchParams: Encodable, Sendable { public var prompt: String; public init(prompt: String) { self.prompt = prompt } }
+public struct SuggestBranchResult: Decodable, Sendable { public var branch: String }
+public struct FinishParams: Encodable, Sendable {
+    public enum Action: String, Encodable, Sendable { case merge, discard }
+    public var ref: ContainerRef; public var action: Action
+    public init(ref: ContainerRef, action: Action) { self.ref = ref; self.action = action }
 }
 public struct CreateSessionResult: Decodable, Sendable { public var ref: ContainerRef }
 public struct RefParams: Encodable, Sendable { public var ref: ContainerRef; public init(ref: ContainerRef) { self.ref = ref } }

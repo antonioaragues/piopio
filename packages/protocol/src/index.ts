@@ -249,6 +249,15 @@ export type SessionEvent = Static<typeof SessionEvent>;
 export const SessionEventsNotification = Type.Object({ subscriptionId: Type.String(), seq: Type.Number(), events: Type.Array(SessionEvent) });
 export type SessionEventsNotification = Static<typeof SessionEventsNotification>;
 
+/** A Build session in its own worktree (docs/spec/05-build BP5). */
+export const WorktreeInfo = Type.Object({
+	branch: Type.String(),
+	base: Type.String(),
+	/** Set once finished: merged into base, or discarded. The session then continues in the project folder. */
+	finished: Type.Optional(literals("merged", "discarded")),
+});
+export type WorktreeInfo = Static<typeof WorktreeInfo>;
+
 export const SessionSummary = Type.Object({
 	ref: ContainerRef,
 	title: Type.String(),
@@ -256,6 +265,9 @@ export const SessionSummary = Type.Object({
 	updatedAt: Type.String(),
 	cwd: Type.Optional(Type.String()),
 	model: Type.Optional(ModelRef),
+	/** Build: the project folder (differs from `cwd` for worktree sessions). */
+	projectPath: Type.Optional(Type.String()),
+	worktree: Type.Optional(WorktreeInfo),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -294,6 +306,38 @@ export type ProjectInfo = Static<typeof ProjectInfo>;
 export const ProjectsChanged = Type.Object({ projects: Type.Array(ProjectInfo) });
 export type ProjectsChanged = Static<typeof ProjectsChanged>;
 
+// ── Git (Build, docs/spec/05-build §8 G1–G3) ──────────────────────────────
+
+export const GitFile = Type.Object({
+	path: Type.String(),
+	status: literals("added", "modified", "deleted", "renamed", "conflicted", "untracked"),
+	staged: Type.Boolean(),
+	from: Type.Optional(Type.String()),
+});
+export type GitFile = Static<typeof GitFile>;
+
+export const GitStatus = Type.Object({
+	repo: Type.Boolean(),
+	branch: Type.Optional(Type.String()),
+	detached: Type.Optional(Type.Boolean()),
+	upstream: Type.Optional(Type.String()),
+	ahead: Type.Number(),
+	behind: Type.Number(),
+	files: Type.Array(GitFile),
+});
+export type GitStatus = Static<typeof GitStatus>;
+
+export const GitBranch = Type.Object({ name: Type.String(), upstream: Type.Optional(Type.String()), lastCommitAt: Type.Optional(Type.String()), current: Type.Boolean() });
+export type GitBranch = Static<typeof GitBranch>;
+
+/** Where a new Build session works: the project as it is, a new branch in it, or a new worktree. */
+export const WorkOn = Type.Union([
+	Type.Object({ kind: Type.Literal("current") }),
+	Type.Object({ kind: Type.Literal("branch"), branch: Type.String(), base: Type.Optional(Type.String()) }),
+	Type.Object({ kind: Type.Literal("worktree"), branch: Type.String(), base: Type.Optional(Type.String()) }),
+]);
+export type WorkOn = Static<typeof WorkOn>;
+
 export const CatalogChanged = Type.Object({ upserted: Type.Array(SessionSummary), removed: Type.Array(ContainerRef) });
 export type CatalogChanged = Static<typeof CatalogChanged>;
 
@@ -318,6 +362,9 @@ export const methods = {
 		params: Type.Object({
 			kind: Type.Union([Type.Literal("thread"), Type.Literal("build")]),
 			cwd: Type.Optional(Type.String()),
+			/** Build: branch or worktree to work on (default: the project as it is). */
+			workOn: Type.Optional(WorkOn),
+			approvalMode: Type.Optional(ApprovalMode),
 			model: Type.Optional(ModelRef),
 			thinking: Type.Optional(Type.String()),
 			title: Type.Optional(Type.String()),
@@ -442,6 +489,25 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef, checkpointId: Type.String(), paths: Type.Optional(Type.Array(Type.String())), dryRun: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({ files: Type.Array(FileChange) }),
 	},
+	/** Build, worktree sessions: merge the branch into its base (then remove the worktree), or discard both. */
+	"sessions.finish": {
+		params: Type.Object({ ref: ContainerRef, action: literals("merge", "discard") }),
+		result: Type.Object({}),
+	},
+	/** Git in a project folder or a session's worktree (`cwd`). */
+	"git.status": { params: Type.Object({ cwd: Type.String() }), result: GitStatus },
+	"git.branches": { params: Type.Object({ cwd: Type.String() }), result: Type.Object({ branches: Type.Array(GitBranch) }) },
+	"git.checkout": { params: Type.Object({ cwd: Type.String(), branch: Type.String(), create: Type.Optional(Type.Boolean()), base: Type.Optional(Type.String()) }), result: Type.Object({}) },
+	/** Commits `paths` (default: every change), new and deleted files included. */
+	"git.commit": {
+		params: Type.Object({ cwd: Type.String(), message: Type.String(), paths: Type.Optional(Type.Array(Type.String())), amend: Type.Optional(Type.Boolean()) }),
+		result: Type.Object({ commit: Type.String() }),
+	},
+	/** A commit message for `paths`, written by the utility model from the diff. */
+	"git.message": { params: Type.Object({ cwd: Type.String(), paths: Type.Optional(Type.Array(Type.String())) }), result: Type.Object({ message: Type.String() }) },
+	"git.sync": { params: Type.Object({ cwd: Type.String(), action: literals("push", "pull", "fetch") }), result: Type.Object({ output: Type.String() }) },
+	/** A branch name for a new session, from its prompt. */
+	"git.suggestBranch": { params: Type.Object({ prompt: Type.String() }), result: Type.Object({ branch: Type.String() }) },
 	/** Answers a pending prompt (approval, question, confirm, select, input). */
 	"sessions.respond": {
 		params: Type.Object({ ref: ContainerRef, promptId: Type.String(), response: PromptResponse }),

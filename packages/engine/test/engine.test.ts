@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -608,4 +609,96 @@ test("checkpoints: before each turn's first change, with changes, diff, restore 
 	expect(kinds(await b.client.call("sessions.open", { ref }))).toEqual(kinds(after));
 	// Since the latest checkpoint ("Before restore"), the restore itself is what changed.
 	expect((await b.client.call("sessions.changes", { ref, since: "turn" })).files.map((f: { path: string; status: string }) => `${f.status} ${f.path}`)).toEqual(["modified a.txt", "deleted b.txt"]);
+});
+
+describe("git and worktrees (docs/spec/05-build §8, BP5)", () => {
+	const sh = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+	function repo() {
+		const dir = realpathSync(mkdtempSync(join(tmpdir(), "piopio-git-")));
+		sh(dir, "init", "-q", "-b", "main");
+		sh(dir, "config", "user.email", "t@example.com");
+		sh(dir, "config", "user.name", "Test");
+		writeFileSync(join(dir, "a.txt"), "one\n");
+		sh(dir, "add", ".");
+		sh(dir, "commit", "-qm", "Initial commit");
+		return dir;
+	}
+
+	test("a worktree session works on its own branch, commits, and merges back", async () => {
+		const a = await start();
+		const dir = repo();
+		await a.client.call("projects.add", { path: dir });
+		const { branch } = await a.client.call("git.suggestBranch", { prompt: "Add the WebSocket transport, please!" });
+		expect(branch).toBe("piopio/add-websocket-transport");
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: dir, workOn: { kind: "worktree", branch }, approvalMode: "full_auto" });
+		const summary = (await a.client.call("sessions.list", { kind: "build" })).sessions.find((s: { ref: { id: string } }) => s.ref.id === ref.id);
+		expect(summary).toMatchObject({ projectPath: dir, worktree: { branch, base: "main" } });
+		const worktree = summary.cwd as string;
+		expect(worktree.startsWith(join(a.home, "worktrees"))).toBe(true);
+		expect(sh(worktree, "branch", "--show-current")).toBe(branch);
+
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: "edit: a.txt | one | two" } });
+		await a.client.waitFor(settled(sub.subscriptionId, 1), 20_000);
+		expect(readFileSync(join(worktree, "a.txt"), "utf8")).toBe("two\n");
+		expect(readFileSync(join(dir, "a.txt"), "utf8")).toBe("one\n");
+
+		expect((await a.client.call("git.status", { cwd: worktree })).files).toEqual([{ path: "a.txt", status: "modified", staged: false }]);
+		await expect(a.client.call("sessions.finish", { ref, action: "merge" })).rejects.toMatchObject({ data: { code: "CONFLICT" } });
+		const { message } = await a.client.call("git.message", { cwd: worktree });
+		expect(message).toBe("Update a.txt"); // the scripted model has no utility model: a plain summary
+		await a.client.call("git.commit", { cwd: worktree, message: "Say two" });
+
+		await a.client.call("sessions.finish", { ref, action: "merge" });
+		expect(readFileSync(join(dir, "a.txt"), "utf8")).toBe("two\n");
+		expect(sh(dir, "log", "-1", "--format=%s")).toBe("Say two");
+		expect(existsSync(worktree)).toBe(false);
+		expect(sh(dir, "branch", "--list", branch)).toBe("");
+		const after = (await a.client.call("sessions.list", { kind: "build" })).sessions.find((s: { ref: { id: string } }) => s.ref.id === ref.id);
+		expect(after).toMatchObject({ cwd: dir, worktree: { finished: "merged" } });
+	});
+
+	test("discarding a worktree leaves the project untouched; a new branch switches the project", async () => {
+		const a = await start();
+		const dir = repo();
+		await a.client.call("projects.add", { path: dir });
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: dir, workOn: { kind: "worktree", branch: "piopio/throwaway" } });
+		const worktree = (await a.client.call("sessions.list", { kind: "build" })).sessions[0].cwd as string;
+		writeFileSync(join(worktree, "scratch.txt"), "draft\n");
+		await a.client.call("sessions.finish", { ref, action: "discard" });
+		expect(existsSync(worktree)).toBe(false);
+		expect(sh(dir, "branch", "--list", "piopio/throwaway")).toBe("");
+		expect(existsSync(join(dir, "scratch.txt"))).toBe(false);
+
+		await a.client.call("sessions.create", { kind: "build", cwd: dir, workOn: { kind: "branch", branch: "feature/x" } });
+		expect(sh(dir, "branch", "--show-current")).toBe("feature/x");
+		expect((await a.client.call("projects.list")).projects[0].branch).toBe("feature/x");
+	});
+
+	test("status, branches, partial commits, and the first push creates the upstream", async () => {
+		const a = await start();
+		const dir = repo();
+		const remote = realpathSync(mkdtempSync(join(tmpdir(), "piopio-remote-")));
+		sh(remote, "init", "-q", "--bare");
+		sh(dir, "remote", "add", "origin", remote);
+		await a.client.call("projects.add", { path: dir });
+		await expect(a.client.call("git.status", { cwd: tmpdir() })).rejects.toMatchObject({ data: { code: "INVALID" } });
+
+		writeFileSync(join(dir, "a.txt"), "changed\n");
+		writeFileSync(join(dir, "b.txt"), "new\n");
+		const s = await a.client.call("git.status", { cwd: dir });
+		expect(s).toMatchObject({ repo: true, branch: "main", ahead: 0, behind: 0, files: [{ path: "a.txt", status: "modified" }, { path: "b.txt", status: "untracked" }] });
+		expect(s.upstream).toBeUndefined();
+
+		await a.client.call("git.commit", { cwd: dir, message: "Add b", paths: ["b.txt"] });
+		expect(sh(dir, "show", "--name-only", "--format=", "HEAD")).toBe("b.txt");
+		expect((await a.client.call("git.status", { cwd: dir })).files.map((f: { path: string }) => f.path)).toEqual(["a.txt"]);
+
+		const pushed = await a.client.call("git.sync", { cwd: dir, action: "push" });
+		expect(pushed.output).toBeDefined();
+		expect((await a.client.call("git.status", { cwd: dir })).upstream).toBe("origin/main");
+		await a.client.call("git.checkout", { cwd: dir, branch: "topic", create: true });
+		expect((await a.client.call("git.branches", { cwd: dir })).branches.map((b: { name: string; current: boolean }) => `${b.current ? "*" : ""}${b.name}`).sort()).toEqual(["*topic", "main"]);
+		await expect(a.client.call("git.checkout", { cwd: dir, branch: "bad name" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+	});
 });

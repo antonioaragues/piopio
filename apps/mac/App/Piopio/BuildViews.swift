@@ -87,7 +87,7 @@ struct BuildSidebarList: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("New Session") { Task { if let ref = await engine.createBuildSession(in: project) { selection = ref.id } } }
+            Button("New Session…") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)]) }
             Divider()
             Button("Remove from Piopio") {
@@ -107,6 +107,9 @@ struct BuildSidebarList: View {
                     .foregroundStyle(Color.dsFg)
                     .lineLimit(1)
                 Spacer(minLength: 4)
+                if let worktree = session.worktree, worktree.finished == nil {
+                    Image(systemName: "square.split.2x1").font(.system(size: 9.5)).foregroundStyle(Color.dsFg3).help("Worktree on \(worktree.branch)")
+                }
             }
             .padding(.leading, 22)
             .padding(.trailing, 8)
@@ -172,6 +175,8 @@ struct BuildSessionView: View {
     @AppStorage("buildInspector") private var showInspector = true
     @State private var reviewing = false
     @State private var reviewFile: String?
+    @State private var git: GitModel?
+    @State private var committing = false
 
     private var project: ProjectInfo? { engine.projects.first { $0.path == summary.cwd } }
 
@@ -179,6 +184,18 @@ struct BuildSessionView: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 header
+                if let notice = git?.notice {
+                    Text(notice.text).font(.system(size: 12)).foregroundStyle(notice.failed ? Color.dsRed : Color.dsFg2)
+                        .lineLimit(2).padding(.horizontal, 24).padding(.bottom, 6).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let worktree = summary.worktree, let finished = worktree.finished {
+                    Text(finished == .merged ? "Merged \(worktree.branch) into \(worktree.base). The worktree was removed; this session now works in the project folder." : "The worktree and \(worktree.branch) were discarded. This session now works in the project folder.")
+                        .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+                        .padding(.horizontal, 24).padding(.bottom, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if reviewing {
                     DiffReview(session: session, selected: reviewFile) { reviewing = false }
                 } else {
@@ -186,7 +203,7 @@ struct BuildSessionView: View {
                 }
             }
             if showInspector && !reviewing {
-                BuildInspector(session: session) { file in
+                BuildInspector(session: session, commit: git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil) { file in
                     reviewFile = file
                     reviewing = true
                 }
@@ -196,7 +213,21 @@ struct BuildSessionView: View {
             }
         }
         .task { await session.open() }
+        .task(id: summary.cwd) {
+            guard let cwd = summary.cwd else { return }
+            let model = GitModel(cwd: cwd, engine: engine)
+            git = model
+            await model.refresh()
+        }
+        .onChange(of: session.state?.status) { _, status in
+            if status == .idle { Task { await git?.refresh() } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in Task { await git?.refresh() } }
+        .sheet(isPresented: $committing) { if let git { CommitSheet(git: git) } }
         .onChange(of: session.prompts.isEmpty) { _, empty in if empty { session.document.bottomInset = 150 } }
+        .onReceive(NotificationCenter.default.publisher(for: .showCommit)) { note in
+            if note.object as? String == session.ref.id { committing = true }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .showReview)) { note in
             if note.object as? String == session.ref.id { reviewing = true }
         }
@@ -239,16 +270,7 @@ struct BuildSessionView: View {
             }
             Spacer(minLength: 12)
             ApprovalModeMenu(engine: engine, session: session, project: project)
-            if let branch = project?.branch {
-                Label(branch, systemImage: "arrow.triangle.branch")
-                    .font(.system(size: 12, design: .monospaced))
-                    .labelStyle(BranchLabelStyle())
-                    .padding(.horizontal, 12)
-                    .frame(height: 28)
-                    .background(Color.dsPill, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Color.dsLine, lineWidth: 0.5))
-                    .help("Current branch of \(project?.name ?? "the project")")
-            }
+            if let git { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
             if let cwd = summary.cwd {
                 Menu {
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) }
@@ -305,14 +327,6 @@ struct BuildSessionView: View {
     }
 }
 
-private struct BranchLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 5) {
-            configuration.icon.font(.system(size: 10, weight: .medium)).foregroundStyle(Color.dsFg3)
-            configuration.title.lineLimit(1)
-        }
-    }
-}
 
 /// Build with no session selected: open a folder (button, ⌘O or drop), or start a session in a project.
 struct BuildEmptyState: View {
@@ -343,7 +357,7 @@ struct BuildEmptyState: View {
                     HStack(spacing: 8) {
                         ForEach(engine.projects.prefix(4)) { project in
                             Button("New session in \(project.name)") {
-                                Task { if let ref = await engine.createBuildSession(in: project) { selection = ref.id } }
+                                NotificationCenter.default.post(name: .newBuildSession, object: project.id)
                             }
                             .buttonStyle(PillStyle())
                         }
@@ -616,4 +630,8 @@ extension CheckpointItem: @retroactive Identifiable {}
 extension Notification.Name {
     /// Object: a session id. Opens its diff review (automation).
     static let showReview = Notification.Name("piopio.showReview")
+    /// Object: a project id. Opens the new session sheet (7a).
+    static let newBuildSession = Notification.Name("piopio.newBuildSession")
+    /// Object: a session id. Opens its commit sheet (automation).
+    static let showCommit = Notification.Name("piopio.showCommit")
 }

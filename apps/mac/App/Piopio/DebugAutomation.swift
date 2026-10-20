@@ -60,8 +60,13 @@ enum DebugAutomation {
         if let folder = env["PIOPIO_DEMO_PROJECT"], engine.status == .ready {
             Task {
                 NotificationCenter.default.post(name: .setMode, object: AppMode.build)
-                guard let project = await engine.addProject(URL(fileURLWithPath: folder)),
-                      let ref = await engine.createBuildSession(in: project) else { return }
+                guard let project = await engine.addProject(URL(fileURLWithPath: folder)) else { return }
+                // PIOPIO_DEMO_NEW_SESSION=<prompt>: open the new session sheet with this prompt (PIOPIO_DEMO_WORKTREE=1: on a worktree).
+                if env["PIOPIO_DEMO_NEW_SESSION"] != nil {
+                    NotificationCenter.default.post(name: .newBuildSession, object: project.id)
+                    return
+                }
+                guard let ref = await engine.createBuildSession(in: project) else { return }
                 NotificationCenter.default.post(name: .selectBuildSession, object: ref.id)
                 guard let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] else { return }
                 let session = engine.thread(ref)
@@ -78,6 +83,12 @@ enum DebugAutomation {
                     try? await Task.sleep(for: .milliseconds(500))
                     if env["PIOPIO_DEMO_REVIEW"] == "1" { NotificationCenter.default.post(name: .showReview, object: ref.id) }
                     if env["PIOPIO_DEMO_RESTORE"] == "1" { session.restoring = session.checkpoints.first }
+                }
+                // PIOPIO_DEMO_COMMIT=1: open the commit sheet once the turn is done.
+                if env["PIOPIO_DEMO_COMMIT"] == "1" {
+                    await waitIdle(session)
+                    try? await Task.sleep(for: .milliseconds(800))
+                    NotificationCenter.default.post(name: .showCommit, object: ref.id)
                 }
                 // PIOPIO_DEMO_RESPOND=allow|always|deny: answer the first approval the session asks for.
                 if let decision = env["PIOPIO_DEMO_RESPOND"].flatMap(PromptResponse.Decision.init(rawValue:)) {

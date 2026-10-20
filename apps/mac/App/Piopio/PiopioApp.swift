@@ -29,7 +29,7 @@ struct PiopioApp: App {
                 CheckForUpdatesButton()
             }
             CommandGroup(replacing: .newItem) {
-                Button("New Thread") { NotificationCenter.default.post(name: .newThread, object: nil) }
+                Button("New Thread / Session") { NotificationCenter.default.post(name: .newThread, object: nil) }
                     .keyboardShortcut("n")
                 Button("Quick Chat") { QuickChatController.shared?.show() }
                 Divider()

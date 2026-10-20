@@ -9,6 +9,8 @@ import SwiftUI
 /// The right-hand inspector of a Build session.
 struct BuildInspector: View {
     let session: ThreadModel
+    /// Opens the commit sheet; nil when there's nothing to commit (or no git).
+    let commit: (() -> Void)?
     let onReview: (String?) -> Void
     @State private var files: [FileChange] = []
     @State private var reverting: FileChange?
@@ -54,11 +56,19 @@ struct BuildInspector: View {
             ForEach(files) { file in
                 ChangeRow(file: file, open: { onReview(file.path) }, revert: { reverting = file })
             }
-            if !files.isEmpty {
-                Button("Review diff") { onReview(nil) }
-                    .buttonStyle(PillStyle(kind: .secondary))
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 6)
+            if !files.isEmpty || commit != nil {
+                HStack(spacing: 8) {
+                    Button("Review diff") { onReview(nil) }
+                        .buttonStyle(PillStyle(kind: .secondary))
+                        .frame(maxWidth: .infinity)
+                        .disabled(files.isEmpty)
+                    if let commit {
+                        Button("Commit…", action: commit)
+                            .buttonStyle(PillStyle(kind: .strong))
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.top, 6)
             }
         }
     }

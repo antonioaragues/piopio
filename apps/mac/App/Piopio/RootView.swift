@@ -8,6 +8,7 @@ struct RootView: View {
     @AppStorage("mode") private var mode: AppMode = .chat
     @State private var selection: String?
     @State private var buildSelection: String?
+    @State private var newSessionProject: ProjectInfo?
     @State private var showOnboarding = false
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
@@ -37,7 +38,16 @@ struct RootView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in newThread() }
+        .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in
+            if mode == .build { newBuildSession() } else { newThread() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .newBuildSession)) { note in
+            mode = .build
+            newSessionProject = engine.projects.first { $0.id == note.object as? String }
+        }
+        .sheet(item: $newSessionProject) { project in
+            NewSessionSheet(engine: engine, project: project) { buildSelection = $0.id }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in
             mode = .build
             if let url = note.object as? URL {
@@ -170,6 +180,17 @@ struct RootView: View {
         selection = threadId
         guard let item, let summary = engine.threads.first(where: { $0.ref.id == threadId }) else { return }
         engine.thread(summary.ref).reveal(item)
+    }
+
+    /// ⌘N in Build: a new session in the selected session's project (or the first project).
+    private func newBuildSession() {
+        let current = engine.buildSessions.first { $0.ref.id == buildSelection }
+        let path = current?.projectPath ?? current?.cwd
+        if let project = engine.projects.first(where: { $0.path == path }) ?? engine.projects.first {
+            newSessionProject = project
+        } else {
+            NotificationCenter.default.post(name: .openProject, object: nil)
+        }
     }
 
     private func newThread() {

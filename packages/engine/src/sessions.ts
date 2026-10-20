@@ -7,10 +7,11 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFi
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, PromptResponse, SessionSummary } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, PromptResponse, SessionSummary, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
+import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
@@ -34,6 +35,8 @@ type CatalogEntry = SessionSummary & {
 
 /** Where Build sessions get their default approval mode and "always allow" rules (the projects). */
 export type ApprovalPolicy = {
+	/** The project that contains `cwd` (worktrees live under the project's id). */
+	projectFor(cwd: string): { id: string; path: string } | undefined;
 	modeFor(cwd: string): ApprovalMode;
 	rulesFor(cwd: string): ApprovalRule[];
 	addRule(cwd: string, rule: { kind: ApprovalRule["kind"]; pattern: string }): void;
@@ -49,7 +52,7 @@ export class Sessions {
 	private listeners = new Set<CatalogListener>();
 	readonly search: SearchIndex;
 	readonly checkpoints: CheckpointStore;
-	policy: ApprovalPolicy = { modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
+	policy: ApprovalPolicy = { projectFor: () => undefined, modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
 
@@ -221,10 +224,24 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; cwd?: string; model?: ModelRef; thinking?: string; title?: string }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
 		const ref: ContainerRef = { kind: params.kind, id: newId(params.kind === "thread" ? "thr" : "ses") };
+		// Build: a new branch in the project, or a worktree of its own (BP5) under <data>/worktrees/<project>/<session>.
+		let cwd = params.cwd;
+		let worktree: CatalogEntry["worktree"];
+		if (params.kind === "build" && params.workOn && params.workOn.kind !== "current") {
+			const base = params.workOn.base ?? (await gitStatus(params.cwd!)).branch ?? "HEAD";
+			if (params.workOn.kind === "branch") {
+				await checkout(params.cwd!, params.workOn.branch, true, params.workOn.base);
+			} else {
+				const project = this.policy.projectFor(params.cwd!);
+				cwd = join(this.paths.home, "worktrees", project?.id ?? "other", ref.id);
+				await addWorktree(params.cwd!, cwd, params.workOn.branch, base);
+				worktree = { branch: params.workOn.branch, base };
+			}
+		}
 		const now = new Date().toISOString();
 		const entry: CatalogEntry = {
 			ref,
@@ -232,9 +249,10 @@ export class Sessions {
 			createdAt: now,
 			updatedAt: now,
 			model: params.model ?? this.hub.defaultModel,
-			...(params.cwd ? { cwd: params.cwd } : {}),
+			...(cwd ? { cwd } : {}),
+			...(worktree ? { projectPath: params.cwd!, worktree } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
-			...(params.kind === "build" ? { approvalMode: this.policy.modeFor(params.cwd!) } : {}),
+			...(params.kind === "build" ? { approvalMode: params.approvalMode ?? this.policy.modeFor(params.cwd!) } : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
 		};
 		this.entries.set(ref.id, entry);
@@ -252,6 +270,35 @@ export class Sessions {
 			pending.catch(() => this.open.delete(ref.id));
 		}
 		return pending;
+	}
+
+	/**
+	 * Ends a worktree session: merges its branch into the base (in the project's checkout) or discards both.
+	 * The worktree is removed; the session goes on in the project folder.
+	 */
+	async finish(ref: ContainerRef, action: "merge" | "discard"): Promise<void> {
+		const entry = this.entry(ref);
+		if (!entry.worktree || !entry.projectPath) throw new EngineError("INVALID", "This session doesn't have a worktree.");
+		if (entry.worktree.finished) throw new EngineError("INVALID", `This worktree was already ${entry.worktree.finished}.`);
+		const runtime = this.open.get(ref.id);
+		if (runtime) {
+			const r = await runtime.catch(() => undefined);
+			if (r?.snapshot().state.status === "running") throw new EngineError("BUSY", "Stop the agent first.");
+		}
+		if (action === "merge") await mergeWorktree(entry.projectPath, entry.cwd!, entry.worktree.branch, entry.worktree.base);
+		else await removeWorktree(entry.projectPath, entry.cwd!, entry.worktree.branch, true);
+		this.open.delete(ref.id);
+		if (runtime) await (await runtime.catch(() => undefined))?.close();
+		entry.worktree = { ...entry.worktree, finished: action === "merge" ? "merged" : "discarded" };
+		entry.cwd = entry.projectPath;
+		entry.updatedAt = new Date().toISOString();
+		this.save();
+		this.changed(entry);
+	}
+
+	/** Folders git may run in: a project, or a Build session's worktree. */
+	knowsFolder(cwd: string): boolean {
+		return Boolean(this.policy.projectFor(cwd)) || [...this.entries.values()].some((e) => e.ref.kind === "build" && e.cwd === cwd);
 	}
 
 	/** A Build session's runtime (checkpoints, approvals). */
@@ -427,9 +474,9 @@ export class Sessions {
 			...(entry.sessionFile ? { sessionFile: entry.sessionFile } : {}),
 			...this.piOverrides,
 			approvals: {
-				mode: () => entry.approvalMode ?? this.policy.modeFor(entry.cwd!),
-				rules: () => this.policy.rulesFor(entry.cwd!),
-				addRule: (rule) => this.policy.addRule(entry.cwd!, rule),
+				mode: () => entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? entry.cwd!),
+				rules: () => this.policy.rulesFor(entry.projectPath ?? entry.cwd!),
+				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
 			},
 			checkpoints: this.checkpoints,
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),

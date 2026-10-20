@@ -296,14 +296,28 @@ final class EngineController {
     }
 
     func sessions(in project: ProjectInfo) -> [SessionSummary] {
-        buildSessions.filter { $0.cwd == project.path }
+        buildSessions.filter { ($0.projectPath ?? $0.cwd) == project.path }
     }
 
     func createBuildSession(in project: ProjectInfo) async -> ContainerRef? {
-        guard let client else { return nil }
-        let ref = try? await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: preferredModel), as: CreateSessionResult.self).ref
+        try? await createBuildSession(in: project, workOn: .current, mode: nil, model: nil)
+    }
+
+    /// A Build session on the project as it is, a new branch, or its own worktree (docs/design 7a).
+    func createBuildSession(in project: ProjectInfo, workOn: WorkOn, mode: ApprovalMode?, model: ModelRef?) async throws -> ContainerRef {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
+        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: model ?? preferredModel, workOn: workOn, approvalMode: mode), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return ref
+    }
+
+    /// Worktree sessions: merge into the base branch, or discard.
+    func finish(_ ref: ContainerRef, _ action: FinishParams.Action) async throws {
+        guard let client else { return }
+        openThreads[ref.id]?.close()
+        openThreads[ref.id] = nil
+        _ = try await client.call("sessions.finish", FinishParams(ref: ref, action: action), as: Empty.self)
+        try? await refreshCatalog()
     }
 
     func createThread(model: ModelRef? = nil) async -> ContainerRef? {

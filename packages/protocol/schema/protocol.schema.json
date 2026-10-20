@@ -4213,6 +4213,36 @@
 							"type": "string"
 						}
 					}
+				},
+				"projectPath": {
+					"type": "string"
+				},
+				"worktree": {
+					"type": "object",
+					"required": [
+						"branch",
+						"base"
+					],
+					"properties": {
+						"branch": {
+							"type": "string"
+						},
+						"base": {
+							"type": "string"
+						},
+						"finished": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "merged"
+								},
+								{
+									"type": "string",
+									"const": "discarded"
+								}
+							]
+						}
+					}
 				}
 			}
 		},
@@ -6976,6 +7006,36 @@
 										"type": "string"
 									}
 								}
+							},
+							"projectPath": {
+								"type": "string"
+							},
+							"worktree": {
+								"type": "object",
+								"required": [
+									"branch",
+									"base"
+								],
+								"properties": {
+									"branch": {
+										"type": "string"
+									},
+									"base": {
+										"type": "string"
+									},
+									"finished": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "merged"
+											},
+											{
+												"type": "string",
+												"const": "discarded"
+											}
+										]
+									}
+								}
 							}
 						}
 					}
@@ -7248,6 +7308,36 @@
 										"type": "string"
 									}
 								}
+							},
+							"projectPath": {
+								"type": "string"
+							},
+							"worktree": {
+								"type": "object",
+								"required": [
+									"branch",
+									"base"
+								],
+								"properties": {
+									"branch": {
+										"type": "string"
+									},
+									"base": {
+										"type": "string"
+									},
+									"finished": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "merged"
+											},
+											{
+												"type": "string",
+												"const": "discarded"
+											}
+										]
+									}
+								}
 							}
 						}
 					}
@@ -7274,6 +7364,76 @@
 				},
 				"cwd": {
 					"type": "string"
+				},
+				"workOn": {
+					"anyOf": [
+						{
+							"type": "object",
+							"required": [
+								"kind"
+							],
+							"properties": {
+								"kind": {
+									"type": "string",
+									"const": "current"
+								}
+							}
+						},
+						{
+							"type": "object",
+							"required": [
+								"kind",
+								"branch"
+							],
+							"properties": {
+								"kind": {
+									"type": "string",
+									"const": "branch"
+								},
+								"branch": {
+									"type": "string"
+								},
+								"base": {
+									"type": "string"
+								}
+							}
+						},
+						{
+							"type": "object",
+							"required": [
+								"kind",
+								"branch"
+							],
+							"properties": {
+								"kind": {
+									"type": "string",
+									"const": "worktree"
+								},
+								"branch": {
+									"type": "string"
+								},
+								"base": {
+									"type": "string"
+								}
+							}
+						}
+					]
+				},
+				"approvalMode": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "ask"
+						},
+						{
+							"type": "string",
+							"const": "auto_edit"
+						},
+						{
+							"type": "string",
+							"const": "full_auto"
+						}
+					]
 				},
 				"model": {
 					"type": "object",
@@ -10698,6 +10858,348 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"sessions.finish.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"action"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"action": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "merge"
+						},
+						{
+							"type": "string",
+							"const": "discard"
+						}
+					]
+				}
+			}
+		},
+		"sessions.finish.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"git.status.params": {
+			"type": "object",
+			"required": [
+				"cwd"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				}
+			}
+		},
+		"git.status.result": {
+			"type": "object",
+			"required": [
+				"repo",
+				"ahead",
+				"behind",
+				"files"
+			],
+			"properties": {
+				"repo": {
+					"type": "boolean"
+				},
+				"branch": {
+					"type": "string"
+				},
+				"detached": {
+					"type": "boolean"
+				},
+				"upstream": {
+					"type": "string"
+				},
+				"ahead": {
+					"type": "number"
+				},
+				"behind": {
+					"type": "number"
+				},
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path",
+							"status",
+							"staged"
+						],
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "added"
+									},
+									{
+										"type": "string",
+										"const": "modified"
+									},
+									{
+										"type": "string",
+										"const": "deleted"
+									},
+									{
+										"type": "string",
+										"const": "renamed"
+									},
+									{
+										"type": "string",
+										"const": "conflicted"
+									},
+									{
+										"type": "string",
+										"const": "untracked"
+									}
+								]
+							},
+							"staged": {
+								"type": "boolean"
+							},
+							"from": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"git.branches.params": {
+			"type": "object",
+			"required": [
+				"cwd"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				}
+			}
+		},
+		"git.branches.result": {
+			"type": "object",
+			"required": [
+				"branches"
+			],
+			"properties": {
+				"branches": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name",
+							"current"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"upstream": {
+								"type": "string"
+							},
+							"lastCommitAt": {
+								"type": "string"
+							},
+							"current": {
+								"type": "boolean"
+							}
+						}
+					}
+				}
+			}
+		},
+		"git.checkout.params": {
+			"type": "object",
+			"required": [
+				"cwd",
+				"branch"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"branch": {
+					"type": "string"
+				},
+				"create": {
+					"type": "boolean"
+				},
+				"base": {
+					"type": "string"
+				}
+			}
+		},
+		"git.checkout.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"git.commit.params": {
+			"type": "object",
+			"required": [
+				"cwd",
+				"message"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"message": {
+					"type": "string"
+				},
+				"paths": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"amend": {
+					"type": "boolean"
+				}
+			}
+		},
+		"git.commit.result": {
+			"type": "object",
+			"required": [
+				"commit"
+			],
+			"properties": {
+				"commit": {
+					"type": "string"
+				}
+			}
+		},
+		"git.message.params": {
+			"type": "object",
+			"required": [
+				"cwd"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"paths": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"git.message.result": {
+			"type": "object",
+			"required": [
+				"message"
+			],
+			"properties": {
+				"message": {
+					"type": "string"
+				}
+			}
+		},
+		"git.sync.params": {
+			"type": "object",
+			"required": [
+				"cwd",
+				"action"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"action": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "push"
+						},
+						{
+							"type": "string",
+							"const": "pull"
+						},
+						{
+							"type": "string",
+							"const": "fetch"
+						}
+					]
+				}
+			}
+		},
+		"git.sync.result": {
+			"type": "object",
+			"required": [
+				"output"
+			],
+			"properties": {
+				"output": {
+					"type": "string"
+				}
+			}
+		},
+		"git.suggestBranch.params": {
+			"type": "object",
+			"required": [
+				"prompt"
+			],
+			"properties": {
+				"prompt": {
+					"type": "string"
+				}
+			}
+		},
+		"git.suggestBranch.result": {
+			"type": "object",
+			"required": [
+				"branch"
+			],
+			"properties": {
+				"branch": {
+					"type": "string"
 				}
 			}
 		},

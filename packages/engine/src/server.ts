@@ -9,6 +9,7 @@ import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
 import type { Runtime } from "./runtimes/runtime.js";
+import * as gitOps from "./git.js";
 import { Projects } from "./projects.js";
 import { Sessions } from "./sessions.js";
 
@@ -60,6 +61,7 @@ export class Engine {
 		};
 		this.projects = new Projects(options.paths.projectsIndex);
 		this.sessions.policy = {
+			projectFor: (cwd) => this.projects.projectFor(cwd),
 			modeFor: (cwd) => this.projects.modeFor(cwd),
 			rulesFor: (cwd) => this.projects.rulesFor(cwd),
 			addRule: (cwd, rule) => this.projects.addRule(cwd, rule),
@@ -154,6 +156,13 @@ export class Engine {
 		const runtime = await this.sessions.runtime(ref);
 		if (!runtime[name]) throw new EngineError("INVALID", `${ref.kind} sessions don't support ${name} yet.`);
 		return runtime;
+	}
+
+	/** The `cwd` of a git call, if it's a project or a session's worktree. */
+	private folder(params: unknown): string {
+		const cwd = (params as { cwd: string }).cwd;
+		if (!this.sessions.knowsFolder(cwd)) throw new EngineError("INVALID", "Git runs only in project folders and session worktrees.");
+		return cwd;
 	}
 
 	private async handle(method: MethodName, params: unknown, conn: RpcConnection, owned: Set<string>): Promise<unknown> {
@@ -287,6 +296,40 @@ export class Engine {
 			case "sessions.restore": {
 				const p = params as Params<"sessions.restore">;
 				return { files: await (await this.sessions.build(p.ref)).restore(p.checkpointId, p.paths, p.dryRun ?? false) } satisfies Result<"sessions.restore">;
+			}
+			case "sessions.finish": {
+				const p = params as Params<"sessions.finish">;
+				await this.sessions.finish(p.ref, p.action);
+				return {};
+			}
+			case "git.status":
+				return (await gitOps.status(this.folder(params))) satisfies Result<"git.status">;
+			case "git.branches":
+				return { branches: await gitOps.branches(this.folder(params)) } satisfies Result<"git.branches">;
+			case "git.checkout": {
+				const p = params as Params<"git.checkout">;
+				await gitOps.checkout(this.folder(p), p.branch, p.create ?? false, p.base);
+				this.projects.touch();
+				return {};
+			}
+			case "git.commit": {
+				const p = params as Params<"git.commit">;
+				return { commit: await gitOps.commit(this.folder(p), p.message, { ...(p.paths ? { paths: p.paths } : {}), ...(p.amend ? { amend: true } : {}) }) } satisfies Result<"git.commit">;
+			}
+			case "git.message": {
+				const p = params as Params<"git.message">;
+				return { message: await gitOps.commitMessage(this.folder(p), p.paths, (system, prompt) => this.hub.utility(system, prompt)) } satisfies Result<"git.message">;
+			}
+			case "git.sync": {
+				const p = params as Params<"git.sync">;
+				const cwd = this.folder(p);
+				const output = p.action === "push" ? await gitOps.push(cwd) : p.action === "pull" ? await gitOps.pull(cwd) : await gitOps.fetchAll(cwd);
+				this.projects.touch();
+				return { output } satisfies Result<"git.sync">;
+			}
+			case "git.suggestBranch": {
+				const p = params as Params<"git.suggestBranch">;
+				return { branch: gitOps.branchName(p.prompt) } satisfies Result<"git.suggestBranch">;
 			}
 			case "sessions.respond": {
 				const p = params as Params<"sessions.respond">;

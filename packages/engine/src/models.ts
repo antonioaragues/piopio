@@ -65,6 +65,21 @@ export class ModelHub {
 		);
 	}
 
+	/**
+	 * One-off request to the utility model (commit messages, titles): cheap and fast.
+	 * `PIOPIO_UTILITY_MODEL` picks another OpenRouter model. Returns undefined with the scripted model.
+	 */
+	async utility(systemPrompt: string, prompt: string): Promise<string | undefined> {
+		if (this.faux) return undefined;
+		const ref: ModelRef = process.env.PIOPIO_UTILITY_MODEL ? { provider: "openrouter", id: process.env.PIOPIO_UTILITY_MODEL } : DEFAULT_MODEL;
+		await this.ensureCredential(ref.provider);
+		const model = this.models.getModel(ref.provider, ref.id);
+		if (!model) throw new EngineError("INVALID", `Unknown utility model ${ref.provider}/${ref.id}`);
+		const reply = await this.models.completeSimple(model, { systemPrompt, messages: [{ role: "user", content: prompt, timestamp: Date.now() }] });
+		if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new EngineError("MODEL_ERROR", reply.errorMessage ?? "The utility model failed.");
+		return reply.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim();
+	}
+
 	/** Drops cached credentials after the client changed a secret. */
 	async forgetSecret(name: string): Promise<void> {
 		this.secrets.forget(name);
@@ -129,7 +144,7 @@ function scriptedTools(text: string): { name: string; args: Record<string, unkno
 
 export class EngineError extends Error {
 	constructor(
-		readonly code: "NOT_FOUND" | "BUSY" | "AUTH" | "INVALID" | "MODEL_ERROR" | "INTERNAL" | "ENGINE_UNAVAILABLE",
+		readonly code: "NOT_FOUND" | "BUSY" | "AUTH" | "INVALID" | "CONFLICT" | "MODEL_ERROR" | "INTERNAL" | "ENGINE_UNAVAILABLE",
 		message: string,
 	) {
 		super(message);
