@@ -56,6 +56,19 @@ enum DebugAutomation {
                 ThreadModel.openSettings()
             }
         }
+        // PIOPIO_DEMO_PROJECT: add this folder in Build and open a session there; PIOPIO_DEMO_BUILD_PROMPT: send it.
+        if let folder = env["PIOPIO_DEMO_PROJECT"], engine.status == .ready {
+            Task {
+                NotificationCenter.default.post(name: .setMode, object: AppMode.build)
+                guard let project = await engine.addProject(URL(fileURLWithPath: folder)),
+                      let ref = await engine.createBuildSession(in: project) else { return }
+                NotificationCenter.default.post(name: .selectBuildSession, object: ref.id)
+                guard let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] else { return }
+                let session = engine.thread(ref)
+                await session.open()
+                await session.send(prompt)
+            }
+        }
         // PIOPIO_DEMO_BACKGROUND=on|off: move the engine to launchd (SMAppService) or back into the app.
         if let background = env["PIOPIO_DEMO_BACKGROUND"] {
             Task { await engine.setRunsInBackground(background == "on") }

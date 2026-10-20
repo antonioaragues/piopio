@@ -9,6 +9,7 @@ export type EnginePaths = {
 	tokenFile: string;
 	lockFile: string;
 	catalogIndex: string;
+	projectsIndex: string;
 	threadsDir: string;
 	logsDir: string;
 };
@@ -21,6 +22,7 @@ export function enginePaths(home = process.env.PIOPIO_HOME ?? join(homedir(), "L
 		tokenFile: join(home, "engine.token"),
 		lockFile: join(home, "engine.lock"),
 		catalogIndex: join(home, "sessions.json"),
+		projectsIndex: join(home, "projects.json"),
 		threadsDir: join(home, "threads"),
 		logsDir: join(home, "logs"),
 	};

@@ -28,7 +28,7 @@ final class ThreadModel {
     @ObservationIgnored private let notifies: Bool
 
     init(ref: ContainerRef, engine: EngineController, notifies: Bool = true, compact: Bool = false) {
-        document = TranscriptDocument(compact: compact)
+        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread)
         self.ref = ref
         self.engine = engine
         self.notifies = notifies

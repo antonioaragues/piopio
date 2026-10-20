@@ -54,8 +54,8 @@ export class SdkEventMapper {
 				break;
 			}
 			case "tool_execution_end": {
-				const result = event.result as { content?: PiContentBlock[] } | undefined;
-				b.toolEnd(event.toolCallId as string, result?.content ? contentText(result.content) : undefined, Boolean(event.isError), event.durationMs as number | undefined);
+				const result = event.result as { content?: PiContentBlock[]; details?: unknown; structuredContent?: unknown } | undefined;
+				b.toolEnd(event.toolCallId as string, result?.content ? contentText(result.content) : undefined, Boolean(event.isError), event.durationMs as number | undefined, result);
 				break;
 			}
 			case "queue_update": {

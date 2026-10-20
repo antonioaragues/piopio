@@ -10,6 +10,8 @@ struct SendableText: @unchecked Sendable { let value: NSAttributedString }
 nonisolated struct ItemRenderer: Sendable {
     /// Compact (Quick Chat): your messages and the action footers are not shown; answers stand alone.
     var compact = false
+    /// Edit, Regenerate and Fork make new versions (threads). Build sessions show Copy only for now.
+    var versions = true
 
     private var body: NSFont { .systemFont(ofSize: DS.transcriptSize) }
     private var mono: NSFont { .monospacedSystemFont(ofSize: 12, weight: .regular) }
@@ -41,11 +43,7 @@ nonisolated struct ItemRenderer: Sendable {
             if a.status != .streaming, !compact { out.append(answerFooter(a)) }
             return out
         case .tool(let t):
-            let (title, detail) = Self.toolTitle(t)
-            let trailing = t.durationMs.map { $0 < 1000 ? String(format: "%.1fs", $0 / 1000) : String(format: "%.0fs", $0 / 1000) } ?? (t.status == .running ? "…" : "")
-            let card = DisclosureCard(kind: .tool, title: title, detail: detail, trailing: trailing, body: t.output ?? "")
-            card.failed = t.status == .error
-            return attachmentParagraph(DisclosureAttachment(card: card))
+            return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t)))
         case .system(let s):
             if s.level == .error { return errorCard(title: s.text, safe: "Nothing was lost.", actions: []) }
             return note(s.text, dot: s.level == .warn ? DS.amber : DS.accent)
@@ -135,10 +133,58 @@ nonisolated struct ItemRenderer: Sendable {
         return out
     }
 
+    /// The card for a tool call (docs/spec/05-build BR1): edits and writes show their diff (open by default),
+    /// bash its command, output and exit code, other tools their output.
+    static func toolCard(_ t: ToolItem) -> DisclosureCard {
+        let (title, detail) = toolTitle(t)
+        let duration = t.durationMs.map { $0 < 1000 ? String(format: "%.1fs", $0 / 1000) : String(format: "%.0fs", $0 / 1000) } ?? (t.status == .running ? "…" : "")
+        let failed = t.status == .error || t.status == .denied
+        let card: DisclosureCard
+        switch t.typedDetails {
+        case .diff(_, let patch) where !patch.isEmpty && !failed:
+            let parsed = DiffLine.parse(patch)
+            card = DisclosureCard(tool: title, detail: detail, trailing: "", content: .diff(parsed.lines))
+            card.added = parsed.added
+            card.removed = parsed.removed
+            card.expanded = true
+        case .terminal(_, let exitCode):
+            var trailing = [String]()
+            if let exitCode, exitCode != 0 { trailing.append("exit \(exitCode)") }
+            if !duration.isEmpty { trailing.append(duration) }
+            card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .terminal(t.output ?? ""))
+        default:
+            card = DisclosureCard(tool: title, detail: detail, trailing: duration, content: .text(t.output ?? ""))
+        }
+        card.failed = failed
+        return card
+    }
+
     /// Human titles for known tools ("Searched the web" + the query); others show their name and status.
     static func toolTitle(_ t: ToolItem) -> (String, String) {
         let running = t.status == .running
+        let failed = t.status == .error
+        let path = t.args?["path"]?.stringValue ?? ""
         switch t.tool {
+        case "read":
+            var range = ""
+            if case .number(let offset)? = t.args?["offset"] {
+                range = ":\(Int(offset))"
+                if case .number(let limit)? = t.args?["limit"] { range += "–\(Int(offset + limit - 1))" }
+            }
+            return (running ? "Reading" : failed ? "Couldn't read" : "Read", path + range)
+        case "edit":
+            return (running ? "Editing" : failed ? "Edit failed" : "Edited", path)
+        case "write":
+            return (running ? "Writing" : failed ? "Write failed" : "Wrote", path)
+        case "bash":
+            let command = t.args?["command"]?.stringValue ?? ""
+            return (running ? "Running" : t.status == .denied ? "Not run" : "Ran", command.split(separator: "\n").first.map(String.init) ?? command)
+        case "grep":
+            return (running ? "Searching" : "Searched", t.args?["pattern"]?.stringValue ?? "")
+        case "find":
+            return (running ? "Finding files" : "Found files", t.args?["pattern"]?.stringValue ?? path)
+        case "ls":
+            return (running ? "Listing" : "Listed", path.isEmpty ? "." : path)
         case "web_search":
             let query = t.args?["query"]?.stringValue ?? ""
             return (running ? "Searching the web" : t.status == .error ? "Web search failed" : "Searched the web", query)
@@ -193,8 +239,10 @@ nonisolated struct ItemRenderer: Sendable {
     /// Under your message: version switcher (always visible), then Edit and Copy (on hover).
     func userFooter(_ u: UserItem) -> NSAttributedString {
         let m = NSMutableAttributedString()
-        m.append(action("Edit", .edit(itemId: u.id), itemId: u.id, help: "Edit and resend (keeps this version)"))
-        m.append(gap(u.id))
+        if versions {
+            m.append(action("Edit", .edit(itemId: u.id), itemId: u.id, help: "Edit and resend (keeps this version)"))
+            m.append(gap(u.id))
+        }
         m.append(action("Copy", .copy(itemId: u.id), itemId: u.id))
         if let b = u.branch {
             let dim: [NSAttributedString.Key: Any] = [.font: footerFont, .foregroundColor: DS.line]
@@ -216,16 +264,20 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(action("Copy", .copy(itemId: a.id), itemId: a.id))
             m.append(gap(a.id))
         }
-        m.append(action("Regenerate", .regenerate(itemId: a.id), itemId: a.id, help: "Ask again (keeps this version)"))
-        m.append(gap(a.id))
-        m.append(action("Fork", .fork(itemId: a.id), itemId: a.id, help: "Continue from here in a new thread"))
+        if versions {
+            m.append(action("Regenerate", .regenerate(itemId: a.id), itemId: a.id, help: "Ask again (keeps this version)"))
+            m.append(gap(a.id))
+            m.append(action("Fork", .fork(itemId: a.id), itemId: a.id, help: "Continue from here in a new thread"))
+        } else if a.text.isEmpty {
+            return NSAttributedString() // a step that only called tools
+        }
         var meta: [String] = []
         if let model = a.model { meta.append(model.split(separator: "/").dropFirst().joined(separator: "/").nilIfEmpty ?? model) }
         if let u = a.usage, u.costUsd > 0 { meta.append(u.costUsd < 0.01 ? String(format: "$%.4f", u.costUsd) : String(format: "$%.2f", u.costUsd)) }
         if !meta.isEmpty {
             var attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11.5), .foregroundColor: NSColor.clear, .piopioFooter: a.id, .piopioFooterColor: DS.fg3]
             if let u = a.usage { attrs[.toolTip] = "\(Int(u.inputTokens)) in · \(Int(u.outputTokens)) out · \(Int(u.cacheReadTokens)) cached tokens" }
-            m.append(gap(a.id))
+            if versions { m.append(gap(a.id)) } // otherwise Copy's gap already separates them
             m.append(NSAttributedString(string: meta.joined(separator: " · "), attributes: attrs))
         }
         return line(m, paragraph(spacing: 20, before: 2))

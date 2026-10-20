@@ -9,6 +9,7 @@ import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
 import type { Runtime } from "./runtimes/runtime.js";
+import { Projects } from "./projects.js";
 import { Sessions } from "./sessions.js";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -20,6 +21,8 @@ export type EngineOptions = {
 	faux?: boolean;
 	piSessionDir?: string;
 	piAgentDir?: string;
+	/** Where deleted build session files go (tests); default ~/.Trash. */
+	trashDir?: string;
 	/** Let web_fetch read localhost (tests). */
 	allowPrivateFetch?: boolean;
 	log?: (line: string) => void;
@@ -30,6 +33,7 @@ export class Engine {
 	readonly secrets = new SecretBroker();
 	readonly hub: ModelHub;
 	readonly sessions: Sessions;
+	readonly projects: Projects;
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
@@ -46,9 +50,14 @@ export class Engine {
 		this.sessions = new Sessions(options.paths, this.hub, {
 			...(options.piSessionDir ? { piSessionDir: options.piSessionDir } : {}),
 			...(options.piAgentDir ? { piAgentDir: options.piAgentDir } : {}),
+			...(options.trashDir ? { trashDir: options.trashDir } : {}),
 		}, { allowPrivate: options.allowPrivateFetch ?? false });
 		this.sessions.onChange((change) => {
 			for (const conn of this.authed) conn.notify("catalog.changed", change);
+		});
+		this.projects = new Projects(options.paths.projectsIndex);
+		this.projects.onChange((projects) => {
+			for (const conn of this.authed) conn.notify("projects.changed", { projects });
 		});
 	}
 
@@ -71,6 +80,10 @@ export class Engine {
 		this.log(`piopio-engine ${ENGINE_VERSION} listening on ${socket}${this.options.faux ? " (faux models)" : ""}`);
 		// Index older threads for search in the background.
 		this.backfill = this.sessions.backfillSearch().catch(() => 0);
+		// Pick up pi CLI sessions in project folders: what changed while the engine was off, then live.
+		const folders = () => this.projects.list().filter((p) => !p.missing).map((p) => p.path);
+		for (const cwd of folders()) void this.sessions.syncFolder(cwd);
+		this.sessions.watchPiSessions(folders);
 	}
 
 	async stop(): Promise<void> {
@@ -241,6 +254,20 @@ export class Engine {
 			case "sessions.export": {
 				const p = params as Params<"sessions.export">;
 				return (await this.sessions.export(p.ref, p.format)) satisfies Result<"sessions.export">;
+			}
+			case "projects.list":
+				return { projects: this.projects.list() } satisfies Result<"projects.list">;
+			case "projects.add": {
+				const p = params as Params<"projects.add">;
+				const project = this.projects.add(p.path);
+				await this.sessions.syncFolder(project.path);
+				return { project } satisfies Result<"projects.add">;
+			}
+			case "projects.remove": {
+				const p = params as Params<"projects.remove">;
+				const project = this.projects.remove(p.id);
+				await this.sessions.forgetFolder(project.path);
+				return {};
 			}
 			case "catalog.search": {
 				const p = params as Params<"catalog.search">;

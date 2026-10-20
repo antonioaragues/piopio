@@ -1,6 +1,7 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { SessionEvent, Snapshot } from "@piopio/protocol";
 import { afterEach, describe, expect, test } from "vitest";
 import { enginePaths } from "../src/paths.js";
@@ -13,7 +14,7 @@ const open: Ctx[] = [];
 
 async function start(home = mkdtempSync(join(tmpdir(), "piopio-test-")), faux = true): Promise<Ctx> {
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), allowPrivateFetch: true, log: () => {} });
+	const engine = new Engine({ paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), allowPrivateFetch: true, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0" });
@@ -344,4 +345,105 @@ test("search finds messages across threads, follows renames and deletes, and bac
 	const b = await start(a.home);
 	expect(await b.engine.backfill).toBe(1);
 	expect((await b.client.call("catalog.search", { query: "lifetimes" })).results.map((r: { kind: string }) => r.kind).sort()).toEqual(["assistant", "user"]);
+});
+
+describe("projects", () => {
+	/** A session file as the pi CLI would leave it: one exchange, persisted by pi's SessionManager. */
+	function cliSession(cwd: string, dir: string, text: string): string {
+		const sm = SessionManager.create(cwd, dir);
+		const now = Date.now();
+		sm.appendMessage({ role: "user", content: text, timestamp: now } as never);
+		sm.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: `CLI says: ${text}` }],
+			api: "openai-completions",
+			provider: "faux",
+			model: "faux-1",
+			usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			stopReason: "stop",
+			timestamp: now + 1,
+		} as never);
+		return sm.getSessionFile()!;
+	}
+
+	test("add a folder, import and open pi CLI sessions, follow new and deleted files, forget the folder", async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-project-")));
+		mkdirSync(join(folder, ".git"));
+		writeFileSync(join(folder, ".git", "HEAD"), "ref: refs/heads/main\n");
+		writeFileSync(join(folder, "AGENTS.md"), "# Agents\n");
+		const piDir = join(a.home, "pi-sessions");
+		const first = cliSession(folder, piDir, "Hello from the CLI");
+
+		const { project } = await a.client.call("projects.add", { path: folder });
+		expect(project).toMatchObject({ path: folder, name: basename(folder), branch: "main", contextFile: "AGENTS.md", piConfig: false });
+		expect((await a.client.call("projects.add", { path: folder })).project.id).toBe(project.id);
+		expect(a.client.notifications.some((n) => n.method === "projects.changed")).toBe(true);
+
+		const [imported] = (await a.client.call("sessions.list", { kind: "build" })).sessions;
+		expect(imported).toMatchObject({ title: "Hello from the CLI", cwd: folder });
+		const snapshot: Snapshot = await a.client.call("sessions.open", { ref: imported.ref });
+		expect(texts(snapshot)).toEqual([
+			["user", "Hello from the CLI"],
+			["assistant", "CLI says: Hello from the CLI"],
+		]);
+
+		// A session written while the engine runs shows up; a deleted one goes away.
+		const changed = (predicate: (c: { upserted: { title: string }[]; removed: unknown[] }) => boolean) =>
+			new Promise<void>((resolve, reject) => {
+				const t = setTimeout(() => reject(new Error("no catalog.changed")), 5000);
+				const check = setInterval(() => {
+					if (a.client.notifications.some((n) => n.method === "catalog.changed" && predicate(n.params))) {
+						clearTimeout(t);
+						clearInterval(check);
+						resolve();
+					}
+				}, 50);
+			});
+		const second = cliSession(folder, piDir, "Second CLI session");
+		await changed((c) => c.upserted.some((s) => s.title === "Second CLI session"));
+		rmSync(second);
+		await changed((c) => c.removed.length > 0);
+		expect((await a.client.call("sessions.list", { kind: "build" })).sessions.map((s: { title: string }) => s.title)).toEqual(["Hello from the CLI"]);
+
+		// Deleting a build session trashes its file, so it isn't found again.
+		const third = cliSession(folder, piDir, "Third CLI session");
+		await changed((c) => c.upserted.some((s) => s.title === "Third CLI session"));
+		const thirdRef = (await a.client.call("sessions.list", { kind: "build" })).sessions.find((s: { title: string }) => s.title === "Third CLI session").ref;
+		await a.client.call("sessions.delete", { ref: thirdRef });
+		expect(existsSync(third)).toBe(false);
+		expect(existsSync(join(a.home, "trash", basename(third)))).toBe(true);
+		await a.client.call("projects.add", { path: folder }); // re-syncs the folder
+		expect((await a.client.call("sessions.list", { kind: "build" })).sessions.map((s: { title: string }) => s.title)).toEqual(["Hello from the CLI"]);
+
+		await a.client.call("projects.remove", { id: project.id });
+		expect((await a.client.call("projects.list")).projects).toEqual([]);
+		expect((await a.client.call("sessions.list", { kind: "build" })).sessions).toEqual([]);
+		expect(existsSync(first)).toBe(true);
+	});
+});
+
+test("build tool cards: the scripted model edits, writes and runs commands; details survive a reopen", async () => {
+	const a = await start();
+	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-tools-")));
+	writeFileSync(join(folder, "notes.txt"), "hello world\n");
+	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+	const sub = await a.client.call("sessions.subscribe", { ref });
+	const script = ["read: notes.txt", "edit: notes.txt | hello world | hello piopio", "write: new.md | # New\\nline two", "$ exit 3"].join("\n");
+	await a.client.call("sessions.submit", { ref, input: { text: script } });
+	await a.client.waitFor(settled(sub.subscriptionId, 1), 20_000);
+	const details = (s: Snapshot) => s.items.flatMap((i) => (i.kind === "tool" ? [[i.tool, i.status, i.details]] : []));
+	const live: Snapshot = await a.client.call("sessions.open", { ref });
+	expect(readFileSync(join(folder, "notes.txt"), "utf8")).toBe("hello piopio\n");
+	expect(details(live)).toEqual([
+		["read", "done", { type: "file", path: "notes.txt", language: "txt" }],
+		["edit", "done", { type: "diff", path: "notes.txt", diff: expect.stringContaining("+hello piopio") }],
+		["write", "done", { type: "diff", path: "new.md", diff: "@@ -0,0 +1,2 @@\n+# New\n+line two" }],
+		["bash", "error", { type: "terminal", command: "exit 3", exitCode: 3 }],
+	]);
+	expect(live.state.context?.window).toBeGreaterThan(0);
+
+	await stop(a);
+	const b = await start(a.home);
+	expect(details(await b.client.call("sessions.open", { ref }))).toEqual(details(live));
 });

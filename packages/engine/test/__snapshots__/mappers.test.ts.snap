@@ -60,6 +60,11 @@ exports[`pi SDK mapper > pi-sdk-tools-faux: streamed timeline equals a fresh sna
       "command": "echo from-tool",
     },
     "callId": "tool:1792354431185:qn5fm0bzw5",
+    "details": {
+      "command": "echo from-tool",
+      "exitCode": 0,
+      "type": "terminal",
+    },
     "durationMs": 12,
     "id": "tool:tool:1792354431185:qn5fm0bzw5",
     "kind": "tool",

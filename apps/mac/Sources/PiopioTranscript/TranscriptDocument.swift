@@ -49,8 +49,8 @@ public final class TranscriptDocument {
     }
     public var onFollowingChange: ((Bool) -> Void)?
 
-    public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false) {
-        renderer = ItemRenderer(compact: compact)
+    public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true) {
+        renderer = ItemRenderer(compact: compact, versions: versions)
         self.windowSize = windowSize
         self.pageSize = pageSize
         scrollView = NSTextView.scrollableTextView()
@@ -283,8 +283,16 @@ public final class TranscriptDocument {
         guard let d = documentIDs.firstIndex(of: item.id) else { return } // outside the window: data only
         if case .assistant(let a) = item, a.status == .streaming, streams[item.id] != nil { return } // deltas drive it
         streams[item.id] = nil
+        let range = NSRange(location: offset(ofIndex: d), length: lengths[item.id] ?? 0)
         let text = renderer.render(item)
-        edit(NSRange(location: offset(ofIndex: d), length: lengths[item.id] ?? 0), with: text)
+        // A running tool updates often: its cards keep whatever the reader opened or closed.
+        let before = cards(in: range)
+        for (old, new) in zip(before, cards(in: text)) where old.toggledByReader || old.showAll {
+            new.expanded = old.expanded
+            new.toggledByReader = old.toggledByReader
+            new.showAll = old.showAll
+        }
+        edit(range, with: text)
         lengths[item.id] = text.length
         if case .assistant(let a) = item, a.status == .streaming { startStream(a) }
     }
@@ -513,6 +521,23 @@ public final class TranscriptDocument {
         storage.enumerateAttribute(.attachment, in: range) { value, _, _ in
             (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
         }
+    }
+
+    private func cards(in range: NSRange) -> [DisclosureCard] {
+        cards(in: storage, range: range)
+    }
+
+    private func cards(in text: NSAttributedString) -> [DisclosureCard] {
+        cards(in: text, range: NSRange(location: 0, length: text.length))
+    }
+
+    private func cards(in text: NSAttributedString, range: NSRange) -> [DisclosureCard] {
+        var found: [DisclosureCard] = []
+        guard range.length > 0, NSMaxRange(range) <= text.length else { return found }
+        text.enumerateAttribute(.attachment, in: range) { value, _, _ in
+            if let card = (value as? DisclosureAttachment)?.card { found.append(card) }
+        }
+        return found
     }
 
     private func relayout(_ card: DisclosureCard) {

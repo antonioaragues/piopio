@@ -32,6 +32,9 @@ struct PiopioApp: App {
                 Button("New Thread") { NotificationCenter.default.post(name: .newThread, object: nil) }
                     .keyboardShortcut("n")
                 Button("Quick Chat") { QuickChatController.shared?.show() }
+                Divider()
+                Button("Open Folder…") { NotificationCenter.default.post(name: .openProject, object: nil) }
+                    .keyboardShortcut("o")
             }
             CommandGroup(after: .textEditing) {
                 Button("Command Palette") { NotificationCenter.default.post(name: .showPalette, object: false) }

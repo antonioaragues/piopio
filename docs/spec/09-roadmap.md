@@ -91,6 +91,25 @@ Scope: 04-chat §1 (T1–T12), Quick Chat (§4), 07-shared §1 (models, costs), 
 Scope: 05-build §1–7, §9, plus G1–G3 (local git). Bundled extensions: approvals, checkpoints, todos, notify, subagents (plan mode as opt-in). MCP in Build.
 **Acceptance:** the author does real work on Piopio itself in Piopio. CLI interop works both ways. Approvals never lose a pending request across app restart. Checkpoint restore is correct on a repo with untracked files.
 
+Milestones (each one usable on its own):
+| | Scope |
+|---|---|
+| **2.1** Projects & sessions | Add a folder as a Project (BP1). Sessions per project, with pi CLI sessions discovered on disk and resumable (BP2, BP3). Session view with tool cards: read, edit/write with inline diff, bash with output and exit code, generic (BR1). Context meter (BR7). |
+| **2.2** Approvals | `piopio-approvals` with the three modes, approval card, rules, deny-list, "waiting for you" (§6). `piopio-notify` (`ask_user`). Pending approvals survive an app restart. |
+| **2.3** Checkpoints & review | Shadow-git checkpoints, checkpoint dividers and restore (§7). Inspector: Changes, Checkpoints, Context, spend. Diff review with comment-on-diff (BR2, BR3, 4c). |
+| **2.4** Git & new session | Git status, branch switcher, commit with a generated message, push/pull (G1–G3). New-session sheet (7a) with worktrees (BP5) and merge/discard. |
+| **2.5** Composer & extensions | @-mentions, /commands, prompt templates and skills (BR5). `piopio-todos`, `piopio-subagents`, `piopio-plan`. Session tree (BR6). |
+| **2.6** Terminal & MCP | Terminal drawer (§9, 6b). MCP in Build. File viewer and Open in editor (BR4). |
+
+**Milestone 2.1 done (2026-10-20).**
+- **Projects:** `projects.add/list/remove` (in `projects.json`, keyed by real path) with the git branch (read from `.git/HEAD`, worktrees too), `AGENTS.md`/`CLAUDE.md` and `.pi/` detection. Add a project with ⌘O, the sidebar +, or by dropping a folder on the Build empty state.
+- **pi CLI interop (BP3):** sessions are read from pi's own folder for each project (`~/.pi/agent/sessions/--path--`), on add, at engine start, and live through a recursive file watcher. Sessions started with `pi` show up, titled by their name or first message, and resume in Piopio. Moving a session to the Trash moves its file to `~/.Trash`, because otherwise it would be found again. Imported sessions start on Piopio's default model.
+- **Tool cards (BR1):** `edit` shows pi's unified patch and `write` the new file, both as diff rows (open by default, with the first 12 lines and "N more lines"). `bash` shows the command, terminal-styled output, and the exit code (red when nonzero). `read` shows path:lines; `grep`, `find` and `ls` get plain titles. Details are rebuilt from the session file on reopen (the exit code is parsed from the output there). Cards keep the reader's open/closed choice while a tool updates.
+- **Context meter (BR7):** `SessionState.context` from pi's `getContextUsage()`, shown as a chip in the composer.
+- Build transcripts hide Edit/Regenerate/Fork (pi's session tree comes in 2.5). Dropping a file in the composer inserts its project-relative path.
+- The scripted model can drive tools (`$ cmd`, `read:`, `write:`, `edit:` lines) for tests and captures.
+- Verified: engine tests (project add/import/watch/delete/forget; scripted read/edit/write/bash with details surviving a restart) and app captures with the scripted model, light and dark. **Not verified:** a real model doing Build work in the app, and a live `pi` CLI session appearing while the app is open (the same path is covered by the engine test).
+
 ## Phase 3 — Chat: Projects lens + Spaces
 Scope: 04-chat §2–3 (organizer, topics, routing link cards, memory, files, Thread → Space suggestion S11). Global memory (07 §5). MCP for pi-durable runtimes.
 **Acceptance:** one real Space (e.g. a home project) with 5+ topics. Routing is right ≥ 90% of the time on a 50-message replay set. Rerouting works and is learned.

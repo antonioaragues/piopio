@@ -151,6 +151,8 @@ export const SessionState = Type.Object({
 	/** Optional tool sets enabled for this session. */
 	tools: Type.Optional(Type.Object({ web: Type.Boolean() })),
 	usage: Usage,
+	/** How full the model's context is (Build). `tokens` is null right after a compaction. */
+	context: Type.Optional(Type.Object({ tokens: Type.Union([Type.Number(), Type.Null()]), window: Type.Number() })),
 });
 export type SessionState = Static<typeof SessionState>;
 
@@ -193,6 +195,26 @@ export const ModelInfo = Type.Object({
 	supports: Type.Object({ vision: Type.Boolean(), reasoning: Type.Boolean() }),
 });
 export type ModelInfo = Static<typeof ModelInfo>;
+
+/** A folder added in Build (docs/spec/05-build BP1). */
+export const ProjectInfo = Type.Object({
+	id: Type.String(),
+	path: Type.String(),
+	name: Type.String(),
+	addedAt: Type.String(),
+	/** Current git branch; absent outside a git repo. */
+	branch: Type.Optional(Type.String()),
+	/** AGENTS.md or CLAUDE.md, when present. */
+	contextFile: Type.Optional(Type.String()),
+	/** The folder has a pi project config (`.pi/`). */
+	piConfig: Type.Boolean(),
+	/** The folder no longer exists. */
+	missing: Type.Optional(Type.Boolean()),
+});
+export type ProjectInfo = Static<typeof ProjectInfo>;
+
+export const ProjectsChanged = Type.Object({ projects: Type.Array(ProjectInfo) });
+export type ProjectsChanged = Static<typeof ProjectsChanged>;
 
 export const CatalogChanged = Type.Object({ upserted: Type.Array(SessionSummary), removed: Type.Array(ContainerRef) });
 export type CatalogChanged = Static<typeof CatalogChanged>;
@@ -310,6 +332,20 @@ export const methods = {
 		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({ models: Type.Array(ModelInfo), defaultModel: ModelRef }),
 	},
+	"projects.list": {
+		params: Type.Object({}),
+		result: Type.Object({ projects: Type.Array(ProjectInfo) }),
+	},
+	/** Adds a folder (idempotent by real path) and imports its pi sessions. */
+	"projects.add": {
+		params: Type.Object({ path: Type.String() }),
+		result: Type.Object({ project: ProjectInfo }),
+	},
+	/** Forgets a project. Its session files stay where pi keeps them. */
+	"projects.remove": {
+		params: Type.Object({ id: Type.String() }),
+		result: Type.Object({}),
+	},
 	/** The client changed a secret (e.g. a new API key): drop cached copies. */
 	"secrets.changed": {
 		params: Type.Object({ name: Type.String() }),
@@ -339,6 +375,7 @@ export type ReverseResult<M extends ReverseMethodName> = Static<(typeof reverseM
 export const notifications = {
 	"session.events": SessionEventsNotification,
 	"catalog.changed": CatalogChanged,
+	"projects.changed": ProjectsChanged,
 } satisfies Record<string, TSchema>;
 
 // ── JSON-RPC envelope ───────────────────────────────────────────────────────

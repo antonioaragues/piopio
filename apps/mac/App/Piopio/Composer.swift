@@ -91,7 +91,7 @@ struct Composer: View {
             }
             .font(.system(size: 13.5))
             HStack(spacing: 6) {
-                if thread.editing == nil {
+                if thread.editing == nil && !isBuild {
                     Button(action: pickFiles) { Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 24) }
                         .buttonStyle(.plain)
                         .background(Color.dsChip, in: Circle())
@@ -99,7 +99,8 @@ struct Composer: View {
                 }
                 ModelChip(engine: engine, thread: thread)
                 if thread.supportsThinking { ThinkingChip(thread: thread) }
-                if thread.editing == nil {
+                if let context = thread.state?.context { ContextChip(context: context) }
+                if thread.editing == nil && !isBuild {
                     Button { Task { await thread.setWeb(!thread.webEnabled) } } label: {
                         Label("Web search", systemImage: "globe").labelStyle(.titleOnly)
                     }
@@ -130,11 +131,15 @@ struct Composer: View {
         .onAppear { focused = true }
     }
 
+    /// Build sessions take files by path (the agent reads them) and have their own tools.
+    private var isBuild: Bool { thread.ref.kind == .build }
+
     private var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
-        return thread.isRunning ? "Queue a follow-up…" : "Message"
+        if thread.isRunning { return "Queue a follow-up…" }
+        return isBuild ? "Ask the agent to build, fix or explain something" : "Message"
     }
 
     private var chips: some View {
@@ -189,7 +194,7 @@ struct Composer: View {
             if provider.canLoadObject(ofClass: URL.self) {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url else { return }
-                    Task { @MainActor in add([url]) }
+                    Task { @MainActor in isBuild ? mention(url) : add([url]) }
                 }
             } else if let type = [UTType.png, .tiff, .jpeg].first(where: { provider.hasItemConformingToTypeIdentifier($0.identifier) }) {
                 provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in
@@ -202,6 +207,15 @@ struct Composer: View {
         }
     }
 
+    /// Build: a dropped file becomes its path (relative to the project) in the message; the agent reads it.
+    private func mention(_ url: URL) {
+        var path = url.path
+        if let cwd = engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.cwd, path.hasPrefix(cwd + "/") {
+            path = String(path.dropFirst(cwd.count + 1))
+        }
+        text += (text.isEmpty || text.hasSuffix(" ") ? "" : " ") + path + " "
+    }
+
     private func send(steer: Bool) {
         let message = text
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -210,6 +224,37 @@ struct Composer: View {
         attachments = []
         attachError = nil
         Task { await thread.send(message, attachments: files, steer: steer && thread.isRunning) }
+    }
+}
+
+/// The context meter (docs/spec/05-build BR7): tokens in the model's context window.
+struct ContextChip: View {
+    let context: SessionState.Context
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.dsLine).frame(width: 28, height: 4)
+                Capsule().fill(fraction > 0.8 ? Color.dsAmber : Color.accentColor).frame(width: max(2, 28 * fraction), height: 4)
+            }
+            Text(label).font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).monospacedDigit()
+        }
+        .padding(.horizontal, 9)
+        .frame(height: 24)
+        .background(Color.dsChip, in: Capsule())
+        .help("Context: \(context.tokens.map { "\(Int($0)) of " } ?? "")\(Int(context.window)) tokens. pi compacts older messages automatically when it fills up.")
+    }
+
+    private var fraction: Double { min(1, (context.tokens ?? 0) / max(1, context.window)) }
+
+    private var label: String {
+        let window = Self.short(context.window)
+        guard let tokens = context.tokens else { return "– / \(window)" }
+        return "\(Self.short(tokens)) / \(window)"
+    }
+
+    static func short(_ n: Double) -> String {
+        n >= 1_000_000 ? String(format: "%.1fM", n / 1_000_000) : n >= 1000 ? "\(Int((n / 1000).rounded()))k" : "\(Int(n))"
     }
 }
 

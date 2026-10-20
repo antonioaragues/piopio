@@ -108,6 +108,28 @@ public struct ToolItem: Codable, Sendable, Hashable {
     }
 }
 
+/// What a tool card shows beyond the output (engine: timeline/tool-details.ts).
+public enum ToolDetails: Sendable, Hashable {
+    case diff(path: String, diff: String)
+    case file(path: String, language: String?)
+    case terminal(command: String, exitCode: Int?)
+}
+
+extension ToolItem {
+    public var typedDetails: ToolDetails? {
+        guard let d = details, let type = d["type"]?.stringValue else { return nil }
+        switch type {
+        case "diff": return d["path"]?.stringValue.map { .diff(path: $0, diff: d["diff"]?.stringValue ?? "") }
+        case "file": return d["path"]?.stringValue.map { .file(path: $0, language: d["language"]?.stringValue) }
+        case "terminal":
+            guard let command = d["command"]?.stringValue else { return nil }
+            if case .number(let code)? = d["exitCode"] { return .terminal(command: command, exitCode: Int(code)) }
+            return .terminal(command: command, exitCode: nil)
+        default: return nil
+        }
+    }
+}
+
 public struct SystemItem: Codable, Sendable, Hashable {
     public enum Level: String, Codable, Sendable { case info, warn, error }
     public var id, at: String
@@ -177,8 +199,11 @@ public struct SessionState: Codable, Sendable, Hashable {
     public struct Tools: Codable, Sendable, Hashable { public var web: Bool }
     public var tools: Tools?
     public var usage: Usage
-    public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, tools: Tools? = nil, usage: Usage) {
-        self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.tools = tools; self.usage = usage
+    /// How full the model's context is (Build). `tokens` is nil right after a compaction.
+    public struct Context: Codable, Sendable, Hashable { public var tokens: Double?; public var window: Double }
+    public var context: Context?
+    public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, tools: Tools? = nil, usage: Usage, context: Context? = nil) {
+        self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.tools = tools; self.usage = usage; self.context = context
     }
 }
 
@@ -332,6 +357,24 @@ public struct RenameParams: Encodable, Sendable {
 }
 public struct SecretChangedParams: Encodable, Sendable { public var name: String; public init(name: String) { self.name = name } }
 public struct UnsubscribeParams: Encodable, Sendable { public var subscriptionId: String; public init(subscriptionId: String) { self.subscriptionId = subscriptionId } }
+
+/// A folder added in Build.
+public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
+    public var id: String
+    public var path: String
+    public var name: String
+    public var addedAt: String
+    public var branch: String?
+    public var contextFile: String?
+    public var piConfig: Bool
+    public var missing: Bool?
+}
+
+public struct ProjectsChanged: Decodable, Sendable { public var projects: [ProjectInfo] }
+public struct ProjectsListResult: Decodable, Sendable { public var projects: [ProjectInfo] }
+public struct ProjectsAddParams: Encodable, Sendable { public var path: String; public init(path: String) { self.path = path } }
+public struct ProjectsAddResult: Decodable, Sendable { public var project: ProjectInfo }
+public struct ProjectsRemoveParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
 
 public struct CatalogChanged: Decodable, Sendable {
     public var upserted: [SessionSummary]

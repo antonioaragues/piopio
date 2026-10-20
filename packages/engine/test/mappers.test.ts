@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import { TimelineBuilder, type PiMessage } from "../src/timeline/builder.js";
 import { DurableEventMapper, messagesFromEntries } from "../src/timeline/pi-durable.js";
 import { SdkEventMapper } from "../src/timeline/pi-sdk.js";
+import { endDetails, startDetails } from "../src/timeline/tool-details.js";
 
 const load = (name: string) =>
 	readFileSync(new URL(`./fixtures/${name}.jsonl`, import.meta.url), "utf8")
@@ -84,5 +85,19 @@ describe("pi-durable mapper", () => {
 		const snap = live.snapshot();
 		expect(snap.state.status).toBe("running");
 		expect(snap.items).toMatchObject([{ kind: "user", id: "1" }, { kind: "assistant", status: "streaming", parts: [{ text: "Hal" }] }]);
+	});
+});
+
+describe("tool details", () => {
+	test("edit shows pi's patch, write shows the new file, bash its exit code, read its path", () => {
+		const patch = "--- a.ts\n+++ a.ts\n@@ -1 +1 @@\n-old\n+new";
+		expect(endDetails("edit", { path: "a.ts", edits: [] }, { details: { patch } }, "ok", false)).toEqual({ type: "diff", path: "a.ts", diff: patch });
+		expect(startDetails("write", { path: "b.md", content: "one\ntwo\n" })).toEqual({ type: "diff", path: "b.md", diff: "@@ -0,0 +1,2 @@\n+one\n+two" });
+		expect(endDetails("bash", { command: "false" }, { structuredContent: { exit_code: 1 } }, "", true)).toEqual({ type: "terminal", command: "false", exitCode: 1 });
+		// Reloaded from the session file there is no structuredContent: the code comes from the output.
+		expect(endDetails("bash", { command: "exit 3" }, {}, "\n\nCommand exited with code 3", true)).toMatchObject({ exitCode: 3 });
+		expect(endDetails("bash", { command: "true" }, {}, "", false)).toMatchObject({ exitCode: 0 });
+		expect(startDetails("read", { path: "src/x.swift", offset: 3 })).toEqual({ type: "file", path: "src/x.swift", language: "swift" });
+		expect(startDetails("web_search", { query: "x" })).toBeUndefined();
 	});
 });

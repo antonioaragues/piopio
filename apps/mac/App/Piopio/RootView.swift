@@ -7,6 +7,7 @@ struct RootView: View {
     let engine: EngineController
     @AppStorage("mode") private var mode: AppMode = .chat
     @State private var selection: String?
+    @State private var buildSelection: String?
     @State private var showOnboarding = false
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
@@ -15,7 +16,7 @@ struct RootView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(engine: engine, mode: $mode, selection: $selection, onSearch: { palette = .messages; paletteQuery = "" })
+            Sidebar(engine: engine, mode: $mode, selection: $selection, buildSelection: $buildSelection, onSearch: { palette = .messages; paletteQuery = "" })
                 .frame(width: 268)
                 .glassPanel()
                 .padding(8)
@@ -37,6 +38,18 @@ struct RootView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in newThread() }
+        .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in
+            mode = .build
+            if let url = note.object as? URL {
+                Task { await BuildActions.add(url, engine: engine) { buildSelection = $0 } }
+            } else {
+                BuildActions.addProject(engine: engine) { buildSelection = $0 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .selectBuildSession)) { note in
+            mode = .build
+            buildSelection = note.object as? String
+        }
         .onReceive(NotificationCenter.default.publisher(for: .selectThread)) { note in
             mode = .chat
             selection = note.object as? String
@@ -78,16 +91,11 @@ struct RootView: View {
                 }
             }
         case (_, .build):
-            EmptyState(label: "Build", title: "Open a folder to start building", message: "Each folder becomes a Project. Sessions run with pi-coding-agent inside it.") {
-                VStack(spacing: 10) {
-                    VStack(spacing: 10) {
-                        Text("Drop a folder here").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-                        Button("Open Folder… ⌘O") {}.buttonStyle(PillStyle(kind: .primary)).disabled(true)
-                    }
-                    .frame(width: 360, height: 110)
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-                    Text("Build mode arrives in Phase 2.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                }
+            if let id = buildSelection, let summary = engine.buildSessions.first(where: { $0.ref.id == id }) {
+                BuildSessionView(engine: engine, session: engine.thread(summary.ref), summary: summary)
+                    .id(id)
+            } else {
+                BuildEmptyState(engine: engine, selection: $buildSelection)
             }
         case (_, .agents):
             EmptyState(label: "Agents", title: "Create your first agent", message: "Agents live in your messaging apps, run on schedules and keep their own memory.") {
@@ -171,6 +179,9 @@ struct RootView: View {
 extension Notification.Name {
     static let selectThread = Notification.Name("piopio.selectThread")
     static let setMode = Notification.Name("piopio.setMode")
+    /// Object: a folder URL to add, or nil to ask for one.
+    static let openProject = Notification.Name("piopio.openProject")
+    static let selectBuildSession = Notification.Name("piopio.selectBuildSession")
 }
 
 // MARK: Sidebar
@@ -179,6 +190,7 @@ struct Sidebar: View {
     let engine: EngineController
     @Binding var mode: AppMode
     @Binding var selection: String?
+    @Binding var buildSelection: String?
     let onSearch: () -> Void
     @State private var renaming: SessionSummary?
     @State private var newTitle = ""
@@ -209,7 +221,7 @@ struct Sidebar: View {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     switch mode {
                     case .chat: chatList
-                    case .build: placeholder("Projects", "Folders you open appear here.")
+                    case .build: BuildSidebarList(engine: engine, selection: $buildSelection)
                     case .agents: placeholder("Agents", "Agents you create appear here.")
                     }
                 }

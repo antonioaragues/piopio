@@ -3,8 +3,10 @@
  * it moves to catalog.db (SQLite + FTS) with the Phase 1 sidebar.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ContainerRef, ModelRef, SessionSummary } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
@@ -17,7 +19,15 @@ import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
 import type { SessionEvent } from "@piopio/protocol";
 
-type CatalogEntry = SessionSummary & { thinking?: string; file?: string; sessionFile?: string; branches?: BranchState; web?: boolean };
+type CatalogEntry = SessionSummary & {
+	thinking?: string;
+	file?: string;
+	sessionFile?: string;
+	/** The pi session file was seen on disk, so its disappearance means it was deleted. */
+	onDisk?: boolean;
+	branches?: BranchState;
+	web?: boolean;
+};
 
 export const newId = (prefix: string) => `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 20)}`;
 
@@ -32,7 +42,7 @@ export class Sessions {
 	constructor(
 		private readonly paths: EnginePaths,
 		private readonly hub: ModelHub,
-		private readonly piOverrides: { piSessionDir?: string; piAgentDir?: string } = {},
+		private readonly piOverrides: { piSessionDir?: string; piAgentDir?: string; trashDir?: string } = {},
 		private readonly webOptions: WebOptions = {},
 	) {
 		this.search = new SearchIndex(join(paths.home, "search.db"));
@@ -172,13 +182,17 @@ export class Sessions {
 		return exportTranscript(entry.title, (await this.runtime(ref)).snapshot().items, format);
 	}
 
-	/** Threads lose their history file; build sessions only leave the catalog (pi owns the JSONL). */
+	/**
+	 * Threads lose their history file. A build session's pi file goes to the Trash (it would be found
+	 * again on disk otherwise, and the pi CLI would still list it).
+	 */
 	async delete(ref: ContainerRef): Promise<void> {
 		const entry = this.entry(ref);
 		const runtime = this.open.get(ref.id);
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
 		if (entry.file) for (const suffix of ["", "-wal", "-shm"]) rmSync(entry.file + suffix, { force: true });
+		if (entry.sessionFile && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
 		this.search.deleteSession(ref.id);
 		this.entries.delete(ref.id);
 		this.save();
@@ -236,7 +250,112 @@ export class Sessions {
 		this.changed(entry);
 	}
 
+	// ── pi session discovery (docs/spec/05-build BP3) ──────────────────────
+
+	private watcher?: FSWatcher;
+
+	/** pi's session folder for `cwd`: `<agentDir>/sessions/--path-with-dashes--`, or the test override. */
+	private piSessionDir(cwd: string): string {
+		if (this.piOverrides.piSessionDir) return this.piOverrides.piSessionDir;
+		return join(this.piSessionsRoot(), `--${resolve(cwd).replace(/^\//, "").replace(/[/:]/g, "-")}--`);
+	}
+
+	private piSessionsRoot(): string {
+		return this.piOverrides.piSessionDir ?? join(this.piOverrides.piAgentDir ?? join(homedir(), ".pi", "agent"), "sessions");
+	}
+
+	/**
+	 * Brings the catalog in line with pi's session files for `cwd`: sessions started with the pi CLI
+	 * appear, and sessions whose files were deleted go away.
+	 */
+	async syncFolder(cwd: string): Promise<void> {
+		let infos: Awaited<ReturnType<typeof SessionManager.list>>;
+		try {
+			infos = await SessionManager.list(cwd, this.piSessionDir(cwd));
+		} catch {
+			return;
+		}
+		const byFile = new Map([...this.entries.values()].filter((e) => e.sessionFile).map((e) => [e.sessionFile!, e]));
+		const upserted: CatalogEntry[] = [];
+		for (const info of infos) {
+			const modified = info.modified.toISOString();
+			const entry = byFile.get(info.path);
+			if (entry) {
+				let changed = !entry.onDisk;
+				entry.onDisk = true;
+				if (!this.open.has(entry.ref.id) && modified > entry.updatedAt) {
+					entry.updatedAt = modified;
+					if (info.name) entry.title = info.name;
+					changed = true;
+				}
+				if (changed) upserted.push(entry);
+				continue;
+			}
+			const created: CatalogEntry = {
+				ref: { kind: "build", id: newId("ses") },
+				title: info.name ?? (titleFrom(info.firstMessage) || "Untitled session"),
+				createdAt: info.created.toISOString(),
+				updatedAt: modified,
+				cwd,
+				model: this.hub.defaultModel,
+				sessionFile: info.path,
+				onDisk: true,
+			};
+			this.entries.set(created.ref.id, created);
+			upserted.push(created);
+		}
+		const removed = [...this.entries.values()].filter(
+			(e) => e.ref.kind === "build" && e.cwd === cwd && e.onDisk && e.sessionFile && !existsSync(e.sessionFile) && !this.open.has(e.ref.id),
+		);
+		for (const e of removed) {
+			this.entries.delete(e.ref.id);
+			this.search.deleteSession(e.ref.id);
+		}
+		if (!upserted.length && !removed.length) return;
+		this.save();
+		const change = { upserted: upserted.map(summary), removed: removed.map((e) => e.ref) };
+		for (const l of this.listeners) l(change);
+	}
+
+	/** Re-syncs folders when pi writes session files from outside this engine (the CLI). */
+	watchPiSessions(folders: () => string[]): void {
+		const root = this.piSessionsRoot();
+		mkdirSync(root, { recursive: true });
+		const dirty = new Set<string>();
+		let timer: NodeJS.Timeout | undefined;
+		this.watcher = watch(root, { recursive: true }, (_event, name) => {
+			if (!name?.endsWith(".jsonl")) return;
+			const file = join(root, name);
+			// Our own sessions write as they stream; their catalog entries are already current.
+			if ([...this.entries.values()].some((e) => e.sessionFile === file && this.open.has(e.ref.id))) return;
+			const dir = join(root, dirname(name));
+			for (const cwd of folders()) if (this.piSessionDir(cwd) === dir || this.piOverrides.piSessionDir) dirty.add(cwd);
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				const cwds = [...dirty];
+				dirty.clear();
+				for (const cwd of cwds) void this.syncFolder(cwd);
+			}, 300);
+		});
+	}
+
+	/** Drops the build sessions of a folder from the catalog (the files stay with pi). */
+	async forgetFolder(cwd: string): Promise<void> {
+		const gone = [...this.entries.values()].filter((e) => e.ref.kind === "build" && e.cwd === cwd);
+		for (const e of gone) {
+			const runtime = this.open.get(e.ref.id);
+			this.open.delete(e.ref.id);
+			if (runtime) await (await runtime.catch(() => undefined))?.close();
+			this.entries.delete(e.ref.id);
+			this.search.deleteSession(e.ref.id);
+		}
+		if (!gone.length) return;
+		this.save();
+		for (const l of this.listeners) l({ upserted: [], removed: gone.map((e) => e.ref) });
+	}
+
 	async closeAll(): Promise<void> {
+		this.watcher?.close();
 		const runtimes = await Promise.allSettled(this.open.values());
 		this.open.clear();
 		await Promise.allSettled(runtimes.map((r) => (r.status === "fulfilled" ? r.value.close() : undefined)));
@@ -291,8 +410,17 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, thinking: _t, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, ...rest }: CatalogEntry): SessionSummary {
 	return rest;
+}
+
+/** Moves a file into the Trash folder under a free name (same volume: a rename). */
+function moveToTrash(file: string, trash: string): void {
+	mkdirSync(trash, { recursive: true });
+	const name = basename(file);
+	let target = join(trash, name);
+	for (let i = 2; existsSync(target); i++) target = join(trash, name.replace(/(\.[^.]*)?$/, ` ${i}$1`));
+	renameSync(file, target);
 }
 
 /** A short plain-text title from a first message: markdown markup removed, first line, ≤ 60 chars. */

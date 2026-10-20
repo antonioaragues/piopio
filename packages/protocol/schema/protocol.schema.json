@@ -598,6 +598,28 @@
 							"type": "number"
 						}
 					}
+				},
+				"context": {
+					"type": "object",
+					"required": [
+						"tokens",
+						"window"
+					],
+					"properties": {
+						"tokens": {
+							"anyOf": [
+								{
+									"type": "number"
+								},
+								{
+									"type": "null"
+								}
+							]
+						},
+						"window": {
+							"type": "number"
+						}
+					}
 				}
 			}
 		},
@@ -2164,6 +2186,28 @@
 											"type": "number"
 										}
 									}
+								},
+								"context": {
+									"type": "object",
+									"required": [
+										"tokens",
+										"window"
+									],
+									"properties": {
+										"tokens": {
+											"anyOf": [
+												{
+													"type": "number"
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"window": {
+											"type": "number"
+										}
+									}
 								}
 							}
 						}
@@ -2786,6 +2830,28 @@
 													"type": "number"
 												}
 											}
+										},
+										"context": {
+											"type": "object",
+											"required": [
+												"tokens",
+												"window"
+											],
+											"properties": {
+												"tokens": {
+													"anyOf": [
+														{
+															"type": "number"
+														},
+														{
+															"type": "null"
+														}
+													]
+												},
+												"window": {
+													"type": "number"
+												}
+											}
 										}
 									}
 								}
@@ -3398,6 +3464,28 @@
 									"type": "number"
 								},
 								"costUsd": {
+									"type": "number"
+								}
+							}
+						},
+						"context": {
+							"type": "object",
+							"required": [
+								"tokens",
+								"window"
+							],
+							"properties": {
+								"tokens": {
+									"anyOf": [
+										{
+											"type": "number"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"window": {
 									"type": "number"
 								}
 							}
@@ -5058,6 +5146,28 @@
 														"type": "number"
 													}
 												}
+											},
+											"context": {
+												"type": "object",
+												"required": [
+													"tokens",
+													"window"
+												],
+												"properties": {
+													"tokens": {
+														"anyOf": [
+															{
+																"type": "number"
+															},
+															{
+																"type": "null"
+															}
+														]
+													},
+													"window": {
+														"type": "number"
+													}
+												}
 											}
 										}
 									}
@@ -5677,6 +5787,28 @@
 																"type": "number"
 															},
 															"costUsd": {
+																"type": "number"
+															}
+														}
+													},
+													"context": {
+														"type": "object",
+														"required": [
+															"tokens",
+															"window"
+														],
+														"properties": {
+															"tokens": {
+																"anyOf": [
+																	{
+																		"type": "number"
+																	},
+																	{
+																		"type": "null"
+																	}
+																]
+															},
+															"window": {
 																"type": "number"
 															}
 														}
@@ -6852,6 +6984,28 @@
 									"type": "number"
 								}
 							}
+						},
+						"context": {
+							"type": "object",
+							"required": [
+								"tokens",
+								"window"
+							],
+							"properties": {
+								"tokens": {
+									"anyOf": [
+										{
+											"type": "number"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"window": {
+									"type": "number"
+								}
+							}
 						}
 					}
 				}
@@ -7513,6 +7667,28 @@
 											"type": "number"
 										},
 										"costUsd": {
+											"type": "number"
+										}
+									}
+								},
+								"context": {
+									"type": "object",
+									"required": [
+										"tokens",
+										"window"
+									],
+									"properties": {
+										"tokens": {
+											"anyOf": [
+												{
+													"type": "number"
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"window": {
 											"type": "number"
 										}
 									}
@@ -8573,6 +8749,127 @@
 					}
 				}
 			}
+		},
+		"projects.list.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"projects.list.result": {
+			"type": "object",
+			"required": [
+				"projects"
+			],
+			"properties": {
+				"projects": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"path",
+							"name",
+							"addedAt",
+							"piConfig"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"path": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"addedAt": {
+								"type": "string"
+							},
+							"branch": {
+								"type": "string"
+							},
+							"contextFile": {
+								"type": "string"
+							},
+							"piConfig": {
+								"type": "boolean"
+							},
+							"missing": {
+								"type": "boolean"
+							}
+						}
+					}
+				}
+			}
+		},
+		"projects.add.params": {
+			"type": "object",
+			"required": [
+				"path"
+			],
+			"properties": {
+				"path": {
+					"type": "string"
+				}
+			}
+		},
+		"projects.add.result": {
+			"type": "object",
+			"required": [
+				"project"
+			],
+			"properties": {
+				"project": {
+					"type": "object",
+					"required": [
+						"id",
+						"path",
+						"name",
+						"addedAt",
+						"piConfig"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"path": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"addedAt": {
+							"type": "string"
+						},
+						"branch": {
+							"type": "string"
+						},
+						"contextFile": {
+							"type": "string"
+						},
+						"piConfig": {
+							"type": "boolean"
+						},
+						"missing": {
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"projects.remove.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"projects.remove.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"secrets.changed.params": {
 			"type": "object",

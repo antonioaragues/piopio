@@ -4,6 +4,7 @@
  */
 import type { AssistantItem, AssistantPart, AttachmentInfo, BranchInfo, SessionEvent, SessionState, Snapshot, TimelineItem, ToolItem, Usage, ContainerRef, UserItem } from "@piopio/protocol";
 import { describeModelError } from "./errors.js";
+import { endDetails, startDetails, type PiToolResult } from "./tool-details.js";
 
 /** Minimal structural views of pi-ai messages (avoid coupling to upstream unions). */
 export type PiContentBlock =
@@ -15,7 +16,7 @@ export type PiUsage = { input: number; output: number; cacheRead: number; cacheW
 export type PiMessage =
 	| { role: "user"; content: string | PiContentBlock[]; timestamp?: number }
 	| { role: "assistant"; content: PiContentBlock[]; provider?: string; model?: string; usage?: PiUsage; stopReason?: string; errorMessage?: string; timestamp?: number }
-	| { role: "toolResult"; toolCallId: string; toolName: string; content: PiContentBlock[]; isError?: boolean; timestamp?: number }
+	| { role: "toolResult"; toolCallId: string; toolName: string; content: PiContentBlock[]; details?: unknown; isError?: boolean; timestamp?: number }
 	| { role: string; [key: string]: unknown };
 
 export const emptyUsage = (): Usage => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 });
@@ -95,7 +96,8 @@ export class TimelineBuilder {
 				this.addUsage(a.usage);
 				for (const b of a.content) {
 					if (b.type !== "toolCall") continue;
-					const t: ToolItem = { kind: "tool", id: `tool:${b.id}`, at: iso(a.timestamp), callId: b.id, tool: b.name, args: b.arguments, status: "interrupted" };
+					const details = startDetails(b.name, b.arguments);
+					const t: ToolItem = { kind: "tool", id: `tool:${b.id}`, at: iso(a.timestamp), callId: b.id, tool: b.name, args: b.arguments, status: "interrupted", ...(details ? { details } : {}) };
 					tools.set(b.id, t);
 					this.push(t);
 				}
@@ -105,6 +107,8 @@ export class TimelineBuilder {
 				if (t) {
 					t.status = r.isError ? "error" : "done";
 					t.output = contentText(r.content);
+					const details = endDetails(t.tool, t.args, { details: r.details }, t.output, Boolean(r.isError));
+					if (details) t.details = details;
 				}
 			}
 		});
@@ -210,10 +214,13 @@ export class TimelineBuilder {
 		if (existing) {
 			existing.status = "running";
 			existing.args = args;
+			const details = startDetails(tool, args);
+			if (details) existing.details = details;
 			this.pending.push({ type: "item.updated", item: structuredClone(existing) });
 			return;
 		}
-		const item: ToolItem = { kind: "tool", id, at: iso(), callId, tool, args, status: "running", ...(parentCallId ? { parentCallId } : {}) };
+		const details = startDetails(tool, args);
+		const item: ToolItem = { kind: "tool", id, at: iso(), callId, tool, args, status: "running", ...(details ? { details } : {}), ...(parentCallId ? { parentCallId } : {}) };
 		this.push(item);
 		this.pending.push({ type: "item.added", item: structuredClone(item) });
 	}
@@ -231,11 +238,13 @@ export class TimelineBuilder {
 		this.pending.push({ type: "item.updated", item: structuredClone(item) });
 	}
 
-	toolEnd(callId: string, output: string | undefined, isError: boolean, durationMs?: number): void {
+	toolEnd(callId: string, output: string | undefined, isError: boolean, durationMs?: number, result?: PiToolResult): void {
 		const item = this.get(`tool:${callId}`) as ToolItem | undefined;
 		if (!item) return;
 		item.status = isError ? "error" : "done";
 		if (output !== undefined) item.output = output;
+		const details = endDetails(item.tool, item.args, result, item.output, isError);
+		if (details) item.details = details;
 		if (durationMs !== undefined) item.durationMs = durationMs;
 		this.pending.push({ type: "item.updated", item: structuredClone(item) });
 	}

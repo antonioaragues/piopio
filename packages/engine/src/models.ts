@@ -3,7 +3,7 @@
  * client's Keychain via `secrets.get`), a pi-ai Models collection for pi-durable, and a
  * lazily created ModelRuntime for pi-coding-agent.
  */
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { SECRET_OPENROUTER, type ModelInfo, type ModelRef } from "@piopio/protocol";
@@ -83,15 +83,44 @@ export class ModelHub {
 	}
 }
 
-/** Faux model that answers "Echo: <last user text>" forever (dev and tests). */
+/**
+ * Faux model that answers "Echo: <last user text>" forever (dev and tests). Lines of the message can
+ * script tool calls first, one per step, for Build demos:
+ *   $ <command>                      bash
+ *   read: <path>                     read
+ *   write: <path> | <content>        write (\n in content for new lines)
+ *   edit: <path> | <old> | <new>     edit
+ */
 function installEcho(faux: FauxHandle): void {
 	const step = (context: { messages: readonly { role: string; content: unknown }[] }) => {
 		faux.appendResponses([step]);
-		const last = [...context.messages].reverse().find((m) => m.role === "user");
+		const lastUser = context.messages.map((m) => m.role).lastIndexOf("user");
+		const last = context.messages[lastUser];
 		const text = typeof last?.content === "string" ? last.content : Array.isArray(last?.content) ? (last.content as { type: string; text?: string }[]).map((b) => b.text ?? "").join("") : "";
+		const script = scriptedTools(text);
+		const done = context.messages.slice(lastUser + 1).filter((m) => m.role === "toolResult").length;
+		const next = script[done];
+		if (next) return fauxAssistantMessage([fauxToolCall(next.name, next.args as Parameters<typeof fauxToolCall>[1])], { stopReason: "toolUse" });
 		return fauxAssistantMessage([fauxText(`Echo: ${text}`)]);
 	};
 	faux.setResponses([step]);
+}
+
+function scriptedTools(text: string): { name: string; args: Record<string, unknown> }[] {
+	const calls: { name: string; args: Record<string, unknown> }[] = [];
+	for (const line of text.split("\n").map((l) => l.trim())) {
+		const parts = (rest: string) => rest.split("|").map((p) => p.trim().replaceAll("\\n", "\n"));
+		if (line.startsWith("$ ")) calls.push({ name: "bash", args: { command: line.slice(2) } });
+		else if (line.startsWith("read: ")) calls.push({ name: "read", args: { path: line.slice(6).trim() } });
+		else if (line.startsWith("write: ")) {
+			const [path, content = ""] = parts(line.slice(7));
+			calls.push({ name: "write", args: { path, content } });
+		} else if (line.startsWith("edit: ")) {
+			const [path, oldText = "", newText = ""] = parts(line.slice(6));
+			calls.push({ name: "edit", args: { path, edits: [{ oldText, newText }] } });
+		}
+	}
+	return calls;
 }
 
 export class EngineError extends Error {

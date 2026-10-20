@@ -61,15 +61,22 @@ export class BuildRuntime implements Runtime {
 	private attach(): void {
 		const messages = this.session.messages as unknown as PiMessage[];
 		this.builder.reset(messages, (i) => SdkEventMapper.idOf(i), false);
-		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel });
+		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, ...this.context() });
 		this.builder.flush();
 		const mapper = new SdkEventMapper(this.builder, messages.length);
 		const record = recorder("pi-sdk", this.ref.id);
 		this.unsubscribe = this.session.subscribe((event) => {
 			record?.(event);
 			mapper.apply(event as never);
+			if (event.type === "message_end" || event.type === "agent_settled" || event.type === "compaction_end") this.builder.setState(this.context());
 			this.emitter.emit(this.builder.flush());
 		});
+	}
+
+	/** The context meter (BR7): tokens in the model's context window. */
+	private context(): { context?: { tokens: number | null; window: number } } {
+		const usage = this.session.getContextUsage();
+		return usage ? { context: { tokens: usage.tokens, window: usage.contextWindow } } : {};
 	}
 
 	snapshot(): Snapshot {
@@ -110,7 +117,7 @@ export class BuildRuntime implements Runtime {
 			this.model = change.model;
 		}
 		if (change.thinking) this.session.setThinkingLevel(change.thinking as never);
-		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel });
+		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, ...this.context() });
 		this.emitter.emit(this.builder.flush());
 	}
 

@@ -176,13 +176,22 @@ final class CardLayoutDelegate: NSObject, NSTextLayoutManagerDelegate {
 @Observable
 public final class DisclosureCard: @unchecked Sendable {
     public enum Kind: Sendable { case tool, thinking }
+    /// How the expanded body is drawn: plain text, terminal output, or diff rows.
+    public enum Body: Sendable { case text(String), terminal(String), diff([DiffLine]) }
     public let kind: Kind
     public var title: String
     public var detail: String
     public var trailing: String
-    public var body: String
+    public var content: Body
+    /// Line counts shown in green/red after the detail (edit/write).
+    public var added = 0
+    public var removed = 0
     public var failed = false
     public var expanded = false
+    /// The reader opened or closed it, so re-renders keep their choice.
+    public var toggledByReader = false
+    /// Diff cards show the first `previewLines` until "more lines" is clicked.
+    public var showAll = false
     @ObservationIgnored var onToggle: (@MainActor (DisclosureCard) -> Void)?
 
     public init(kind: Kind, title: String, detail: String = "", trailing: String = "", body: String) {
@@ -190,17 +199,88 @@ public final class DisclosureCard: @unchecked Sendable {
         self.title = title
         self.detail = detail
         self.trailing = trailing
-        self.body = body
+        self.content = .text(body)
+    }
+
+    public init(tool title: String, detail: String, trailing: String, content: Body) {
+        self.kind = .tool
+        self.title = title
+        self.detail = detail
+        self.trailing = trailing
+        self.content = content
+    }
+
+    var body: String {
+        get {
+            switch content {
+            case .text(let s), .terminal(let s): s
+            case .diff(let lines): lines.map(\.text).joined(separator: "\n")
+            }
+        }
+        set { content = .text(newValue) }
+    }
+
+    var isEmpty: Bool {
+        switch content {
+        case .text(let s), .terminal(let s): s.isEmpty
+        case .diff(let lines): lines.isEmpty
+        }
     }
 
     static let collapsedHeight: CGFloat = 34
+    static let diffRowHeight: CGFloat = 17
+    static let previewLines = 12
+
+    /// Diff rows shown now, and how many are hidden behind "more lines".
+    var visibleDiff: (lines: [DiffLine], hidden: Int) {
+        guard case .diff(let lines) = content else { return ([], 0) }
+        if showAll || lines.count <= Self.previewLines + 2 { return (lines, 0) }
+        return (Array(lines.prefix(Self.previewLines)), lines.count - Self.previewLines)
+    }
 
     func height(width: CGFloat) -> CGFloat {
-        guard expanded, !body.isEmpty else { return Self.collapsedHeight }
+        guard expanded, !isEmpty else { return Self.collapsedHeight }
+        if case .diff = content {
+            let (lines, hidden) = visibleDiff
+            return Self.collapsedHeight + CGFloat(lines.count) * Self.diffRowHeight + (hidden > 0 ? 24 : 0) + 10
+        }
         let font: NSFont = kind == .tool ? .monospacedSystemFont(ofSize: 11.5, weight: .regular) : .systemFont(ofSize: 12.5)
         let text = NSAttributedString(string: body, attributes: [.font: font])
         let h = text.boundingRect(with: NSSize(width: max(50, width - 28), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height
-        return Self.collapsedHeight + ceil(h) + 20
+        // Long outputs scroll inside the card.
+        return Self.collapsedHeight + min(ceil(h) + 20, 360)
+    }
+}
+
+/// One row of a unified diff.
+public struct DiffLine: Sendable, Hashable {
+    public enum Kind: Sendable { case added, removed, context, hunk }
+    public var kind: Kind
+    public var text: String
+
+    /// Parses a unified patch (file headers dropped). Returns the rows and the added/removed counts.
+    public static func parse(_ patch: String) -> (lines: [DiffLine], added: Int, removed: Int) {
+        var lines: [DiffLine] = []
+        var added = 0, removed = 0
+        for raw in patch.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(raw)
+            if line.hasPrefix("+++") || line.hasPrefix("---") || line.hasPrefix("\\") || line.hasPrefix("diff ") || line.hasPrefix("index ") { continue }
+            if line.hasPrefix("@@") {
+                lines.append(DiffLine(kind: .hunk, text: line))
+            } else if line.hasPrefix("+") {
+                added += 1
+                lines.append(DiffLine(kind: .added, text: String(line.dropFirst())))
+            } else if line.hasPrefix("-") {
+                removed += 1
+                lines.append(DiffLine(kind: .removed, text: String(line.dropFirst())))
+            } else if line.hasPrefix("… ") {
+                lines.append(DiffLine(kind: .hunk, text: line))
+            } else if !line.isEmpty || !lines.isEmpty {
+                lines.append(DiffLine(kind: .context, text: line.hasPrefix(" ") ? String(line.dropFirst()) : line))
+            }
+        }
+        while lines.last?.kind == .context && lines.last?.text.isEmpty == true { lines.removeLast() }
+        return (lines, added, removed)
     }
 }
 
@@ -247,6 +327,7 @@ struct DisclosureCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 card.expanded.toggle()
+                card.toggledByReader = true
                 card.onToggle?(card)
             } label: {
                 HStack(spacing: 8) {
@@ -264,8 +345,10 @@ struct DisclosureCardView: View {
                             .truncationMode(.middle)
                     }
                     Spacer(minLength: 8)
+                    if card.added > 0 { Text("+\(card.added)").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(nsColor: DS.green)).monospacedDigit() }
+                    if card.removed > 0 { Text("−\(card.removed)").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(nsColor: DS.red)).monospacedDigit() }
                     if !card.trailing.isEmpty {
-                        Text(card.trailing).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).monospacedDigit()
+                        Text(card.trailing).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: card.failed ? DS.red : DS.fg3)).monospacedDigit()
                     }
                 }
                 .padding(.horizontal, 12)
@@ -273,21 +356,76 @@ struct DisclosureCardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if card.expanded {
+            if card.expanded && !card.isEmpty {
                 Rectangle().fill(Color(nsColor: DS.line)).frame(height: 0.5)
-                ScrollView {
-                    Text(card.body)
-                        .font(card.kind == .tool ? .system(size: 11.5, design: .monospaced) : .system(size: 12.5))
-                        .foregroundStyle(Color(nsColor: DS.fg2))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                switch card.content {
+                case .diff: diff
+                case .terminal(let text): scrolling(text, terminal: true)
+                case .text(let text): scrolling(text, terminal: false)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: DS.card), in: RoundedRectangle(cornerRadius: DS.Radius.card))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color(nsColor: DS.line), lineWidth: 0.5))
+    }
+
+    private func scrolling(_ text: String, terminal: Bool) -> some View {
+        ScrollView {
+            Text(text)
+                .font(card.kind == .tool ? .system(size: 11.5, design: .monospaced) : .system(size: 12.5))
+                .foregroundStyle(Color(nsColor: DS.fg2))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+        }
+        .background(terminal ? Color(nsColor: DS.chip) : .clear)
+    }
+
+    private var diff: some View {
+        let (lines, hidden) = card.visibleDiff
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                HStack(spacing: 0) {
+                    Text(marker(line.kind)).frame(width: 18, alignment: .center).foregroundStyle(Color(nsColor: DS.fg3))
+                    Text(line.text.isEmpty ? " " : line.text).lineLimit(1).truncationMode(.tail)
+                        .foregroundStyle(Color(nsColor: line.kind == .hunk ? DS.fg3 : DS.fg))
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 11.5, design: .monospaced))
+                .frame(height: DisclosureCard.diffRowHeight)
+                .background(background(line.kind))
+            }
+            if hidden > 0 {
+                Button {
+                    card.showAll = true
+                    card.onToggle?(card)
+                } label: {
+                    Text("… \(hidden) more lines").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.fg3))
+                        .padding(.leading, 18).frame(height: 24).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 5)
+        .textSelection(.enabled)
+    }
+
+    private func marker(_ kind: DiffLine.Kind) -> String {
+        switch kind {
+        case .added: "+"
+        case .removed: "−"
+        default: ""
+        }
+    }
+
+    private func background(_ kind: DiffLine.Kind) -> Color {
+        switch kind {
+        case .added: Color(nsColor: DS.addbg)
+        case .removed: Color(nsColor: DS.delbg)
+        default: .clear
+        }
     }
 }

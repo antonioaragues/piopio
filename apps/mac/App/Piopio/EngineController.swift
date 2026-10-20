@@ -11,6 +11,9 @@ final class EngineController {
 
     private(set) var status: Status = .starting
     private(set) var threads: [SessionSummary] = []
+    /// Build: folders added as projects, and their sessions (newest first).
+    private(set) var projects: [ProjectInfo] = []
+    private(set) var buildSessions: [SessionSummary] = []
     private(set) var models: [ModelInfo] = []
     private(set) var defaultModel: ModelRef?
     private(set) var hasKey = Keychain.read(secretOpenRouter) != nil
@@ -181,6 +184,9 @@ final class EngineController {
         Task { [weak self] in
             for await change in client.catalogChanges { self?.applyCatalog(change) }
         }
+        Task { [weak self] in
+            for await projects in client.projectChanges { self?.projects = projects }
+        }
         return hello
     }
 
@@ -250,16 +256,51 @@ final class EngineController {
     func refreshCatalog() async throws {
         guard let client else { return }
         threads = try await client.call("sessions.list", ListSessionsParams(kind: .thread), as: ListSessionsResult.self).sessions
+        buildSessions = try await client.call("sessions.list", ListSessionsParams(kind: .build), as: ListSessionsResult.self).sessions
+        projects = try await client.call("projects.list", Empty(), as: ProjectsListResult.self).projects
     }
 
     private func applyCatalog(_ change: CatalogChanged) {
         let removed = Set(change.removed.map(\.id))
-        var next = threads.filter { !removed.contains($0.ref.id) }
-        for s in change.upserted where s.ref.kind == .thread {
-            if let i = next.firstIndex(where: { $0.ref.id == s.ref.id }) { next[i] = s } else { next.append(s) }
+        func merged(_ list: [SessionSummary], kind: ContainerKind) -> [SessionSummary] {
+            var next = list.filter { !removed.contains($0.ref.id) }
+            for s in change.upserted where s.ref.kind == kind {
+                if let i = next.firstIndex(where: { $0.ref.id == s.ref.id }) { next[i] = s } else { next.append(s) }
+            }
+            return next.sorted { $0.updatedAt > $1.updatedAt }
         }
-        threads = next.sorted { $0.updatedAt > $1.updatedAt }
+        threads = merged(threads, kind: .thread)
+        buildSessions = merged(buildSessions, kind: .build)
         for id in removed { openThreads[id] = nil }
+    }
+
+    // MARK: Projects
+
+    /// Adds a folder as a project; its pi sessions are imported by the engine.
+    func addProject(_ url: URL) async -> ProjectInfo? {
+        guard let client else { return nil }
+        do {
+            let project = try await client.call("projects.add", ProjectsAddParams(path: url.path), as: ProjectsAddResult.self).project
+            try await refreshCatalog()
+            return project
+        } catch {
+            return nil
+        }
+    }
+
+    func removeProject(_ project: ProjectInfo) async {
+        _ = try? await client?.call("projects.remove", ProjectsRemoveParams(id: project.id), as: Empty.self)
+    }
+
+    func sessions(in project: ProjectInfo) -> [SessionSummary] {
+        buildSessions.filter { $0.cwd == project.path }
+    }
+
+    func createBuildSession(in project: ProjectInfo) async -> ContainerRef? {
+        guard let client else { return nil }
+        let ref = try? await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: preferredModel), as: CreateSessionResult.self).ref
+        try? await refreshCatalog()
+        return ref
     }
 
     func createThread(model: ModelRef? = nil) async -> ContainerRef? {
