@@ -14,6 +14,10 @@ struct Composer: View {
     @State private var attachError: String?
     @State private var dropTargeted = false
     @FocusState private var focused: Bool
+    /// Build: @-mention and /command suggestions shown above the box (docs/spec/05-build BR5).
+    @State private var suggestions: [Suggestion] = []
+    @State private var highlighted = 0
+    @State private var sessionCommands: [SessionCommand] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -41,8 +45,17 @@ struct Composer: View {
                 }
                 .padding(.horizontal, 16)
             }
+            if !suggestions.isEmpty { suggestionList }
             box
         }
+        .onChange(of: text) { _, value in if isBuild { suggest(for: value) } }
+        .onChange(of: thread.draft) { _, draft in
+            guard let draft else { return }
+            text = draft
+            thread.draft = nil
+            focused = true
+        }
+        .task(id: thread.ref.id) { if isBuild { sessionCommands = await thread.commands() } }
         .onChange(of: thread.editing?.itemId) { _, id in
             guard id != nil, let original = thread.editing?.original else { return }
             text = original
@@ -79,10 +92,27 @@ struct Composer: View {
                     .onPasteCommand(of: [.fileURL, .png, .tiff, .jpeg]) { providers in paste(providers) }
                     .onKeyPress(.return, phases: .down) { press in
                         if press.modifiers.contains(.shift) { return .ignored }
+                        if !suggestions.isEmpty { accept(suggestions[min(highlighted, suggestions.count - 1)]); return .handled }
                         send(steer: press.modifiers.contains(.option))
                         return .handled
                     }
+                    .onKeyPress(.tab) {
+                        guard !suggestions.isEmpty else { return .ignored }
+                        accept(suggestions[min(highlighted, suggestions.count - 1)])
+                        return .handled
+                    }
+                    .onKeyPress(.downArrow) {
+                        guard !suggestions.isEmpty else { return .ignored }
+                        highlighted = (highlighted + 1) % suggestions.count
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        guard !suggestions.isEmpty else { return .ignored }
+                        highlighted = (highlighted + suggestions.count - 1) % suggestions.count
+                        return .handled
+                    }
                     .onKeyPress(.escape) {
+                        if !suggestions.isEmpty { suggestions = []; return .handled }
                         if thread.editing != nil { cancelEdit(); return .handled }
                         guard thread.isRunning else { return .ignored }
                         Task { await thread.stop() }
@@ -99,6 +129,11 @@ struct Composer: View {
                 }
                 ModelChip(engine: engine, thread: thread)
                 if thread.supportsThinking { ThinkingChip(thread: thread) }
+                if isBuild {
+                    Button { Task { await thread.setPlanMode(!thread.planMode) } } label: { Text("Plan") }
+                        .buttonStyle(ChipStyle(active: thread.planMode))
+                        .help(thread.planMode ? "Plan mode is on: the agent explores and proposes a plan before changing anything" : "Plan mode: explore and propose a plan before changing anything (/plan)")
+                }
                 if let context = thread.state?.context { ContextChip(context: context) }
                 if thread.editing == nil && !isBuild {
                     Button { Task { await thread.setWeb(!thread.webEnabled) } } label: {
@@ -139,7 +174,8 @@ struct Composer: View {
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
         if thread.isRunning { return "Queue a follow-up…" }
-        return isBuild ? "Ask the agent to build, fix or explain something" : "Message"
+        if isBuild && thread.planMode { return "Plan mode: describe what you want; the agent proposes a plan first" }
+        return isBuild ? "Ask, @mention files, or /command…" : "Message"
     }
 
     private var chips: some View {
@@ -219,6 +255,12 @@ struct Composer: View {
     private func send(steer: Bool) {
         let message = text
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // Piopio's own commands run here; pi's templates, skills and extension commands go to the agent as typed.
+        if isBuild, let command = BuiltInCommand.all.first(where: { "/\($0.name)" == message.trimmingCharacters(in: .whitespacesAndNewlines) }) {
+            text = ""
+            command.run(thread)
+            return
+        }
         let files = attachments.map(\.attachment)
         text = ""
         attachments = []
@@ -323,4 +365,144 @@ struct ThinkingChip: View {
     }
 
     private var current: String { thread.state?.thinking ?? "default" }
+}
+
+// MARK: Suggestions (@-mentions and /commands)
+
+/// A row of the suggestion list: a file or folder to mention, or a command.
+enum Suggestion: Hashable, Identifiable {
+    case file(FileMatch)
+    case builtIn(BuiltInCommand)
+    case command(SessionCommand)
+
+    var id: String {
+        switch self {
+        case .file(let f): "file:\(f.path)"
+        case .builtIn(let c): "piopio:\(c.name)"
+        case .command(let c): "pi:\(c.name)"
+        }
+    }
+}
+
+/// Commands the app handles itself (BR5: /plan, /compact, /model, /tree, plus review, commit, new).
+struct BuiltInCommand: Hashable {
+    let name: String
+    let summary: String
+
+    static let all = [
+        BuiltInCommand(name: "plan", summary: "Plan mode on or off: explore and propose a plan before changing anything"),
+        BuiltInCommand(name: "compact", summary: "Summarize older messages to free context"),
+        BuiltInCommand(name: "model", summary: "Choose the model for this session"),
+        BuiltInCommand(name: "tree", summary: "Go back to an earlier message (the session tree)"),
+        BuiltInCommand(name: "review", summary: "Review this session's changes"),
+        BuiltInCommand(name: "commit", summary: "Commit changes"),
+        BuiltInCommand(name: "new", summary: "New session, on a branch or a worktree"),
+    ]
+
+    @MainActor func run(_ thread: ThreadModel) {
+        switch name {
+        case "plan": Task { await thread.setPlanMode(!thread.planMode) }
+        case "compact": Task { await thread.compact() }
+        case "model": thread.showModelPicker = true
+        case "tree": thread.showTree = true
+        case "review": NotificationCenter.default.post(name: .showReview, object: thread.ref.id)
+        case "commit": NotificationCenter.default.post(name: .showCommit, object: thread.ref.id)
+        case "new": NotificationCenter.default.post(name: .newThread, object: nil)
+        default: break
+        }
+    }
+}
+
+extension Composer {
+    /// The word being typed: "@query" at the end of the text.
+    private var mentionQuery: String? {
+        let word = text.split(whereSeparator: { $0 == " " || $0 == "\n" }).last.map(String.init) ?? ""
+        guard text.last != " ", text.last != "\n", word.hasPrefix("@") else { return nil }
+        return String(word.dropFirst())
+    }
+
+    func suggest(for value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
+            let q = trimmed.dropFirst().lowercased()
+            let builtIn = BuiltInCommand.all.filter { q.isEmpty || $0.name.hasPrefix(q) }.map(Suggestion.builtIn)
+            let pi = sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.map(Suggestion.command)
+            suggestions = Array((builtIn + pi).prefix(12))
+            highlighted = 0
+            return
+        }
+        guard let query = mentionQuery else {
+            if !suggestions.isEmpty { suggestions = [] }
+            return
+        }
+        Task {
+            let files = await thread.files(matching: query)
+            guard mentionQuery == query else { return } // typing moved on
+            suggestions = files.map(Suggestion.file)
+            highlighted = 0
+        }
+    }
+
+    func accept(_ suggestion: Suggestion) {
+        switch suggestion {
+        case .file(let f):
+            if let query = mentionQuery { text.removeLast(query.count + 1) }
+            text += "@\(f.path)\(f.kind == .folder ? "/" : "") "
+        case .builtIn(let c):
+            text = ""
+            c.run(thread)
+        case .command(let c):
+            text = "/\(c.name) "
+        }
+        suggestions = []
+    }
+
+    var suggestionList: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                Button { accept(suggestion) } label: {
+                    HStack(spacing: 8) {
+                        icon(suggestion).frame(width: 16)
+                        Text(title(suggestion)).font(.system(size: 12.5, design: isFile(suggestion) ? .monospaced : .default)).lineLimit(1).truncationMode(.head)
+                        Text(subtitle(suggestion)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 26)
+                    .background(index == highlighted ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(6)
+        .glassPanel(radius: DS.Radius.panel, material: .regularMaterial)
+    }
+
+    private func isFile(_ s: Suggestion) -> Bool { if case .file = s { true } else { false } }
+
+    private func title(_ s: Suggestion) -> String {
+        switch s {
+        case .file(let f): f.path
+        case .builtIn(let c): "/\(c.name)"
+        case .command(let c): "/\(c.name)" + (c.hint.map { " \($0)" } ?? "")
+        }
+    }
+
+    private func subtitle(_ s: Suggestion) -> String {
+        switch s {
+        case .file: ""
+        case .builtIn(let c): c.summary
+        case .command(let c): c.description.isEmpty ? (c.kind == .skill ? "Skill" : c.kind == .template ? "Prompt template" : "Extension command") : c.description
+        }
+    }
+
+    @ViewBuilder private func icon(_ s: Suggestion) -> some View {
+        let name: String = switch s {
+        case .file(let f): f.kind == .folder ? "folder" : "doc"
+        case .builtIn: "command"
+        case .command(let c): c.kind == .skill ? "sparkles" : c.kind == .template ? "text.badge.plus" : "puzzlepiece.extension"
+        }
+        Image(systemName: name).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+    }
 }

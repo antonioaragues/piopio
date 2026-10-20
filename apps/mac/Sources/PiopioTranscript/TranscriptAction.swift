@@ -11,6 +11,8 @@ public enum TranscriptAction: Equatable, Sendable {
     case showErrorDetail(itemId: String)
     case copy(itemId: String)
     case restoreCheckpoint(itemId: String)
+    /// Opens another session (a subagent's).
+    case openSession(String)
 
     static let scheme = "piopio-action"
 
@@ -27,6 +29,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .showErrorDetail(let id): c.host = "error"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .copy(let id): c.host = "copy"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .restoreCheckpoint(let id): c.host = "restore"; c.queryItems = [URLQueryItem(name: "item", value: id)]
+        case .openSession(let id): c.host = "session"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         }
         return c.url!
     }
@@ -44,6 +47,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "error": guard let id = q("item") else { return nil }; self = .showErrorDetail(itemId: id)
         case "copy": guard let id = q("item") else { return nil }; self = .copy(itemId: id)
         case "restore": guard let id = q("item") else { return nil }; self = .restoreCheckpoint(itemId: id)
+        case "session": guard let id = q("id") else { return nil }; self = .openSession(id)
         default: return nil
         }
     }

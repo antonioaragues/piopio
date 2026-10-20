@@ -540,6 +540,7 @@ public final class TranscriptDocument {
         guard range.length > 0 else { return }
         storage.enumerateAttribute(.attachment, in: range) { value, _, _ in
             (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
+            (value as? DisclosureAttachment)?.card.onAction = { [weak self] action in self?.handle(action) }
         }
     }
 

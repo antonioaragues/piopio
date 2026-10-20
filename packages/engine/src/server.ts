@@ -9,6 +9,7 @@ import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
 import type { Runtime } from "./runtimes/runtime.js";
+import { searchFiles } from "./files.js";
 import * as gitOps from "./git.js";
 import { Projects } from "./projects.js";
 import { Sessions } from "./sessions.js";
@@ -255,7 +256,7 @@ export class Engine {
 			}
 			case "sessions.configure": {
 				const p = params as Params<"sessions.configure">;
-				await this.sessions.configure(p.ref, { ...(p.model ? { model: p.model } : {}), ...(p.thinking ? { thinking: p.thinking } : {}), ...(p.web !== undefined ? { web: p.web } : {}), ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}) });
+				await this.sessions.configure(p.ref, { ...(p.model ? { model: p.model } : {}), ...(p.thinking ? { thinking: p.thinking } : {}), ...(p.web !== undefined ? { web: p.web } : {}), ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.planMode !== undefined ? { planMode: p.planMode } : {}) });
 				return {};
 			}
 			case "sessions.rename": {
@@ -296,6 +297,27 @@ export class Engine {
 			case "sessions.restore": {
 				const p = params as Params<"sessions.restore">;
 				return { files: await (await this.sessions.build(p.ref)).restore(p.checkpointId, p.paths, p.dryRun ?? false) } satisfies Result<"sessions.restore">;
+			}
+			case "sessions.commands": {
+				const p = params as Params<"sessions.commands">;
+				return { commands: (await this.sessions.build(p.ref)).commands() } satisfies Result<"sessions.commands">;
+			}
+			case "sessions.tree": {
+				const p = params as Params<"sessions.tree">;
+				return { nodes: (await this.sessions.build(p.ref)).tree() } satisfies Result<"sessions.tree">;
+			}
+			case "sessions.navigate": {
+				const p = params as Params<"sessions.navigate">;
+				return (await (await this.sessions.build(p.ref)).navigate(p.entryId)) satisfies Result<"sessions.navigate">;
+			}
+			case "sessions.compact": {
+				const p = params as Params<"sessions.compact">;
+				await (await this.sessions.build(p.ref)).compact();
+				return {};
+			}
+			case "projects.files": {
+				const p = params as Params<"projects.files">;
+				return { files: await searchFiles(this.folder(p), p.query, p.limit ?? 30) } satisfies Result<"projects.files">;
 			}
 			case "sessions.finish": {
 				const p = params as Params<"sessions.finish">;

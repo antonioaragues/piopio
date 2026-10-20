@@ -201,7 +201,10 @@ public final class DisclosureCard: @unchecked Sendable {
     public var toggledByReader = false
     /// Diff cards show the first `previewLines` until "more lines" is clicked.
     public var showAll = false
+    /// A link in the header (a subagent's "Open").
+    public var action: (title: String, action: TranscriptAction)?
     @ObservationIgnored var onToggle: (@MainActor (DisclosureCard) -> Void)?
+    @ObservationIgnored var onAction: (@MainActor (TranscriptAction) -> Void)?
 
     public init(kind: Kind, title: String, detail: String = "", trailing: String = "", body: String) {
         self.kind = kind
@@ -359,6 +362,12 @@ struct DisclosureCardView: View {
                     if card.removed > 0 { Text("−\(card.removed)").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(nsColor: DS.red)).monospacedDigit() }
                     if !card.trailing.isEmpty {
                         Text(card.trailing).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: card.failed ? DS.red : card.waiting ? DS.amber : DS.fg3)).monospacedDigit()
+                    }
+                    if let action = card.action {
+                        Button(action.title) { card.onAction?(action.action) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
                     }
                 }
                 .padding(.horizontal, 12)

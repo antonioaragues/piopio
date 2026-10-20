@@ -164,13 +164,29 @@ nonisolated struct ItemRenderer: Sendable {
             card.added = parsed.added
             card.removed = parsed.removed
             card.expanded = true
+        case .todos(let todos):
+            let done = todos.filter { $0.status == .done }.count
+            let current = todos.first { $0.status == .inProgress }?.text
+            card = DisclosureCard(tool: title, detail: "\(done) of \(todos.count) done" + (current.map { " · \($0)" } ?? ""), trailing: "", content: .text(todos.map { "\($0.status == .done ? "✓" : $0.status == .inProgress ? "▸" : "○")  \($0.text)" }.joined(separator: "\n")))
+        case .task(let sessionId, let status, let cost):
+            var trailing = [String]()
+            if status == "error" { trailing.append("failed") } else if status == "stopped" { trailing.append("stopped") }
+            if let cost, cost > 0 { trailing.append(cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)) }
+            if trailing.isEmpty, !duration.isEmpty { trailing.append(duration) }
+            card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .text(t.output ?? ""))
+            if let sessionId { card.action = ("Open", .openSession(sessionId)) }
         case .terminal(_, let exitCode):
             var trailing = [String]()
             if let exitCode, exitCode != 0 { trailing.append("exit \(exitCode)") }
             if !duration.isEmpty { trailing.append(duration) }
             card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .terminal(t.output ?? ""))
         default:
-            card = DisclosureCard(tool: title, detail: detail, trailing: duration, content: .text(t.output ?? ""))
+            var body = t.output ?? ""
+            if t.tool == "propose_plan", case .array(let steps)? = t.args?["steps"] {
+                body = steps.enumerated().map { "\($0.offset + 1). \($0.element.stringValue ?? "")" }.joined(separator: "\n") + (body.isEmpty ? "" : "\n\n\(body)")
+            }
+            card = DisclosureCard(tool: title, detail: detail, trailing: duration, content: .text(body))
+            card.expanded = t.tool == "propose_plan"
         }
         card.failed = failed
         switch t.status {
@@ -215,6 +231,12 @@ nonisolated struct ItemRenderer: Sendable {
             return (running ? "Finding files" : "Found files", t.args?["pattern"]?.stringValue ?? path)
         case "ls":
             return (running ? "Listing" : "Listed", path.isEmpty ? "." : path)
+        case "todo":
+            return (running ? "Updating the checklist" : "Checklist", "")
+        case "task":
+            return (running ? "Subagent working" : "Subagent", t.args?["description"]?.stringValue ?? "")
+        case "propose_plan":
+            return (running ? "Proposed a plan" : "Plan", t.args?["summary"]?.stringValue ?? "")
         case "ask_user":
             return (running ? "Waiting for your answer" : "Asked you", t.args?["question"]?.stringValue ?? "")
         case "notify_user":

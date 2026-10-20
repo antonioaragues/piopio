@@ -158,6 +158,8 @@ final class ThreadModel {
             break // handled by the document
         case .restoreCheckpoint(let id):
             if case .checkpoint(let c) = document.item(id) { restoring = c }
+        case .openSession(let id):
+            NotificationCenter.default.post(name: .selectBuildSession, object: id)
         }
     }
 
@@ -220,6 +222,50 @@ final class ThreadModel {
     }
 
     /// `"default"` returns to the model's default.
+    // MARK: Composer, plan mode and tree (Build)
+
+    /// Text to put in the composer (a message brought back from the session tree).
+    var draft: String?
+    var showTree = false
+    var planMode: Bool { state?.planMode ?? false }
+    var todos: [Todo] { state?.todos ?? [] }
+    /// The session's folder (a worktree for worktree sessions).
+    var cwd: String? { engine?.buildSessions.first { $0.ref.id == ref.id }?.cwd }
+
+    func setPlanMode(_ on: Bool) async {
+        await call("sessions.configure", ConfigureParams(ref: ref, planMode: on))
+    }
+
+    func compact() async {
+        await call("sessions.compact", RefParams(ref: ref))
+    }
+
+    func commands() async -> [SessionCommand] {
+        guard let client = engine?.client else { return [] }
+        return (try? await client.call("sessions.commands", RefParams(ref: ref), as: CommandsResult.self).commands) ?? []
+    }
+
+    func files(matching query: String) async -> [FileMatch] {
+        guard let client = engine?.client, let cwd else { return [] }
+        return (try? await client.call("projects.files", FilesParams(cwd: cwd, query: query, limit: 12), as: FilesResult.self).files) ?? []
+    }
+
+    func tree() async -> [TreeNode] {
+        guard let client = engine?.client else { return [] }
+        return (try? await client.call("sessions.tree", RefParams(ref: ref), as: TreeResult.self).nodes) ?? []
+    }
+
+    func navigate(to node: TreeNode) async {
+        guard let client = engine?.client else { return }
+        do {
+            let result = try await client.call("sessions.navigate", NavigateParams(ref: ref, entryId: node.entryId), as: NavigateResult.self)
+            if let text = result.editorText { draft = text }
+            error = nil
+        } catch {
+            report(error)
+        }
+    }
+
     // MARK: Checkpoints and changes (Build)
 
     /// Bumped on every event batch, so views that read the document's items refresh.

@@ -1,10 +1,10 @@
 /** Build runtime: one pi-coding-agent SDK session, persisted as a pi CLI-compatible JSONL file. */
 import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager, SettingsManager, type AgentSession } from "@earendil-works/pi-coding-agent";
-import { approvalsExtension, checkpointsExtension, notifyExtension, type ApprovalMode, type Rule } from "@piopio/pi-extensions";
+import { approvalsExtension, checkpointsExtension, notifyExtension, planExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge } from "@piopio/pi-extensions";
 import type { ApprovalRule, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
 import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
-import { TimelineBuilder, type PiMessage } from "../timeline/builder.js";
+import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage } from "../timeline/builder.js";
 import { SdkEventMapper } from "../timeline/pi-sdk.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { recorder } from "./recorder.js";
@@ -31,6 +31,10 @@ export type BuildOpenOptions = {
 	checkpoints: CheckpointStore;
 	/** The session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (kind: "waiting" | "notify", message: string) => void;
+	/** Plan mode (piopio-plan), kept by the catalog so it survives a reopen. */
+	plan: { active(): boolean; setActive(on: boolean): void };
+	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
+	runTask?: SubagentBridge["run"];
 };
 
 export class BuildRuntime implements Runtime {
@@ -47,6 +51,7 @@ export class BuildRuntime implements Runtime {
 		private readonly approvalMode: () => ApprovalMode,
 		private readonly cwd: string,
 		private readonly checkpoints: CheckpointStore,
+		private readonly plan: BuildOpenOptions["plan"],
 	) {
 		this.builder = new TimelineBuilder(ref);
 	}
@@ -94,6 +99,20 @@ export class BuildRuntime implements Runtime {
 						return { decision: response.decision ?? "deny", ...(response.text ? { note: response.text } : {}) };
 					},
 				}),
+				todosExtension(),
+				planExtension({
+					active: o.plan.active,
+					setActive: (on) => {
+						o.plan.setActive(on);
+						runtime?.planChanged();
+					},
+					propose: async (plan, signal) => {
+						const response = await broker.ask({ kind: "plan", title: plan.summary, steps: plan.steps, callId: plan.callId }, signal);
+						if (!response) return undefined;
+						return { approved: response.decision === "allow" || response.decision === "always", ...(response.text ? { note: response.text } : {}) };
+					},
+				}),
+				subagentsExtension(o.runTask ? { run: o.runTask } : undefined),
 				notifyExtension({
 					ask: async (question, signal) => {
 						const response = await broker.ask({ kind: "question", title: question.question, callId: question.callId, ...(question.options ? { options: question.options } : {}) }, signal);
@@ -117,7 +136,7 @@ export class BuildRuntime implements Runtime {
 			resourceLoader,
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
-		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints);
+		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan);
 		broker.onAdded = (prompt) => o.onAttention?.("waiting", prompt.detail ? `${prompt.title}: ${prompt.detail}` : prompt.title);
 		const bound = runtime;
 		await session.bindExtensions({ mode: "rpc", uiContext: uiBridge(broker, (level, text) => bound.note(level, text)) });
@@ -202,7 +221,13 @@ export class BuildRuntime implements Runtime {
 		return (since === "session" ? all[0] : all.at(-1))?.checkpointId;
 	}
 
-	private attach(): void {
+	private mapper!: SdkEventMapper;
+
+	/**
+	 * Rebuilds the timeline from the session (pi messages plus Piopio's checkpoint entries). Also after a
+	 * compaction or a jump in the session tree, when the messages change under the live numbering.
+	 */
+	private rebuild(emit: boolean): void {
 		const messages = this.session.messages as unknown as PiMessage[];
 		this.builder.reset(messages, (i) => SdkEventMapper.idOf(i), false);
 		for (const entry of this.session.sessionManager.getBranch()) {
@@ -210,7 +235,22 @@ export class BuildRuntime implements Runtime {
 			const { beforeCallId, ...item } = entry.data as CheckpointItem & { beforeCallId?: string };
 			this.builder.checkpoint(item, beforeCallId ? `tool:${beforeCallId}` : this.builder.firstAfter(item.at), false);
 		}
-		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, approvalMode: this.approvalMode(), prompts: [], ...this.context() });
+		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, approvalMode: this.approvalMode(), planMode: this.plan.active(), prompts: this.broker.list(), ...this.context() });
+		this.mapper = new SdkEventMapper(this.builder, messages.length);
+		if (emit) {
+			this.builder.flush();
+			this.builder.resnapshot();
+			this.emitter.emit(this.builder.flush());
+		}
+	}
+
+	planChanged(): void {
+		this.builder.setState({ planMode: this.plan.active() });
+		this.emitter.emit(this.builder.flush());
+	}
+
+	private attach(): void {
+		this.rebuild(false);
 		this.builder.flush();
 		// Waiting on the user: the session shows "waiting for you" and an approval's tool card waits too.
 		this.broker.onChange = (prompts, changed, added) => {
@@ -219,13 +259,14 @@ export class BuildRuntime implements Runtime {
 			this.builder.setState({ prompts, status });
 			this.emitter.emit(this.builder.flush());
 		};
-		const mapper = new SdkEventMapper(this.builder, messages.length);
 		const record = recorder("pi-sdk", this.ref.id);
 		this.unsubscribe = this.session.subscribe((event) => {
 			record?.(event);
-			mapper.apply(event as never);
-			if (event.type === "message_end" || event.type === "agent_settled" || event.type === "compaction_end") this.builder.setState(this.context());
+			this.mapper.apply(event as never);
+			if (event.type === "message_end" || event.type === "agent_settled") this.builder.setState(this.context());
 			this.emitter.emit(this.builder.flush());
+			// Compaction replaces older messages with a summary: renumber from the session.
+			if (event.type === "compaction_end") this.rebuild(true);
 		});
 	}
 
@@ -266,7 +307,8 @@ export class BuildRuntime implements Runtime {
 		await this.session.abort();
 	}
 
-	async configure(change: { model?: ModelRef; thinking?: string; approvalMode?: ApprovalMode }): Promise<void> {
+	async configure(change: { model?: ModelRef; thinking?: string; approvalMode?: ApprovalMode; planMode?: boolean }): Promise<void> {
+		if (change.planMode !== undefined) this.plan.setActive(change.planMode);
 		if (change.model) {
 			const model = (await this.hub.buildRuntime()).getModel(change.model.provider, change.model.id);
 			if (!model) throw new EngineError("INVALID", `Unknown model ${change.model.provider}/${change.model.id}`);
@@ -274,8 +316,52 @@ export class BuildRuntime implements Runtime {
 			this.model = change.model;
 		}
 		if (change.thinking) this.session.setThinkingLevel(change.thinking as never);
-		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, approvalMode: this.approvalMode(), ...this.context() });
+		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, approvalMode: this.approvalMode(), planMode: this.plan.active(), ...this.context() });
 		this.emitter.emit(this.builder.flush());
+	}
+
+	// ── Composer and tree (docs/spec/05-build BR5, BR6) ─────────────────────
+
+	/** pi prompt templates, skills and extension commands, for `/`. */
+	commands(): { name: string; description: string; kind: "template" | "skill" | "extension"; hint?: string }[] {
+		const templates = this.session.promptTemplates.map((t) => ({ name: t.name, description: t.description, kind: "template" as const, ...(t.argumentHint ? { hint: t.argumentHint } : {}) }));
+		const skills = this.session.resourceLoader.getSkills().skills.map((s) => ({ name: `skill:${s.name}`, description: s.description, kind: "skill" as const }));
+		const extensions = this.session.extensionRunner.getRegisteredCommands().map((c) => ({ name: c.invocationName, description: (c as { description?: string }).description ?? "", kind: "extension" as const }));
+		return [...templates, ...skills, ...extensions].sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	/** Your messages in pi's session tree; `depth` grows at each branch point. */
+	tree(): { entryId: string; text: string; at: string; depth: number; current: boolean; branches: number }[] {
+		const onPath = new Set(this.session.sessionManager.getBranch().map((e) => e.id));
+		const out: { entryId: string; text: string; at: string; depth: number; current: boolean; branches: number }[] = [];
+		type Node = ReturnType<AgentSession["sessionManager"]["getTree"]>[number];
+		const walk = (nodes: readonly Node[], depth: number) => {
+			const nested = nodes.length > 1 ? depth + 1 : depth;
+			for (const node of nodes) {
+				const entry = node.entry as { id: string; type: string; timestamp?: string; message?: PiMessage };
+				if (entry.type === "message" && entry.message?.role === "user") {
+					const text = contentText((entry.message as { content: string | PiContentBlock[] }).content).replace(/\s+/g, " ").trim();
+					out.push({ entryId: entry.id, text: text.slice(0, 140), at: entry.timestamp ?? "", depth: nested, current: onPath.has(entry.id), branches: node.children.length });
+				}
+				walk(node.children, nested);
+			}
+		};
+		walk(this.session.sessionManager.getTree(), 0);
+		return out;
+	}
+
+	/** Moves to another point of the tree (pi's /tree). Returns the message's text when it's one of yours. */
+	async navigate(entryId: string): Promise<{ editorText?: string }> {
+		if (this.session.isStreaming) throw new EngineError("BUSY", "Stop the agent before moving in the tree.");
+		const result = await this.session.navigateTree(entryId);
+		this.rebuild(true);
+		return result.editorText ? { editorText: result.editorText } : {};
+	}
+
+	async compact(): Promise<void> {
+		if (this.session.isStreaming) throw new EngineError("BUSY", "Wait for the agent to finish before compacting.");
+		await this.session.compact();
+		this.rebuild(true);
 	}
 
 	async clearQueue(): Promise<void> {

@@ -127,3 +127,26 @@ function parentOf(path: string): string {
 function expandHome(path: string, home: string): string {
 	return path === "~" ? home : path.startsWith("~/") ? `${home}${path.slice(1)}` : path;
 }
+
+/** Programs that only read (plan mode lets these run). Output redirection makes any of them a write. */
+const READ_ONLY = new Set(["ls", "cat", "head", "tail", "grep", "rg", "find", "fd", "wc", "pwd", "echo", "which", "tree", "du", "file", "stat", "less", "sort", "uniq", "cut", "jq", "diff", "basename", "dirname", "realpath", "date"]);
+const READ_ONLY_SUB: Record<string, Set<string>> = {
+	git: new Set(["status", "log", "diff", "show", "branch", "blame", "ls-files", "rev-parse", "remote", "describe", "shortlog", "grep"]),
+	npm: new Set(["ls", "view", "outdated", "--version"]),
+	pnpm: new Set(["ls", "list", "why", "outdated", "--version"]),
+	swift: new Set(["--version"]),
+	node: new Set(["--version"]),
+};
+
+/** True when every part of the command only reads (plan mode, docs/spec/05-build §4 piopio-plan). */
+export function readOnlyCommand(command: string): boolean {
+	if (/[^<]>|>>|\btee\b|`|\$\(/.test(command)) return false;
+	const segments = commandSegments(command);
+	return segments.length > 0 && segments.every((segment) => {
+		const [program, sub] = segment.split(/\s+/);
+		if (!program) return false;
+		if (READ_ONLY_SUB[program]) return Boolean(sub && READ_ONLY_SUB[program]!.has(sub));
+		if (program === "sed") return /^sed\s+-n\b/.test(segment);
+		return READ_ONLY.has(program);
+	});
+}

@@ -52,6 +52,10 @@ export const ToolDetails = Type.Union([
 	Type.Object({ type: Type.Literal("file"), path: Type.String(), language: Type.Optional(Type.String()) }),
 	Type.Object({ type: Type.Literal("terminal"), command: Type.String(), exitCode: Type.Optional(Type.Number()) }),
 	Type.Object({ type: Type.Literal("json"), value: Type.Unknown() }),
+	/** The agent's checklist (piopio-todos). */
+	Type.Object({ type: Type.Literal("todos"), items: Type.Array(Type.Object({ text: Type.String(), status: literals("pending", "in_progress", "done") })) }),
+	/** A subagent (piopio-subagents): its child session, once started, and the outcome. */
+	Type.Object({ type: Type.Literal("task"), sessionId: Type.Optional(Type.String()), status: Type.Optional(literals("done", "error", "stopped")), costUsd: Type.Optional(Type.Number()) }),
 ]);
 export type ToolDetails = Static<typeof ToolDetails>;
 
@@ -179,7 +183,7 @@ export type ApprovalRule = Static<typeof ApprovalRule>;
  */
 export const PendingPrompt = Type.Object({
 	id: Type.String(),
-	kind: literals("approval", "question", "confirm", "select", "input"),
+	kind: literals("approval", "question", "confirm", "select", "input", "plan"),
 	title: Type.String(),
 	message: Type.Optional(Type.String()),
 	/** Monospace detail: the command, or the path. */
@@ -194,6 +198,8 @@ export const PendingPrompt = Type.Object({
 	/** Questions and selects: the choices offered. */
 	options: Type.Optional(Type.Array(Type.String())),
 	placeholder: Type.Optional(Type.String()),
+	/** Plans (propose_plan): the steps. Approve = decision "allow"; keep planning = "deny" with a note. */
+	steps: Type.Optional(Type.Array(Type.String())),
 	at: Type.String(),
 });
 export type PendingPrompt = Static<typeof PendingPrompt>;
@@ -225,6 +231,9 @@ export const SessionState = Type.Object({
 	/** Build: approval mode and what the session is waiting on you for. */
 	approvalMode: Type.Optional(ApprovalMode),
 	prompts: Type.Optional(Type.Array(PendingPrompt)),
+	/** Build: the agent's current checklist, and whether plan mode is on. */
+	todos: Type.Optional(Type.Array(Type.Object({ text: Type.String(), status: literals("pending", "in_progress", "done") }))),
+	planMode: Type.Optional(Type.Boolean()),
 	/** How full the model's context is (Build). `tokens` is null right after a compaction. */
 	context: Type.Optional(Type.Object({ tokens: Type.Union([Type.Number(), Type.Null()]), window: Type.Number() })),
 });
@@ -268,6 +277,8 @@ export const SessionSummary = Type.Object({
 	/** Build: the project folder (differs from `cwd` for worktree sessions). */
 	projectPath: Type.Optional(Type.String()),
 	worktree: Type.Optional(WorktreeInfo),
+	/** A subagent's session: the parent session and the `task` call that started it. */
+	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -429,7 +440,7 @@ export const methods = {
 		result: Type.Object({ filename: Type.String(), mimeType: Type.String(), content: Type.String() }),
 	},
 	"sessions.configure": {
-		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()), web: Type.Optional(Type.Boolean()), approvalMode: Type.Optional(ApprovalMode) }),
+		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()), web: Type.Optional(Type.Boolean()), approvalMode: Type.Optional(ApprovalMode), planMode: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({}),
 	},
 	"sessions.rename": {
@@ -508,6 +519,28 @@ export const methods = {
 	"git.sync": { params: Type.Object({ cwd: Type.String(), action: literals("push", "pull", "fetch") }), result: Type.Object({ output: Type.String() }) },
 	/** A branch name for a new session, from its prompt. */
 	"git.suggestBranch": { params: Type.Object({ prompt: Type.String() }), result: Type.Object({ branch: Type.String() }) },
+	/** Build: what `/` offers besides Piopio's own commands: pi prompt templates, skills and extension commands. */
+	"sessions.commands": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({ commands: Type.Array(Type.Object({ name: Type.String(), description: Type.String(), kind: literals("template", "skill", "extension"), hint: Type.Optional(Type.String()) })) }),
+	},
+	/** Build: pi's session tree, as your messages (BR6). `depth` grows at each branch point; `current` = on the active path. */
+	"sessions.tree": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({ nodes: Type.Array(Type.Object({ entryId: Type.String(), text: Type.String(), at: Type.String(), depth: Type.Number(), current: Type.Boolean(), branches: Type.Number() })) }),
+	},
+	/** Build: moves to another point of the tree. Going to one of your messages returns its text for the composer. */
+	"sessions.navigate": {
+		params: Type.Object({ ref: ContainerRef, entryId: Type.String() }),
+		result: Type.Object({ editorText: Type.Optional(Type.String()) }),
+	},
+	/** Build: summarizes older messages to free context. */
+	"sessions.compact": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({}) },
+	/** Files and folders for @-mentions: fuzzy match on the path, .gitignore respected. */
+	"projects.files": {
+		params: Type.Object({ cwd: Type.String(), query: Type.String(), limit: Type.Optional(Type.Number()) }),
+		result: Type.Object({ files: Type.Array(Type.Object({ path: Type.String(), kind: literals("file", "folder") })) }),
+	},
 	/** Answers a pending prompt (approval, question, confirm, select, input). */
 	"sessions.respond": {
 		params: Type.Object({ ref: ContainerRef, promptId: Type.String(), response: PromptResponse }),

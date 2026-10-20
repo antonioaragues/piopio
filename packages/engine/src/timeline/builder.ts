@@ -112,9 +112,14 @@ export class TimelineBuilder {
 					t.status = r.isError ? failedStatus(t.output) : "done";
 					const details = endDetails(t.tool, t.args, { details: r.details }, t.output, Boolean(r.isError));
 					if (details) t.details = details;
+					this.addTaskCost(t);
 				}
 			}
 		});
+		// The checklist is the latest todo call on this branch.
+		const lastTodo = [...tools.values()].reverse().find((t) => t.details?.type === "todos");
+		if (lastTodo?.details?.type === "todos") this.state.todos = lastTodo.details.items;
+		else delete this.state.todos;
 		if (emit) this.pending.push({ type: "resnapshot", snapshot: this.snapshot() });
 	}
 
@@ -224,6 +229,7 @@ export class TimelineBuilder {
 		}
 		const details = startDetails(tool, args);
 		const item: ToolItem = { kind: "tool", id, at: iso(), callId, tool, args, status: "running", ...(details ? { details } : {}), ...(parentCallId ? { parentCallId } : {}) };
+		if (details?.type === "todos") this.setState({ todos: details.items });
 		this.push(item);
 		this.pending.push({ type: "item.added", item: structuredClone(item) });
 	}
@@ -234,6 +240,21 @@ export class TimelineBuilder {
 		if (!item || item.status === status || (status === "running" && item.status !== "pending_approval")) return;
 		item.status = status;
 		this.pending.push({ type: "item.updated", item: structuredClone(item) });
+	}
+
+	/** A subagent's child session, known once it starts (shown on the task card, openable). */
+	toolSession(callId: string, sessionId: string): void {
+		const item = this.get(`tool:${callId}`) as ToolItem | undefined;
+		if (!item || (item.details?.type === "task" && item.details.sessionId === sessionId)) return;
+		item.details = { type: "task", sessionId };
+		this.pending.push({ type: "item.updated", item: structuredClone(item) });
+	}
+
+	/** A finished subagent's cost counts toward this session (spec: children count toward the parent's cost). */
+	private addTaskCost(item: ToolItem): boolean {
+		if (item.details?.type !== "task" || !item.details.costUsd) return false;
+		this.state.usage.costUsd += item.details.costUsd;
+		return true;
 	}
 
 	toolOutput(callId: string, update: { set: string } | { trimStart?: number; append?: string }): void {
@@ -256,6 +277,7 @@ export class TimelineBuilder {
 		item.status = isError ? failedStatus(item.output) : "done";
 		const details = endDetails(item.tool, item.args, result, item.output, isError);
 		if (details) item.details = details;
+		if (this.addTaskCost(item)) this.pending.push({ type: "state", state: structuredClone(this.state) });
 		if (durationMs !== undefined) item.durationMs = durationMs;
 		this.pending.push({ type: "item.updated", item: structuredClone(item) });
 	}

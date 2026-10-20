@@ -106,6 +106,9 @@ export class ModelHub {
  *   write: <path> | <content>        write (\n in content for new lines)
  *   edit: <path> | <old> | <new>     edit
  *   ask: <question> | <option>…      ask_user
+ *   todo: <item> (done) | <item> (in_progress) | <item>…   todo
+ *   plan: <summary> | <step>…          propose_plan
+ *   task: <title> | <prompt>           task (a subagent)
  */
 function installEcho(faux: FauxHandle): void {
 	const step = (context: { messages: readonly { role: string; content: unknown }[] }) => {
@@ -131,6 +134,18 @@ function scriptedTools(text: string): { name: string; args: Record<string, unkno
 		else if (line.startsWith("write: ")) {
 			const [path, content = ""] = parts(line.slice(7));
 			calls.push({ name: "write", args: { path, content } });
+		} else if (line.startsWith("todo: ")) {
+			const items = parts(line.slice(6)).map((p) => {
+				const m = /^(.*?)\s*\((done|in_progress|pending)\)$/.exec(p);
+				return m ? { text: m[1]!, status: m[2]! } : { text: p, status: "pending" };
+			});
+			calls.push({ name: "todo", args: { items } });
+		} else if (line.startsWith("plan: ")) {
+			const [summary, ...steps] = parts(line.slice(6));
+			calls.push({ name: "propose_plan", args: { summary, steps } });
+		} else if (line.startsWith("task: ")) {
+			const [description, ...prompt] = parts(line.slice(6));
+			calls.push({ name: "task", args: { description, prompt: prompt.join(" | ").replaceAll(" ; ", "\n") } });
 		} else if (line.startsWith("ask: ")) {
 			const [question, ...options] = parts(line.slice(5));
 			calls.push({ name: "ask_user", args: { question, ...(options.length ? { options } : {}) } });

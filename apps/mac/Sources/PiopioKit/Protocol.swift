@@ -113,6 +113,16 @@ public enum ToolDetails: Sendable, Hashable {
     case diff(path: String, diff: String)
     case file(path: String, language: String?)
     case terminal(command: String, exitCode: Int?)
+    case todos([Todo])
+    /// A subagent: its child session once started, and how it ended.
+    case task(sessionId: String?, status: String?, costUsd: Double?)
+}
+
+/// An item of the agent's checklist (piopio-todos).
+public struct Todo: Codable, Sendable, Hashable {
+    public enum Status: String, Codable, Sendable { case pending, inProgress = "in_progress", done }
+    public var text: String
+    public var status: Status
 }
 
 extension ToolItem {
@@ -121,6 +131,16 @@ extension ToolItem {
         switch type {
         case "diff": return d["path"]?.stringValue.map { .diff(path: $0, diff: d["diff"]?.stringValue ?? "") }
         case "file": return d["path"]?.stringValue.map { .file(path: $0, language: d["language"]?.stringValue) }
+        case "todos":
+            guard case .array(let items)? = d["items"] else { return nil }
+            return .todos(items.compactMap { item in
+                guard let text = item["text"]?.stringValue, let status = item["status"]?.stringValue.flatMap(Todo.Status.init(rawValue:)) else { return nil }
+                return Todo(text: text, status: status)
+            })
+        case "task":
+            var cost: Double?
+            if case .number(let c)? = d["costUsd"] { cost = c }
+            return .task(sessionId: d["sessionId"]?.stringValue, status: d["status"]?.stringValue, costUsd: cost)
         case "terminal":
             guard let command = d["command"]?.stringValue else { return nil }
             if case .number(let code)? = d["exitCode"] { return .terminal(command: command, exitCode: Int(code)) }
@@ -244,6 +264,9 @@ public struct SessionState: Codable, Sendable, Hashable {
     /// Build: approval mode and what the session waits on you for.
     public var approvalMode: ApprovalMode?
     public var prompts: [PendingPrompt]?
+    /// Build: the agent's checklist, and plan mode.
+    public var todos: [Todo]?
+    public var planMode: Bool?
     public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, tools: Tools? = nil, usage: Usage, context: Context? = nil) {
         self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.tools = tools; self.usage = usage; self.context = context
     }
@@ -306,6 +329,9 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// Build: the project folder (differs from `cwd` for worktree sessions), and the worktree if any.
     public var projectPath: String?
     public var worktree: WorktreeInfo?
+    /// A subagent's session: the parent session and its `task` call.
+    public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String }
+    public var parent: Parent?
 }
 
 // MARK: Method params / results
@@ -332,6 +358,43 @@ public struct CreateSessionParams: Encodable, Sendable {
         self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode
     }
 }
+
+// MARK: Composer and tree (Build)
+
+public struct SessionCommand: Codable, Sendable, Hashable, Identifiable {
+    public enum Kind: String, Codable, Sendable { case template, skill, `extension` }
+    public var name: String
+    public var description: String
+    public var kind: Kind
+    public var hint: String?
+    public var id: String { name }
+}
+public struct CommandsResult: Decodable, Sendable { public var commands: [SessionCommand] }
+
+public struct TreeNode: Codable, Sendable, Hashable, Identifiable {
+    public var entryId: String
+    public var text: String
+    public var at: String
+    public var depth: Int
+    public var current: Bool
+    public var branches: Int
+    public var id: String { entryId }
+}
+public struct TreeResult: Decodable, Sendable { public var nodes: [TreeNode] }
+public struct NavigateParams: Encodable, Sendable { public var ref: ContainerRef; public var entryId: String; public init(ref: ContainerRef, entryId: String) { self.ref = ref; self.entryId = entryId } }
+public struct NavigateResult: Decodable, Sendable { public var editorText: String? }
+
+public struct FileMatch: Codable, Sendable, Hashable, Identifiable {
+    public enum Kind: String, Codable, Sendable { case file, folder }
+    public var path: String
+    public var kind: Kind
+    public var id: String { path }
+}
+public struct FilesParams: Encodable, Sendable {
+    public var cwd: String; public var query: String; public var limit: Int?
+    public init(cwd: String, query: String, limit: Int? = nil) { self.cwd = cwd; self.query = query; self.limit = limit }
+}
+public struct FilesResult: Decodable, Sendable { public var files: [FileMatch] }
 
 // MARK: Git (Build)
 
@@ -473,8 +536,9 @@ public struct ConfigureParams: Encodable, Sendable {
     public var thinking: String?
     public var web: Bool?
     public var approvalMode: ApprovalMode?
-    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil, web: Bool? = nil, approvalMode: ApprovalMode? = nil) {
-        self.ref = ref; self.model = model; self.thinking = thinking; self.web = web; self.approvalMode = approvalMode
+    public var planMode: Bool?
+    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil, web: Bool? = nil, approvalMode: ApprovalMode? = nil, planMode: Bool? = nil) {
+        self.ref = ref; self.model = model; self.thinking = thinking; self.web = web; self.approvalMode = approvalMode; self.planMode = planMode
     }
 }
 
@@ -495,7 +559,7 @@ public struct ApprovalRule: Codable, Sendable, Hashable, Identifiable {
 
 /// Something a session waits on you for: an approval, a question, or an extension's confirm/select/input.
 public struct PendingPrompt: Codable, Sendable, Hashable, Identifiable {
-    public enum Kind: String, Codable, Sendable { case approval, question, confirm, select, input }
+    public enum Kind: String, Codable, Sendable { case approval, question, confirm, select, input, plan }
     public struct SuggestedRule: Codable, Sendable, Hashable { public var kind: ApprovalRule.Kind; public var pattern: String }
     public var id: String
     public var kind: Kind
@@ -508,6 +572,8 @@ public struct PendingPrompt: Codable, Sendable, Hashable, Identifiable {
     public var rule: SuggestedRule?
     public var options: [String]?
     public var placeholder: String?
+    /// Plans: the steps (approve = decision allow; keep planning = deny with a note).
+    public var steps: [String]?
     public var at: String
 }
 

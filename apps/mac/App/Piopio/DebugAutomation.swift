@@ -68,9 +68,15 @@ enum DebugAutomation {
                 }
                 guard let ref = await engine.createBuildSession(in: project) else { return }
                 NotificationCenter.default.post(name: .selectBuildSession, object: ref.id)
-                guard let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] else { return }
                 let session = engine.thread(ref)
                 await session.open()
+                // PIOPIO_DEMO_PLAN=1: plan mode first; PIOPIO_DEMO_DRAFT: text left in the composer (shows @ and / suggestions).
+                if env["PIOPIO_DEMO_PLAN"] == "1" { await session.setPlanMode(true) }
+                if let draft = env["PIOPIO_DEMO_DRAFT"] {
+                    try? await Task.sleep(for: .seconds(1))
+                    session.draft = draft
+                }
+                guard let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] else { return }
                 await session.send(prompt)
                 // PIOPIO_DEMO_BUILD_FOLLOWUP: a second turn; PIOPIO_DEMO_REVIEW=1 then opens the diff review,
                 // PIOPIO_DEMO_RESTORE=1 the restore sheet for the first checkpoint.

@@ -702,3 +702,115 @@ describe("git and worktrees (docs/spec/05-build §8, BP5)", () => {
 		await expect(a.client.call("git.checkout", { cwd: dir, branch: "bad name" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 	});
 });
+
+describe("composer and extensions (milestone 2.5)", () => {
+	type State = Snapshot["state"];
+	async function session(a: Ctx, mode: "full_auto" | "auto_edit" = "full_auto") {
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-25-")));
+		writeFileSync(join(folder, "a.txt"), "one\n");
+		await a.client.call("projects.add", { path: folder });
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: mode });
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		return { folder, ref, sub: sub.subscriptionId as string };
+	}
+	const latest = (a: Ctx, sub: string) => a.client.events.filter((n) => n.subscriptionId === sub).flatMap((n) => n.events).filter((e) => e.type === "state").at(-1) as { state: State } | undefined;
+	async function stateWhere(a: Ctx, sub: string, predicate: (s: State) => boolean): Promise<State> {
+		await a.client.waitFor(() => Boolean(latest(a, sub) && predicate(latest(a, sub)!.state)), 20_000);
+		return latest(a, sub)!.state;
+	}
+	async function run(a: Ctx, s: { ref: unknown; sub: string }, text: string) {
+		const seq = Math.max(0, ...a.client.events.filter((n) => n.subscriptionId === s.sub).map((n) => n.seq));
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text } });
+		await a.client.waitFor(settled(s.sub, seq), 20_000);
+	}
+	const tools = async (a: Ctx, ref: unknown) => ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "tool" ? [i] : []));
+
+	test("todo keeps the latest checklist in the session state, also after a reopen", async () => {
+		const a = await start();
+		const s = await session(a);
+		await run(a, s, "todo: Read the code (done) | Write the test (in_progress) | Ship it");
+		const items = [
+			{ text: "Read the code", status: "done" },
+			{ text: "Write the test", status: "in_progress" },
+			{ text: "Ship it", status: "pending" },
+		];
+		expect(latest(a, s.sub)!.state.todos).toEqual(items);
+		expect((await tools(a, s.ref))[0]).toMatchObject({ tool: "todo", details: { type: "todos", items }, output: "1 of 3 done. In progress: Write the test." });
+		await stop(a);
+		const b = await start(a.home);
+		expect(((await b.client.call("sessions.open", { ref: s.ref })) as Snapshot).state.todos).toEqual(items);
+	});
+
+	test("plan mode refuses changes, lets read-only commands run, and approving the plan turns it off", async () => {
+		const a = await start();
+		const s = await session(a);
+		await a.client.call("sessions.configure", { ref: s.ref, planMode: true });
+		expect((await stateWhere(a, s.sub, (st) => st.planMode === true)).planMode).toBe(true);
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "$ cat a.txt\nedit: a.txt | one | two\n$ touch b.txt\nplan: Change one to two | Edit a.txt | Run the tests" } });
+		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		expect(waiting.prompts![0]).toMatchObject({ kind: "plan", title: "Change one to two", steps: ["Edit a.txt", "Run the tests"] });
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: waiting.prompts![0]!.id, response: { decision: "allow" } });
+		const done = await stateWhere(a, s.sub, (st) => st.status === "idle" && st.planMode === false);
+		expect(done.planMode).toBe(false);
+		const [cat, edit, touch, plan] = await tools(a, s.ref);
+		expect(cat).toMatchObject({ status: "done", output: expect.stringContaining("one") });
+		expect(edit).toMatchObject({ status: "error", output: expect.stringContaining("Plan mode is on") });
+		expect(touch).toMatchObject({ status: "error", output: expect.stringContaining("only read-only commands") });
+		expect(plan).toMatchObject({ tool: "propose_plan", status: "done", output: expect.stringContaining("approved the plan") });
+		expect(readFileSync(join(s.folder, "a.txt"), "utf8")).toBe("one\n");
+		expect(existsSync(join(s.folder, "b.txt"))).toBe(false);
+	});
+
+	test("a task runs a subagent as a child session that can be opened", async () => {
+		const a = await start();
+		const s = await session(a);
+		await run(a, s, "task: Say hello | $ echo from-the-child");
+		const [task] = await tools(a, s.ref);
+		expect(task).toMatchObject({ tool: "task", status: "done", details: { type: "task", status: "done" }, output: "Echo: $ echo from-the-child" });
+		const childId = task!.details?.type === "task" ? task!.details.sessionId : undefined;
+		const child = (await a.client.call("sessions.list", { kind: "build" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === childId);
+		expect(child).toMatchObject({ title: "Say hello", parent: { id: (s.ref as { id: string }).id, callId: task!.callId } });
+		const childTools = await tools(a, child.ref);
+		expect(childTools[0]).toMatchObject({ tool: "bash", status: "done", output: expect.stringContaining("from-the-child") });
+	});
+
+	test("the session tree: navigate back to a message, branch, and see both branches", async () => {
+		const a = await start();
+		const s = await session(a);
+		await run(a, s, "first");
+		await run(a, s, "second");
+		let tree = (await a.client.call("sessions.tree", { ref: s.ref })).nodes;
+		expect(tree.map((n: { text: string; current: boolean }) => `${n.text}:${n.current}`)).toEqual(["first:true", "second:true"]);
+		const second = tree[1].entryId;
+		expect(await a.client.call("sessions.navigate", { ref: s.ref, entryId: second })).toEqual({ editorText: "second" });
+		const after = (await a.client.call("sessions.open", { ref: s.ref })) as Snapshot;
+		expect(texts(after)).toEqual([
+			["user", "first"],
+			["assistant", "Echo: first"],
+		]);
+		await run(a, s, "second, again");
+		tree = (await a.client.call("sessions.tree", { ref: s.ref })).nodes;
+		expect(tree.map((n: { text: string; current: boolean; depth: number }) => `${n.text}:${n.current}:${n.depth}`)).toEqual(["first:true:0", "second:false:1", "second, again:true:1"]);
+	});
+
+	test("commands list templates and extension commands; @-mentions find files fuzzily", async () => {
+		const a = await start();
+		const s = await session(a);
+		mkdirSync(join(s.folder, ".pi", "prompts"), { recursive: true });
+		writeFileSync(join(s.folder, ".pi", "prompts", "review.md"), "---\ndescription: Review the current diff\n---\nReview the diff carefully.\n");
+		mkdirSync(join(s.folder, "src", "transport"), { recursive: true });
+		writeFileSync(join(s.folder, "src", "transport", "stdio.ts"), "");
+		writeFileSync(join(s.folder, "src", "transport", "ws.ts"), "");
+		writeFileSync(join(s.folder, "README.md"), "");
+		await stop(a); // a fresh runtime discovers the new template
+		const b = await start(a.home);
+		const { commands } = await b.client.call("sessions.commands", { ref: s.ref });
+		expect(commands).toEqual(expect.arrayContaining([expect.objectContaining({ name: "plan", kind: "extension" })]));
+		const names = commands.map((c: { name: string }) => c.name);
+		if (names.includes("review")) expect(commands.find((c: { name: string }) => c.name === "review")).toMatchObject({ kind: "template", description: "Review the current diff" });
+		const { files } = await b.client.call("projects.files", { cwd: s.folder, query: "stdio" });
+		expect(files[0]).toEqual({ path: "src/transport/stdio.ts", kind: "file" });
+		expect((await b.client.call("projects.files", { cwd: s.folder, query: "srctr" })).files[0]).toMatchObject({ path: "src/transport" });
+		expect((await b.client.call("projects.files", { cwd: s.folder, query: "" })).files.map((f: { path: string }) => f.path)).toEqual(expect.arrayContaining(["README.md", "src", "a.txt"]));
+	});
+});

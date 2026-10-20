@@ -34,8 +34,13 @@ struct BuildSidebarList: View {
         ForEach(engine.projects) { project in
             projectRow(project)
             if !collapsed.contains(project.id) {
-                ForEach(engine.sessions(in: project), id: \.ref.id) { session in
+                // Subagents' sessions sit under the session that started them.
+                let sessions = engine.sessions(in: project)
+                ForEach(sessions.filter { $0.parent == nil }, id: \.ref.id) { session in
                     sessionRow(session)
+                    ForEach(sessions.filter { $0.parent?.id == session.ref.id }, id: \.ref.id) { child in
+                        sessionRow(child, nested: true)
+                    }
                 }
             }
         }
@@ -97,7 +102,7 @@ struct BuildSidebarList: View {
         }
     }
 
-    private func sessionRow(_ session: SessionSummary) -> some View {
+    private func sessionRow(_ session: SessionSummary, nested: Bool = false) -> some View {
         let selected = selection == session.ref.id
         return Button { selection = session.ref.id } label: {
             HStack(spacing: 8) {
@@ -111,7 +116,7 @@ struct BuildSidebarList: View {
                     Image(systemName: "square.split.2x1").font(.system(size: 9.5)).foregroundStyle(Color.dsFg3).help("Worktree on \(worktree.branch)")
                 }
             }
-            .padding(.leading, 22)
+            .padding(.leading, nested ? 38 : 22)
             .padding(.trailing, 8)
             .frame(height: 28)
             .background(selected ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
@@ -269,6 +274,14 @@ struct BuildSessionView: View {
                 Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
             Spacer(minLength: 12)
+            Button { session.showTree = true } label: {
+                Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(PillStyle(kind: .toolbar))
+            .help("Session tree: go back to an earlier message (/tree)")
+            .popover(isPresented: Binding(get: { session.showTree }, set: { session.showTree = $0 }), arrowEdge: .bottom) {
+                SessionTreePopover(session: session)
+            }
             ApprovalModeMenu(engine: engine, session: session, project: project)
             if let git { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
             if let cwd = summary.cwd {
@@ -310,6 +323,7 @@ struct BuildSessionView: View {
         }
         if session.state?.status == .running { parts.append("working…") }
         if session.state?.status == .waitingApproval { parts.append("waiting for you") }
+        if session.planMode { parts.append("plan mode") }
         return parts.joined(separator: " · ")
     }
 
@@ -433,6 +447,7 @@ struct PromptCard: View {
         case .approval: prompt.title == "Run a command" || prompt.title.isEmpty ? "Approval needed" : "Approval needed · \(prompt.title.prefix(1).lowercased() + prompt.title.dropFirst())"
         case .question: "The agent asks"
         case .confirm, .select, .input: "An extension asks"
+        case .plan: "Plan ready"
         }
     }
 
@@ -448,6 +463,7 @@ struct PromptCard: View {
                     .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
             }
         case .input: freeAnswer(placeholder: prompt.placeholder ?? "Your answer")
+        case .plan: planActions
         }
     }
 
@@ -475,6 +491,42 @@ struct PromptCard: View {
                 Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Allow once ⌘↩" : "Allow once") }
                     .buttonStyle(PillStyle(kind: .primary))
                     .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
+            }
+        }
+    }
+
+    /// propose_plan: the steps, then approve (plan mode turns off and the agent builds) or ask for changes.
+    @ViewBuilder private var planActions: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let steps = prompt.steps {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("\(i + 1).").font(.system(size: 12.5).monospacedDigit()).foregroundStyle(Color.dsFg3).frame(width: 18, alignment: .trailing)
+                            Text(step).font(.system(size: 13)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+            if denying {
+                HStack(spacing: 8) {
+                    TextField("What should change in the plan?", text: $text)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12.5))
+                        .focused($focused)
+                        .onSubmit { answer(PromptResponse(decision: .deny, text: note)) }
+                        .onAppear { focused = true }
+                    Button("Cancel") { denying = false; text = "" }.buttonStyle(PillStyle())
+                    Button("Send") { answer(PromptResponse(decision: .deny, text: note)) }.buttonStyle(PillStyle(kind: .strong))
+                }
+            } else {
+                HStack {
+                    Button("Keep planning") { denying = true }.buttonStyle(PillStyle())
+                    Spacer()
+                    Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Approve and build ⌘↩" : "Approve and build") }
+                        .buttonStyle(PillStyle(kind: .primary))
+                        .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
+                }
             }
         }
     }
@@ -634,4 +686,51 @@ extension Notification.Name {
     static let newBuildSession = Notification.Name("piopio.newBuildSession")
     /// Object: a session id. Opens its commit sheet (automation).
     static let showCommit = Notification.Name("piopio.showCommit")
+}
+
+/// pi's session tree as your messages (BR6). Picking one goes back to just before it and puts its text in the
+/// composer, so sending starts a new branch; the old branch stays in the tree.
+struct SessionTreePopover: View {
+    let session: ThreadModel
+    @State private var nodes: [TreeNode]?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Session tree").font(.system(size: 13, weight: .semibold))
+            Text("Go back to one of your messages to try something else. The current path stays in the tree.")
+                .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+            if let nodes {
+                if nodes.isEmpty { Text("No messages yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 1) {
+                        ForEach(nodes) { node in
+                            Button {
+                                session.showTree = false
+                                Task { await session.navigate(to: node) }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Circle().fill(node.current ? Color.accentColor : Color.dsFg3.opacity(0.5)).frame(width: 6, height: 6)
+                                    Text(node.text).font(.system(size: 12.5)).foregroundStyle(node.current ? Color.dsFg : Color.dsFg2).lineLimit(1)
+                                    Spacer(minLength: 6)
+                                    if node.branches > 1 { Text("\(node.branches) branches").font(.system(size: 10.5)).foregroundStyle(Color.dsFg3) }
+                                }
+                                .padding(.leading, CGFloat(node.depth) * 14 + 6)
+                                .padding(.trailing, 6)
+                                .frame(height: 26)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(session.isRunning)
+                        }
+                    }
+                }
+                .frame(maxHeight: 360)
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .padding(14)
+        .frame(width: 380)
+        .task { nodes = await session.tree() }
+    }
 }

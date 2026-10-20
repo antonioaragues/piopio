@@ -407,6 +407,84 @@
 										},
 										"value": {}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"type",
+										"items"
+									],
+									"properties": {
+										"type": {
+											"type": "string",
+											"const": "todos"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"text",
+													"status"
+												],
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "in_progress"
+															},
+															{
+																"type": "string",
+																"const": "done"
+															}
+														]
+													}
+												}
+											}
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"type"
+									],
+									"properties": {
+										"type": {
+											"type": "string",
+											"const": "task"
+										},
+										"sessionId": {
+											"type": "string"
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "done"
+												},
+												{
+													"type": "string",
+													"const": "error"
+												},
+												{
+													"type": "string",
+													"const": "stopped"
+												}
+											]
+										},
+										"costUsd": {
+											"type": "number"
+										}
+									}
 								}
 							]
 						},
@@ -681,6 +759,10 @@
 									{
 										"type": "string",
 										"const": "input"
+									},
+									{
+										"type": "string",
+										"const": "plan"
 									}
 								]
 							},
@@ -739,11 +821,51 @@
 							"placeholder": {
 								"type": "string"
 							},
+							"steps": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
 							"at": {
 								"type": "string"
 							}
 						}
 					}
+				},
+				"todos": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"text",
+							"status"
+						],
+						"properties": {
+							"text": {
+								"type": "string"
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "pending"
+									},
+									{
+										"type": "string",
+										"const": "in_progress"
+									},
+									{
+										"type": "string",
+										"const": "done"
+									}
+								]
+							}
+						}
+					}
+				},
+				"planMode": {
+					"type": "boolean"
 				},
 				"context": {
 					"type": "object",
@@ -1150,6 +1272,84 @@
 															"const": "json"
 														},
 														"value": {}
+													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"items"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "todos"
+														},
+														"items": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"required": [
+																	"text",
+																	"status"
+																],
+																"properties": {
+																	"text": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "pending"
+																			},
+																			{
+																				"type": "string",
+																				"const": "in_progress"
+																			},
+																			{
+																				"type": "string",
+																				"const": "done"
+																			}
+																		]
+																	}
+																}
+															}
+														}
+													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "task"
+														},
+														"sessionId": {
+															"type": "string"
+														},
+														"status": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "done"
+																},
+																{
+																	"type": "string",
+																	"const": "error"
+																},
+																{
+																	"type": "string",
+																	"const": "stopped"
+																}
+															]
+														},
+														"costUsd": {
+															"type": "number"
+														}
 													}
 												}
 											]
@@ -1682,6 +1882,84 @@
 														},
 														"value": {}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"items"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "todos"
+														},
+														"items": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"required": [
+																	"text",
+																	"status"
+																],
+																"properties": {
+																	"text": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "pending"
+																			},
+																			{
+																				"type": "string",
+																				"const": "in_progress"
+																			},
+																			{
+																				"type": "string",
+																				"const": "done"
+																			}
+																		]
+																	}
+																}
+															}
+														}
+													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "task"
+														},
+														"sessionId": {
+															"type": "string"
+														},
+														"status": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "done"
+																},
+																{
+																	"type": "string",
+																	"const": "error"
+																},
+																{
+																	"type": "string",
+																	"const": "stopped"
+																}
+															]
+														},
+														"costUsd": {
+															"type": "number"
+														}
+													}
 												}
 											]
 										},
@@ -2193,6 +2471,84 @@
 														},
 														"value": {}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"items"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "todos"
+														},
+														"items": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"required": [
+																	"text",
+																	"status"
+																],
+																"properties": {
+																	"text": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "pending"
+																			},
+																			{
+																				"type": "string",
+																				"const": "in_progress"
+																			},
+																			{
+																				"type": "string",
+																				"const": "done"
+																			}
+																		]
+																	}
+																}
+															}
+														}
+													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "task"
+														},
+														"sessionId": {
+															"type": "string"
+														},
+														"status": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "done"
+																},
+																{
+																	"type": "string",
+																	"const": "error"
+																},
+																{
+																	"type": "string",
+																	"const": "stopped"
+																}
+															]
+														},
+														"costUsd": {
+															"type": "number"
+														}
+													}
 												}
 											]
 										},
@@ -2480,6 +2836,10 @@
 													{
 														"type": "string",
 														"const": "input"
+													},
+													{
+														"type": "string",
+														"const": "plan"
 													}
 												]
 											},
@@ -2538,11 +2898,51 @@
 											"placeholder": {
 												"type": "string"
 											},
+											"steps": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											},
 											"at": {
 												"type": "string"
 											}
 										}
 									}
+								},
+								"todos": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"text",
+											"status"
+										],
+										"properties": {
+											"text": {
+												"type": "string"
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "pending"
+													},
+													{
+														"type": "string",
+														"const": "in_progress"
+													},
+													{
+														"type": "string",
+														"const": "done"
+													}
+												]
+											}
+										}
+									}
+								},
+								"planMode": {
+									"type": "boolean"
 								},
 								"context": {
 									"type": "object",
@@ -2995,6 +3395,84 @@
 																	},
 																	"value": {}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"items"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "todos"
+																	},
+																	"items": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"text",
+																				"status"
+																			],
+																			"properties": {
+																				"text": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "pending"
+																						},
+																						{
+																							"type": "string",
+																							"const": "in_progress"
+																						},
+																						{
+																							"type": "string",
+																							"const": "done"
+																						}
+																					]
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "task"
+																	},
+																	"sessionId": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "done"
+																			},
+																			{
+																				"type": "string",
+																				"const": "error"
+																			},
+																			{
+																				"type": "string",
+																				"const": "stopped"
+																			}
+																		]
+																	},
+																	"costUsd": {
+																		"type": "number"
+																	}
+																}
 															}
 														]
 													},
@@ -3270,6 +3748,10 @@
 															{
 																"type": "string",
 																"const": "input"
+															},
+															{
+																"type": "string",
+																"const": "plan"
 															}
 														]
 													},
@@ -3328,11 +3810,51 @@
 													"placeholder": {
 														"type": "string"
 													},
+													"steps": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
 													"at": {
 														"type": "string"
 													}
 												}
 											}
+										},
+										"todos": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"text",
+													"status"
+												],
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "in_progress"
+															},
+															{
+																"type": "string",
+																"const": "done"
+															}
+														]
+													}
+												}
+											}
+										},
+										"planMode": {
+											"type": "boolean"
 										},
 										"context": {
 											"type": "object",
@@ -3778,6 +4300,84 @@
 													},
 													"value": {}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"items"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "todos"
+													},
+													"items": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"text",
+																"status"
+															],
+															"properties": {
+																"text": {
+																	"type": "string"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending"
+																		},
+																		{
+																			"type": "string",
+																			"const": "in_progress"
+																		},
+																		{
+																			"type": "string",
+																			"const": "done"
+																		}
+																	]
+																}
+															}
+														}
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "task"
+													},
+													"sessionId": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "done"
+															},
+															{
+																"type": "string",
+																"const": "error"
+															},
+															{
+																"type": "string",
+																"const": "stopped"
+															}
+														]
+													},
+													"costUsd": {
+														"type": "number"
+													}
+												}
 											}
 										]
 									},
@@ -4053,6 +4653,10 @@
 											{
 												"type": "string",
 												"const": "input"
+											},
+											{
+												"type": "string",
+												"const": "plan"
 											}
 										]
 									},
@@ -4111,11 +4715,51 @@
 									"placeholder": {
 										"type": "string"
 									},
+									"steps": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
 									"at": {
 										"type": "string"
 									}
 								}
 							}
+						},
+						"todos": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"text",
+									"status"
+								],
+								"properties": {
+									"text": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "in_progress"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											}
+										]
+									}
+								}
+							}
+						},
+						"planMode": {
+							"type": "boolean"
 						},
 						"context": {
 							"type": "object",
@@ -4241,6 +4885,21 @@
 									"const": "discarded"
 								}
 							]
+						}
+					}
+				},
+				"parent": {
+					"type": "object",
+					"required": [
+						"id",
+						"callId"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"callId": {
+							"type": "string"
 						}
 					}
 				}
@@ -4643,6 +5302,84 @@
 																		"const": "json"
 																	},
 																	"value": {}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"items"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "todos"
+																	},
+																	"items": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"text",
+																				"status"
+																			],
+																			"properties": {
+																				"text": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "pending"
+																						},
+																						{
+																							"type": "string",
+																							"const": "in_progress"
+																						},
+																						{
+																							"type": "string",
+																							"const": "done"
+																						}
+																					]
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "task"
+																	},
+																	"sessionId": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "done"
+																			},
+																			{
+																				"type": "string",
+																				"const": "error"
+																			},
+																			{
+																				"type": "string",
+																				"const": "stopped"
+																			}
+																		]
+																	},
+																	"costUsd": {
+																		"type": "number"
+																	}
 																}
 															}
 														]
@@ -5175,6 +5912,84 @@
 																	},
 																	"value": {}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"items"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "todos"
+																	},
+																	"items": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"text",
+																				"status"
+																			],
+																			"properties": {
+																				"text": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "pending"
+																						},
+																						{
+																							"type": "string",
+																							"const": "in_progress"
+																						},
+																						{
+																							"type": "string",
+																							"const": "done"
+																						}
+																					]
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "task"
+																	},
+																	"sessionId": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "done"
+																			},
+																			{
+																				"type": "string",
+																				"const": "error"
+																			},
+																			{
+																				"type": "string",
+																				"const": "stopped"
+																			}
+																		]
+																	},
+																	"costUsd": {
+																		"type": "number"
+																	}
+																}
 															}
 														]
 													},
@@ -5686,6 +6501,84 @@
 																	},
 																	"value": {}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"items"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "todos"
+																	},
+																	"items": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"text",
+																				"status"
+																			],
+																			"properties": {
+																				"text": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "pending"
+																						},
+																						{
+																							"type": "string",
+																							"const": "in_progress"
+																						},
+																						{
+																							"type": "string",
+																							"const": "done"
+																						}
+																					]
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "task"
+																	},
+																	"sessionId": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "done"
+																			},
+																			{
+																				"type": "string",
+																				"const": "error"
+																			},
+																			{
+																				"type": "string",
+																				"const": "stopped"
+																			}
+																		]
+																	},
+																	"costUsd": {
+																		"type": "number"
+																	}
+																}
 															}
 														]
 													},
@@ -5973,6 +6866,10 @@
 																{
 																	"type": "string",
 																	"const": "input"
+																},
+																{
+																	"type": "string",
+																	"const": "plan"
 																}
 															]
 														},
@@ -6031,11 +6928,51 @@
 														"placeholder": {
 															"type": "string"
 														},
+														"steps": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
 														"at": {
 															"type": "string"
 														}
 													}
 												}
+											},
+											"todos": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"text",
+														"status"
+													],
+													"properties": {
+														"text": {
+															"type": "string"
+														},
+														"status": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "pending"
+																},
+																{
+																	"type": "string",
+																	"const": "in_progress"
+																},
+																{
+																	"type": "string",
+																	"const": "done"
+																}
+															]
+														}
+													}
+												}
+											},
+											"planMode": {
+												"type": "boolean"
 											},
 											"context": {
 												"type": "object",
@@ -6488,6 +7425,84 @@
 																				},
 																				"value": {}
 																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"items"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "todos"
+																				},
+																				"items": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"text",
+																							"status"
+																						],
+																						"properties": {
+																							"text": {
+																								"type": "string"
+																							},
+																							"status": {
+																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "pending"
+																									},
+																									{
+																										"type": "string",
+																										"const": "in_progress"
+																									},
+																									{
+																										"type": "string",
+																										"const": "done"
+																									}
+																								]
+																							}
+																						}
+																					}
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "task"
+																				},
+																				"sessionId": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "done"
+																						},
+																						{
+																							"type": "string",
+																							"const": "error"
+																						},
+																						{
+																							"type": "string",
+																							"const": "stopped"
+																						}
+																					]
+																				},
+																				"costUsd": {
+																					"type": "number"
+																				}
+																			}
 																		}
 																	]
 																},
@@ -6763,6 +7778,10 @@
 																		{
 																			"type": "string",
 																			"const": "input"
+																		},
+																		{
+																			"type": "string",
+																			"const": "plan"
 																		}
 																	]
 																},
@@ -6821,11 +7840,51 @@
 																"placeholder": {
 																	"type": "string"
 																},
+																"steps": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
 																"at": {
 																	"type": "string"
 																}
 															}
 														}
+													},
+													"todos": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"text",
+																"status"
+															],
+															"properties": {
+																"text": {
+																	"type": "string"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending"
+																		},
+																		{
+																			"type": "string",
+																			"const": "in_progress"
+																		},
+																		{
+																			"type": "string",
+																			"const": "done"
+																		}
+																	]
+																}
+															}
+														}
+													},
+													"planMode": {
+														"type": "boolean"
 													},
 													"context": {
 														"type": "object",
@@ -7034,6 +8093,21 @@
 												"const": "discarded"
 											}
 										]
+									}
+								}
+							},
+							"parent": {
+								"type": "object",
+								"required": [
+									"id",
+									"callId"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"callId": {
+										"type": "string"
 									}
 								}
 							}
@@ -7336,6 +8410,21 @@
 												"const": "discarded"
 											}
 										]
+									}
+								}
+							},
+							"parent": {
+								"type": "object",
+								"required": [
+									"id",
+									"callId"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"callId": {
+										"type": "string"
 									}
 								}
 							}
@@ -7958,6 +9047,84 @@
 													},
 													"value": {}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"items"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "todos"
+													},
+													"items": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"text",
+																"status"
+															],
+															"properties": {
+																"text": {
+																	"type": "string"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending"
+																		},
+																		{
+																			"type": "string",
+																			"const": "in_progress"
+																		},
+																		{
+																			"type": "string",
+																			"const": "done"
+																		}
+																	]
+																}
+															}
+														}
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "task"
+													},
+													"sessionId": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "done"
+															},
+															{
+																"type": "string",
+																"const": "error"
+															},
+															{
+																"type": "string",
+																"const": "stopped"
+															}
+														]
+													},
+													"costUsd": {
+														"type": "number"
+													}
+												}
 											}
 										]
 									},
@@ -8233,6 +9400,10 @@
 											{
 												"type": "string",
 												"const": "input"
+											},
+											{
+												"type": "string",
+												"const": "plan"
 											}
 										]
 									},
@@ -8291,11 +9462,51 @@
 									"placeholder": {
 										"type": "string"
 									},
+									"steps": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
 									"at": {
 										"type": "string"
 									}
 								}
 							}
+						},
+						"todos": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"text",
+									"status"
+								],
+								"properties": {
+									"text": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "in_progress"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											}
+										]
+									}
+								}
+							}
+						},
+						"planMode": {
+							"type": "boolean"
 						},
 						"context": {
 							"type": "object",
@@ -8790,6 +10001,84 @@
 															},
 															"value": {}
 														}
+													},
+													{
+														"type": "object",
+														"required": [
+															"type",
+															"items"
+														],
+														"properties": {
+															"type": {
+																"type": "string",
+																"const": "todos"
+															},
+															"items": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"text",
+																		"status"
+																	],
+																	"properties": {
+																		"text": {
+																			"type": "string"
+																		},
+																		"status": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "pending"
+																				},
+																				{
+																					"type": "string",
+																					"const": "in_progress"
+																				},
+																				{
+																					"type": "string",
+																					"const": "done"
+																				}
+																			]
+																		}
+																	}
+																}
+															}
+														}
+													},
+													{
+														"type": "object",
+														"required": [
+															"type"
+														],
+														"properties": {
+															"type": {
+																"type": "string",
+																"const": "task"
+															},
+															"sessionId": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "done"
+																	},
+																	{
+																		"type": "string",
+																		"const": "error"
+																	},
+																	{
+																		"type": "string",
+																		"const": "stopped"
+																	}
+																]
+															},
+															"costUsd": {
+																"type": "number"
+															}
+														}
 													}
 												]
 											},
@@ -9065,6 +10354,10 @@
 													{
 														"type": "string",
 														"const": "input"
+													},
+													{
+														"type": "string",
+														"const": "plan"
 													}
 												]
 											},
@@ -9123,11 +10416,51 @@
 											"placeholder": {
 												"type": "string"
 											},
+											"steps": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											},
 											"at": {
 												"type": "string"
 											}
 										}
 									}
+								},
+								"todos": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"text",
+											"status"
+										],
+										"properties": {
+											"text": {
+												"type": "string"
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "pending"
+													},
+													{
+														"type": "string",
+														"const": "in_progress"
+													},
+													{
+														"type": "string",
+														"const": "done"
+													}
+												]
+											}
+										}
+									}
+								},
+								"planMode": {
+									"type": "boolean"
 								},
 								"context": {
 									"type": "object",
@@ -9872,6 +11205,9 @@
 							"const": "full_auto"
 						}
 					]
+				},
+				"planMode": {
+					"type": "boolean"
 				}
 			}
 		},
@@ -11200,6 +12536,335 @@
 			"properties": {
 				"branch": {
 					"type": "string"
+				}
+			}
+		},
+		"sessions.commands.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.commands.result": {
+			"type": "object",
+			"required": [
+				"commands"
+			],
+			"properties": {
+				"commands": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name",
+							"description",
+							"kind"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "template"
+									},
+									{
+										"type": "string",
+										"const": "skill"
+									},
+									{
+										"type": "string",
+										"const": "extension"
+									}
+								]
+							},
+							"hint": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"sessions.tree.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.tree.result": {
+			"type": "object",
+			"required": [
+				"nodes"
+			],
+			"properties": {
+				"nodes": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"entryId",
+							"text",
+							"at",
+							"depth",
+							"current",
+							"branches"
+						],
+						"properties": {
+							"entryId": {
+								"type": "string"
+							},
+							"text": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"depth": {
+								"type": "number"
+							},
+							"current": {
+								"type": "boolean"
+							},
+							"branches": {
+								"type": "number"
+							}
+						}
+					}
+				}
+			}
+		},
+		"sessions.navigate.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"entryId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"entryId": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.navigate.result": {
+			"type": "object",
+			"properties": {
+				"editorText": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.compact.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.compact.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"projects.files.params": {
+			"type": "object",
+			"required": [
+				"cwd",
+				"query"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"query": {
+					"type": "string"
+				},
+				"limit": {
+					"type": "number"
+				}
+			}
+		},
+		"projects.files.result": {
+			"type": "object",
+			"required": [
+				"files"
+			],
+			"properties": {
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path",
+							"kind"
+						],
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "file"
+									},
+									{
+										"type": "string",
+										"const": "folder"
+									}
+								]
+							}
+						}
+					}
 				}
 			}
 		},

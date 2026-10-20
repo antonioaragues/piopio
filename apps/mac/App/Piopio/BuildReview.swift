@@ -20,6 +20,7 @@ struct BuildInspector: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    if !session.todos.isEmpty { checklist }
                     changes
                     checkpoints
                 }
@@ -69,6 +70,27 @@ struct BuildInspector: View {
                     }
                 }
                 .padding(.top, 6)
+            }
+        }
+    }
+
+    /// The agent's checklist (piopio-todos), latest version.
+    private var checklist: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Checklist").font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Text("\(session.todos.filter { $0.status == .done }.count) / \(session.todos.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
+            }
+            ForEach(Array(session.todos.enumerated()), id: \.offset) { _, todo in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: todo.status == .done ? "checkmark.circle.fill" : todo.status == .inProgress ? "circle.dotted.circle" : "circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(todo.status == .done ? Color.dsGreen : todo.status == .inProgress ? Color.accentColor : Color.dsFg3)
+                    Text(todo.text).font(.system(size: 12.5)).foregroundStyle(todo.status == .done ? Color.dsFg3 : Color.dsFg)
+                        .strikethrough(todo.status == .done, color: Color.dsFg3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

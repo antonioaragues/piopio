@@ -134,6 +134,15 @@ Milestones (each one usable on its own):
 - Not in this milestone: Create PR and GitHub auth (G4–G8, Phase 6). Commit messages from a real model are untested.
 - Verified: 3 engine tests (worktree session edit → commit → merge with cleanup; discard; new branch; status, partial commit, first push with upstream, branches, invalid names, folder guard) and app captures.
 
+**Milestone 2.5 done (2026-10-20).**
+- **@-mentions (BR5):** `projects.files`: git's file list when it's a repository (so .gitignore applies), else a bounded walk; folders included; fuzzy match favoring file names and word starts. The composer suggests as you type `@…` (↑↓, ↩/⇥ to insert `@path`).
+- **/commands (BR5):** `sessions.commands` lists pi prompt templates, skills (`/skill:name`) and extension commands; they're sent as typed and pi expands them. Piopio's own commands run in the app: /plan, /compact, /model, /tree, /review, /commit, /new.
+- **`piopio-todos`:** the agent's checklist, shown as a card and in the inspector (`SessionState.todos`, also after a reopen).
+- **`piopio-plan`:** plan mode per session (Plan chip, /plan, `sessions.configure planMode`). Edits, writes and commands that aren't read-only are refused with a reason. `propose_plan` shows a plan card (numbered steps, Keep planning with a note, Approve and build ⌘↩); approving turns plan mode off.
+- **`piopio-subagents`:** `task` runs a child Build session (same folder, model and approval mode; one level deep; at most 3 at a time per session). Its progress shows on the task card, with Open to see the child, which is nested under its parent in the sidebar. Its final answer goes back to the parent, and its cost counts toward the parent's spend.
+- **Session tree (BR6):** `sessions.tree` (your messages, indented at branch points, current path marked) and `sessions.navigate` (pi's navigateTree; the message's text comes back to the composer, so sending branches). A header button and /tree open it. `sessions.compact`. The timeline is rebuilt after a compaction or a jump, so ids stay consistent.
+- Verified: 5 engine tests (todos across a reopen; plan mode refusals, read-only commands, approval turning it off; a subagent's child session; tree navigation and branching; commands and fuzzy file search), the read-only command policy test, and app captures. **Not verified:** pi project prompt templates and skills from `.pi/` (pi may want the project trusted first), and real-model behavior with these tools.
+
 ## Phase 3 — Chat: Projects lens + Spaces
 Scope: 04-chat §2–3 (organizer, topics, routing link cards, memory, files, Thread → Space suggestion S11). Global memory (07 §5). MCP for pi-durable runtimes.
 **Acceptance:** one real Space (e.g. a home project) with 5+ topics. Routing is right ≥ 90% of the time on a 50-message replay set. Rerouting works and is learned.

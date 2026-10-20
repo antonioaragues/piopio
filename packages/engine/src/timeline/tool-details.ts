@@ -23,6 +23,10 @@ export function startDetails(tool: string, args: unknown): ToolDetails | undefin
 			return path ? { type: "diff", path, diff: "" } : undefined;
 		case "write":
 			return path && typeof a.content === "string" ? { type: "diff", path, diff: newFilePatch(a.content) } : undefined;
+		case "todo":
+			return Array.isArray(a.items) ? { type: "todos", items: a.items as { text: string; status: "pending" | "in_progress" | "done" }[] } : undefined;
+		case "task":
+			return { type: "task" };
 		default:
 			return undefined;
 	}
@@ -32,6 +36,10 @@ export function startDetails(tool: string, args: unknown): ToolDetails | undefin
 export function endDetails(tool: string, args: unknown, result: PiToolResult | undefined, output: string | undefined, isError: boolean): ToolDetails | undefined {
 	const start = startDetails(tool, args);
 	if (!start) return undefined;
+	if (tool === "task") {
+		const d = (result?.details ?? {}) as { sessionId?: string; status?: "done" | "error" | "stopped"; costUsd?: number };
+		return { type: "task", ...(d.sessionId ? { sessionId: d.sessionId } : {}), ...(d.status ? { status: d.status } : {}), ...(typeof d.costUsd === "number" ? { costUsd: d.costUsd } : {}) };
+	}
 	if (tool === "edit" && start.type === "diff") {
 		const patch = (result?.details as { patch?: unknown } | undefined)?.patch;
 		return typeof patch === "string" ? { ...start, diff: patch } : isError ? undefined : start;

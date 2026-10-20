@@ -1,5 +1,5 @@
 import { describe as group, expect, test } from "vitest";
-import { decide, deniedCommand, suggestCommandRule, type Rule } from "../src/policy.js";
+import { decide, deniedCommand, readOnlyCommand, suggestCommandRule, type Rule } from "../src/policy.js";
 
 const cwd = "/work/app";
 const home = "/Users/me";
@@ -73,4 +73,9 @@ test("suggested rules keep the subcommand for runners and skip compound commands
 	expect(suggestCommandRule("ls -la")).toEqual({ kind: "command", pattern: "ls" });
 	expect(suggestCommandRule("npm --version")).toEqual({ kind: "command", pattern: "npm" });
 	expect(suggestCommandRule("make && make install")).toBeUndefined();
+});
+
+test("plan mode's read-only commands", () => {
+	for (const ok of ["ls -la src", "git status && git diff", "rg TODO | head -20", "sed -n 1,40p a.ts", "git log --oneline -5", "cat a.txt | wc -l"]) expect(readOnlyCommand(ok), ok).toBe(true);
+	for (const no of ["rm -rf build", "echo hi > a.txt", "git commit -m x", "npm install", "sed -i s/a/b/ a.ts", "cat a | tee b", "ls $(rm x)", "git push"]) expect(readOnlyCommand(no), no).toBe(false);
 });

@@ -13,6 +13,7 @@ import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
 import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
+import type { TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
@@ -31,7 +32,12 @@ type CatalogEntry = SessionSummary & {
 	web?: boolean;
 	/** Build: the session's approval mode (new sessions take their project's). */
 	approvalMode?: ApprovalMode;
+	/** Build: plan mode (piopio-plan). */
+	planMode?: boolean;
 };
+
+/** At most this many subagents run at once per session (docs/spec/05-build §4). */
+const MAX_SUBAGENTS = 3;
 
 /** Where Build sessions get their default approval mode and "always allow" rules (the projects). */
 export type ApprovalPolicy = {
@@ -89,9 +95,10 @@ export class Sessions {
 		for (const l of this.listeners) l({ upserted: [summary(entry)], removed: [] });
 	}
 
-	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean; approvalMode?: ApprovalMode }): Promise<void> {
+	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean; approvalMode?: ApprovalMode; planMode?: boolean }): Promise<void> {
 		const entry = this.entry(ref);
 		if (change.approvalMode) entry.approvalMode = change.approvalMode; // read by the runtime's approvals bridge
+		if (change.planMode !== undefined) entry.planMode = change.planMode;
 		if (this.open.has(ref.id)) await (await this.runtime(ref)).configure(change);
 		if (change.web !== undefined) entry.web = change.web;
 		if (change.model) entry.model = change.model;
@@ -296,6 +303,70 @@ export class Sessions {
 		this.changed(entry);
 	}
 
+	// ── Subagents (piopio-subagents) ─────────────────────────────────────────
+
+	private subagents = new Map<string, { running: number; waiting: (() => void)[] }>();
+
+	/**
+	 * Runs a `task` as a child Build session (same folder, model and approval mode), one level deep,
+	 * at most MAX_SUBAGENTS at a time per parent. Its final answer goes back to the parent.
+	 */
+	private async runTask(
+		parent: CatalogEntry,
+		task: { callId: string; description: string; prompt: string },
+		signal: AbortSignal | undefined,
+		onStart: (sessionId: string) => void,
+		onProgress: (line: string) => void,
+	): Promise<TaskResult> {
+		const slot = this.subagents.get(parent.ref.id) ?? { running: 0, waiting: [] };
+		this.subagents.set(parent.ref.id, slot);
+		if (slot.running >= MAX_SUBAGENTS) {
+			onProgress("Waiting for another subagent to finish…");
+			await new Promise<void>((resolve) => slot.waiting.push(resolve));
+		}
+		slot.running++;
+		try {
+			const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
+			const child = this.entry(ref);
+			child.parent = { id: parent.ref.id, callId: task.callId };
+			if (parent.projectPath) child.projectPath = parent.projectPath;
+			this.save();
+			this.changed(child);
+			onStart(ref.id);
+			const runtime = await this.build(ref);
+			let started = false;
+			let off = () => {};
+			const settled = new Promise<void>((resolve) => {
+				off = runtime.onEvents((events) => {
+					for (const e of events) {
+						if ((e.type === "item.added" || e.type === "item.updated") && e.item.kind === "tool" && e.item.status === "running") onProgress(progressLine(e.item.tool, e.item.args));
+						if (e.type === "state" && e.state.status === "waiting_approval") onProgress("Waiting for your approval in the subagent…");
+						if (e.type === "state" && e.state.status === "running") started = true;
+						if (e.type === "state" && e.state.status === "idle" && started) resolve();
+					}
+				});
+			});
+			const stop = () => void runtime.abort();
+			signal?.addEventListener("abort", stop, { once: true });
+			try {
+				await runtime.submit(task.prompt, { whenBusy: "reject" });
+				this.touch(ref);
+				await settled;
+			} finally {
+				off();
+				signal?.removeEventListener("abort", stop);
+			}
+			const snap = runtime.snapshot();
+			const last = [...snap.items].reverse().find((i) => i.kind === "assistant");
+			const text = last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
+			const status = signal?.aborted || last?.status === "aborted" ? "stopped" : last?.status === "error" ? "error" : "done";
+			return { text: status === "error" ? (last?.kind === "assistant" ? (last.error ?? text) : text) : text, sessionId: ref.id, costUsd: snap.state.usage.costUsd, status };
+		} finally {
+			slot.running--;
+			slot.waiting.shift()?.();
+		}
+	}
+
 	/** Folders git may run in: a project, or a Build session's worktree. */
 	knowsFolder(cwd: string): boolean {
 		return Boolean(this.policy.projectFor(cwd)) || [...this.entries.values()].some((e) => e.ref.kind === "build" && e.cwd === cwd);
@@ -479,6 +550,14 @@ export class Sessions {
 				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
 			},
 			checkpoints: this.checkpoints,
+			plan: {
+				active: () => entry.planMode ?? false,
+				setActive: (on) => {
+					entry.planMode = on;
+					this.save();
+				},
+			},
+			...(entry.parent ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress) }),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 		});
 		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {
@@ -497,6 +576,13 @@ export class Sessions {
 
 function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, ...rest }: CatalogEntry): SessionSummary {
 	return rest;
+}
+
+/** What a subagent is doing, for its task card. */
+function progressLine(tool: string, args: unknown): string {
+	const a = (args ?? {}) as Record<string, unknown>;
+	const detail = [a.path, a.command, a.pattern, a.query, a.url].find((v) => typeof v === "string") as string | undefined;
+	return detail ? `${tool} ${detail.split("\n")[0]!.slice(0, 120)}` : tool;
 }
 
 /** Moves a file into the Trash folder under a free name (same volume: a rename). */

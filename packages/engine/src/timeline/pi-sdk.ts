@@ -50,8 +50,9 @@ export class SdkEventMapper {
 				b.toolStart(event.toolCallId as string, event.toolName as string, event.args, event.parentToolCallId as string | undefined);
 				break;
 			case "tool_execution_update": {
-				const partial = event.partialResult as { content?: PiContentBlock[] } | undefined;
+				const partial = event.partialResult as { content?: PiContentBlock[]; details?: { sessionId?: unknown } } | undefined;
 				if (partial?.content) b.toolOutput(event.toolCallId as string, { set: contentText(partial.content) });
+				if (event.toolName === "task" && typeof partial?.details?.sessionId === "string" && partial.details.sessionId) b.toolSession(event.toolCallId as string, partial.details.sessionId);
 				break;
 			}
 			case "tool_execution_end": {
