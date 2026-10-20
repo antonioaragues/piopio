@@ -16,7 +16,7 @@ export function messagesFromEntries(entries: readonly Entry[]): { messages: PiMe
 		if (e.kind === "pi.compaction") continue;
 		for (const [i, m] of (e.model ?? []).entries()) {
 			if (m.role !== "user" && m.role !== "assistant" && m.role !== "toolResult") continue;
-			if (e.kind === USER_ENTRY && m.role === "user") {
+			if ((e.kind === USER_ENTRY || (e.kind === "piopio.imported" && typeof (e.data as { text?: unknown })?.text === "string")) && m.role === "user") {
 				// Show the words and file names, not the attachment blocks the model reads.
 				const data = e.data as UserData;
 				messages.push({ role: "user", content: data.text, attachments: data.attachments, timestamp: m.timestamp });

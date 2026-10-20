@@ -72,6 +72,15 @@ enum DebugAutomation {
                     }
                     try? await Task.sleep(for: .milliseconds(1500))
                 }
+                // PIOPIO_DEMO_SPACE_THREAD=<text>: then a thread with this message (its Space suggestion shows).
+                if let text = env["PIOPIO_DEMO_SPACE_THREAD"], let thread = await engine.createThread() {
+                    try? await engine.refreshCatalog()
+                    NotificationCenter.default.post(name: .selectThread, object: thread.id)
+                    let model = engine.thread(thread)
+                    await model.open()
+                    await model.send(text)
+                    return
+                }
                 if let title = env["PIOPIO_DEMO_TOPIC"], let topic = engine.space(ref.id)?.topics?.first(where: { $0.title == title }) {
                     NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: ref.id, topicId: topic.id, itemId: nil))
                 }

@@ -11,6 +11,9 @@ struct ThreadView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            if let suggestion = summary.suggestion {
+                SpaceSuggestionBanner(engine: engine, thread: summary, suggestion: suggestion)
+            }
             ZStack(alignment: .bottom) {
                 TranscriptView(document: thread.document)
                 VStack(spacing: 8) {

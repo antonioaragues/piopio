@@ -1,0 +1,512 @@
+{
+	"about": "The routing replay set (04-chat §3, roadmap 3.4): 50 messages to a home-renovation Space with five topics. Each message lists the outcomes that count as right: route to one of the topics, create a new topic, or answer in Main. `as` names a topic the message should create; later messages refer to it as @name, whatever title the organizer gave it. Acceptance: at least 90% right.",
+	"space": {
+		"name": "Home renovation",
+		"instructions": "We're renovating our flat: kitchen, bathroom and some new furniture. Keep answers practical and short."
+	},
+	"topics": [
+		{
+			"title": "Kitchen layout",
+			"brief": "Where everything goes in the kitchen: sink, appliances, island, storage, lighting."
+		},
+		{
+			"title": "Contractors",
+			"brief": "Who does what and when: quotes, scheduling, payments terms and problems with trades."
+		},
+		{
+			"title": "Budget",
+			"brief": "The overall money: what's been spent, what's planned, what's left."
+		},
+		{
+			"title": "Permits",
+			"brief": "Permits, building rules and inspections."
+		},
+		{
+			"title": "Bathroom",
+			"brief": "The bathroom redo: shower, tiles, fixtures, ventilation."
+		}
+	],
+	"messages": [
+		{
+			"text": "Can we fit a dishwasher if we move the sink 40cm to the left?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		},
+		{
+			"text": "The electrician can start on the 14th, the plumber not until the 21st.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Contractors"
+				}
+			]
+		},
+		{
+			"text": "How much have we spent so far in total?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Budget"
+				}
+			]
+		},
+		{
+			"text": "Do we need a permit to remove the wall between the kitchen and the living room?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Permits"
+				}
+			]
+		},
+		{
+			"text": "I'd like a walk-in shower instead of the bathtub.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				}
+			]
+		},
+		{
+			"text": "What topics do we have in this space?",
+			"accept": [
+				{
+					"decision": "answer"
+				}
+			]
+		},
+		{
+			"text": "Island or peninsula for the kitchen? The room is 3.2m by 4m.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		},
+		{
+			"text": "Marco's quote for the bathroom tiling is 3,400€.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Contractors"
+				},
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				},
+				{
+					"decision": "route",
+					"topic": "Budget"
+				}
+			]
+		},
+		{
+			"text": "Thanks, that helps.",
+			"accept": [
+				{
+					"decision": "answer"
+				}
+			]
+		},
+		{
+			"text": "We should start thinking about the garden: lawn or gravel at the back?",
+			"accept": [
+				{
+					"decision": "create"
+				}
+			],
+			"as": "Garden"
+		},
+		{
+			"text": "The inspector comes Thursday at 10am.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Permits"
+				}
+			]
+		},
+		{
+			"text": "Which tile size makes a small bathroom look bigger?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				}
+			]
+		},
+		{
+			"text": "Add 1,200€ for the new boiler to the budget.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Budget"
+				}
+			]
+		},
+		{
+			"text": "For the garden, which plants survive full sun with little water?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Garden"
+				}
+			]
+		},
+		{
+			"text": "Summarize where we are across all topics.",
+			"accept": [
+				{
+					"decision": "answer"
+				}
+			]
+		},
+		{
+			"text": "Can the fridge go right next to the oven, or is that a bad idea?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		},
+		{
+			"text": "The plumber didn't show up today, again. Should we look for another one?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Contractors"
+				}
+			]
+		},
+		{
+			"text": "We're moving out for three weeks during the works; we need to plan the move and storage.",
+			"accept": [
+				{
+					"decision": "create"
+				}
+			],
+			"as": "Moving"
+		},
+		{
+			"text": "How should we label the boxes so unpacking is easy?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Moving"
+				}
+			]
+		},
+		{
+			"text": "Is an extractor fan in the bathroom required by code?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				},
+				{
+					"decision": "route",
+					"topic": "Permits"
+				}
+			]
+		},
+		{
+			"text": "What's 15% of 42,000?",
+			"accept": [
+				{
+					"decision": "answer"
+				}
+			]
+		},
+		{
+			"text": "Lighting plan for the kitchen: pendants over the island plus LEDs under the cabinets?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		},
+		{
+			"text": "We're 2k over on the kitchen. Where can we cut?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Budget"
+				},
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		},
+		{
+			"text": "Should the toilet be wall-hung or floor-standing?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				}
+			]
+		},
+		{
+			"text": "Get three quotes for the new windows.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Contractors"
+				}
+			]
+		},
+		{
+			"text": "Raised beds, or planting straight into the ground?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Garden"
+				}
+			]
+		},
+		{
+			"text": "Remind me what we decided about the shower.",
+			"accept": [
+				{
+					"decision": "answer"
+				},
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				}
+			]
+		},
+		{
+			"text": "Home insurance: do we need to tell the insurer about the renovation?",
+			"accept": [
+				{
+					"decision": "create"
+				}
+			],
+			"as": "Insurance"
+		},
+		{
+			"text": "What does the policy cover if a contractor damages the neighbour's flat?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Insurance"
+				}
+			]
+		},
+		{
+			"text": "The storage unit costs 90€ a month; book it for two months.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Moving"
+				},
+				{
+					"decision": "route",
+					"topic": "Budget"
+				}
+			]
+		},
+		{
+			"text": "Good morning!",
+			"accept": [
+				{
+					"decision": "answer"
+				}
+			]
+		},
+		{
+			"text": "Can the kitchen drawers be 90cm wide?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		},
+		{
+			"text": "Does the building need a permit for the new windows facing the street?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Permits"
+				}
+			]
+		},
+		{
+			"text": "Grout colour for white tiles: white or light grey?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				}
+			]
+		},
+		{
+			"text": "The carpenter wants 30% upfront. Is that normal?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Contractors"
+				}
+			]
+		},
+		{
+			"text": "Paid the 5,000€ deposit to the kitchen company today.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Budget"
+				}
+			]
+		},
+		{
+			"text": "Which grass seed works for a shady lawn?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Garden"
+				}
+			]
+		},
+		{
+			"text": "Let's plan the living room furniture: sofa size, rug and layout.",
+			"accept": [
+				{
+					"decision": "create"
+				}
+			],
+			"as": "Living room"
+		},
+		{
+			"text": "Is a 3m sofa too big for a 4.5m wall?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Living room"
+				}
+			]
+		},
+		{
+			"text": "In which topic did we talk about the inspector?",
+			"accept": [
+				{
+					"decision": "answer"
+				}
+			]
+		},
+		{
+			"text": "Can we put the washing machine in the bathroom?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				},
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		},
+		{
+			"text": "The kitchen company is delaying delivery by two weeks.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Contractors"
+				},
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		},
+		{
+			"text": "Update: the permit was approved!",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Permits"
+				}
+			]
+		},
+		{
+			"text": "Move the movers' booking to the 3rd.",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Moving"
+				}
+			]
+		},
+		{
+			"text": "How much is left in the budget after the deposit?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Budget"
+				}
+			]
+		},
+		{
+			"text": "Heated towel rail: electric, or connected to the central heating?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "Bathroom"
+				}
+			]
+		},
+		{
+			"text": "Who is our insurance contact again?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Insurance"
+				},
+				{
+					"decision": "answer"
+				}
+			]
+		},
+		{
+			"text": "What size rug goes under a 3m sofa?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Living room"
+				}
+			]
+		},
+		{
+			"text": "Thanks for keeping all of this organized.",
+			"accept": [
+				{
+					"decision": "answer"
+				}
+			]
+		},
+		{
+			"text": "Should the outdoor tap be by the kitchen door, for the garden?",
+			"accept": [
+				{
+					"decision": "route",
+					"topic": "@Garden"
+				},
+				{
+					"decision": "route",
+					"topic": "Kitchen layout"
+				}
+			]
+		}
+	]
+}

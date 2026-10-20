@@ -6016,6 +6016,31 @@
 							"type": "boolean"
 						}
 					}
+				},
+				"suggestion": {
+					"type": "object",
+					"required": [
+						"spaceId",
+						"spaceTitle",
+						"reason"
+					],
+					"properties": {
+						"spaceId": {
+							"type": "string"
+						},
+						"spaceTitle": {
+							"type": "string"
+						},
+						"topicId": {
+							"type": "string"
+						},
+						"topicTitle": {
+							"type": "string"
+						},
+						"reason": {
+							"type": "string"
+						}
+					}
 				}
 			}
 		},
@@ -9998,6 +10023,31 @@
 										"type": "boolean"
 									}
 								}
+							},
+							"suggestion": {
+								"type": "object",
+								"required": [
+									"spaceId",
+									"spaceTitle",
+									"reason"
+								],
+								"properties": {
+									"spaceId": {
+										"type": "string"
+									},
+									"spaceTitle": {
+										"type": "string"
+									},
+									"topicId": {
+										"type": "string"
+									},
+									"topicTitle": {
+										"type": "string"
+									},
+									"reason": {
+										"type": "string"
+									}
+								}
 							}
 						}
 					}
@@ -10407,6 +10457,31 @@
 									},
 									"autoTidy": {
 										"type": "boolean"
+									}
+								}
+							},
+							"suggestion": {
+								"type": "object",
+								"required": [
+									"spaceId",
+									"spaceTitle",
+									"reason"
+								],
+								"properties": {
+									"spaceId": {
+										"type": "string"
+									},
+									"spaceTitle": {
+										"type": "string"
+									},
+									"topicId": {
+										"type": "string"
+									},
+									"topicTitle": {
+										"type": "string"
+									},
+									"reason": {
+										"type": "string"
 									}
 								}
 							}
@@ -16625,6 +16700,479 @@
 		"spaces.files.remove.result": {
 			"type": "object",
 			"properties": {}
+		},
+		"settings.get.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"settings.get.result": {
+			"type": "object",
+			"required": [
+				"chat",
+				"aboutMe"
+			],
+			"properties": {
+				"chat": {
+					"type": "object",
+					"required": [
+						"mcp",
+						"suggestSpaces"
+					],
+					"properties": {
+						"mcp": {
+							"type": "boolean"
+						},
+						"suggestSpaces": {
+							"type": "boolean"
+						}
+					}
+				},
+				"aboutMe": {
+					"type": "object",
+					"required": [
+						"enabled",
+						"capture",
+						"inThreads",
+						"inSpaces"
+					],
+					"properties": {
+						"enabled": {
+							"type": "boolean"
+						},
+						"capture": {
+							"type": "boolean"
+						},
+						"inThreads": {
+							"type": "boolean"
+						},
+						"inSpaces": {
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"settings.set.params": {
+			"type": "object",
+			"properties": {
+				"chat": {
+					"type": "object",
+					"properties": {
+						"mcp": {
+							"type": "boolean"
+						},
+						"suggestSpaces": {
+							"type": "boolean"
+						}
+					}
+				},
+				"aboutMe": {
+					"type": "object",
+					"properties": {
+						"enabled": {
+							"type": "boolean"
+						},
+						"capture": {
+							"type": "boolean"
+						},
+						"inThreads": {
+							"type": "boolean"
+						},
+						"inSpaces": {
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"settings.set.result": {
+			"type": "object",
+			"required": [
+				"chat",
+				"aboutMe"
+			],
+			"properties": {
+				"chat": {
+					"type": "object",
+					"required": [
+						"mcp",
+						"suggestSpaces"
+					],
+					"properties": {
+						"mcp": {
+							"type": "boolean"
+						},
+						"suggestSpaces": {
+							"type": "boolean"
+						}
+					}
+				},
+				"aboutMe": {
+					"type": "object",
+					"required": [
+						"enabled",
+						"capture",
+						"inThreads",
+						"inSpaces"
+					],
+					"properties": {
+						"enabled": {
+							"type": "boolean"
+						},
+						"capture": {
+							"type": "boolean"
+						},
+						"inThreads": {
+							"type": "boolean"
+						},
+						"inSpaces": {
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"aboutMe.get.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"aboutMe.get.result": {
+			"type": "object",
+			"required": [
+				"text",
+				"revisions"
+			],
+			"properties": {
+				"text": {
+					"type": "string"
+				},
+				"revisions": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"at",
+							"by",
+							"summary",
+							"added",
+							"removed"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"by": {
+								"type": "object",
+								"required": [
+									"kind"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "organizer"
+											},
+											{
+												"type": "string",
+												"const": "topic"
+											},
+											{
+												"type": "string",
+												"const": "user"
+											}
+										]
+									}
+								}
+							},
+							"summary": {
+								"type": "string"
+							},
+							"added": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"removed": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"aboutMe.set.params": {
+			"type": "object",
+			"required": [
+				"text"
+			],
+			"properties": {
+				"text": {
+					"type": "string"
+				}
+			}
+		},
+		"aboutMe.set.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"aboutMe.restore.params": {
+			"type": "object",
+			"required": [
+				"revisionId"
+			],
+			"properties": {
+				"revisionId": {
+					"type": "string"
+				}
+			}
+		},
+		"aboutMe.restore.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"threads.dismissSuggestion.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"threads.dismissSuggestion.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.importThreads.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"threads"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"threads": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"kind",
+							"id"
+						],
+						"properties": {
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "build"
+									},
+									{
+										"type": "string",
+										"const": "thread"
+									},
+									{
+										"type": "string",
+										"const": "space"
+									},
+									{
+										"type": "string",
+										"const": "agent"
+									}
+								]
+							},
+							"id": {
+								"type": "string"
+							},
+							"conversationId": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"topicId": {
+					"type": "string"
+				},
+				"keepThreads": {
+					"type": "boolean"
+				}
+			}
+		},
+		"spaces.importThreads.result": {
+			"type": "object",
+			"required": [
+				"topicIds"
+			],
+			"properties": {
+				"topicIds": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"spaces.topics.promote.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"spaces.topics.promote.result": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
 		},
 		"projects.remove.params": {
 			"type": "object",

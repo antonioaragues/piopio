@@ -8,7 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { configure, ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type ConversationId, type Extension, type Tx } from "@earendil-works/pi-durable";
+import { configure, ConversationBusy, createRegistry, defineExtension, Harness, watchEvents, type AgentEventStream, type Conversation, type ConversationId, type Extension, type Tx } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { ContainerRef, MemoryItem, ModelRef, RoutingItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
 import { buildInput, USER_ENTRY, type BuiltInput } from "../input.js";
@@ -18,6 +18,9 @@ import { DurableEventMapper } from "../timeline/pi-durable.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 import { SpaceFiles } from "./space-files.js";
+import { attachChatMcp, MCP_EXTENSION, type ChatMcp } from "../tools/mcp-chat.js";
+import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
+import { exportConversation, importInto, type Portable } from "./transfer.js";
 import { applyPatch, describe, diffFacts, lineCount, MemoryDoc, pushRevision, type MemoryAuthor, type MemoryState, type Proposal, type Revision } from "./space-memory.js";
 import { MEMORY_TOOLS, organizerExtension, ROUTE_TOOLS, sharedExtension, SpaceDoc, topicExtension, type Hint, type Route, type SpaceHost, type SpaceState, type TopicRecord } from "./space-tools.js";
 
@@ -45,6 +48,10 @@ export type SpaceOpenOptions = {
 	info: () => { name: string; instructions?: string };
 	settings: () => SpaceSettings;
 	webOptions?: WebOptions;
+	/** More extensions for every conversation (About me). */
+	extensions?: Extension[];
+	/** MCP servers, when Chat may use them. */
+	mcp?: ChatMcp;
 	/** The topics or the header's numbers changed (sidebar, header). */
 	onTopics?: (topics: TopicSummary[], stats: SpaceStats) => void;
 };
@@ -68,9 +75,8 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		private readonly options: SpaceOpenOptions,
 		private readonly harness: Harness,
 		private readonly organizer: Extension,
-		private readonly topicExtension: Extension,
-		private readonly shared: Extension,
-		private readonly web: Extension,
+		/** What topics run with: the web, shared, extra and MCP extensions, then the topic's own. */
+		private readonly topicExtensions: Extension[],
 		private model: ModelRef,
 	) {
 		this.files = new SpaceFiles(options.filesDir);
@@ -89,15 +95,22 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		const organizer = organizerExtension(() => host) as unknown as Extension;
 		const topic = topicExtension(() => host) as unknown as Extension;
 		const shared = sharedExtension(() => host) as unknown as Extension;
-		for (const e of [web, organizer, topic, shared]) registry.install(e as never);
-		const harness = await Harness.open(storage, { models: options.hub.models, registry, settings: { extensions: [web, shared, topic] } } as never, ctx);
-		host = new SpaceRuntime(options, harness, organizer, topic, shared, web, options.model);
-		const root = await harness.root(ctx, { agent: { model: modelOf(options.organizerModel ?? options.model), extensions: [organizer, shared, web] } } as never);
+		const extra = options.extensions ?? [];
+		for (const e of [web, organizer, topic, shared, ...extra]) registry.install(e as never);
+		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp) : undefined;
+		// Selected by name: MCP and tool_search count once they are installed (Chat MCP on, servers connected).
+		const mcpByName = [defineExtension({ name: MCP_EXTENSION }), options.mcp?.toolSearch ?? createToolSearchExtension()] as unknown as Extension[];
+		const mainExtensions = [organizer, shared, ...extra, ...mcpByName, web];
+		const topicExtensions = [web, shared, ...extra, ...mcpByName, topic];
+		const harness = await Harness.open(storage, { models: options.hub.models, registry, settings: { extensions: topicExtensions } } as never, ctx);
+		host = new SpaceRuntime(options, harness, organizer, topicExtensions, options.model);
+		host.detachMcp = detachMcp;
+		const root = await harness.root(ctx, { agent: { model: modelOf(options.organizerModel ?? options.model), extensions: mainExtensions } } as never);
 		host.state = clone((await harness.snapshot(SpaceDoc, ctx)) ?? undefined);
 		// Spaces made before a tool set changed get the current one (a no-op when nothing changed).
 		await harness.commit(async (tx) => {
-			await configure(tx, root.id, { extensions: [organizer, shared, web] } as never);
-			for (const t of host.state.topics) await configure(tx, Number(t.id) as never, { extensions: [web, shared, topic] } as never);
+			await configure(tx, root.id, { extensions: mainExtensions } as never);
+			for (const t of host.state.topics) await configure(tx, Number(t.id) as never, { extensions: topicExtensions } as never);
 		}, ctx);
 		host.main = await SpaceView.attach(host, root, true);
 		host.views.set("main", Promise.resolve(host.main));
@@ -182,6 +195,7 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 	}
 
 	private memoryWatch?: { stop(): Promise<unknown> };
+	private detachMcp?: () => void;
 
 	/** Routing and memory cards changed status: every open view re-sends its cards. */
 	private refreshCards(): void {
@@ -226,7 +240,7 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		const existing = doc.topics.find((t) => t.status === "active" && t.title.toLowerCase() === clean.toLowerCase());
 		if (existing) return { ...existing };
 		const record = await tx.createConversation({ ownership: { kind: "ownerless" } });
-		await configure(tx, record.id, { model: modelOf(this.model), extensions: [this.web, this.shared, this.topicExtension] } as never);
+		await configure(tx, record.id, { model: modelOf(this.model), extensions: this.topicExtensions } as never);
 		const now = new Date().toISOString();
 		const topic: TopicRecord = { id: String(record.id), title: clean, brief: brief.trim(), status: "active", createdAt: now, lastActiveAt: now };
 		doc.topics.push(topic);
@@ -514,6 +528,33 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		return hits;
 	}
 
+	// ── Moving conversations (S5, S9, S11) ───────────────────────────────────
+
+	/** Copies a thread's messages into a new topic named after it, or into `topicId`. Returns the topic's id. */
+	async importTopic(target: { topicId: string } | { title: string; brief: string }, entries: readonly Portable[], from: { title: string }): Promise<string> {
+		const topicId = await this.harness.commit(async (tx) => {
+			const topic = "topicId" in target ? this.state.topics.find((t) => t.id === target.topicId) : await this.createTopic(tx, target.title, target.brief);
+			if (!topic) throw new EngineError("NOT_FOUND", "No such topic.");
+			await importInto(tx, Number(topic.id) as never, entries, from);
+			const doc = (await tx.doc(SpaceDoc)).topics.find((t) => t.id === topic.id);
+			if (doc) doc.lastActiveAt = new Date().toISOString();
+			return topic.id;
+		}, ctx);
+		await this.refreshState();
+		await this.openViews.get(topicId)?.reload();
+		this.publishTopics();
+		void this.summarize(topicId);
+		return topicId;
+	}
+
+	/** A topic's messages, to promote it to a thread. */
+	async exportTopic(topicId: string): Promise<{ title: string; entries: Portable[] }> {
+		const topic = this.state.topics.find((t) => t.id === topicId);
+		const conversation = topic && (await this.harness.conversation(Number(topicId) as never, ctx));
+		if (!topic || !conversation) throw new EngineError("NOT_FOUND", `No topic ${topicId}`);
+		return { title: topic.title, entries: await exportConversation(conversation) };
+	}
+
 	/** Files were added or removed (the header's count). */
 	filesChanged(): void {
 		this.publishTopics();
@@ -629,6 +670,7 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 
 	async close(): Promise<void> {
 		this.closed = true;
+		this.detachMcp?.();
 		await this.docWatch?.stop();
 		await this.memoryWatch?.stop();
 		for (const view of await Promise.allSettled(this.views.values())) if (view.status === "fulfilled") await view.value.stop();
@@ -671,31 +713,44 @@ export class SpaceView implements Runtime {
 	static async attach(space: SpaceRuntime, conversation: Conversation, isMain: boolean): Promise<SpaceView> {
 		const view = new SpaceView(space, conversation, isMain);
 		if (!isMain) space.registerView(String(conversation.id), view);
-		const stream = await space.watch(conversation.id);
-		view.stream = stream;
-		view.load(stream.snapshot as unknown as { entries?: RawEntry[] }, false);
+		await view.start(false);
 		await view.settings();
 		view.builder.flush();
+		return view;
+	}
+
+	/** Watches the conversation; `emit` sends the fresh state as a resnapshot (after a reload). */
+	private async start(emit: boolean): Promise<void> {
+		const { space, conversation, isMain } = this;
+		const stream = await space.watch(conversation.id);
+		this.stream = stream;
+		this.load(stream.snapshot as unknown as { entries?: RawEntry[] }, emit);
 		stream.start(async (events) => {
+			if (stream !== this.stream) return;
 			let finished = false;
 			for (const event of events) {
 				const e = event as { type: string; entry?: RawEntry; toolCallId?: string };
 				if (e.type === "snapshot") {
-					view.load(event as never, true);
+					this.load(event as never, true);
 					continue;
 				}
 				if (e.type === "run_end") finished = true;
-				if (e.entry) view.noteEntry(e.entry);
-				view.mapper.apply(event as never);
+				if (e.entry) this.noteEntry(e.entry);
+				this.mapper.apply(event as never);
 			}
-			view.emit(view.builder.flush());
+			this.emit(this.builder.flush());
 			// A topic answered a message typed in it: unread dot and summary (routed ones are followed by `track`).
 			if (finished && !isMain) {
 				const id = String(conversation.id);
 				void space.touchTopic(id, true).then(() => space.summarize(id));
 			}
 		});
-		return view;
+	}
+
+	/** Entries were added outside a run (an imported thread): rebuilds the transcript. */
+	async reload(): Promise<void> {
+		await this.stream?.stop();
+		await this.start(true);
 	}
 
 	private load(snapshot: { entries?: RawEntry[] }, emit: boolean): void {

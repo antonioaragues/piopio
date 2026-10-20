@@ -9,7 +9,7 @@ import type { McpServerInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 
 type Scope = "global" | "project";
-type RawServer = { command?: string; args?: string[]; url?: string; type?: string; env?: Record<string, string>; enabled?: boolean; description?: string; [key: string]: unknown };
+export type RawServer = { command?: string; args?: string[]; url?: string; type?: string; env?: Record<string, string>; enabled?: boolean; description?: string; [key: string]: unknown };
 type RawFile = { mcpServers?: Record<string, RawServer>; [key: string]: unknown };
 
 export class McpConfig {
@@ -44,6 +44,19 @@ export class McpConfig {
 			}
 		}
 		return { servers, errors };
+	}
+
+	/** The global servers that are on, as written (Chat connects to these; projects are Build's). */
+	enabledGlobal(): { name: string; server: RawServer }[] {
+		let file: RawFile;
+		try {
+			file = read(this.path("global"));
+		} catch {
+			return [];
+		}
+		return Object.entries(file.mcpServers ?? {})
+			.filter(([, s]) => s.enabled !== false && (s.command || s.url))
+			.map(([name, server]) => ({ name, server }));
 	}
 
 	add(scope: Scope, cwd: string | undefined, name: string, server: { command?: string; args?: string[]; url?: string; env?: Record<string, string>; description?: string }): void {

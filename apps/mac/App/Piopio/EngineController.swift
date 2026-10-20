@@ -263,6 +263,7 @@ final class EngineController {
         threads = try await client.call("sessions.list", ListSessionsParams(kind: .thread), as: ListSessionsResult.self).sessions
         buildSessions = try await client.call("sessions.list", ListSessionsParams(kind: .build), as: ListSessionsResult.self).sessions
         spaces = try await client.call("sessions.list", ListSessionsParams(kind: .space), as: ListSessionsResult.self).sessions
+        if settings == nil { await loadSettings() }
         projects = try await client.call("projects.list", Empty(), as: ProjectsListResult.self).projects
     }
 
@@ -460,6 +461,45 @@ final class EngineController {
 
     func spaceFiles(_ space: ContainerRef) async -> [SpaceFile] {
         (try? await client?.call("spaces.files.list", RefParams(ref: space), as: SpaceFilesResult.self).files) ?? []
+    }
+
+    // MARK: Chat settings, About me, moving threads
+
+    /// Engine-wide settings (Settings › Chat, MCP in Chat).
+    private(set) var settings: EngineSettings?
+
+    func loadSettings() async {
+        settings = try? await client?.call("settings.get", Empty(), as: EngineSettings.self)
+    }
+
+    func updateSettings(_ patch: SettingsPatch) async {
+        if let next = try? await client?.call("settings.set", patch, as: EngineSettings.self) { settings = next }
+    }
+
+    func aboutMe() async -> MemoryResult? {
+        try? await client?.call("aboutMe.get", Empty(), as: MemoryResult.self)
+    }
+
+    /// Moves threads into a Space: each becomes a topic, or joins `topic`. Returns the topics' ids.
+    @discardableResult
+    func importThreads(_ threads: [ContainerRef], into space: ContainerRef, topic: String? = nil, keep: Bool = false) async throws -> [String] {
+        guard let client else { return [] }
+        let ids = try await client.call("spaces.importThreads", ImportThreadsParams(ref: space, threads: threads, topicId: topic, keepThreads: keep), as: ImportThreadsResult.self).topicIds
+        if !keep { for t in threads { forget(t.id) } }
+        try? await refreshCatalog()
+        return ids
+    }
+
+    /// Promote to Thread: a copy of the topic as a new thread.
+    func promote(_ topic: ContainerRef) async throws -> ContainerRef? {
+        guard let client else { return nil }
+        let ref = try await client.call("spaces.topics.promote", RefParams(ref: topic), as: CreateSessionResult.self).ref
+        try? await refreshCatalog()
+        return ref
+    }
+
+    func dismissSuggestion(_ thread: ContainerRef) async {
+        _ = try? await client?.call("threads.dismissSuggestion", RefParams(ref: thread), as: Empty.self)
     }
 
     /// Merges a topic into another; returns the summary that joined it.

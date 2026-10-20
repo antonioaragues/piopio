@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFi
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, PromptResponse, SessionSummary, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, PromptResponse, SessionSummary, SpaceSuggestion, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
@@ -17,6 +17,10 @@ import type { TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
 import { SpaceRuntime, type SpaceStats, type TopicSummary } from "./runtimes/space.js";
+import { aboutMeExtension, type AboutMe } from "./about-me.js";
+import type { Settings } from "./settings.js";
+import type { ChatMcp } from "./tools/mcp-chat.js";
+import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
@@ -44,6 +48,9 @@ type CatalogEntry = SessionSummary & {
 	memoryOff?: boolean;
 	autoTidy?: boolean;
 	stats?: SpaceStats;
+	/** Threads: Dismiss on a Space suggestion; and the exchanges a suggestion was already looked for at. */
+	suggestionDismissed?: boolean;
+	suggestChecked?: number[];
 };
 
 /** At most this many subagents run at once per session (docs/spec/05-build §4). */
@@ -69,6 +76,9 @@ export class Sessions {
 	readonly search: SearchIndex;
 	readonly checkpoints: CheckpointStore;
 	policy: ApprovalPolicy = { projectFor: () => undefined, modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
+	/** Settings, About me and MCP for Threads and Spaces (set by the engine). */
+	chat?: { settings: Settings; aboutMe: AboutMe; mcp: ChatMcp };
+	private aboutMeExtensions = new Map<"thread" | "space", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
 
@@ -446,6 +456,103 @@ export class Sessions {
 		this.changed(entry);
 	}
 
+	private chatExtras(kind: "thread" | "space"): { extensions?: Extension[]; mcp?: ChatMcp } {
+		if (!this.chat) return {};
+		let aboutMe = this.aboutMeExtensions.get(kind);
+		if (!aboutMe) {
+			aboutMe = aboutMeExtension(this.chat.aboutMe, this.chat.settings, kind) as unknown as Extension;
+			this.aboutMeExtensions.set(kind, aboutMe);
+		}
+		return { extensions: [aboutMe], mcp: this.chat.mcp };
+	}
+
+	// ── Moving threads and topics (04-chat S5, S9, S11) ─────────────────────
+
+	/** Each thread becomes a topic of the Space (or joins `topicId`); then it's deleted unless `keep`. */
+	async importThreads(spaceRef: ContainerRef, threads: ContainerRef[], options: { topicId?: string; keep: boolean }): Promise<string[]> {
+		const space = await this.space(spaceRef);
+		const ids: string[] = [];
+		for (const ref of threads) {
+			const entry = this.entry({ kind: "thread", id: ref.id });
+			const runtime = (await this.runtime(entry.ref)) as ThreadRuntime;
+			if (runtime.snapshot().state.status === "running") throw new EngineError("BUSY", `“${entry.title}” is still answering.`);
+			const entries = await runtime.exportEntries();
+			ids.push(await space.importTopic(options.topicId ? { topicId: options.topicId } : { title: entry.title, brief: `Moved here from the thread “${entry.title}”.` }, entries, { title: entry.title }));
+			if (options.keep) {
+				delete entry.suggestion;
+				entry.suggestionDismissed = true;
+				this.save();
+				this.changed(entry);
+			} else {
+				await this.delete(entry.ref);
+			}
+		}
+		return ids;
+	}
+
+	/** Promote to Thread: a new thread with a copy of the topic's messages. */
+	async promoteTopic(topicRef: ContainerRef): Promise<ContainerRef> {
+		if (!topicRef.conversationId) throw new EngineError("INVALID", "Give a topic.");
+		const spaceEntry = this.entry({ kind: "space", id: topicRef.id });
+		const { title, entries } = await (await this.space(topicRef)).exportTopic(topicRef.conversationId);
+		const ref = await this.create({ kind: "thread", title, ...(spaceEntry.model ? { model: spaceEntry.model } : {}) });
+		const thread = (await this.runtime(ref)) as ThreadRuntime;
+		await thread.importEntries(entries, { title: `${spaceEntry.title} › ${title}` });
+		this.entry(ref).suggestionDismissed = true; // it just came from a Space
+		this.touch(ref);
+		return ref;
+	}
+
+	dismissSuggestion(ref: ContainerRef): void {
+		const entry = this.entry(ref);
+		entry.suggestionDismissed = true;
+		delete entry.suggestion;
+		this.save();
+		this.changed(entry);
+	}
+
+	/**
+	 * Thread → Space suggestion (S11): after the first exchange, and again after the fifth (the subject may have
+	 * drifted), the utility model compares the thread with every Space's topics.
+	 */
+	private async suggestSpace(entry: CatalogEntry, runtime: Runtime): Promise<void> {
+		if (!this.chat?.settings.get().chat.suggestSpaces || entry.suggestionDismissed || entry.suggestion) return;
+		const items = runtime.snapshot().items;
+		const exchanges = items.filter((i) => i.kind === "assistant" && i.status === "done").length;
+		const at = exchanges >= 5 ? 5 : exchanges >= 1 ? 1 : 0;
+		if (!at || entry.suggestChecked?.includes(at)) return;
+		entry.suggestChecked = [...(entry.suggestChecked ?? []), at];
+		this.save();
+		const spaces = [...this.entries.values()].filter((e) => e.ref.kind === "space");
+		if (!spaces.length) return;
+		const text = items
+			.flatMap((i) => (i.kind === "user" ? [`User: ${i.text}`] : i.kind === "assistant" ? [`Assistant: ${i.parts.filter((p) => p.type === "text").map((p) => p.text).join("")}`] : []))
+			.join("\n\n")
+			.slice(0, 6000);
+		const suggestion = (await this.askUtility(text, spaces).catch(() => undefined)) ?? keywordMatch(text, spaces);
+		if (!suggestion || !this.entries.has(entry.ref.id) || entry.suggestionDismissed) return;
+		entry.suggestion = suggestion;
+		this.save();
+		this.changed(entry);
+	}
+
+	private async askUtility(text: string, spaces: CatalogEntry[]): Promise<SpaceSuggestion | undefined> {
+		const index = spaces
+			.map((s) => `Space ${s.ref.id} “${s.title}”${s.instructions ? ` (${s.instructions.slice(0, 200)})` : ""}\n${(s.topics ?? []).filter((t) => !t.archived).map((t) => `  - topic ${t.id} “${t.title}”: ${t.brief ?? ""} ${t.summary ?? ""}`.trimEnd()).join("\n") || "  (no topics)"}`)
+			.join("\n");
+		const reply = await this.hub.utility(
+			'You decide whether a chat thread belongs in one of the user\'s Spaces (long-running areas of their life or work, split into topics). Answer with JSON only: {"space": "<space id or null>", "topic": "<topic id or null>", "confidence": <0..1>, "reason": "<one short line>"}. Pick a topic only when the thread continues its subject. Use null when nothing fits well.',
+			`Spaces:\n${index}\n\nThread:\n${text}`,
+		);
+		if (reply === undefined) return undefined;
+		const json = /\{[\s\S]*\}/.exec(reply)?.[0];
+		const parsed = json ? (JSON.parse(json) as { space?: string | null; topic?: string | null; confidence?: number; reason?: string }) : undefined;
+		const space = spaces.find((s) => s.ref.id === parsed?.space);
+		if (!parsed || !space || (parsed.confidence ?? 0) < SUGGEST_CONFIDENCE) return undefined;
+		const topic = (space.topics ?? []).find((t) => t.id === parsed.topic && !t.archived);
+		return { spaceId: space.ref.id, spaceTitle: space.title, ...(topic ? { topicId: topic.id, topicTitle: topic.title } : {}), reason: parsed.reason?.trim() || "It looks like the same subject." };
+	}
+
 	/** Folders git may run in: a project, or a Build session's worktree. */
 	knowsFolder(cwd: string): boolean {
 		return Boolean(this.policy.projectFor(cwd)) || [...this.entries.values()].some((e) => e.ref.kind === "build" && e.cwd === cwd);
@@ -593,7 +700,10 @@ export class Sessions {
 	private async openRuntime(entry: CatalogEntry): Promise<Runtime> {
 		const runtime = await this.createRuntime(entry);
 		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
-		runtime.onEvents((events) => this.index(entry, events));
+		runtime.onEvents((events) => {
+			this.index(entry, events);
+			if (entry.ref.kind === "thread" && events.some((e) => e.type === "state" && e.state.status === "idle")) void this.suggestSpace(entry, runtime);
+		});
 		return runtime;
 	}
 
@@ -610,6 +720,7 @@ export class Sessions {
 				info: () => ({ name: entry.title, ...(entry.instructions ? { instructions: entry.instructions } : {}) }),
 				settings: () => ({ memory: !entry.memoryOff, autoTidy: entry.autoTidy ?? false }),
 				webOptions: this.webOptions,
+				...this.chatExtras("space"),
 				onTopics: (topics, stats) => {
 					if (!this.entries.has(entry.ref.id)) return;
 					if (JSON.stringify(topics) === JSON.stringify(entry.topicState) && JSON.stringify(stats) === JSON.stringify(entry.stats)) return;
@@ -632,6 +743,7 @@ export class Sessions {
 				},
 				web: entry.web ?? true,
 				webOptions: this.webOptions,
+				...this.chatExtras("thread"),
 			});
 		}
 		const runtime = await BuildRuntime.open({
@@ -675,8 +787,26 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, readAt: _r, topicState: _ts, organizerModel: _o, memoryOff: _m, autoTidy: _a, stats: _st, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, readAt: _r, topicState: _ts, organizerModel: _o, memoryOff: _m, autoTidy: _a, stats: _st, suggestionDismissed: _sd, suggestChecked: _sc, ...rest }: CatalogEntry): SessionSummary {
 	return rest;
+}
+
+/** The suggestion needs this much confidence from the utility model. */
+const SUGGEST_CONFIDENCE = 0.75;
+
+/**
+ * Without a utility model (the scripted model): a topic whose title words (4+ letters) all appear in the thread,
+ * else nothing. Cheap and conservative.
+ */
+function keywordMatch(text: string, spaces: CatalogEntry[]): SpaceSuggestion | undefined {
+	const lower = text.toLowerCase();
+	for (const space of spaces) {
+		for (const topic of (space.topics ?? []).filter((t) => !t.archived)) {
+			const words = topic.title.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4);
+			if (words.length && words.every((w) => lower.includes(w))) return { spaceId: space.ref.id, spaceTitle: space.title, topicId: topic.id, topicTitle: topic.title, reason: `It mentions ${topic.title}.` };
+		}
+	}
+	return undefined;
 }
 
 /** What a subagent is doing, for its task card. */

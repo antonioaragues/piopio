@@ -335,6 +335,35 @@ export const SpaceInfo = Type.Object({
 });
 export type SpaceInfo = Static<typeof SpaceInfo>;
 
+/** Engine-wide settings (07-shared §5, §7). */
+export const EngineSettings = Type.Object({
+	chat: Type.Object({
+		/** Threads and Spaces reach the global MCP servers (Build always does). */
+		mcp: Type.Boolean(),
+		/** Suggest moving a thread into a Space (04-chat S11). */
+		suggestSpaces: Type.Boolean(),
+	}),
+	aboutMe: Type.Object({
+		/** Shown to the agents. */
+		enabled: Type.Boolean(),
+		/** The agents may add facts (`remember_about_me`). */
+		capture: Type.Boolean(),
+		inThreads: Type.Boolean(),
+		inSpaces: Type.Boolean(),
+	}),
+});
+export type EngineSettings = Static<typeof EngineSettings>;
+
+/** Where a thread seems to belong (04-chat S11). */
+export const SpaceSuggestion = Type.Object({
+	spaceId: Type.String(),
+	spaceTitle: Type.String(),
+	topicId: Type.Optional(Type.String()),
+	topicTitle: Type.Optional(Type.String()),
+	reason: Type.String(),
+});
+export type SpaceSuggestion = Static<typeof SpaceSuggestion>;
+
 export const SessionSummary = Type.Object({
 	ref: ContainerRef,
 	title: Type.String(),
@@ -355,6 +384,8 @@ export const SessionSummary = Type.Object({
 	instructions: Type.Optional(Type.String()),
 	/** Spaces: the header's numbers and the settings (04-chat S7, §3.6). */
 	space: Type.Optional(SpaceInfo),
+	/** Threads: a Space it seems to belong in (S11), until moved or dismissed. */
+	suggestion: Type.Optional(SpaceSuggestion),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -754,6 +785,33 @@ export const methods = {
 		result: Type.Object({}),
 	},
 	"spaces.files.remove": { params: Type.Object({ ref: ContainerRef, name: Type.String() }), result: Type.Object({}) },
+	"settings.get": { params: Type.Object({}), result: EngineSettings },
+	"settings.set": {
+		params: Type.Object({ chat: Type.Optional(Type.Partial(EngineSettings.properties.chat)), aboutMe: Type.Optional(Type.Partial(EngineSettings.properties.aboutMe)) }),
+		result: EngineSettings,
+	},
+	/** The "About me" memory and its history, newest first. */
+	"aboutMe.get": {
+		params: Type.Object({}),
+		result: Type.Object({
+			text: Type.String(),
+			revisions: Type.Array(Type.Object({ id: Type.String(), at: Type.String(), by: Type.Object({ kind: literals("organizer", "topic", "user") }), summary: Type.String(), added: Type.Array(Type.String()), removed: Type.Array(Type.String()) })),
+		}),
+	},
+	"aboutMe.set": { params: Type.Object({ text: Type.String() }), result: Type.Object({}) },
+	"aboutMe.restore": { params: Type.Object({ revisionId: Type.String() }), result: Type.Object({}) },
+	/** Dismiss on a thread's Space suggestion: it won't be suggested again. */
+	"threads.dismissSuggestion": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({}) },
+	/**
+	 * Moves threads into a Space (S5, S11): each becomes a new topic named after it, or, with `topicId`, joins
+	 * that topic. The threads are deleted unless `keepThreads`.
+	 */
+	"spaces.importThreads": {
+		params: Type.Object({ ref: ContainerRef, threads: Type.Array(ContainerRef), topicId: Type.Optional(Type.String()), keepThreads: Type.Optional(Type.Boolean()) }),
+		result: Type.Object({ topicIds: Type.Array(Type.String()) }),
+	},
+	/** Promote to Thread (S9): copies a topic out into a new thread. The topic stays. */
+	"spaces.topics.promote": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({ ref: ContainerRef }) },
 	/** Forgets a project. Its session files stay where pi keeps them. */
 	"projects.remove": {
 		params: Type.Object({ id: Type.String() }),

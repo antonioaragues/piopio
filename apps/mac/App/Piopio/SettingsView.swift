@@ -9,12 +9,13 @@ struct SettingsView: View {
     @State private var section: Section = Section(rawValue: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Providers", mcp = "MCP servers", approvals = "Approvals", engines = "Engines"
+        case general = "General", providers = "Providers", chat = "Chat", mcp = "MCP servers", approvals = "Approvals", engines = "Engines"
         var id: String { rawValue }
         var icon: (String, Color) {
             switch self {
             case .general: ("gearshape.fill", .gray)
             case .providers: ("key.fill", .blue)
+            case .chat: ("bubble.left.and.bubble.right.fill", .teal)
             case .approvals: ("checkmark.shield.fill", .orange)
             case .mcp: ("puzzlepiece.extension.fill", .purple)
             case .engines: ("cpu.fill", .green)
@@ -53,6 +54,7 @@ struct SettingsView: View {
                     switch section {
                     case .general: GeneralPane()
                     case .providers: ProvidersPane(engine: engine)
+                    case .chat: ChatPane(engine: engine)
                     case .approvals: ApprovalsPane(engine: engine)
                     case .mcp: McpPane(engine: engine)
                     case .engines: EnginesPane(engine: engine)
@@ -68,7 +70,7 @@ struct SettingsView: View {
     }
 }
 
-private struct PaneTitle: View {
+struct PaneTitle: View {
     let title: String
     let subtitle: String
     var body: some View {
@@ -81,7 +83,7 @@ private struct PaneTitle: View {
 }
 
 /// Rows inside a card list, separated by hairlines.
-private struct ListCard<Content: View>: View {
+struct ListCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 0) { content }
@@ -90,7 +92,7 @@ private struct ListCard<Content: View>: View {
     }
 }
 
-private struct Row<Trailing: View>: View {
+struct Row<Trailing: View>: View {
     let title: String
     var last = false
     @ViewBuilder var trailing: Trailing
@@ -326,7 +328,16 @@ private struct McpPane: View {
     @State private var adding = false
 
     var body: some View {
-        PaneTitle(title: "MCP servers", subtitle: "Tools from Model Context Protocol servers, for Build sessions. Same files as the pi CLI.")
+        PaneTitle(title: "MCP servers", subtitle: "Tools from Model Context Protocol servers. Same files as the pi CLI.")
+        ListCard {
+            Row(title: "In Chat", last: true) {
+                Toggle("Also in Threads and Spaces (all servers; Chat doesn't ask before a tool runs)", isOn: Binding(get: { engine.settings?.chat.mcp ?? false }, set: { on in Task { await engine.updateSettings(SettingsPatch(chat: .init(mcp: on))) } }))
+                    .toggleStyle(.switch).controlSize(.small).font(.system(size: 13))
+                Spacer()
+            }
+        }
+        .padding(.bottom, 18)
+        .task { await engine.loadSettings() }
         HStack {
             SectionLabel("Servers")
             Spacer()

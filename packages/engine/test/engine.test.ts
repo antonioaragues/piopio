@@ -1113,3 +1113,106 @@ describe("Spaces (milestone 3.2)", () => {
 		expect(off.items.find((i) => i.kind === "memory")).toMatchObject({ status: "failed", reason: "Memory is off for this Space." });
 	}, 90_000);
 });
+
+describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () => {
+	async function idle(ctx: Ctx, ref: unknown, ready: (s: Snapshot) => boolean = (s) => s.state.status === "idle" && s.items.some((i) => i.kind === "assistant"), timeout = 10_000): Promise<Snapshot> {
+		const end = Date.now() + timeout;
+		for (;;) {
+			const snap: Snapshot = await ctx.client.call("sessions.open", { ref });
+			if (ready(snap)) return snap;
+			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(snap.items)}`);
+			await new Promise((r) => setTimeout(r, 100));
+		}
+	}
+	const thread = async (ctx: Ctx, text: string) => {
+		const { ref } = await ctx.client.call("sessions.create", { kind: "thread" });
+		await ctx.client.call("sessions.subscribe", { ref });
+		await ctx.client.call("sessions.submit", { ref, input: { text } });
+		await idle(ctx, ref);
+		return ref;
+	};
+	const summaryOf = async (ctx: Ctx, id: string) => [...(await ctx.client.call("sessions.list", {})).sessions].find((s) => s.ref.id === id);
+
+	test("a thread is suggested for a Space topic, moves into it, and topics promote back out to threads", async () => {
+		const a = await start();
+		const { ref: space } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
+		await a.client.call("sessions.subscribe", { ref: space });
+		await a.client.call("sessions.submit", { ref: space, input: { text: "/new Kitchen cabinets\nOak or walnut?" } });
+		await idle(a, space, (s) => s.items.some((i) => i.kind === "routing" && i.status === "replied"));
+		const topicId = (await summaryOf(a, space.id))!.topics![0]!.id;
+
+		const t1 = await thread(a, "Which finish for the kitchen cabinets?");
+		for (let i = 0; i < 30 && !(await summaryOf(a, t1.id))?.suggestion; i++) await new Promise((r) => setTimeout(r, 100));
+		expect((await summaryOf(a, t1.id))!.suggestion).toMatchObject({ spaceId: space.id, spaceTitle: "Home", topicId, topicTitle: "Kitchen cabinets" });
+
+		// Move to topic: the thread's messages join the topic; the thread goes.
+		expect(await a.client.call("spaces.importThreads", { ref: space, threads: [t1], topicId })).toEqual({ topicIds: [topicId] });
+		const topicRef = { ...space, conversationId: topicId };
+		expect(texts(await a.client.call("sessions.open", { ref: topicRef }))).toEqual([
+			["user", "Oak or walnut?"],
+			["assistant", "Echo: Oak or walnut?"],
+			["user", "Which finish for the kitchen cabinets?"],
+			["assistant", "Echo: Which finish for the kitchen cabinets?"],
+		]);
+		expect(await summaryOf(a, t1.id)).toBeUndefined();
+
+		// Move as new topic, keeping the thread; Dismiss on another.
+		const t2 = await thread(a, "Paint colours for the hall");
+		const [newTopic] = (await a.client.call("spaces.importThreads", { ref: space, threads: [t2], keepThreads: true })).topicIds;
+		expect((await summaryOf(a, space.id))!.topics!.find((t) => t.id === newTopic)!.title).toBe("Paint colours for the hall");
+		expect(await summaryOf(a, t2.id)).toBeDefined();
+		const t3 = await thread(a, "More about kitchen cabinets hinges");
+		for (let i = 0; i < 30 && !(await summaryOf(a, t3.id))?.suggestion; i++) await new Promise((r) => setTimeout(r, 100));
+		await a.client.call("threads.dismissSuggestion", { ref: t3 });
+		expect((await summaryOf(a, t3.id))!.suggestion).toBeUndefined();
+
+		// Promote to Thread: a copy; the topic stays. The new thread goes on from there.
+		const { ref: promoted } = await a.client.call("spaces.topics.promote", { ref: topicRef });
+		expect((await summaryOf(a, promoted.id))!.title).toBe("Kitchen cabinets");
+		expect(texts(await a.client.call("sessions.open", { ref: promoted }))).toEqual(texts(await a.client.call("sessions.open", { ref: topicRef })));
+		await a.client.call("sessions.subscribe", { ref: promoted });
+		await a.client.call("sessions.submit", { ref: promoted, input: { text: "and the handles?" } });
+		await idle(a, promoted, (s) => s.items.filter((i) => i.kind === "assistant").length === 3 && s.state.status === "idle");
+
+		await stop(a);
+		const b = await start(a.home);
+		expect(texts(await b.client.call("sessions.open", { ref: topicRef })).length).toBe(4);
+	}, 60_000);
+
+	test("About me: off by default, then shown and captured; MCP servers reach Threads and Spaces when allowed", async () => {
+		const a = await start();
+		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true } });
+		const tools = (s: Snapshot) => s.items.flatMap((i) => (i.kind === "tool" ? [i] : []));
+
+		let t = await thread(a, 'call: remember_about_me | {"add":["Lives in Valencia"],"section":"Home"}');
+		expect(tools(await a.client.call("sessions.open", { ref: t }))[0]).toMatchObject({ status: "error", output: expect.stringContaining("off") });
+		await a.client.call("settings.set", { aboutMe: { enabled: true, capture: true } });
+		t = await thread(a, 'call: remember_about_me | {"add":["Lives in Valencia"],"section":"Home"}');
+		expect(tools(await a.client.call("sessions.open", { ref: t }))[0]).toMatchObject({ status: "done", output: "Saved to About me: Added “Lives in Valencia”." });
+		let me = await a.client.call("aboutMe.get", {});
+		expect(me.text).toBe("## Home\n- Lives in Valencia");
+		await a.client.call("aboutMe.set", { text: "## Home\n- Lives in Madrid" });
+		me = await a.client.call("aboutMe.get", {});
+		expect(me.revisions[0]).toMatchObject({ by: { kind: "user" }, added: ["Lives in Madrid"], removed: ["Lives in Valencia"] });
+		await a.client.call("aboutMe.restore", { revisionId: me.revisions[1]!.id });
+		expect((await a.client.call("aboutMe.get", {})).text).toContain("Valencia");
+
+		const server = fileURLToPath(new URL("./fixtures/echo-mcp-server.mjs", import.meta.url));
+		await a.client.call("mcp.add", { scope: "global", name: "test", command: process.execPath, args: [server] });
+		const file = join(a.home, "pi-agent", "mcp.json");
+		const config = JSON.parse(readFileSync(file, "utf8"));
+		config.mcpServers.test.exposure = "direct";
+		writeFileSync(file, JSON.stringify(config));
+		t = await thread(a, 'call: mcp__test__echo | {"text":"hi"}');
+		// Off: the tool doesn't exist for the model, so nothing runs.
+		expect(tools(await a.client.call("sessions.open", { ref: t })).some((i) => i.status === "done")).toBe(false);
+		await a.client.call("settings.set", { chat: { mcp: true } });
+		t = await thread(a, 'call: mcp__test__echo | {"text":"hi"}');
+		expect(tools(await a.client.call("sessions.open", { ref: t }))[0]).toMatchObject({ tool: "mcp__test__echo", status: "done", output: "echo: hi" });
+		const { ref: space } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
+		await a.client.call("sessions.subscribe", { ref: space });
+		await a.client.call("sessions.submit", { ref: space, input: { text: 'call: mcp__test__echo | {"text":"from main"}' } });
+		const main = await idle(a, space);
+		expect(tools(main)[0]).toMatchObject({ status: "done", output: "echo: from main" });
+	}, 60_000);
+});

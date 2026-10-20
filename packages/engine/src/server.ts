@@ -1,5 +1,6 @@
 /** Local Engine: Engine Protocol over a Unix domain socket. */
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import { existsSync, unlinkSync, chmodSync } from "node:fs";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, type MethodName, type Params, type Result } from "@piopio/protocol";
@@ -15,6 +16,9 @@ import { McpConfig } from "./mcp.js";
 import * as gitOps from "./git.js";
 import { Projects } from "./projects.js";
 import { Sessions } from "./sessions.js";
+import { AboutMe } from "./about-me.js";
+import { Settings } from "./settings.js";
+import { ChatMcp } from "./tools/mcp-chat.js";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
 declare const PIOPIO_ENGINE_VERSION: string | undefined;
@@ -39,6 +43,9 @@ export class Engine {
 	readonly sessions: Sessions;
 	readonly projects: Projects;
 	readonly mcp: McpConfig;
+	readonly settings: Settings;
+	readonly aboutMe: AboutMe;
+	readonly chatMcp: ChatMcp;
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
@@ -68,6 +75,13 @@ export class Engine {
 		const agentDir = options.piAgentDir ?? getAgentDir();
 		this.projects = new Projects(options.paths.projectsIndex, agentDir);
 		this.mcp = new McpConfig(agentDir);
+		this.settings = new Settings(join(options.paths.home, "settings.json"));
+		this.aboutMe = new AboutMe(join(options.paths.home, "about-me.json"));
+		this.chatMcp = new ChatMcp(this.mcp, () => this.settings.get().chat.mcp);
+		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp };
+		this.settings.onChange((next, previous) => {
+			if (next.chat.mcp !== previous.chat.mcp) void this.chatMcp.reset();
+		});
 		this.sessions.policy = {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
 			modeFor: (cwd) => this.projects.modeFor(cwd),
@@ -110,6 +124,7 @@ export class Engine {
 		this.subscriptions.clear();
 		await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()));
 		await this.sessions.closeAll();
+		await this.chatMcp.close();
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
 	}
 
@@ -353,17 +368,51 @@ export class Engine {
 				const p = params as Params<"mcp.add">;
 				const { scope, cwd, name, ...server } = p;
 				this.mcp.add(scope, cwd ? this.folder({ cwd }) : undefined, name, server);
+				if (scope === "global") void this.chatMcp.reset();
 				return {};
 			}
 			case "mcp.remove": {
 				const p = params as Params<"mcp.remove">;
 				this.mcp.remove(p.scope, p.cwd ? this.folder(p) : undefined, p.name);
+				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
 			}
 			case "mcp.setEnabled": {
 				const p = params as Params<"mcp.setEnabled">;
 				this.mcp.setEnabled(p.scope, p.cwd ? this.folder(p) : undefined, p.name, p.enabled);
+				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
+			}
+			case "settings.get":
+				return this.settings.get() satisfies Result<"settings.get">;
+			case "settings.set": {
+				const p = params as Params<"settings.set">;
+				return this.settings.set(p) satisfies Result<"settings.set">;
+			}
+			case "aboutMe.get":
+				return this.aboutMe.info() satisfies Result<"aboutMe.get">;
+			case "aboutMe.set": {
+				const p = params as Params<"aboutMe.set">;
+				this.aboutMe.set(p.text);
+				return {};
+			}
+			case "aboutMe.restore": {
+				const p = params as Params<"aboutMe.restore">;
+				this.aboutMe.restore(p.revisionId);
+				return {};
+			}
+			case "threads.dismissSuggestion": {
+				const p = params as Params<"threads.dismissSuggestion">;
+				this.sessions.dismissSuggestion(p.ref);
+				return {};
+			}
+			case "spaces.importThreads": {
+				const p = params as Params<"spaces.importThreads">;
+				return { topicIds: await this.sessions.importThreads(p.ref, p.threads, { ...(p.topicId ? { topicId: p.topicId } : {}), keep: p.keepThreads ?? false }) } satisfies Result<"spaces.importThreads">;
+			}
+			case "spaces.topics.promote": {
+				const p = params as Params<"spaces.topics.promote">;
+				return { ref: await this.sessions.promoteTopic(p.ref) } satisfies Result<"spaces.topics.promote">;
 			}
 			case "sessions.finish": {
 				const p = params as Params<"sessions.finish">;

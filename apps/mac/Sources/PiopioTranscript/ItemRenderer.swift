@@ -323,6 +323,17 @@ nonisolated struct ItemRenderer: Sendable {
             let server = parts.count > 1 ? String(parts[1]) : "MCP"
             let tool = name.components(separatedBy: "__").dropFirst(2).joined(separator: "__")
             return (server, tool.isEmpty ? name : tool)
+        case "remember_about_me":
+            let facts = t.args?["add"]?.arrayValue?.compactMap(\.stringValue).joined(separator: ", ") ?? ""
+            return (running ? "Saving to About me" : failed ? "Not saved to About me" : "Saved to About me", facts)
+        case "ask_topic":
+            return (running ? "Asking \(t.args?["topic"]?.stringValue ?? "a topic")" : "Asked \(t.args?["topic"]?.stringValue ?? "a topic")", t.args?["question"]?.stringValue ?? "")
+        case "search_space":
+            return (running ? "Searching the Space" : "Searched the Space", t.args?["query"]?.stringValue ?? "")
+        case "space_files_list", "space_files_read", "space_files_search":
+            return (running ? "Reading the Space's files" : "Read the Space's files", t.args?["name"]?.stringValue ?? t.args?["query"]?.stringValue ?? "")
+        case "rename_topic", "archive_topic", "merge_topics":
+            return (failed ? "Suggested tidying" : "Tidied topics", t.args?["topic"]?.stringValue ?? t.args?["from"]?.stringValue ?? "")
         case "ask_user":
             return (running ? "Waiting for your answer" : "Asked you", t.args?["question"]?.stringValue ?? "")
         case "notify_user":

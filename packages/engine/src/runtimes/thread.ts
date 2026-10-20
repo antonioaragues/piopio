@@ -14,6 +14,8 @@ import { DurableEventMapper } from "../timeline/pi-durable.js";
 import { computeBranches, type ConversationNode, type ViewEntry } from "./branches.js";
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
+import { attachChatMcp, type ChatMcp } from "../tools/mcp-chat.js";
+import { exportConversation, importInto, type Portable } from "./transfer.js";
 
 const ctx = BACKGROUND_CONTEXT;
 
@@ -34,6 +36,10 @@ export type ThreadOpenOptions = {
 	/** Web tools on (default) or off. */
 	web?: boolean;
 	webOptions?: WebOptions;
+	/** More extensions (About me). */
+	extensions?: Extension[];
+	/** MCP servers, when Chat may use them. */
+	mcp?: ChatMcp;
 };
 
 export class ThreadRuntime implements Runtime {
@@ -67,8 +73,11 @@ export class ThreadRuntime implements Runtime {
 		const registry = createRegistry();
 		const webExtension = createWebExtension(options.hub, options.webOptions) as unknown as Extension;
 		registry.install(webExtension as never);
+		for (const e of options.extensions ?? []) registry.install(e as never);
+		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp) : undefined;
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
 		const runtime = new ThreadRuntime(options.ref, options.hub, harness, options.model, options.thinking, options.branches, options.onBranchState, options.web ?? true, webExtension);
+		runtime.detachMcp = detachMcp;
 		const root = await harness.root(ctx, { agent: runtime.agent() } as Parameters<Harness["root"]>[1]);
 		const saved = options.branches?.active ? await harness.conversation(Number(options.branches.active) as never, ctx) : undefined;
 		await runtime.attach(saved ?? root, false);
@@ -268,7 +277,23 @@ export class ThreadRuntime implements Runtime {
 		for (const q of this.builder.snapshot().state.queue) await this.removeQueued(q.id).catch(() => undefined);
 	}
 
+	private detachMcp?: () => void;
+
+	// MARK: Moving (04-chat S5, S9)
+
+	/** The shown branch's messages, to move into a Space. */
+	exportEntries(): Promise<Portable[]> {
+		return exportConversation(this.active);
+	}
+
+	/** Appends copied messages (a promoted topic) and shows them. */
+	async importEntries(entries: readonly Portable[], from: { title: string }): Promise<void> {
+		await this.harness.commit((tx) => importInto(tx, this.active.id, entries, from), ctx);
+		await this.attach(this.active, true);
+	}
+
 	async close(): Promise<void> {
+		this.detachMcp?.();
 		await this.stream?.stop();
 		await this.harness.close(ctx);
 	}

@@ -378,7 +378,47 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var topics: [TopicInfo]?
     public var instructions: String?
     public var space: SpaceInfo?
+    /// Threads: a Space it seems to belong in (04-chat S11).
+    public var suggestion: SpaceSuggestion?
 }
+
+public struct SpaceSuggestion: Codable, Sendable, Hashable {
+    public var spaceId: String
+    public var spaceTitle: String
+    public var topicId: String?
+    public var topicTitle: String?
+    public var reason: String
+}
+
+/// Engine-wide settings (Settings › Chat, Settings › MCP servers).
+public struct EngineSettings: Codable, Sendable, Hashable {
+    public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var suggestSpaces: Bool }
+    public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool }
+    public var chat: Chat
+    public var aboutMe: AboutMe
+}
+
+public struct SettingsPatch: Encodable, Sendable {
+    public struct Chat: Encodable, Sendable {
+        public var mcp: Bool?; public var suggestSpaces: Bool?
+        public init(mcp: Bool? = nil, suggestSpaces: Bool? = nil) { self.mcp = mcp; self.suggestSpaces = suggestSpaces }
+    }
+    public struct AboutMe: Encodable, Sendable {
+        public var enabled, capture, inThreads, inSpaces: Bool?
+        public init(enabled: Bool? = nil, capture: Bool? = nil, inThreads: Bool? = nil, inSpaces: Bool? = nil) { self.enabled = enabled; self.capture = capture; self.inThreads = inThreads; self.inSpaces = inSpaces }
+    }
+    public var chat: Chat?
+    public var aboutMe: AboutMe?
+    public init(chat: Chat? = nil, aboutMe: AboutMe? = nil) { self.chat = chat; self.aboutMe = aboutMe }
+}
+
+public struct TextParams: Encodable, Sendable { public var text: String; public init(text: String) { self.text = text } }
+public struct RevisionIdParams: Encodable, Sendable { public var revisionId: String; public init(revisionId: String) { self.revisionId = revisionId } }
+public struct ImportThreadsParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var threads: [ContainerRef]; public var topicId: String?; public var keepThreads: Bool?
+    public init(ref: ContainerRef, threads: [ContainerRef], topicId: String? = nil, keepThreads: Bool? = nil) { self.ref = ref; self.threads = threads; self.topicId = topicId; self.keepThreads = keepThreads }
+}
+public struct ImportThreadsResult: Decodable, Sendable { public var topicIds: [String] }
 
 /// A Space's header numbers and settings (04-chat S7, §3.6).
 public struct SpaceInfo: Codable, Sendable, Hashable {

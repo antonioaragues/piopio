@@ -73,6 +73,12 @@ struct TopicMenu: View {
             }
         }
         Button("Export as Markdown…") { Task { await engine.thread(ref).export(.markdown) } }
+        Button("Promote to Thread") {
+            run {
+                if let thread = try await engine.promote(ref) { NotificationCenter.default.post(name: .selectThread, object: thread.id) }
+            }
+        }
+        .help("Copies this topic out into a new thread; the topic stays")
         Divider()
         Button("Archive") {
             if selection == ref.key { selection = space.ref.id }
@@ -247,7 +253,10 @@ extension Notification.Name {
 /// Name and instructions (S5). Topics come later, as you write in Main.
 struct NewSpaceSheet: View {
     let engine: EngineController
-    let created: (ContainerRef) -> Void
+    var preselected: Set<String> = []
+    /// The selection to show: Main, or the first topic made from a thread.
+    let created: (String) -> Void
+    @State private var threads: Set<String> = []
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var instructions = ""
@@ -263,13 +272,18 @@ struct NewSpaceSheet: View {
                 TextField("Home renovation", text: $name).textFieldStyle(.roundedBorder)
             }
             InstructionsField(text: $instructions)
+            if !engine.threads.isEmpty { ThreadPicker(threads: engine.threads, selected: $threads) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
                 Button(creating ? "Creating…" : "Create Space") {
                     creating = true
                     Task {
-                        if let ref = await engine.createSpace(name: name.trimmingCharacters(in: .whitespaces), instructions: instructions.trimmingCharacters(in: .whitespacesAndNewlines)) { created(ref) }
+                        if let ref = await engine.createSpace(name: name.trimmingCharacters(in: .whitespaces), instructions: instructions.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                            let moving = engine.threads.filter { threads.contains($0.ref.id) }.map(\.ref)
+                            let topics = moving.isEmpty ? [] : ((try? await engine.importThreads(moving, into: ref)) ?? [])
+                            created(topics.first.map { ContainerRef(kind: .space, id: ref.id, conversationId: $0).key } ?? ref.id)
+                        }
                         dismiss()
                     }
                 }
@@ -280,6 +294,7 @@ struct NewSpaceSheet: View {
         }
         .padding(22)
         .frame(width: 460)
+        .onAppear { threads = preselected }
     }
 }
 

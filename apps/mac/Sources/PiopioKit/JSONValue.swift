@@ -40,4 +40,9 @@ public enum JSONValue: Sendable, Hashable, Codable {
         if case .string(let s) = self { return s }
         return nil
     }
+
+    public var arrayValue: [JSONValue]? {
+        if case .array(let a) = self { return a }
+        return nil
+    }
 }

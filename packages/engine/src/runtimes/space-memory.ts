@@ -69,8 +69,8 @@ export function describe(added: readonly string[], removed: readonly string[]): 
 }
 
 /** Memory as the agents see it: the start of it, with a note when it is cut. */
-export function memoryPrompt(text: string): string {
-	if (!text.trim()) return "The Space's memory is empty.";
+export function memoryPrompt(text: string, empty = "The Space's memory is empty."): string {
+	if (!text.trim()) return empty;
 	if (text.length <= PROMPT_CHARS) return text;
 	return `${text.slice(0, PROMPT_CHARS)}\n\n[… ${text.length - PROMPT_CHARS} more characters of memory; search_space finds older facts.]`;
 }

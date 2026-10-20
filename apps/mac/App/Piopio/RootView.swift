@@ -13,6 +13,7 @@ struct RootView: View {
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
     @State private var showNewSpace = false
+    @State private var newSpaceThreads: [String] = []
     @State private var editingInstructions: SessionSummary?
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
@@ -62,12 +63,13 @@ struct RootView: View {
             mode = .build
             buildSelection = note.object as? String
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newSpace)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .newSpace)) { note in
             mode = .chat
+            newSpaceThreads = (note.object as? String).map { [$0] } ?? []
             showNewSpace = true
         }
         .sheet(isPresented: $showNewSpace) {
-            NewSpaceSheet(engine: engine) { selection = $0.id }
+            NewSpaceSheet(engine: engine, preselected: Set(newSpaceThreads)) { selection = $0 }
         }
         .onReceive(NotificationCenter.default.publisher(for: .editSpaceInstructions)) { note in
             editingInstructions = engine.space(note.object as? String ?? "")
@@ -175,7 +177,7 @@ struct RootView: View {
                                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
                             }
                             .buttonStyle(.plain)
-                            Button { showNewSpace = true } label: {
+                            Button { newSpaceThreads = []; showNewSpace = true } label: {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("New Space").font(.system(size: 13, weight: .semibold))
                                     Text("⌘⇧N").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
@@ -363,6 +365,8 @@ struct Sidebar: View {
                 newTitle = thread.title
                 renaming = thread
             }
+            Divider()
+            MoveToSpaceMenu(engine: engine, thread: thread)
             Divider()
             Button("Delete", role: .destructive) {
                 if selection == thread.ref.id { selection = nil }
