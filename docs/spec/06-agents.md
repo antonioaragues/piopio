@@ -187,7 +187,9 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 ## 8. Memory
 
 - **ME1** A memory item is `{id, partition, text, source: {conversationId, itemId}, createdBy: agent|user, at, expiresAt?}`.
-- **ME2** Retrieval: v1 puts the most relevant memory in a system section (recency + keyword match, with a token budget) and exposes the rest through `recall`. Semantic retrieval (Vectorize) comes later.
+- **ME2** Retrieval goes through the memory provider (07-shared §5.1). Each partition is its own bank (`<agent>/owner`, `<agent>/shared`, `<agent>/contacts/<id>`), so a contact's memory can't leak into another's (AS2): isolation comes from the storage, not from filtering. Each turn's system section gets the most relevant memory within a token budget (`recall` over the conversation's banks), plus the provider's standing answers when it has them. The rest is reachable through the `recall` tool. With the built-in provider, retrieval is recency + keyword. With Hindsight, it is semantic, keyword, graph and time.
+- **ME2a** What gets retained: the owner's and contacts' messages, and the agent's final answers and run outcomes (schedules, triggers). Tool output is not retained. Retaining happens after the turn and never delays the reply. A provider's extracted facts appear in the memory view as "learned", with their source message; deleting one forgets it.
+- **ME2b** Cloud agents need a provider reachable from Cloudflare: the built-in one (Durable Object SQLite) or a remote Hindsight URL. A local Hindsight daemon only serves local agents. Moving an agent to the cloud with Hindsight local asks to export its banks, or to switch providers.
 - **ME3** The app's memory view per agent: browse by partition, edit, delete, pin. Each item shows where it came from.
 
 ## 9. Approvals & safety

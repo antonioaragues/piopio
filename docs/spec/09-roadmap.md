@@ -186,9 +186,17 @@ Milestones:
 - **Header and inspector (S7, 2b):** "Space · N topics · N memories · N files · $cost" with Memory and Files buttons. The inspector lists the topics with their summaries, then the recent memory changes.
 - Verified: 2 more engine tests (memory: organizer save, Undo, a topic proposal saved, your edit and Restore, with authors; tools: ask_topic leaves the topic unchanged, search_space, files with a PDF's extracted text, auto-tidy gating, rename/merge/unarchive, summaries, settings, memory off), and app captures. **Not verified:** the quality of memory, summaries and merges with real models, the memory editor and the files and settings sheets beyond the build, and large Spaces (search scans the transcripts each time).
 
+## Spike S6 — Hindsight as the memory provider (before Phase 4's memory)
+| Question | Done when |
+|---|---|
+| Can the engine run Hindsight locally, on demand, at a cost a Mac app can carry? And is it worth it over the built-in provider? | Measured on an Apple silicon Mac, with a throwaway `PIOPIO_HOME`. **Footprint:** download size, disk, RAM idle and under load, cold start, startup with the app, and whether the daemon supervisor (`@vectorize-io/hindsight-all` or our own) handles sleep, quit and updates. **Cost and latency:** retain (LLM extraction through OpenRouter on the utility model) and recall at 1k and 20k facts; embeddings local vs OpenRouter. **Quality:** a replay of 200 messages from a real agent-like conversation, with 30 questions about it (old facts, changed facts, who said what), scored for the built-in provider and for Hindsight. **Transparency:** extracted facts, observations and their deletes can be listed and shown with sources. **Packaging:** what runs from outside the signed bundle (uv, Python wheels, model downloads), and whether that's acceptable for notarization and for users. |
+
+Outcome: a decision in README (AQ11 → default provider), and `MemoryProvider` + the built-in provider in `@piopio/runtime` either way. The interface is useful even if Hindsight stays opt-in. Not verified yet: Hindsight's benchmark numbers (LongMemEval, LoCoMo) are the authors' own claims.
+
 ## Phase 4 — Agents (local)
 Scope: 06-agents §2–4, §6–9, §11 local part. In-app channel + simulator, schedules, heartbeat, triggers (local URL via tunnel optional), memory partitions, **agent-to-agent**, approvals, budgets. Background mode.
 Also (from the 2026-10-20 review of a similar app, see README decisions AQ5–AQ10): **Apple app tools served by the Mac app** (§4.1: Reminders, Calendar, Contacts, Notes, Music, Shortcuts), **result cards with Undo** (§4.2), **compact progress lines**, agent header and avatars, the **Inbox** with toolbar/menu bar/Dock badges (§12). Side-by-side agents, link previews, voice and quick entry to an agent (§12 UI3–UI6) if time allows; agent boards (§12.1) later.
+Memory: `MemoryProvider` with the built-in provider, partitions as banks (06 §8 ME2–ME2b), and Hindsight as an opt-in provider if S6 says so.
 Cross-cutting (any phase): the **on-device utility model** (07-shared §1.3, 03-engine-protocol §3.12) for titles, commit messages, routing hints and summaries.
 **Acceptance:** two local agents run for a week on the author's Mac. Schedules fire with the app closed. Agent-to-agent delegation with loop guards is tested.
 

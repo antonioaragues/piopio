@@ -61,5 +61,6 @@ Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release o
 | AQ8 | Agent conversations show **compact progress lines** ("Worked 18s · 2 steps"); Build keeps detailed tool cards. | User |
 | AQ9 | The pending-items view is called **Inbox** (not "Waiting for You"). | User |
 | AQ10 | Later: side-by-side agents, link previews, voice, quick entry to an agent, agent boards. | User |
+| AQ11 | Long-term memory goes through a **memory provider** interface (07-shared §5.1). The built-in provider is the default. **Hindsight** comes as an opt-in provider, local (supervised daemon) or remote, first for Agents, then About me. Spike S6 decides whether it can become the default. | User |
 
 Open questions found later are tracked in [09-roadmap.md § Open questions](09-roadmap.md#open-questions).

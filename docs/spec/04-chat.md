@@ -100,7 +100,7 @@ You can still open any topic and talk to it directly (that bypasses the organize
   | `ask_topic(topicId, question)` | Runs a **read-only side query** against the topic's history (child task conversation, `ownership: task`) and returns the answer to the organizer without polluting the topic. |
   | `update_memory(patch)` | Edits `piopio.space-memory`. Every change is shown as a `system` item ("Memory updated: …"), with undo. |
   | `rename_topic`, `archive_topic`, `merge_topics(a, b)` | Housekeeping. Merging summarizes B into A and archives B. These suggest; they need confirmation unless "auto-tidy" is on. |
-  | `search_space(query)` | Substring/FTS across all topic histories. Semantic search later. |
+  | `search_space(query)` | Substring/FTS across all topic histories. Later: semantic, through the memory provider (07-shared §5.1) indexing topic replies into a bank per Space. |
 - **Policy (system section):** prefer routing when a message clearly continues a topic. Create a topic only when a new subject is likely to recur or needs depth. Answer in Main for one-offs. Always explain the decision in one short line.
 
 ### 3.4 What the user sees in Main
