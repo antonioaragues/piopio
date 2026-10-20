@@ -8,6 +8,9 @@ struct SendableText: @unchecked Sendable { let value: NSAttributedString }
 /// Thread-safe: windows are built off the main thread. Every rendered item ends with a paragraph break
 /// (or is empty), so items never share a paragraph.
 nonisolated struct ItemRenderer: Sendable {
+    /// Compact (Quick Chat): your messages and the action footers are not shown; answers stand alone.
+    var compact = false
+
     private var body: NSFont { .systemFont(ofSize: DS.transcriptSize) }
     private var mono: NSFont { .monospacedSystemFont(ofSize: 12, weight: .regular) }
     private var small: NSFont { .systemFont(ofSize: 12) }
@@ -23,6 +26,7 @@ nonisolated struct ItemRenderer: Sendable {
     func render(_ item: TimelineItem) -> NSAttributedString {
         switch item {
         case .user(let u):
+            if compact { return NSAttributedString() }
             let out = NSMutableAttributedString()
             if let files = u.attachments, !files.isEmpty { out.append(fileChips(files)) }
             out.append(bubble(u.text))
@@ -34,7 +38,7 @@ nonisolated struct ItemRenderer: Sendable {
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: "Thought", detail: Self.wordsSummary(thinking), body: thinking))) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
-            if a.status != .streaming { out.append(answerFooter(a)) }
+            if a.status != .streaming, !compact { out.append(answerFooter(a)) }
             return out
         case .tool(let t):
             let (title, detail) = Self.toolTitle(t)

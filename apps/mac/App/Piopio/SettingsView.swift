@@ -169,7 +169,7 @@ private struct ProvidersPane: View {
                     .disabled(key.isEmpty)
                     if engine.hasKey { Button("Cancel") { replacing = false }.buttonStyle(PillStyle(compact: true)) }
                 } else {
-                    Text(info?.label ?? "Saved in Keychain").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg2)
+                    Text(info?.label ?? "Saved in Keychain").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1).fixedSize()
                     if info?.ok == true { Text("✓ Verified").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen) }
                     if let failed = info, !failed.ok { Text(failed.message ?? "Not verified").font(.system(size: 12)).foregroundStyle(Color.dsRed) }
                     Spacer()

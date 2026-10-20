@@ -7,7 +7,7 @@ import PiopioTranscript
 @Observable @MainActor
 final class ThreadModel {
     let ref: ContainerRef
-    @ObservationIgnored let document = TranscriptDocument()
+    @ObservationIgnored let document: TranscriptDocument
     private(set) var state: SessionState?
     private(set) var loaded = false
     private(set) var error: String?
@@ -27,7 +27,8 @@ final class ThreadModel {
     @ObservationIgnored private var pendingReveal: String?
     @ObservationIgnored private let notifies: Bool
 
-    init(ref: ContainerRef, engine: EngineController, notifies: Bool = true) {
+    init(ref: ContainerRef, engine: EngineController, notifies: Bool = true, compact: Bool = false) {
+        document = TranscriptDocument(compact: compact)
         self.ref = ref
         self.engine = engine
         self.notifies = notifies
@@ -197,7 +198,12 @@ final class ThreadModel {
     }
 
     static func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        if let open = WindowOpener.shared.openSettings {
+            open()
+            NSApp.activate()
+        } else {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
     }
 
     func stop() async {

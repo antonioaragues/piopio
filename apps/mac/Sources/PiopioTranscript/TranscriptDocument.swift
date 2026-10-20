@@ -13,7 +13,7 @@ public final class TranscriptDocument {
     public let scrollView: NSScrollView
     let textView: NSTextView
     private let layoutDelegate = CardLayoutDelegate()
-    private let renderer = ItemRenderer()
+    private let renderer: ItemRenderer
     private let windowSize: Int
     private let pageSize: Int
 
@@ -49,7 +49,8 @@ public final class TranscriptDocument {
     }
     public var onFollowingChange: ((Bool) -> Void)?
 
-    public init(windowSize: Int = 300, pageSize: Int = 10) {
+    public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false) {
+        renderer = ItemRenderer(compact: compact)
         self.windowSize = windowSize
         self.pageSize = pageSize
         scrollView = NSTextView.scrollableTextView()
@@ -203,7 +204,13 @@ public final class TranscriptDocument {
             return
         }
         let follow = isFollowing
-        for event in events { apply(event) }
+        for (i, event) in events.enumerated() {
+            apply(event)
+            if loading { // a resnapshot started reloading: the rest of the batch waits for it
+                pendingEvents += events[(i + 1)...]
+                return
+            }
+        }
         if !events.isEmpty { refreshFooters() }
         if follow, !events.isEmpty { textView.scrollToEndOfDocument(nil) }
     }
@@ -249,6 +256,8 @@ public final class TranscriptDocument {
             items[i] = .assistant(a)
             streamDelta(id: id, partType: partType, delta: delta)
         case .resnapshot(let snapshot):
+            // Queue what follows until the new snapshot is in place (it would be lost otherwise).
+            loading = true
             Task { await load(snapshot) }
         case .state, .unknown:
             break
@@ -342,11 +351,13 @@ public final class TranscriptDocument {
             let show = wanted.contains(id)
             storage.enumerateAttribute(.piopioFooter, in: range) { value, run, _ in
                 guard value as? String == id else { return }
-                let color = storage.attribute(.piopioFooterColor, at: run.location, effectiveRange: nil) as? NSColor
-                let link = storage.attribute(.piopioFooterLink, at: run.location, effectiveRange: nil)
-                storage.addAttribute(.foregroundColor, value: show ? (color ?? DS.fg3) : NSColor.clear, range: run)
-                if let link {
-                    if show { storage.addAttribute(.link, value: link, range: run) } else { storage.removeAttribute(.link, range: run) }
+                // A footer is several words with their own links and colors: handle each sub-run.
+                storage.enumerateAttribute(.piopioFooterColor, in: run) { color, sub, _ in
+                    storage.addAttribute(.foregroundColor, value: show ? ((color as? NSColor) ?? DS.fg3) : NSColor.clear, range: sub)
+                }
+                storage.enumerateAttribute(.piopioFooterLink, in: run) { link, sub, _ in
+                    guard let link else { return }
+                    if show { storage.addAttribute(.link, value: link, range: sub) } else { storage.removeAttribute(.link, range: sub) }
                 }
             }
         }

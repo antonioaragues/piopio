@@ -11,6 +11,7 @@ struct RootView: View {
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         HStack(spacing: 0) {
@@ -45,7 +46,13 @@ struct RootView: View {
             palette = (note.object as? Bool) == true || note.object is String ? .messages : .all
         }
         .onChange(of: selection) { _, id in engine.selectedThreadId = id }
-        .onAppear { WindowOpener.shared.openMain = { [openWindow] in openWindow(id: "main") } }
+        .onAppear {
+            WindowOpener.shared.openMain = { [openWindow] in openWindow(id: "main") }
+            WindowOpener.shared.openSettings = { [openSettings] in openSettings() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .setMode)) { note in
+            if let m = note.object as? AppMode { mode = m }
+        }
         .onChange(of: engine.status) { _, status in
             if status == .ready, engine.needsKey || ProcessInfo.processInfo.environment["PIOPIO_DEMO_WELCOME"] == "1" { showOnboarding = true }
             if status == .ready, selection == nil { selection = engine.threads.first?.ref.id }
@@ -163,6 +170,7 @@ struct RootView: View {
 
 extension Notification.Name {
     static let selectThread = Notification.Name("piopio.selectThread")
+    static let setMode = Notification.Name("piopio.setMode")
 }
 
 // MARK: Sidebar

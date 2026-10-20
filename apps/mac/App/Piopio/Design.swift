@@ -50,6 +50,17 @@ struct PillStyle: ButtonStyle {
     var compact = false
 
     func makeBody(configuration: Configuration) -> some View {
+        PillBody(configuration: configuration, kind: kind, compact: compact)
+    }
+}
+
+private struct PillBody: View {
+    let configuration: ButtonStyleConfiguration
+    let kind: PillStyle.Kind
+    let compact: Bool
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
         configuration.label
             .font(.system(size: 12, weight: .medium))
             .lineLimit(1)
@@ -60,7 +71,7 @@ struct PillStyle: ButtonStyle {
             .background(background, in: Capsule())
             .overlay(Capsule().strokeBorder(kind == .toolbar ? Color.dsLine : .clear, lineWidth: 0.5))
             .shadow(color: kind == .toolbar ? .black.opacity(0.05) : .clear, radius: 2, y: 1)
-            .opacity(configuration.isPressed ? 0.75 : 1)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
             .contentShape(Capsule())
     }
 

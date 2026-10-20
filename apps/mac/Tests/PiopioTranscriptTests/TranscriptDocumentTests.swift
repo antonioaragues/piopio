@@ -136,3 +136,23 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     #expect(doc.documentIDs.count == 380)
     expectConsistent(doc)
 }
+
+@MainActor @Test func latestAnswerKeepsItsActionsAfterAResnapshot() async throws {
+    let doc = await loaded([user("1", "first"), answer("2", "one")])
+    func liveLinks() -> [TranscriptAction] {
+        let storage = doc.textView.textStorage!
+        var out: [TranscriptAction] = []
+        storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { v, _, _ in if let u = v as? URL, let a = TranscriptAction(url: u) { out.append(a) } }
+        return out
+    }
+    #expect(liveLinks().contains(.regenerate(itemId: "2")))
+    // An edit: the engine resnapshots onto the new branch, then streams the new answer.
+    let branch = TimelineItem.user(UserItem(id: "5", at: "", text: "first, edited", branch: BranchInfo(index: 1, count: 2, previous: "1")))
+    doc.apply([.resnapshot(snapshot([branch]))])
+    doc.apply([.itemAdded(answer("gen:1", "", status: .streaming)), .itemDelta(itemId: "gen:1", partIndex: 0, partType: .text, textDelta: "Echo")])
+    doc.apply([.itemReplaced(oldId: "gen:1", item: answer("7", "Echo"))])
+    for _ in 0..<100 where doc.documentIDs != ["5", "7"] { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(doc.documentIDs == ["5", "7"])
+    #expect(liveLinks().contains(.regenerate(itemId: "7")))
+    expectConsistent(doc)
+}

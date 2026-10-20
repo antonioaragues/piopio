@@ -1,7 +1,7 @@
 import AppKit
 import PiopioKit
 
-/// Development hooks for scripted smoke tests (scripts/app-smoke.sh). Inactive unless the env vars are set.
+/// Development hooks for scripted smoke tests and design captures. Inactive unless the env vars are set.
 ///   PIOPIO_DEMO_PROMPT  create a thread and send this message once the engine is ready
 ///   PIOPIO_SNAPSHOT     write a PNG of the main window to this path after PIOPIO_SNAPSHOT_DELAY seconds (default 6)
 ///   PIOPIO_QUIT_AFTER_SNAPSHOT=1  quit afterwards
@@ -9,6 +9,13 @@ import PiopioKit
 enum DebugAutomation {
     static func run(engine: EngineController) {
         let env = ProcessInfo.processInfo.environment
+        // PIOPIO_DEMO_APPEARANCE=dark|light: force the appearance (captures). PIOPIO_DEMO_MODE=build|chat|agents.
+        if let appearance = env["PIOPIO_DEMO_APPEARANCE"] {
+            NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
+        }
+        if let mode = env["PIOPIO_DEMO_MODE"].flatMap(AppMode.init(rawValue:)) {
+            NotificationCenter.default.post(name: .setMode, object: mode)
+        }
         if let prompt = env["PIOPIO_DEMO_PROMPT"], engine.status == .ready {
             Task {
                 guard let ref = await engine.createThread() else { return }
@@ -72,6 +79,7 @@ enum DebugAutomation {
         let target: NSWindow? = switch env["PIOPIO_SNAPSHOT_WINDOW"] {
         case "sheet": NSApp.windows.compactMap(\.attachedSheet).first
         case "key": NSApp.keyWindow
+        case "settings": NSApp.windows.first { $0.isVisible && ($0.identifier?.rawValue.localizedCaseInsensitiveContains("settings") ?? false) }
         default: NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && ($0 is NSPanel) == wantsPanel && $0.attachedSheet == nil || ($0.isVisible && $0.attachedSheet != nil) })
         }
         guard let window = target,

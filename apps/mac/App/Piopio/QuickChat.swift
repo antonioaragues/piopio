@@ -142,6 +142,8 @@ final class QuickChatModel {
     let engine: EngineController
     private(set) var thread: ThreadModel?
     var text = ""
+    /// Shown in the header while the answer is on screen (docs/design 3a).
+    var lastQuestion: String?
     var focusToken = 0
     @ObservationIgnored var hide: (() -> Void)?
 
@@ -155,6 +157,7 @@ final class QuickChatModel {
         if let thread, let last = UserDefaults.standard.object(forKey: "quickChatLastUsed") as? Date, Date().timeIntervalSince(last) > Self.continueWindow,
            thread.state?.status != .running {
             self.thread = nil // start fresh after a while
+            lastQuestion = nil
         }
     }
 
@@ -162,11 +165,13 @@ final class QuickChatModel {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty, engine.status == .ready else { return }
         text = ""
+        lastQuestion = message
         UserDefaults.standard.set(Date(), forKey: "quickChatLastUsed")
         Task {
             if thread == nil {
                 guard let ref = await engine.createThread(model: engine.quickChatModel) else { return }
-                let t = ThreadModel(ref: ref, engine: engine, notifies: false)
+                let t = ThreadModel(ref: ref, engine: engine, notifies: false, compact: true)
+                t.document.bottomInset = 12
                 thread = t
                 await t.open()
             }
@@ -189,6 +194,7 @@ final class QuickChatModel {
         thread?.close()
         thread = nil
         text = ""
+        lastQuestion = nil
         focusToken += 1
     }
 
@@ -209,16 +215,22 @@ struct QuickChatView: View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 RoundedRectangle(cornerRadius: 5).fill(Color.accentColor).frame(width: 20, height: 20).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 4 }
-                TextField("Ask anything…", text: Bindable(model).text, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 17))
-                    .lineLimit(1...6)
-                    .focused($focused)
+                ZStack(alignment: .topLeading) {
+                    if model.text.isEmpty, let question = model.lastQuestion {
+                        // The question stays in the header; typing asks a follow-up.
+                        Text(question).font(.system(size: 17)).foregroundStyle(Color.dsFg).lineLimit(3).allowsHitTesting(false)
+                    }
+                    TextField(model.lastQuestion == nil ? "Ask anything…" : "", text: Bindable(model).text, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 17))
+                        .lineLimit(1...6)
+                        .focused($focused)
                     .onKeyPress(.return, phases: .down) { press in
                         if press.modifiers.contains(.shift) { return .ignored }
                         model.send()
                         return .handled
                     }
+                }
                 Text(model.modelName).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Color.dsChip, in: Capsule())
@@ -228,7 +240,7 @@ struct QuickChatView: View {
             if let thread = model.thread {
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
                 TranscriptView(document: thread.document)
-                    .frame(height: 300)
+                    .frame(height: 280)
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
                 HStack(spacing: 6) {
                     Button("Open in Piopio ⌘O") { model.openInMain() }.keyboardShortcut("o")
@@ -257,6 +269,7 @@ struct QuickChatView: View {
 final class WindowOpener {
     static let shared = WindowOpener()
     var openMain: (() -> Void)?
+    var openSettings: (() -> Void)?
 
     func showMain() {
         openMain?()
