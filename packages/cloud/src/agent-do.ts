@@ -178,7 +178,14 @@ export class AgentDO extends DurableObject<Env> {
 			case "engine.status": {
 				let subscriptions = 0;
 				for (const c of this.webSockets.getConnections<ConnState>()) subscriptions += c.state?.subs?.length ?? 0;
-				return { uptimeMs: Date.now() - this.startedAt, openSessions: this.views.size, subscriptions } satisfies Result<"engine.status">;
+				return {
+					uptimeMs: Date.now() - this.startedAt,
+					openSessions: this.views.size,
+					subscriptions,
+					runtime: "Cloudflare Workers (workerd)",
+					memoryMB: 0, // not observable from inside a Worker
+					dataPath: `Durable Object ${this.ctx.id.toString().slice(0, 12)}…`,
+				} satisfies Result<"engine.status">;
 			}
 			case "sessions.subscribe": {
 				const p = params as Params<"sessions.subscribe">;
