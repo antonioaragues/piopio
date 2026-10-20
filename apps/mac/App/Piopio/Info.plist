@@ -26,5 +26,11 @@
 	<string>MIT License</string>
 	<key>PiopioEngineMain</key>
 	<string>$(PIOPIO_ENGINE_MAIN)</string>
+	<key>PiopioEngineVersion</key>
+	<string>$(MARKETING_VERSION)-$(CURRENT_PROJECT_VERSION)</string>
+	<key>SUFeedURL</key>
+	<string>$(SPARKLE_FEED_URL)</string>
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_KEY)</string>
 </dict>
 </plist>

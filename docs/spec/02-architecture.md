@@ -67,7 +67,7 @@ piopio/
 ## 4. Local Engine (Node)
 
 ### 4.1 Packaging
-- A pinned Node runtime (≥ 22.19, **arm64 only**: Piopio supports Apple silicon only) is shipped in `Piopio.app/Contents/Resources/engine/node`, plus a single bundled `engine.mjs` and native deps (e.g. `better-sqlite3` if `node:sqlite` isn't enough).
+- A pinned Node runtime (≥ 22.19, **arm64 only**: Piopio supports Apple silicon only) is shipped in `Piopio.app/Contents/Helpers/node`, and the engine as one esbuild bundle in `Contents/Resources/engine/main.js` with the few files pi reads at runtime. No native deps: `node:sqlite` is enough. A small launcher (`Contents/MacOS/piopio-engine`) starts it, both for the app and for the background LaunchAgent. See [docs/releasing.md](../releasing.md).
 - Code-signed and notarized with the app (hardened runtime, JIT entitlement for Node).
 - Users can point to a **custom engine build** (dev setting) to hack on the engine without rebuilding the app.
 

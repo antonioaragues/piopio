@@ -9,6 +9,9 @@ options:
 packages:
   PiopioPackage:
     path: ..
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: "2.10.0"
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -17,12 +20,34 @@ targets:
   Piopio:
     type: application
     platform: macOS
-    sources: [Piopio]
+    sources:
+      - Piopio
+      # Background mode: SMAppService.agent(plistName:) looks in Contents/Library/LaunchAgents.
+      - path: LaunchAgents/app.piopio.engine.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchAgents
     dependencies:
       - package: PiopioPackage
         product: PiopioKit
       - package: PiopioPackage
         product: PiopioTranscript
+      - package: Sparkle
+      - target: piopio-engine
+        embed: true
+        codeSign: false
+        copy:
+          destination: executables
+    postBuildScripts:
+      # Release builds carry the engine and Node (docs/spec/02-architecture §4.1). Debug builds run the repo's
+      # engine with the system Node; set PIOPIO_BUNDLE_ENGINE=YES to bundle there too.
+      - name: Bundle engine
+        basedOnDependencyAnalysis: false
+        script: |
+          if [[ "$CONFIGURATION" == Release || "${PIOPIO_BUNDLE_ENGINE:-NO}" == YES ]]; then
+            "$SRCROOT/../../../scripts/bundle-engine.sh" "$TARGET_BUILD_DIR/$WRAPPER_NAME" "$MARKETING_VERSION-$CURRENT_PROJECT_VERSION"
+          fi
     info:
       path: Piopio/Info.plist
       properties:
@@ -31,8 +56,13 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: MIT License
-        # Dev builds run the engine from the repo; release builds will bundle it (spike S5).
+        # Dev builds run the engine from the repo; release builds bundle it (see the Bundle engine phase).
         PiopioEngineMain: $(PIOPIO_ENGINE_MAIN)
+        # What the bundled engine reports in engine.hello; a background engine with another version is restarted.
+        PiopioEngineVersion: $(MARKETING_VERSION)-$(CURRENT_PROJECT_VERSION)
+        # Sparkle 2. Updates stay off while either is empty (see docs/releasing.md).
+        SUFeedURL: $(SPARKLE_FEED_URL)
+        SUPublicEDKey: $(SPARKLE_PUBLIC_KEY)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.piopio.Piopio
@@ -43,7 +73,21 @@ targets:
         CODE_SIGN_STYLE: Manual
         ENABLE_HARDENED_RUNTIME: NO
         ENABLE_APP_SANDBOX: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         PIOPIO_ENGINE_MAIN: $(SRCROOT)/../../../packages/engine/dist/main.js
+        SPARKLE_FEED_URL: ""
+        SPARKLE_PUBLIC_KEY: ""
+  piopio-engine:
+    type: tool
+    platform: macOS
+    sources: [EngineLauncher]
+    settings:
+      base:
+        PRODUCT_NAME: piopio-engine
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: NO
+        SKIP_INSTALL: YES
 schemes:
   Piopio:
     build:

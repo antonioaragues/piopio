@@ -5,7 +5,8 @@ import SwiftUI
 /// Settings (docs/design 4b): a sidebar of sections; providers and engines are lists of cards.
 struct SettingsView: View {
     let engine: EngineController
-    @State private var section: Section = .providers
+    // PIOPIO_DEMO_SETTINGS_SECTION=General|Providers|Engines picks the first section (captures).
+    @State private var section: Section = Section(rawValue: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
         case general = "General", providers = "Providers", engines = "Engines"
@@ -106,9 +107,10 @@ private struct Row<Trailing: View>: View {
 
 private struct GeneralPane: View {
     @State private var tick = 0
+    private let updater = AppUpdater.shared
 
     var body: some View {
-        PaneTitle(title: "General", subtitle: "Shortcuts and notifications.")
+        PaneTitle(title: "General", subtitle: "Shortcuts, notifications and updates.")
         ListCard {
             Row(title: "Quick Chat") {
                 Picker("", selection: Binding(get: { QuickChatShortcut.current }, set: { value in
@@ -123,12 +125,28 @@ private struct GeneralPane: View {
                 Text("Opens from any app").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 Spacer()
             }
-            Row(title: "Notifications", last: true) {
+            Row(title: "Notifications") {
                 Toggle("When an answer finishes or fails while I'm elsewhere", isOn: Binding(get: { Notifier.enabled }, set: { UserDefaults.standard.set($0, forKey: "notifyAnswers"); tick += 1 }))
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .font(.system(size: 13))
                 Spacer()
+            }
+            Row(title: "Updates", last: true) {
+                if updater.isConfigured {
+                    Toggle("Check automatically", isOn: Binding(get: { updater.checksAutomatically }, set: { updater.checksAutomatically = $0 }))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .font(.system(size: 13))
+                    Spacer()
+                    Text(updater.version).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    Button("Check Now") { updater.checkForUpdates() }
+                        .buttonStyle(PillStyle(compact: true))
+                        .disabled(!updater.canCheck)
+                } else {
+                    Text("Version \(updater.version) · this build doesn't update itself").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    Spacer()
+                }
             }
         }
         .id(tick)
@@ -231,9 +249,17 @@ private struct EnginesPane: View {
                         Text(engine.status == .ready ? "Running" : "Stopped").font(.system(size: 12)).foregroundStyle(engine.status == .ready ? Color.dsGreen : Color.dsRed)
                     }
                     fact("Runtime", status?.runtime ?? "…")
+                    fact("Version", engine.engineVersion ?? "…")
                     fact("Sessions", status.map { "\($0.openSessions) open · \(engine.threads.count) threads" } ?? "…")
                     fact("Memory", status.map { "\(Int($0.memoryMB)) MB" } ?? "…")
                     fact("Data", (status?.dataPath ?? engine.home.path).replacingOccurrences(of: NSHomeDirectory(), with: "~"), mono: true)
+                    Toggle(isOn: Binding(get: { engine.runsInBackground }, set: { on in Task { await engine.setRunsInBackground(on) } })) {
+                        Text("Keep running when Piopio quits").font(.system(size: 12.5))
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .disabled(!engine.canRunInBackground)
+                    .help(engine.canRunInBackground ? "Runs the engine as a login item, so it's ready at login and keeps working after you quit." : "Available in release builds, which carry their own engine.")
                     Rectangle().fill(Color.dsLine).frame(height: 0.5)
                     HStack {
                         Button("Restart") { engine.restart() }.buttonStyle(PillStyle(compact: true))

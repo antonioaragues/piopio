@@ -12,6 +12,7 @@ struct PiopioApp: App {
                 .frame(minWidth: 760, minHeight: 480)
                 .task {
                     appDelegate.engine = engine
+                    _ = AppUpdater.shared
                     if QuickChatController.shared == nil { _ = QuickChatController(engine: engine) }
                     Notifier.shared.setUp()
                     if engine.status != .ready { await engine.start() }
@@ -19,9 +20,14 @@ struct PiopioApp: App {
                 }
         }
         .defaultSize(width: 1280, height: 820)
+        // The engine starts from this window, so it always opens at launch, even if the app quit without it.
+        .defaultLaunchBehavior(.presented)
         .windowStyle(.hiddenTitleBar)
         .windowBackgroundDragBehavior(.enabled)
         .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesButton()
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New Thread") { NotificationCenter.default.post(name: .newThread, object: nil) }
                     .keyboardShortcut("n")
@@ -38,6 +44,7 @@ struct PiopioApp: App {
         Settings {
             SettingsView(engine: engine)
         }
+        .restorationBehavior(.disabled)
     }
 }
 

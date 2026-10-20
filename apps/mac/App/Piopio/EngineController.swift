@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import PiopioKit
+import ServiceManagement
 
 /// Owns the Local Engine: starts it (or attaches to a running one), answers its secret requests from the
 /// Keychain, mirrors the session catalog, and fans out session events to open threads.
@@ -38,15 +39,32 @@ final class EngineController {
         status = .starting
         do {
             try FileManager.default.createDirectory(at: home.appending(path: "logs"), withIntermediateDirectories: true)
-            if try await !connect() {
-                try launchEngine()
-                var connected = false
-                for _ in 0..<100 where !connected {
-                    try await Task.sleep(for: .milliseconds(100))
-                    connected = try await connect()
+            var hello = try await connect()
+            if hello == nil {
+                // In background mode launchd owns the engine: wait for it instead of starting a second one.
+                if runsInBackground {
+                    if Self.agent.status == .requiresApproval {
+                        throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Allow Piopio in System Settings › General › Login Items, or turn off background mode in Settings › Engines.")
+                    }
+                } else {
+                    try launchEngine()
                 }
-                guard connected else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine did not start. See \(home.path)/logs/engine.log") }
+                for _ in 0..<100 where hello == nil {
+                    try await Task.sleep(for: .milliseconds(100))
+                    hello = try await connect()
+                }
+                guard hello != nil else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine did not start. See \(home.path)/logs/engine.log") }
             }
+            // After an app update, a background engine still runs the old version: restart it once.
+            if let hello, runsInBackground, let bundled = Self.bundledEngineVersion, hello.version != bundled, !restartedStale {
+                restartedStale = true
+                let old = client
+                client = nil
+                await old?.close()
+                restartBackgroundEngine()
+                return
+            }
+            engineVersion = hello?.version
             try await refreshCatalog()
             let list = try await client!.call("models.list", ModelsListParams(), as: ModelsListResult.self)
             models = list.models.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -62,6 +80,7 @@ final class EngineController {
         NSWorkspace.shared.activateFileViewerSelecting([home.appending(path: "logs/engine.log")])
     }
 
+    /// Closes the connection; an engine this app started stops with it (a background engine keeps running).
     func stop() {
         stopping = true
         Task { await client?.close() }
@@ -70,6 +89,61 @@ final class EngineController {
     }
 
     @ObservationIgnored private var stopping = false
+    @ObservationIgnored private var restartedStale = false
+    private(set) var engineVersion: String?
+
+    // MARK: Background mode
+
+    /// The LaunchAgent that runs the engine after the app quits (docs/spec/02-architecture §3.3).
+    static let agent = SMAppService.agent(plistName: "app.piopio.engine.plist")
+    private var agentTick = 0
+
+    /// Background mode needs the launcher and engine inside the app (release builds).
+    var canRunInBackground: Bool { Self.launcher != nil }
+    var runsInBackground: Bool {
+        _ = agentTick
+        return canRunInBackground && [.enabled, .requiresApproval].contains(Self.agent.status)
+    }
+
+    /// Moves the engine between this app (a child process) and launchd. Open threads reconnect.
+    func setRunsInBackground(_ on: Bool) async {
+        guard on != runsInBackground else { return }
+        stopping = true
+        await client?.close()
+        client = nil
+        do {
+            if on {
+                // One engine per data folder: the child must be gone before launchd starts its own.
+                if let p = process {
+                    p.terminate()
+                    for _ in 0..<50 where p.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+                    process = nil
+                }
+                try Self.agent.register()
+                if Self.agent.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+            } else {
+                try await Self.agent.unregister()
+            }
+        } catch {
+            status = .failed("Background mode: \(error.localizedDescription)")
+        }
+        agentTick += 1
+        stopping = false
+        await start()
+    }
+
+    /// Restarts the launchd-managed engine (Restart button, version mismatch).
+    private func restartBackgroundEngine() {
+        let kickstart = Process()
+        kickstart.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        kickstart.arguments = ["kickstart", "-k", "gui/\(getuid())/app.piopio.engine"]
+        try? kickstart.run()
+        kickstart.waitUntilExit()
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            await start()
+        }
+    }
 
     /// Starts over after the engine connection drops; open threads re-subscribe when their views reappear.
     private func connectionLost(_ lost: EngineClient) {
@@ -83,19 +157,20 @@ final class EngineController {
         Task { await start() }
     }
 
-    /// Connects to a running engine. Returns false when nothing is listening.
-    private func connect() async throws -> Bool {
-        guard FileManager.default.fileExists(atPath: socket.path) else { return false }
+    /// Connects to a running engine. Returns nil when nothing is listening.
+    private func connect() async throws -> HelloResult? {
+        guard FileManager.default.fileExists(atPath: socket.path) else { return nil }
         let client = EngineClient(socketPath: socket.path)
         await client.setReverseHandler { method, params in
             guard method == "secrets.get", let name = params["name"]?.stringValue else { return .object(["value": .null]) }
             return .object(["value": Keychain.read(name).map(JSONValue.string) ?? .null])
         }
+        let hello: HelloResult
         do {
-            _ = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"))
+            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"))
         } catch {
             await client.close()
-            return false
+            return nil
         }
         self.client = client
         Task { [weak self] in
@@ -106,15 +181,24 @@ final class EngineController {
         Task { [weak self] in
             for await change in client.catalogChanges { self?.applyCatalog(change) }
         }
-        return true
+        return hello
     }
 
     private func launchEngine() throws {
-        guard let main = Self.engineMain() else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Engine not found. Build it with `pnpm build`.") }
-        guard let node = Self.nodeExecutable() else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Node.js ≥ 22.19 not found (looked in /opt/homebrew/bin, /usr/local/bin).") }
         let p = Process()
-        p.executableURL = node
-        p.arguments = [main.path]
+        if let custom = Self.customEngine {
+            // Dev setting: `defaults write app.piopio.Piopio customEnginePath /path/to/engine/dist/main.js`.
+            guard let node = Self.nodeExecutable() else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Node.js ≥ 22.19 not found for the custom engine.") }
+            p.executableURL = node
+            p.arguments = [custom.path]
+        } else if let launcher = Self.launcher {
+            p.executableURL = launcher
+        } else {
+            guard let main = Self.engineMain() else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Engine not found. Build it with `pnpm build`.") }
+            guard let node = Self.nodeExecutable() else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Node.js ≥ 22.19 not found (looked in /opt/homebrew/bin, /usr/local/bin).") }
+            p.executableURL = node
+            p.arguments = [main.path]
+        }
         var env = ProcessInfo.processInfo.environment
         env["PIOPIO_HOME"] = home.path
         p.environment = env
@@ -129,8 +213,23 @@ final class EngineController {
         process = p
     }
 
+    /// Contents/MacOS/piopio-engine, present when the engine is bundled (release builds).
+    private static var launcher: URL? {
+        guard Bundle.main.url(forResource: "main", withExtension: "js", subdirectory: "engine") != nil else { return nil }
+        return Bundle.main.url(forAuxiliaryExecutable: "piopio-engine")
+    }
+
+    private static var bundledEngineVersion: String? {
+        launcher == nil ? nil : Bundle.main.object(forInfoDictionaryKey: "PiopioEngineVersion") as? String
+    }
+
+    private static var customEngine: URL? {
+        guard let path = UserDefaults.standard.string(forKey: "customEnginePath"), FileManager.default.fileExists(atPath: path) else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
+    /// The repo's engine in dev builds.
     private static func engineMain() -> URL? {
-        if let bundled = Bundle.main.url(forResource: "main", withExtension: "js", subdirectory: "engine") { return bundled }
         if let path = Bundle.main.object(forInfoDictionaryKey: "PiopioEngineMain") as? String, FileManager.default.fileExists(atPath: path) {
             return URL(fileURLWithPath: path).standardizedFileURL
         }
@@ -138,7 +237,8 @@ final class EngineController {
     }
 
     private static func nodeExecutable() -> URL? {
-        if let bundled = Bundle.main.url(forResource: "node", withExtension: nil, subdirectory: "engine") { return bundled }
+        let bundled = Bundle.main.bundleURL.appending(path: "Contents/Helpers/node")
+        if FileManager.default.isExecutableFile(atPath: bundled.path) { return bundled }
         for path in ["/opt/homebrew/bin/node", "/usr/local/bin/node"] where FileManager.default.isExecutableFile(atPath: path) {
             return URL(fileURLWithPath: path)
         }
@@ -209,10 +309,15 @@ final class EngineController {
 
     /// Stops the engine this app started and starts it again.
     func restart() {
-        Task { await client?.close() }
+        let old = client
+        client = nil
+        Task { await old?.close() }
+        if runsInBackground {
+            restartBackgroundEngine()
+            return
+        }
         process?.terminate()
         process = nil
-        client = nil
         Task {
             try? await Task.sleep(for: .milliseconds(400))
             await start()

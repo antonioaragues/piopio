@@ -33,6 +33,7 @@ pnpm test          # engine tests (scripted model, no key needed)
 pnpm test:swift    # PiopioKit tests
 pnpm demo:s1       # Swift CLI ↔ engine, both runtimes, scripted model
 scripts/build-app.sh   # builds the engine and Piopio.app (Debug); prints the .app path
+scripts/release.sh 0.1.0   # Release app with bundled Node + engine → signed DMG (+ notarization, appcast); see docs/releasing.md
 scripts/app-smoke.sh   # launches the app on a scratch data folder with the scripted model and saves a snapshot
 ```
 

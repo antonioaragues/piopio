@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Launches Piopio.app against a throwaway data folder with the scripted echo model, sends a markdown-heavy
-# message, a follow-up, edits the follow-up (two versions), and writes a window snapshot. Usage: scripts/app-smoke.sh [out.png]
+# message, a follow-up, edits the follow-up (two versions), and writes a window snapshot.
+# Usage: scripts/app-smoke.sh [out.png] [Debug|Release]   (Release runs the engine and Node bundled in the app)
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 out="${1:-$root/apps/mac/App/build/smoke.png}"
-app="$("$root/scripts/build-app.sh" | tail -1)"
+app="$("$root/scripts/build-app.sh" "${2:-Debug}" | tail -1)"
 home="$(mktemp -d -t piopio-smoke)"   # short path: Unix sockets allow 103 bytes
 printf 'Release notes\n\n- Attachments\n- Web tools\n' > "$home/notes.txt"
 sips -s format png -z 64 64 /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericDocumentIcon.icns --out "$home/icon.png" >/dev/null 2>&1 || true
@@ -15,4 +16,5 @@ PIOPIO_HOME="$home" PIOPIO_FAUX=1 PIOPIO_DEMO_PROMPT="$prompt" PIOPIO_DEMO_ATTAC
 pid=$!
 ( sleep 60; kill "$pid" 2>/dev/null ) &
 wait "$pid" || true
+grep -h "listening" "$home/logs/engine.log" | tail -1
 [[ -s "$out" ]] && echo "snapshot: $out" || { echo "no snapshot; engine log:"; tail -20 "$home/logs/engine.log"; exit 1; }

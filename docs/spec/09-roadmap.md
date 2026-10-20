@@ -28,7 +28,8 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 | **S2** Native transcript | ✅ Decision: **TextKit 2 transcript** (one `NSTextView`, custom layout fragments + attachment views for cards). SwiftUI `LazyVStack`/`List` hitch while scrolling at 2,000 items; TextKit 2 had 0 hitches. See [docs/spikes/s2](../spikes/s2/README.md). |
 | **S2b** Card chrome, attachments, progressive load | ✅ Card fragments + tool-card attachment views (AppKit or SwiftUI, same cost) stay at 0–8 ms/s hitch. Prepending into a large document is O(text after the insert), so the transcript is a **windowed document** (newest 300 items, 10-item pages on demand, ~9 ms each, 0 anchor drift); tail on screen in ~140 ms for 2,000 items. 120 Hz still untested. |
 | **S4** PiHarness on Cloudflare | ✅ locally (2026-10-19), in workerd via Miniflare with the faux model: `packages/cloud` (Worker + SQLite `AgentDO` on `PiHarness`, hibernatable WS with `engine.hello`/`sessions.subscribe`/`sessions.submit`). Verified: hibernation + wake on a WS message, alarm-driven resume after eviction, reconnect → fresh snapshot, OpenRouter request path from workerd (dummy key → clean 401). Token deploy script (`scripts/deploy.ts`, Cloudflare REST API) is tested against a fake API only. **Pending:** first deploy to a real account, a real OpenRouter answer (opt-in test exists), and a run longer than 15 min. See [packages/cloud](../../packages/cloud/README.md). |
-| S3 OpenRouter details, S5 Packaging | ⏳ Not started |
+| **S5** Packaging | ✅ locally (2026-10-20), ad hoc signed: a DMG installs and runs on its bundled Node + engine, and background mode (SMAppService LaunchAgent) keeps the engine running after quit. See milestone 1.5. **Pending:** Developer ID signing and notarization (needs the Apple account). |
+| S3 OpenRouter details | ⏳ Not started |
 | CI | ⏳ Not started (needs a macOS 27 runner for the Swift side) |
 
 **S1 findings**
@@ -71,7 +72,17 @@ Also: monorepo scaffold, protocol package + Swift codegen, CI (lint, tests, Swif
 - **Notifications:** sent when an answer finishes or fails while you're elsewhere; clicking opens the thread. Can be turned off in Settings.
 - Not verified: the notification permission prompt and banners. Automation can't click them.
 
-Next milestones: **1.5** packaging (S5: bundled Node + engine, notarized DMG, Sparkle).
+**Milestone 1.5 done (2026-10-20)**, except for notarization. See [docs/releasing.md](../releasing.md).
+- **Engine bundle:** esbuild makes one ESM file (15 MB) using pi's bundled-Node mode (`PI_BUNDLED_NODE`, so user extensions get pi's packages as virtual modules). Alongside it ship the files pi reads from disk: its docs (`PI_PACKAGE_DIR`), the Photon image worker, and the Photon and QuickJS `.wasm` files.
+- **Node:** 24.22.0 LTS, arm64, pinned by checksum, in `Contents/Helpers/node`. Re-signed with JIT entitlements. The app is 146 MB; the DMG is 47 MB.
+- **Launcher:** `Contents/MacOS/piopio-engine` execs Node on the engine. The app runs it as a child. In background mode launchd runs it, because a LaunchAgent can only name bundle-relative programs.
+- **Background mode:** Settings › Engines › Keep running when Piopio quits (off by default until Agents ships locally) registers `SMAppService.agent`. After an update, the app restarts a background engine whose version differs from its own.
+- **Updates:** Sparkle 2.10.0 with EdDSA and deltas, via "Check for Updates…" and Settings › General. Updates stay off until `SPARKLE_FEED_URL` and `SPARKLE_PUBLIC_KEY` are set.
+- **Release script:** `scripts/release.sh <version>` builds, signs from the inside out, makes the DMG, notarizes and staples (with a notary profile), and runs `generate_appcast`.
+- Verified with ad hoc signing: the DMG app on its bundled engine, and a full Sparkle update 0.1.0 → 0.1.1 from a localhost feed (delta download, signature check, install on quit). Ad hoc builds keep the hardened runtime off for the app, because library validation rejects an ad hoc Sparkle.framework with no Team ID; Node keeps it.
+- Not verified: Developer ID, notarization and Gatekeeper. Also not shipped in the bundle: pi's codemode worker, which Build doesn't use yet.
+
+Next: Phase 1 acceptance (a week of daily use), then Phase 2 (Build).
 
 Scope: 04-chat §1 (T1–T12), Quick Chat (§4), 07-shared §1 (models, costs), §8 onboarding, 08-app-shell core (window, sidebar, transcript, composer, ⌘K, ⌘⇧F, notifications).
 **Acceptance:** for a week the author uses Piopio instead of a web chat app. 1,000-message threads stay smooth. Forking and edit/regenerate work. Costs match OpenRouter's dashboard within 2%.

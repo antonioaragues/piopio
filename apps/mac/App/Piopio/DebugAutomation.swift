@@ -56,6 +56,18 @@ enum DebugAutomation {
                 ThreadModel.openSettings()
             }
         }
+        // PIOPIO_DEMO_BACKGROUND=on|off: move the engine to launchd (SMAppService) or back into the app.
+        if let background = env["PIOPIO_DEMO_BACKGROUND"] {
+            Task { await engine.setRunsInBackground(background == "on") }
+        }
+        // PIOPIO_DEMO_CHECK_UPDATES=1: run a Sparkle update check (snapshot its window with PIOPIO_SNAPSHOT_WINDOW=key).
+        // =install: download silently and install when the app quits.
+        if let check = env["PIOPIO_DEMO_CHECK_UPDATES"] {
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                if check == "install" { AppUpdater.shared.installSilently() } else { AppUpdater.shared.checkForUpdates() }
+            }
+        }
         if let path = env["PIOPIO_SNAPSHOT"] {
             let delay = Double(env["PIOPIO_SNAPSHOT_DELAY"] ?? "") ?? 6
             Task {

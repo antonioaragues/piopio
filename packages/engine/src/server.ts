@@ -11,7 +11,9 @@ import { SecretBroker } from "./secrets.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { Sessions } from "./sessions.js";
 
-export const ENGINE_VERSION = "0.0.0";
+/** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
+declare const PIOPIO_ENGINE_VERSION: string | undefined;
+export const ENGINE_VERSION = typeof PIOPIO_ENGINE_VERSION === "string" ? PIOPIO_ENGINE_VERSION : "dev";
 
 export type EngineOptions = {
 	paths: EnginePaths;
