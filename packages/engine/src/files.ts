@@ -112,3 +112,23 @@ function inside(cwd: string, path: string): string {
 	if (full !== root && !full.startsWith(`${root}/`)) throw new EngineError("INVALID", "That path is outside the project.");
 	return full;
 }
+
+/** The entries of `dir` (relative to `cwd`, "" for the top): folders first, then files, by name. */
+export async function listDir(cwd: string, dir: string): Promise<{ name: string; path: string; kind: "file" | "folder" }[]> {
+	inside(cwd, dir || ".");
+	const prefix = dir ? `${dir.replace(/\/+$/, "")}/` : "";
+	const folders = new Set<string>();
+	const files: string[] = [];
+	for (const f of await listFiles(cwd)) {
+		if (!f.startsWith(prefix)) continue;
+		const rest = f.slice(prefix.length);
+		const slash = rest.indexOf("/");
+		if (slash === -1) files.push(rest);
+		else folders.add(rest.slice(0, slash));
+	}
+	const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+	return [
+		...[...folders].sort(byName).map((name) => ({ name, path: prefix + name, kind: "folder" as const })),
+		...files.sort(byName).map((name) => ({ name, path: prefix + name, kind: "file" as const })),
+	];
+}

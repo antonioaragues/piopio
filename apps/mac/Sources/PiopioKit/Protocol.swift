@@ -332,6 +332,9 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// A subagent's session: the parent session and its `task` call.
     public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String }
     public var parent: Parent?
+    /// Project sessions: "build" (coding) or "chat" (knowledge assistant).
+    public enum Profile: String, Codable, Sendable { case build, chat }
+    public var profile: Profile?
 }
 
 // MARK: Method params / results
@@ -354,8 +357,9 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var title: String?
     public var workOn: WorkOn?
     public var approvalMode: ApprovalMode?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, approvalMode: ApprovalMode? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode
+    public var profile: SessionSummary.Profile?
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode; self.profile = profile
     }
 }
 
@@ -397,6 +401,15 @@ public struct FilesParams: Encodable, Sendable {
 public struct FilesResult: Decodable, Sendable { public var files: [FileMatch] }
 
 // MARK: Files and MCP (Build)
+
+public struct ListDirParams: Encodable, Sendable { public var cwd: String; public var dir: String; public init(cwd: String, dir: String) { self.cwd = cwd; self.dir = dir } }
+public struct DirEntry: Codable, Sendable, Hashable, Identifiable {
+    public var name: String
+    public var path: String
+    public var kind: FileMatch.Kind
+    public var id: String { path }
+}
+public struct ListDirResult: Decodable, Sendable { public var entries: [DirEntry] }
 
 public struct ReadFileParams: Encodable, Sendable { public var cwd: String; public var path: String; public init(cwd: String, path: String) { self.cwd = cwd; self.path = path } }
 public struct ReadFileResult: Decodable, Sendable {
@@ -639,7 +652,10 @@ public struct ProjectsConfigureParams: Encodable, Sendable {
     public var approvalMode: ApprovalMode?
     public var removeRule: String?
     public var trust: Bool?
-    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil) { self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust }
+    public var lenses: [ProjectInfo.Lens]?
+    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, lenses: [ProjectInfo.Lens]? = nil) {
+        self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust; self.lenses = lenses
+    }
 }
 
 /// A session needs you, or told you something (notify_user).
@@ -680,12 +696,19 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public enum Trust: String, Codable, Sendable { case trusted, untrusted, undecided }
     public var trust: Trust
     public var needsTrust: Bool
+    /// Where the project shows: Build, Chat, or both (04-chat P1).
+    public enum Lens: String, Codable, Sendable { case build, chat }
+    public var lenses: [Lens]
     public var missing: Bool?
 }
 
 public struct ProjectsChanged: Decodable, Sendable { public var projects: [ProjectInfo] }
 public struct ProjectsListResult: Decodable, Sendable { public var projects: [ProjectInfo] }
-public struct ProjectsAddParams: Encodable, Sendable { public var path: String; public init(path: String) { self.path = path } }
+public struct ProjectsAddParams: Encodable, Sendable {
+    public var path: String
+    public var lens: ProjectInfo.Lens?
+    public init(path: String, lens: ProjectInfo.Lens? = nil) { self.path = path; self.lens = lens }
+}
 public struct ProjectsAddResult: Decodable, Sendable { public var project: ProjectInfo }
 public struct ProjectsRemoveParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
 

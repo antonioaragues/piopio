@@ -28,10 +28,11 @@ struct BuildSidebarList: View {
         .padding(.horizontal, 8)
         .padding(.top, 12)
         .padding(.bottom, 4)
-        if engine.projects.isEmpty {
+        let projects = engine.projects(in: .build)
+        if projects.isEmpty {
             Text("Folders you open appear here.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.horizontal, 8)
         }
-        ForEach(engine.projects) { project in
+        ForEach(projects) { project in
             projectRow(project)
             if !collapsed.contains(project.id) {
                 // Subagents' sessions sit under the session that started them.
@@ -93,6 +94,11 @@ struct BuildSidebarList: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button("New Session…") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
+            if project.lenses.contains(.chat) {
+                Button("Show Only in Build") { Task { await engine.setLenses([.build], for: project) } }
+            } else {
+                Button("Show in Chat Too") { Task { await engine.setLenses([.build, .chat], for: project) } }
+            }
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)]) }
             Divider()
             Button("Remove from Piopio") {
@@ -162,7 +168,7 @@ enum BuildActions {
     }
 
     static func add(_ url: URL, engine: EngineController, select: (String) -> Void) async {
-        guard let project = await engine.addProject(url) else { return }
+        guard let project = await engine.addProject(url, lens: .build) else { return }
         if let latest = engine.sessions(in: project).first {
             select(latest.ref.id)
         } else if let ref = await engine.createBuildSession(in: project) {
@@ -176,8 +182,12 @@ struct BuildSessionView: View {
     let engine: EngineController
     let session: ThreadModel
     let summary: SessionSummary
+    /// Shown in Chat (docs/spec/04-chat §2): file browser and preview instead of the terminal and git.
+    var chatLens = false
 
     @AppStorage("buildInspector") private var showInspector = true
+    @State private var inspectorTab = ChatInspectorTab.files
+    @State private var previewing: String?
     @State private var reviewing = false
     @State private var reviewFile: String?
     @State private var git: GitModel?
@@ -211,18 +221,40 @@ struct BuildSessionView: View {
                 } else {
                     conversation
                 }
-                if showTerminal, let cwd = summary.cwd {
+                if showTerminal, !chatLens, let cwd = summary.cwd {
                     TerminalDrawer(cwd: cwd, session: session) { showTerminal = false }
                         .padding(.horizontal, 8)
                         .padding(.bottom, 8)
                 }
             }
+            if chatLens, !reviewing, let path = previewing, let cwd = summary.cwd {
+                FilePreview(engine: engine, cwd: cwd, path: path, session: session) { previewing = nil }
+                    .frame(width: 440)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.panel))
+                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.panel).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                    .padding(.vertical, 8)
+            }
             if showInspector && !reviewing {
-                BuildInspector(session: session, commit: git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil) { file in
-                    reviewFile = file
-                    reviewing = true
+                VStack(spacing: 0) {
+                    if chatLens {
+                        Picker("", selection: $inspectorTab) {
+                            ForEach(ChatInspectorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .padding(.horizontal, 12)
+                        .padding(.top, 12)
+                    }
+                    if chatLens, inspectorTab == .files, let cwd = summary.cwd {
+                        FileBrowser(engine: engine, cwd: cwd, selected: $previewing)
+                    } else {
+                        BuildInspector(session: session, commit: !chatLens && git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil) { file in
+                            reviewFile = file
+                            reviewing = true
+                        }
+                    }
                 }
-                .frame(width: 290)
+                .frame(width: chatLens ? 260 : 290)
                 .glassPanel()
                 .padding(8)
             }
@@ -243,11 +275,14 @@ struct BuildSessionView: View {
             if let cwd = summary.cwd { FileViewer(engine: engine, cwd: cwd, target: target) }
         }
         .background {
-            Button("") { showTerminal.toggle() }.keyboardShortcut("`", modifiers: .control).hidden()
+            Button("") { if !chatLens { showTerminal.toggle() } }.keyboardShortcut("`", modifiers: .control).hidden()
         }
         .onChange(of: session.prompts.isEmpty) { _, empty in if empty { session.document.bottomInset = 150 } }
         .onReceive(NotificationCenter.default.publisher(for: .showCommit)) { note in
             if note.object as? String == session.ref.id { committing = true }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .previewFile)) { note in
+            if chatLens, let path = note.object as? String { previewing = path }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showReview)) { note in
             if note.object as? String == session.ref.id { reviewing = true }
@@ -299,13 +334,15 @@ struct BuildSessionView: View {
                 SessionTreePopover(session: session)
             }
             ApprovalModeMenu(engine: engine, session: session, project: project)
-            if let git { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
-            if let cwd = summary.cwd { OpenInEditorMenu(path: cwd) }
-            Button { showTerminal.toggle() } label: {
-                Image(systemName: "terminal").font(.system(size: 12, weight: .medium))
+            if !chatLens {
+                if let git { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
+                if let cwd = summary.cwd { OpenInEditorMenu(path: cwd) }
+                Button { showTerminal.toggle() } label: {
+                    Image(systemName: "terminal").font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(PillStyle(kind: .toolbar))
+                .help(showTerminal ? "Hide the terminal (⌃`)" : "Terminal in this folder (⌃`)")
             }
-            .buttonStyle(PillStyle(kind: .toolbar))
-            .help(showTerminal ? "Hide the terminal (⌃`)" : "Terminal in this folder (⌃`)")
             if let cwd = summary.cwd {
                 Menu {
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) }
@@ -328,7 +365,7 @@ struct BuildSessionView: View {
                 Image(systemName: "sidebar.right").font(.system(size: 12, weight: .medium))
             }
             .buttonStyle(PillStyle(kind: .toolbar))
-            .help(showInspector ? "Hide the inspector" : "Show changes, checkpoints and context")
+            .help(showInspector ? "Hide the inspector" : chatLens ? "Show the files and changes" : "Show changes, checkpoints and context")
         }
         .padding(.leading, 24)
         .padding(.trailing, 16)
@@ -364,6 +401,11 @@ struct BuildSessionView: View {
 }
 
 
+enum ChatInspectorTab: String, CaseIterable {
+    case files = "Files"
+    case changes = "Changes"
+}
+
 /// Build with no session selected: open a folder (button, ⌘O or drop), or start a session in a project.
 struct BuildEmptyState: View {
     let engine: EngineController
@@ -371,7 +413,7 @@ struct BuildEmptyState: View {
     @State private var targeted = false
 
     var body: some View {
-        EmptyState(label: "Build", title: engine.projects.isEmpty ? "Open a folder to start building" : "Pick a session, or start one", message: "Each folder becomes a Project. Sessions run with pi-coding-agent inside it, and sessions you start with the pi CLI show up here too.") {
+        EmptyState(label: "Build", title: engine.projects(in: .build).isEmpty ? "Open a folder to start building" : "Pick a session, or start one", message: "Each folder becomes a Project. Sessions run with pi-coding-agent inside it, and sessions you start with the pi CLI show up here too.") {
             VStack(spacing: 12) {
                 VStack(spacing: 10) {
                     Text("Drop a folder here").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
@@ -389,9 +431,9 @@ struct BuildEmptyState: View {
                     }
                     return true
                 }
-                if !engine.projects.isEmpty {
+                if !engine.projects(in: .build).isEmpty {
                     HStack(spacing: 8) {
-                        ForEach(engine.projects.prefix(4)) { project in
+                        ForEach(engine.projects(in: .build).prefix(4)) { project in
                             Button("New session in \(project.name)") {
                                 NotificationCenter.default.post(name: .newBuildSession, object: project.id)
                             }

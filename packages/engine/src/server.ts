@@ -10,7 +10,7 @@ import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { readProjectFile, searchFiles, writeProjectFile } from "./files.js";
+import { listDir, readProjectFile, searchFiles, writeProjectFile } from "./files.js";
 import { McpConfig } from "./mcp.js";
 import * as gitOps from "./git.js";
 import { Projects } from "./projects.js";
@@ -284,13 +284,13 @@ export class Engine {
 				return { projects: this.projects.list() } satisfies Result<"projects.list">;
 			case "projects.add": {
 				const p = params as Params<"projects.add">;
-				const project = this.projects.add(p.path);
+				const project = this.projects.add(p.path, p.lens);
 				await this.sessions.syncFolder(project.path);
 				return { project } satisfies Result<"projects.add">;
 			}
 			case "projects.configure": {
 				const p = params as Params<"projects.configure">;
-				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}) };
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
 			}
 			case "sessions.changes": {
@@ -325,6 +325,10 @@ export class Engine {
 			case "projects.files": {
 				const p = params as Params<"projects.files">;
 				return { files: await searchFiles(this.folder(p), p.query, p.limit ?? 30) } satisfies Result<"projects.files">;
+			}
+			case "projects.listDir": {
+				const p = params as Params<"projects.listDir">;
+				return { entries: await listDir(this.folder(p), p.dir) } satisfies Result<"projects.listDir">;
 			}
 			case "projects.readFile": {
 				const p = params as Params<"projects.readFile">;

@@ -18,6 +18,8 @@ import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage } from "../timeline/builder.js";
 import { SdkEventMapper } from "../timeline/pi-sdk.js";
+import { CHAT_TOOLS, chatProfileExtension } from "../tools/chat-profile.js";
+import type { WebOptions } from "../tools/web.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
@@ -45,6 +47,9 @@ export type BuildOpenOptions = {
 	onAttention?: (kind: "waiting" | "notify", message: string) => void;
 	/** Plan mode (piopio-plan), kept by the catalog so it survives a reopen. */
 	plan: { active(): boolean; setActive(on: boolean): void };
+	/** "chat": the Chat lens profile (no bash, web tools, knowledge-assistant prompt; 04-chat §2). */
+	profile?: "build" | "chat";
+	webOptions?: WebOptions;
 	/** Where project trust is looked up (the project folder; differs from `cwd` for worktree sessions). */
 	trustPath?: string;
 	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
@@ -118,6 +123,7 @@ export class BuildRuntime implements Runtime {
 						return { decision: response.decision ?? "deny", ...(response.text ? { note: response.text } : {}) };
 					},
 				}),
+				...(o.profile === "chat" ? [chatProfileExtension(o.hub, o.webOptions)] : []),
 				todosExtension(),
 				planExtension({
 					active: o.plan.active,
@@ -165,6 +171,7 @@ export class BuildRuntime implements Runtime {
 			sessionManager,
 			settingsManager,
 			resourceLoader,
+			...(o.profile === "chat" ? { tools: CHAT_TOOLS } : {}),
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
 		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan);

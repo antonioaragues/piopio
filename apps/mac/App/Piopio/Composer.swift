@@ -175,6 +175,7 @@ struct Composer: View {
         if thread.editing != nil { return "Edit your message" }
         if thread.isRunning { return "Queue a follow-up…" }
         if isBuild && thread.planMode { return "Plan mode: describe what you want; the agent proposes a plan first" }
+        if isBuild, engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.profile == .chat { return "Ask about these files, @mention one, or search the web…" }
         return isBuild ? "Ask, @mention files, or /command…" : "Message"
     }
 

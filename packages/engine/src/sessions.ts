@@ -231,7 +231,7 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; profile?: "build" | "chat" }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
 		const ref: ContainerRef = { kind: params.kind, id: newId(params.kind === "thread" ? "thr" : "ses") };
@@ -259,7 +259,7 @@ export class Sessions {
 			...(cwd ? { cwd } : {}),
 			...(worktree ? { projectPath: params.cwd!, worktree } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
-			...(params.kind === "build" ? { approvalMode: params.approvalMode ?? this.policy.modeFor(params.cwd!) } : {}),
+			...(params.kind === "build" ? { approvalMode: params.approvalMode ?? this.policy.modeFor(params.cwd!), profile: params.profile ?? "build" } : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
 		};
 		this.entries.set(ref.id, entry);
@@ -550,6 +550,8 @@ export class Sessions {
 				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
 			},
 			checkpoints: this.checkpoints,
+			profile: entry.profile ?? "build",
+			webOptions: this.webOptions,
 			...(entry.projectPath ? { trustPath: entry.projectPath } : {}),
 			plan: {
 				active: () => entry.planMode ?? false,

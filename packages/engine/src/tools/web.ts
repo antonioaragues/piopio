@@ -30,24 +30,8 @@ export function createWebExtension(hub: ModelHub, options: WebOptions = {}) {
 		description: "Search the web for current information. Returns a short summary and the sources (title, URL, snippet). Use it for recent events, facts you are unsure about, or anything that may have changed.",
 		parameters: Type.Object({ query: Type.String({ description: "What to search for" }), max_results: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })) }),
 		execute: async (args) => {
-			await hub.ensureCredential("openrouter");
-			const credential = await hub.credentials.read("openrouter");
-			const key = credential?.type === "api_key" ? credential.key : undefined;
-			if (!key) return { output: [{ type: "text", text: "Web search needs an OpenRouter key." }], isError: true };
-			const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
-				method: "POST",
-				headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "x-title": "Piopio" },
-				body: JSON.stringify({
-					model: options.searchModel ?? process.env.PIOPIO_SEARCH_MODEL ?? "deepseek/deepseek-v4.1-flash",
-					plugins: [{ id: "web", max_results: Math.round(args.max_results ?? 5) }],
-					messages: [{ role: "user", content: `Search the web and summarize what you find, briefly and factually, citing sources.\n\nQuery: ${args.query}` }],
-				}),
-				signal: AbortSignal.timeout(60_000),
-			});
-			const body = await response.text();
-			if (!response.ok) return { output: [{ type: "text", text: `Web search failed (${response.status}): ${body.slice(0, 300)}` }], isError: true };
-			const { summary, sources } = parseSearchResponse(JSON.parse(body));
-			return { output: [{ type: "text", text: formatSearch(args.query, summary, sources) }], details: { type: "web", results: sources } };
+			const r = await runWebSearch(hub, args, { ...options, fetchImpl });
+			return { output: [{ type: "text", text: r.text }], ...(r.isError ? { isError: true } : {}), ...(r.details ? { details: r.details as never } : {}) };
 		},
 	});
 
@@ -56,21 +40,54 @@ export function createWebExtension(hub: ModelHub, options: WebOptions = {}) {
 		description: "Read a web page (http/https) and return its main content as markdown. Use it to read sources found with web_search or links the user shares.",
 		parameters: Type.Object({ url: Type.String({ description: "The page URL" }) }),
 		execute: async (args) => {
-			const page = await fetchPage(args.url, { allowPrivate: options.allowPrivate ?? false, fetchImpl });
-			if ("error" in page) return { output: [{ type: "text", text: page.error }], isError: true };
-			let text = page.markdown;
-			if (text.length > MAX_OUTPUT_CHARS) text = `${text.slice(0, MAX_OUTPUT_CHARS)}\n\n[… truncated: the page has ${page.markdown.length} characters]`;
-			return { output: [{ type: "text", text: `# ${page.title || page.url}\nSource: ${page.url}\n\n${text}` }], details: { type: "page", url: page.url, title: page.title } };
+			const r = await runWebFetch(args.url, { ...options, fetchImpl });
+			return { output: [{ type: "text", text: r.text }], ...(r.isError ? { isError: true } : {}), ...(r.details ? { details: r.details as never } : {}) };
 		},
 	});
 
 	return defineExtension({
 		name: WEB_EXTENSION,
 		tools: [webSearch, webFetch],
-		sections: [
-			section("web", () => `You can search the web with web_search and read pages with web_fetch. Use them when the answer depends on current or specific information, and link the sources you used. Today is ${new Date().toISOString().slice(0, 10)}.`),
-		],
+		sections: [section("web", webSection)],
 	});
+}
+
+/** System prompt note for the web tools. */
+export const webSection = () =>
+	`You can search the web with web_search and read pages with web_fetch. Use them when the answer depends on current or specific information, and link the sources you used. Today is ${new Date().toISOString().slice(0, 10)}.`;
+
+export type WebResult = { text: string; isError?: boolean; details?: Record<string, unknown> };
+
+/** web_search, shared by the pi-durable (threads) and pi SDK (Chat-lens projects) tools. */
+export async function runWebSearch(hub: ModelHub, args: { query: string; max_results?: number }, options: WebOptions = {}): Promise<WebResult> {
+	const fetchImpl = options.fetchImpl ?? fetch;
+	await hub.ensureCredential("openrouter");
+	const credential = await hub.credentials.read("openrouter");
+	const key = credential?.type === "api_key" ? credential.key : undefined;
+	if (!key) return { text: "Web search needs an OpenRouter key.", isError: true };
+	const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
+		method: "POST",
+		headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "x-title": "Piopio" },
+		body: JSON.stringify({
+			model: options.searchModel ?? process.env.PIOPIO_SEARCH_MODEL ?? "deepseek/deepseek-v4.1-flash",
+			plugins: [{ id: "web", max_results: Math.round(args.max_results ?? 5) }],
+			messages: [{ role: "user", content: `Search the web and summarize what you find, briefly and factually, citing sources.\n\nQuery: ${args.query}` }],
+		}),
+		signal: AbortSignal.timeout(60_000),
+	});
+	const body = await response.text();
+	if (!response.ok) return { text: `Web search failed (${response.status}): ${body.slice(0, 300)}`, isError: true };
+	const { summary, sources } = parseSearchResponse(JSON.parse(body));
+	return { text: formatSearch(args.query, summary, sources), details: { type: "web", results: sources } };
+}
+
+/** web_fetch, shared like runWebSearch. */
+export async function runWebFetch(url: string, options: WebOptions = {}): Promise<WebResult> {
+	const page = await fetchPage(url, { allowPrivate: options.allowPrivate ?? false, fetchImpl: options.fetchImpl ?? fetch });
+	if ("error" in page) return { text: page.error, isError: true };
+	let text = page.markdown;
+	if (text.length > MAX_OUTPUT_CHARS) text = `${text.slice(0, MAX_OUTPUT_CHARS)}\n\n[… truncated: the page has ${page.markdown.length} characters]`;
+	return { text: `# ${page.title || page.url}\nSource: ${page.url}\n\n${text}`, details: { type: "page", url: page.url, title: page.title } };
 }
 
 // MARK: Search

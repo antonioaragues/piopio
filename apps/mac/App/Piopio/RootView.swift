@@ -131,6 +131,9 @@ struct RootView: View {
             if let id = selection, let summary = engine.threads.first(where: { $0.ref.id == id }) {
                 ThreadView(engine: engine, thread: engine.thread(summary.ref), summary: summary)
                     .id(id)
+            } else if let id = selection, let summary = engine.buildSessions.first(where: { $0.ref.id == id }) {
+                BuildSessionView(engine: engine, session: engine.thread(summary.ref), summary: summary, chatLens: true)
+                    .id(id)
             } else {
                 EmptyState(label: "Chat", title: "Start a thread, or a Space", message: "A thread is one conversation. A Space keeps a long-running subject organized into topics.") {
                     VStack(spacing: 12) {
@@ -291,6 +294,7 @@ struct Sidebar: View {
     }
 
     @ViewBuilder private var chatList: some View {
+        ChatProjectsSection(engine: engine, selection: $selection)
         if engine.threads.isEmpty {
             placeholder("Threads", "Your conversations appear here.")
         }

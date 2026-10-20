@@ -56,6 +56,23 @@ enum DebugAutomation {
                 ThreadModel.openSettings()
             }
         }
+        // PIOPIO_DEMO_CHAT_PROJECT: add this folder in Chat and open a chat-profile session; PIOPIO_DEMO_PREVIEW=<path>
+        // previews a file; PIOPIO_DEMO_BUILD_PROMPT is sent there too.
+        if let folder = env["PIOPIO_DEMO_CHAT_PROJECT"], engine.status == .ready {
+            Task {
+                NotificationCenter.default.post(name: .setMode, object: AppMode.chat)
+                guard let project = await engine.addProject(URL(fileURLWithPath: folder), lens: .chat),
+                      let ref = await engine.createBuildSession(in: project, profile: .chat) else { return }
+                NotificationCenter.default.post(name: .selectThread, object: ref.id)
+                let session = engine.thread(ref)
+                await session.open()
+                if let path = env["PIOPIO_DEMO_PREVIEW"] {
+                    try? await Task.sleep(for: .seconds(1))
+                    NotificationCenter.default.post(name: .previewFile, object: path)
+                }
+                if let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] { await session.send(prompt) }
+            }
+        }
         // PIOPIO_DEMO_PROJECT: add this folder in Build and open a session there; PIOPIO_DEMO_BUILD_PROMPT: send it.
         if let folder = env["PIOPIO_DEMO_PROJECT"], engine.status == .ready {
             Task {

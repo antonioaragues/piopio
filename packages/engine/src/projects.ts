@@ -6,7 +6,15 @@ import type { ApprovalMode, ApprovalRule, ProjectInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 import { newId } from "./sessions.js";
 
-type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[] };
+type Lens = "build" | "chat";
+type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[] };
+
+/** Files that make a folder a code project (04-chat P1); anything else opens in Chat. */
+const CODE_MARKERS = [".git", "package.json", "Package.swift", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt", "Gemfile", "pom.xml", "build.gradle", "Makefile", "CMakeLists.txt", "composer.json", "deno.json", "mix.exs"];
+
+export function detectLens(path: string): Lens {
+	return CODE_MARKERS.some((m) => existsSync(join(path, m))) ? "build" : "chat";
+}
 
 export class Projects {
 	private entries: StoredProject[] = [];
@@ -46,7 +54,7 @@ export class Projects {
 	}
 
 	/** Adds a folder. Adding the same folder again returns the existing project. */
-	add(path: string): ProjectInfo {
+	add(path: string, lens?: Lens): ProjectInfo {
 		if (!isAbsolute(path)) throw new EngineError("INVALID", "Project paths must be absolute.");
 		let real: string;
 		try {
@@ -56,8 +64,17 @@ export class Projects {
 			throw new EngineError("INVALID", `Not a folder: ${path}`);
 		}
 		const existing = this.entries.find((p) => p.path === real);
-		if (existing) return this.describe(existing);
-		const entry: StoredProject = { id: newId("prj"), path: real, name: basename(real), addedAt: new Date().toISOString() };
+		if (existing) {
+			// Adding it from the other mode shows it there too.
+			const lenses = existing.lenses ?? [detectLens(existing.path)];
+			if (lens && !lenses.includes(lens)) {
+				existing.lenses = [...lenses, lens];
+				this.save();
+			}
+			return this.describe(existing);
+		}
+		const detected = detectLens(real);
+		const entry: StoredProject = { id: newId("prj"), path: real, name: basename(real), addedAt: new Date().toISOString(), lenses: lens && lens !== detected ? [detected, lens] : [detected] };
 		this.entries.push(entry);
 		this.save();
 		return this.describe(entry);
@@ -71,13 +88,17 @@ export class Projects {
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; lenses?: Lens[] }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
 		if (change.approvalMode) entry.approvalMode = change.approvalMode;
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
 		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
 		if (change.trust !== undefined) this.trust.set(entry.path, change.trust);
+		if (change.lenses) {
+			if (change.lenses.length === 0) throw new EngineError("INVALID", "A project shows in Build, Chat or both.");
+			entry.lenses = [...new Set(change.lenses)];
+		}
 		this.save();
 		return this.describe(entry);
 	}
@@ -132,7 +153,7 @@ export class Projects {
 }
 
 function describe(stored: StoredProject): Omit<ProjectInfo, "trust" | "needsTrust"> {
-	const p = { ...stored, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [] };
+	const p = { ...stored, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [], lenses: stored.lenses ?? (existsSync(stored.path) ? [detectLens(stored.path)] : (["build"] as Lens[])) };
 	if (!existsSync(p.path)) return { ...p, piConfig: false, missing: true };
 	const branch = gitBranch(p.path);
 	const contextFile = ["AGENTS.md", "CLAUDE.md"].find((name) => existsSync(join(p.path, name)));

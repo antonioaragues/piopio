@@ -612,3 +612,10 @@ private final class HoverTracker: NSResponder {
         document?.hover(at: nil)
     }
 }
+
+/// Markdown rendered in the transcript's style, for other views (the Chat lens file preview).
+public enum MarkdownRendering {
+    public static func attributed(_ markdown: String) -> NSAttributedString {
+        ItemRenderer().render(MarkdownStream(text: markdown).blocks)
+    }
+}

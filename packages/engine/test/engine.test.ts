@@ -879,3 +879,49 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		await expect(a.client.call("projects.writeFile", { cwd: folder, path: "/tmp/x", content: "" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 	});
 });
+
+describe("projects in the Chat lens (milestone 3.1)", () => {
+	test("lenses are detected, and adding from the other mode shows the project in both", async () => {
+		const a = await start();
+		const code = realpathSync(mkdtempSync(join(tmpdir(), "piopio-code-")));
+		writeFileSync(join(code, "package.json"), "{}");
+		const notes = realpathSync(mkdtempSync(join(tmpdir(), "piopio-notes-")));
+		writeFileSync(join(notes, "ideas.md"), "# Ideas\n");
+		expect((await a.client.call("projects.add", { path: code })).project.lenses).toEqual(["build"]);
+		expect((await a.client.call("projects.add", { path: notes })).project.lenses).toEqual(["chat"]);
+		const both = (await a.client.call("projects.add", { path: code, lens: "chat" })).project;
+		expect(both.lenses).toEqual(["build", "chat"]);
+		expect((await a.client.call("projects.configure", { id: both.id, lenses: ["chat"] })).project.lenses).toEqual(["chat"]);
+		await expect(a.client.call("projects.configure", { id: both.id, lenses: [] })).rejects.toMatchObject({ data: { code: "INVALID" } });
+	});
+
+	test("chat-profile sessions read, grep and fetch pages, but have no bash", async () => {
+		const a = await start();
+		const http = await import("node:http");
+		const server = http.createServer((_req, res) => res.end("<html><head><title>Kitchen</title></head><body><p>Dishwashers need 60 cm.</p></body></html>"));
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+		const port = (server.address() as { port: number }).port;
+		const notes = realpathSync(mkdtempSync(join(tmpdir(), "piopio-notes-")));
+		writeFileSync(join(notes, "kitchen.md"), "# Kitchen\nSink moves 40 cm left.\n");
+		mkdirSync(join(notes, "plans"));
+		writeFileSync(join(notes, "plans", "budget.md"), "Budget: 12k\n");
+		await a.client.call("projects.add", { path: notes });
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: notes, profile: "chat", approvalMode: "full_auto" });
+		expect((await a.client.call("sessions.list", { kind: "build" })).sessions[0].profile).toBe("chat");
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: `call: grep | {"pattern":"Sink","path":"."}\ncall: web_fetch | {"url":"http://127.0.0.1:${port}/"}\n$ ls` } });
+		await a.client.waitFor(settled(sub.subscriptionId, 1), 20_000);
+		server.close();
+		const tools = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "tool" ? [i] : []));
+		expect(tools.map((t) => `${t.tool}:${t.status}`)).toEqual(["grep:done", "web_fetch:done", "bash:error"]);
+		expect(tools[0]!.output).toContain("kitchen.md");
+		expect(tools[1]!.output).toContain("Dishwashers need 60 cm.");
+		expect(tools[2]!.output).toContain("not found");
+
+		expect((await a.client.call("projects.listDir", { cwd: notes, dir: "" })).entries).toEqual([
+			{ name: "plans", path: "plans", kind: "folder" },
+			{ name: "kitchen.md", path: "kitchen.md", kind: "file" },
+		]);
+		expect((await a.client.call("projects.listDir", { cwd: notes, dir: "plans" })).entries).toEqual([{ name: "budget.md", path: "plans/budget.md", kind: "file" }]);
+	});
+});

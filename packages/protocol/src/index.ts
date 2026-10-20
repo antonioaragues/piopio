@@ -277,6 +277,8 @@ export const SessionSummary = Type.Object({
 	/** Build: the project folder (differs from `cwd` for worktree sessions). */
 	projectPath: Type.Optional(Type.String()),
 	worktree: Type.Optional(WorktreeInfo),
+	/** Project sessions: the profile they were created with (04-chat P2). */
+	profile: Type.Optional(literals("build", "chat")),
 	/** A subagent's session: the parent session and the `task` call that started it. */
 	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
 });
@@ -315,6 +317,8 @@ export const ProjectInfo = Type.Object({
 	 */
 	trust: literals("trusted", "untrusted", "undecided"),
 	needsTrust: Type.Boolean(),
+	/** Where the project shows (04-chat P1): Build, Chat, or both. Detected when added; "Show in…" changes it. */
+	lenses: Type.Array(literals("build", "chat")),
 	/** The folder no longer exists. */
 	missing: Type.Optional(Type.Boolean()),
 });
@@ -396,6 +400,8 @@ export const methods = {
 			cwd: Type.Optional(Type.String()),
 			/** Build: branch or worktree to work on (default: the project as it is). */
 			workOn: Type.Optional(WorkOn),
+			/** Project sessions: "build" (coding tools) or "chat" (knowledge assistant: no bash, web tools). */
+			profile: Type.Optional(literals("build", "chat")),
 			approvalMode: Type.Optional(ApprovalMode),
 			model: Type.Optional(ModelRef),
 			thinking: Type.Optional(Type.String()),
@@ -493,14 +499,20 @@ export const methods = {
 		params: Type.Object({}),
 		result: Type.Object({ projects: Type.Array(ProjectInfo) }),
 	},
-	/** Adds a folder (idempotent by real path) and imports its pi sessions. */
+	/** Adds a folder (idempotent by real path) and imports its pi sessions. `lens`: also show it there. */
 	"projects.add": {
-		params: Type.Object({ path: Type.String() }),
+		params: Type.Object({ path: Type.String(), lens: Type.Optional(literals("build", "chat")) }),
 		result: Type.Object({ project: ProjectInfo }),
 	},
 	/** Default approval mode for the project's new sessions, and rule removal. */
 	"projects.configure": {
-		params: Type.Object({ id: Type.String(), approvalMode: Type.Optional(ApprovalMode), removeRule: Type.Optional(Type.String()), trust: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])) }),
+		params: Type.Object({
+			id: Type.String(),
+			approvalMode: Type.Optional(ApprovalMode),
+			removeRule: Type.Optional(Type.String()),
+			trust: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])),
+			lenses: Type.Optional(Type.Array(literals("build", "chat"))),
+		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},
 	/** Build: files that differ from the session's first checkpoint (or the latest), with line counts. */
@@ -561,6 +573,11 @@ export const methods = {
 	"projects.files": {
 		params: Type.Object({ cwd: Type.String(), query: Type.String(), limit: Type.Optional(Type.Number()) }),
 		result: Type.Object({ files: Type.Array(Type.Object({ path: Type.String(), kind: literals("file", "folder") })) }),
+	},
+	/** File browser (04-chat P3): the entries of a folder of the project (.gitignore respected in git repositories). */
+	"projects.listDir": {
+		params: Type.Object({ cwd: Type.String(), dir: Type.String() }),
+		result: Type.Object({ entries: Type.Array(Type.Object({ name: Type.String(), path: Type.String(), kind: literals("file", "folder") })) }),
 	},
 	/** File viewer (BR4): a file of a project or worktree. Text only; large files are cut. */
 	"projects.readFile": {

@@ -4888,6 +4888,18 @@
 						}
 					}
 				},
+				"profile": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "build"
+						},
+						{
+							"type": "string",
+							"const": "chat"
+						}
+					]
+				},
 				"parent": {
 					"type": "object",
 					"required": [
@@ -8096,6 +8108,18 @@
 									}
 								}
 							},
+							"profile": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "build"
+									},
+									{
+										"type": "string",
+										"const": "chat"
+									}
+								]
+							},
 							"parent": {
 								"type": "object",
 								"required": [
@@ -8413,6 +8437,18 @@
 									}
 								}
 							},
+							"profile": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "build"
+									},
+									{
+										"type": "string",
+										"const": "chat"
+									}
+								]
+							},
 							"parent": {
 								"type": "object",
 								"required": [
@@ -8505,6 +8541,18 @@
 									"type": "string"
 								}
 							}
+						}
+					]
+				},
+				"profile": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "build"
+						},
+						{
+							"type": "string",
+							"const": "chat"
 						}
 					]
 				},
@@ -11583,7 +11631,8 @@
 							"approvalMode",
 							"rules",
 							"trust",
-							"needsTrust"
+							"needsTrust",
+							"lenses"
 						],
 						"properties": {
 							"id": {
@@ -11681,6 +11730,21 @@
 							"needsTrust": {
 								"type": "boolean"
 							},
+							"lenses": {
+								"type": "array",
+								"items": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "build"
+										},
+										{
+											"type": "string",
+											"const": "chat"
+										}
+									]
+								}
+							},
 							"missing": {
 								"type": "boolean"
 							}
@@ -11697,6 +11761,18 @@
 			"properties": {
 				"path": {
 					"type": "string"
+				},
+				"lens": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "build"
+						},
+						{
+							"type": "string",
+							"const": "chat"
+						}
+					]
 				}
 			}
 		},
@@ -11717,7 +11793,8 @@
 						"approvalMode",
 						"rules",
 						"trust",
-						"needsTrust"
+						"needsTrust",
+						"lenses"
 					],
 					"properties": {
 						"id": {
@@ -11814,6 +11891,21 @@
 						},
 						"needsTrust": {
 							"type": "boolean"
+						},
+						"lenses": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "build"
+									},
+									{
+										"type": "string",
+										"const": "chat"
+									}
+								]
+							}
 						},
 						"missing": {
 							"type": "boolean"
@@ -11859,6 +11951,21 @@
 							"type": "null"
 						}
 					]
+				},
+				"lenses": {
+					"type": "array",
+					"items": {
+						"anyOf": [
+							{
+								"type": "string",
+								"const": "build"
+							},
+							{
+								"type": "string",
+								"const": "chat"
+							}
+						]
+					}
 				}
 			}
 		},
@@ -11879,7 +11986,8 @@
 						"approvalMode",
 						"rules",
 						"trust",
-						"needsTrust"
+						"needsTrust",
+						"lenses"
 					],
 					"properties": {
 						"id": {
@@ -11976,6 +12084,21 @@
 						},
 						"needsTrust": {
 							"type": "boolean"
+						},
+						"lenses": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "build"
+									},
+									{
+										"type": "string",
+										"const": "chat"
+									}
+								]
+							}
 						},
 						"missing": {
 							"type": "boolean"
@@ -12921,6 +13044,60 @@
 							"kind"
 						],
 						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "file"
+									},
+									{
+										"type": "string",
+										"const": "folder"
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		"projects.listDir.params": {
+			"type": "object",
+			"required": [
+				"cwd",
+				"dir"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"dir": {
+					"type": "string"
+				}
+			}
+		},
+		"projects.listDir.result": {
+			"type": "object",
+			"required": [
+				"entries"
+			],
+			"properties": {
+				"entries": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name",
+							"path",
+							"kind"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
 							"path": {
 								"type": "string"
 							},

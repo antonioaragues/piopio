@@ -280,15 +280,28 @@ final class EngineController {
     // MARK: Projects
 
     /// Adds a folder as a project; its pi sessions are imported by the engine.
-    func addProject(_ url: URL) async -> ProjectInfo? {
+    func addProject(_ url: URL, lens: ProjectInfo.Lens? = nil) async -> ProjectInfo? {
         guard let client else { return nil }
         do {
-            let project = try await client.call("projects.add", ProjectsAddParams(path: url.path), as: ProjectsAddResult.self).project
+            let project = try await client.call("projects.add", ProjectsAddParams(path: url.path, lens: lens), as: ProjectsAddResult.self).project
             try await refreshCatalog()
             return project
         } catch {
             return nil
         }
+    }
+
+    /// Projects shown in a mode (04-chat P1).
+    func projects(in lens: ProjectInfo.Lens) -> [ProjectInfo] {
+        projects.filter { $0.lenses.contains(lens) }
+    }
+
+    func setLenses(_ lenses: [ProjectInfo.Lens], for project: ProjectInfo) async {
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, lenses: lenses), as: ProjectsAddResult.self)
+    }
+
+    func listDir(_ cwd: String, _ dir: String) async -> [DirEntry] {
+        (try? await client?.call("projects.listDir", ListDirParams(cwd: cwd, dir: dir), as: ListDirResult.self).entries) ?? []
     }
 
     func removeProject(_ project: ProjectInfo) async {
@@ -299,14 +312,14 @@ final class EngineController {
         buildSessions.filter { ($0.projectPath ?? $0.cwd) == project.path }
     }
 
-    func createBuildSession(in project: ProjectInfo) async -> ContainerRef? {
-        try? await createBuildSession(in: project, workOn: .current, mode: nil, model: nil)
+    func createBuildSession(in project: ProjectInfo, profile: SessionSummary.Profile = .build) async -> ContainerRef? {
+        try? await createBuildSession(in: project, workOn: .current, mode: nil, model: nil, profile: profile)
     }
 
     /// A Build session on the project as it is, a new branch, or its own worktree (docs/design 7a).
-    func createBuildSession(in project: ProjectInfo, workOn: WorkOn, mode: ApprovalMode?, model: ModelRef?) async throws -> ContainerRef {
+    func createBuildSession(in project: ProjectInfo, workOn: WorkOn, mode: ApprovalMode?, model: ModelRef?, profile: SessionSummary.Profile = .build) async throws -> ContainerRef {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
-        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: model ?? preferredModel, workOn: workOn, approvalMode: mode), as: CreateSessionResult.self).ref
+        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: model ?? preferredModel, workOn: workOn, approvalMode: mode, profile: profile), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return ref
     }

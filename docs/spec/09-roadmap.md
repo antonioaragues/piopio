@@ -155,6 +155,20 @@ Milestones (each one usable on its own):
 Scope: 04-chat §2–3 (organizer, topics, routing link cards, memory, files, Thread → Space suggestion S11). Global memory (07 §5). MCP for pi-durable runtimes.
 **Acceptance:** one real Space (e.g. a home project) with 5+ topics. Routing is right ≥ 90% of the time on a 50-message replay set. Rerouting works and is learned.
 
+Milestones:
+| | Scope |
+|---|---|
+| **3.1** Projects in Chat | Project lenses (P1: detected, switchable, both). Chat profile for sessions: no bash, web tools, knowledge-assistant prompt (P2). Chat sidebar Projects section. File browser, preview pane (markdown, PDF, images) and changed files (P3). |
+| **3.2** Spaces core | Space = one pi-durable session: Main (organizer) + topic conversations. Organizer tools route/create/answer; link cards with live status; topic view; sidebar with nested topics and unread dots; `@topic`, `/new`, `/main`; reroute that's learned (S1–S4, S6, S10). |
+| **3.3** Memory, files, housekeeping | Space memory doc with history and editor (S8), `update_memory` / `propose_memory`, `ask_topic`, `search_space`, rename/archive/merge, topic summaries, Space files and settings, header (S7, S9, §3.5–3.6). |
+| **3.4** Conversions and suggestion | Convert threads to a Space (S5), Promote topic to thread, Thread → Space suggestion (S11), global memory (07 §5), MCP for pi-durable runtimes, the 50-message routing replay set. |
+
+**Milestone 3.1 done (2026-10-20).**
+- **Lenses (P1):** a project has `lenses` (build, chat or both). New projects get the detected one (a `.git` folder or code files → build, otherwise chat) plus the mode they were added from. The Build and Chat sidebars show their own projects; the context menu shows a project in the other mode too, or only in this one.
+- **Chat profile (P2):** `sessions.create profile: "chat"` gives a session read, write, edit, grep, find and ls, but no bash, plus `web_search` and `web_fetch` (the same tools as Threads), with a knowledge-assistant section in the system prompt. Sessions are tagged with their profile and appear under their project in both modes; Build-profile sessions show a hammer in Chat.
+- **Chat lens UI (P3):** the Chat sidebar has a Projects section (add a folder, new session). The session view drops the terminal, git and editor pills. The inspector has Files (a lazy tree from `projects.listDir`) and Changes. Picking a file opens a preview: markdown in the transcript's style, PDF, images, or other text, with "Ask about this" (an @-mention in the composer) and "Open in".
+- Verified: 2 engine tests (lens detection and switching; a chat-profile session reaches grep and web_fetch and has no bash; listDir), and app captures. **Not verified:** the knowledge-assistant prompt with a real model, and large folders in the file tree.
+
 ## Phase 4 — Agents (local)
 Scope: 06-agents §2–4, §6–9, §11 local part. In-app channel + simulator, schedules, heartbeat, triggers (local URL via tunnel optional), memory partitions, **agent-to-agent**, approvals, budgets. Background mode.
 Also (from the 2026-10-20 review of a similar app, see README decisions AQ5–AQ10): **Apple app tools served by the Mac app** (§4.1: Reminders, Calendar, Contacts, Notes, Music, Shortcuts), **result cards with Undo** (§4.2), **compact progress lines**, agent header and avatars, the **Inbox** with toolbar/menu bar/Dock badges (§12). Side-by-side agents, link previews, voice and quick entry to an agent (§12 UI3–UI6) if time allows; agent boards (§12.1) later.
