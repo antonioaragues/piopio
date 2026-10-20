@@ -276,6 +276,18 @@ export class Engine {
 				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
 			}
+			case "sessions.changes": {
+				const p = params as Params<"sessions.changes">;
+				return (await (await this.sessions.build(p.ref)).changes(p.since)) satisfies Result<"sessions.changes">;
+			}
+			case "sessions.diff": {
+				const p = params as Params<"sessions.diff">;
+				return { patch: await (await this.sessions.build(p.ref)).diff(p.path, p.since) } satisfies Result<"sessions.diff">;
+			}
+			case "sessions.restore": {
+				const p = params as Params<"sessions.restore">;
+				return { files: await (await this.sessions.build(p.ref)).restore(p.checkpointId, p.paths, p.dryRun ?? false) } satisfies Result<"sessions.restore">;
+			}
 			case "sessions.respond": {
 				const p = params as Params<"sessions.respond">;
 				await this.sessions.respond(p.ref, p.promptId, p.response);

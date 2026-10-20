@@ -19,6 +19,8 @@ final class ThreadModel {
     var errorDetail: String?
     /// Opens the composer's model picker ("Use another model" in error cards).
     var showModelPicker = false
+    /// Build: the checkpoint "Restore…" was clicked on (the session view confirms it).
+    var restoring: CheckpointItem?
 
     @ObservationIgnored private weak var engine: EngineController?
     @ObservationIgnored private var subscriptionId: String?
@@ -76,6 +78,7 @@ final class ThreadModel {
 
     private func apply(_ events: [SessionEvent]) {
         document.apply(events)
+        revision += 1
         let wasRunning = state?.status == .running
         for case .state(let s) in events { state = s }
         for case .resnapshot(let snap) in events { state = snap.state }
@@ -153,6 +156,8 @@ final class ThreadModel {
             if case .assistant(let a) = document.item(id) { errorDetail = a.errorDetail ?? a.error }
         case .copy:
             break // handled by the document
+        case .restoreCheckpoint(let id):
+            if case .checkpoint(let c) = document.item(id) { restoring = c }
         }
     }
 
@@ -215,6 +220,32 @@ final class ThreadModel {
     }
 
     /// `"default"` returns to the model's default.
+    // MARK: Checkpoints and changes (Build)
+
+    /// Bumped on every event batch, so views that read the document's items refresh.
+    private(set) var revision = 0
+
+    var checkpoints: [CheckpointItem] {
+        _ = revision
+        return document.items.compactMap { if case .checkpoint(let c) = $0 { c } else { nil } }
+    }
+
+    func changes(since: ChangesSince) async -> [FileChange] {
+        guard let client = engine?.client else { return [] }
+        return (try? await client.call("sessions.changes", ChangesParams(ref: ref, since: since), as: ChangesResult.self).files) ?? []
+    }
+
+    func diff(_ path: String, since: ChangesSince) async -> String {
+        guard let client = engine?.client else { return "" }
+        return (try? await client.call("sessions.diff", DiffParams(ref: ref, path: path, since: since), as: DiffResult.self).patch) ?? ""
+    }
+
+    /// What a restore would change (`dryRun`), or the restore itself.
+    func restore(_ checkpoint: CheckpointItem, paths: [String]? = nil, dryRun: Bool) async throws -> [FileChange] {
+        guard let client = engine?.client else { return [] }
+        return try await client.call("sessions.restore", RestoreParams(ref: ref, checkpointId: checkpoint.checkpointId, paths: paths, dryRun: dryRun), as: RestoreResult.self).files
+    }
+
     // MARK: Approvals and questions (Build)
 
     var prompts: [PendingPrompt] { state?.prompts ?? [] }

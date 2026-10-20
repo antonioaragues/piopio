@@ -10,6 +10,7 @@ public enum TranscriptAction: Equatable, Sendable {
     case chooseModel
     case showErrorDetail(itemId: String)
     case copy(itemId: String)
+    case restoreCheckpoint(itemId: String)
 
     static let scheme = "piopio-action"
 
@@ -25,6 +26,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .chooseModel: c.host = "model"
         case .showErrorDetail(let id): c.host = "error"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .copy(let id): c.host = "copy"; c.queryItems = [URLQueryItem(name: "item", value: id)]
+        case .restoreCheckpoint(let id): c.host = "restore"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         }
         return c.url!
     }
@@ -41,6 +43,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "model": self = .chooseModel
         case "error": guard let id = q("item") else { return nil }; self = .showErrorDetail(itemId: id)
         case "copy": guard let id = q("item") else { return nil }; self = .copy(itemId: id)
+        case "restore": guard let id = q("item") else { return nil }; self = .restoreCheckpoint(itemId: id)
         default: return nil
         }
     }

@@ -18,7 +18,7 @@ public final class TranscriptDocument {
     private let pageSize: Int
 
     /// Every item of the session, oldest first; `items[windowStart...]` are in the document.
-    private var items: [TimelineItem] = []
+    public private(set) var items: [TimelineItem] = []
     private var windowStart = 0
     /// Document order and rendered length of each item in the window.
     private(set) var documentIDs: [String] = []
@@ -225,6 +225,17 @@ public final class TranscriptDocument {
                 items.append(item)
                 append(item)
             }
+        case .itemInserted(let item, let before):
+            if let i = items.firstIndex(where: { $0.id == item.id }) {
+                items[i] = item
+                replace(item)
+            } else if let i = items.firstIndex(where: { $0.id == before }) {
+                items.insert(item, at: i)
+                if let d = documentIDs.firstIndex(of: before) { insert(item, at: d) }
+            } else {
+                items.append(item)
+                append(item)
+            }
         case .itemUpdated(let item):
             guard let i = items.lastIndex(where: { $0.id == item.id }) else { return }
             items[i] = item
@@ -276,6 +287,15 @@ public final class TranscriptDocument {
         lengths[item.id] = text.length
         edit(NSRange(location: storage.length, length: 0), with: text)
         if case .assistant(let a) = item, a.status == .streaming { startStream(a) }
+    }
+
+    /// Renders an item before the document's `index`-th item.
+    private func insert(_ item: TimelineItem, at index: Int) {
+        let text = renderer.render(item)
+        let location = offset(ofIndex: index)
+        documentIDs.insert(item.id, at: index)
+        lengths[item.id] = text.length
+        edit(NSRange(location: location, length: 0), with: text)
     }
 
     /// Re-renders an item in place. A finished answer replaces its streamed rendering with the final one.

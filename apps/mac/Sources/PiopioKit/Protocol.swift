@@ -139,12 +139,48 @@ public struct SystemItem: Codable, Sendable, Hashable {
 
 public struct CompactionItem: Codable, Sendable, Hashable { public var id, at, summary: String }
 
+/// A snapshot of the working tree before a turn changed files (Build).
+public struct CheckpointItem: Codable, Sendable, Hashable {
+    public var id, at, checkpointId, label: String
+    /// Files that changed since the previous checkpoint.
+    public var files: Int?
+    public init(id: String, at: String, checkpointId: String, label: String, files: Int? = nil) {
+        self.id = id; self.at = at; self.checkpointId = checkpointId; self.label = label; self.files = files
+    }
+}
+
+/// A file that differs from a checkpoint.
+public struct FileChange: Codable, Sendable, Hashable, Identifiable {
+    public enum Status: String, Codable, Sendable { case added, modified, deleted }
+    public var path: String
+    public var status: Status
+    public var added: Int
+    public var removed: Int
+    public var binary: Bool?
+    public var id: String { path }
+}
+
+public enum ChangesSince: String, Codable, Sendable { case session, turn }
+public struct ChangesParams: Encodable, Sendable { public var ref: ContainerRef; public var since: ChangesSince; public init(ref: ContainerRef, since: ChangesSince) { self.ref = ref; self.since = since } }
+public struct ChangesResult: Decodable, Sendable { public var base: String?; public var files: [FileChange] }
+public struct DiffParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var path: String; public var since: ChangesSince
+    public init(ref: ContainerRef, path: String, since: ChangesSince) { self.ref = ref; self.path = path; self.since = since }
+}
+public struct DiffResult: Decodable, Sendable { public var patch: String }
+public struct RestoreParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var checkpointId: String; public var paths: [String]?; public var dryRun: Bool?
+    public init(ref: ContainerRef, checkpointId: String, paths: [String]? = nil, dryRun: Bool? = nil) { self.ref = ref; self.checkpointId = checkpointId; self.paths = paths; self.dryRun = dryRun }
+}
+public struct RestoreResult: Decodable, Sendable { public var files: [FileChange] }
+
 public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case user(UserItem)
     case assistant(AssistantItem)
     case tool(ToolItem)
     case system(SystemItem)
     case compaction(CompactionItem)
+    case checkpoint(CheckpointItem)
 
     private enum Key: String, CodingKey { case kind }
 
@@ -156,6 +192,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case "tool": self = .tool(try ToolItem(from: decoder))
         case "system": self = .system(try SystemItem(from: decoder))
         case "compaction": self = .compaction(try CompactionItem(from: decoder))
+        case "checkpoint": self = .checkpoint(try CheckpointItem(from: decoder))
         default: throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown item kind \(kind)"))
         }
     }
@@ -168,6 +205,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .tool(let v): try c.encode("tool", forKey: .kind); try v.encode(to: encoder)
         case .system(let v): try c.encode("system", forKey: .kind); try v.encode(to: encoder)
         case .compaction(let v): try c.encode("compaction", forKey: .kind); try v.encode(to: encoder)
+        case .checkpoint(let v): try c.encode("checkpoint", forKey: .kind); try v.encode(to: encoder)
         }
     }
 
@@ -178,6 +216,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .tool(let v): v.id
         case .system(let v): v.id
         case .compaction(let v): v.id
+        case .checkpoint(let v): v.id
         }
     }
 }
@@ -219,6 +258,8 @@ public struct Snapshot: Codable, Sendable, Hashable {
 
 public enum SessionEvent: Decodable, Sendable, Hashable {
     case itemAdded(TimelineItem)
+    /// Added before another item (checkpoints go before the change they precede).
+    case itemInserted(TimelineItem, before: String)
     case itemDelta(itemId: String, partIndex: Int, partType: AssistantPart.PartType, textDelta: String)
     case itemUpdated(TimelineItem)
     case itemRemoved(itemId: String)
@@ -227,13 +268,15 @@ public enum SessionEvent: Decodable, Sendable, Hashable {
     case resnapshot(Snapshot)
     case unknown(String)
 
-    private enum Key: String, CodingKey { case type, item, itemId, partIndex, partType, textDelta, oldId, state, snapshot }
+    private enum Key: String, CodingKey { case type, item, itemId, partIndex, partType, textDelta, oldId, state, snapshot, before }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Key.self)
         let type = try c.decode(String.self, forKey: .type)
         switch type {
-        case "item.added": self = .itemAdded(try c.decode(TimelineItem.self, forKey: .item))
+        case "item.added":
+            let item = try c.decode(TimelineItem.self, forKey: .item)
+            if let before = try c.decodeIfPresent(String.self, forKey: .before) { self = .itemInserted(item, before: before) } else { self = .itemAdded(item) }
         case "item.delta":
             self = .itemDelta(itemId: try c.decode(String.self, forKey: .itemId), partIndex: try c.decode(Int.self, forKey: .partIndex),
                               partType: try c.decode(AssistantPart.PartType.self, forKey: .partType), textDelta: try c.decode(String.self, forKey: .textDelta))

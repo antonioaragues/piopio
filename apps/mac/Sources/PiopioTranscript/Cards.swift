@@ -20,7 +20,7 @@ extension NSAttributedString.Key {
     static let piopioFooterColor = NSAttributedString.Key("piopio.footerColor")
 }
 
-public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, note, pills }
+public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, note, pills, divider }
 
 enum PillStyle: String { case primary, secondary, file }
 
@@ -57,6 +57,7 @@ final class CardLayoutFragment: NSTextLayoutFragment {
         case .user: return text.insetBy(dx: -Self.bubblePadH, dy: -Self.bubblePadV)
         case .note: return text.insetBy(dx: -12, dy: -5)
         case .pills: return .zero
+        case .divider: return columnRect(text, pad: 0)
         }
     }
 
@@ -86,6 +87,12 @@ final class CardLayoutFragment: NSTextLayoutFragment {
             fill(context, rect, DS.chip, radius: rect.height / 2)
         case .pills:
             break
+        case .divider:
+            // Hairlines either side of the centered label (docs/design 2a checkpoint divider).
+            let text = textBounds.offsetBy(dx: point.x, dy: point.y)
+            context.setFillColor(DS.line.cgColor)
+            context.fill(CGRect(x: rect.minX, y: text.midY, width: max(0, text.minX - 12 - rect.minX), height: 0.5))
+            context.fill(CGRect(x: text.maxX + 12, y: text.midY, width: max(0, rect.maxX - text.maxX - 12), height: 0.5))
         }
         drawPills(at: point, in: context)
         context.restoreGState()

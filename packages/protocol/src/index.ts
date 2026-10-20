@@ -128,12 +128,38 @@ export const CompactionItem = Type.Object({
 	summary: Type.String(),
 });
 
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem]);
+/** A snapshot of the working tree before a turn changed files (Build, docs/spec/05-build §7). */
+export const CheckpointItem = Type.Object({
+	kind: Type.Literal("checkpoint"),
+	id: Type.String(),
+	at: Type.String(),
+	checkpointId: Type.String(),
+	/** "Session start", "Before turn 3", "Before restore". */
+	label: Type.String(),
+	/** Files that changed since the previous checkpoint. */
+	files: Type.Optional(Type.Number()),
+});
+
+export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem]);
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
 export type ToolItem = Static<typeof ToolItem>;
 export type SystemItem = Static<typeof SystemItem>;
+export type CheckpointItem = Static<typeof CheckpointItem>;
+
+/** A file that differs from a checkpoint. */
+export const FileChange = Type.Object({
+	path: Type.String(),
+	status: literals("added", "modified", "deleted"),
+	added: Type.Number(),
+	removed: Type.Number(),
+	binary: Type.Optional(Type.Boolean()),
+});
+export type FileChange = Static<typeof FileChange>;
+
+/** Compared with the session's first checkpoint, or its latest one (the last turn). */
+export const ChangesSince = literals("session", "turn");
 
 // ── Session state & events ─────────────────────────────────────────────────
 
@@ -208,7 +234,8 @@ export const Snapshot = Type.Object({ ref: ContainerRef, items: Type.Array(Timel
 export type Snapshot = Static<typeof Snapshot>;
 
 export const SessionEvent = Type.Union([
-	Type.Object({ type: Type.Literal("item.added"), item: TimelineItem }),
+	/** Appended, or inserted before the item `before` when set (checkpoints go before the change they precede). */
+	Type.Object({ type: Type.Literal("item.added"), item: TimelineItem, before: Type.Optional(Type.String()) }),
 	Type.Object({ type: Type.Literal("item.delta"), itemId: Type.String(), partIndex: Type.Number(), partType: Type.Union([Type.Literal("text"), Type.Literal("thinking")]), textDelta: Type.String() }),
 	Type.Object({ type: Type.Literal("item.updated"), item: TimelineItem }),
 	Type.Object({ type: Type.Literal("item.removed"), itemId: Type.String() }),
@@ -396,6 +423,24 @@ export const methods = {
 	"projects.configure": {
 		params: Type.Object({ id: Type.String(), approvalMode: Type.Optional(ApprovalMode), removeRule: Type.Optional(Type.String()) }),
 		result: Type.Object({ project: ProjectInfo }),
+	},
+	/** Build: files that differ from the session's first checkpoint (or the latest), with line counts. */
+	"sessions.changes": {
+		params: Type.Object({ ref: ContainerRef, since: ChangesSince }),
+		result: Type.Object({ base: Type.Optional(Type.String()), files: Type.Array(FileChange) }),
+	},
+	/** Build: unified diff of one file since a checkpoint. */
+	"sessions.diff": {
+		params: Type.Object({ ref: ContainerRef, path: Type.String(), since: ChangesSince }),
+		result: Type.Object({ patch: Type.String() }),
+	},
+	/**
+	 * Build: puts files back as they were at a checkpoint (all, or `paths`). `dryRun` lists what would change.
+	 * A real restore first checkpoints the current state, then tells the agent what changed.
+	 */
+	"sessions.restore": {
+		params: Type.Object({ ref: ContainerRef, checkpointId: Type.String(), paths: Type.Optional(Type.Array(Type.String())), dryRun: Type.Optional(Type.Boolean()) }),
+		result: Type.Object({ files: Type.Array(FileChange) }),
 	},
 	/** Answers a pending prompt (approval, question, confirm, select, input). */
 	"sessions.respond": {

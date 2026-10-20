@@ -49,6 +49,8 @@ nonisolated struct ItemRenderer: Sendable {
             return note(s.text, dot: s.level == .warn ? DS.amber : DS.accent)
         case .compaction:
             return note("Context compacted: older messages were summarized", dot: DS.fg3)
+        case .checkpoint(let c):
+            return checkpointDivider(c)
         }
     }
 
@@ -124,6 +126,21 @@ nonisolated struct ItemRenderer: Sendable {
     }
 
     /// Routing, memory and other notes: a small capsule with a colored dot (8e "System note").
+    /// "Checkpoint · Before turn 2   Restore…" between hairlines.
+    private func checkpointDivider(_ c: CheckpointItem) -> NSAttributedString {
+        let small = NSFont.systemFont(ofSize: 11)
+        let m = NSMutableAttributedString(string: "Checkpoint · \(c.label)", attributes: [.font: small, .foregroundColor: DS.fg3])
+        if !compact {
+            m.append(NSAttributedString(string: "   ", attributes: [.font: small]))
+            m.append(NSAttributedString(string: "Restore…", attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: DS.fg2, .link: TranscriptAction.restoreCheckpoint(itemId: c.id).url, .toolTip: "Put the project's files back as they were here"]))
+        }
+        let p = paragraph(spacing: 16, before: 4)
+        p.alignment = .center
+        let out = NSMutableAttributedString(attributedString: line(m, p))
+        out.addAttribute(.piopioCard, value: CardStyle.divider.rawValue, range: NSRange(location: 0, length: out.length))
+        return out
+    }
+
     private func note(_ text: String, dot: NSColor) -> NSAttributedString {
         let m = NSMutableAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5])
         m.append(NSAttributedString(string: text, attributes: [.font: small, .foregroundColor: DS.fg2]))

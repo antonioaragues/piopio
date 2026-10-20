@@ -10,6 +10,7 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, PromptResponse, SessionSummary } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
+import { CheckpointStore } from "./checkpoints.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
@@ -47,6 +48,7 @@ export class Sessions {
 	private open = new Map<string, Promise<Runtime>>();
 	private listeners = new Set<CatalogListener>();
 	readonly search: SearchIndex;
+	readonly checkpoints: CheckpointStore;
 	policy: ApprovalPolicy = { modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
@@ -58,6 +60,7 @@ export class Sessions {
 		private readonly webOptions: WebOptions = {},
 	) {
 		this.search = new SearchIndex(join(paths.home, "search.db"));
+		this.checkpoints = new CheckpointStore(join(paths.home, "checkpoints"));
 		if (existsSync(paths.catalogIndex)) {
 			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) this.entries.set(e.ref.id, e);
 		}
@@ -251,6 +254,13 @@ export class Sessions {
 		return pending;
 	}
 
+	/** A Build session's runtime (checkpoints, approvals). */
+	async build(ref: ContainerRef): Promise<BuildRuntime> {
+		const runtime = await this.runtime(ref);
+		if (!(runtime instanceof BuildRuntime)) throw new EngineError("INVALID", "Only Build sessions have checkpoints and approvals.");
+		return runtime;
+	}
+
 	/** Answers a pending prompt of a Build session. */
 	async respond(ref: ContainerRef, promptId: string, response: PromptResponse): Promise<void> {
 		const runtime = await this.runtime(ref);
@@ -421,6 +431,7 @@ export class Sessions {
 				rules: () => this.policy.rulesFor(entry.cwd!),
 				addRule: (rule) => this.policy.addRule(entry.cwd!, rule),
 			},
+			checkpoints: this.checkpoints,
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 		});
 		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {

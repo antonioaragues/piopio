@@ -67,6 +67,18 @@ enum DebugAutomation {
                 let session = engine.thread(ref)
                 await session.open()
                 await session.send(prompt)
+                // PIOPIO_DEMO_BUILD_FOLLOWUP: a second turn; PIOPIO_DEMO_REVIEW=1 then opens the diff review,
+                // PIOPIO_DEMO_RESTORE=1 the restore sheet for the first checkpoint.
+                if let followUp = env["PIOPIO_DEMO_BUILD_FOLLOWUP"] {
+                    await waitIdle(session)
+                    await session.send(followUp)
+                }
+                if env["PIOPIO_DEMO_REVIEW"] == "1" || env["PIOPIO_DEMO_RESTORE"] == "1" {
+                    await waitIdle(session)
+                    try? await Task.sleep(for: .milliseconds(500))
+                    if env["PIOPIO_DEMO_REVIEW"] == "1" { NotificationCenter.default.post(name: .showReview, object: ref.id) }
+                    if env["PIOPIO_DEMO_RESTORE"] == "1" { session.restoring = session.checkpoints.first }
+                }
                 // PIOPIO_DEMO_RESPOND=allow|always|deny: answer the first approval the session asks for.
                 if let decision = env["PIOPIO_DEMO_RESPOND"].flatMap(PromptResponse.Decision.init(rawValue:)) {
                     for _ in 0..<100 {

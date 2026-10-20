@@ -21,6 +21,8 @@ public struct Transcript: Sendable {
         switch event {
         case .itemAdded(let item):
             if let i = index(of: item.id) { items[i] = item } else { items.append(item) }
+        case .itemInserted(let item, let before):
+            if let i = index(of: item.id) { items[i] = item } else if let b = index(of: before) { items.insert(item, at: b) } else { items.append(item) }
         case .itemUpdated(let item):
             if let i = index(of: item.id) { items[i] = item }
         case .itemReplaced(let oldId, let item):

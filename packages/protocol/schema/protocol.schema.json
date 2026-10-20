@@ -482,6 +482,37 @@
 							"type": "string"
 						}
 					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"id",
+						"at",
+						"checkpointId",
+						"label"
+					],
+					"properties": {
+						"kind": {
+							"type": "string",
+							"const": "checkpoint"
+						},
+						"id": {
+							"type": "string"
+						},
+						"at": {
+							"type": "string"
+						},
+						"checkpointId": {
+							"type": "string"
+						},
+						"label": {
+							"type": "string"
+						},
+						"files": {
+							"type": "number"
+						}
+					}
 				}
 			]
 		},
@@ -1195,8 +1226,42 @@
 											"type": "string"
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"checkpointId",
+										"label"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "checkpoint"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"checkpointId": {
+											"type": "string"
+										},
+										"label": {
+											"type": "string"
+										},
+										"files": {
+											"type": "number"
+										}
+									}
 								}
 							]
+						},
+						"before": {
+							"type": "string"
 						}
 					}
 				},
@@ -1692,6 +1757,37 @@
 											"type": "string"
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"checkpointId",
+										"label"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "checkpoint"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"checkpointId": {
+											"type": "string"
+										},
+										"label": {
+											"type": "string"
+										},
+										"files": {
+											"type": "number"
+										}
+									}
 								}
 							]
 						}
@@ -2170,6 +2266,37 @@
 										},
 										"summary": {
 											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"checkpointId",
+										"label"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "checkpoint"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"checkpointId": {
+											"type": "string"
+										},
+										"label": {
+											"type": "string"
+										},
+										"files": {
+											"type": "number"
 										}
 									}
 								}
@@ -2943,6 +3070,37 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"checkpointId",
+													"label"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "checkpoint"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"checkpointId": {
+														"type": "string"
+													},
+													"label": {
+														"type": "string"
+													},
+													"files": {
+														"type": "number"
+													}
+												}
 											}
 										]
 									}
@@ -3693,6 +3851,37 @@
 									},
 									"summary": {
 										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"checkpointId",
+									"label"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "checkpoint"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"checkpointId": {
+										"type": "string"
+									},
+									"label": {
+										"type": "string"
+									},
+									"files": {
+										"type": "number"
 									}
 								}
 							}
@@ -4500,8 +4689,42 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"checkpointId",
+													"label"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "checkpoint"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"checkpointId": {
+														"type": "string"
+													},
+													"label": {
+														"type": "string"
+													},
+													"files": {
+														"type": "number"
+													}
+												}
 											}
 										]
+									},
+									"before": {
+										"type": "string"
 									}
 								}
 							},
@@ -4997,6 +5220,37 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"checkpointId",
+													"label"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "checkpoint"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"checkpointId": {
+														"type": "string"
+													},
+													"label": {
+														"type": "string"
+													},
+													"files": {
+														"type": "number"
+													}
+												}
 											}
 										]
 									}
@@ -5475,6 +5729,37 @@
 													},
 													"summary": {
 														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"checkpointId",
+													"label"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "checkpoint"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"checkpointId": {
+														"type": "string"
+													},
+													"label": {
+														"type": "string"
+													},
+													"files": {
+														"type": "number"
 													}
 												}
 											}
@@ -6246,6 +6531,37 @@
 																},
 																"summary": {
 																	"type": "string"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"checkpointId",
+																"label"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "checkpoint"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"checkpointId": {
+																	"type": "string"
+																},
+																"label": {
+																	"type": "string"
+																},
+																"files": {
+																	"type": "number"
 																}
 															}
 														}
@@ -7557,6 +7873,37 @@
 										"type": "string"
 									}
 								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"checkpointId",
+									"label"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "checkpoint"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"checkpointId": {
+										"type": "string"
+									},
+									"label": {
+										"type": "string"
+									},
+									"files": {
+										"type": "number"
+									}
+								}
 							}
 						]
 					}
@@ -8356,6 +8703,37 @@
 											},
 											"summary": {
 												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"id",
+											"at",
+											"checkpointId",
+											"label"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "checkpoint"
+											},
+											"id": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											},
+											"checkpointId": {
+												"type": "string"
+											},
+											"label": {
+												"type": "string"
+											},
+											"files": {
+												"type": "number"
 											}
 										}
 									}
@@ -10032,6 +10410,292 @@
 						},
 						"missing": {
 							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"sessions.changes.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"since"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"since": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "session"
+						},
+						{
+							"type": "string",
+							"const": "turn"
+						}
+					]
+				}
+			}
+		},
+		"sessions.changes.result": {
+			"type": "object",
+			"required": [
+				"files"
+			],
+			"properties": {
+				"base": {
+					"type": "string"
+				},
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path",
+							"status",
+							"added",
+							"removed"
+						],
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "added"
+									},
+									{
+										"type": "string",
+										"const": "modified"
+									},
+									{
+										"type": "string",
+										"const": "deleted"
+									}
+								]
+							},
+							"added": {
+								"type": "number"
+							},
+							"removed": {
+								"type": "number"
+							},
+							"binary": {
+								"type": "boolean"
+							}
+						}
+					}
+				}
+			}
+		},
+		"sessions.diff.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"path",
+				"since"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"path": {
+					"type": "string"
+				},
+				"since": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "session"
+						},
+						{
+							"type": "string",
+							"const": "turn"
+						}
+					]
+				}
+			}
+		},
+		"sessions.diff.result": {
+			"type": "object",
+			"required": [
+				"patch"
+			],
+			"properties": {
+				"patch": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.restore.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"checkpointId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"checkpointId": {
+					"type": "string"
+				},
+				"paths": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"dryRun": {
+					"type": "boolean"
+				}
+			}
+		},
+		"sessions.restore.result": {
+			"type": "object",
+			"required": [
+				"files"
+			],
+			"properties": {
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path",
+							"status",
+							"added",
+							"removed"
+						],
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "added"
+									},
+									{
+										"type": "string",
+										"const": "modified"
+									},
+									{
+										"type": "string",
+										"const": "deleted"
+									}
+								]
+							},
+							"added": {
+								"type": "number"
+							},
+							"removed": {
+								"type": "number"
+							},
+							"binary": {
+								"type": "boolean"
+							}
 						}
 					}
 				}

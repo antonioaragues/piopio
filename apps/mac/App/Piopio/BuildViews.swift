@@ -169,11 +169,43 @@ struct BuildSessionView: View {
     let session: ThreadModel
     let summary: SessionSummary
 
+    @AppStorage("buildInspector") private var showInspector = true
+    @State private var reviewing = false
+    @State private var reviewFile: String?
+
     private var project: ProjectInfo? { engine.projects.first { $0.path == summary.cwd } }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                header
+                if reviewing {
+                    DiffReview(session: session, selected: reviewFile) { reviewing = false }
+                } else {
+                    conversation
+                }
+            }
+            if showInspector && !reviewing {
+                BuildInspector(session: session) { file in
+                    reviewFile = file
+                    reviewing = true
+                }
+                .frame(width: 290)
+                .glassPanel()
+                .padding(8)
+            }
+        }
+        .task { await session.open() }
+        .onChange(of: session.prompts.isEmpty) { _, empty in if empty { session.document.bottomInset = 150 } }
+        .onReceive(NotificationCenter.default.publisher(for: .showReview)) { note in
+            if note.object as? String == session.ref.id { reviewing = true }
+        }
+        .sheet(item: Binding(get: { session.restoring }, set: { session.restoring = $0 })) { checkpoint in
+            RestoreSheet(session: session, checkpoint: checkpoint)
+        }
+    }
+
+    private var conversation: some View {
             ZStack(alignment: .bottom) {
                 TranscriptView(document: session.document)
                 VStack(spacing: 8) {
@@ -197,9 +229,6 @@ struct BuildSessionView: View {
                         .padding(.bottom, 20)
                 }
             }
-        }
-        .task { await session.open() }
-        .onChange(of: session.prompts.isEmpty) { _, empty in if empty { session.document.bottomInset = 150 } }
     }
 
     private var header: some View {
@@ -238,6 +267,11 @@ struct BuildSessionView: View {
                 .fixedSize()
                 .help(cwd)
             }
+            Button { withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() } } label: {
+                Image(systemName: "sidebar.right").font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(PillStyle(kind: .toolbar))
+            .help(showInspector ? "Hide the inspector" : "Show changes, checkpoints and context")
         }
         .padding(.leading, 24)
         .padding(.trailing, 16)
@@ -575,4 +609,11 @@ struct ApprovalModeMenu: View {
         case .fullAuto: "Doesn't ask, except for risky commands and writes outside the project."
         }
     }
+}
+
+extension CheckpointItem: @retroactive Identifiable {}
+
+extension Notification.Name {
+    /// Object: a session id. Opens its diff review (automation).
+    static let showReview = Notification.Name("piopio.showReview")
 }

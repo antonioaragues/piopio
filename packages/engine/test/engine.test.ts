@@ -557,3 +557,55 @@ describe("approvals and questions (docs/spec/05-build §6)", () => {
 		expect((await tools(a, s.ref)).at(-1)?.status).toBe("interrupted");
 	});
 });
+
+test("checkpoints: before each turn's first change, with changes, diff, restore and a note for the agent", async () => {
+	const a = await start();
+	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-checkpoints-")));
+	writeFileSync(join(folder, "a.txt"), "one\n");
+	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+	await a.client.call("sessions.configure", { ref, approvalMode: "full_auto" });
+	const sub = await a.client.call("sessions.subscribe", { ref });
+	const kinds = (s: Snapshot) => s.items.map((i) => (i.kind === "checkpoint" ? `checkpoint:${i.label}` : i.kind === "tool" ? `tool:${i.tool}` : i.kind));
+
+	await a.client.call("sessions.submit", { ref, input: { text: "edit: a.txt | one | two\nwrite: b.txt | new file" } });
+	await a.client.waitFor(settled(sub.subscriptionId, 1), 20_000);
+	let seq = Math.max(...a.client.events.filter((n) => n.subscriptionId === sub.subscriptionId).map((n) => n.seq));
+	// Live, the checkpoint was inserted before the edit it precedes.
+	const added = a.client.events.flatMap((n) => n.events).find((e) => e.type === "item.added" && e.item.kind === "checkpoint") as { before?: string } | undefined;
+	expect(added?.before).toMatch(/^tool:/);
+
+	expect(await a.client.call("sessions.changes", { ref, since: "session" })).toMatchObject({
+		files: [
+			{ path: "a.txt", status: "modified", added: 1, removed: 1 },
+			{ path: "b.txt", status: "added", added: 1, removed: 0 },
+		],
+	});
+	expect((await a.client.call("sessions.diff", { ref, path: "a.txt", since: "session" })).patch).toContain("-one\n+two");
+
+	await a.client.call("sessions.submit", { ref, input: { text: "edit: a.txt | two | three" } });
+	await a.client.waitFor(settled(sub.subscriptionId, seq), 20_000);
+	seq = Math.max(...a.client.events.filter((n) => n.subscriptionId === sub.subscriptionId).map((n) => n.seq));
+	const live: Snapshot = await a.client.call("sessions.open", { ref });
+	expect(kinds(live)).toEqual(["user", "assistant", "checkpoint:Session start", "tool:edit", "assistant", "tool:write", "assistant", "user", "assistant", "checkpoint:Before turn 2", "tool:edit", "assistant"]);
+	const [first, second] = live.items.filter((i) => i.kind === "checkpoint");
+	expect(second).toMatchObject({ files: 2 });
+	expect((await a.client.call("sessions.changes", { ref, since: "turn" })).files).toEqual([{ path: "a.txt", status: "modified", added: 1, removed: 1 }]);
+
+	const preview = await a.client.call("sessions.restore", { ref, checkpointId: first!.kind === "checkpoint" ? first.checkpointId : "", dryRun: true });
+	expect(preview.files.map((f: { path: string }) => f.path)).toEqual(["a.txt", "b.txt"]);
+	expect(readFileSync(join(folder, "a.txt"), "utf8")).toBe("three\n");
+	const restored = await a.client.call("sessions.restore", { ref, checkpointId: first!.kind === "checkpoint" ? first.checkpointId : "" });
+	expect(restored.files.map((f: { path: string; status: string }) => `${f.status} ${f.path}`)).toEqual(["modified a.txt", "added b.txt"]);
+	expect(readFileSync(join(folder, "a.txt"), "utf8")).toBe("one\n");
+	expect(existsSync(join(folder, "b.txt"))).toBe(false);
+	const after: Snapshot = await a.client.call("sessions.open", { ref });
+	expect(kinds(after).slice(-2)).toEqual(["checkpoint:Before restore", "system"]);
+	expect(after.items.at(-1)).toMatchObject({ kind: "system", text: "Restored 2 files to “Session start”. The agent was told." });
+
+	// Everything is rebuilt from the pi session file in the same order.
+	await stop(a);
+	const b = await start(a.home);
+	expect(kinds(await b.client.call("sessions.open", { ref }))).toEqual(kinds(after));
+	// Since the latest checkpoint ("Before restore"), the restore itself is what changed.
+	expect((await b.client.call("sessions.changes", { ref, since: "turn" })).files.map((f: { path: string; status: string }) => `${f.status} ${f.path}`)).toEqual(["modified a.txt", "deleted b.txt"]);
+});

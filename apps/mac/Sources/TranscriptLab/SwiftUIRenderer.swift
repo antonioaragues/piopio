@@ -266,6 +266,7 @@ final class SwiftUIRenderer: LabRenderer {
         case .tool(let t): MessageModel(id: t.id, role: .tool(name: t.tool, output: t.output ?? ""), text: "")
         case .system(let s): MessageModel(id: s.id, role: .system, text: s.text)
         case .compaction(let c): MessageModel(id: c.id, role: .system, text: c.summary)
+        case .checkpoint(let c): MessageModel(id: c.id, role: .system, text: c.label)
         }
     }
 }

@@ -1,13 +1,17 @@
 /** Build runtime: one pi-coding-agent SDK session, persisted as a pi CLI-compatible JSONL file. */
 import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager, SettingsManager, type AgentSession } from "@earendil-works/pi-coding-agent";
-import { approvalsExtension, notifyExtension, type ApprovalMode, type Rule } from "@piopio/pi-extensions";
-import type { ApprovalRule, ContainerRef, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
+import { approvalsExtension, checkpointsExtension, notifyExtension, type ApprovalMode, type Rule } from "@piopio/pi-extensions";
+import type { ApprovalRule, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
+import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder, type PiMessage } from "../timeline/builder.js";
 import { SdkEventMapper } from "../timeline/pi-sdk.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
+
+/** pi session entry type for checkpoints (kept in the session file, not sent to the model). */
+const CHECKPOINT_ENTRY = "piopio.checkpoint";
 
 export type BuildOpenOptions = {
 	ref: ContainerRef;
@@ -23,6 +27,8 @@ export type BuildOpenOptions = {
 	piAgentDir?: string;
 	/** Approval mode and the project's rules, read on every tool call (they can change mid-session). */
 	approvals: { mode(): ApprovalMode; rules(): readonly ApprovalRule[]; addRule(rule: Rule): void };
+	/** Shadow-git snapshots of the working tree (docs/spec/05-build §7). */
+	checkpoints: CheckpointStore;
 	/** The session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (kind: "waiting" | "notify", message: string) => void;
 };
@@ -39,6 +45,8 @@ export class BuildRuntime implements Runtime {
 		private model: ModelRef,
 		private readonly broker: PromptBroker,
 		private readonly approvalMode: () => ApprovalMode,
+		private readonly cwd: string,
+		private readonly checkpoints: CheckpointStore,
 	) {
 		this.builder = new TimelineBuilder(ref);
 	}
@@ -63,6 +71,8 @@ export class BuildRuntime implements Runtime {
 			agentDir,
 			settingsManager,
 			extensionFactories: [
+				// First, so the snapshot is taken before anything else can change files.
+				checkpointsExtension({ snapshot: async (callId) => void (await runtime?.takeCheckpoint(callId)) }),
 				approvalsExtension({
 					mode: o.approvals.mode,
 					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),
@@ -107,7 +117,7 @@ export class BuildRuntime implements Runtime {
 			resourceLoader,
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
-		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode);
+		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints);
 		broker.onAdded = (prompt) => o.onAttention?.("waiting", prompt.detail ? `${prompt.title}: ${prompt.detail}` : prompt.title);
 		const bound = runtime;
 		await session.bindExtensions({ mode: "rpc", uiContext: uiBridge(broker, (level, text) => bound.note(level, text)) });
@@ -125,9 +135,81 @@ export class BuildRuntime implements Runtime {
 		this.broker.respond(promptId, response);
 	}
 
+	// ── Checkpoints (docs/spec/05-build §7) ────────────────────────────────
+
+	/**
+	 * Snapshots the working tree, records it in the pi session file (a custom entry, not sent to the model)
+	 * and shows it before the tool call it precedes.
+	 */
+	async takeCheckpoint(beforeCallId?: string, label?: string): Promise<CheckpointItem> {
+		const previous = this.builder.checkpoints();
+		const turns = (this.session.messages as PiMessage[]).filter((m) => m.role === "user").length;
+		const name = label ?? (previous.length === 0 ? "Session start" : `Before turn ${turns}`);
+		const snapshot = await this.checkpoints.snapshot(this.cwd, name);
+		const item: CheckpointItem = {
+			kind: "checkpoint",
+			id: `cp:${snapshot.id.slice(0, 12)}:${Date.now().toString(36)}`,
+			at: new Date().toISOString(),
+			checkpointId: snapshot.id,
+			label: name,
+			...(previous.length > 0 ? { files: snapshot.files } : {}),
+		};
+		this.session.sessionManager.appendCustomEntry(CHECKPOINT_ENTRY, { ...item, ...(beforeCallId ? { beforeCallId } : {}) });
+		this.builder.checkpoint(item, beforeCallId ? `tool:${beforeCallId}` : undefined);
+		this.emitter.emit(this.builder.flush());
+		return item;
+	}
+
+	/** Files that differ from the session's first checkpoint, or from the latest one. */
+	async changes(since: "session" | "turn"): Promise<{ base?: string; files: FileChange[] }> {
+		const base = this.base(since);
+		return base ? { base, files: await this.checkpoints.changes(this.cwd, base) } : { files: [] };
+	}
+
+	async diff(path: string, since: "session" | "turn"): Promise<string> {
+		const base = this.base(since);
+		return base ? this.checkpoints.diff(this.cwd, base, path) : "";
+	}
+
+	/**
+	 * Puts files back as they were at a checkpoint. The current state is checkpointed first ("Before restore"),
+	 * and the agent gets a note listing what changed, so it re-reads those files.
+	 */
+	async restore(checkpointId: string, paths: string[] | undefined, dryRun: boolean): Promise<FileChange[]> {
+		if (dryRun) {
+			const files = await this.checkpoints.changes(this.cwd, checkpointId);
+			return paths ? files.filter((f) => paths.includes(f.path)) : files;
+		}
+		if (this.session.isStreaming) throw new EngineError("BUSY", "Stop the agent before restoring files.");
+		const target = this.builder.checkpoints().find((c) => c.checkpointId === checkpointId);
+		await this.takeCheckpoint(undefined, "Before restore");
+		const files = await this.checkpoints.restore(this.cwd, checkpointId, paths);
+		if (files.length > 0) {
+			const where = target ? `“${target.label}”` : "an earlier checkpoint";
+			const list = files.map((f) => `- ${f.path} (${f.status === "added" ? "removed again" : f.status === "deleted" ? "brought back" : "reverted"})`).join("\n");
+			await this.session.sendCustomMessage({
+				customType: "piopio.restore",
+				content: `The user restored ${paths ? "some files" : "the project"} to ${where}. These files changed on disk; re-read them before editing:\n${list}`,
+				display: true,
+				details: { summary: `Restored ${files.length === 1 ? files[0]!.path : `${files.length} files`} to ${where}. The agent was told.` },
+			});
+		}
+		return files;
+	}
+
+	private base(since: "session" | "turn"): string | undefined {
+		const all = this.builder.checkpoints();
+		return (since === "session" ? all[0] : all.at(-1))?.checkpointId;
+	}
+
 	private attach(): void {
 		const messages = this.session.messages as unknown as PiMessage[];
 		this.builder.reset(messages, (i) => SdkEventMapper.idOf(i), false);
+		for (const entry of this.session.sessionManager.getBranch()) {
+			if (entry.type !== "custom" || entry.customType !== CHECKPOINT_ENTRY) continue;
+			const { beforeCallId, ...item } = entry.data as CheckpointItem & { beforeCallId?: string };
+			this.builder.checkpoint(item, beforeCallId ? `tool:${beforeCallId}` : this.builder.firstAfter(item.at), false);
+		}
 		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, approvalMode: this.approvalMode(), prompts: [], ...this.context() });
 		this.builder.flush();
 		// Waiting on the user: the session shows "waiting for you" and an approval's tool card waits too.

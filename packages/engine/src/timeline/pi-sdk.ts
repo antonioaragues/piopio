@@ -1,5 +1,5 @@
 /** Maps pi-coding-agent `AgentSessionEvent`s onto the timeline builder. */
-import { contentText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
+import { contentText, customText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
 
 type AnyEvent = { type: string; [key: string]: unknown };
 
@@ -32,6 +32,7 @@ export class SdkEventMapper {
 				const id = SdkEventMapper.idOf(this.nextIndex++);
 				if (message.role === "user") b.user(id, contentText(message.content as string | PiContentBlock[]), message.timestamp as number | undefined);
 				else if (message.role === "assistant") b.assistantStart(id, (message as { model?: string }).model);
+				else if (message.role === "custom" && (message as { display?: boolean }).display) b.system(id, "info", customText(message));
 				break;
 			}
 			case "message_update": {

@@ -102,6 +102,8 @@ export class TimelineBuilder {
 					tools.set(b.id, t);
 					this.push(t);
 				}
+			} else if (m.role === "custom" && (m as { display?: boolean }).display) {
+				this.push({ kind: "system", id, at: iso(m.timestamp as number | undefined), level: "info", text: customText(m) });
 			} else if (m.role === "toolResult") {
 				const r = m as Extract<PiMessage, { role: "toolResult" }>;
 				const t = tools.get(r.toolCallId);
@@ -287,6 +289,39 @@ export class TimelineBuilder {
 		};
 	}
 
+	/**
+	 * Adds a checkpoint before the item `beforeId` (the change it precedes), or at the end.
+	 * Emits item.added with `before` so clients put it in the same place.
+	 */
+	checkpoint(item: Extract<TimelineItem, { kind: "checkpoint" }>, beforeId?: string, emit = true): void {
+		if (this.index.has(item.id)) return;
+		const at = beforeId ? this.index.get(beforeId) : undefined;
+		if (at === undefined) {
+			this.push(item);
+			if (emit) this.pending.push({ type: "item.added", item: structuredClone(item) });
+			return;
+		}
+		this.items.splice(at, 0, item);
+		this.index.clear();
+		this.items.forEach((it, i) => this.index.set(it.id, i));
+		if (emit) this.pending.push({ type: "item.added", item: structuredClone(item), before: beforeId! });
+	}
+
+	/** Sends the current items as a fresh snapshot (after rebuilding them outside the event flow). */
+	resnapshot(): void {
+		this.pending.push({ type: "resnapshot", snapshot: this.snapshot() });
+	}
+
+	/** The first item newer than `at` (to place something by time). */
+	firstAfter(at: string): string | undefined {
+		return this.items.find((i) => i.at > at)?.id;
+	}
+
+	/** The checkpoints, oldest first. */
+	checkpoints(): Extract<TimelineItem, { kind: "checkpoint" }>[] {
+		return this.items.filter((i): i is Extract<TimelineItem, { kind: "checkpoint" }> => i.kind === "checkpoint");
+	}
+
 	private push(item: TimelineItem): void {
 		this.index.set(item.id, this.items.length);
 		this.items.push(item);
@@ -301,6 +336,12 @@ export class TimelineBuilder {
 function errorFields(raw: string | undefined): Pick<AssistantItem, "error" | "errorKind" | "errorDetail"> {
 	const { kind, message } = describeModelError(raw);
 	return { error: message, errorKind: kind, ...(raw ? { errorDetail: raw } : {}) };
+}
+
+/** What a displayed custom message (e.g. Piopio's restore note) shows: its `details.summary`, else its text. */
+export function customText(m: PiMessage): string {
+	const summary = (m as { details?: { summary?: unknown } }).details?.summary;
+	return typeof summary === "string" ? summary : contentText((m as { content?: string | PiContentBlock[] }).content);
 }
 
 /** A failed call that the user denied, or that a stop cut short, isn't an error of the tool. */
