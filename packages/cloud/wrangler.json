@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "piopio-cloud",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "no_nodejs_global_timers"],
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [{ "name": "AGENT", "class_name": "AgentDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentDO"] }],
+  "observability": { "enabled": true }
+}
