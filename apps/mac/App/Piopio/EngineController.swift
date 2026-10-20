@@ -11,6 +11,8 @@ final class EngineController {
 
     private(set) var status: Status = .starting
     private(set) var threads: [SessionSummary] = []
+    /// Chat: Spaces, with their topics (docs/spec/04-chat §3).
+    private(set) var spaces: [SessionSummary] = []
     /// Build: folders added as projects, and their sessions (newest first).
     private(set) var projects: [ProjectInfo] = []
     private(set) var buildSessions: [SessionSummary] = []
@@ -260,6 +262,7 @@ final class EngineController {
         guard let client else { return }
         threads = try await client.call("sessions.list", ListSessionsParams(kind: .thread), as: ListSessionsResult.self).sessions
         buildSessions = try await client.call("sessions.list", ListSessionsParams(kind: .build), as: ListSessionsResult.self).sessions
+        spaces = try await client.call("sessions.list", ListSessionsParams(kind: .space), as: ListSessionsResult.self).sessions
         projects = try await client.call("projects.list", Empty(), as: ProjectsListResult.self).projects
     }
 
@@ -274,7 +277,8 @@ final class EngineController {
         }
         threads = merged(threads, kind: .thread)
         buildSessions = merged(buildSessions, kind: .build)
-        for id in removed { openThreads[id] = nil }
+        spaces = merged(spaces, kind: .space)
+        for id in removed { forget(id) }
     }
 
     // MARK: Projects
@@ -343,8 +347,7 @@ final class EngineController {
     }
 
     func delete(_ ref: ContainerRef) async {
-        openThreads[ref.id]?.close()
-        openThreads[ref.id] = nil
+        forget(ref.id)
         _ = try? await client?.call("sessions.delete", RefParams(ref: ref), as: Empty.self)
     }
 
@@ -403,10 +406,46 @@ final class EngineController {
     // MARK: Threads
 
     func thread(_ ref: ContainerRef) -> ThreadModel {
-        if let open = openThreads[ref.id] { return open }
+        if let open = openThreads[ref.key] { return open }
         let t = ThreadModel(ref: ref, engine: self)
-        openThreads[ref.id] = t
+        openThreads[ref.key] = t
         return t
+    }
+
+    /// Drops the open models of a session (a Space's Main and all its topics).
+    private func forget(_ id: String) {
+        for key in openThreads.keys where key == id || key.hasPrefix(id + "/") {
+            openThreads[key]?.close()
+            openThreads[key] = nil
+        }
+    }
+
+    // MARK: Spaces
+
+    func createSpace(name: String, instructions: String) async -> ContainerRef? {
+        guard let client else { return nil }
+        let ref = try? await client.call("sessions.create", CreateSessionParams(kind: .space, model: preferredModel, title: name, instructions: instructions.isEmpty ? nil : instructions), as: CreateSessionResult.self).ref
+        try? await refreshCatalog()
+        return ref
+    }
+
+    func space(_ id: String) -> SessionSummary? {
+        spaces.first { $0.ref.id == id }
+    }
+
+    /// Wrong topic: moves a routed message to another topic, or a new one.
+    func reroute(_ ref: ContainerRef, itemId: String, toTopic: String? = nil, newTopic: String? = nil) async throws {
+        guard let client else { return }
+        _ = try await client.call("spaces.reroute", RerouteParams(ref: ref, itemId: itemId, toTopicId: toTopic, newTopic: newTopic), as: Empty.self)
+    }
+
+    func markRead(_ ref: ContainerRef) {
+        guard ref.conversationId != nil, space(ref.id)?.topics?.first(where: { $0.id == ref.conversationId })?.unread == true else { return }
+        Task { _ = try? await client?.call("spaces.markRead", RefParams(ref: ref), as: Empty.self) }
+    }
+
+    func setInstructions(_ instructions: String, for space: ContainerRef) async {
+        _ = try? await client?.call("spaces.configure", SpaceConfigureParams(ref: space, instructions: instructions), as: Empty.self)
     }
 
     func subscribe(_ ref: ContainerRef, handler: @escaping ([SessionEvent]) -> Void) async throws -> SubscribeResult {
@@ -437,9 +476,10 @@ final class EngineController {
     var selectedThreadId: String?
 
     func answerFinished(in thread: ThreadModel) {
-        guard !(NSApp.isActive && selectedThreadId == thread.ref.id) else { return }
+        guard !(NSApp.isActive && selectedThreadId == thread.ref.key) else { return }
         guard case .assistant(let a)? = thread.document.lastItem else { return }
-        let title = (threads + buildSessions).first { $0.ref.id == thread.ref.id }?.title ?? "Piopio"
+        let space = space(thread.ref.id)
+        let title = thread.ref.conversationId.flatMap { id in space?.topics?.first { $0.id == id }?.title } ?? (threads + buildSessions + spaces).first { $0.ref.id == thread.ref.id }?.title ?? "Piopio"
         let failed = a.status == .error
         let body = failed ? (a.error ?? "The request failed.") : String(a.text.replacingOccurrences(of: "\n", with: " ").prefix(180))
         Notifier.shared.answer(ref: thread.ref, title: title, body: body, failed: failed)

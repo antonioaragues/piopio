@@ -15,6 +15,10 @@ public enum TranscriptAction: Equatable, Sendable {
     case openSession(String)
     /// Opens a file of the session's folder in the viewer, at a line.
     case openFile(path: String, line: Int?)
+    /// Opens a Space topic, at the reply when known.
+    case openTopic(topicId: String, itemId: String?)
+    /// Wrong topic: choose where a routed message should have gone.
+    case wrongTopic(itemId: String)
 
     static let scheme = "piopio-action"
 
@@ -33,6 +37,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case .restoreCheckpoint(let id): c.host = "restore"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .openSession(let id): c.host = "session"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .openFile(let path, let line): c.host = "file"; c.queryItems = [URLQueryItem(name: "path", value: path)] + (line.map { [URLQueryItem(name: "line", value: "\($0)")] } ?? [])
+        case .openTopic(let topic, let item): c.host = "topic"; c.queryItems = [URLQueryItem(name: "id", value: topic)] + (item.map { [URLQueryItem(name: "item", value: $0)] } ?? [])
+        case .wrongTopic(let id): c.host = "wrong-topic"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         }
         return c.url!
     }
@@ -52,6 +58,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case "restore": guard let id = q("item") else { return nil }; self = .restoreCheckpoint(itemId: id)
         case "session": guard let id = q("id") else { return nil }; self = .openSession(id)
         case "file": guard let path = q("path") else { return nil }; self = .openFile(path: path, line: q("line").flatMap(Int.init))
+        case "topic": guard let id = q("id") else { return nil }; self = .openTopic(topicId: id, itemId: q("item"))
+        case "wrong-topic": guard let id = q("item") else { return nil }; self = .wrongTopic(itemId: id)
         default: return nil
         }
     }

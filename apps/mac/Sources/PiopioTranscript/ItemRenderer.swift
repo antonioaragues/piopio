@@ -51,7 +51,41 @@ nonisolated struct ItemRenderer: Sendable {
             return note("Context compacted: older messages were summarized", dot: DS.fg3)
         case .checkpoint(let c):
             return checkpointDivider(c)
+        case .routing(let r):
+            return routingCard(r)
         }
+    }
+
+    /// A Space's Main (04-chat S1): where a message went, a live status and one line of the reply,
+    /// with Open and Wrong topic. The reply itself lives in the topic.
+    private func routingCard(_ r: RoutingItem) -> NSAttributedString {
+        let (status, dot): (String, NSColor) = switch r.status {
+        case .thinking: ("thinking…", DS.accent)
+        case .replying: ("replying…", DS.accent)
+        case .replied: (r.message.isEmpty ? "created" : "replied", DS.green)
+        case .needsYou: ("needs you", DS.amber)
+        case .failed: ("failed", DS.red)
+        }
+        let m = NSMutableAttributedString()
+        m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5]))
+        m.append(NSAttributedString(string: r.decision == .create ? "New topic " : "Routed to ", attributes: [.font: small, .foregroundColor: DS.fg2]))
+        m.append(NSAttributedString(string: r.topicTitle, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .semibold), .foregroundColor: DS.fg]))
+        m.append(NSAttributedString(string: "  ·  \(status)", attributes: [.font: small, .foregroundColor: DS.fg3]))
+        if !r.reason.isEmpty {
+            m.append(NSAttributedString(string: lineSeparator + r.reason, attributes: [.font: small, .foregroundColor: DS.fg3]))
+        }
+        if let preview = r.preview {
+            m.append(NSAttributedString(string: lineSeparator + "“\(preview)”", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg]))
+        }
+        if !compact, !r.topicId.isEmpty {
+            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            m.append(pill("Open →", .openTopic(topicId: r.topicId, itemId: r.replyItemId), .secondary))
+            if !r.message.isEmpty, r.status != .failed {
+                m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
+                m.append(pill("Wrong topic…", .wrongTopic(itemId: r.id), .secondary))
+            }
+        }
+        return card(m, .link, lineHeight: 1.75)
     }
 
     // MARK: Messages
@@ -311,6 +345,10 @@ nonisolated struct ItemRenderer: Sendable {
     /// Under your message: version switcher (always visible), then Edit and Copy (on hover).
     func userFooter(_ u: UserItem) -> NSAttributedString {
         let m = NSMutableAttributedString()
+        if u.direct == true {
+            m.append(NSAttributedString(string: "direct", attributes: [.font: footerFont, .foregroundColor: DS.fg3, .toolTip: "Typed in this topic, not routed from Main"]))
+            m.append(NSAttributedString(string: "    ", attributes: [.font: footerFont]))
+        }
         if versions {
             m.append(action("Edit", .edit(itemId: u.id), itemId: u.id, help: "Edit and resend (keeps this version)"))
             m.append(gap(u.id))

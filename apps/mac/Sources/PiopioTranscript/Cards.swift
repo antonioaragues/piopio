@@ -20,7 +20,7 @@ extension NSAttributedString.Key {
     static let piopioFooterColor = NSAttributedString.Key("piopio.footerColor")
 }
 
-public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, note, pills, divider }
+public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, link, note, pills, divider }
 
 enum PillStyle: String { case primary, secondary, file }
 
@@ -52,7 +52,7 @@ final class CardLayoutFragment: NSTextLayoutFragment {
         let text = textBounds
         guard text != .zero else { return .zero }
         switch card {
-        case .code, .table, .errorCard: return columnRect(text, pad: Self.padding)
+        case .code, .table, .errorCard, .link: return columnRect(text, pad: Self.padding)
         case .quote: return columnRect(text, pad: 2)
         case .user: return text.insetBy(dx: -Self.bubblePadH, dy: -Self.bubblePadV)
         case .note: return text.insetBy(dx: -12, dy: -5)
@@ -72,7 +72,7 @@ final class CardLayoutFragment: NSTextLayoutFragment {
         switch card {
         case .code:
             fill(context, rect, DS.chip, radius: DS.Radius.card)
-        case .table, .errorCard:
+        case .table, .errorCard, .link:
             fill(context, rect, DS.card, radius: DS.Radius.card)
             stroke(context, rect, DS.line, radius: DS.Radius.card)
         case .quote:

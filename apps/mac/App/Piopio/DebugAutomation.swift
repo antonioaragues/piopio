@@ -56,6 +56,27 @@ enum DebugAutomation {
                 ThreadModel.openSettings()
             }
         }
+        // PIOPIO_DEMO_SPACE=<name>: a new Space; PIOPIO_DEMO_SPACE_MESSAGES: messages to Main, separated by "||",
+        // each sent once the previous settles; PIOPIO_DEMO_TOPIC=<title>: then open that topic.
+        if let name = env["PIOPIO_DEMO_SPACE"], engine.status == .ready {
+            Task {
+                guard let ref = await engine.createSpace(name: name, instructions: env["PIOPIO_DEMO_SPACE_INSTRUCTIONS"] ?? "") else { return }
+                NotificationCenter.default.post(name: .selectThread, object: ref.id)
+                let main = engine.thread(ref)
+                await main.open()
+                for message in (env["PIOPIO_DEMO_SPACE_MESSAGES"] ?? "").components(separatedBy: "||") where !message.isEmpty {
+                    await main.send(message.replacingOccurrences(of: "\\n", with: "\n"))
+                    for _ in 0..<60 {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        if main.state?.status == .idle { break }
+                    }
+                    try? await Task.sleep(for: .milliseconds(1500))
+                }
+                if let title = env["PIOPIO_DEMO_TOPIC"], let topic = engine.space(ref.id)?.topics?.first(where: { $0.title == title }) {
+                    NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: ref.id, topicId: topic.id, itemId: nil))
+                }
+            }
+        }
         // PIOPIO_DEMO_CHAT_PROJECT: add this folder in Chat and open a chat-profile session; PIOPIO_DEMO_PREVIEW=<path>
         // previews a file; PIOPIO_DEMO_BUILD_PROMPT is sent there too.
         if let folder = env["PIOPIO_DEMO_CHAT_PROJECT"], engine.status == .ready {

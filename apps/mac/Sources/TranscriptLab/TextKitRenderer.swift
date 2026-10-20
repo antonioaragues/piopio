@@ -106,6 +106,8 @@ final class TextKitRenderer: LabRenderer {
             out.append(NSAttributedString(string: "— " + c.summary + "\n", attributes: [.font: body, .foregroundColor: NSColor.tertiaryLabelColor]))
         case .checkpoint(let c):
             out.append(NSAttributedString(string: "— \(c.label)\n", attributes: [.font: body, .foregroundColor: NSColor.tertiaryLabelColor]))
+        case .routing(let r):
+            out.append(NSAttributedString(string: "↳ \(r.topicTitle)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor]))
         }
         return out
     }

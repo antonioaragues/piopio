@@ -925,3 +925,94 @@ describe("projects in the Chat lens (milestone 3.1)", () => {
 		expect((await a.client.call("projects.listDir", { cwd: notes, dir: "plans" })).entries).toEqual([{ name: "budget.md", path: "plans/budget.md", kind: "file" }]);
 	});
 });
+
+describe("Spaces (milestone 3.2)", () => {
+	type Routing = Extract<Snapshot["items"][number], { kind: "routing" }>;
+	const routings = (s: Snapshot) => s.items.filter((i): i is Routing => i.kind === "routing");
+	/** Polls `sessions.open` until `ready` holds (routing statuses settle in the background). */
+	async function until(ctx: Ctx, ref: unknown, ready: (s: Snapshot) => boolean, timeout = 8_000): Promise<Snapshot> {
+		const end = Date.now() + timeout;
+		for (;;) {
+			const snap: Snapshot = await ctx.client.call("sessions.open", { ref });
+			if (ready(snap)) return snap;
+			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(snap.items)}`);
+			await new Promise((r) => setTimeout(r, 100));
+		}
+	}
+
+	test("the organizer creates and routes to topics; Main shows routing cards and the replies live in the topics", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "space", title: "Home renovation", instructions: "We're redoing the flat." });
+		expect(ref.kind).toBe("space");
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: create_topic | {"title":"Kitchen layout","brief":"Where things go in the kitchen","reason":"A new subject that will come back","message":"Can we fit a dishwasher?"}' } });
+		let main = await until(a, ref, (s) => routings(s)[0]?.status === "replied");
+		const [created] = routings(main);
+		expect(created).toMatchObject({ decision: "create", topicTitle: "Kitchen layout", reason: "A new subject that will come back", message: "Can we fit a dishwasher?", preview: "Echo: Can we fit a dishwasher?" });
+		expect(main.items.filter((i) => i.kind === "tool")).toEqual([]);
+		expect(main.state.model).toEqual({ provider: "faux", id: "faux-1" });
+
+		const topicRef = { ...ref, conversationId: created!.topicId };
+		const topic: Snapshot = await a.client.call("sessions.open", { ref: topicRef });
+		expect(texts(topic)).toEqual([
+			["user", "Can we fit a dishwasher?"],
+			["assistant", "Echo: Can we fit a dishwasher?"],
+		]);
+		expect(topic.items.find((i) => i.kind === "assistant")!.id).toBe(created!.replyItemId);
+		let [space] = (await a.client.call("sessions.list", { kind: "space" })).sessions;
+		expect(space).toMatchObject({ title: "Home renovation", instructions: "We're redoing the flat.", topics: [{ id: created!.topicId, title: "Kitchen layout", unread: true }] });
+		await a.client.call("spaces.markRead", { ref: topicRef });
+		[space] = (await a.client.call("sessions.list", { kind: "space" })).sessions;
+		expect(space!.topics![0]!.unread).toBeUndefined();
+
+		// Routing by title to the existing topic; a plain message is answered in Main.
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: route_to_topic | {"topic":"kitchen layout","reason":"Continues the sink discussion","message":"And the sink?"}' } });
+		main = await until(a, ref, (s) => routings(s)[1]?.status === "replied");
+		expect(routings(main)[1]).toMatchObject({ decision: "route", topicId: created!.topicId, reason: "Continues the sink discussion", preview: "Echo: And the sink?" });
+		await a.client.call("sessions.submit", { ref, input: { text: "what's in this space?" } });
+		main = await until(a, ref, (s) => s.items.some((i) => i.kind === "assistant" && i.parts.some((p) => p.text === "Echo: what's in this space?")));
+		expect(texts(await a.client.call("sessions.open", { ref: topicRef })).length).toBe(4);
+	}, 40_000);
+
+	test("@topic, /new and /main decide for the organizer; Wrong topic moves a message; all of it survives a restart", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: "/new Garden\nShould we plant tomatoes?" } });
+		await a.client.call("sessions.submit", { ref, input: { text: "@garden: how often do we water them?" } });
+		let main = await until(a, ref, (s) => routings(s).length === 2 && routings(s).every((r) => r.status === "replied"));
+		expect(routings(main).map((r) => [r.decision, r.topicTitle, r.message, r.forced])).toEqual([
+			["create", "Garden", "Should we plant tomatoes?", true],
+			["route", "Garden", "how often do we water them?", true],
+		]);
+		expect(main.items.filter((i) => i.kind === "user").map((i) => (i.kind === "user" ? i.text : ""))).toEqual(["/new Garden\nShould we plant tomatoes?", "@garden: how often do we water them?"]);
+
+		await a.client.call("sessions.submit", { ref, input: { text: "/main what topics do we have?" } });
+		main = await until(a, ref, (s) => s.items.some((i) => i.kind === "assistant" && i.status === "done"));
+		expect(main.items.filter((i) => i.kind === "user").at(-1)).toMatchObject({ text: "what topics do we have?" });
+
+		// Typing in the topic itself: a direct message.
+		const garden = { ...ref, conversationId: routings(main)[0]!.topicId };
+		await a.client.call("sessions.submit", { ref: garden, input: { text: "direct question" } });
+		const topic = await until(a, garden, (s) => s.items.filter((i) => i.kind === "assistant").length === 3);
+		expect(topic.items.filter((i) => i.kind === "user").map((i) => (i.kind === "user" ? [i.text, i.direct ?? false] : []))).toEqual([
+			["Should we plant tomatoes?", false],
+			["how often do we water them?", false],
+			["direct question", true],
+		]);
+
+		// Wrong topic: the watering question goes to a new topic.
+		const watering = routings(main)[1]!;
+		await a.client.call("spaces.reroute", { ref, itemId: watering.id, newTopic: "Watering" });
+		main = await until(a, ref, (s) => routings(s)[1]?.topicTitle === "Watering" && routings(s)[1]?.status === "replied");
+		expect(routings(main)[1]).toMatchObject({ movedFrom: "Garden", reason: "You moved this from Garden", preview: "Echo: how often do we water them?" });
+		const [space] = (await a.client.call("sessions.list", { kind: "space" })).sessions;
+		expect(space!.topics!.map((t) => t.title).sort()).toEqual(["Garden", "Watering"]);
+
+		await stop(a);
+		const b = await start(a.home);
+		const reopened = await until(b, ref, (s) => routings(s).length === 2 && routings(s).every((r) => r.status === "replied"));
+		expect(routings(reopened).map((r) => r.topicTitle)).toEqual(["Garden", "Watering"]);
+		expect(reopened.items.map((i) => i.id)).toEqual(main.items.map((i) => i.id));
+	}, 60_000);
+});

@@ -115,6 +115,9 @@
 									"type": "string"
 								}
 							}
+						},
+						"direct": {
+							"type": "boolean"
 						}
 					}
 				},
@@ -591,6 +594,92 @@
 							"type": "number"
 						}
 					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"id",
+						"at",
+						"decision",
+						"topicId",
+						"topicTitle",
+						"reason",
+						"message",
+						"status"
+					],
+					"properties": {
+						"kind": {
+							"type": "string",
+							"const": "routing"
+						},
+						"id": {
+							"type": "string"
+						},
+						"at": {
+							"type": "string"
+						},
+						"decision": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "route"
+								},
+								{
+									"type": "string",
+									"const": "create"
+								}
+							]
+						},
+						"topicId": {
+							"type": "string"
+						},
+						"topicTitle": {
+							"type": "string"
+						},
+						"reason": {
+							"type": "string"
+						},
+						"message": {
+							"type": "string"
+						},
+						"status": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "thinking"
+								},
+								{
+									"type": "string",
+									"const": "replying"
+								},
+								{
+									"type": "string",
+									"const": "replied"
+								},
+								{
+									"type": "string",
+									"const": "needs_you"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								}
+							]
+						},
+						"preview": {
+							"type": "string"
+						},
+						"replyItemId": {
+							"type": "string"
+						},
+						"forced": {
+							"type": "boolean"
+						},
+						"movedFrom": {
+							"type": "string"
+						}
+					}
 				}
 			]
 		},
@@ -981,6 +1070,9 @@
 													"type": "string"
 												}
 											}
+										},
+										"direct": {
+											"type": "boolean"
 										}
 									}
 								},
@@ -1455,6 +1547,92 @@
 										},
 										"files": {
 											"type": "number"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"decision",
+										"topicId",
+										"topicTitle",
+										"reason",
+										"message",
+										"status"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "routing"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"decision": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "route"
+												},
+												{
+													"type": "string",
+													"const": "create"
+												}
+											]
+										},
+										"topicId": {
+											"type": "string"
+										},
+										"topicTitle": {
+											"type": "string"
+										},
+										"reason": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "thinking"
+												},
+												{
+													"type": "string",
+													"const": "replying"
+												},
+												{
+													"type": "string",
+													"const": "replied"
+												},
+												{
+													"type": "string",
+													"const": "needs_you"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"preview": {
+											"type": "string"
+										},
+										"replyItemId": {
+											"type": "string"
+										},
+										"forced": {
+											"type": "boolean"
+										},
+										"movedFrom": {
+											"type": "string"
 										}
 									}
 								}
@@ -1590,6 +1768,9 @@
 													"type": "string"
 												}
 											}
+										},
+										"direct": {
+											"type": "boolean"
 										}
 									}
 								},
@@ -2064,6 +2245,92 @@
 										},
 										"files": {
 											"type": "number"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"decision",
+										"topicId",
+										"topicTitle",
+										"reason",
+										"message",
+										"status"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "routing"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"decision": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "route"
+												},
+												{
+													"type": "string",
+													"const": "create"
+												}
+											]
+										},
+										"topicId": {
+											"type": "string"
+										},
+										"topicTitle": {
+											"type": "string"
+										},
+										"reason": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "thinking"
+												},
+												{
+													"type": "string",
+													"const": "replying"
+												},
+												{
+													"type": "string",
+													"const": "replied"
+												},
+												{
+													"type": "string",
+													"const": "needs_you"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"preview": {
+											"type": "string"
+										},
+										"replyItemId": {
+											"type": "string"
+										},
+										"forced": {
+											"type": "boolean"
+										},
+										"movedFrom": {
+											"type": "string"
 										}
 									}
 								}
@@ -2179,6 +2446,9 @@
 													"type": "string"
 												}
 											}
+										},
+										"direct": {
+											"type": "boolean"
 										}
 									}
 								},
@@ -2653,6 +2923,92 @@
 										},
 										"files": {
 											"type": "number"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"decision",
+										"topicId",
+										"topicTitle",
+										"reason",
+										"message",
+										"status"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "routing"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"decision": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "route"
+												},
+												{
+													"type": "string",
+													"const": "create"
+												}
+											]
+										},
+										"topicId": {
+											"type": "string"
+										},
+										"topicTitle": {
+											"type": "string"
+										},
+										"reason": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "thinking"
+												},
+												{
+													"type": "string",
+													"const": "replying"
+												},
+												{
+													"type": "string",
+													"const": "replied"
+												},
+												{
+													"type": "string",
+													"const": "needs_you"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"preview": {
+											"type": "string"
+										},
+										"replyItemId": {
+											"type": "string"
+										},
+										"forced": {
+											"type": "boolean"
+										},
+										"movedFrom": {
+											"type": "string"
 										}
 									}
 								}
@@ -3103,6 +3459,9 @@
 																"type": "string"
 															}
 														}
+													},
+													"direct": {
+														"type": "boolean"
 													}
 												}
 											},
@@ -3579,6 +3938,92 @@
 														"type": "number"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"decision",
+													"topicId",
+													"topicTitle",
+													"reason",
+													"message",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "routing"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"decision": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "route"
+															},
+															{
+																"type": "string",
+																"const": "create"
+															}
+														]
+													},
+													"topicId": {
+														"type": "string"
+													},
+													"topicTitle": {
+														"type": "string"
+													},
+													"reason": {
+														"type": "string"
+													},
+													"message": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "thinking"
+															},
+															{
+																"type": "string",
+																"const": "replying"
+															},
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "needs_you"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"preview": {
+														"type": "string"
+													},
+													"replyItemId": {
+														"type": "string"
+													},
+													"forced": {
+														"type": "boolean"
+													},
+													"movedFrom": {
+														"type": "string"
+													}
+												}
 											}
 										]
 									}
@@ -4008,6 +4453,9 @@
 												"type": "string"
 											}
 										}
+									},
+									"direct": {
+										"type": "boolean"
 									}
 								}
 							},
@@ -4484,6 +4932,92 @@
 										"type": "number"
 									}
 								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"decision",
+									"topicId",
+									"topicTitle",
+									"reason",
+									"message",
+									"status"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "routing"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"decision": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "route"
+											},
+											{
+												"type": "string",
+												"const": "create"
+											}
+										]
+									},
+									"topicId": {
+										"type": "string"
+									},
+									"topicTitle": {
+										"type": "string"
+									},
+									"reason": {
+										"type": "string"
+									},
+									"message": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "thinking"
+											},
+											{
+												"type": "string",
+												"const": "replying"
+											},
+											{
+												"type": "string",
+												"const": "replied"
+											},
+											{
+												"type": "string",
+												"const": "needs_you"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											}
+										]
+									},
+									"preview": {
+										"type": "string"
+									},
+									"replyItemId": {
+										"type": "string"
+									},
+									"forced": {
+										"type": "boolean"
+									},
+									"movedFrom": {
+										"type": "string"
+									}
+								}
 							}
 						]
 					}
@@ -4914,6 +5448,40 @@
 							"type": "string"
 						}
 					}
+				},
+				"topics": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"title",
+							"lastActiveAt"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							},
+							"brief": {
+								"type": "string"
+							},
+							"lastActiveAt": {
+								"type": "string"
+							},
+							"unread": {
+								"type": "boolean"
+							},
+							"running": {
+								"type": "boolean"
+							}
+						}
+					}
+				},
+				"instructions": {
+					"type": "string"
 				}
 			}
 		},
@@ -5023,6 +5591,9 @@
 																"type": "string"
 															}
 														}
+													},
+													"direct": {
+														"type": "boolean"
 													}
 												}
 											},
@@ -5497,6 +6068,92 @@
 													},
 													"files": {
 														"type": "number"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"decision",
+													"topicId",
+													"topicTitle",
+													"reason",
+													"message",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "routing"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"decision": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "route"
+															},
+															{
+																"type": "string",
+																"const": "create"
+															}
+														]
+													},
+													"topicId": {
+														"type": "string"
+													},
+													"topicTitle": {
+														"type": "string"
+													},
+													"reason": {
+														"type": "string"
+													},
+													"message": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "thinking"
+															},
+															{
+																"type": "string",
+																"const": "replying"
+															},
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "needs_you"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"preview": {
+														"type": "string"
+													},
+													"replyItemId": {
+														"type": "string"
+													},
+													"forced": {
+														"type": "boolean"
+													},
+													"movedFrom": {
+														"type": "string"
 													}
 												}
 											}
@@ -5632,6 +6289,9 @@
 																"type": "string"
 															}
 														}
+													},
+													"direct": {
+														"type": "boolean"
 													}
 												}
 											},
@@ -6106,6 +6766,92 @@
 													},
 													"files": {
 														"type": "number"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"decision",
+													"topicId",
+													"topicTitle",
+													"reason",
+													"message",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "routing"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"decision": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "route"
+															},
+															{
+																"type": "string",
+																"const": "create"
+															}
+														]
+													},
+													"topicId": {
+														"type": "string"
+													},
+													"topicTitle": {
+														"type": "string"
+													},
+													"reason": {
+														"type": "string"
+													},
+													"message": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "thinking"
+															},
+															{
+																"type": "string",
+																"const": "replying"
+															},
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "needs_you"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"preview": {
+														"type": "string"
+													},
+													"replyItemId": {
+														"type": "string"
+													},
+													"forced": {
+														"type": "boolean"
+													},
+													"movedFrom": {
+														"type": "string"
 													}
 												}
 											}
@@ -6221,6 +6967,9 @@
 																"type": "string"
 															}
 														}
+													},
+													"direct": {
+														"type": "boolean"
 													}
 												}
 											},
@@ -6695,6 +7444,92 @@
 													},
 													"files": {
 														"type": "number"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"decision",
+													"topicId",
+													"topicTitle",
+													"reason",
+													"message",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "routing"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"decision": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "route"
+															},
+															{
+																"type": "string",
+																"const": "create"
+															}
+														]
+													},
+													"topicId": {
+														"type": "string"
+													},
+													"topicTitle": {
+														"type": "string"
+													},
+													"reason": {
+														"type": "string"
+													},
+													"message": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "thinking"
+															},
+															{
+																"type": "string",
+																"const": "replying"
+															},
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "needs_you"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"preview": {
+														"type": "string"
+													},
+													"replyItemId": {
+														"type": "string"
+													},
+													"forced": {
+														"type": "boolean"
+													},
+													"movedFrom": {
+														"type": "string"
 													}
 												}
 											}
@@ -7145,6 +7980,9 @@
 																			"type": "string"
 																		}
 																	}
+																},
+																"direct": {
+																	"type": "boolean"
 																}
 															}
 														},
@@ -7619,6 +8457,92 @@
 																},
 																"files": {
 																	"type": "number"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"decision",
+																"topicId",
+																"topicTitle",
+																"reason",
+																"message",
+																"status"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "routing"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"decision": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "route"
+																		},
+																		{
+																			"type": "string",
+																			"const": "create"
+																		}
+																	]
+																},
+																"topicId": {
+																	"type": "string"
+																},
+																"topicTitle": {
+																	"type": "string"
+																},
+																"reason": {
+																	"type": "string"
+																},
+																"message": {
+																	"type": "string"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "thinking"
+																		},
+																		{
+																			"type": "string",
+																			"const": "replying"
+																		},
+																		{
+																			"type": "string",
+																			"const": "replied"
+																		},
+																		{
+																			"type": "string",
+																			"const": "needs_you"
+																		},
+																		{
+																			"type": "string",
+																			"const": "failed"
+																		}
+																	]
+																},
+																"preview": {
+																	"type": "string"
+																},
+																"replyItemId": {
+																	"type": "string"
+																},
+																"forced": {
+																	"type": "boolean"
+																},
+																"movedFrom": {
+																	"type": "string"
 																}
 															}
 														}
@@ -8134,6 +9058,40 @@
 										"type": "string"
 									}
 								}
+							},
+							"topics": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"title",
+										"lastActiveAt"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"title": {
+											"type": "string"
+										},
+										"brief": {
+											"type": "string"
+										},
+										"lastActiveAt": {
+											"type": "string"
+										},
+										"unread": {
+											"type": "boolean"
+										},
+										"running": {
+											"type": "boolean"
+										}
+									}
+								}
+							},
+							"instructions": {
+								"type": "string"
 							}
 						}
 					}
@@ -8463,6 +9421,40 @@
 										"type": "string"
 									}
 								}
+							},
+							"topics": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"title",
+										"lastActiveAt"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"title": {
+											"type": "string"
+										},
+										"brief": {
+											"type": "string"
+										},
+										"lastActiveAt": {
+											"type": "string"
+										},
+										"unread": {
+											"type": "boolean"
+										},
+										"running": {
+											"type": "boolean"
+										}
+									}
+								}
+							},
+							"instructions": {
+								"type": "string"
 							}
 						}
 					}
@@ -8484,10 +9476,17 @@
 						{
 							"type": "string",
 							"const": "build"
+						},
+						{
+							"type": "string",
+							"const": "space"
 						}
 					]
 				},
 				"cwd": {
+					"type": "string"
+				},
+				"instructions": {
 					"type": "string"
 				},
 				"workOn": {
@@ -8803,6 +9802,9 @@
 												"type": "string"
 											}
 										}
+									},
+									"direct": {
+										"type": "boolean"
 									}
 								}
 							},
@@ -9277,6 +10279,92 @@
 									},
 									"files": {
 										"type": "number"
+									}
+								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"decision",
+									"topicId",
+									"topicTitle",
+									"reason",
+									"message",
+									"status"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "routing"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"decision": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "route"
+											},
+											{
+												"type": "string",
+												"const": "create"
+											}
+										]
+									},
+									"topicId": {
+										"type": "string"
+									},
+									"topicTitle": {
+										"type": "string"
+									},
+									"reason": {
+										"type": "string"
+									},
+									"message": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "thinking"
+											},
+											{
+												"type": "string",
+												"const": "replying"
+											},
+											{
+												"type": "string",
+												"const": "replied"
+											},
+											{
+												"type": "string",
+												"const": "needs_you"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											}
+										]
+									},
+									"preview": {
+										"type": "string"
+									},
+									"replyItemId": {
+										"type": "string"
+									},
+									"forced": {
+										"type": "boolean"
+									},
+									"movedFrom": {
+										"type": "string"
 									}
 								}
 							}
@@ -9757,6 +10845,9 @@
 														"type": "string"
 													}
 												}
+											},
+											"direct": {
+												"type": "boolean"
 											}
 										}
 									},
@@ -10231,6 +11322,92 @@
 											},
 											"files": {
 												"type": "number"
+											}
+										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"id",
+											"at",
+											"decision",
+											"topicId",
+											"topicTitle",
+											"reason",
+											"message",
+											"status"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "routing"
+											},
+											"id": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											},
+											"decision": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "route"
+													},
+													{
+														"type": "string",
+														"const": "create"
+													}
+												]
+											},
+											"topicId": {
+												"type": "string"
+											},
+											"topicTitle": {
+												"type": "string"
+											},
+											"reason": {
+												"type": "string"
+											},
+											"message": {
+												"type": "string"
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "thinking"
+													},
+													{
+														"type": "string",
+														"const": "replying"
+													},
+													{
+														"type": "string",
+														"const": "replied"
+													},
+													{
+														"type": "string",
+														"const": "needs_you"
+													},
+													{
+														"type": "string",
+														"const": "failed"
+													}
+												]
+											},
+											"preview": {
+												"type": "string"
+											},
+											"replyItemId": {
+												"type": "string"
+											},
+											"forced": {
+												"type": "boolean"
+											},
+											"movedFrom": {
+												"type": "string"
 											}
 										}
 									}
@@ -13463,6 +14640,160 @@
 			}
 		},
 		"sessions.respond.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.reroute.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"itemId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"itemId": {
+					"type": "string"
+				},
+				"toTopicId": {
+					"type": "string"
+				},
+				"newTopic": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.reroute.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.markRead.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"spaces.markRead.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"spaces.configure.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"instructions": {
+					"type": "string"
+				}
+			}
+		},
+		"spaces.configure.result": {
 			"type": "object",
 			"properties": {}
 		},

@@ -316,6 +316,11 @@ export class TimelineBuilder {
 	 * Emits item.added with `before` so clients put it in the same place.
 	 */
 	checkpoint(item: Extract<TimelineItem, { kind: "checkpoint" }>, beforeId?: string, emit = true): void {
+		this.insert(item, beforeId, emit);
+	}
+
+	/** Adds an item before `beforeId`, or at the end (items that don't come from the transcript's messages). */
+	insert(item: TimelineItem, beforeId?: string, emit = true): void {
 		if (this.index.has(item.id)) return;
 		const at = beforeId ? this.index.get(beforeId) : undefined;
 		if (at === undefined) {

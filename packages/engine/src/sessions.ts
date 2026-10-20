@@ -16,6 +16,7 @@ import { BuildRuntime } from "./runtimes/build.js";
 import type { TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
+import { SpaceRuntime, type TopicSummary } from "./runtimes/space.js";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
@@ -34,6 +35,10 @@ type CatalogEntry = SessionSummary & {
 	approvalMode?: ApprovalMode;
 	/** Build: plan mode (piopio-plan). */
 	planMode?: boolean;
+	/** Spaces: when you last looked at each topic (unread dots). */
+	readAt?: Record<string, string>;
+	/** Spaces: the topics as the runtime last reported them. */
+	topicState?: TopicSummary[];
 };
 
 /** At most this many subagents run at once per session (docs/spec/05-build §4). */
@@ -231,10 +236,10 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; profile?: "build" | "chat" }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build" | "space"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; profile?: "build" | "chat" }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
-		const ref: ContainerRef = { kind: params.kind, id: newId(params.kind === "thread" ? "thr" : "ses") };
+		const ref: ContainerRef = { kind: params.kind, id: newId(params.kind === "thread" ? "thr" : params.kind === "space" ? "spc" : "ses") };
 		// Build: a new branch in the project, or a worktree of its own (BP5) under <data>/worktrees/<project>/<session>.
 		let cwd = params.cwd;
 		let worktree: CatalogEntry["worktree"];
@@ -252,7 +257,7 @@ export class Sessions {
 		const now = new Date().toISOString();
 		const entry: CatalogEntry = {
 			ref,
-			title: params.title ?? (params.kind === "thread" ? "New thread" : "New session"),
+			title: params.title?.trim() || (params.kind === "thread" ? "New thread" : params.kind === "space" ? "New Space" : "New session"),
 			createdAt: now,
 			updatedAt: now,
 			model: params.model ?? this.hub.defaultModel,
@@ -261,6 +266,7 @@ export class Sessions {
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.kind === "build" ? { approvalMode: params.approvalMode ?? this.policy.modeFor(params.cwd!), profile: params.profile ?? "build" } : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
+			...(params.kind === "space" ? { file: join(this.paths.spacesDir, `${ref.id}.sqlite`), topics: [], ...(params.instructions?.trim() ? { instructions: params.instructions.trim() } : {}) } : {}),
 		};
 		this.entries.set(ref.id, entry);
 		this.save();
@@ -269,6 +275,7 @@ export class Sessions {
 	}
 
 	async runtime(ref: ContainerRef): Promise<Runtime> {
+		if (ref.kind === "space" && ref.conversationId) return (await this.space(ref)).view(ref.conversationId);
 		const entry = this.entry(ref);
 		let pending = this.open.get(ref.id);
 		if (!pending) {
@@ -365,6 +372,49 @@ export class Sessions {
 			slot.running--;
 			slot.waiting.shift()?.();
 		}
+	}
+
+	// ── Spaces (docs/spec/04-chat §3) ─────────────────────────────────────────
+
+	async space(ref: ContainerRef): Promise<SpaceRuntime> {
+		const runtime = await this.runtime({ kind: "space", id: ref.id });
+		if (!(runtime instanceof SpaceRuntime)) throw new EngineError("INVALID", "Not a Space.");
+		return runtime;
+	}
+
+	/** You looked at a topic (or Main): its unread dot goes. */
+	markRead(ref: ContainerRef): void {
+		const entry = this.entry({ kind: "space", id: ref.id });
+		if (!ref.conversationId) return;
+		entry.readAt = { ...entry.readAt, [ref.conversationId]: new Date().toISOString() };
+		this.updateTopics(entry, entry.topicState ?? []);
+	}
+
+	configureSpace(ref: ContainerRef, change: { instructions?: string }): void {
+		const entry = this.entry({ kind: "space", id: ref.id });
+		if (change.instructions !== undefined) {
+			if (change.instructions.trim()) entry.instructions = change.instructions.trim();
+			else delete entry.instructions;
+		}
+		this.save();
+		this.changed(entry);
+	}
+
+	private updateTopics(entry: CatalogEntry, topics: TopicSummary[]): void {
+		entry.topicState = topics;
+		const read = entry.readAt ?? {};
+		entry.topics = topics.map((t) => ({
+			id: t.id,
+			title: t.title,
+			...(t.brief ? { brief: t.brief } : {}),
+			lastActiveAt: t.lastActiveAt,
+			...(t.lastReplyAt && t.lastReplyAt > (read[t.id] ?? "") ? { unread: true } : {}),
+			...(t.running ? { running: true } : {}),
+		}));
+		const latest = topics[0]?.lastActiveAt;
+		if (latest && latest > entry.updatedAt) entry.updatedAt = latest;
+		this.save();
+		this.changed(entry);
 	}
 
 	/** Folders git may run in: a project, or a Build session's worktree. */
@@ -520,6 +570,19 @@ export class Sessions {
 
 	private async createRuntime(entry: CatalogEntry): Promise<Runtime> {
 		const model = entry.model ?? this.hub.defaultModel;
+		if (entry.ref.kind === "space") {
+			return SpaceRuntime.open({
+				ref: entry.ref,
+				file: entry.file!,
+				hub: this.hub,
+				model,
+				info: () => ({ name: entry.title, ...(entry.instructions ? { instructions: entry.instructions } : {}) }),
+				webOptions: this.webOptions,
+				onTopics: (topics) => {
+					if (this.entries.has(entry.ref.id) && JSON.stringify(topics) !== JSON.stringify(entry.topicState)) this.updateTopics(entry, topics);
+				},
+			});
+		}
 		if (entry.ref.kind === "thread") {
 			return ThreadRuntime.open({
 				ref: entry.ref,
@@ -577,7 +640,7 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, readAt: _r, topicState: _ts, ...rest }: CatalogEntry): SessionSummary {
 	return rest;
 }
 

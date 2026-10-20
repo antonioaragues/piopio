@@ -48,7 +48,7 @@ struct Composer: View {
             if !suggestions.isEmpty { suggestionList }
             box
         }
-        .onChange(of: text) { _, value in if isBuild { suggest(for: value) } }
+        .onChange(of: text) { _, value in if isBuild || isSpaceMain { suggest(for: value) } }
         .onChange(of: thread.draft) { _, draft in
             guard let draft else { return }
             text = draft
@@ -135,7 +135,8 @@ struct Composer: View {
                         .help(thread.planMode ? "Plan mode is on: the agent explores and proposes a plan before changing anything" : "Plan mode: explore and propose a plan before changing anything (/plan)")
                 }
                 if let context = thread.state?.context { ContextChip(context: context) }
-                if thread.editing == nil && !isBuild {
+                // Spaces always have the web tools (no per-conversation switch yet).
+                if thread.editing == nil && !isBuild && thread.ref.kind != .space {
                     Button { Task { await thread.setWeb(!thread.webEnabled) } } label: {
                         Label("Web search", systemImage: "globe").labelStyle(.titleOnly)
                     }
@@ -168,6 +169,8 @@ struct Composer: View {
 
     /// Build sessions take files by path (the agent reads them) and have their own tools.
     private var isBuild: Bool { thread.ref.kind == .build }
+    /// A Space's Main: @topic and /new, /main (04-chat S3).
+    var isSpaceMain: Bool { thread.ref.kind == .space && thread.ref.conversationId == nil }
 
     private var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -176,6 +179,10 @@ struct Composer: View {
         if thread.isRunning { return "Queue a follow-up…" }
         if isBuild && thread.planMode { return "Plan mode: describe what you want; the agent proposes a plan first" }
         if isBuild, engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.profile == .chat { return "Ask about these files, @mention one, or search the web…" }
+        if thread.ref.kind == .space, let space = engine.space(thread.ref.id) {
+            if let id = thread.ref.conversationId { return "Message \(space.topics?.first { $0.id == id }?.title ?? "this topic") directly" }
+            return "Message \(space.title): the organizer picks the topic (@topic to choose)"
+        }
         return isBuild ? "Ask, @mention files, or /command…" : "Message"
     }
 
@@ -375,14 +382,24 @@ enum Suggestion: Hashable, Identifiable {
     case file(FileMatch)
     case builtIn(BuiltInCommand)
     case command(SessionCommand)
+    /// A Space's Main: a topic to send to, or /new and /main.
+    case topic(TopicInfo)
+    case spaceCommand(name: String, summary: String)
 
     var id: String {
         switch self {
         case .file(let f): "file:\(f.path)"
         case .builtIn(let c): "piopio:\(c.name)"
         case .command(let c): "pi:\(c.name)"
+        case .topic(let t): "topic:\(t.id)"
+        case .spaceCommand(let name, _): "space:\(name)"
         }
     }
+
+    static let spaceCommands: [Suggestion] = [
+        .spaceCommand(name: "new", summary: "Start a topic: /new Title, then your message on the next line"),
+        .spaceCommand(name: "main", summary: "Answer here in Main instead of routing"),
+    ]
 }
 
 /// Commands the app handles itself (BR5: /plan, /compact, /model, /tree, plus review, commit, new).
@@ -424,6 +441,21 @@ extension Composer {
 
     func suggest(for value: String) {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
+        if isSpaceMain {
+            if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
+                let q = trimmed.dropFirst().lowercased()
+                suggestions = Suggestion.spaceCommands.filter { if case .spaceCommand(let name, _) = $0 { q.isEmpty || name.hasPrefix(q) } else { false } }
+            } else if trimmed.hasPrefix("@"), !value.contains("\n") {
+                let q = trimmed.dropFirst().lowercased()
+                let topics = engine.space(thread.ref.id)?.topics ?? []
+                // Stop suggesting once a whole title (and a space) was typed.
+                suggestions = topics.contains(where: { q.hasPrefix($0.title.lowercased() + " ") }) ? [] : topics.filter { q.isEmpty || $0.title.lowercased().hasPrefix(q) || $0.title.lowercased().contains(q) }.prefix(8).map(Suggestion.topic)
+            } else if !suggestions.isEmpty {
+                suggestions = []
+            }
+            highlighted = 0
+            return
+        }
         if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
             let q = trimmed.dropFirst().lowercased()
             let builtIn = BuiltInCommand.all.filter { q.isEmpty || $0.name.hasPrefix(q) }.map(Suggestion.builtIn)
@@ -454,6 +486,10 @@ extension Composer {
             c.run(thread)
         case .command(let c):
             text = "/\(c.name) "
+        case .topic(let t):
+            text = "@\(t.title) "
+        case .spaceCommand(let name, _):
+            text = "/\(name) "
         }
         suggestions = []
     }
@@ -487,6 +523,8 @@ extension Composer {
         case .file(let f): f.path
         case .builtIn(let c): "/\(c.name)"
         case .command(let c): "/\(c.name)" + (c.hint.map { " \($0)" } ?? "")
+        case .topic(let t): "@\(t.title)"
+        case .spaceCommand(let name, _): "/\(name)"
         }
     }
 
@@ -495,6 +533,8 @@ extension Composer {
         case .file: ""
         case .builtIn(let c): c.summary
         case .command(let c): c.description.isEmpty ? (c.kind == .skill ? "Skill" : c.kind == .template ? "Prompt template" : "Extension command") : c.description
+        case .topic(let t): t.brief ?? ""
+        case .spaceCommand(_, let summary): summary
         }
     }
 
@@ -503,6 +543,8 @@ extension Composer {
         case .file(let f): f.kind == .folder ? "folder" : "doc"
         case .builtIn: "command"
         case .command(let c): c.kind == .skill ? "sparkles" : c.kind == .template ? "text.badge.plus" : "puzzlepiece.extension"
+        case .topic: "number"
+        case .spaceCommand: "command"
         }
         Image(systemName: name).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
     }

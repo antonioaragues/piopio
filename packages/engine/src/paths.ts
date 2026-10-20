@@ -11,6 +11,7 @@ export type EnginePaths = {
 	catalogIndex: string;
 	projectsIndex: string;
 	threadsDir: string;
+	spacesDir: string;
 	logsDir: string;
 };
 
@@ -24,12 +25,13 @@ export function enginePaths(home = process.env.PIOPIO_HOME ?? join(homedir(), "L
 		catalogIndex: join(home, "sessions.json"),
 		projectsIndex: join(home, "projects.json"),
 		threadsDir: join(home, "threads"),
+		spacesDir: join(home, "spaces"),
 		logsDir: join(home, "logs"),
 	};
 }
 
 export function ensureDirs(paths: EnginePaths): void {
-	for (const dir of [paths.home, paths.threadsDir, paths.logsDir]) mkdirSync(dir, { recursive: true, mode: 0o700 });
+	for (const dir of [paths.home, paths.threadsDir, paths.spacesDir, paths.logsDir]) mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
 
 /** Reads the shared engine token, creating it (0600) on first run. */

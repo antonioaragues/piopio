@@ -45,6 +45,9 @@ export function toMarkdown(title: string, items: readonly TimelineItem[]): strin
 			case "compaction":
 				out.push(`> *Context compacted:* ${item.summary}`, "");
 				break;
+			case "routing":
+				out.push(`> ↳ ${item.decision === "create" ? "New topic" : "Routed to"} **${item.topicTitle}**${item.reason ? ` (${item.reason})` : ""}`, "");
+				break;
 		}
 	}
 	return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";

@@ -267,6 +267,7 @@ final class SwiftUIRenderer: LabRenderer {
         case .system(let s): MessageModel(id: s.id, role: .system, text: s.text)
         case .compaction(let c): MessageModel(id: c.id, role: .system, text: c.summary)
         case .checkpoint(let c): MessageModel(id: c.id, role: .system, text: c.label)
+        case .routing(let r): MessageModel(id: r.id, role: .system, text: r.topicTitle)
         }
     }
 }

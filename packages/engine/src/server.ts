@@ -398,6 +398,22 @@ export class Engine {
 				await this.sessions.respond(p.ref, p.promptId, p.response);
 				return {};
 			}
+			case "spaces.reroute": {
+				const p = params as Params<"spaces.reroute">;
+				if (!p.toTopicId === !p.newTopic) throw new EngineError("INVALID", "Give a topic or a new topic's title.");
+				await (await this.sessions.space(p.ref)).moveRoute(p.itemId, { ...(p.toTopicId ? { topicId: p.toTopicId } : {}), ...(p.newTopic ? { newTopic: p.newTopic } : {}) });
+				return {};
+			}
+			case "spaces.markRead": {
+				const p = params as Params<"spaces.markRead">;
+				this.sessions.markRead(p.ref);
+				return {};
+			}
+			case "spaces.configure": {
+				const p = params as Params<"spaces.configure">;
+				this.sessions.configureSpace(p.ref, { ...(p.instructions !== undefined ? { instructions: p.instructions } : {}) });
+				return {};
+			}
 			case "projects.remove": {
 				const p = params as Params<"projects.remove">;
 				const project = this.projects.remove(p.id);

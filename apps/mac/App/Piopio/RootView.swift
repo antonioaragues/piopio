@@ -12,6 +12,8 @@ struct RootView: View {
     @State private var showOnboarding = false
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
+    @State private var showNewSpace = false
+    @State private var editingInstructions: SessionSummary?
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -59,6 +61,26 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .selectBuildSession)) { note in
             mode = .build
             buildSelection = note.object as? String
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .newSpace)) { _ in
+            mode = .chat
+            showNewSpace = true
+        }
+        .sheet(isPresented: $showNewSpace) {
+            NewSpaceSheet(engine: engine) { selection = $0.id }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editSpaceInstructions)) { note in
+            editingInstructions = engine.space(note.object as? String ?? "")
+        }
+        .sheet(item: $editingInstructions) { space in
+            SpaceInstructionsSheet(engine: engine, space: space)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openTopic)) { note in
+            guard let target = note.object as? TopicTarget else { return }
+            mode = .chat
+            let ref = ContainerRef(kind: .space, id: target.spaceId, conversationId: target.topicId)
+            selection = ref.key
+            if let item = target.itemId { engine.thread(ref).reveal(item) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .selectThread)) { note in
             mode = .chat
@@ -134,6 +156,10 @@ struct RootView: View {
             } else if let id = selection, let summary = engine.buildSessions.first(where: { $0.ref.id == id }) {
                 BuildSessionView(engine: engine, session: engine.thread(summary.ref), summary: summary, chatLens: true)
                     .id(id)
+            } else if let key = selection, let space = engine.space(String(key.split(separator: "/").first ?? "")) {
+                let topicId = key.split(separator: "/").dropFirst().first.map(String.init)
+                SpaceView(engine: engine, space: space, topicId: topicId, thread: engine.thread(space.ref(topic: topicId)), selection: $selection)
+                    .id(key)
             } else {
                 EmptyState(label: "Chat", title: "Start a thread, or a Space", message: "A thread is one conversation. A Space keeps a long-running subject organized into topics.") {
                     VStack(spacing: 12) {
@@ -149,15 +175,17 @@ struct RootView: View {
                                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
                             }
                             .buttonStyle(.plain)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("New Space").font(.system(size: 13, weight: .semibold))
-                                Text("Soon").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            Button { showNewSpace = true } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("New Space").font(.system(size: 13, weight: .semibold))
+                                    Text("⌘⇧N").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                                }
+                                .frame(width: 160, alignment: .leading)
+                                .padding(14)
+                                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
                             }
-                            .frame(width: 160, alignment: .leading)
-                            .padding(14)
-                            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                            .opacity(0.55)
+                            .buttonStyle(.plain)
                         }
                         if let shortcut = QuickChatController.shortcutLabel {
                             Text("Tip: \(shortcut) opens Quick Chat from any app").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
@@ -294,6 +322,7 @@ struct Sidebar: View {
     }
 
     @ViewBuilder private var chatList: some View {
+        SpacesSection(engine: engine, selection: $selection)
         ChatProjectsSection(engine: engine, selection: $selection)
         if engine.threads.isEmpty {
             placeholder("Threads", "Your conversations appear here.")

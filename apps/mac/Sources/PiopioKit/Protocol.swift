@@ -15,6 +15,8 @@ public struct ContainerRef: Codable, Sendable, Hashable {
     public init(kind: ContainerKind, id: String, conversationId: String? = nil) {
         self.kind = kind; self.id = id; self.conversationId = conversationId
     }
+    /// Unique per conversation: a Space topic is "<space>/<topic>", everything else its id.
+    public var key: String { conversationId.map { "\(id)/\($0)" } ?? id }
 }
 
 public struct ModelRef: Codable, Sendable, Hashable {
@@ -68,6 +70,8 @@ public struct UserItem: Codable, Sendable, Hashable {
     public var id, at, text: String
     public var attachments: [AttachmentInfo]?
     public var branch: BranchInfo?
+    /// A Space topic: typed in the topic itself, not routed from Main.
+    public var direct: Bool?
     public init(id: String, at: String, text: String, attachments: [AttachmentInfo]? = nil, branch: BranchInfo? = nil) {
         self.id = id; self.at = at; self.text = text; self.attachments = attachments; self.branch = branch
     }
@@ -194,6 +198,20 @@ public struct RestoreParams: Encodable, Sendable {
 }
 public struct RestoreResult: Decodable, Sendable { public var files: [FileChange] }
 
+/// A Space's Main: where the organizer (or you) sent a message. The reply lives in the topic.
+public struct RoutingItem: Codable, Sendable, Hashable {
+    public enum Decision: String, Codable, Sendable { case route, create }
+    public enum Status: String, Codable, Sendable { case thinking, replying, replied, needsYou = "needs_you", failed }
+    public var id, at: String
+    public var decision: Decision
+    public var topicId, topicTitle, reason, message: String
+    public var status: Status
+    public var preview: String?
+    public var replyItemId: String?
+    public var forced: Bool?
+    public var movedFrom: String?
+}
+
 public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case user(UserItem)
     case assistant(AssistantItem)
@@ -201,6 +219,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case system(SystemItem)
     case compaction(CompactionItem)
     case checkpoint(CheckpointItem)
+    case routing(RoutingItem)
 
     private enum Key: String, CodingKey { case kind }
 
@@ -213,6 +232,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case "system": self = .system(try SystemItem(from: decoder))
         case "compaction": self = .compaction(try CompactionItem(from: decoder))
         case "checkpoint": self = .checkpoint(try CheckpointItem(from: decoder))
+        case "routing": self = .routing(try RoutingItem(from: decoder))
         default: throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown item kind \(kind)"))
         }
     }
@@ -226,6 +246,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .system(let v): try c.encode("system", forKey: .kind); try v.encode(to: encoder)
         case .compaction(let v): try c.encode("compaction", forKey: .kind); try v.encode(to: encoder)
         case .checkpoint(let v): try c.encode("checkpoint", forKey: .kind); try v.encode(to: encoder)
+        case .routing(let v): try c.encode("routing", forKey: .kind); try v.encode(to: encoder)
         }
     }
 
@@ -237,6 +258,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .system(let v): v.id
         case .compaction(let v): v.id
         case .checkpoint(let v): v.id
+        case .routing(let v): v.id
         }
     }
 }
@@ -335,6 +357,33 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// Project sessions: "build" (coding) or "chat" (knowledge assistant).
     public enum Profile: String, Codable, Sendable { case build, chat }
     public var profile: Profile?
+    /// Spaces: the topics, most recently active first, and the Space's instructions.
+    public var topics: [TopicInfo]?
+    public var instructions: String?
+}
+
+extension SessionSummary: Identifiable {
+    public var id: String { ref.key }
+}
+
+/// A Space topic (04-chat S6).
+public struct TopicInfo: Codable, Sendable, Hashable, Identifiable {
+    /// The topic's conversation id.
+    public var id: String
+    public var title: String
+    public var brief: String?
+    public var lastActiveAt: String
+    public var unread: Bool?
+    public var running: Bool?
+}
+
+public struct RerouteParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var itemId: String; public var toTopicId: String?; public var newTopic: String?
+    public init(ref: ContainerRef, itemId: String, toTopicId: String? = nil, newTopic: String? = nil) { self.ref = ref; self.itemId = itemId; self.toTopicId = toTopicId; self.newTopic = newTopic }
+}
+public struct SpaceConfigureParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var instructions: String?
+    public init(ref: ContainerRef, instructions: String?) { self.ref = ref; self.instructions = instructions }
 }
 
 // MARK: Method params / results
@@ -358,8 +407,9 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var workOn: WorkOn?
     public var approvalMode: ApprovalMode?
     public var profile: SessionSummary.Profile?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode; self.profile = profile
+    public var instructions: String?
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, instructions: String? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode; self.profile = profile; self.instructions = instructions
     }
 }
 

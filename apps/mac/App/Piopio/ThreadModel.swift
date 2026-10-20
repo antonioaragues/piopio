@@ -85,7 +85,7 @@ final class ThreadModel {
         if wasRunning, state?.status == .idle, notifies { engine?.answerFinished(in: self) }
         if notifies, let status = state?.status {
             let failed: Bool = if case .assistant(let a)? = document.lastItem { a.status == .error } else { false }
-            engine?.liveStatus[ref.id] = failed && status == .idle ? .error : status
+            engine?.liveStatus[ref.key] = failed && status == .idle ? .error : status
         }
     }
 
@@ -162,6 +162,41 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .selectBuildSession, object: id)
         case .openFile(let path, let line):
             viewing = FileTarget(path: path, line: line)
+        case .openTopic(let topicId, let itemId):
+            NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: ref.id, topicId: topicId, itemId: itemId))
+        case .wrongTopic(let itemId):
+            chooseTopic(for: itemId)
+        }
+    }
+
+    /// Wrong topic (04-chat S2): a menu of the other topics and New Topic…, at the pointer.
+    private func chooseTopic(for itemId: String) {
+        guard let engine, case .routing(let routing) = document.item(itemId) else { return }
+        let menu = NSMenu()
+        for topic in engine.space(ref.id)?.topics ?? [] where topic.id != routing.topicId {
+            menu.addItem(ClosureMenuItem(title: topic.title) { [weak self] in self?.reroute(itemId, toTopic: topic.id) })
+        }
+        if !menu.items.isEmpty { menu.addItem(.separator()) }
+        menu.addItem(ClosureMenuItem(title: "New Topic…") { [weak self] in
+            let alert = NSAlert()
+            alert.messageText = "Move to a new topic"
+            alert.informativeText = "The message goes to a new topic, and the organizer learns from the correction."
+            let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+            field.placeholderString = "Topic title"
+            alert.accessoryView = field
+            alert.addButton(withTitle: "Move")
+            alert.addButton(withTitle: "Cancel")
+            alert.window.initialFirstResponder = field
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            let name = field.stringValue.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty { self?.reroute(itemId, newTopic: name) }
+        })
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
+    private func reroute(_ itemId: String, toTopic: String? = nil, newTopic: String? = nil) {
+        Task {
+            do { try await engine?.reroute(ref, itemId: itemId, toTopic: toTopic, newTopic: newTopic) } catch { report(error) }
         }
     }
 

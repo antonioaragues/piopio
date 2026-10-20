@@ -87,6 +87,8 @@ export const UserItem = Type.Object({
 	text: Type.String(),
 	attachments: Type.Optional(Type.Array(AttachmentInfo)),
 	branch: Type.Optional(BranchInfo),
+	/** A Space topic: typed in the topic itself, not routed from Main (04-chat S4). */
+	direct: Type.Optional(Type.Boolean()),
 });
 
 /** Why a model request failed, so clients can offer the right fix. */
@@ -144,7 +146,32 @@ export const CheckpointItem = Type.Object({
 	files: Type.Optional(Type.Number()),
 });
 
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem]);
+/** A Space's Main: where the organizer sent a message (04-chat §3.4). The reply lives in the topic. */
+export const RoutingItem = Type.Object({
+	kind: Type.Literal("routing"),
+	id: Type.String(),
+	at: Type.String(),
+	decision: literals("route", "create"),
+	/** The topic's conversation id. */
+	topicId: Type.String(),
+	topicTitle: Type.String(),
+	reason: Type.String(),
+	/** The message as the topic got it. */
+	message: Type.String(),
+	/** Live: the topic is working on it, writing, answered, asked you something, or failed. */
+	status: literals("thinking", "replying", "replied", "needs_you", "failed"),
+	/** One line of the reply. */
+	preview: Type.Optional(Type.String()),
+	/** The reply's item in the topic, for Open. */
+	replyItemId: Type.Optional(Type.String()),
+	/** You chose the topic (@topic, /new) instead of the organizer. */
+	forced: Type.Optional(Type.Boolean()),
+	/** Moved here with Wrong topic: the topic it was first sent to. */
+	movedFrom: Type.Optional(Type.String()),
+});
+export type RoutingItem = Static<typeof RoutingItem>;
+
+export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem]);
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
@@ -267,6 +294,19 @@ export const WorktreeInfo = Type.Object({
 });
 export type WorktreeInfo = Static<typeof WorktreeInfo>;
 
+/** A Space topic, for the sidebar (04-chat S6). */
+export const TopicInfo = Type.Object({
+	/** The topic's conversation id (`ContainerRef.conversationId`). */
+	id: Type.String(),
+	title: Type.String(),
+	brief: Type.Optional(Type.String()),
+	lastActiveAt: Type.String(),
+	/** A reply arrived since you last looked. */
+	unread: Type.Optional(Type.Boolean()),
+	running: Type.Optional(Type.Boolean()),
+});
+export type TopicInfo = Static<typeof TopicInfo>;
+
 export const SessionSummary = Type.Object({
 	ref: ContainerRef,
 	title: Type.String(),
@@ -281,6 +321,10 @@ export const SessionSummary = Type.Object({
 	profile: Type.Optional(literals("build", "chat")),
 	/** A subagent's session: the parent session and the `task` call that started it. */
 	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
+	/** Spaces: the topics, newest activity first (Main is the Space itself). */
+	topics: Type.Optional(Type.Array(TopicInfo)),
+	/** Spaces: what every agent in the Space is told. */
+	instructions: Type.Optional(Type.String()),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -396,8 +440,10 @@ export const methods = {
 	},
 	"sessions.create": {
 		params: Type.Object({
-			kind: Type.Union([Type.Literal("thread"), Type.Literal("build")]),
+			kind: Type.Union([Type.Literal("thread"), Type.Literal("build"), Type.Literal("space")]),
 			cwd: Type.Optional(Type.String()),
+			/** Spaces: what every agent in the Space is told. */
+			instructions: Type.Optional(Type.String()),
 			/** Build: branch or worktree to work on (default: the project as it is). */
 			workOn: Type.Optional(WorkOn),
 			/** Project sessions: "build" (coding tools) or "chat" (knowledge assistant: no bash, web tools). */
@@ -612,6 +658,21 @@ export const methods = {
 	/** Answers a pending prompt (approval, question, confirm, select, input). */
 	"sessions.respond": {
 		params: Type.Object({ ref: ContainerRef, promptId: Type.String(), response: PromptResponse }),
+		result: Type.Object({}),
+	},
+	/** Wrong topic: sends a routed message to another topic, or a new one, and teaches the organizer (04-chat S2). */
+	"spaces.reroute": {
+		params: Type.Object({ ref: ContainerRef, itemId: Type.String(), toTopicId: Type.Optional(Type.String()), newTopic: Type.Optional(Type.String()) }),
+		result: Type.Object({}),
+	},
+	/** You looked at a topic: clears its unread dot. */
+	"spaces.markRead": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({}),
+	},
+	/** A Space's name and instructions. */
+	"spaces.configure": {
+		params: Type.Object({ ref: ContainerRef, instructions: Type.Optional(Type.String()) }),
 		result: Type.Object({}),
 	},
 	/** Forgets a project. Its session files stay where pi keeps them. */

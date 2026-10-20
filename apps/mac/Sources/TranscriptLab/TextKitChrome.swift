@@ -58,6 +58,8 @@ nonisolated struct TranscriptBuilder: Sendable {
             return NSAttributedString(string: "— \(c.summary)\n", attributes: [.font: body, .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: style()])
         case .checkpoint(let c):
             return NSAttributedString(string: "— \(c.label)\n", attributes: [.font: body, .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: style()])
+        case .routing(let r):
+            return NSAttributedString(string: "↳ \(r.topicTitle)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style()])
         }
     }
 
