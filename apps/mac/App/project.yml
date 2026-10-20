@@ -21,7 +21,12 @@ targets:
     type: application
     platform: macOS
     sources:
-      - Piopio
+      - path: Piopio
+        excludes: [AppIcon.icon]
+      # Icon Composer document: compiled by actool into the app icon (light and dark).
+      - path: Piopio/AppIcon.icon
+        type: file
+        buildPhase: resources
       # Background mode: SMAppService.agent(plistName:) looks in Contents/Library/LaunchAgents.
       - path: LaunchAgents/app.piopio.engine.plist
         buildPhase:
@@ -74,6 +79,8 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
         ENABLE_APP_SANDBOX: NO
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # Piopio/AppIcon.icon (Icon Composer format: light and dark artwork, docs/design/icon).
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PIOPIO_ENGINE_MAIN: $(SRCROOT)/../../../packages/engine/dist/main.js
         SPARKLE_FEED_URL: ""
         SPARKLE_PUBLIC_KEY: ""
