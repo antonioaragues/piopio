@@ -76,7 +76,7 @@ Every record keeps its source, and the app's memory views list it (01-product, p
 - **Settings › Chat › Memory:** provider (Built-in / Hindsight local / Hindsight remote URL), status, disk use, per-bank wipe and export.
 - **Fallback:** if a provider is unreachable, conversations go on without memory and show a note. Nothing blocks on memory.
 - **Fit, in order:** (1) **Agents** (06 §8): long-lived, many people, schedules; recall across months matters most there. (2) **About me** (GM1): facts captured across Threads. (3) **Spaces:** the curated memory doc (04-chat S8) stays the source of truth; a provider may index topic histories later, for semantic `search_space`. Build keeps AGENTS.md and pi's own conventions.
-- Whether Hindsight becomes the default depends on spike **S6** (09-roadmap).
+- Spike **S6** (2026-10-21, [docs/spikes/s6](../spikes/s6/README.md)) kept the built-in provider as the default. Hindsight locally: about 2 GB of opt-in download (uv, Python, wheels, models, Postgres, none of it in the signed bundle); about 300 ms recall; about $0.07 per 100 messages retained; `HINDSIGHT_API_LLM_OPENAI_COMPATIBLE_JSON_MODE=false` with OpenRouter. Each turn uses recall; reflect (about 7 s) is a tool.
 
 ## 6. Extensions
 - Pi packages installed via Settings › Extensions apply to **Build** (pi-coding-agent).

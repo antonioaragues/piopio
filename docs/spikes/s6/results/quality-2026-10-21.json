@@ -1,0 +1,500 @@
+{
+	"model": "anthropic/claude-haiku-5.5",
+	"retain": {
+		"calls": 80,
+		"seconds": 213,
+		"msPerCallMedian": 2647,
+		"tokens": 913737,
+		"consolidationSeconds": 12.1,
+		"stats": {
+			"total_nodes": 116,
+			"total_links": 2073,
+			"total_documents": 80,
+			"nodes_by_fact_type": {
+				"experience": 3,
+				"observation": 39,
+				"world": 74
+			},
+			"total_observations": 39
+		},
+		"costUsd": 0.1432
+	},
+	"questions": [
+		{
+			"q": "Which city does Alex live in now?",
+			"expected": "Madrid",
+			"kind": "changed",
+			"baseline": "Alex lives in Valencia, near the Turia park.",
+			"recallMs": 345,
+			"hindsight": "Alex lives in Madrid now, at Calle Fernández de los Ríos 12.",
+			"reflectMs": 9321,
+			"reflect": "## Alex now lives in Madrid\n\nThe most recent records place Alex in **Madrid**, in the Chamberí neighborhood.\n\n### Supporting facts (oldest to newest)\n\n- **Valencia (earlier residence):** Alex said \"I live in Valencia, near the Turia park\" (mentioned 2026-03-02). Alex's dog Kiwi's earlier vet was also on Calle Colón, with no city stated.\n- **Planned move (mentioned 2026-03-31):** Alex said \"we're moving to Madrid in April, to Chamberí.\"\n- **Move completed (mentioned 2026-04-17):** Alex wrote \"We've moved. New address is Calle Fernández de los Ríos 12, Madrid,\" and the agent updated Alex's stored address to that location.\n- **Later Madrid references (2026-05-07 and 2026-05-25):** Kiwi's vet is now Clínica Veterinaria Chamberí in Madrid, and Alex's new gym is Basic-Fit Chamberí. Both fit a Madrid base.\n\n### Reasoning\n\nThe Valencia statement is the oldest. The April 17, 2026 move record is the latest explicit statement of residence, and every later fact that mentions a location is consistent with Madrid. Under the rule that the latest statement wins, Valencia is no longer current.\n\n### Caveats\n\n- No record says Alex has moved away from Madrid since April 2026.\n- Alex has a booked flight to Lisbon on May 20, 2026, and an Atlas client meeting is set in Lisbon. These are trips, not a change of home.\n- The April 17 record says \"we\" moved, so other household members (possibly Sam, Alex's partner) probably moved too. This does not change the city.",
+			"right": {
+				"baseline": false,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What is Alex's current street address?",
+			"expected": "Calle Fernández de los Ríos 12, Madrid",
+			"kind": "changed",
+			"baseline": "Alex's current street address is Calle Fernández de los Ríos 12, Madrid.",
+			"recallMs": 351,
+			"hindsight": "Alex's current street address is Calle Fernández de los Ríos 12, Madrid.",
+			"reflectMs": 8949,
+			"reflect": "Alex's current street address is **Calle Fernández de los Ríos 12, Madrid** (Chamberí neighborhood).\n\n**Supporting facts, oldest to newest:**\n\n- **March 31, 2026:** Alex said they were moving to Madrid, to Chamberí, in April 2026.\n- **April 17, 2026 (latest address update):** Alex wrote \"We've moved. New address is Calle Fernández de los Ríos 12, Madrid,\" and the assistant updated the stored address to that location.\n\n**Earlier address (superseded):** Alex lived in Valencia, near the Turia park, until the April 2026 move.\n\n**Other Madrid-area details that agree:** Kiwi's vet is now Clínica Veterinaria Chamberí in Madrid (May 7, 2026), and Alex's new gym is Basic-Fit Chamberí (May 25, 2026).\n\nThe records give the street address only as of the April 17, 2026 update. No later fact records another move, so this is the current address as far as the memory bank shows.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What is the name of Alex's dog?",
+			"expected": "Kiwi",
+			"kind": "fact",
+			"baseline": "Alex's dog is named Kiwi.",
+			"recallMs": 324,
+			"hindsight": "Alex's dog is named Kiwi.",
+			"reflectMs": 4227,
+			"reflect": "Alex's dog is named **Kiwi**. Alex has a female dog named Kiwi (recorded March 3, 2026). Kiwi's current vet is Clínica Veterinaria Chamberí in Madrid, as of May 7, 2026.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Who is the dog's vet now?",
+			"expected": "Clínica Veterinaria Chamberí",
+			"kind": "changed",
+			"baseline": "Kiwi's vet is now Clínica Veterinaria Chamberí in Madrid.",
+			"recallMs": 343,
+			"hindsight": "Kiwi's current vet is Clínica Veterinaria Chamberí in Madrid.",
+			"reflectMs": 6040,
+			"reflect": "Kiwi's current vet is **Clínica Veterinaria Chamberí in Madrid**.\n\n- **Earlier vet:** On March 3, 2026, Alex said Kiwi's vet was Dr. Ruiz on Calle Colón.\n- **Change:** On May 7, 2026, Alex said Kiwi has a new vet in Madrid, Clínica Veterinaria Chamberí. This is the most recent vet record, so it supersedes Dr. Ruiz.\n\nNo later memory records another vet change.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "When is Alex's dentist appointment?",
+			"expected": "March 10 at 9am",
+			"kind": "changed",
+			"baseline": "Alex's dentist appointment is on March 10 at 9am.",
+			"recallMs": 300,
+			"hindsight": "Alex's dentist appointment was moved to March 10, 2026 at 9am, a date that has already passed as of today, June 1, 2026.",
+			"reflectMs": 8752,
+			"reflect": "## Alex's dentist appointment\n\n**Current booking: March 10, 2026 at 9:00am.**\n\n### How the date changed\nThe retained facts, oldest to newest, are:\n\n- **March 3, 2026 at 9:00am**: Alex asked the agent to book the dentist for March 3 at 9am, and the agent confirmed it on March 5, 2026 (booking request recorded at 08:07).\n- **March 10, 2026 at 9:00am**: Alex asked to move the dentist to March 10 at the same time, and the agent confirmed the move. This was recorded on March 17, 2026.\n\nThe March 17 move is the most recent statement about this appointment, so it is the authoritative one. No later fact changes it.\n\n### Caveat\nThe records do not show whether the March 10 appointment has already taken place. Today is October 20, 2026, and no later record mentions the dentist, so I cannot say whether it was attended, rescheduled, or cancelled. Alex may want to check whether another dentist visit has been booked since.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Is Alex lactose intolerant or allergic to nuts?",
+			"expected": "Lactose intolerant (Marta is the one allergic to nuts)",
+			"kind": "who",
+			"baseline": "Alex is lactose intolerant, while the nut allergy belongs to Marta, not Alex.",
+			"recallMs": 319,
+			"hindsight": "Alex is lactose intolerant, and Marta (Alex's sister) is the one allergic to nuts.",
+			"reflectMs": 8685,
+			"reflect": "## Answer\n\n**Alex is lactose intolerant. The memory bank does not record Alex as having a nut allergy.**\n\n### What is recorded about Alex\n\n- **Lactose intolerance:** Alex said, \"I'm lactose intolerant, keep that in mind for restaurant ideas,\" and the agent replied, \"Noted, no dairy-heavy suggestions.\" This was recorded on **2026-03-04 09:37**. A later observation repeats it: Alex is lactose intolerant and wants restaurant recommendations that avoid dairy-heavy options. Nothing in the memories contradicts this.\n\n### Nut allergy\n\n- The only nut allergy in the memories belongs to **Marta, Alex's sister**. Marta said, \"I'm allergic to nuts, so no nut cakes for me,\" recorded on **2026-03-07 08:17**.\n- Nothing in the memories says Alex is allergic to nuts, or mentions any nut allergy for Alex.\n\n### Conclusion\n\nAlex is lactose intolerant. The nut allergy belongs to Marta, not Alex. The data does not record whether Alex has any nut allergy or sensitivity, so \"not allergic to nuts\" cannot be confirmed; it is only the absence of any such record.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Who is allergic to nuts?",
+			"expected": "Marta",
+			"kind": "who",
+			"baseline": "Marta is allergic to nuts.",
+			"recallMs": 302,
+			"hindsight": "Marta is allergic to nuts.",
+			"reflectMs": 9139,
+			"reflect": "## Who is allergic to nuts?\n\n**Marta** is the only person in the memory bank recorded as allergic to nuts. Marta is Alex's sister. On March 7, 2026, Marta wrote to Alex's personal agent: \"I'm allergic to nuts, so no nut cakes for me.\" The agent noted: \"no nuts for Marta.\" This is the only mention of a nut allergy, and no other person is described as having one.\n\nSearches for other food allergies or nut-related terms (peanuts, almonds) returned nothing further. Alex's own recorded dietary restriction is lactose intolerance (noted March 4, 2026), not a nut allergy.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "When is Marta's birthday?",
+			"expected": "April 12",
+			"kind": "fact",
+			"baseline": "Marta's birthday is April 12.",
+			"recallMs": 350,
+			"hindsight": "Marta's birthday is April 12 (the year isn't stated).",
+			"reflectMs": 4042,
+			"reflect": "Marta's birthday is **April 12**. Her birthday was recorded in March 2026, and no birth year was given. Marta asked that Alex be reminded of it in case Alex forgets.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Where will Christmas dinner be this year?",
+			"expected": "At their mum's in Valencia",
+			"kind": "changed",
+			"baseline": "Christmas dinner will be at Marta's mum's in Valencia.",
+			"recallMs": 318,
+			"hindsight": "Christmas dinner will be at Marta's mum's home in Valencia, not Marta's home in Alicante.",
+			"reflectMs": 8593,
+			"reflect": "## Christmas dinner location\n\n**Christmas dinner will most likely be at Marta's mum's home in Valencia.**\n\n### How the plan changed\n\nChristmas dinner was first planned at Marta's home in Alicante, and the plan later changed to Valencia:\n\n- **March 27, 2026:** Marta said she would host Christmas dinner at her home in Alicante, on December 25, 2026.\n- **May 12, 2026:** Marta announced a change of plans. Christmas would be held at her mum's home in Valencia instead of her own place. This is the most recent statement about the location, so it supersedes the Alicante plan.\n\n### Notes\n\n- The May 12 message does not state the year. The Alicante plan was for December 25, 2026, and the change message was about the same upcoming Christmas, so I read it as applying to this year.\n- Marta is Alex's sister. Alex lives in Madrid (Calle Fernández de los Ríos 12, Chamberí) after moving there in April 2026, so Valencia is not Alex's home any more.\n- No memory records whether Alex will attend, or the exact address in Valencia.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Who said Christmas would be at Mum's?",
+			"expected": "Marta",
+			"kind": "who",
+			"baseline": "Marta said Christmas would be at Mum's in Valencia.",
+			"recallMs": 341,
+			"hindsight": "Marta announced on May 12, 2026, that Christmas would be at her mum's home in Valencia.",
+			"reflectMs": 9853,
+			"reflect": "**Marta** said Christmas would be at Mum's.\n\nThe raw messages show this directly. In a message to Alex's personal agent, Marta wrote: \"Change of plans: Christmas will be at Mum's in Valencia, not my place.\" The agent confirmed: \"Christmas moved to your mum's in Valencia.\"\n\nThis is a change from Marta's earlier plan. Her March 2026 message said she would host Christmas dinner at her own home in Alicante on December 25, 2026. The change was announced on May 12, 2026, which is the most recent statement on this, so Christmas is now at Marta's mum's home in Valencia.\n\nMarta is Alex's sister, according to the stored facts.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What time does Luis prefer meetings?",
+			"expected": "After 10am",
+			"kind": "fact",
+			"baseline": "Luis prefers meetings after 10am, never earlier.",
+			"recallMs": 297,
+			"hindsight": "Luis prefers meetings after 10am and never earlier.",
+			"reflectMs": 7383,
+			"reflect": "Luis prefers meetings **after 10am, and never earlier**.\n\nThis comes from Luis's own message to Alex's personal agent, recorded on 2026-03-10 at 08:55. The agent confirmed it at the time (\"Got it Luis: meetings after 10am\"). The same preference appears in the consolidated observations and in the raw facts, and no later memory changes it. There is nothing that contradicts or updates it.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What is the Atlas deadline now?",
+			"expected": "June 15",
+			"kind": "changed",
+			"baseline": "The Atlas deadline is now June 15.",
+			"recallMs": 304,
+			"hindsight": "The Atlas deadline is now June 15, 2026, after it was moved from June 1 on April 11, 2026 at the client's request.",
+			"reflectMs": 8502,
+			"reflect": "## Atlas deadline: now June 15, 2026\n\nThe Atlas deadline is **June 15, 2026**.\n\n### How the deadline changed\n\n1. **June 1 (original).** Luis first gave the Atlas deadline as June 1 (recorded 2026-03-11).\n2. **June 15 (current).** On April 11, 2026, Luis reported that the deadline had moved to June 15 because the client asked for more time (recorded 2026-04-11 08:14).\n\nThe April 11 statement is the most recent one on record and nothing later changes it, so June 15, 2026 is the current deadline.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Where is the Atlas client meeting?",
+			"expected": "Lisbon",
+			"kind": "fact",
+			"baseline": "Lisbon.",
+			"recallMs": 301,
+			"hindsight": "The Atlas client meeting is in Lisbon, not Madrid.",
+			"reflectMs": 5651,
+			"reflect": "The Atlas client meeting is in **Lisbon**, not Madrid. Luis stated this correction on March 21, 2026, and no later record changes it.\n\nAlex also booked a TAP flight to Lisbon departing May 20, 2026 at 7:40. The records don't say whether that flight is for the Atlas meeting, and they don't record the meeting's date or time.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Who covers Atlas while Luis is on holiday?",
+			"expected": "Ana",
+			"kind": "fact",
+			"baseline": "Ana covers Atlas while Luis is on holiday (May 5–16).",
+			"recallMs": 350,
+			"hindsight": "Ana covers the Atlas project while Luis is on holiday (May 5 to May 16, 2026).",
+			"reflectMs": 7366,
+			"reflect": "**Ana** covers the Atlas project while Luis is on holiday.\n\n- Luis is on holiday from **May 5 to May 16, 2026**.\n- Luis asked Alex's personal agent to route Atlas matters to Ana during that absence, and the agent's notes say to ask Ana for Atlas during that period.\n\nThe memories don't record any further detail, such as whether Ana's cover extends beyond those dates.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "When is Luis on holiday?",
+			"expected": "May 5 to May 16",
+			"kind": "fact",
+			"baseline": "May 5 to May 16 (2026).",
+			"recallMs": 351,
+			"hindsight": "Luis is on holiday from May 5 to May 16, 2026.",
+			"reflectMs": 5528,
+			"reflect": "Luis is on holiday **from May 5 to May 16, 2026**.\n\n- Luis stated this in a message to Alex's agent on April 26, 2026.\n- While he is away, Atlas matters should go to Ana.\n- That period has already passed (today is October 20, 2026). The memory bank records no other holiday dates for Luis.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Which car does Alex drive now?",
+			"expected": "A white Tesla Model 3",
+			"kind": "changed",
+			"baseline": "White Tesla Model 3.",
+			"recallMs": 318,
+			"hindsight": "Alex drives a used white Tesla Model 3, bought April 8, 2026, after selling the blue Seat Ibiza on April 6, 2026.",
+			"reflectMs": 7814,
+			"reflect": "## Alex's current car: a white Tesla Model 3\n\nAlex now drives a **used white Tesla Model 3**.\n\n### Reasoning (oldest to newest)\n\n1. **Blue Seat Ibiza (plate 4821 KLM)**: Alex said they drove it for parking bookings (recorded 2026-03-13 and 2026-04-06).\n2. **Seat Ibiza sold**: Alex said on **2026-04-06** that they had sold the Seat Ibiza.\n3. **White Tesla Model 3 bought**: Alex bought a used white Tesla Model 3 on **2026-04-08**, and the agent recorded it as Alex's car.\n\nThe Tesla is the latest car fact. It was recorded after the Seat was sold, and no later fact mentions a different vehicle. Nothing in the records says the Tesla has been sold, so it is the best current answer.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What happened to the Seat Ibiza?",
+			"expected": "It was sold",
+			"kind": "changed",
+			"baseline": "Alex sold the Seat Ibiza on 2026-04-06.",
+			"recallMs": 324,
+			"hindsight": "Alex sold the Seat Ibiza on April 6, 2026.",
+			"reflectMs": 7281,
+			"reflect": "Alex sold the Seat Ibiza on **April 6, 2026**. The record shows Alex's message \"Sold the Seat Ibiza today,\" and the agent confirmed that the Seat was sold.\n\n**Background on the car:**\n- Alex drove a blue Seat Ibiza with plate 4821 KLM, which was used for parking bookings. This was recorded on March 13, 2026.\n\n**What came next:**\n- Two days later, on **April 8, 2026**, Alex bought a used white Tesla Model 3. The assistant recorded it as Alex's car from that point.\n\nNo other memories mention the Seat Ibiza after its sale, so the record does not say why it was sold or what happened to it afterward.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Which days does Alex go to the gym now?",
+			"expected": "Tuesdays",
+			"kind": "changed",
+			"baseline": "Alex goes to the gym on Tuesdays only.",
+			"recallMs": 344,
+			"hindsight": "Alex now goes to the gym only on Tuesdays.",
+			"reflectMs": 8882,
+			"reflect": "## Alex's current gym days: Tuesdays only\n\nAlex now goes to the gym **on Tuesdays only**.\n\n### How the schedule changed\n\n- **Earlier schedule: Mondays and Thursdays.** A fact recorded on 2026-03-09 (08:45) says Alex's gym days were Mondays and Thursdays, and Alex asked that no calls be scheduled after 6pm on those days.\n- **Current schedule: Tuesdays only.** A later fact, recorded on 2026-04-14 (09:11), says the gym schedule \"changed to Tuesdays only.\" This is the most recent statement about gym days, so it supersedes the Monday/Thursday schedule.\n\n### Other related details\n\n- Alex's gym is now **Basic-Fit Chamberí** (recorded 2026-05-25), which fits with Alex's move to the Chamberí neighbourhood of Madrid in April 2026.\n- The \"no calls after 6pm\" preference was tied to the old Monday/Thursday schedule. The retrieved facts do not say whether that preference still applies on Tuesdays.\n\n### Caveat\n\nThe data has no statement after 2026-05-25 about the gym schedule. The answer is therefore based on the most recent recorded schedule, which is from April 2026, and may have changed since then.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Which gym does Alex use now?",
+			"expected": "Basic-Fit Chamberí",
+			"kind": "fact",
+			"baseline": "Alex's current gym is Basic-Fit Chamberí.",
+			"recallMs": 341,
+			"hindsight": "Alex's current gym is Basic-Fit Chamberí.",
+			"reflectMs": 8502,
+			"reflect": "## Alex's current gym\n\nAlex's current gym is **Basic-Fit Chamberí**.\n\n### Supporting facts (oldest to newest)\n\n- **2026-03-09:** Alex said gym days are Mondays and Thursdays, and asked that no calls be scheduled after 6pm on those days.\n- **2026-04-14:** Alex's gym schedule changed to Tuesdays only. Before this, Alex went on Mondays and Thursdays.\n- **2026-05-25:** Alex said, \"My new gym is Basic-Fit Chamberí.\" This is the most recent statement about which gym Alex uses, so it is the authoritative one.\n\n### Notes\n\n- The Basic-Fit Chamberí statement is the latest gym fact, so it supersedes the earlier Monday/Thursday schedule at the old gym (which was never named in the records).\n- The Tuesdays-only schedule (from 2026-04-14) is the most recent recorded schedule. It is not clear whether it still applies after the move to Basic-Fit Chamberí, because the records do not link the schedule change to a specific gym.\n- The move to Madrid's Chamberí neighbourhood was planned for April 2026, and Alex's address was updated to Calle Fernández de los Ríos 12, Madrid, by 2026-04-17. The gym's Chamberí location fits with this move, though the records do not state this connection directly.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What is Alex's favourite restaurant now?",
+			"expected": "Casa Montaña",
+			"kind": "changed",
+			"baseline": "Alex's favourite restaurant is now Casa Montaña.",
+			"recallMs": 340,
+			"hindsight": "Alex's favourite restaurant is now Casa Montaña, which replaced La Pepica on April 20, 2026.",
+			"reflectMs": 3489,
+			"reflect": "Alex's current favourite restaurant is **Casa Montaña**. Alex said it replaced La Pepica on the beach, which Alex felt had got worse in quality (recorded 20 April 2026).\n\nEarlier, in March 2026, La Pepica was recorded as Alex's favourite, good for special dinners. That was superseded by the later April 2026 statement.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "How much does Alex want to save each month?",
+			"expected": "700€",
+			"kind": "changed",
+			"baseline": "Alex wants to save 700€ each month.",
+			"recallMs": 318,
+			"hindsight": "Alex wants to save 700€ each month.",
+			"reflectMs": 5628,
+			"reflect": "Alex wants to save **700€ per month**.\n\n- **March 15, 2026:** Alex set the goal at 500€ every month.\n- **April 23, 2026:** Alex raised the goal to 700€ a month, and the agent updated it.\n\nThe April 23 update is the most recent record and no later fact changes it. The memories don't show whether Alex is currently meeting the target.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What is the book club reading in April?",
+			"expected": "Klara and the Sun",
+			"kind": "changed",
+			"baseline": "The book club is reading *Klara and the Sun* in April.",
+			"recallMs": 314,
+			"hindsight": "Alex's book club changed its April 2026 book to *Klara and the Sun*.",
+			"reflectMs": 6681,
+			"reflect": "## Book club reading for April\n\nAlex's book club is reading **Klara and the Sun** in April 2026.\n\n- The change was reported on April 3, 2026: \"Book club switched: April book is Klara and the Sun.\"\n- It replaces the earlier pick. Alex's book club was reading *Dune* in March 2026 (noted March 16, 2026).\n\nThere are no later records that change the April pick.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What did the book club read in March?",
+			"expected": "Dune",
+			"kind": "fact",
+			"baseline": "The book club read *Dune* in March.",
+			"recallMs": 310,
+			"hindsight": "The book club read *Dune* in March 2026.",
+			"reflectMs": 5753,
+			"reflect": "The book club read **Dune** in March 2026.\n\n- Alex's message on 2026-03-16 said the book club was reading Dune that month, and the agent noted it as the March book.\n- The only later book club change on record is the April pick, switched to *Klara and the Sun* on 2026-04-03. That change applies to April, so it does not alter the March selection.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What does Sam do for work?",
+			"expected": "Nurse",
+			"kind": "fact",
+			"baseline": "Sam is a nurse.",
+			"recallMs": 298,
+			"hindsight": "Sam is a nurse.",
+			"reflectMs": 6070,
+			"reflect": "Sam is a **nurse**. Sam told Alex's personal agent this on March 19, 2026, and is recorded as Alex's partner.\n\nSam's shift pattern has changed over time:\n- **March 19, 2026:** Sam said they would be on night shifts in April 2026.\n- **May 3, 2026:** Sam said the night shifts were over and they were back on day shifts from May 1, 2026. This is the most recent update, so it is the current schedule.\n\nThe memory bank does not record Sam's employer or workplace.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Is Sam on night shifts in May?",
+			"expected": "No, back on day shifts from May 1",
+			"kind": "changed",
+			"baseline": "No, Sam's night shifts ended and Sam is back on day shifts from May 1.",
+			"recallMs": 318,
+			"hindsight": "No. Sam's night shifts ended, and Sam has been back on day shifts since May 1, 2026.",
+			"reflectMs": 9089,
+			"reflect": "No, Sam is not on night shifts in May 2026. Sam is back on day shifts.\n\n**Reasoning, step by step:**\n\n1. **Facts, oldest to newest (by when they were recorded):**\n   - Sam introduced themself as Alex's partner, said they are a nurse, and said that in April they are on night shifts (recorded 2026-03-19).\n   - Sam later said their night shifts are over and they are back on days from May 1 (recorded 2026-05-03).\n\n2. **Authoritative fact:** The most recent statement is the 2026-05-03 message saying Sam is back on day shifts from May 1, 2026. It supersedes the March note about April night shifts.\n\n3. **Events that could change this:** None of the retrieved memories mention Sam returning to night shifts after May 1.\n\n4. **Check against the authoritative date:** The only shift-related event is the April night-shift period, which ended before May 1, so it is already reflected in the newer fact and does not apply to May.\n\n**Conclusion:** Sam was on night shifts during April 2026, but the night shifts ended and Sam has been on day shifts since May 1, 2026. The memories do not record any return to night shifts in May. The memories do not say whether Sam's day-shift schedule continues beyond May.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "When are Kiwi's vaccines due?",
+			"expected": "April 2",
+			"kind": "fact",
+			"baseline": "Kiwi's vaccines are due on April 2.",
+			"recallMs": 286,
+			"hindsight": "Kiwi's vaccines were due on April 2, 2026.",
+			"reflectMs": 8077,
+			"reflect": "Kiwi's vaccines are due on **April 2, 2026**.\n\nThis comes from a March 24, 2026 message in which Alex said, \"Kiwi's vaccines are due on April 2,\" and the agent confirmed it. Nothing later in memory updates or changes this date.\n\nContext from the same records:\n- Kiwi is Alex's female dog.\n- Kiwi's vet changed. Alex first recorded Dr. Ruiz on Calle Colón (March 3, 2026), then on May 7, 2026 recorded Clínica Veterinaria Chamberí in Madrid as the current vet.\n\nMemory does not record whether the April 2 vaccination was completed or whether any later vaccine dates exist. Since today is October 20, 2026, the April 2, 2026 date has already passed. If Kiwi's vaccines are on a recurring schedule, the next due date isn't in memory.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "When is Alex's flight to Lisbon and with which airline?",
+			"expected": "May 20 at 7:40, TAP",
+			"kind": "fact",
+			"baseline": "Alex's flight to Lisbon is with TAP on May 20 at 7:40.",
+			"recallMs": 330,
+			"hindsight": "Alex's flight to Lisbon is with TAP, departing May 20, 2026 at 7:40.",
+			"reflectMs": 3633,
+			"reflect": "Alex's flight to Lisbon is with **TAP**, departing **May 20, 2026 at 7:40**. Alex booked it, and the booking was recorded on April 30, 2026.\n\nNote that this flight is dated May 20, 2026, which is before today's date (October 20, 2026), so it has likely already taken place. The memory bank has no record of a return flight or any later Lisbon trip.</answer>\n<parameter name=\"memory_ids\">[\"ec616bae-68d9-4bf2-ad6c-b4294465d1ed\", \"alex_774a48a2-e060-499f-89c8-adfae9cd091c_0\"]",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Which neighbourhood in Madrid did Alex move to?",
+			"expected": "Chamberí",
+			"kind": "fact",
+			"baseline": "Alex moved to Chamberí, Madrid.",
+			"recallMs": 321,
+			"hindsight": "Alex moved to Madrid's Chamberí neighbourhood.",
+			"reflectMs": 7643,
+			"reflect": "Alex moved to the **Chamberí** neighbourhood in Madrid.\n\n**Supporting facts (in date order):**\n- **2026-03-31:** Alex told the agent \"we're moving to Madrid in April, to Chamberí.\" The move was planned for April 2026.\n- **2026-04-17:** Alex said \"we've moved\" and gave the new address as **Calle Fernández de los Ríos 12, Madrid**. The agent updated Alex's stored address to match.\n- **Later mentions:** Alex's new gym is Basic-Fit Chamberí (2026-05-25), and Kiwi's vet is now Clínica Veterinaria Chamberí in Madrid (2026-05-07). These fit with Alex living in Chamberí, though they do not state Alex's home neighbourhood directly.\n\nBefore the move, Alex lived in Valencia, near the Turia park.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "What kind of cake does Marta like?",
+			"expected": "Lemon cake",
+			"kind": "fact",
+			"baseline": "Marta likes lemon cake.",
+			"recallMs": 326,
+			"hindsight": "Marta likes lemon cake, and she doesn't want nut cakes because she's allergic to nuts.",
+			"reflectMs": 3614,
+			"reflect": "Marta likes **lemon cake**. Alex passed this on (noted on May 18, 2026).\n\nSomething to keep in mind when choosing one: Marta is allergic to nuts and does not want nut cakes (noted March 7, 2026).",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		},
+		{
+			"q": "Who told the agent that the Atlas meeting is in Lisbon?",
+			"expected": "Luis",
+			"kind": "who",
+			"baseline": "Luis told the agent on 2026-03-21 that the Atlas client meeting would be in Lisbon, not Madrid.",
+			"recallMs": 347,
+			"hindsight": "Luis told the agent the Atlas client meeting is in Lisbon, not Madrid.",
+			"reflectMs": 6510,
+			"reflect": "**Luis** told the agent that the Atlas client meeting will be in Lisbon, not Madrid.\n\n- **Who:** Luis, Alex's coworker.\n- **When recorded:** March 21, 2026 at 09:09.\n- **Nature:** A location correction. The source message reads, \"The client meeting for Atlas will be in Lisbon, not Madrid,\" and the agent replied, \"Atlas client meeting: Lisbon.\"\n\nNo later memory changes the Atlas meeting location.",
+			"right": {
+				"baseline": true,
+				"hindsight": true,
+				"reflect": true
+			}
+		}
+	],
+	"qaCostUsd": 0.218,
+	"summary": {
+		"baseline": 29,
+		"hindsight": 30,
+		"reflect": 30,
+		"of": 30,
+		"byKind": {
+			"baseline": {
+				"fact": "13/13",
+				"changed": "12/13",
+				"who": "4/4"
+			},
+			"hindsight": {
+				"fact": "13/13",
+				"changed": "13/13",
+				"who": "4/4"
+			},
+			"reflect": {
+				"fact": "13/13",
+				"changed": "13/13",
+				"who": "4/4"
+			}
+		},
+		"recallMsMedian": 324,
+		"reflectMsMedian": 7383
+	}
+}

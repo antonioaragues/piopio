@@ -1,0 +1,25 @@
+{
+  "idleRssMb": 286,
+  "fill1k": {
+    "items": 1000,
+    "seconds": 2.7,
+    "perSecond": 364
+  },
+  "recall1k": {
+    "p50ms": 255,
+    "p90ms": 284,
+    "maxMs": 300
+  },
+  "rss1k": 478,
+  "fill20k": {
+    "items": 19000,
+    "seconds": 56.2,
+    "perSecond": 338
+  },
+  "recall20k": {
+    "p50ms": 250,
+    "p90ms": 291,
+    "maxMs": 291
+  },
+  "rss20k": 669
+}

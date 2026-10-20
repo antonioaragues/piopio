@@ -1,0 +1,6 @@
+#!/bin/bash
+# Starts a Hindsight API on port $1 with HOME=$2 (data and model caches stay in the spike folder). $3: LLM provider.
+cd "$(dirname "$0")"
+export HINDSIGHT_API_LLM_OPENAI_COMPATIBLE_JSON_MODE=false
+export HOME=$2 HINDSIGHT_API_LLM_PROVIDER=${3:-openrouter} HINDSIGHT_API_LLM_API_KEY="$OPENROUTER_API_KEY" HINDSIGHT_API_LLM_MODEL=anthropic/claude-haiku-5.5
+exec hs/bin/hindsight-api --port $1 --host 127.0.0.1
