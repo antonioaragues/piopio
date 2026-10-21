@@ -12,7 +12,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
-import { AgentCore, alwaysLabel, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
+import { AgentCore, type AgentCoreOptions, alwaysLabel, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder } from "../timeline/builder.js";
@@ -39,6 +39,8 @@ export type AgentOpenOptions = {
 	onStatus?: () => void;
 	/** An approval was asked or answered (notifications). */
 	onApproval?: (approval: Approval) => void;
+	/** Apple app tools through the Mac app (06 §4.1). */
+	appTool?: AgentCoreOptions["appTool"];
 };
 
 type RawEntry = { id: string | number; kind: string; data?: unknown; model?: { timestamp?: number }[] };
@@ -74,6 +76,7 @@ export class AgentRuntime implements Runtime {
 			extensions: () => (wantsWeb() ? [web] : []),
 			context: ctx,
 			...(options.now ? { now: options.now } : {}),
+			...(options.appTool ? { appTool: options.appTool } : {}),
 			onRun: () => options.onActivity?.(),
 			onOutbound: () => options.onActivity?.(),
 			onApproval: (approval) => {

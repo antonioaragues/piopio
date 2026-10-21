@@ -12,6 +12,7 @@ import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
 import { OUT_ENTRY, Proactivity, type ProactiveState, type Reminder, type RunRecord } from "./proactive.js";
 import { Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
+import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
 
 type AgentState = ProactiveState & SafetyState & {
 	/** contact id → conversation id. */
@@ -55,6 +56,8 @@ export type AgentCoreOptions = {
 	onApproval?: (approval: Approval) => void;
 	onUndo?: (undo: UndoRecord) => void;
 	onStatus?: () => void;
+	/** Apple app tools, run by the Mac app (06 §4.1); absent or throwing `AppUnavailable` when no app is connected. */
+	appTool?: (call: { name: string; args: JsonObject; agent: { id: string; name: string }; groups: string[]; shortcuts: string[] }) => Promise<AppToolResult>;
 };
 
 export class AgentCore {
@@ -62,6 +65,7 @@ export class AgentCore {
 	readonly proactive: Proactivity;
 	readonly safety: Safety;
 	private memoryTools: { name: string }[] = [];
+	private readonly apple: ReturnType<typeof appleTools>;
 
 	constructor(private readonly options: AgentCoreOptions) {
 		const { harness, context } = options;
@@ -121,7 +125,21 @@ export class AgentCore {
 				options.onRun?.(run);
 			},
 		});
+		this.apple = appleTools({
+			call: (name, args) => this.appTool(name, args),
+			recordUndo: (undo, conversationId) => this.safety.recordUndo("app.tool", { name: undo.name, args: undo.args as JsonObject }, undo.title, conversationId),
+		});
 		this.extension = this.makeExtension();
+	}
+
+	/** The Apple app groups this agent may use (Shortcuts when it lists any). */
+	private get appleGroups(): string[] {
+		return [...(this.def.tools.apple ?? []), ...(this.def.tools.shortcuts?.length ? ["shortcuts"] : [])];
+	}
+
+	private async appTool(name: string, args: JsonObject): Promise<AppToolResult> {
+		if (!this.options.appTool) throw new AppUnavailable("No Mac app.");
+		return this.options.appTool({ name, args, agent: { id: this.def.id, name: this.def.name }, groups: this.appleGroups, shortcuts: this.def.tools.shortcuts ?? [] });
 	}
 
 	private get owner(): Contact | undefined {
@@ -159,6 +177,16 @@ export class AgentCore {
 			case "memory.restore":
 				await this.options.memory().retain(String(d.bank), { content: String(d.text), kind: (d.kind as MemoryRecord["kind"]) ?? "fact", createdBy: "user" });
 				return;
+			case "app.tool": {
+				let result: AppToolResult;
+				try {
+					result = await this.appTool(String(d.name), (d.args ?? {}) as JsonObject);
+				} catch (error) {
+					throw new Error(error instanceof AppUnavailable ? "Piopio needs to be open to undo this." : (error as Error).message);
+				}
+				if (!result.ok) throw new Error(result.output);
+				return;
+			}
 		}
 	}
 
@@ -252,6 +280,7 @@ export class AgentCore {
 			...(builtin.includes("memory") ? [] : this.memoryTools),
 			...(builtin.includes("send_message") ? [] : [p.send]),
 			...(builtin.includes("schedule") ? [] : [p.schedule, p.list, p.cancel]),
+			...this.apple.filter((t) => !this.appleGroups.includes(APPLE_TOOLS.find((s) => s.name === t.name)!.group)),
 		];
 		await harness.commit(async (tx) => {
 			await configure(tx, conversationId, {
@@ -381,7 +410,7 @@ export class AgentCore {
 		const p = this.proactive.tools;
 		return defineExtension({
 			name: "piopio-agent",
-			tools: [remember, recall, forget, p.send, p.schedule, p.list, p.cancel],
+			tools: [remember, recall, forget, p.send, p.schedule, p.list, p.cancel, ...this.apple],
 			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
 			hooks: [hook(ToolTask, { beforeTool: (call, api, context) => core.safety.beforeTool(call, api.conversationId, context) as Promise<{ arguments?: JsonObject; block?: string } | undefined> })],
@@ -397,7 +426,8 @@ export class AgentCore {
 						: contact.role === "owner"
 							? `\n\nYou are talking with ${contact.name}, your owner.`
 							: `\n\nYou are talking with ${contact.name}, one of ${owner?.name ?? "your owner"}'s contacts — not your owner. Don't share ${owner?.name ?? "the owner"}'s private information or other people's details with them.${contact.notes ? ` About ${contact.name}: ${contact.notes}` : ""}`;
-					return `${core.options.instructions().trim()}${who}\n\nToday is ${(core.options.now?.() ?? new Date()).toISOString().slice(0, 10)}.`;
+					const shortcuts = core.def.tools.shortcuts?.length ? `\n\nShortcuts you may run (shortcuts_run): ${core.def.tools.shortcuts.join(", ")}.` : "";
+					return `${core.options.instructions().trim()}${who}${shortcuts}\n\nToday is ${(core.options.now?.() ?? new Date()).toISOString().slice(0, 10)}.`;
 				}),
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;

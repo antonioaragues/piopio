@@ -139,11 +139,11 @@ struct AgentDefinitionView: View {
 
     private static let toolChoices: [(String, String, Bool)] = [
         ("web_search", "Web search", true), ("web_fetch", "Read web pages", true), ("memory", "Memory (remember, recall, forget)", true),
-        ("schedule", "Reminders and schedules", false), ("send_message", "Send messages", false), ("http_request", "HTTP requests", false),
+        ("schedule", "Reminders and schedules", true), ("send_message", "Send messages", true), ("http_request", "HTTP requests", false),
         ("codemode", "Code mode", false), ("files", "Workspace files", false),
     ]
 
-    private var tools: some View {
+    @ViewBuilder private var tools: some View {
         section("Tools", "Grey ones are saved now and arrive in later milestones") {
             LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 6) {
                 ForEach(Self.toolChoices, id: \.0) { id, title, ready in
@@ -158,7 +158,32 @@ struct AgentDefinitionView: View {
                 }
             }
         }
+        section("Apple apps on this Mac", "Served by Piopio while it's open; macOS asks once per app. Changes can be undone, and approval rules apply (apple_reminders_create…)") {
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 6) {
+                ForEach(Self.appleChoices, id: \.0) { id, title in
+                    Toggle(title, isOn: Binding(get: { def?.tools.apple?.contains(id) ?? false }, set: { on in
+                        guard var d = def else { return }
+                        var groups = (d.tools.apple ?? []).filter { $0 != id }
+                        if on { groups.append(id) }
+                        d.tools.apple = groups.isEmpty ? nil : groups
+                        def = d
+                    }))
+                    .toggleStyle(.checkbox)
+                }
+            }
+            labeled("Shortcuts it may run (comma-separated names)") {
+                TextField("Log water, Morning routine", text: Binding(get: { def?.tools.shortcuts?.joined(separator: ", ") ?? "" }, set: { v in
+                    let names = v.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                    def?.tools.shortcuts = names.isEmpty ? nil : names
+                }))
+                .textFieldStyle(.roundedBorder)
+            }
+        }
     }
+
+    private static let appleChoices: [(String, String)] = [
+        ("reminders", "Reminders"), ("calendar", "Calendar"), ("contacts", "Contacts (read)"), ("notes", "Notes"), ("music", "Music"),
+    ]
 
     private var contacts: some View {
         section("Contacts", "The owner is who the agent works for; contacts only see their own memory") {

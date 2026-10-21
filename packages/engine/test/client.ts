@@ -10,6 +10,8 @@ export class TestClient {
 	readonly notifications: { method: string; params: any }[] = [];
 	private eventListeners: ((n: SessionEventsNotification) => void)[] = [];
 	secrets: Record<string, string> = {};
+	/** Answers `app.tool` like the Mac app (when the client said it serves it in engine.hello). */
+	appTool?: (params: any) => any;
 
 	private constructor(private readonly socket: Socket) {
 		socket.setEncoding("utf8");
@@ -66,6 +68,13 @@ export class TestClient {
 			for (const l of this.eventListeners) l(m.params);
 		} else if (m.method === "secrets.get") {
 			this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, result: { value: this.secrets[m.params.name] ?? null } })}\n`);
+		} else if (m.method === "app.tool") {
+			try {
+				const result = this.appTool ? this.appTool(m.params) : { ok: false, output: "no handler" };
+				this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, result })}\n`);
+			} catch (error) {
+				this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, error: { code: -32000, message: (error as Error).message } })}\n`);
+			}
 		} else if ("id" in m) {
 			const w = this.waiters.get(m.id);
 			this.waiters.delete(m.id);

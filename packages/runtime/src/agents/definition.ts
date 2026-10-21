@@ -55,6 +55,10 @@ export const AgentDefinition = Type.Object({
 			]),
 		),
 		mcp: Type.Optional(Type.Array(Type.Object({ name: Type.String({ pattern: "^[A-Za-z0-9_-]+$" }), url: Type.String(), auth: Type.Optional(SecretRef) }))),
+		/** Apple apps on this Mac (§4.1 NB1), served by the Piopio app. */
+		apple: Type.Optional(Type.Array(Type.Union([Type.Literal("reminders"), Type.Literal("calendar"), Type.Literal("contacts"), Type.Literal("notes"), Type.Literal("music")]))),
+		/** Shortcuts the agent may run, by name. */
+		shortcuts: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
 		agents: Type.Optional(Type.Array(Type.String())),
 	}),
 	contacts: Type.Array(Contact),

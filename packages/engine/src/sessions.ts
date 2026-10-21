@@ -23,6 +23,7 @@ import type { ChatMcp } from "./tools/mcp-chat.js";
 import type { ChatResources } from "./tools/chat-resources.js";
 import { AgentRuntime } from "./runtimes/agent.js";
 import type { AgentFiles } from "./agent-files.js";
+import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
 import { alwaysLabel, newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
@@ -86,7 +87,7 @@ export class Sessions {
 	/** Settings, About me and MCP for Threads and Spaces (set by the engine). */
 	chat?: { settings: Settings; aboutMe: AboutMe; mcp: ChatMcp; resources: ChatResources };
 	/** Agent folders and memory (set by the engine). */
-	agentHost?: { files: AgentFiles; memory: MemoryProviders };
+	agentHost?: { files: AgentFiles; memory: MemoryProviders; app?: AppServices };
 	/** Each agent's last valid definition, as the runtime uses it. */
 	private definitions = new Map<string, { definition: AgentDefinition; instructions: string }>();
 	private skillsExtension?: Extension;
@@ -982,6 +983,7 @@ export class Sessions {
 				memory: () => this.host.memory.get(this.agentDefinition(id).definition.memory?.provider ?? "builtin"),
 				webOptions: this.webOptions,
 				onActivity: () => this.touch(entry.ref),
+				...(this.agentHost?.app ? { appTool: (call: Parameters<AppServices["tool"]>[0]) => this.agentHost!.app!.tool(call) } : {}),
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {
 					if (approval.status === "pending") this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });

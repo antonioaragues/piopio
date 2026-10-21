@@ -72,10 +72,10 @@ public actor EngineClient {
     }
 
     /// Connects and authenticates with the token file next to the socket.
-    public func connectAndHello(client: String, tokenFile: URL) async throws -> HelloResult {
+    public func connectAndHello(client: String, tokenFile: URL, services: [String]? = nil) async throws -> HelloResult {
         try await connect()
         let token = try String(contentsOf: tokenFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        return try await call("engine.hello", HelloParams(token: token, client: client, protocolVersion: protocolVersion), as: HelloResult.self)
+        return try await call("engine.hello", HelloParams(token: token, client: client, protocolVersion: protocolVersion, services: services), as: HelloResult.self)
     }
 
     public func call<P: Encodable & Sendable, R: Decodable>(_ method: String, _ params: P, as: R.Type = R.self) async throws -> R {

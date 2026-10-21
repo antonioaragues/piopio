@@ -169,12 +169,14 @@ final class EngineController {
         guard FileManager.default.fileExists(atPath: socket.path) else { return nil }
         let client = EngineClient(socketPath: socket.path)
         await client.setReverseHandler { method, params in
+            // Apple app tools for agents (06-agents §4.1), run with this app's permissions.
+            if method == "app.tool" { return await AppleTools.shared.handle(params) }
             guard method == "secrets.get", let name = params["name"]?.stringValue else { return .object(["value": .null]) }
             return .object(["value": Keychain.read(name).map(JSONValue.string) ?? .null])
         }
         let hello: HelloResult
         do {
-            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"))
+            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"), services: ["app.tool"])
         } catch {
             await client.close()
             return nil

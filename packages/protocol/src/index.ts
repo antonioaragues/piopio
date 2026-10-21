@@ -219,7 +219,7 @@ export const ResultItem = Type.Object({
 	id: Type.String(),
 	at: Type.String(),
 	callId: Type.String(),
-	card: Type.Object({ kind: literals("reminder", "message", "memory"), title: Type.String(), detail: Type.Optional(Type.String()) }),
+	card: Type.Object({ kind: literals("reminder", "message", "memory", "event", "contact", "note", "music", "shortcut"), title: Type.String(), detail: Type.Optional(Type.String()) }),
 	undo: Type.Optional(Type.Object({ id: Type.String(), status: literals("available", "undone", "failed", "expired"), until: Type.String() })),
 });
 export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem, ApprovalItem, ResultItem]);
@@ -590,7 +590,13 @@ export const EngineCapabilities = Type.Object({ runtimes: Type.Array(ContainerKi
 
 export const methods = {
 	"engine.hello": {
-		params: Type.Object({ token: Type.String(), client: Type.String(), protocolVersion: Type.String() }),
+		params: Type.Object({
+			token: Type.String(),
+			client: Type.String(),
+			protocolVersion: Type.String(),
+			/** Reverse requests this client answers besides `secrets.get` (§3.12): `app.tool`. */
+			services: Type.Optional(Type.Array(Type.String())),
+		}),
 		result: Type.Object({ engineId: Type.String(), kind: Type.Union([Type.Literal("local"), Type.Literal("cloud")]), version: Type.String(), protocolVersion: Type.String(), capabilities: EngineCapabilities }),
 	},
 	"engine.status": {
@@ -1084,6 +1090,26 @@ export const reverseMethods = {
 	"secrets.get": {
 		params: Type.Object({ name: Type.String(), purpose: Type.String() }),
 		result: Type.Object({ value: Type.Union([Type.String(), Type.Null()]) }),
+	},
+	/**
+	 * An Apple app tool, run by the Mac app with the user's permissions (06-agents §4.1). The app checks `groups`
+	 * (and `shortcuts`) again. `undo` is the call that reverses a change (§4.2).
+	 */
+	"app.tool": {
+		params: Type.Object({
+			name: Type.String(),
+			args: Type.Unknown(),
+			agent: Type.Object({ id: Type.String(), name: Type.String() }),
+			groups: Type.Array(Type.String()),
+			shortcuts: Type.Array(Type.String()),
+		}),
+		result: Type.Object({
+			ok: Type.Boolean(),
+			/** What the model reads. */
+			output: Type.String(),
+			card: Type.Optional(Type.Object({ kind: literals("reminder", "event", "contact", "note", "music", "shortcut"), title: Type.String(), detail: Type.Optional(Type.String()) })),
+			undo: Type.Optional(Type.Object({ name: Type.String(), args: Type.Unknown(), title: Type.String() })),
+		}),
 	},
 } satisfies Record<string, { params: TSchema; result: TSchema }>;
 

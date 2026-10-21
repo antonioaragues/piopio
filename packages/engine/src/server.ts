@@ -24,6 +24,7 @@ import { Packages } from "./packages.js";
 import { MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
 import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
+import { AppServices } from "./app-services.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -60,6 +61,7 @@ export class Engine {
 	readonly chatResources: ChatResources;
 	readonly memory: MemoryProviders;
 	readonly hooks: Hooks;
+	readonly app = new AppServices();
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
@@ -100,7 +102,7 @@ export class Engine {
 		this.chatResources = new ChatResources(agentDir);
 		this.packages.onChange(() => void this.chatResources.reload());
 		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp, resources: this.chatResources };
-		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory };
+		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory, app: this.app };
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp) void this.chatMcp.reset();
@@ -161,6 +163,7 @@ export class Engine {
 		let authed = false;
 		const owned = new Set<string>();
 		let unregisterSecrets: (() => void) | undefined;
+		let unregisterTools: (() => void) | undefined;
 
 		const conn: RpcConnection = new RpcConnection(holder.stream, async (method, params): Promise<unknown> => {
 			if (!(method in methods)) throw new MethodNotFound(`Unknown method ${method}`);
@@ -178,6 +181,14 @@ export class Engine {
 					const res = (await conn.request("secrets.get", { name, purpose } satisfies Params<never> | object)) as { value: string | null };
 					return Value.Check(reverseMethods["secrets.get"].result, res) ? res.value : null;
 				});
+				// The Mac app serves Apple app tools (§3.12); only a client that says so is asked.
+				if (p.services?.includes("app.tool")) {
+					unregisterTools = this.app.addToolServer(async (call) => {
+						const res = await conn.request("app.tool", call);
+						if (!Value.Check(reverseMethods["app.tool"].result, res)) throw new Error("The app's answer wasn't understood.");
+						return res;
+					});
+				}
 				return this.hello();
 			}
 			if (!authed) throw new EngineError("AUTH", "Call engine.hello first.");
@@ -187,6 +198,7 @@ export class Engine {
 		conn.onClose(() => {
 			this.authed.delete(conn);
 			unregisterSecrets?.();
+			unregisterTools?.();
 			for (const id of owned) {
 				this.subscriptions.get(id)?.();
 				this.subscriptions.delete(id);

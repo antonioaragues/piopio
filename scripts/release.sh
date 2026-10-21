@@ -56,7 +56,7 @@ sign --preserve-metadata=entitlements "$sparkle/Versions/B/XPCServices/Downloade
 sign "$sparkle/Versions/B/Autoupdate"
 sign "$sparkle/Versions/B/Updater.app"
 sign "$sparkle"
-sign "$app"
+sign --entitlements "$app_dir/Piopio.entitlements" "$app"
 codesign --verify --deep --strict "$app"
 
 step "making the DMG"

@@ -1603,3 +1603,74 @@ describe("Agents: approvals, budgets and the Inbox (milestone 4.4)", () => {
 		expect((await owner()).some((i) => i.kind === "system" && i.text.startsWith("Helper used its budget"))).toBe(true);
 	}, 90_000);
 });
+
+describe("Agents: Apple apps as tools (milestone 4.5)", () => {
+	async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean, timeout = 15_000): Promise<T> {
+		const end = Date.now() + timeout;
+		for (;;) {
+			const value = await read();
+			if (ready(value)) return value;
+			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(value)}`);
+			await new Promise((r) => setTimeout(r, 150));
+		}
+	}
+	const call = (tool: string, args: object) => `call: ${tool} | ${JSON.stringify(args)}`;
+	type Item = Snapshot["items"][number];
+	const steps = (items: Item[]) => items.filter((i): i is Extract<Item, { kind: "steps" }> => i.kind === "steps").flatMap((s) => s.tools);
+	const results = (items: Item[]) => items.filter((i): i is Extract<Item, { kind: "result" }> => i.kind === "result");
+
+	test("tools by group through the Mac app: unavailable without it, cards and Undo with it, Shortcuts by name", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		const got = await a.client.call("agents.get", { ref });
+		const def = got.definition as Record<string, unknown>;
+		expect(await a.client.call("agents.save", { ref, definition: { ...def, tools: { builtin: ["memory"], apple: ["reminders"], shortcuts: ["Log water"] } }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+		const owner = () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+		const turn = async (text: string) => {
+			const before = (await owner()).filter((i) => i.kind === "assistant" && i.parts.some((p) => p.text)).length;
+			await a.client.call("sessions.submit", { ref, input: { text } });
+			return until(owner, (xs) => xs.filter((i) => i.kind === "assistant" && i.parts.some((p) => p.text)).length > before && !xs.some((i) => i.kind === "steps" && i.tools.some((t) => t.status === "running")));
+		};
+
+		// No app connected (background mode): the tool says so.
+		let items = await turn(call("apple_reminders_create", { title: "Buy milk" }));
+		expect(steps(items).at(-1)).toMatchObject({ tool: "apple_reminders_create", status: "error", output: expect.stringContaining("Piopio isn't open") });
+
+		// The Mac app connects and serves the tools.
+		const paths = enginePaths(a.home);
+		const app = await TestClient.connect(paths.socket);
+		await app.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "fake app", protocolVersion: "1.0", services: ["app.tool"] });
+		const reminders = new Map<string, string>();
+		const calls: any[] = [];
+		app.appTool = (p) => {
+			calls.push(p);
+			if (p.name === "apple_reminders_create") {
+				const id = `r${reminders.size + 1}`;
+				reminders.set(id, p.args.title);
+				return { ok: true, output: `Created ${id}.`, card: { kind: "reminder", title: "Reminder created", detail: p.args.title }, undo: { name: "apple_reminders_delete", args: { id }, title: `creating “${p.args.title}”` } };
+			}
+			if (p.name === "apple_reminders_delete") return reminders.delete(p.args.id) ? { ok: true, output: "Deleted." } : { ok: false, output: "Gone already." };
+			if (p.name === "shortcuts_run") return { ok: true, output: "Logged 250 ml.", card: { kind: "shortcut", title: `Ran “${p.args.name}”`, detail: "Logged 250 ml." } };
+			throw new Error(`unexpected ${p.name}`);
+		};
+		items = await turn(call("apple_reminders_create", { title: "Buy milk" }));
+		expect(calls[0]).toMatchObject({ name: "apple_reminders_create", args: { title: "Buy milk" }, agent: { id: ref.id, name: "Helper" }, groups: ["reminders", "shortcuts"], shortcuts: ["Log water"] });
+		expect([...reminders.values()]).toEqual(["Buy milk"]);
+		const card = results(items).at(-1)!;
+		expect(card).toMatchObject({ card: { kind: "reminder", title: "Reminder created", detail: "Buy milk" }, undo: { status: "available" } });
+
+		// Undo is another call to the app.
+		await a.client.call("agents.undo", { ref, undoId: card.undo!.id });
+		await until(owner, (xs) => results(xs).find((r) => r.id === card.id)?.undo?.status === "undone");
+		expect(reminders.size).toBe(0);
+		expect(calls.at(-1)).toMatchObject({ name: "apple_reminders_delete", args: { id: "r1" } });
+
+		// Shortcuts by name; groups that aren't on aren't offered.
+		items = await turn(call("shortcuts_run", { name: "Log water", input: "250" }));
+		expect(results(items).at(-1)).toMatchObject({ card: { kind: "shortcut", title: "Ran “Log water”" } });
+		items = await turn(call("apple_calendar_events", { from: "2026-10-21", to: "2026-10-22" }));
+		expect(steps(items).at(-1)).toMatchObject({ tool: "apple_calendar_events", status: "error" });
+		expect(calls.some((c) => c.name === "apple_calendar_events")).toBe(false);
+		app.close();
+	}, 60_000);
+});

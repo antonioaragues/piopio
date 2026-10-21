@@ -14,7 +14,7 @@ extension Notification.Name {
 /// agent.json v1, for the form editor. Fields the form doesn't edit pass through as JSON.
 struct AgentDef: Codable, Equatable {
     struct Models: Codable, Equatable { var `default`: String; var utility: String? }
-    struct Tools: Codable, Equatable { var builtin: [String]; var mcp: JSONValue?; var agents: [String]? }
+    struct Tools: Codable, Equatable { var builtin: [String]; var mcp: JSONValue?; var apple: [String]?; var shortcuts: [String]?; var agents: [String]? }
     struct Contact: Codable, Equatable, Identifiable {
         var id: String
         var name: String

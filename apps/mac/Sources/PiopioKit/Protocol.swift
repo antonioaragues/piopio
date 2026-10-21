@@ -707,7 +707,11 @@ public struct SpaceFileParams: Encodable, Sendable { public var ref: ContainerRe
 
 // MARK: Method params / results
 
-public struct HelloParams: Encodable, Sendable { public var token: String; public var client: String; public var protocolVersion: String }
+public struct HelloParams: Encodable, Sendable {
+    public var token: String; public var client: String; public var protocolVersion: String
+    /// Reverse requests this client answers besides secrets.get (03-engine-protocol §3.12): "app.tool".
+    public var services: [String]?
+}
 public struct HelloResult: Decodable, Sendable {
     public struct Capabilities: Decodable, Sendable { public var runtimes: [ContainerKind]; public var models: [String] }
     public var engineId: String

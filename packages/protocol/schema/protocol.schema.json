@@ -1133,6 +1133,26 @@
 										{
 											"type": "string",
 											"const": "memory"
+										},
+										{
+											"type": "string",
+											"const": "event"
+										},
+										{
+											"type": "string",
+											"const": "contact"
+										},
+										{
+											"type": "string",
+											"const": "note"
+										},
+										{
+											"type": "string",
+											"const": "music"
+										},
+										{
+											"type": "string",
+											"const": "shortcut"
 										}
 									]
 								},
@@ -2589,6 +2609,26 @@
 														{
 															"type": "string",
 															"const": "memory"
+														},
+														{
+															"type": "string",
+															"const": "event"
+														},
+														{
+															"type": "string",
+															"const": "contact"
+														},
+														{
+															"type": "string",
+															"const": "note"
+														},
+														{
+															"type": "string",
+															"const": "music"
+														},
+														{
+															"type": "string",
+															"const": "shortcut"
 														}
 													]
 												},
@@ -3788,6 +3828,26 @@
 														{
 															"type": "string",
 															"const": "memory"
+														},
+														{
+															"type": "string",
+															"const": "event"
+														},
+														{
+															"type": "string",
+															"const": "contact"
+														},
+														{
+															"type": "string",
+															"const": "note"
+														},
+														{
+															"type": "string",
+															"const": "music"
+														},
+														{
+															"type": "string",
+															"const": "shortcut"
 														}
 													]
 												},
@@ -4967,6 +5027,26 @@
 														{
 															"type": "string",
 															"const": "memory"
+														},
+														{
+															"type": "string",
+															"const": "event"
+														},
+														{
+															"type": "string",
+															"const": "contact"
+														},
+														{
+															"type": "string",
+															"const": "note"
+														},
+														{
+															"type": "string",
+															"const": "music"
+														},
+														{
+															"type": "string",
+															"const": "shortcut"
 														}
 													]
 												},
@@ -6481,6 +6561,26 @@
 																	{
 																		"type": "string",
 																		"const": "memory"
+																	},
+																	{
+																		"type": "string",
+																		"const": "event"
+																	},
+																	{
+																		"type": "string",
+																		"const": "contact"
+																	},
+																	{
+																		"type": "string",
+																		"const": "note"
+																	},
+																	{
+																		"type": "string",
+																		"const": "music"
+																	},
+																	{
+																		"type": "string",
+																		"const": "shortcut"
 																	}
 																]
 															},
@@ -7976,6 +8076,26 @@
 													{
 														"type": "string",
 														"const": "memory"
+													},
+													{
+														"type": "string",
+														"const": "event"
+													},
+													{
+														"type": "string",
+														"const": "contact"
+													},
+													{
+														"type": "string",
+														"const": "note"
+													},
+													{
+														"type": "string",
+														"const": "music"
+													},
+													{
+														"type": "string",
+														"const": "shortcut"
 													}
 												]
 											},
@@ -9786,6 +9906,26 @@
 																	{
 																		"type": "string",
 																		"const": "memory"
+																	},
+																	{
+																		"type": "string",
+																		"const": "event"
+																	},
+																	{
+																		"type": "string",
+																		"const": "contact"
+																	},
+																	{
+																		"type": "string",
+																		"const": "note"
+																	},
+																	{
+																		"type": "string",
+																		"const": "music"
+																	},
+																	{
+																		"type": "string",
+																		"const": "shortcut"
 																	}
 																]
 															},
@@ -10985,6 +11125,26 @@
 																	{
 																		"type": "string",
 																		"const": "memory"
+																	},
+																	{
+																		"type": "string",
+																		"const": "event"
+																	},
+																	{
+																		"type": "string",
+																		"const": "contact"
+																	},
+																	{
+																		"type": "string",
+																		"const": "note"
+																	},
+																	{
+																		"type": "string",
+																		"const": "music"
+																	},
+																	{
+																		"type": "string",
+																		"const": "shortcut"
 																	}
 																]
 															},
@@ -12164,6 +12324,26 @@
 																	{
 																		"type": "string",
 																		"const": "memory"
+																	},
+																	{
+																		"type": "string",
+																		"const": "event"
+																	},
+																	{
+																		"type": "string",
+																		"const": "contact"
+																	},
+																	{
+																		"type": "string",
+																		"const": "note"
+																	},
+																	{
+																		"type": "string",
+																		"const": "music"
+																	},
+																	{
+																		"type": "string",
+																		"const": "shortcut"
 																	}
 																]
 															},
@@ -13678,6 +13858,26 @@
 																				{
 																					"type": "string",
 																					"const": "memory"
+																				},
+																				{
+																					"type": "string",
+																					"const": "event"
+																				},
+																				{
+																					"type": "string",
+																					"const": "contact"
+																				},
+																				{
+																					"type": "string",
+																					"const": "note"
+																				},
+																				{
+																					"type": "string",
+																					"const": "music"
+																				},
+																				{
+																					"type": "string",
+																					"const": "shortcut"
 																				}
 																			]
 																		},
@@ -14504,6 +14704,12 @@
 				},
 				"protocolVersion": {
 					"type": "string"
+				},
+				"services": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
 				}
 			}
 		},
@@ -16343,6 +16549,26 @@
 													{
 														"type": "string",
 														"const": "memory"
+													},
+													{
+														"type": "string",
+														"const": "event"
+													},
+													{
+														"type": "string",
+														"const": "contact"
+													},
+													{
+														"type": "string",
+														"const": "note"
+													},
+													{
+														"type": "string",
+														"const": "music"
+													},
+													{
+														"type": "string",
+														"const": "shortcut"
 													}
 												]
 											},
@@ -17887,6 +18113,26 @@
 															{
 																"type": "string",
 																"const": "memory"
+															},
+															{
+																"type": "string",
+																"const": "event"
+															},
+															{
+																"type": "string",
+																"const": "contact"
+															},
+															{
+																"type": "string",
+																"const": "note"
+															},
+															{
+																"type": "string",
+																"const": "music"
+															},
+															{
+																"type": "string",
+																"const": "shortcut"
 															}
 														]
 													},
@@ -24689,6 +24935,124 @@
 							"type": "null"
 						}
 					]
+				}
+			}
+		},
+		"app.tool.params": {
+			"type": "object",
+			"required": [
+				"name",
+				"args",
+				"agent",
+				"groups",
+				"shortcuts"
+			],
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"args": {},
+				"agent": {
+					"type": "object",
+					"required": [
+						"id",
+						"name"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						}
+					}
+				},
+				"groups": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"shortcuts": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"app.tool.result": {
+			"type": "object",
+			"required": [
+				"ok",
+				"output"
+			],
+			"properties": {
+				"ok": {
+					"type": "boolean"
+				},
+				"output": {
+					"type": "string"
+				},
+				"card": {
+					"type": "object",
+					"required": [
+						"kind",
+						"title"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "reminder"
+								},
+								{
+									"type": "string",
+									"const": "event"
+								},
+								{
+									"type": "string",
+									"const": "contact"
+								},
+								{
+									"type": "string",
+									"const": "note"
+								},
+								{
+									"type": "string",
+									"const": "music"
+								},
+								{
+									"type": "string",
+									"const": "shortcut"
+								}
+							]
+						},
+						"title": {
+							"type": "string"
+						},
+						"detail": {
+							"type": "string"
+						}
+					}
+				},
+				"undo": {
+					"type": "object",
+					"required": [
+						"name",
+						"args",
+						"title"
+					],
+					"properties": {
+						"name": {
+							"type": "string"
+						},
+						"args": {},
+						"title": {
+							"type": "string"
+						}
+					}
 				}
 			}
 		}

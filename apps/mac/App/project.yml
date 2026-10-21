@@ -66,6 +66,11 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: MIT License
+        # Agents' Apple app tools (docs/spec/06-agents §4.1), asked for once, when an agent first uses them.
+        NSRemindersFullAccessUsageDescription: Your agents can read and change your reminders when you allow it in their definition.
+        NSCalendarsFullAccessUsageDescription: Your agents can read and change your calendar events when you allow it in their definition.
+        NSContactsUsageDescription: Your agents can look people up in your contacts when you allow it in their definition.
+        NSAppleEventsUsageDescription: Your agents can use Notes and Music when you allow it in their definition.
         # Dev builds run the engine from the repo; release builds bundle it (see the Bundle engine phase).
         PiopioEngineMain: $(PIOPIO_ENGINE_MAIN)
         # What the bundled engine reports in engine.hello; a background engine with another version is restarted.

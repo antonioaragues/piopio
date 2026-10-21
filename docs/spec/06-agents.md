@@ -118,6 +118,15 @@ Agents that live on a Mac should work with the user's own data in Apple's apps. 
 - **NB2** Local agents reach the tools while the app is running. In background mode with the app closed, the tools answer "Piopio isn't open" (or the app relaunches as a login item helper, later).
 - **NB3** Cloud agents reach the same tools through the Mac Bridge (§10) while the Mac is online.
 - **NB4** Build and Chat can use the same bridge later (for example, "add a reminder for this TODO").
+- **NB5** (4.5) The tools, by group:
+  - Reminders: `apple_reminders_lists`, `_list` (open, due, overdue, completed), `_create`, `_complete`, `_update`.
+  - Calendar: `apple_calendar_calendars`, `_events` (free when empty), `_create`, `_update`.
+  - Contacts: `apple_contacts_find` (read only).
+  - Notes: `apple_notes_search`, `_read`, `_create`, `_append`.
+  - Music: `apple_music_now`, `_play`, `_control`.
+  - Shortcuts: `shortcuts_run`, only the shortcuts listed in `tools.shortcuts`, which the prompt also names.
+
+  The app answers each change with a card and the call that reverses it (delete what was created, put back the previous values or the note's earlier body), and Undo sends that call. Notes and Music go through AppleScript with the strings passed as arguments; Shortcuts through `/usr/bin/shortcuts run`. Release builds sign the app with the Calendars, Contacts and Apple Events entitlements (`apps/mac/App/Piopio.entitlements`).
 
 ### 4.2 Result cards and Undo
 

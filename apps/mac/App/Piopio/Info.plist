@@ -22,8 +22,16 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Your agents can use Notes and Music when you allow it in their definition.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Your agents can read and change your calendar events when you allow it in their definition.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Your agents can look people up in your contacts when you allow it in their definition.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT License</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Your agents can read and change your reminders when you allow it in their definition.</string>
 	<key>PiopioEngineMain</key>
 	<string>$(PIOPIO_ENGINE_MAIN)</string>
 	<key>PiopioEngineVersion</key>
