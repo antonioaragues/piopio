@@ -15,7 +15,11 @@ struct InboxView: View {
     @AppStorage("inboxFocus") private var focus = ""
     @State private var selected: String?
 
-    private var items: [InboxItem] { engine.inbox.filter { !needsYouOnly || $0.needsYou } }
+    /// The one you're reading stays listed after it's marked read.
+    private var items: [InboxItem] { engine.inbox.filter { !needsYouOnly || $0.needsYou || $0.id == selected } }
+
+    /// What opens first: a waiting approval, else the newest item.
+    private var first: String? { (items.first { $0.approval?.status == .pending } ?? items.first)?.id }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -52,12 +56,15 @@ struct InboxView: View {
                 Text("Pick an item.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task { await engine.loadInbox() }
+        .task {
+            await engine.loadInbox()
+            if selected == nil { selected = first }
+        }
         .onAppear(perform: applyFocus)
         .onChange(of: focus) { _, _ in applyFocus() }
         .onChange(of: engine.inbox) { _, _ in
             applyFocus()
-            if selected == nil || !engine.inbox.contains(where: { $0.id == selected }) { selected = items.first?.id }
+            if selected == nil || !engine.inbox.contains(where: { $0.id == selected }) { selected = first }
         }
         .onChange(of: selected) { _, id in
             guard let item = engine.inbox.first(where: { $0.id == id }) else { return }
@@ -158,7 +165,7 @@ private struct InboxDetail: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(item.agentName) · \(InboxView.kindLabel(item))").font(.system(size: 14, weight: .semibold))
-                    Text(item.approval == nil ? item.title : "\(item.agentName) wants to: \(item.approval!.title)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    Text(item.approval == nil ? item.body : "\(item.agentName) wants to: \(item.approval!.title)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
                 Spacer()
                 if item.conversationId != nil { Button("Open conversation", action: open).buttonStyle(PillStyle(compact: true)) }
@@ -187,7 +194,7 @@ private struct InboxDetail: View {
                 Text("expires \(AgentRunsView.when(a.expiresAt))").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(Self.actionLabel(a)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                Text(Self.actionLabel(a, contacts: engine.agents.first { $0.ref.id == item.agent.id }?.agent?.contacts ?? [])).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                 if editing {
                     TextEditor(text: $text)
                         .font(.system(size: 13, design: Self.textField(a) == nil ? .monospaced : .default))
@@ -262,9 +269,10 @@ private struct InboxDetail: View {
         }
     }
 
-    static func actionLabel(_ a: ApprovalItem) -> String {
-        switch a.tool {
-        case "send_message": "Send message · to \(a.args["to"]?.stringValue ?? "")"
+    static func actionLabel(_ a: ApprovalItem, contacts: [AgentInfo.Contact]) -> String {
+        let to = a.args["to"]?.stringValue ?? ""
+        return switch a.tool {
+        case "send_message": "Send message · to \(contacts.first { $0.id == to }?.name ?? to)"
         case "schedule": "Schedule · \(a.args["when"]?.stringValue ?? "")"
         case "remember": "Save to memory"
         default: a.tool

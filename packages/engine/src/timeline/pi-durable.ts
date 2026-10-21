@@ -46,7 +46,8 @@ export class DurableEventMapper {
 
 	private queue(items: { id: string | number; mode: string }[]) {
 		this.lastInbox = items;
-		return items.map((q) => {
+		// Writes (notes and messages the engine adds) wait for the turn to end too, but they aren't yours to edit.
+		return items.filter((q) => q.mode !== "write").map((q) => {
 			const text = this.queueText(String(q.id));
 			return { id: String(q.id), mode: q.mode === "steer" ? ("steer" as const) : ("followUp" as const), ...(text !== undefined ? { text } : {}) };
 		});

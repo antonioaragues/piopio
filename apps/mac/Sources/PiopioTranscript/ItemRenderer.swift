@@ -95,7 +95,7 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
             m.append(pill("Approve", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
         }
-        return card(m, .approval, lineHeight: 1.75)
+        return card(m, .approval, lineHeight: 1.5)
     }
 
     /// What a tool changed (06-agents §4.2 RC1): the change, and Undo while it can be undone.
