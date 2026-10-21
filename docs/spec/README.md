@@ -14,6 +14,7 @@ Piopio is a native macOS app on top of the **pi** agent harnesses (`pi-coding-ag
 | [07-shared-resources.md](07-shared-resources.md) | Models, keys, skills, MCP, memory, extensions, settings |
 | [08-app-shell.md](08-app-shell.md) | Window, navigation, transcript, composer, notifications, shortcuts |
 | [09-roadmap.md](09-roadmap.md) | Phases, spikes, milestones and acceptance criteria |
+| [10-model-providers.md](10-model-providers.md) | Multi-provider model support: requirements (not built yet) |
 
 Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release of a mode. "Later" means after it.
 

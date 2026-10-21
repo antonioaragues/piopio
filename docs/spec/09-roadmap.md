@@ -300,7 +300,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 
 **Bugs**
 - B1 · The agent's icon (avatar) picker looks broken.
-- B2 · The Questions UI lets long answers overflow their option rows. *(The user's screenshot didn't come through; ask for it again.)*
+- B2 · The Questions UI ("The agent asks") draws each option as a one-line capsule that doesn't wrap, so long answers run past the card's right edge and over the transcript. Options should wrap inside the card. Screenshot: [docs/design/feedback/questions-overflow.png](../design/feedback/questions-overflow.png).
 
 **Small changes**
 - S1 · After you answer through the Questions UI, the chat shows nothing of it. Show the question and the chosen answer inline in the transcript, as Cursor and Claude do.
@@ -313,7 +313,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 
 **To design further**
 - D1 · Connected apps (Gmail, Calendar, …). Open question: where they live. Per agent (Setup › Abilities), per project, or app-wide in Settings with each agent or project choosing which to use? Overlaps with MCP servers and Mac apps (4.5).
-- D2 · More model providers beyond OpenRouter. *(The user has requirements written elsewhere; they didn't come through in this message. Ask for them.)* Related: "direct providers + local models + subscription logins" in Later.
+- D2 · More model providers beyond OpenRouter: ChatGPT/Codex subscription and OpenAI API first, several connected at once, reusing pi's own provider and auth infrastructure. Requirements: [10-model-providers.md](10-model-providers.md). Related: "direct providers + local models + subscription logins" in Later.
 - D3 · Truly proactive agents: agents that don't need you to chat with them. They observe their environment (mail, calendar, files, Mac apps), decide when something matters, ask you questions and act. Builds on 4.3 proactivity (schedules, heartbeat, triggers).
 - D4 · Create agents by chatting: describe what you want and Piopio drafts the definition (instructions, schedule, abilities, people) for you to confirm, replacing or complementing the form in the new agent sheet.
 - D5 · Voice input in the composers (dictation, push to talk).
