@@ -586,7 +586,7 @@ struct PromptCard: View {
         VStack(alignment: .leading, spacing: 8) {
             if let options = prompt.options, !options.isEmpty {
                 FlowRow(options) { option in
-                    Button(option) { answer(PromptResponse(choice: option)) }.buttonStyle(PillStyle(kind: .secondary))
+                    Button(option) { answer(PromptResponse(choice: option)) }.buttonStyle(OptionStyle())
                 }
             }
             if prompt.kind == .question { freeAnswer(placeholder: prompt.options?.isEmpty == false ? "Or answer in your own words" : "Your answer") }
@@ -626,7 +626,25 @@ struct PromptCard: View {
     }
 }
 
-/// Wraps its items onto as many lines as needed.
+/// A question's answer: a capsule while it fits on one line; a long answer wraps inside a rounded box
+/// no wider than the card instead of running past it.
+private struct OptionStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .medium))
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(minHeight: 28)
+            .foregroundStyle(Color.dsFg)
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// Wraps its items onto as many lines as needed; an item wider than a line gets the line's width.
 private struct FlowRow<Item: Hashable, Content: View>: View {
     let items: [Item]
     let content: (Item) -> Content
@@ -653,7 +671,7 @@ private struct FlowLayout: Layout {
         for row in arrange(width: bounds.width, subviews: subviews) {
             var x = bounds.minX
             for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
+                let size = Self.size(subviews[index], width: bounds.width)
                 subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
                 x += size.width + spacing
             }
@@ -665,7 +683,7 @@ private struct FlowLayout: Layout {
         var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
         var current: (indices: [Int], width: CGFloat, height: CGFloat) = ([], 0, 0)
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
+            let size = Self.size(subviews[index], width: width)
             if !current.indices.isEmpty, current.width + spacing + size.width > width {
                 rows.append(current)
                 current = ([], 0, 0)
@@ -676,6 +694,13 @@ private struct FlowLayout: Layout {
         }
         if !current.indices.isEmpty { rows.append(current) }
         return rows
+    }
+
+    /// Its ideal size, or its size wrapped to the line's width when it wouldn't fit on one.
+    private static func size(_ subview: LayoutSubview, width: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard width.isFinite, ideal.width > width else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
     }
 }
 

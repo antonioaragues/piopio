@@ -300,7 +300,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 
 **Bugs**
 - B1 · The agent's icon (avatar) picker looks broken.
-- B2 · The Questions UI ("The agent asks") draws each option as a one-line capsule that doesn't wrap, so long answers run past the card's right edge and over the transcript. Options should wrap inside the card. Screenshot: [docs/design/feedback/questions-overflow.png](../design/feedback/questions-overflow.png).
+- B2 · The Questions UI ("The agent asks") draws each option as a one-line capsule that doesn't wrap, so long answers run past the card's right edge and over the transcript. Options should wrap inside the card. Screenshot: [docs/design/feedback/questions-overflow.png](../design/feedback/questions-overflow.png). **Fixed 2026-10-22:** a long answer wraps in a rounded box no wider than the card; short ones stay capsules.
 
 **Small changes**
 - S1 · After you answer through the Questions UI, the chat shows nothing of it. Show the question and the chosen answer inline in the transcript, as Cursor and Claude do.
