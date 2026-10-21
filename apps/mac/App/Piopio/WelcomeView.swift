@@ -16,12 +16,12 @@ struct WelcomeView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(LinearGradient(colors: [Color.accentColor, Color.accentColor.opacity(0.7)], startPoint: .top, endPoint: .bottom))
-                        .frame(width: 84, height: 84)
-                        .overlay(Image(systemName: "bubble.left.and.text.bubble.right.fill").font(.system(size: 34)).foregroundStyle(.white))
-                        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                        .padding(.top, 36)
+                    // docs/design 5a: the app icon (the chick, light or dark with the system).
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 96, height: 96)
+                        .padding(.top, 30)
                     Text("Welcome to Piopio").font(.system(size: 28, weight: .bold)).tracking(-0.5).padding(.top, 22)
                     Text("Build, chat and run agents on the pi harness. Everything stays on this Mac or in your own accounts.")
                         .font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).multilineTextAlignment(.center).frame(maxWidth: 440).padding(.top, 8)

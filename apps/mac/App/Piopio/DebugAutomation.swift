@@ -37,6 +37,11 @@ enum DebugAutomation {
                         await thread.send(edit)
                     }
                 }
+                // PIOPIO_DEMO_MODEL_PICKER=1: open the model picker (snapshot it with PIOPIO_SNAPSHOT_WINDOW=popover).
+                if env["PIOPIO_DEMO_MODEL_PICKER"] == "1" {
+                    await waitIdle(thread)
+                    thread.showModelPicker = true
+                }
                 // PIOPIO_DEMO_SEARCH: open message search with this query.
                 if let search = env["PIOPIO_DEMO_SEARCH"] {
                     await waitIdle(thread)
@@ -253,6 +258,7 @@ enum DebugAutomation {
         let target: NSWindow? = switch env["PIOPIO_SNAPSHOT_WINDOW"] {
         case "sheet": NSApp.windows.compactMap(\.attachedSheet).first
         case "key": NSApp.keyWindow
+        case "popover": NSApp.windows.first { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }
         case "settings": NSApp.windows.first { $0.isVisible && ($0.identifier?.rawValue.localizedCaseInsensitiveContains("settings") ?? false) }
         default: NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && ($0 is NSPanel) == wantsPanel && $0.attachedSheet == nil || ($0.isVisible && $0.attachedSheet != nil) })
         }
