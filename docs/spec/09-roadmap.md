@@ -295,6 +295,33 @@ Scope: Cloud Engine (02 §5), cloud setup wizard, deploy/rollback, Telegram, Wha
 ## Phase 6 — 1.0 polish
 GitHub PR/CI loop (G4–G8), worktrees UX, usage page, export everything, accessibility pass, Sparkle + Homebrew cask, docs site.
 
+## Backlog from the v2 review (2026-10-22)
+Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
+
+**Bugs**
+- B1 · The agent's icon (avatar) picker looks broken.
+- B2 · The Questions UI lets long answers overflow their option rows. *(The user's screenshot didn't come through; ask for it again.)*
+
+**Small changes**
+- S1 · After you answer through the Questions UI, the chat shows nothing of it. Show the question and the chosen answer inline in the transcript, as Cursor and Claude do.
+- S2 · Thinking lines read "Thought x words": drop the word count ("Thought for 4s" or just "Thought").
+
+**Plan mode**
+- P1 · Show the plan inline in the transcript, not in a pop-up.
+- P2 · Give it real formatting (headings, numbered steps, checkboxes, code) instead of flat text.
+- P3 · Let the user edit the plan before approving it.
+
+**To design further**
+- D1 · Connected apps (Gmail, Calendar, …). Open question: where they live. Per agent (Setup › Abilities), per project, or app-wide in Settings with each agent or project choosing which to use? Overlaps with MCP servers and Mac apps (4.5).
+- D2 · More model providers beyond OpenRouter. *(The user has requirements written elsewhere; they didn't come through in this message. Ask for them.)* Related: "direct providers + local models + subscription logins" in Later.
+- D3 · Truly proactive agents: agents that don't need you to chat with them. They observe their environment (mail, calendar, files, Mac apps), decide when something matters, ask you questions and act. Builds on 4.3 proactivity (schedules, heartbeat, triggers).
+- D4 · Create agents by chatting: describe what you want and Piopio drafts the definition (instructions, schedule, abilities, people) for you to confirm, replacing or complementing the form in the new agent sheet.
+- D5 · Voice input in the composers (dictation, push to talk).
+- D6 · MCP Apps support: MCP servers that return interactive UI, rendered in the transcript.
+
+**Future idea**
+- F1 · Concept → simple 3D visualization: say a concept and Piopio shows it in 3D (reference: https://x.com/elvar_official/status/2111831136171151589). Open question: a skill, a mode, or its own item type in the sidebar.
+
 ## Later (unordered)
 Mac Bridge · cloud Threads/Spaces · iOS companion · direct providers + local models + subscription logins · artifacts/canvas · code execution in Chat · email/Slack/Discord channels · group chats & agent rooms · cloud Build sessions · web preview · semantic search · OS sandbox for Build.
 
