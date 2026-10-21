@@ -81,6 +81,11 @@ enum DebugAutomation {
                     }
                     try? await Task.sleep(for: .milliseconds(800))
                 }
+                // PIOPIO_DEMO_AGENT_RUNS: prompts run now ("||"), as if a schedule fired them.
+                for prompt in (env["PIOPIO_DEMO_AGENT_RUNS"] ?? "").components(separatedBy: "||") where !prompt.isEmpty {
+                    _ = try? await engine.agentRunNow(ref, prompt: prompt.replacingOccurrences(of: "\\n", with: "\n"))
+                    try? await Task.sleep(for: .milliseconds(1500))
+                }
             }
         }
         // PIOPIO_DEMO_SPACE=<name>: a new Space; PIOPIO_DEMO_SPACE_MESSAGES: messages to Main, separated by "||",

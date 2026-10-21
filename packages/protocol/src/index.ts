@@ -106,6 +106,8 @@ export const AssistantItem = Type.Object({
 	errorKind: Type.Optional(ErrorKind),
 	/** The provider's raw error, for "show details". */
 	errorDetail: Type.Optional(Type.String()),
+	/** An agent's message sent on its own (send_message), and where from: a run id or a person's conversation. */
+	outbound: Type.Optional(Type.Object({ from: Type.String() })),
 });
 export const ToolItem = Type.Object({
 	kind: Type.Literal("tool"),
@@ -934,6 +936,39 @@ export const methods = {
 		result: Type.Object({
 			people: Type.Array(Type.Object({ contactId: Type.String(), name: Type.String(), role: literals("owner", "contact"), conversationId: Type.String(), started: Type.Boolean(), lastAt: Type.Optional(Type.String()), preview: Type.Optional(Type.String()) })),
 		}),
+	},
+	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */
+	"agents.runs": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({
+			runs: Type.Array(
+				Type.Object({
+					id: Type.String(),
+					kind: literals("schedule", "heartbeat", "reminder", "trigger", "manual"),
+					source: Type.String(),
+					prompt: Type.String(),
+					firedAt: Type.String(),
+					status: literals("running", "done", "failed"),
+					summary: Type.Optional(Type.String()),
+					sent: Type.Number(),
+					costUsd: Type.Optional(Type.Number()),
+				}),
+			),
+			/** Messages held by quiet hours or the daily limit. */
+			outbox: Type.Array(Type.Object({ id: Type.String(), to: Type.String(), text: Type.String(), notBefore: Type.String(), reason: literals("quiet", "limit") })),
+			/** The schedules and reminders, with their next time. */
+			upcoming: Type.Array(Type.Object({ id: Type.String(), kind: literals("schedule", "heartbeat", "reminder"), label: Type.String(), next: Type.Optional(Type.String()) })),
+		}),
+	},
+	/** Run now: a schedule from the definition (its prompt), or any prompt. */
+	"agents.runNow": {
+		params: Type.Object({ ref: ContainerRef, scheduleId: Type.Optional(Type.String()), prompt: Type.Optional(Type.String()) }),
+		result: Type.Object({ runId: Type.String() }),
+	},
+	/** The agent's webhook triggers, with the local URLs to call (HMAC-signed path). */
+	"agents.triggers": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({ triggers: Type.Array(Type.Object({ id: Type.String(), url: Type.String() })) }),
 	},
 	/** The agent's memory: its provider and partitions, each a bank (06 §8). */
 	"agents.memory": {

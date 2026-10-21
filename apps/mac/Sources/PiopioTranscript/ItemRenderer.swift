@@ -38,6 +38,7 @@ nonisolated struct ItemRenderer: Sendable {
             let out = NSMutableAttributedString()
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: "Thought", detail: Self.wordsSummary(thinking), body: thinking))) }
+            if let o = a.outbound { out.append(note(o.from.hasPrefix("run_") ? "Sent on its own, from an automatic run" : "Sent on its own", dot: DS.accent)) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
             if a.status != .streaming, !compact { out.append(answerFooter(a)) }
@@ -440,7 +441,7 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(action("Copy", .copy(itemId: a.id), itemId: a.id))
             m.append(gap(a.id))
         }
-        if versions {
+        if versions, a.outbound == nil {
             m.append(action("Regenerate", .regenerate(itemId: a.id), itemId: a.id, help: "Ask again (keeps this version)"))
             m.append(gap(a.id))
             m.append(action("Fork", .fork(itemId: a.id), itemId: a.id, help: "Continue from here in a new thread"))

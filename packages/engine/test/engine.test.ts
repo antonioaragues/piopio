@@ -16,7 +16,7 @@ const open: Ctx[] = [];
 
 async function start(home = mkdtempSync(join(tmpdir(), "piopio-test-")), faux = true): Promise<Ctx> {
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), allowPrivateFetch: true, log: () => {} });
+	const engine = new Engine({ paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, allowPrivateFetch: true, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0" });
@@ -1409,5 +1409,91 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 		expect(existsSync(folder)).toBe(false);
 		expect(existsSync(join(b.home, "trash", "coach"))).toBe(true);
 		expect((await b.client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner` })).records).toEqual([]);
+	}, 60_000);
+});
+
+describe("Agents: proactivity (milestone 4.3)", () => {
+	type Runs = { runs: { id: string; kind: string; source: string; status: string; sent: number; summary?: string }[]; outbox: { to: string; text: string; reason: string }[]; upcoming: { id: string; kind: string; next?: string }[] };
+	async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean, timeout = 15_000): Promise<T> {
+		const end = Date.now() + timeout;
+		for (;;) {
+			const value = await read();
+			if (ready(value)) return value;
+			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(value)}`);
+			await new Promise((r) => setTimeout(r, 150));
+		}
+	}
+	const send = (to: string, text: string) => `call: send_message | ${JSON.stringify({ to, text })}`;
+	const hhmm = (t: number) => new Date(t).toISOString().slice(11, 16);
+
+	test("reminders and triggers start runs that message the owner; quiet hours and the daily limit hold messages; restart resumes", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		const got = await a.client.call("agents.get", { ref });
+		const base = { ...(got.definition as object), timezone: "UTC", tools: { builtin: ["memory", "schedule", "send_message"] }, triggers: [{ id: "strava", type: "webhook", prompt: "New activity: {{body}}" }] };
+		const save = async (policies: object) => expect(await a.client.call("agents.save", { ref, definition: { ...base, policies }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+		await save({ maxOutboundPerDay: 2 });
+		const runs = () => a.client.call("agents.runs", { ref }) as Promise<Runs>;
+		const ownerItems = async () => ((await a.client.call("sessions.open", { ref })) as Snapshot).items;
+		const outbound = (items: Snapshot["items"]) => items.filter((i) => i.kind === "assistant" && i.outbound).map((i) => (i.kind === "assistant" ? i.parts[0]!.text : ""));
+
+		// The owner asks for a reminder; it fires as a run, which messages the owner.
+		const at = new Date(Date.now() + 2_000).toISOString();
+		await a.client.call("sessions.submit", { ref, input: { text: `call: schedule | ${JSON.stringify({ when: at, prompt: send("owner", "Time to stretch") })}` } });
+		const pending = await until(runs, (r) => r.upcoming.length === 1);
+		expect(pending.upcoming[0]).toMatchObject({ kind: "reminder", next: at });
+		let r = await until(runs, (x) => x.runs[0]?.status === "done");
+		expect(r.runs[0]).toMatchObject({ kind: "reminder", sent: 1, summary: expect.stringContaining("Echo:") });
+		expect(r.upcoming).toEqual([]);
+		expect(outbound(await until(ownerItems, (items) => outbound(items).length === 1))).toEqual(["Time to stretch"]);
+		const owner = await until(() => a.client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner` }), (m) => m.records.some((x) => x.text.includes("on its own")));
+		expect(owner.records.some((x) => x.text === "Helper (on its own): Time to stretch")).toBe(true);
+
+		// The run's conversation: the prompt, the step, the answer; read-only.
+		const runRef = { ...ref, conversationId: `run:${r.runs[0]!.id}` };
+		const runSnap: Snapshot = await a.client.call("sessions.open", { ref: runRef });
+		expect(runSnap.items.map((i) => i.kind)).toEqual(["user", "assistant", "steps", "assistant"]);
+		await expect(a.client.call("sessions.submit", { ref: runRef, input: { text: "hi" } })).rejects.toThrow(/read-only/);
+
+		// A webhook trigger: signed URL, the body in the prompt, a retried delivery is the same run.
+		const [trigger] = (await a.client.call("agents.triggers", { ref })).triggers;
+		expect(trigger!.url).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:\\d+/hooks/${ref.id}/strava/[A-Za-z0-9_-]{32}$`));
+		const post = (url: string) => fetch(url, { method: "POST", body: "Ran 10 km", headers: { "idempotency-key": "d1" } });
+		expect((await post(trigger!.url.replace(/[A-Za-z0-9_-]{32}$/, "x".repeat(32)))).status).toBe(403);
+		const first = (await (await post(trigger!.url)).json()) as { runId: string };
+		const again = (await (await post(trigger!.url)).json()) as { runId: string };
+		expect(again.runId).toBe(first.runId);
+		r = await until(runs, (x) => x.runs[0]?.id === first.runId && x.runs[0].status === "done");
+		expect(r.runs[0]).toMatchObject({ kind: "trigger", source: "strava", sent: 0, summary: "Echo: New activity: Ran 10 km" });
+
+		// Restart: a reminder due while the engine is off fires when it comes back.
+		const soon = new Date(Date.now() + 1_500).toISOString();
+		await a.client.call("sessions.submit", { ref, input: { text: `call: schedule | ${JSON.stringify({ when: soon, prompt: send("owner", "While you were away") })}` } });
+		await until(runs, (x) => x.upcoming.length === 1);
+		await stop(a);
+		await new Promise((resolve) => setTimeout(resolve, 2_500));
+		const b = await start(a.home);
+		Object.assign(a, { engine: b.engine, client: b.client });
+		r = await until(runs, (x) => x.runs[0]?.kind === "reminder" && x.runs[0].status === "done" && x.runs.length === 3);
+		expect(outbound(await until(ownerItems, (items) => outbound(items).length === 2))).toEqual(["Time to stretch", "While you were away"]);
+
+		// Quiet hours (now, for the next hour): the message waits in the outbox.
+		await save({ maxOutboundPerDay: 2, quietHours: `${hhmm(Date.now() - 60_000)}-${hhmm(Date.now() + 3_600_000)}` });
+		await a.client.call("agents.runNow", { ref, prompt: send("owner", "Late note") });
+		r = await until(runs, (x) => x.outbox.length === 1 && x.runs[0]?.status === "done");
+		expect(r.outbox[0]).toMatchObject({ to: "owner", text: "Late note", reason: "quiet" });
+		expect(r.runs[0]).toMatchObject({ kind: "manual", sent: 0 });
+
+		// The daily limit (2, both used): held too, and the owner gets one notice.
+		await save({ maxOutboundPerDay: 2 });
+		await a.client.call("agents.runNow", { ref, prompt: `${send("owner", "One more")}\n${send("owner", "And another")}` });
+		r = await until(runs, (x) => x.outbox.length === 3 && x.runs[0]?.status === "done");
+		expect(r.outbox.slice(1).map((o) => [o.text, o.reason])).toEqual([
+			["One more", "limit"],
+			["And another", "limit"],
+		]);
+		const items = await until(ownerItems, (xs) => xs.some((i) => i.kind === "system"));
+		expect(items.filter((i) => i.kind === "system").map((i) => (i.kind === "system" ? i.text : ""))).toEqual(["Helper reached its limit of 2 messages today; the rest wait until tomorrow."]);
+		expect(outbound(items)).toHaveLength(2);
 	}, 60_000);
 });

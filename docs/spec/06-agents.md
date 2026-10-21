@@ -51,7 +51,8 @@ A folder that is a git repo (auto-committed on every save → history, diff, rol
   "heartbeat": { "every": "4h", "activeHours": "08:00-22:00", "prompt": "Anything worth telling the owner now?" },
   "triggers": [{ "id": "strava", "type": "webhook", "prompt": "New activity: {{body}}" }],
   "policies": {
-    "quietHours": "22:30-07:30", "maxOutboundPerDay": 20, "budgetUsdPerMonth": 15,
+    "quietHours": "22:30-07:30", "urgentBypassesQuiet": false,
+    "maxOutboundPerDay": 20, "maxOutboundPerContactPerDay": 5, "budgetUsdPerMonth": 15,
     "requireApproval": ["send_message:to_non_owner", "http_request:POST", "mcp:*:write"],
     "unknownSenders": "ignore" // ignore | reply_canned | ask_owner
   }
@@ -168,9 +169,9 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 
 - **PR1** **Schedules:** cron + timezone, defined in the definition or created by the agent at runtime. Each fire creates a `run:<id>` conversation with the prompt + relevant memory. The run may call `send_message`, or decide not to (it records "nothing to report").
 - **PR2** **Heartbeat:** optional periodic wake during active hours, with the heartbeat prompt plus a digest of recent activity. Cost-capped (skipped when the budget is above 80%).
-- **PR3** **Triggers:** generic webhook endpoint per trigger (HMAC-signed URL). The payload is templated into a prompt and runs as a `run`. Later: RSS, email-in, calendar.
-- **PR4** **Quiet hours:** outbound messages during quiet hours are queued and delivered at the end of quiet hours, unless the agent marks them `urgent` **and** the policy allows urgent sends.
-- **PR5** **Outbound limits:** per-day cap per contact and globally. When hit, messages are queued and the owner gets one notice.
+- **PR3** **Triggers:** generic webhook endpoint per trigger (HMAC-signed URL). The payload is templated into a prompt and runs as a `run`. Later: RSS, email-in, calendar. Locally: `POST http://127.0.0.1:47615/hooks/<agentId>/<triggerId>/<token>`, where the token is an HMAC of agent and trigger under a key in the engine's home. The body (≤ 1 MB) replaces `{{body}}`; an `Idempotency-Key` or `X-Delivery-Id` header makes a retry the same run. Reaching it from the internet needs a tunnel (optional, the user's own).
+- **PR4** **Quiet hours:** outbound messages during quiet hours are queued and delivered at the end of quiet hours, unless the agent marks them `urgent` **and** the policy allows urgent sends (`policies.urgentBypassesQuiet`). Times are in the agent's `timezone` (default: the Mac's).
+- **PR5** **Outbound limits:** per-day cap per contact (`maxOutboundPerContactPerDay`) and globally (`maxOutboundPerDay`). When hit, messages are queued until the next day and the owner gets one notice that day.
 - **PR6** Durable implementation: schedules are pi-durable tasks (`defineTask` + `runtime.sleepUntil`). The cloud uses `PiHarness` alarm projection, and alarms are at-least-once, so every run is idempotent (keyed by `scheduleId + fireTime`).
 
 ## 7. Agent-to-agent

@@ -90,10 +90,13 @@ public struct AssistantItem: Codable, Sendable, Hashable {
     public var error: String?
     public var errorKind: ErrorKind?
     public var errorDetail: String?
+    /// An agent's message sent on its own (send_message), from a run (`run_…`) or a person's conversation.
+    public struct Outbound: Codable, Sendable, Hashable { public var from: String; public init(from: String) { self.from = from } }
+    public var outbound: Outbound?
     public var text: String { parts.filter { $0.type == .text }.map(\.text).joined() }
-    public init(id: String, at: String, parts: [AssistantPart], model: String? = nil, usage: Usage? = nil, status: Status, error: String? = nil, errorKind: ErrorKind? = nil, errorDetail: String? = nil) {
+    public init(id: String, at: String, parts: [AssistantPart], model: String? = nil, usage: Usage? = nil, status: Status, error: String? = nil, errorKind: ErrorKind? = nil, errorDetail: String? = nil, outbound: Outbound? = nil) {
         self.id = id; self.at = at; self.parts = parts; self.model = model; self.usage = usage; self.status = status
-        self.error = error; self.errorKind = errorKind; self.errorDetail = errorDetail
+        self.error = error; self.errorKind = errorKind; self.errorDetail = errorDetail; self.outbound = outbound
     }
 }
 
@@ -438,6 +441,29 @@ public struct AgentPerson: Decodable, Sendable, Hashable, Identifiable {
     public var id: String { contactId }
 }
 public struct AgentPeopleResult: Decodable, Sendable { public var people: [AgentPerson] }
+/// The Runs tab (06-agents §6): runs newest first, messages held by quiet hours or the daily limit, what fires next.
+public struct AgentRunsResult: Decodable, Sendable {
+    public struct Run: Decodable, Sendable, Hashable, Identifiable {
+        public var id, kind, source, prompt, firedAt, status: String
+        public var summary: String?
+        public var sent: Int
+        public var costUsd: Double?
+    }
+    public struct Held: Decodable, Sendable, Hashable, Identifiable { public var id, to, text, notBefore, reason: String }
+    public struct Upcoming: Decodable, Sendable, Hashable, Identifiable { public var id, kind, label: String; public var next: String? }
+    public var runs: [Run]
+    public var outbox: [Held]
+    public var upcoming: [Upcoming]
+}
+public struct AgentRunNowParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var scheduleId: String?; public var prompt: String?
+    public init(ref: ContainerRef, scheduleId: String? = nil, prompt: String? = nil) { self.ref = ref; self.scheduleId = scheduleId; self.prompt = prompt }
+}
+public struct AgentRunNowResult: Decodable, Sendable { public var runId: String }
+public struct AgentTriggersResult: Decodable, Sendable {
+    public struct Trigger: Decodable, Sendable, Hashable, Identifiable { public var id, url: String }
+    public var triggers: [Trigger]
+}
 public struct AgentMemoryResult: Decodable, Sendable {
     public struct Partition: Decodable, Sendable, Hashable, Identifiable { public var id, label, bank: String }
     public var provider: String

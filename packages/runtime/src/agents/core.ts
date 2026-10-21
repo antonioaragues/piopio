@@ -10,8 +10,9 @@ import { Type } from "@earendil-works/pi-ai";
 import { configure, defineDoc, defineExtension, defineTool, section, type ConversationId, type Extension, type Harness } from "@earendil-works/pi-durable";
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
+import { Proactivity, type ProactiveState, type RunRecord } from "./proactive.js";
 
-type AgentState = {
+type AgentState = ProactiveState & {
 	/** contact id → conversation id. */
 	people: Record<string, string>;
 	/** conversation id → the memory recalled for its current turn (the system section shows it). */
@@ -46,13 +47,56 @@ export type AgentCoreOptions = {
 	extensions: () => Extension[];
 	context: Context;
 	now?: () => Date;
+	/** Someone was sent a message, or a run started or settled (the app shows them). */
+	onOutbound?: (to: string, text: string, from: string) => void;
+	onRun?: (run: RunRecord) => void;
 };
 
 export class AgentCore {
 	readonly extension: Extension;
+	readonly proactive: Proactivity;
+	private memoryTools: { name: string }[] = [];
 
 	constructor(private readonly options: AgentCoreOptions) {
+		const { harness, context } = options;
+		this.proactive = new Proactivity({
+			harness,
+			context,
+			definition: () => this.def,
+			now: () => (options.now?.() ?? new Date()).getTime(),
+			read: async () => ({ people: {}, recalled: {}, ...((await harness.snapshot(AgentStateDoc, context)) ?? {}) }) as never,
+			write: (change) => harness.commit(async (tx) => change((await tx.doc(AgentStateDoc)) as never), context),
+			person: (id) => this.conversation(id) as never,
+			newConversation: () => this.newConversation(),
+			recallForRun: (conversationId, prompt) => this.recallInto(conversationId, ["owner", "shared"], prompt),
+			onOutbound: (to, text, from) => {
+				// What the agent sent on its own goes to that person's memory too, so later turns know about it.
+				const contact = this.contact(to);
+				if (contact && this.usesMemory) {
+					void this.options
+						.memory()
+						.retain(bankOf(this.def.id, partitionsFor(contact).home), { content: `${this.def.name} (on its own): ${text}`, kind: "message", createdBy: "agent", source: { ref: from, title: this.def.name } })
+						.catch(() => undefined);
+				}
+				options.onOutbound?.(to, text, from);
+			},
+			...(options.onRun ? { onRun: options.onRun } : {}),
+		});
 		this.extension = this.makeExtension();
+	}
+
+	/** Schedules running, runs a previous engine left followed again, held messages flushed. */
+	async start(): Promise<void> {
+		await this.proactive.reconcile();
+		await this.proactive.resumeRuns();
+		await this.proactive.flush().catch(() => 0);
+	}
+
+	/** A conversation with no person (a run, the scheduler), with the agent's model and tools. */
+	private async newConversation(): Promise<ConversationId> {
+		const record = await this.options.harness.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), this.options.context);
+		await this.configure(record.id);
+		return record.id;
 	}
 
 	private get def(): AgentDefinition {
@@ -90,11 +134,20 @@ export class AgentCore {
 	/** Every person's conversation gets the definition's model and tools (after an edit too). */
 	async configure(conversationId: ConversationId): Promise<void> {
 		const { harness, context } = this.options;
+		// Tools the definition doesn't turn on are left out of what the model is offered.
+		const builtin = this.def.tools.builtin;
+		const p = this.proactive.tools;
+		const off = [
+			...(builtin.includes("memory") ? [] : this.memoryTools),
+			...(builtin.includes("send_message") ? [] : [p.send]),
+			...(builtin.includes("schedule") ? [] : [p.schedule, p.list, p.cancel]),
+		];
 		await harness.commit(async (tx) => {
 			await configure(tx, conversationId, {
 				model: modelOf(this.def.models.default),
 				thinkingLevel: this.def.thinking && this.def.thinking !== "off" ? this.def.thinking : null,
 				extensions: [this.extension, ...this.options.extensions()],
+				tools: off.length ? { remove: off } : null,
 			} as never);
 		}, context);
 	}
@@ -102,6 +155,7 @@ export class AgentCore {
 	async configureAll(): Promise<void> {
 		const state = await this.options.harness.snapshot(AgentStateDoc, this.options.context);
 		for (const id of Object.values(state?.people ?? {})) await this.configure(Number(id) as never);
+		await this.proactive.reconcile();
 	}
 
 	people(): Promise<Record<string, string>> {
@@ -112,8 +166,13 @@ export class AgentCore {
 	async beforeTurn(contactId: string, conversationId: ConversationId, text: string): Promise<void> {
 		const contact = this.contact(contactId);
 		if (!contact || !this.usesMemory) return;
-		const { read } = partitionsFor(contact);
-		const banks = read.map((p) => bankOf(this.def.id, p));
+		await this.recallInto(conversationId, partitionsFor(contact).read, text);
+	}
+
+	/** Recalls what's relevant to `text` from `partitions` into the conversation's notes. */
+	private async recallInto(conversationId: ConversationId, partitions: readonly Partition[], text: string): Promise<void> {
+		if (!this.usesMemory) return;
+		const banks = partitions.map((p) => bankOf(this.def.id, p));
 		const provider = this.options.memory();
 		const [hits, standing] = await Promise.all([
 			provider.recall(banks, text, { budgetTokens: 1200 }).catch(() => []),
@@ -143,8 +202,9 @@ export class AgentCore {
 
 	private makeExtension(): Extension {
 		const core = this;
+		// Automatic runs act for the owner.
 		const scope = async (conversationId: ConversationId, context: Context) => {
-			const contact = await core.contactOf(conversationId, context);
+			const contact = (await core.contactOf(conversationId, context)) ?? ((await core.proactive.runOf(conversationId)) ? core.def.contacts.find((c) => c.role === "owner") : undefined);
 			if (!contact) throw new Error("This conversation has no person.");
 			return { contact, ...partitionsFor(contact) };
 		};
@@ -198,14 +258,20 @@ export class AgentCore {
 			},
 		});
 
+		this.memoryTools = [remember, recall, forget];
+		const p = this.proactive.tools;
 		return defineExtension({
 			name: "piopio-agent",
-			tools: [remember, recall, forget],
+			tools: [remember, recall, forget, p.send, p.schedule, p.list, p.cancel],
+			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
 			sections: [
 				section("agent", async (input, context) => {
 					const contact = await core.contactOf(input.conversationId, context);
 					const owner = core.def.contacts.find((c) => c.role === "owner");
-					const who = !contact
+					const run = contact ? undefined : await core.proactive.runOf(input.conversationId);
+					const who = run
+						? `\n\n${core.proactive.runPrompt(run)}`
+						: !contact
 						? ""
 						: contact.role === "owner"
 							? `\n\nYou are talking with ${contact.name}, your owner.`

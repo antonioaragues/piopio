@@ -24,7 +24,7 @@ struct AgentDef: Codable, Equatable {
         var notes: String?
     }
     struct Schedule: Codable, Equatable, Identifiable { var id: String; var cron: String; var tz: String?; var prompt: String; var deliverTo: String? }
-    struct Policies: Codable, Equatable { var quietHours: String?; var maxOutboundPerDay: Int?; var budgetUsdPerMonth: Double?; var requireApproval: [String]?; var unknownSenders: String? }
+    struct Policies: Codable, Equatable { var quietHours: String?; var maxOutboundPerDay: Int?; var maxOutboundPerContactPerDay: Int?; var urgentBypassesQuiet: Bool?; var budgetUsdPerMonth: Double?; var requireApproval: [String]?; var unknownSenders: String? }
     var version: Int
     var id: String
     var slug: String
@@ -33,6 +33,7 @@ struct AgentDef: Codable, Equatable {
     var description: String?
     var models: Models
     var thinking: String?
+    var timezone: String?
     var tools: Tools
     var contacts: [Contact]
     var channels: JSONValue?
@@ -228,7 +229,7 @@ struct AgentPage: View {
     @Binding var selection: String?
     @AppStorage("agentTab") private var tab: Tab = .chat
 
-    enum Tab: String, CaseIterable { case chat = "Chat", conversations = "Conversations", memory = "Memory", definition = "Definition" }
+    enum Tab: String, CaseIterable { case chat = "Chat", conversations = "Conversations", runs = "Runs", memory = "Memory", definition = "Definition" }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -251,6 +252,7 @@ struct AgentPage: View {
             switch tab {
             case .chat: AgentChat(engine: engine, ref: summary.ref, simulated: nil)
             case .conversations: AgentConversations(engine: engine, summary: summary)
+            case .runs: AgentRunsView(engine: engine, summary: summary)
             case .memory: AgentMemoryView(engine: engine, summary: summary)
             case .definition: AgentDefinitionView(engine: engine, summary: summary)
             }
@@ -353,6 +355,168 @@ struct AgentConversations: View {
             people = await engine.agentPeople(summary.ref)
             if selected == nil { selected = people.first(where: { $0.role != "owner" })?.contactId ?? people.first?.contactId }
         }
+    }
+}
+
+/// Runs (06-agents §6, §12): what fires next, messages held by quiet hours or the daily limit, the webhook URLs, and
+/// every run with its outcome and cost. A run opens its own conversation, read-only.
+struct AgentRunsView: View {
+    let engine: EngineController
+    let summary: SessionSummary
+    @State private var result: AgentRunsResult?
+    @State private var triggers: [AgentTriggersResult.Trigger] = []
+    @State private var selected: String?
+    @State private var prompt = ""
+    @State private var error: String?
+
+    var body: some View {
+        HStack(spacing: 0) {
+            List(selection: $selected) {
+                if let result, !result.upcoming.isEmpty {
+                    Section("Next") { ForEach(result.upcoming) { upcoming($0) } }
+                }
+                if let result, !result.outbox.isEmpty {
+                    Section("Held") { ForEach(result.outbox) { held($0) } }
+                }
+                if !triggers.isEmpty {
+                    Section("Webhooks") { ForEach(triggers) { trigger($0) } }
+                }
+                Section("Runs") {
+                    if result?.runs.isEmpty ?? true {
+                        Text("No runs yet. Schedules, the heartbeat, reminders and webhooks start them.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    }
+                    ForEach(result?.runs ?? []) { run in row(run).tag(run.id) }
+                }
+            }
+            .listStyle(.sidebar)
+            .frame(width: 320)
+            .safeAreaInset(edge: .bottom) { runBar }
+            Rectangle().fill(Color.dsLine).frame(width: 0.5)
+            if let id = selected, result?.runs.contains(where: { $0.id == id }) == true {
+                AgentRunTranscript(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: "run:\(id)"))
+            } else {
+                Text("Pick a run to see what the agent did.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: summary.updatedAt) { await load() }
+    }
+
+    private func load() async {
+        result = await engine.agentRuns(summary.ref)
+        triggers = await engine.agentTriggers(summary.ref)
+        if selected == nil { selected = result?.runs.first?.id }
+    }
+
+    private var runBar: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let error { Text(error).font(.system(size: 11.5)).foregroundStyle(Color.dsRed) }
+            HStack {
+                TextField("Run a prompt now", text: $prompt).textFieldStyle(.roundedBorder).onSubmit { runNow(prompt: prompt) }
+                Button("Run") { runNow(prompt: prompt) }.buttonStyle(PillStyle(compact: true)).disabled(prompt.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(10)
+        .background(.bar)
+    }
+
+    private func runNow(scheduleId: String? = nil, prompt: String? = nil) {
+        error = nil
+        Task {
+            do {
+                let id = try await engine.agentRunNow(summary.ref, scheduleId: scheduleId, prompt: prompt?.trimmingCharacters(in: .whitespacesAndNewlines))
+                if prompt != nil { self.prompt = "" }
+                await load()
+                selected = id
+            } catch {
+                self.error = (error as? EngineError)?.message ?? String(describing: error)
+            }
+        }
+    }
+
+    private static let kindIcon = ["schedule": "calendar", "heartbeat": "waveform.path.ecg", "reminder": "bell", "trigger": "bolt", "manual": "play"]
+
+    private func upcoming(_ u: AgentRunsResult.Upcoming) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: Self.kindIcon[u.kind] ?? "clock").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(u.label).font(.system(size: 12.5)).lineLimit(2)
+                if let next = u.next { Text("Next: \(Self.when(next))").font(.system(size: 11)).foregroundStyle(Color.dsFg3) }
+            }
+            Spacer(minLength: 4)
+            if u.kind == "schedule" {
+                Button("Run now") { runNow(scheduleId: u.id) }.buttonStyle(PillStyle(compact: true))
+            }
+        }
+        .selectionDisabled()
+    }
+
+    private func held(_ h: AgentRunsResult.Held) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(h.text).font(.system(size: 12.5)).lineLimit(2)
+            Text("To \(h.to) · \(h.reason == "quiet" ? "quiet hours" : "daily limit") · goes \(Self.when(h.notBefore))").font(.system(size: 11)).foregroundStyle(Color.dsAmber)
+        }
+        .selectionDisabled()
+    }
+
+    private func trigger(_ t: AgentTriggersResult.Trigger) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "bolt").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(t.id).font(.system(size: 12.5, weight: .medium))
+                Text(t.url).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+            }
+            Spacer(minLength: 4)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(t.url, forType: .string)
+            } label: { Image(systemName: "doc.on.doc").font(.system(size: 11)) }
+                .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Copy the URL (POST to it; the body goes into the prompt)")
+        }
+        .selectionDisabled()
+    }
+
+    private func row(_ r: AgentRunsResult.Run) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: Self.kindIcon[r.kind] ?? "clock").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 14).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(r.kind == "heartbeat" ? "Heartbeat" : r.source == "manual" ? "Manual" : r.source).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                    Spacer()
+                    Text(BuildSessionView.relative(r.firedAt)).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                }
+                Text(r.summary ?? (r.status == "running" ? "Running…" : r.prompt)).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(2)
+                HStack(spacing: 6) {
+                    Circle().fill(r.status == "done" ? Color.dsGreen : r.status == "failed" ? Color.dsRed : Color.dsAmber).frame(width: 6, height: 6)
+                    Text([r.status == "done" ? (r.sent > 0 ? "Sent \(r.sent)" : "Nothing sent") : r.status == "failed" ? "Failed" : "Running", r.costUsd.map { $0 < 0.01 ? String(format: "$%.4f", $0) : String(format: "$%.2f", $0) }].compactMap { $0 }.joined(separator: " · "))
+                        .font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                }
+            }
+        }
+        .padding(.vertical, 3)
+    }
+
+    /// "Today 21:00", "Tue 08:00", "23 Oct 09:00".
+    static func when(_ iso: String) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
+        let out = DateFormatter()
+        let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: .now), to: date).day ?? 0
+        out.dateFormat = days == 0 ? "'today' HH:mm" : days == 1 ? "'tomorrow' HH:mm" : days < 7 ? "EEE HH:mm" : "d MMM HH:mm"
+        return out.string(from: date)
+    }
+}
+
+/// A run's conversation: the prompt, its steps and answer. Runs can't be written to.
+struct AgentRunTranscript: View {
+    let engine: EngineController
+    let ref: ContainerRef
+
+    var body: some View {
+        let thread = engine.thread(ref)
+        TranscriptView(document: thread.document)
+            .task(id: ref.key) { await thread.open() }
+            .id(ref.key)
     }
 }
 

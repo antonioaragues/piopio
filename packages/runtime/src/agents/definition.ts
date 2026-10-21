@@ -35,6 +35,8 @@ export const AgentDefinition = Type.Object({
 	slug: Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }),
 	name: Type.String({ minLength: 1, maxLength: 60 }),
 	avatar: Type.Optional(Type.String({ maxLength: 8 })),
+	/** IANA time zone for schedules, quiet hours and daily limits. Default: the machine's. */
+	timezone: Type.Optional(Type.String()),
 	/** One line for the sidebar. */
 	description: Type.Optional(Type.String({ maxLength: 120 })),
 	models: Type.Object({ default: Type.String({ minLength: 1 }), utility: Type.Optional(Type.String()) }),
@@ -69,6 +71,10 @@ export const AgentDefinition = Type.Object({
 		Type.Object({
 			quietHours: Type.Optional(Type.String({ pattern: "^[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]$" })),
 			maxOutboundPerDay: Type.Optional(Type.Integer({ minimum: 0 })),
+			/** The same cap for each person. */
+			maxOutboundPerContactPerDay: Type.Optional(Type.Integer({ minimum: 0 })),
+			/** Messages the agent marks urgent go out during quiet hours (PR4). */
+			urgentBypassesQuiet: Type.Optional(Type.Boolean()),
 			budgetUsdPerMonth: Type.Optional(Type.Number({ minimum: 0 })),
 			requireApproval: Type.Optional(Type.Array(Type.String())),
 			unknownSenders: Type.Optional(Type.Union([Type.Literal("ignore"), Type.Literal("reply_canned"), Type.Literal("ask_owner")])),

@@ -309,6 +309,7 @@ export class Sessions {
 
 	async runtime(ref: ContainerRef): Promise<Runtime> {
 		if (ref.kind === "space" && ref.conversationId) return (await this.space(ref)).view(ref.conversationId);
+		if (ref.kind === "agent" && ref.conversationId?.startsWith("run:")) return (await this.agent(ref)).runView(ref.conversationId.slice(4));
 		if (ref.kind === "agent" && ref.conversationId) return (await this.agent(ref)).view(ref.conversationId.replace(/^person:/, ""));
 		const entry = this.entry(ref);
 		let pending = this.open.get(ref.id);
@@ -489,6 +490,31 @@ export class Sessions {
 		});
 	}
 
+	/** Runs, held messages and what fires next (the Runs tab). */
+	async agentRuns(ref: ContainerRef) {
+		const { runs, outbox, upcoming } = await (await this.agent(ref)).runs();
+		const iso = (t: number) => new Date(t).toISOString();
+		return {
+			runs: runs.map(({ conversationId: _c, deliverTo: _d, ...r }) => r),
+			outbox: outbox.map((o) => ({ id: o.id, to: o.to, text: o.text, notBefore: iso(o.notBefore), reason: o.reason })),
+			upcoming: upcoming.map((u) => ({ id: u.id, kind: u.kind, label: u.label, ...(u.next ? { next: iso(u.next) } : {}) })),
+		};
+	}
+
+	/** Opens every agent, so their schedules, reminders and held messages run while the app is closed (06 §6). */
+	async startAgents(log: (line: string) => void): Promise<void> {
+		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent")) {
+			await this.agent(entry.ref).catch((error: unknown) => log(`Agent ${entry.title}: couldn't start: ${(error as Error).message}`));
+		}
+	}
+
+	/** A webhook trigger (hooks.ts): the agent must exist and have it. */
+	async fireTrigger(agentId: string, triggerId: string, body: string, deliveryId?: string): Promise<{ runId: string }> {
+		if (this.entries.get(agentId)?.ref.kind !== "agent") throw new EngineError("NOT_FOUND", "No such agent.");
+		const run = await (await this.agent({ kind: "agent", id: agentId })).trigger(triggerId, body, deliveryId);
+		return { runId: run.id };
+	}
+
 	agentMemory(ref: ContainerRef) {
 		const def = this.agentDefinition(ref.id).definition;
 		const partitions = [
@@ -511,7 +537,7 @@ export class Sessions {
 	}
 
 	/** The last valid definition: from memory, else from disk (falling back to nothing usable). */
-	private agentDefinition(id: string): { definition: AgentDefinition; instructions: string } {
+	agentDefinition(id: string): { definition: AgentDefinition; instructions: string } {
 		let cached = this.definitions.get(id);
 		if (!cached) {
 			const entry = this.entry({ kind: "agent", id });

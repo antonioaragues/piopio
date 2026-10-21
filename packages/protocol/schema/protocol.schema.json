@@ -274,6 +274,17 @@
 						},
 						"errorDetail": {
 							"type": "string"
+						},
+						"outbound": {
+							"type": "object",
+							"required": [
+								"from"
+							],
+							"properties": {
+								"from": {
+									"type": "string"
+								}
+							}
 						}
 					}
 				},
@@ -1556,6 +1567,17 @@
 										},
 										"errorDetail": {
 											"type": "string"
+										},
+										"outbound": {
+											"type": "object",
+											"required": [
+												"from"
+											],
+											"properties": {
+												"from": {
+													"type": "string"
+												}
+											}
 										}
 									}
 								},
@@ -2581,6 +2603,17 @@
 										},
 										"errorDetail": {
 											"type": "string"
+										},
+										"outbound": {
+											"type": "object",
+											"required": [
+												"from"
+											],
+											"properties": {
+												"from": {
+													"type": "string"
+												}
+											}
 										}
 									}
 								},
@@ -3586,6 +3619,17 @@
 										},
 										"errorDetail": {
 											"type": "string"
+										},
+										"outbound": {
+											"type": "object",
+											"required": [
+												"from"
+											],
+											"properties": {
+												"from": {
+													"type": "string"
+												}
+											}
 										}
 									}
 								},
@@ -4926,6 +4970,17 @@
 													},
 													"errorDetail": {
 														"type": "string"
+													},
+													"outbound": {
+														"type": "object",
+														"required": [
+															"from"
+														],
+														"properties": {
+															"from": {
+																"type": "string"
+															}
+														}
 													}
 												}
 											},
@@ -6247,6 +6302,17 @@
 									},
 									"errorDetail": {
 										"type": "string"
+									},
+									"outbound": {
+										"type": "object",
+										"required": [
+											"from"
+										],
+										"properties": {
+											"from": {
+												"type": "string"
+											}
+										}
 									}
 								}
 							},
@@ -7858,6 +7924,17 @@
 													},
 													"errorDetail": {
 														"type": "string"
+													},
+													"outbound": {
+														"type": "object",
+														"required": [
+															"from"
+														],
+														"properties": {
+															"from": {
+																"type": "string"
+															}
+														}
 													}
 												}
 											},
@@ -8883,6 +8960,17 @@
 													},
 													"errorDetail": {
 														"type": "string"
+													},
+													"outbound": {
+														"type": "object",
+														"required": [
+															"from"
+														],
+														"properties": {
+															"from": {
+																"type": "string"
+															}
+														}
 													}
 												}
 											},
@@ -9888,6 +9976,17 @@
 													},
 													"errorDetail": {
 														"type": "string"
+													},
+													"outbound": {
+														"type": "object",
+														"required": [
+															"from"
+														],
+														"properties": {
+															"from": {
+																"type": "string"
+															}
+														}
 													}
 												}
 											},
@@ -11228,6 +11327,17 @@
 																},
 																"errorDetail": {
 																	"type": "string"
+																},
+																"outbound": {
+																	"type": "object",
+																	"required": [
+																		"from"
+																	],
+																	"properties": {
+																		"from": {
+																			"type": "string"
+																		}
+																	}
 																}
 															}
 														},
@@ -13669,6 +13779,17 @@
 									},
 									"errorDetail": {
 										"type": "string"
+									},
+									"outbound": {
+										"type": "object",
+										"required": [
+											"from"
+										],
+										"properties": {
+											"from": {
+												"type": "string"
+											}
+										}
 									}
 								}
 							},
@@ -15039,6 +15160,17 @@
 											},
 											"errorDetail": {
 												"type": "string"
+											},
+											"outbound": {
+												"type": "object",
+												"required": [
+													"from"
+												],
+												"properties": {
+													"from": {
+														"type": "string"
+													}
+												}
 											}
 										}
 									},
@@ -21462,6 +21594,343 @@
 								"type": "string"
 							},
 							"preview": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"agents.runs.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"agents.runs.result": {
+			"type": "object",
+			"required": [
+				"runs",
+				"outbox",
+				"upcoming"
+			],
+			"properties": {
+				"runs": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"kind",
+							"source",
+							"prompt",
+							"firedAt",
+							"status",
+							"sent"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "schedule"
+									},
+									{
+										"type": "string",
+										"const": "heartbeat"
+									},
+									{
+										"type": "string",
+										"const": "reminder"
+									},
+									{
+										"type": "string",
+										"const": "trigger"
+									},
+									{
+										"type": "string",
+										"const": "manual"
+									}
+								]
+							},
+							"source": {
+								"type": "string"
+							},
+							"prompt": {
+								"type": "string"
+							},
+							"firedAt": {
+								"type": "string"
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "running"
+									},
+									{
+										"type": "string",
+										"const": "done"
+									},
+									{
+										"type": "string",
+										"const": "failed"
+									}
+								]
+							},
+							"summary": {
+								"type": "string"
+							},
+							"sent": {
+								"type": "number"
+							},
+							"costUsd": {
+								"type": "number"
+							}
+						}
+					}
+				},
+				"outbox": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"to",
+							"text",
+							"notBefore",
+							"reason"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"to": {
+								"type": "string"
+							},
+							"text": {
+								"type": "string"
+							},
+							"notBefore": {
+								"type": "string"
+							},
+							"reason": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "quiet"
+									},
+									{
+										"type": "string",
+										"const": "limit"
+									}
+								]
+							}
+						}
+					}
+				},
+				"upcoming": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"kind",
+							"label"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "schedule"
+									},
+									{
+										"type": "string",
+										"const": "heartbeat"
+									},
+									{
+										"type": "string",
+										"const": "reminder"
+									}
+								]
+							},
+							"label": {
+								"type": "string"
+							},
+							"next": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"agents.runNow.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"scheduleId": {
+					"type": "string"
+				},
+				"prompt": {
+					"type": "string"
+				}
+			}
+		},
+		"agents.runNow.result": {
+			"type": "object",
+			"required": [
+				"runId"
+			],
+			"properties": {
+				"runId": {
+					"type": "string"
+				}
+			}
+		},
+		"agents.triggers.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"agents.triggers.result": {
+			"type": "object",
+			"required": [
+				"triggers"
+			],
+			"properties": {
+				"triggers": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"url"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"url": {
 								"type": "string"
 							}
 						}

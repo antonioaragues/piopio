@@ -493,6 +493,19 @@ final class EngineController {
         (try? await client?.call("agents.conversations", RefParams(ref: ref), as: AgentPeopleResult.self).people) ?? []
     }
 
+    func agentRuns(_ ref: ContainerRef) async -> AgentRunsResult? {
+        try? await client?.call("agents.runs", RefParams(ref: ref), as: AgentRunsResult.self)
+    }
+
+    func agentRunNow(_ ref: ContainerRef, scheduleId: String? = nil, prompt: String? = nil) async throws -> String {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("agents.runNow", AgentRunNowParams(ref: ref, scheduleId: scheduleId, prompt: prompt), as: AgentRunNowResult.self).runId
+    }
+
+    func agentTriggers(_ ref: ContainerRef) async -> [AgentTriggersResult.Trigger] {
+        (try? await client?.call("agents.triggers", RefParams(ref: ref), as: AgentTriggersResult.self).triggers) ?? []
+    }
+
     func agentMemory(_ ref: ContainerRef) async -> AgentMemoryResult? {
         try? await client?.call("agents.memory", RefParams(ref: ref), as: AgentMemoryResult.self)
     }

@@ -5,7 +5,7 @@ import SwiftUI
 
 /// The Definition tab (06-agents AD1, AD3, docs/design 6a): a form over agent.json and instructions.md, or the JSON
 /// itself. Saving validates first; errors show at the top with their path. Each save is a commit in the folder's git
-/// history, listed below. Schedules, heartbeat and channels are saved now and run from milestone 4.3.
+/// history, listed below. Schedules, the heartbeat, triggers and policies run (milestone 4.3); channels come later.
 struct AgentDefinitionView: View {
     let engine: EngineController
     let summary: SessionSummary
@@ -184,7 +184,7 @@ struct AgentDefinitionView: View {
     }
 
     private var schedules: some View {
-        section("Schedules", "cron (minute hour day month weekday) · they run from milestone 4.3") {
+        section("Schedules", "cron (minute hour day month weekday), in the agent's time zone · Runs shows each fire") {
             ForEach(Array((def?.schedules ?? []).enumerated()), id: \.offset) { i, _ in
                 HStack(spacing: 6) {
                     TextField("id", text: scheduleBinding(i, \.id)).textFieldStyle(.roundedBorder).frame(width: 90).font(.system(size: 12, design: .monospaced))
@@ -203,13 +203,23 @@ struct AgentDefinitionView: View {
     }
 
     private var policies: some View {
-        section("Policies", "Enforced from milestones 4.3–4.4") {
+        section("Policies", "Quiet hours and limits hold what the agent sends on its own until it may go") {
             HStack(spacing: 12) {
+                labeled("Time zone") {
+                    TextField(TimeZone.current.identifier, text: Binding(get: { def?.timezone ?? "" }, set: { def?.timezone = $0.isEmpty ? nil : $0 }))
+                        .textFieldStyle(.roundedBorder).frame(width: 130)
+                }
                 labeled("Quiet hours") { TextField("22:30-07:30", text: policy(\.quietHours)).textFieldStyle(.roundedBorder).frame(width: 110) }
                 labeled("Messages a day") {
                     TextField("20", text: Binding(get: { def?.policies?.maxOutboundPerDay.map(String.init) ?? "" }, set: { v in var p = def?.policies ?? .init(); p.maxOutboundPerDay = Int(v); def?.policies = p }))
                         .textFieldStyle(.roundedBorder).frame(width: 60)
                 }
+                labeled("Per person") {
+                    TextField("5", text: Binding(get: { def?.policies?.maxOutboundPerContactPerDay.map(String.init) ?? "" }, set: { v in var p = def?.policies ?? .init(); p.maxOutboundPerContactPerDay = Int(v); def?.policies = p }))
+                        .textFieldStyle(.roundedBorder).frame(width: 50)
+                }
+            }
+            HStack(spacing: 12) {
                 labeled("Budget $/month") {
                     TextField("15", text: Binding(get: { def?.policies?.budgetUsdPerMonth.map { String(format: "%g", $0) } ?? "" }, set: { v in var p = def?.policies ?? .init(); p.budgetUsdPerMonth = Double(v); def?.policies = p }))
                         .textFieldStyle(.roundedBorder).frame(width: 60)
@@ -222,6 +232,8 @@ struct AgentDefinitionView: View {
                     }
                     .labelsHidden().fixedSize()
                 }
+                Toggle("Urgent messages ignore quiet hours", isOn: Binding(get: { def?.policies?.urgentBypassesQuiet ?? false }, set: { v in var p = def?.policies ?? .init(); p.urgentBypassesQuiet = v ? true : nil; def?.policies = p }))
+                    .toggleStyle(.checkbox).font(.system(size: 12))
             }
         }
     }

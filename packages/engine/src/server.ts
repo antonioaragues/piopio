@@ -23,6 +23,7 @@ import { ChatResources } from "./tools/chat-resources.js";
 import { Packages } from "./packages.js";
 import { MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
+import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -38,6 +39,8 @@ export type EngineOptions = {
 	trashDir?: string;
 	/** Where agent folders go (tests); default ~/Piopio/Agents or PIOPIO_AGENTS_DIR. */
 	agentsDir?: string;
+	/** The webhook triggers' port (0: any free one, tests); default PIOPIO_HOOKS_PORT or 47615. */
+	hooksPort?: number;
 	/** Let web_fetch read localhost (tests). */
 	allowPrivateFetch?: boolean;
 	log?: (line: string) => void;
@@ -56,6 +59,7 @@ export class Engine {
 	readonly packages: Packages;
 	readonly chatResources: ChatResources;
 	readonly memory: MemoryProviders;
+	readonly hooks: Hooks;
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
@@ -94,6 +98,7 @@ export class Engine {
 		this.packages.onChange(() => void this.chatResources.reload());
 		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp, resources: this.chatResources };
 		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory };
+		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp) void this.chatMcp.reset();
 		});
@@ -132,6 +137,9 @@ export class Engine {
 		const folders = () => this.projects.list().filter((p) => !p.missing).map((p) => p.path);
 		for (const cwd of folders()) void this.sessions.syncFolder(cwd);
 		this.sessions.watchPiSessions(folders);
+		// Agents: webhook triggers, then every agent's schedules (they run with the app closed).
+		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
+		void this.sessions.startAgents(this.log);
 	}
 
 	async stop(): Promise<void> {
@@ -139,6 +147,7 @@ export class Engine {
 		for (const off of this.subscriptions.values()) off();
 		this.subscriptions.clear();
 		await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()));
+		await this.hooks.close();
 		await this.sessions.closeAll();
 		await this.chatMcp.close();
 		await this.memory.reset();
@@ -458,6 +467,21 @@ export class Engine {
 			case "agents.conversations": {
 				const p = params as Params<"agents.conversations">;
 				return { people: await this.sessions.agentConversations(p.ref) } satisfies Result<"agents.conversations">;
+			}
+			case "agents.runs": {
+				const p = params as Params<"agents.runs">;
+				return (await this.sessions.agentRuns(p.ref)) satisfies Result<"agents.runs">;
+			}
+			case "agents.runNow": {
+				const p = params as Params<"agents.runNow">;
+				const run = await (await this.sessions.agent(p.ref)).runNow(p.scheduleId, p.prompt);
+				return { runId: run.id } satisfies Result<"agents.runNow">;
+			}
+			case "agents.triggers": {
+				const p = params as Params<"agents.triggers">;
+				const def = this.sessions.agentDefinition(p.ref.id).definition;
+				if (!this.hooks.port) throw new EngineError("INTERNAL", "Webhook triggers are off (the port couldn't be opened).");
+				return { triggers: (def.triggers ?? []).map((t) => ({ id: t.id, url: this.hooks.url(p.ref.id, t.id) })) } satisfies Result<"agents.triggers">;
 			}
 			case "agents.memory": {
 				const p = params as Params<"agents.memory">;
