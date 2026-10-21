@@ -64,6 +64,13 @@ enum DebugAutomation {
                 guard let ref = try? await engine.createAgent(name: "Coach", template: template.isEmpty ? nil : template, avatar: "") else { return }
                 UserDefaults.standard.set(ref.id, forKey: "agentSelection")
                 NotificationCenter.default.post(name: .setMode, object: AppMode.agents)
+                // PIOPIO_DEMO_AGENT_PEER=<name>: a second agent that Coach may ask (06-agents §7).
+                if let peerName = env["PIOPIO_DEMO_AGENT_PEER"], let peer = try? await engine.createAgent(name: peerName, template: nil, avatar: "📒"),
+                   let got = await engine.agentDefinition(ref), var def = AgentDef(got.definition) {
+                    def.tools.agents = [peer.id]
+                    _ = try? await engine.saveAgent(ref, definition: def.json, instructions: got.instructions, message: "Let Coach ask \(peerName)")
+                    try? await engine.refreshCatalog()
+                }
                 if let contact = env["PIOPIO_DEMO_AGENT_CONTACT"], let got = await engine.agentDefinition(ref), var def = AgentDef(got.definition) {
                     def.contacts.append(.init(id: "maria", name: contact, role: "contact"))
                     // PIOPIO_DEMO_AGENT_APPROVE: approval rules (comma-separated), e.g. send_message:to_non_owner.
@@ -91,6 +98,11 @@ enum DebugAutomation {
                 for prompt in (env["PIOPIO_DEMO_AGENT_RUNS"] ?? "").components(separatedBy: "||") where !prompt.isEmpty {
                     _ = try? await engine.agentRunNow(ref, prompt: prompt.replacingOccurrences(of: "\\n", with: "\n"))
                     try? await Task.sleep(for: .milliseconds(1500))
+                }
+                // PIOPIO_DEMO_TRACE=1: then open the trace of the last message between agents.
+                if env["PIOPIO_DEMO_TRACE"] == "1" {
+                    let trace = owner.document.items.reversed().compactMap { item -> String? in if case .agentMsg(let m) = item { m.traceId } else { nil } }.first
+                    if let trace { NotificationCenter.default.post(name: .openTrace, object: trace) }
                 }
                 // PIOPIO_DEMO_INBOX=1: then show the Inbox.
                 if env["PIOPIO_DEMO_INBOX"] == "1" { NotificationCenter.default.post(name: .openInbox, object: nil) }

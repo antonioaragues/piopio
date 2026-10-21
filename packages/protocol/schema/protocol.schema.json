@@ -1201,6 +1201,122 @@
 							}
 						}
 					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"id",
+						"at",
+						"fromAgent",
+						"toAgent",
+						"text",
+						"direction",
+						"mode"
+					],
+					"properties": {
+						"kind": {
+							"type": "string",
+							"const": "agent_msg"
+						},
+						"id": {
+							"type": "string"
+						},
+						"at": {
+							"type": "string"
+						},
+						"fromAgent": {
+							"type": "object",
+							"required": [
+								"id",
+								"name"
+							],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								}
+							}
+						},
+						"toAgent": {
+							"type": "object",
+							"required": [
+								"id",
+								"name"
+							],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								}
+							}
+						},
+						"text": {
+							"type": "string"
+						},
+						"direction": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "in"
+								},
+								{
+									"type": "string",
+									"const": "out"
+								}
+							]
+						},
+						"mode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "tell"
+								},
+								{
+									"type": "string",
+									"const": "reply"
+								}
+							]
+						},
+						"status": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "waiting"
+								},
+								{
+									"type": "string",
+									"const": "replied"
+								},
+								{
+									"type": "string",
+									"const": "no_reply"
+								},
+								{
+									"type": "string",
+									"const": "sent"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								}
+							]
+						},
+						"reply": {
+							"type": "string"
+						},
+						"traceId": {
+							"type": "string"
+						}
+					}
 				}
 			]
 		},
@@ -2677,6 +2793,122 @@
 											}
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"fromAgent",
+										"toAgent",
+										"text",
+										"direction",
+										"mode"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "agent_msg"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"fromAgent": {
+											"type": "object",
+											"required": [
+												"id",
+												"name"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												}
+											}
+										},
+										"toAgent": {
+											"type": "object",
+											"required": [
+												"id",
+												"name"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												}
+											}
+										},
+										"text": {
+											"type": "string"
+										},
+										"direction": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "in"
+												},
+												{
+													"type": "string",
+													"const": "out"
+												}
+											]
+										},
+										"mode": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "ask"
+												},
+												{
+													"type": "string",
+													"const": "tell"
+												},
+												{
+													"type": "string",
+													"const": "reply"
+												}
+											]
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "waiting"
+												},
+												{
+													"type": "string",
+													"const": "replied"
+												},
+												{
+													"type": "string",
+													"const": "no_reply"
+												},
+												{
+													"type": "string",
+													"const": "sent"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"reply": {
+											"type": "string"
+										},
+										"traceId": {
+											"type": "string"
+										}
+									}
 								}
 							]
 						},
@@ -3896,6 +4128,122 @@
 											}
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"fromAgent",
+										"toAgent",
+										"text",
+										"direction",
+										"mode"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "agent_msg"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"fromAgent": {
+											"type": "object",
+											"required": [
+												"id",
+												"name"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												}
+											}
+										},
+										"toAgent": {
+											"type": "object",
+											"required": [
+												"id",
+												"name"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												}
+											}
+										},
+										"text": {
+											"type": "string"
+										},
+										"direction": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "in"
+												},
+												{
+													"type": "string",
+													"const": "out"
+												}
+											]
+										},
+										"mode": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "ask"
+												},
+												{
+													"type": "string",
+													"const": "tell"
+												},
+												{
+													"type": "string",
+													"const": "reply"
+												}
+											]
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "waiting"
+												},
+												{
+													"type": "string",
+													"const": "replied"
+												},
+												{
+													"type": "string",
+													"const": "no_reply"
+												},
+												{
+													"type": "string",
+													"const": "sent"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"reply": {
+											"type": "string"
+										},
+										"traceId": {
+											"type": "string"
+										}
+									}
 								}
 							]
 						}
@@ -5093,6 +5441,122 @@
 													"type": "string"
 												}
 											}
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"fromAgent",
+										"toAgent",
+										"text",
+										"direction",
+										"mode"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "agent_msg"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"fromAgent": {
+											"type": "object",
+											"required": [
+												"id",
+												"name"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												}
+											}
+										},
+										"toAgent": {
+											"type": "object",
+											"required": [
+												"id",
+												"name"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												}
+											}
+										},
+										"text": {
+											"type": "string"
+										},
+										"direction": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "in"
+												},
+												{
+													"type": "string",
+													"const": "out"
+												}
+											]
+										},
+										"mode": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "ask"
+												},
+												{
+													"type": "string",
+													"const": "tell"
+												},
+												{
+													"type": "string",
+													"const": "reply"
+												}
+											]
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "waiting"
+												},
+												{
+													"type": "string",
+													"const": "replied"
+												},
+												{
+													"type": "string",
+													"const": "no_reply"
+												},
+												{
+													"type": "string",
+													"const": "sent"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										},
+										"reply": {
+											"type": "string"
+										},
+										"traceId": {
+											"type": "string"
 										}
 									}
 								}
@@ -6629,6 +7093,122 @@
 														}
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"fromAgent",
+													"toAgent",
+													"text",
+													"direction",
+													"mode"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "agent_msg"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"fromAgent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"toAgent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"text": {
+														"type": "string"
+													},
+													"direction": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "in"
+															},
+															{
+																"type": "string",
+																"const": "out"
+															}
+														]
+													},
+													"mode": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "ask"
+															},
+															{
+																"type": "string",
+																"const": "tell"
+															},
+															{
+																"type": "string",
+																"const": "reply"
+															}
+														]
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "waiting"
+															},
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "no_reply"
+															},
+															{
+																"type": "string",
+																"const": "sent"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"reply": {
+														"type": "string"
+													},
+													"traceId": {
+														"type": "string"
+													}
+												}
 											}
 										]
 									}
@@ -8142,6 +8722,122 @@
 												"type": "string"
 											}
 										}
+									}
+								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"fromAgent",
+									"toAgent",
+									"text",
+									"direction",
+									"mode"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "agent_msg"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"fromAgent": {
+										"type": "object",
+										"required": [
+											"id",
+											"name"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"name": {
+												"type": "string"
+											}
+										}
+									},
+									"toAgent": {
+										"type": "object",
+										"required": [
+											"id",
+											"name"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"name": {
+												"type": "string"
+											}
+										}
+									},
+									"text": {
+										"type": "string"
+									},
+									"direction": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "in"
+											},
+											{
+												"type": "string",
+												"const": "out"
+											}
+										]
+									},
+									"mode": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "ask"
+											},
+											{
+												"type": "string",
+												"const": "tell"
+											},
+											{
+												"type": "string",
+												"const": "reply"
+											}
+										]
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "waiting"
+											},
+											{
+												"type": "string",
+												"const": "replied"
+											},
+											{
+												"type": "string",
+												"const": "no_reply"
+											},
+											{
+												"type": "string",
+												"const": "sent"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											}
+										]
+									},
+									"reply": {
+										"type": "string"
+									},
+									"traceId": {
+										"type": "string"
 									}
 								}
 							}
@@ -9974,6 +10670,122 @@
 														}
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"fromAgent",
+													"toAgent",
+													"text",
+													"direction",
+													"mode"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "agent_msg"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"fromAgent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"toAgent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"text": {
+														"type": "string"
+													},
+													"direction": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "in"
+															},
+															{
+																"type": "string",
+																"const": "out"
+															}
+														]
+													},
+													"mode": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "ask"
+															},
+															{
+																"type": "string",
+																"const": "tell"
+															},
+															{
+																"type": "string",
+																"const": "reply"
+															}
+														]
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "waiting"
+															},
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "no_reply"
+															},
+															{
+																"type": "string",
+																"const": "sent"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"reply": {
+														"type": "string"
+													},
+													"traceId": {
+														"type": "string"
+													}
+												}
 											}
 										]
 									},
@@ -11193,6 +12005,122 @@
 														}
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"fromAgent",
+													"toAgent",
+													"text",
+													"direction",
+													"mode"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "agent_msg"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"fromAgent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"toAgent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"text": {
+														"type": "string"
+													},
+													"direction": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "in"
+															},
+															{
+																"type": "string",
+																"const": "out"
+															}
+														]
+													},
+													"mode": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "ask"
+															},
+															{
+																"type": "string",
+																"const": "tell"
+															},
+															{
+																"type": "string",
+																"const": "reply"
+															}
+														]
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "waiting"
+															},
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "no_reply"
+															},
+															{
+																"type": "string",
+																"const": "sent"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"reply": {
+														"type": "string"
+													},
+													"traceId": {
+														"type": "string"
+													}
+												}
 											}
 										]
 									}
@@ -12390,6 +13318,122 @@
 																"type": "string"
 															}
 														}
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"fromAgent",
+													"toAgent",
+													"text",
+													"direction",
+													"mode"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "agent_msg"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"fromAgent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"toAgent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"text": {
+														"type": "string"
+													},
+													"direction": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "in"
+															},
+															{
+																"type": "string",
+																"const": "out"
+															}
+														]
+													},
+													"mode": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "ask"
+															},
+															{
+																"type": "string",
+																"const": "tell"
+															},
+															{
+																"type": "string",
+																"const": "reply"
+															}
+														]
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "waiting"
+															},
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "no_reply"
+															},
+															{
+																"type": "string",
+																"const": "sent"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													},
+													"reply": {
+														"type": "string"
+													},
+													"traceId": {
+														"type": "string"
 													}
 												}
 											}
@@ -13924,6 +14968,122 @@
 																			"type": "string"
 																		}
 																	}
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"fromAgent",
+																"toAgent",
+																"text",
+																"direction",
+																"mode"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "agent_msg"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"fromAgent": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"name"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"name": {
+																			"type": "string"
+																		}
+																	}
+																},
+																"toAgent": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"name"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"name": {
+																			"type": "string"
+																		}
+																	}
+																},
+																"text": {
+																	"type": "string"
+																},
+																"direction": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "in"
+																		},
+																		{
+																			"type": "string",
+																			"const": "out"
+																		}
+																	]
+																},
+																"mode": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "ask"
+																		},
+																		{
+																			"type": "string",
+																			"const": "tell"
+																		},
+																		{
+																			"type": "string",
+																			"const": "reply"
+																		}
+																	]
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "waiting"
+																		},
+																		{
+																			"type": "string",
+																			"const": "replied"
+																		},
+																		{
+																			"type": "string",
+																			"const": "no_reply"
+																		},
+																		{
+																			"type": "string",
+																			"const": "sent"
+																		},
+																		{
+																			"type": "string",
+																			"const": "failed"
+																		}
+																	]
+																},
+																"reply": {
+																	"type": "string"
+																},
+																"traceId": {
+																	"type": "string"
 																}
 															}
 														}
@@ -16617,6 +17777,122 @@
 										}
 									}
 								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"fromAgent",
+									"toAgent",
+									"text",
+									"direction",
+									"mode"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "agent_msg"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"fromAgent": {
+										"type": "object",
+										"required": [
+											"id",
+											"name"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"name": {
+												"type": "string"
+											}
+										}
+									},
+									"toAgent": {
+										"type": "object",
+										"required": [
+											"id",
+											"name"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"name": {
+												"type": "string"
+											}
+										}
+									},
+									"text": {
+										"type": "string"
+									},
+									"direction": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "in"
+											},
+											{
+												"type": "string",
+												"const": "out"
+											}
+										]
+									},
+									"mode": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "ask"
+											},
+											{
+												"type": "string",
+												"const": "tell"
+											},
+											{
+												"type": "string",
+												"const": "reply"
+											}
+										]
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "waiting"
+											},
+											{
+												"type": "string",
+												"const": "replied"
+											},
+											{
+												"type": "string",
+												"const": "no_reply"
+											},
+											{
+												"type": "string",
+												"const": "sent"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											}
+										]
+									},
+									"reply": {
+										"type": "string"
+									},
+									"traceId": {
+										"type": "string"
+									}
+								}
 							}
 						]
 					}
@@ -18179,6 +19455,122 @@
 														"type": "string"
 													}
 												}
+											}
+										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"id",
+											"at",
+											"fromAgent",
+											"toAgent",
+											"text",
+											"direction",
+											"mode"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "agent_msg"
+											},
+											"id": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											},
+											"fromAgent": {
+												"type": "object",
+												"required": [
+													"id",
+													"name"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													}
+												}
+											},
+											"toAgent": {
+												"type": "object",
+												"required": [
+													"id",
+													"name"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													}
+												}
+											},
+											"text": {
+												"type": "string"
+											},
+											"direction": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "in"
+													},
+													{
+														"type": "string",
+														"const": "out"
+													}
+												]
+											},
+											"mode": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "ask"
+													},
+													{
+														"type": "string",
+														"const": "tell"
+													},
+													{
+														"type": "string",
+														"const": "reply"
+													}
+												]
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "waiting"
+													},
+													{
+														"type": "string",
+														"const": "replied"
+													},
+													{
+														"type": "string",
+														"const": "no_reply"
+													},
+													{
+														"type": "string",
+														"const": "sent"
+													},
+													{
+														"type": "string",
+														"const": "failed"
+													}
+												]
+											},
+											"reply": {
+												"type": "string"
+											},
+											"traceId": {
+												"type": "string"
 											}
 										}
 									}
@@ -23858,6 +25250,10 @@
 									{
 										"type": "string",
 										"const": "contact"
+									},
+									{
+										"type": "string",
+										"const": "agent"
 									}
 								]
 							},
@@ -23871,6 +25267,145 @@
 								"type": "string"
 							},
 							"preview": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"agents.trace.params": {
+			"type": "object",
+			"required": [
+				"traceId"
+			],
+			"properties": {
+				"traceId": {
+					"type": "string"
+				}
+			}
+		},
+		"agents.trace.result": {
+			"type": "object",
+			"required": [
+				"traceId",
+				"costUsd",
+				"hops"
+			],
+			"properties": {
+				"traceId": {
+					"type": "string"
+				},
+				"costUsd": {
+					"type": "number"
+				},
+				"hops": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"hop",
+							"mode",
+							"from",
+							"to",
+							"text",
+							"at",
+							"status"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"parent": {
+								"type": "string"
+							},
+							"hop": {
+								"type": "number"
+							},
+							"mode": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "ask"
+									},
+									{
+										"type": "string",
+										"const": "tell"
+									},
+									{
+										"type": "string",
+										"const": "reply"
+									}
+								]
+							},
+							"from": {
+								"type": "object",
+								"required": [
+									"id",
+									"name"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									}
+								}
+							},
+							"to": {
+								"type": "object",
+								"required": [
+									"id",
+									"name"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									}
+								}
+							},
+							"text": {
+								"type": "string"
+							},
+							"reply": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "waiting"
+									},
+									{
+										"type": "string",
+										"const": "replied"
+									},
+									{
+										"type": "string",
+										"const": "no_reply"
+									},
+									{
+										"type": "string",
+										"const": "sent"
+									},
+									{
+										"type": "string",
+										"const": "failed"
+									}
+								]
+							},
+							"costUsd": {
+								"type": "number"
+							},
+							"error": {
 								"type": "string"
 							}
 						}

@@ -25,7 +25,7 @@ import { AgentRuntime } from "./runtimes/agent.js";
 import type { AgentFiles } from "./agent-files.js";
 import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
-import { alwaysLabel, newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError } from "@piopio/runtime";
+import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
@@ -94,6 +94,8 @@ export class Sessions {
 	private aboutMeExtensions = new Map<"thread" | "space", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
+	/** How long ask_agent waits (tests shorten it). */
+	agentAskTimeoutMs?: number;
 	/** The Inbox changed (badges), with the approval an agent just asked for (notifications). */
 	onInbox?: (change: { count: number; approval?: { agent: ContainerRef; agentName: string; approvalId: string; title: string } }) => void;
 
@@ -313,6 +315,7 @@ export class Sessions {
 	async runtime(ref: ContainerRef): Promise<Runtime> {
 		if (ref.kind === "space" && ref.conversationId) return (await this.space(ref)).view(ref.conversationId);
 		if (ref.kind === "agent" && ref.conversationId?.startsWith("run:")) return (await this.agent(ref)).runView(ref.conversationId.slice(4));
+		if (ref.kind === "agent" && ref.conversationId?.startsWith("agent:")) return (await this.agent(ref)).peerView(ref.conversationId.slice(6));
 		if (ref.kind === "agent" && ref.conversationId) return (await this.agent(ref)).view(ref.conversationId.replace(/^person:/, ""));
 		const entry = this.entry(ref);
 		let pending = this.open.get(ref.id);
@@ -486,11 +489,14 @@ export class Sessions {
 
 	async agentConversations(ref: ContainerRef) {
 		const def = this.agentDefinition(ref.id).definition;
-		const people = await (await this.agent(ref)).people();
-		return def.contacts.map((c) => {
+		const runtime = await this.agent(ref);
+		const people = await runtime.people();
+		const humans = def.contacts.map((c) => {
 			const p = people.find((x) => x.contactId === c.id);
 			return { contactId: c.id, name: c.name, role: c.role, conversationId: `person:${c.id}`, started: p?.started ?? false, ...(p?.lastAt ? { lastAt: p.lastAt } : {}), ...(p?.preview ? { preview: p.preview } : {}) };
 		});
+		const agents = (await runtime.peers()).map((a) => ({ contactId: `agent:${a.id}`, name: a.name, role: "agent" as const, conversationId: `agent:${a.id}`, started: true, ...(a.lastAt ? { lastAt: a.lastAt } : {}), ...(a.preview ? { preview: a.preview } : {}) }));
+		return [...humans, ...agents];
 	}
 
 	/** Runs, held messages and what fires next (the Runs tab). */
@@ -510,6 +516,65 @@ export class Sessions {
 			await this.agent(entry.ref).catch((error: unknown) => log(`Agent ${entry.title}: couldn't start: ${(error as Error).message}`));
 			await this.agentStatus(entry);
 		}
+	}
+
+	/** Agents reaching each other in this engine (06 §7 AA7): who they are, delivery, a trace's cost, shared memory. */
+	private peerHost() {
+		const agents = () => [...this.entries.values()].filter((e) => e.ref.kind === "agent");
+		const defOf = (id: string) => {
+			try {
+				return this.agentDefinition(id).definition;
+			} catch {
+				return undefined;
+			}
+		};
+		return {
+			directory: async () =>
+				agents().flatMap((e) => {
+					const def = defOf(e.ref.id);
+					return def ? [{ id: def.id, slug: def.slug, name: def.name, ...(def.acceptFrom ? { acceptFrom: def.acceptFrom } : {}) }] : [];
+				}),
+			deliver: async (to: string, envelope: Envelope) => {
+				if (this.entries.get(to)?.ref.kind !== "agent") throw new Error("No such agent.");
+				await (await this.agent({ kind: "agent", id: to })).core.peers.receive(envelope);
+			},
+			traceCost: async (traceId: string) => (await this.traceLogs(traceId)).reduce((n, l) => n + (l.costUsd ?? 0), 0),
+			sharedBanks: async (agentId: string) => {
+				const me = defOf(agentId);
+				return agents().flatMap((e) => {
+					const share = defOf(e.ref.id)?.shareMemory;
+					const parts = share?.[agentId] ?? (me ? share?.[me.slug] : undefined) ?? [];
+					return e.ref.id === agentId ? [] : parts.map((p) => `${e.ref.id}/${p}`);
+				});
+			},
+		};
+	}
+
+	/** A trace's messages from every agent's log: the receiver's entry (with its answer and cost) wins. */
+	private async traceLogs(traceId: string): Promise<PeerLog[]> {
+		const byId = new Map<string, PeerLog>();
+		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent")) {
+			const runtime = await this.agent(entry.ref).catch(() => undefined);
+			for (const l of (await runtime?.core.peers.logs()) ?? []) {
+				if (l.traceId !== traceId) continue;
+				const had = byId.get(l.id);
+				if (!had || l.side === "in") byId.set(l.id, had && l.side === "in" ? { ...had, ...l, reply: l.reply ?? had.reply } : l);
+			}
+		}
+		return [...byId.values()].sort((a, b) => a.at.localeCompare(b.at));
+	}
+
+	/** The trace view (AA5). */
+	async agentTrace(traceId: string) {
+		const logs = await this.traceLogs(traceId);
+		if (!logs.length) throw new EngineError("NOT_FOUND", "No such trace.");
+		return {
+			traceId,
+			costUsd: logs.reduce((n, l) => n + (l.costUsd ?? 0), 0),
+			hops: logs
+				.filter((l) => l.mode !== "reply")
+				.map((l) => ({ id: l.id, ...(l.parent ? { parent: l.parent } : {}), hop: l.hop, mode: l.mode, from: l.from, to: l.to, text: l.text, ...(l.reply ? { reply: l.reply } : {}), at: l.at, status: l.status, ...(l.costUsd !== undefined ? { costUsd: l.costUsd } : {}), ...(l.error ? { error: l.error } : {}) })),
+		};
 	}
 
 	/** Pause, spend and the Inbox count, from the running agent into the catalog (sidebar, header, badges). */
@@ -984,6 +1049,8 @@ export class Sessions {
 				webOptions: this.webOptions,
 				onActivity: () => this.touch(entry.ref),
 				...(this.agentHost?.app ? { appTool: (call: Parameters<AppServices["tool"]>[0]) => this.agentHost!.app!.tool(call) } : {}),
+				peers: this.peerHost(),
+				...(this.agentAskTimeoutMs ? { askTimeoutMs: this.agentAskTimeoutMs } : {}),
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {
 					if (approval.status === "pending") this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });

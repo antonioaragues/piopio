@@ -6,4 +6,5 @@ export * from "./agents/core.js";
 export * from "./agents/proactive.js";
 export * from "./agents/safety.js";
 export * from "./agents/apple.js";
+export * from "./agents/peers.js";
 export * from "./agents/time.js";

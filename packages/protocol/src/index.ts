@@ -222,12 +222,28 @@ export const ResultItem = Type.Object({
 	card: Type.Object({ kind: literals("reminder", "message", "memory", "event", "contact", "note", "music", "shortcut"), title: Type.String(), detail: Type.Optional(Type.String()) }),
 	undo: Type.Optional(Type.Object({ id: Type.String(), status: literals("available", "undone", "failed", "expired"), until: Type.String() })),
 });
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem, ApprovalItem, ResultItem]);
+/** A message between two of the owner's agents (06-agents §7 AA5): sent (`out`, with the answer once it comes) or received (`in`). */
+export const AgentMsgItem = Type.Object({
+	kind: Type.Literal("agent_msg"),
+	id: Type.String(),
+	at: Type.String(),
+	fromAgent: Type.Object({ id: Type.String(), name: Type.String() }),
+	toAgent: Type.Object({ id: Type.String(), name: Type.String() }),
+	text: Type.String(),
+	direction: literals("in", "out"),
+	mode: literals("ask", "tell", "reply"),
+	status: Type.Optional(literals("waiting", "replied", "no_reply", "sent", "failed")),
+	reply: Type.Optional(Type.String()),
+	/** Opens the trace view (`agents.trace`). */
+	traceId: Type.Optional(Type.String()),
+});
+export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem, ApprovalItem, ResultItem, AgentMsgItem]);
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
 export type ApprovalItem = Static<typeof ApprovalItem>;
 export type ResultItem = Static<typeof ResultItem>;
+export type AgentMsgItem = Static<typeof AgentMsgItem>;
 export type ToolItem = Static<typeof ToolItem>;
 export type SystemItem = Static<typeof SystemItem>;
 export type CheckpointItem = Static<typeof CheckpointItem>;
@@ -972,7 +988,32 @@ export const methods = {
 	"agents.conversations": {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({
-			people: Type.Array(Type.Object({ contactId: Type.String(), name: Type.String(), role: literals("owner", "contact"), conversationId: Type.String(), started: Type.Boolean(), lastAt: Type.Optional(Type.String()), preview: Type.Optional(Type.String()) })),
+			/** People, then other agents it has talked with (`agent:<id>`, read-only). */
+			people: Type.Array(Type.Object({ contactId: Type.String(), name: Type.String(), role: literals("owner", "contact", "agent"), conversationId: Type.String(), started: Type.Boolean(), lastAt: Type.Optional(Type.String()), preview: Type.Optional(Type.String()) })),
+		}),
+	},
+	/** A trace (AA5): every message between agents it holds, as a tree (`parent`), with what answering cost. */
+	"agents.trace": {
+		params: Type.Object({ traceId: Type.String() }),
+		result: Type.Object({
+			traceId: Type.String(),
+			costUsd: Type.Number(),
+			hops: Type.Array(
+				Type.Object({
+					id: Type.String(),
+					parent: Type.Optional(Type.String()),
+					hop: Type.Number(),
+					mode: literals("ask", "tell", "reply"),
+					from: Type.Object({ id: Type.String(), name: Type.String() }),
+					to: Type.Object({ id: Type.String(), name: Type.String() }),
+					text: Type.String(),
+					reply: Type.Optional(Type.String()),
+					at: Type.String(),
+					status: literals("waiting", "replied", "no_reply", "sent", "failed"),
+					costUsd: Type.Optional(Type.Number()),
+					error: Type.Optional(Type.String()),
+				}),
+			),
 		}),
 	},
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */

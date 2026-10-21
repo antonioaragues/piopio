@@ -40,6 +40,8 @@ export type EngineOptions = {
 	trashDir?: string;
 	/** Where agent folders go (tests); default ~/Piopio/Agents or PIOPIO_AGENTS_DIR. */
 	agentsDir?: string;
+	/** How long ask_agent waits for another agent (tests); default 10 minutes. */
+	agentAskTimeoutMs?: number;
 	/** The webhook triggers' port (0: any free one, tests); default PIOPIO_HOOKS_PORT or 47615. */
 	hooksPort?: number;
 	/** Let web_fetch read localhost (tests). */
@@ -103,6 +105,7 @@ export class Engine {
 		this.packages.onChange(() => void this.chatResources.reload());
 		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp, resources: this.chatResources };
 		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory, app: this.app };
+		if (options.agentAskTimeoutMs) this.sessions.agentAskTimeoutMs = options.agentAskTimeoutMs;
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp) void this.chatMcp.reset();
@@ -522,6 +525,10 @@ export class Engine {
 				const p = params as Params<"agents.pause">;
 				await (await this.sessions.agent(p.ref)).core.safety.setPaused(p.paused);
 				return {} satisfies Result<"agents.pause">;
+			}
+			case "agents.trace": {
+				const p = params as Params<"agents.trace">;
+				return (await this.sessions.agentTrace(p.traceId)) satisfies Result<"agents.trace">;
 			}
 			case "inbox.list":
 				return (await this.sessions.inbox()) satisfies Result<"inbox.list">;

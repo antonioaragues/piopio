@@ -29,6 +29,8 @@ public enum TranscriptAction: Equatable, Sendable {
     case editApproval(approvalId: String)
     /// Reverses a change a result card shows (06-agents §4.2).
     case undoChange(undoId: String)
+    /// Opens the trace of messages between agents (06-agents §7 AA5).
+    case openTrace(traceId: String)
 
     static let scheme = "piopio-action"
 
@@ -54,6 +56,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .decideApproval(let id, let approve): c.host = "approval"; c.queryItems = [URLQueryItem(name: "id", value: id), URLQueryItem(name: "approve", value: approve ? "1" : "0")]
         case .editApproval(let id): c.host = "edit-approval"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .undoChange(let id): c.host = "undo"; c.queryItems = [URLQueryItem(name: "id", value: id)]
+        case .openTrace(let id): c.host = "trace"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         }
         return c.url!
     }
@@ -80,6 +83,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "approval": guard let id = q("id") else { return nil }; self = .decideApproval(approvalId: id, approve: q("approve") == "1")
         case "edit-approval": guard let id = q("id") else { return nil }; self = .editApproval(approvalId: id)
         case "undo": guard let id = q("id") else { return nil }; self = .undoChange(undoId: id)
+        case "trace": guard let id = q("id") else { return nil }; self = .openTrace(traceId: id)
         default: return nil
         }
     }

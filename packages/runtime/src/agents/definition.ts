@@ -77,6 +77,9 @@ export const AgentDefinition = Type.Object({
 			maxOutboundPerDay: Type.Optional(Type.Integer({ minimum: 0 })),
 			/** The same cap for each person. */
 			maxOutboundPerContactPerDay: Type.Optional(Type.Integer({ minimum: 0 })),
+			/** Messages to one other agent per hour (AA4, default 30), and what one exchange between agents may cost (default $0.50). */
+			agentMessagesPerHour: Type.Optional(Type.Integer({ minimum: 0 })),
+			traceBudgetUsd: Type.Optional(Type.Number({ minimum: 0 })),
 			/** Messages the agent marks urgent go out during quiet hours (PR4). */
 			urgentBypassesQuiet: Type.Optional(Type.Boolean()),
 			budgetUsdPerMonth: Type.Optional(Type.Number({ minimum: 0 })),
@@ -84,6 +87,10 @@ export const AgentDefinition = Type.Object({
 			unknownSenders: Type.Optional(Type.Union([Type.Literal("ignore"), Type.Literal("reply_canned"), Type.Literal("ask_owner")])),
 		}),
 	),
+	/** Agents that may write to this one (ids or slugs; AA1). Unset: every agent of the owner. */
+	acceptFrom: Type.Optional(Type.Array(Type.String())),
+	/** Partitions other agents may read (AA6), e.g. `{ "agt_x": ["shared"] }`. */
+	shareMemory: Type.Optional(Type.Record(Type.String(), Type.Array(Type.String()))),
 	/** Where long-term memory lives: "builtin" (default) or an MCP memory provider's id (07-shared §6.2). */
 	memory: Type.Optional(Type.Object({ provider: Type.String() })),
 });

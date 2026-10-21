@@ -14,9 +14,9 @@ import { TestClient } from "./client.js";
 type Ctx = { home: string; engine: Engine; client: TestClient };
 const open: Ctx[] = [];
 
-async function start(home = mkdtempSync(join(tmpdir(), "piopio-test-")), faux = true): Promise<Ctx> {
+async function start(home = mkdtempSync(join(tmpdir(), "piopio-test-")), faux = true, extra: Partial<ConstructorParameters<typeof Engine>[0]> = {}): Promise<Ctx> {
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, allowPrivateFetch: true, log: () => {} });
+	const engine = new Engine({ ...extra, paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, allowPrivateFetch: true, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0" });
@@ -1673,4 +1673,89 @@ describe("Agents: Apple apps as tools (milestone 4.5)", () => {
 		expect(calls.some((c) => c.name === "apple_calendar_events")).toBe(false);
 		app.close();
 	}, 60_000);
+});
+
+describe("Agents: agent-to-agent (milestone 4.6)", () => {
+	async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean, timeout = 20_000): Promise<T> {
+		const end = Date.now() + timeout;
+		for (;;) {
+			const value = await read();
+			if (ready(value)) return value;
+			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(value)}`);
+			await new Promise((r) => setTimeout(r, 150));
+		}
+	}
+	const call = (tool: string, args: object) => `call: ${tool} | ${JSON.stringify(args)}`;
+	type Item = Snapshot["items"][number];
+	const msgs = (items: Item[]) => items.filter((i): i is Extract<Item, { kind: "agent_msg" }> => i.kind === "agent_msg");
+
+	test("ask and tell between agents: permissions, answers, the hop limit, rate and trace limits, shared memory, the trace", async () => {
+		const a = await start(undefined, true, { agentAskTimeoutMs: 30_000 });
+		const faux = { provider: "faux", id: "faux-1" };
+		const make = async (name: string) => (await a.client.call("agents.create", { name, owner: "Antonio", model: faux })).ref as { kind: "agent"; id: string };
+		const scout = await make("Scout"), ledger = await make("Ledger"), muse = await make("Muse");
+		const save = async (ref: { id: string }, change: (d: Record<string, any>) => object) => {
+			const got = await a.client.call("agents.get", { ref });
+			expect(await a.client.call("agents.save", { ref, definition: change(got.definition), instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+		};
+		await save(scout, (d) => ({ ...d, tools: { builtin: ["memory"], agents: [ledger.id, muse.id] } }));
+		await save(ledger, (d) => ({ ...d, tools: { builtin: ["memory"], agents: [scout.id] }, shareMemory: { [scout.id]: ["shared"] } }));
+		await save(muse, (d) => ({ ...d, acceptFrom: [ledger.id] }));
+		const items = (ref: object) => () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+		const settled = (xs: Item[]) => xs.at(-1)?.kind === "assistant" && !msgs(xs).some((m) => m.status === "waiting");
+
+		// Scout asks Ledger; Ledger answers in its conversation with Scout; the answer comes back.
+		await a.client.call("sessions.submit", { ref: scout, input: { text: call("ask_agent", { agent: "Ledger", message: "What is the budget?" }) } });
+		let mine = await until(items(scout), (xs) => settled(xs) && msgs(xs).length === 1);
+		const asked = msgs(mine)[0]!;
+		expect(asked).toMatchObject({ direction: "out", mode: "ask", toAgent: { id: ledger.id, name: "Ledger" }, text: "What is the budget?", status: "replied", reply: "Echo: What is the budget?" });
+		const theirs = await items({ ...ledger, conversationId: `agent:${scout.id}` })();
+		expect(msgs(theirs)[0]).toMatchObject({ direction: "in", fromAgent: { name: "Scout" }, text: "What is the budget?" });
+		expect(theirs.at(-1)).toMatchObject({ kind: "assistant", parts: [{ text: "Echo: What is the budget?" }] });
+		await expect(a.client.call("sessions.submit", { ref: { ...ledger, conversationId: `agent:${scout.id}` }, input: { text: "hi" } })).rejects.toThrow(/read-only/);
+		expect((await a.client.call("agents.conversations", { ref: ledger })).people.find((p: any) => p.role === "agent")).toMatchObject({ name: "Scout", conversationId: `agent:${scout.id}` });
+		const trace = await a.client.call("agents.trace", { traceId: asked.traceId });
+		expect(trace.hops).toEqual([expect.objectContaining({ hop: 1, mode: "ask", from: { id: scout.id, name: "Scout" }, to: { id: ledger.id, name: "Ledger" }, status: "replied", reply: "Echo: What is the budget?" })]);
+
+		// Muse only accepts Ledger; Ledger can't write to Muse (not in its list).
+		await a.client.call("sessions.submit", { ref: scout, input: { text: call("tell_agent", { agent: "Muse", message: "hi" }) } });
+		mine = await until(items(scout), (xs) => settled(xs) && msgs(xs).length === 2);
+		expect(msgs(mine)[1]).toMatchObject({ mode: "tell", status: "failed", reply: "Muse doesn't accept messages from you." });
+		await a.client.call("sessions.submit", { ref: ledger, input: { text: call("tell_agent", { agent: "Muse", message: "hi" }) } });
+		const own = await until(items(ledger), (xs) => settled(xs) && msgs(xs).length === 1);
+		expect(msgs(own)[0]).toMatchObject({ status: "failed", reply: "You can write to: Scout." });
+
+		// The hop limit: Scout → Ledger → Scout → Ledger → Scout, whose fifth hop is refused; the answers unwind.
+		const chain = [ledger, scout, ledger, scout, ledger].map((r) => (r === ledger ? "Ledger" : "Scout"));
+		let message = "the end";
+		for (const to of chain.slice(1).reverse()) message = call("ask_agent", { agent: to, message });
+		await a.client.call("sessions.submit", { ref: scout, input: { text: call("ask_agent", { agent: chain[0], message }) } });
+		mine = await until(items(scout), (xs) => settled(xs) && msgs(xs).length === 3, 40_000);
+		const deep = await a.client.call("agents.trace", { traceId: msgs(mine)[2]!.traceId });
+		expect(deep.hops.map((h: any) => [h.hop, h.from.name, h.to.name])).toEqual([
+			[1, "Scout", "Ledger"],
+			[2, "Ledger", "Scout"],
+			[3, "Scout", "Ledger"],
+			[4, "Ledger", "Scout"],
+		]);
+		expect(deep.hops.slice(1).map((h: any, i: number) => h.parent === deep.hops[i].id)).toEqual([true, true, true]);
+
+		// Rate and trace limits.
+		await save(scout, (d) => ({ ...d, policies: { agentMessagesPerHour: 3 } }));
+		await a.client.call("sessions.submit", { ref: scout, input: { text: call("tell_agent", { agent: "Ledger", message: "one more" }) } });
+		mine = await until(items(scout), (xs) => settled(xs) && msgs(xs).length === 4);
+		expect(msgs(mine)[3]).toMatchObject({ status: "failed", reply: expect.stringContaining("limit 3") });
+		await save(scout, (d) => ({ ...d, policies: { traceBudgetUsd: 0 } }));
+		await a.client.call("sessions.submit", { ref: scout, input: { text: call("tell_agent", { agent: "Ledger", message: "cheap?" }) } });
+		mine = await until(items(scout), (xs) => settled(xs) && msgs(xs).length === 5);
+		expect(msgs(mine)[4]).toMatchObject({ status: "failed", reply: expect.stringContaining("its limit is $0.00") });
+
+		// Shared memory (AA6): Ledger shares its shared partition with Scout, read-only.
+		await a.client.call("sessions.submit", { ref: ledger, input: { text: call("remember", { fact: "The travel budget is 500 euros", partition: "shared" }) } });
+		await until(items(ledger), (xs) => xs.some((i) => i.kind === "result"));
+		await a.client.call("sessions.submit", { ref: scout, input: { text: call("recall", { query: "travel budget" }) } });
+		mine = await until(items(scout), (xs) => xs.filter((i) => i.kind === "steps").some((s) => s.kind === "steps" && s.tools.some((t) => t.tool === "recall" && t.status === "done")));
+		const recall = mine.filter((i) => i.kind === "steps").flatMap((s) => (s.kind === "steps" ? s.tools : [])).find((t) => t.tool === "recall")!;
+		expect(recall.output).toContain("The travel budget is 500 euros");
+	}, 120_000);
 });

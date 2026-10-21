@@ -24,7 +24,7 @@ struct AgentDef: Codable, Equatable {
         var notes: String?
     }
     struct Schedule: Codable, Equatable, Identifiable { var id: String; var cron: String; var tz: String?; var prompt: String; var deliverTo: String? }
-    struct Policies: Codable, Equatable { var quietHours: String?; var maxOutboundPerDay: Int?; var maxOutboundPerContactPerDay: Int?; var urgentBypassesQuiet: Bool?; var budgetUsdPerMonth: Double?; var requireApproval: [String]?; var unknownSenders: String? }
+    struct Policies: Codable, Equatable { var quietHours: String?; var maxOutboundPerDay: Int?; var maxOutboundPerContactPerDay: Int?; var urgentBypassesQuiet: Bool?; var agentMessagesPerHour: Int?; var traceBudgetUsd: Double?; var budgetUsdPerMonth: Double?; var requireApproval: [String]?; var unknownSenders: String? }
     var version: Int
     var id: String
     var slug: String
@@ -42,6 +42,9 @@ struct AgentDef: Codable, Equatable {
     var triggers: JSONValue?
     var policies: Policies?
     var memory: JSONValue?
+    /// Agents that may write to this one (unset: every agent), and partitions shared with other agents (06-agents §7).
+    var acceptFrom: [String]?
+    var shareMemory: [String: [String]]?
 
     init?(_ json: JSONValue) {
         guard let data = try? JSONEncoder().encode(json), let def = try? JSONDecoder().decode(AgentDef.self, from: data) else { return nil }
@@ -363,7 +366,7 @@ struct AgentConversations: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Text(p.name).font(.system(size: 13, weight: .medium))
-                        if p.role == "owner" { Text("owner").font(.system(size: 10.5)).foregroundStyle(Color.dsFg3) }
+                        if p.role == "owner" || p.role == "agent" { Text(p.role).font(.system(size: 10.5)).foregroundStyle(Color.dsFg3) }
                         Spacer()
                         if let at = p.lastAt { Text(BuildSessionView.relative(at)).font(.system(size: 11)).foregroundStyle(Color.dsFg3) }
                     }
@@ -375,7 +378,10 @@ struct AgentConversations: View {
             .listStyle(.sidebar)
             .frame(width: 240)
             Rectangle().fill(Color.dsLine).frame(width: 0.5)
-            if let person = people.first(where: { $0.contactId == selected }) {
+            if let person = people.first(where: { $0.contactId == selected }), person.role == "agent" {
+                // Between agents: read-only (06-agents §7).
+                AgentRunTranscript(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: person.conversationId))
+            } else if let person = people.first(where: { $0.contactId == selected }) {
                 AgentChat(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: person.conversationId), simulated: person.role == "owner" ? nil : person.name)
             } else {
                 Text("Pick someone to see their conversation.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)

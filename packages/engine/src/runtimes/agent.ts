@@ -12,7 +12,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
-import { AgentCore, type AgentCoreOptions, alwaysLabel, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
+import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, type Envelope, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder } from "../timeline/builder.js";
@@ -41,6 +41,9 @@ export type AgentOpenOptions = {
 	onApproval?: (approval: Approval) => void;
 	/** Apple app tools through the Mac app (06 §4.1). */
 	appTool?: AgentCoreOptions["appTool"];
+	/** The other agents (06 §7). */
+	peers?: AgentCoreOptions["peers"];
+	askTimeoutMs?: number;
 };
 
 type RawEntry = { id: string | number; kind: string; data?: unknown; model?: { timestamp?: number }[] };
@@ -77,6 +80,9 @@ export class AgentRuntime implements Runtime {
 			context: ctx,
 			...(options.now ? { now: options.now } : {}),
 			...(options.appTool ? { appTool: options.appTool } : {}),
+			...(options.peers ? { peers: options.peers } : {}),
+			...(options.askTimeoutMs ? { askTimeoutMs: options.askTimeoutMs } : {}),
+			onPeerLog: () => options.onActivity?.(),
 			onRun: () => options.onActivity?.(),
 			onOutbound: () => options.onActivity?.(),
 			onApproval: (approval) => {
@@ -121,6 +127,23 @@ export class AgentRuntime implements Runtime {
 
 	runs() {
 		return this.core.proactive.overview();
+	}
+
+	/** The conversation with another agent (`agent:<id>`), read-only. */
+	async peerView(peerId: string): Promise<AgentView> {
+		const key = `agent:${peerId}`;
+		let pending = this.views.get(key);
+		if (!pending) {
+			pending = (async () => {
+				const peer = (await this.options.peers?.directory())?.find((a) => a.id === peerId);
+				if (!peer) throw new EngineError("NOT_FOUND", `No agent “${peerId}”.`);
+				const conversation = await this.core.agentConversation(peerId);
+				return AgentView.attach(this, { peer: { id: peer.id, name: peer.name } }, conversation);
+			})();
+			this.views.set(key, pending);
+			pending.catch(() => this.views.delete(key));
+		}
+		return pending;
 	}
 
 	/** Runs a schedule from the definition now, or any prompt (a manual run). */
@@ -180,6 +203,19 @@ export class AgentRuntime implements Runtime {
 			const last = items.at(-1);
 			const preview = last?.kind === "user" ? last.text : last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : undefined;
 			out.push({ contactId: c.id, started: true, ...(last ? { lastAt: last.at } : {}), ...(preview ? { preview: preview.replace(/\s+/g, " ").slice(0, 140) } : {}) });
+		}
+		return out;
+	}
+
+	/** Other agents it has talked with (the Conversations tab). */
+	async peers(): Promise<{ id: string; name: string; lastAt?: string; preview?: string }[]> {
+		const directory = (await this.options.peers?.directory()) ?? [];
+		const out = [];
+		for (const peerId of Object.keys((await this.core.peers.logs()).reduce((m, l) => ({ ...m, [l.from.id === this.ref.id ? l.to.id : l.from.id]: true }), {} as Record<string, boolean>))) {
+			const peer = directory.find((a) => a.id === peerId);
+			if (!peer || peer.id === this.ref.id) continue;
+			const last = (await this.core.peers.logs()).filter((l) => l.from.id === peerId || l.to.id === peerId).at(-1);
+			out.push({ id: peer.id, name: peer.name, ...(last ? { lastAt: last.at, preview: (last.reply ?? last.text).replace(/\s+/g, " ").slice(0, 140) } : {}) });
 		}
 		return out;
 	}
@@ -259,23 +295,29 @@ export class AgentView implements Runtime {
 	private readonly calls = new Map<string, unknown>();
 	readonly contactId?: string;
 	readonly run?: RunRecord;
+	readonly peer?: { id: string; name: string };
+	/** Messages from other agents in this conversation (entry id → the envelope). */
+	private readonly agentMsgs = new Map<string, Envelope & { late?: boolean }>();
+	/** ask_agent / tell_agent results (call id → details). */
+	private readonly peerCalls = new Map<string, { to?: { id: string; name: string }; traceId?: string; status?: string; reply?: string }>();
 
 	private constructor(
 		private readonly agent: AgentRuntime,
-		who: { contactId: string } | { run: RunRecord },
+		who: { contactId: string } | { run: RunRecord } | { peer: { id: string; name: string } },
 		private readonly conversation: Conversation,
 	) {
 		if ("run" in who) this.run = who.run;
+		else if ("peer" in who) this.peer = who.peer;
 		else this.contactId = who.contactId;
 		this.builder = new TimelineBuilder(this.ref);
 		this.mapper = new DurableEventMapper(this.builder, (id) => this.queueTexts.get(id));
 	}
 
 	get ref(): ContainerRef {
-		return { ...this.agent.ref, conversationId: this.run ? `run:${this.run.id}` : `person:${this.contactId}` };
+		return { ...this.agent.ref, conversationId: this.run ? `run:${this.run.id}` : this.peer ? `agent:${this.peer.id}` : `person:${this.contactId}` };
 	}
 
-	static async attach(agent: AgentRuntime, who: { contactId: string } | { run: RunRecord }, conversation: Conversation): Promise<AgentView> {
+	static async attach(agent: AgentRuntime, who: { contactId: string } | { run: RunRecord } | { peer: { id: string; name: string } }, conversation: Conversation): Promise<AgentView> {
 		const view = new AgentView(agent, who, conversation);
 		const stream = await agent.watch(conversation);
 		view.stream = stream;
@@ -312,6 +354,29 @@ export class AgentView implements Runtime {
 
 	get conversationId(): string {
 		return String(this.conversation.id);
+	}
+
+	/** ask_agent / tell_agent as a message to the other agent, with its answer once it comes (AA5). */
+	private agentCall(item: Extract<TimelineItem, { kind: "tool" }>): TimelineItem {
+		const args = (item.args ?? {}) as { agent?: string; message?: string };
+		const d = this.peerCalls.get(item.callId);
+		const me = { id: this.agent.ref.id, name: this.agent.definition().name };
+		const failed = item.status === "error" || item.status === "interrupted";
+		const status = item.status === "running" || item.status === "pending_approval" ? "waiting" : failed ? "failed" : ((d?.status as "replied" | "no_reply" | "sent") ?? "sent");
+		const reply = failed ? item.output : d?.reply;
+		return {
+			kind: "agent_msg",
+			id: item.id,
+			at: item.at,
+			fromAgent: me,
+			toAgent: d?.to ?? { id: args.agent ?? "", name: args.agent ?? "agent" },
+			text: args.message ?? "",
+			direction: "out",
+			mode: item.tool === "ask_agent" ? "ask" : "tell",
+			status,
+			...(reply ? { reply } : {}),
+			...(d?.traceId ? { traceId: d.traceId } : {}),
+		};
 	}
 
 	/** An approval asked here, or its answer: one item, placed when it was asked. */
@@ -368,13 +433,15 @@ export class AgentView implements Runtime {
 
 	private noteEntry(entry: RawEntry, live: boolean): void {
 		const id = String(entry.id);
-		type Message = { role?: string; toolCallId?: string; toolName?: string; isError?: boolean; content?: unknown; details?: { card?: ResultCard; undo?: string } };
+		if (entry.kind === AGENT_ENTRY) this.agentMsgs.set(id, entry.data as Envelope);
+		type Message = { role?: string; toolCallId?: string; toolName?: string; isError?: boolean; content?: unknown; details?: { card?: ResultCard; undo?: string; to?: { id: string; name: string }; traceId?: string; status?: string; reply?: string } };
 		for (const m of (entry.model ?? []) as Message[]) {
 			if (m.role === "assistant" && Array.isArray(m.content)) {
 				for (const b of m.content as { type: string; id?: string; arguments?: unknown }[]) if (b.type === "toolCall" && b.id) this.calls.set(b.id, b.arguments);
 			}
 			if (m.role !== "toolResult" || !m.toolCallId) continue;
 			if (m.details?.card) this.cards.set(m.toolCallId, { card: m.details.card, ...(m.details.undo ? { undo: m.details.undo } : {}) });
+			if (m.toolName === "ask_agent" || m.toolName === "tell_agent") this.peerCalls.set(m.toolCallId, m.details ?? {});
 			// A call that was blocked before it ran (denied, paused, not allowed) has no tool item: show it failed.
 			if (m.isError && !this.builder.currentItems.some((i) => i.id === `tool:${m.toolCallId}`)) {
 				const text = Array.isArray(m.content) ? (m.content as { text?: string }[]).map((b) => b.text ?? "").join("") : String(m.content ?? "");
@@ -400,6 +467,9 @@ export class AgentView implements Runtime {
 		return this.builder.snapshot().items.map((item) => {
 			const out = item.kind === "user" ? this.outbound.get(item.id) : undefined;
 			if (out) return { kind: "assistant", id: item.id, at: item.at, parts: [{ type: "text", text: out.text }], status: "done", outbound: { from: out.from } };
+			const msg = item.kind === "user" ? this.agentMsgs.get(item.id) : undefined;
+			if (msg) return { kind: "agent_msg", id: item.id, at: item.at, fromAgent: msg.from, toAgent: msg.to, text: msg.text, direction: "in", mode: msg.late ? "reply" : msg.mode, traceId: msg.traceId };
+			if (item.kind === "tool" && (item.tool === "ask_agent" || item.tool === "tell_agent")) return this.agentCall(item);
 			const approval = item.kind === "approval" ? this.approvals.get(item.approvalId) : undefined;
 			return approval ? this.approvalItem(approval) : item;
 		});
@@ -443,7 +513,7 @@ export class AgentView implements Runtime {
 	}
 
 	async submit(text: string, options: SubmitOptions) {
-		if (!this.contactId) throw new EngineError("INVALID", "A run's conversation is read-only.");
+		if (!this.contactId) throw new EngineError("INVALID", this.peer ? "A conversation between agents is read-only." : "A run's conversation is read-only.");
 		// /pause, /resume, and messages while paused or out of budget (06 §9 AS3–AS4) don't start a turn.
 		if (await this.agent.core.intercept(this.contactId, text)) {
 			this.agent.activity();

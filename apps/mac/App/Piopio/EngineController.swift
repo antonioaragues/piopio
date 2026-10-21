@@ -549,6 +549,11 @@ final class EngineController {
         try await spaceCall("agents.undo", AgentUndoParams(ref: ContainerRef(kind: .agent, id: agent.id), undoId: undoId))
     }
 
+    func trace(_ traceId: String) async throws -> AgentTrace {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("agents.trace", TraceParams(traceId: traceId), as: AgentTrace.self)
+    }
+
     func pause(_ agent: ContainerRef, paused: Bool) async throws {
         try await spaceCall("agents.pause", AgentPauseParams(ref: ContainerRef(kind: .agent, id: agent.id), paused: paused))
     }

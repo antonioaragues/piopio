@@ -89,7 +89,7 @@ export interface SafetyHost {
 	read(): Promise<SafetyState>;
 	write(change: (state: SafetyState) => void): Promise<void>;
 	/** Who a conversation belongs to: a person, or a run (which acts for the owner). */
-	whose(conversationId: ConversationId | string): Promise<{ contact?: Contact; runId?: string }>;
+	whose(conversationId: ConversationId | string): Promise<{ contact?: Contact; runId?: string; peerId?: string }>;
 	/** Writes a note into a person's conversation (the model reads it too, when `forModel` is given). */
 	note(contactId: string, text: string, forModel?: string): Promise<void>;
 	/** Stops every running turn and run. */
@@ -210,6 +210,10 @@ export class Safety {
 		const args = (call.arguments ?? {}) as JsonObject;
 		const who = await this.host.whose(conversationId);
 		const owner = this.owner;
+		// AS2: a contact can't reach other agents through this one.
+		if ((call.name === "ask_agent" || call.name === "tell_agent") && who.contact && who.contact.role !== "owner" && !who.peerId) {
+			return { block: `Messages from ${who.contact.name} can't make you contact other agents.` };
+		}
 		// AS2: a contact can't make the agent message anyone but themselves and the owner.
 		if (call.name === "send_message" && who.contact && who.contact.role !== "owner" && args.to !== who.contact.id && args.to !== owner?.id) {
 			return { block: `Messages from ${who.contact.name} can't make you write to other people.` };
@@ -229,7 +233,7 @@ export class Safety {
 				tool: call.name,
 				args,
 				title: describe(call.name, args, this.def),
-				from: who.runId ?? `person:${who.contact?.id ?? "owner"}`,
+				from: who.runId ?? (who.peerId ? `agent:${who.peerId}` : `person:${who.contact?.id ?? "owner"}`),
 				key,
 				rule,
 				requestedAt: this.iso(now),
@@ -237,7 +241,7 @@ export class Safety {
 				status: "pending",
 			};
 			await this.host.write((s) => void (s.approvals = [...(s.approvals ?? []), created].slice(-MAX_KEPT)));
-			await this.inbox({ kind: "approval", title: `Approval · ${created.tool}`, body: created.title, needsYou: true, approvalId: created.id, conversation: who.runId ? `run:${who.runId}` : `person:${who.contact?.id ?? "owner"}` });
+			await this.inbox({ kind: "approval", title: `Approval · ${created.tool}`, body: created.title, needsYou: true, approvalId: created.id, conversation: who.runId ? `run:${who.runId}` : who.peerId ? `agent:${who.peerId}` : `person:${who.contact?.id ?? "owner"}` });
 			this.host.onApproval?.(created);
 			approval = created;
 		}

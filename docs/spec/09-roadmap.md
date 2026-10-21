@@ -266,6 +266,28 @@ The first week-long acceptance run can start after 4.4 (two agents, schedules, a
 - **Cards and Undo (§4.2):** each change returns a card (reminder, event, note, music, shortcut) and the reversing call. Undo sends it to the app through 4.4's Undo.
 - Verified: an engine test with the test client as the Mac app: unavailable before it connects; then a reminder created with its card, the call carrying the agent, groups and allowed Shortcuts; Undo sending the delete; a Shortcut by name; a group that's off not offered or called. Also the app build, the Info.plist keys, and all suites. **Not verified:** the Swift handlers against the real apps (no TCC prompts or changes to your data were made here), and app captures (the display was asleep).
 
+**Milestone 4.6 done (2026-10-21).**
+- **`ask_agent` and `tell_agent` (§7 AA1–AA3):**
+  - Each agent has a conversation with every agent that writes to it (`agent:<id>`), where it answers the message like any input.
+  - An ask waits for that answer (10 minutes by default). A later answer comes back to the asker's conversation as a new message, including after a restart: answers in progress are followed again.
+  - Permissions: A must list B in `tools.agents`, and B must accept A (`acceptFrom`, unset means every agent).
+- **Guards (AA4):** `{traceId, hop}` on every message, so a fifth hop is refused. There is a per-pair hourly limit (30) and a per-trace budget ($0.50); both are `policies` settings. Mutual asks get side conversations instead of deadlocking (AA8).
+- **Shared memory (AA6):** `shareMemory: {<agentId>: ["shared"]}` lets another agent read that partition. It's included in that agent's recall and notes, read-only.
+- **Visibility (AA5):**
+  - Both agents' transcripts show `agent_msg` items ("Asked Ledger …" with the answer, "Scout asks …").
+  - The Conversations tab lists the agents it has talked with (read-only).
+  - `agents.trace` returns the tree of hops with costs, and the app shows it in a sheet from the message's Trace link.
+  - The Definition form has an "Other agents" section: may write to it, accepts it, shares memory with it.
+- Verified: an engine test with three agents:
+  - Scout asks Ledger and gets the answer; Ledger's side shows the message, and that conversation is read-only and listed under Conversations.
+  - The trace holds one hop.
+  - Muse refuses Scout; Ledger can't write to an agent it doesn't list.
+  - A Scout → Ledger → Scout → Ledger chain stops at four hops, with parents linked.
+  - The rate limit and the trace budget refuse.
+  - Ledger's shared fact reaches Scout's recall.
+
+  A deliberately slow chain also exercised the late-answer path once (not asserted). Also the app build and the Swift tests. **Not verified:** app captures (the display was asleep); real-model behavior between agents; a restart in the middle of an ask.
+
 ## Phase 5 — Agents (cloud) + channels
 Scope: Cloud Engine (02 §5), cloud setup wizard, deploy/rollback, Telegram, WhatsApp (Cloud API + template), approvals over channels, cloud cost ledger sync, live view.
 **Acceptance:** two agents live 24/7 with the Mac off. Telegram + WhatsApp both work. Owner approvals via Telegram buttons work. Agent-to-agent works in the cloud.

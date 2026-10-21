@@ -192,6 +192,7 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 - **AA5** **Visibility:** the app shows agent-to-agent traffic as `agent_msg` items in both agents, plus a **trace view** (a tree of hops with cost) for any conversation that triggered delegation.
 - **AA6** **Shared memory:** none by default. An agent can expose read-only memory partitions to specific peers (`shareMemory: {agt_x: ["shared"]}`).
 - **AA7** Local ↔ cloud: in v1, both agents must be in the same engine (both local or both cloud).
+- **AA8** (4.6) Locally the engine routes messages in-process between agents' runtimes; each agent keeps a log of what it sent and answered, and the trace view joins them. A message nested in a trace that B's conversation with A is still answering (A asks B, B asks A, A asks B again) goes to a side conversation, so it doesn't wait behind itself. In an agent's conversation with another agent, memory tools use only the `shared` partition. Policies `agentMessagesPerHour` and `traceBudgetUsd` change the AA4 defaults; contacts can't make an agent reach other agents (AS2).
 - **Later:** **rooms**: a multi-agent conversation the owner can watch and join (and a Telegram group with several agent bots).
 
 ## 8. Memory

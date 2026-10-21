@@ -179,6 +179,36 @@ struct AgentDefinitionView: View {
                 .textFieldStyle(.roundedBorder)
             }
         }
+        let others = engine.agents.filter { $0.ref.id != summary.ref.id }
+        if !others.isEmpty {
+            section("Other agents", "Who it may ask or tell, who may write to it, and who may read its shared memory (06-agents §7)") {
+                ForEach(others, id: \.ref.id) { other in
+                    HStack(spacing: 14) {
+                        Text(other.title).font(.system(size: 12.5, weight: .medium)).frame(width: 130, alignment: .leading)
+                        Toggle("May write to it", isOn: Binding(get: { def?.tools.agents?.contains(other.ref.id) ?? false }, set: { on in
+                            var list = (def?.tools.agents ?? []).filter { $0 != other.ref.id }
+                            if on { list.append(other.ref.id) }
+                            def?.tools.agents = list.isEmpty ? nil : list
+                        }))
+                        Toggle("Accepts it", isOn: Binding(get: { def?.acceptFrom.map { $0.contains(other.ref.id) } ?? true }, set: { on in
+                            // Unset means every agent; unticking one lists the rest.
+                            var list = def?.acceptFrom ?? others.map(\.ref.id)
+                            list.removeAll { $0 == other.ref.id }
+                            if on { list.append(other.ref.id) }
+                            def?.acceptFrom = Set(list) == Set(others.map(\.ref.id)) ? nil : list
+                        }))
+                        Toggle("Shares memory", isOn: Binding(get: { def?.shareMemory?[other.ref.id]?.contains("shared") ?? false }, set: { on in
+                            var share = def?.shareMemory ?? [:]
+                            share[other.ref.id] = on ? ["shared"] : nil
+                            def?.shareMemory = share.isEmpty ? nil : share
+                        }))
+                        .help("It can read this agent's shared partition")
+                    }
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 12))
+                }
+            }
+        }
     }
 
     private static let appleChoices: [(String, String)] = [

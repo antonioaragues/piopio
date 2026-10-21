@@ -176,6 +176,8 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .openInbox, object: approvalId)
         case .undoChange(let undoId):
             Task { do { try await engine?.undo(ref, undoId: undoId) } catch { report(error) } }
+        case .openTrace(let traceId):
+            NotificationCenter.default.post(name: .openTrace, object: traceId)
         }
     }
 

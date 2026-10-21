@@ -259,6 +259,22 @@ public struct ResultItem: Codable, Sendable, Hashable {
     public var undo: Undo?
 }
 
+/// A message between two of the owner's agents (06-agents §7 AA5).
+public struct AgentMsgItem: Codable, Sendable, Hashable {
+    public struct Agent: Codable, Sendable, Hashable { public var id, name: String }
+    public enum Direction: String, Codable, Sendable { case `in`, out }
+    public enum Mode: String, Codable, Sendable { case ask, tell, reply }
+    public enum Status: String, Codable, Sendable { case waiting, replied, noReply = "no_reply", sent, failed }
+    public var id, at: String
+    public var fromAgent, toAgent: Agent
+    public var text: String
+    public var direction: Direction
+    public var mode: Mode
+    public var status: Status?
+    public var reply: String?
+    public var traceId: String?
+}
+
 public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case user(UserItem)
     case assistant(AssistantItem)
@@ -271,6 +287,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case steps(StepsItem)
     case approval(ApprovalItem)
     case result(ResultItem)
+    case agentMsg(AgentMsgItem)
 
     private enum Key: String, CodingKey { case kind }
 
@@ -288,6 +305,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case "steps": self = .steps(try StepsItem(from: decoder))
         case "approval": self = .approval(try ApprovalItem(from: decoder))
         case "result": self = .result(try ResultItem(from: decoder))
+        case "agent_msg": self = .agentMsg(try AgentMsgItem(from: decoder))
         default: throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown item kind \(kind)"))
         }
     }
@@ -306,6 +324,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .steps(let v): try c.encode("steps", forKey: .kind); try v.encode(to: encoder)
         case .approval(let v): try c.encode("approval", forKey: .kind); try v.encode(to: encoder)
         case .result(let v): try c.encode("result", forKey: .kind); try v.encode(to: encoder)
+        case .agentMsg(let v): try c.encode("agent_msg", forKey: .kind); try v.encode(to: encoder)
         }
     }
 
@@ -322,6 +341,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .steps(let v): v.id
         case .approval(let v): v.id
         case .result(let v): v.id
+        case .agentMsg(let v): v.id
         }
     }
 }
@@ -517,6 +537,25 @@ public struct InboxItem: Decodable, Sendable, Hashable, Identifiable {
     public var approval: ApprovalItem?
 }
 public struct InboxListResult: Decodable, Sendable { public var count: Int; public var items: [InboxItem] }
+/// A trace between agents (06-agents §7 AA5): its messages as a tree, with what answering cost.
+public struct AgentTrace: Decodable, Sendable {
+    public struct Hop: Decodable, Sendable, Hashable, Identifiable {
+        public var id: String
+        public var parent: String?
+        public var hop: Int
+        public var mode: String
+        public var from, to: AgentMsgItem.Agent
+        public var text: String
+        public var reply: String?
+        public var at, status: String
+        public var costUsd: Double?
+        public var error: String?
+    }
+    public var traceId: String
+    public var costUsd: Double
+    public var hops: [Hop]
+}
+public struct TraceParams: Encodable, Sendable { public var traceId: String; public init(traceId: String) { self.traceId = traceId } }
 public struct InboxReadParams: Encodable, Sendable {
     public struct Item: Encodable, Sendable { public var agentId, id: String; public init(agentId: String, id: String) { self.agentId = agentId; self.id = id } }
     public var items: [Item]

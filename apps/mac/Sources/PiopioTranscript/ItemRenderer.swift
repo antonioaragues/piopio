@@ -62,6 +62,8 @@ nonisolated struct ItemRenderer: Sendable {
             return approvalCard(a)
         case .result(let r):
             return resultCard(r)
+        case .agentMsg(let m):
+            return agentMessage(m)
         }
     }
 
@@ -117,6 +119,36 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(NSAttributedString(string: lineSeparator + detail, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: undone ? DS.fg3 : DS.fg2]))
         }
         return card(m, .link, lineHeight: 1.5)
+    }
+
+    /// A message to or from another agent (06-agents §7 AA5): who, what, the answer once it comes, and the trace.
+    private func agentMessage(_ m: AgentMsgItem) -> NSAttributedString {
+        let lead: String = switch (m.direction, m.mode) {
+        case (.out, .ask): "Asked \(m.toAgent.name)"
+        case (.out, _): "Told \(m.toAgent.name)"
+        case (.in, .ask): "\(m.fromAgent.name) asks"
+        case (.in, .tell): "\(m.fromAgent.name) says"
+        case (.in, .reply): "\(m.fromAgent.name) answered (later)"
+        }
+        let (dot, state): (NSColor, String?) = switch m.status {
+        case .waiting?: (DS.accent, "waiting…")
+        case .failed?: (DS.red, "not sent")
+        case .noReply?: (DS.amber, "no answer yet")
+        default: (DS.fg3, nil)
+        }
+        let out = NSMutableAttributedString(string: "⇄  ", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: dot])
+        out.append(NSAttributedString(string: lead, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .semibold), .foregroundColor: DS.fg]))
+        if let state { out.append(NSAttributedString(string: "  \(state)", attributes: [.font: small, .foregroundColor: dot])) }
+        if let trace = m.traceId, !compact {
+            out.append(NSAttributedString(string: "   ", attributes: [.font: small]))
+            out.append(NSAttributedString(string: "Trace", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: TranscriptAction.openTrace(traceId: trace).url, .toolTip: "Every message between agents in this exchange, with costs"]))
+        }
+        out.append(NSAttributedString(string: lineSeparator + m.text, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
+        if let reply = m.reply, !reply.isEmpty {
+            let who = m.status == .failed ? "" : "\(m.toAgent.name): "
+            out.append(NSAttributedString(string: lineSeparator + who + reply, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: m.status == .failed ? DS.red : DS.fg]))
+        }
+        return card(out, .link, lineHeight: 1.5)
     }
 
     /// "Worked 1.2s · 2 steps" (06-agents UI2): one line for a turn's tool calls; it opens to each step.

@@ -231,6 +231,8 @@ extension Notification.Name {
     static let selectBuildSession = Notification.Name("piopio.selectBuildSession")
     /// Object: an approval id to show, or nil.
     static let openInbox = Notification.Name("piopio.openInbox")
+    /// Object: a trace id between agents.
+    static let openTrace = Notification.Name("piopio.openTrace")
 }
 
 // MARK: Sidebar
@@ -425,9 +427,14 @@ private struct SpaceAndAgentSheets: ViewModifier {
     @Binding var showNewSpace: Bool
     @Binding var newSpaceThreads: [String]
     @Binding var editingInstructions: SessionSummary?
+    @State private var trace: TraceTarget?
 
     func body(content: Content) -> some View {
         content
+            .onReceive(NotificationCenter.default.publisher(for: .openTrace)) { note in
+                if let id = note.object as? String { trace = TraceTarget(id: id) }
+            }
+            .sheet(item: $trace) { TraceSheet(engine: engine, traceId: $0.id) }
             .onReceive(NotificationCenter.default.publisher(for: .openInbox)) { note in
                 mode = .agents
                 agentSelection = "inbox"
