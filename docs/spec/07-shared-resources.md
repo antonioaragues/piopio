@@ -70,6 +70,7 @@ Every record keeps its source, and the app's memory views list it (01-product, p
 | Provider | What it is | Where |
 |---|---|---|
 | **Built-in** (default) | Markdown doc plus records in the engine's SQLite. Retrieval is recency + keyword (FTS) with a token budget. `reflect` and `standing` are absent. | Local and cloud (Durable Object SQLite) |
+| **MCP memory** (opt-in, §6.2) | Any memory system with an MCP server: its tools mapped to recall/retain/list/forget. | Wherever the server runs (local process or URL) |
 | **Hindsight** (opt-in) | [vectorize-io/hindsight](https://github.com/vectorize-io/hindsight), MIT. Retain extracts facts, entities and time with an LLM. Recall merges four channels (vector, BM25, entity graph, time) and reranks them. Reflect answers over the bank. Mental models act as standing answers. One Hindsight bank per Piopio bank. | **Local:** a Hindsight daemon the engine starts and supervises (Python via `uv`, embedded Postgres with pgvector), only after the user turns it on (it downloads its runtime). **Remote:** a URL, either self-hosted or Hindsight Cloud (sends memories to Vectorize; explicit opt-in). |
 
 - **Models:** the provider uses the user's OpenRouter key. Extraction runs on the utility model slot (07 §1.3); embeddings run locally or through OpenRouter. No other key is needed.
@@ -79,8 +80,30 @@ Every record keeps its source, and the app's memory views list it (01-product, p
 - Spike **S6** (2026-10-21, [docs/spikes/s6](../spikes/s6/README.md)) kept the built-in provider as the default. Hindsight locally: about 2 GB of opt-in download (uv, Python, wheels, models, Postgres, none of it in the signed bundle); about 300 ms recall; about $0.07 per 100 messages retained; `HINDSIGHT_API_LLM_OPENAI_COMPATIBLE_JSON_MODE=false` with OpenRouter. Each turn uses recall; reflect (about 7 s) is a tool.
 
 ## 6. Extensions
-- Pi packages installed via Settings › Extensions apply to **Build** (pi-coding-agent).
-- pi-durable runtimes use pi-durable's own extension format (`defineExtension`). Piopio-provided ones only in v1. User-installable pi-durable extensions come later, once the upstream format stabilizes.
+Piopio has **no plugin format of its own**. You extend it with what pi and the wider ecosystem already use, and the app makes those visible and manageable (decision AQ12):
+
+| Kind | What it adds | Where it runs | Managed in |
+|---|---|---|---|
+| **MCP servers** (§4) | Tools: an API, a database, an app, a memory system | Build (through pi's MCP extension); Threads, Spaces and Agents (through the engine's MCP bridge, 04-chat 3.4) | Settings › MCP servers |
+| **pi packages** (§6.1) | pi extensions (tools, hooks, commands), skills, prompt templates, themes | Extensions: Build only. Skills and prompt templates: everywhere | Settings › Extensions |
+| **Memory providers** (§5.1, §6.2) | Long-term memory: the built-in one, Hindsight, or any memory system that has an MCP server | Agents, About me, later Spaces | Settings › Chat › Memory, and per agent |
+
+Why not a Piopio plugin API: in-process plugins would run third-party code inside the engine, with access to every conversation and key. They would need a stable API we'd have to keep, and they would split the ecosystem. MCP servers run in their own processes with only what they're given, and pi packages are pi's to define. Piopio's own extensions (approvals, checkpoints, plan, todos, subagents, the Space organizer…) stay bundled, written in the runtimes' own formats.
+
+### 6.1 pi packages (Settings › Extensions)
+- **EX1** The list shows the user's packages (`~/.pi/agent/settings.json`, shared with the pi CLI) and, per project, the project's (`.pi/settings.json`, loaded only for trusted projects, 05-build). Each package shows its source (npm, git, local), pinned version, and what it brings: extensions, skills, prompt templates, themes.
+- **EX2** **Install** from an npm name, a git URL or a local folder, with pi's own package manager (`DefaultPackageManager`, the code behind `pi install`), so the CLI and the app see the same packages. **Update** and **Remove** too. Before installing, a sheet says what the package contains and that extension code runs with the user's permissions. It links the source, and nothing installs without a click.
+- **EX3** **Per package, on or off**, and per resource where pi allows it. Changes reach new Build sessions; open ones offer to reload.
+- **EX4** Where each resource works: **pi extensions run in Build only.** Threads, Spaces and Agents run on pi-durable, which can't load pi extensions, and stay on Piopio's own extensions (user-installable pi-durable extensions wait until that format is stable upstream). **Skills and prompt templates work everywhere**, because they are text: Chat and Agents list a package's skills (name and description in the prompt, the body read on demand) and its templates as `/commands`. Themes are ignored (Piopio has its own look).
+- **EX5** Extensions with a terminal UI show "This extension has a terminal UI that Piopio can't display" (05-build). Their tools, hooks and commands still work.
+- **EX6** A small catalog of recommended packages, including Piopio's own `@piopio/pi-extensions` for the CLI, links to the pi package gallery (pi.dev/packages).
+
+### 6.2 Memory over MCP
+Many memory systems already ship an MCP server (Hindsight serves one per bank). The **MCP memory provider** turns such a server into a memory provider without code for each system:
+- **MM1** Settings › Chat › Memory › Add provider › "MCP server": pick a server from §4, then map its tools to the provider's operations. `recall` is required; `retain`, `list`, `forget` and `reflect` are optional. Each mapping is a tool name and an argument template, with `{bank}`, `{query}`, `{content}`, `{source}` and `{at}` placeholders. Presets fill in the mapping for servers we have tested; the first is Hindsight's (`/mcp/{bank_id}/`).
+- **MM2** Banks map to whatever the server uses (a bank id, a user id, a namespace), through the `{bank}` placeholder or one server URL per bank.
+- **MM3** **Transparency depends on the server.** Without a `list` tool, Piopio can't show what the server stored. The provider is then marked "limited visibility" in Settings and in the memory view, which shows the turn's retain calls instead. Without `forget`, deleting is done in the memory system itself.
+- **MM4** Native adapters (Hindsight's REST API, the built-in provider) stay preferred where they exist: they have listing, editing, history and webhooks. MCP memory is the way in for everything else.
 
 ## 7. Settings map
 | Section | Contents |
@@ -90,7 +113,7 @@ Every record keeps its source, and the app's memory views list it (01-product, p
 | Build | Default approval mode, rules, editors, worktree location, checkpoint retention, git identity |
 | Chat | Default tools, web search provider, attachment limits, memory |
 | Agents | Cloud connection, channels credentials, default policies |
-| Skills / MCP / Extensions | As above |
+| Skills / MCP / Extensions | MCP servers (§4, with "In Chat"), pi packages (§6.1) |
 | Cloud | Cloudflare account, deploy status, upgrade, rotate token, teardown |
 | Advanced | Engine logs, custom engine path, data folder, export all, reset |
 

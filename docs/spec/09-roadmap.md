@@ -207,9 +207,24 @@ Outcome: a decision in README (AQ11 → default provider), and `MemoryProvider` 
 ## Phase 4 — Agents (local)
 Scope: 06-agents §2–4, §6–9, §11 local part. In-app channel + simulator, schedules, heartbeat, triggers (local URL via tunnel optional), memory partitions, **agent-to-agent**, approvals, budgets. Background mode.
 Also (from the 2026-10-20 review of a similar app, see README decisions AQ5–AQ10): **Apple app tools served by the Mac app** (§4.1: Reminders, Calendar, Contacts, Notes, Music, Shortcuts), **result cards with Undo** (§4.2), **compact progress lines**, agent header and avatars, the **Inbox** with toolbar/menu bar/Dock badges (§12). Side-by-side agents, link previews, voice and quick entry to an agent (§12 UI3–UI6) if time allows; agent boards (§12.1) later.
-Memory: `MemoryProvider` with the built-in provider, partitions as banks (06 §8 ME2–ME2b), and Hindsight as an opt-in provider if S6 says so.
+Memory: `MemoryProvider` with the built-in provider, partitions as banks (06 §8 ME2–ME2b), and Hindsight as an opt-in provider (S6).
+Also: **Settings › Extensions** for pi packages and **MCP memory** (07-shared §6, AQ12).
 Cross-cutting (any phase): the **on-device utility model** (07-shared §1.3, 03-engine-protocol §3.12) for titles, commit messages, routing hints and summaries.
 **Acceptance:** two local agents run for a week on the author's Mac. Schedules fire with the app closed. Agent-to-agent delegation with loop guards is tested.
+
+Milestones:
+| | Scope |
+|---|---|
+| **4.1** Extensions and memory providers | Settings › Extensions: pi packages listed, installed, updated, removed and switched on or off with pi's package manager (07-shared §6.1 EX1–EX6); package skills and prompt templates reach Threads and Spaces. `MemoryProvider` in `@piopio/runtime` (07 §5.1) with the **built-in provider** (SQLite: records with sources, FTS + recency, list, forget). The **MCP memory provider** with a mapping editor and a Hindsight preset (§6.2 MM1–MM4). About me (3.4) moves onto the provider interface. |
+| **4.2** Agents: definition and runtime | Agent Definition files and validation (06 §2 AD2–AD4, templates), the form editor (AD1 without the Builder). The local agent runtime on pi-durable in `@piopio/runtime` (§3): one conversation per person, the owner's chat, the **in-app channel and the channel simulator** (§5.4). Memory partitions as banks with the memory view (§8 ME1–ME3). Agents sidebar, agent page tabs, **agent header** and **compact progress lines** (§12 UI1–UI2). |
+| **4.3** Proactivity | Schedules, heartbeat, triggers (local webhook URL; a tunnel is optional), quiet hours and outbound limits (§6 PR1–PR6). The Runs tab with outcomes and cost. Runs fire with the app closed (background mode). |
+| **4.4** Approvals, budgets and the Inbox | Approval policies and the pending state (§9 AS1–AS2), budgets and the kill switch (AS3–AS4). **Result cards with Undo** (§4.2 RC1–RC5) and proposed actions. The **Inbox** with toolbar, menu bar and Dock badges (§12). |
+| **4.5** Apple apps as tools | The native bridge (§4.1 NB1–NB2) through `app.tool` reverse requests (03 §3.12): Reminders, Calendar, Contacts, Notes, Music, Shortcuts, each with result cards and Undo. |
+| **4.6** Agent-to-agent | `ask_agent` and `tell_agent`, permissions, loop guards and the trace budget, `agent_msg` items and the trace view, shared memory partitions (§7 AA1–AA7). |
+| **4.7** Hindsight provider | The native Hindsight adapter: remote URL first (self-hosted or Hindsight Cloud), then the supervised local daemon behind a download prompt (S6: JSON mode off, the utility model for extraction, recall per turn and reflect as a tool). The harder memory set (2,000+ messages, paraphrased questions) to revisit the default (AQ11). |
+| **4.8** Agent Builder and extras | The Agent Builder chat (§2 AD1). If time allows: side-by-side agents, link previews, voice, quick entry to an agent (§12 UI3–UI6). |
+
+The first week-long acceptance run can start after 4.4 (two agents, schedules, approvals). 4.5–4.8 add to it.
 
 ## Phase 5 — Agents (cloud) + channels
 Scope: Cloud Engine (02 §5), cloud setup wizard, deploy/rollback, Telegram, WhatsApp (Cloud API + template), approvals over channels, cloud cost ledger sync, live view.
