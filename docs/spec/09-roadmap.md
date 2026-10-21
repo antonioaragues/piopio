@@ -264,7 +264,7 @@ The first week-long acceptance run can start after 4.4 (two agents, schedules, a
 - **Tools (NB5):** defined in `@piopio/runtime` (shared with the Cloud Engine's Mac Bridge later) and turned on per group in the definition (`tools.apple`, `tools.shortcuts`). The Definition form has an "Apple apps on this Mac" section; Reminders/schedules and Send messages are no longer greyed out there.
 - **Native side:** `AppleTools.swift` uses EventKit (Reminders, Calendar; full-access requests), Contacts, AppleScript (Notes, Music) and the `shortcuts` CLI. Usage descriptions are in Info.plist, and release signing gets the hardened-runtime resource entitlements.
 - **Cards and Undo (§4.2):** each change returns a card (reminder, event, note, music, shortcut) and the reversing call. Undo sends it to the app through 4.4's Undo.
-- Verified: an engine test with the test client as the Mac app: unavailable before it connects; then a reminder created with its card, the call carrying the agent, groups and allowed Shortcuts; Undo sending the delete; a Shortcut by name; a group that's off not offered or called. Also the app build, the Info.plist keys, and all suites. **Not verified:** the Swift handlers against the real apps (no TCC prompts or changes to your data were made here), and app captures (the display was asleep).
+- Verified: an engine test with the test client as the Mac app: unavailable before it connects; then a reminder created with its card, the call carrying the agent, groups and allowed Shortcuts; Undo sending the delete; a Shortcut by name; a group that's off not offered or called. Also the app build, the Info.plist keys, all suites, and a capture of the Definition tab with the new section. **Not verified:** the Swift handlers against the real apps (no TCC prompts or changes to your data were made here).
 
 **Milestone 4.6 done (2026-10-21).**
 - **`ask_agent` and `tell_agent` (§7 AA1–AA3):**
@@ -286,7 +286,7 @@ The first week-long acceptance run can start after 4.4 (two agents, schedules, a
   - The rate limit and the trace budget refuse.
   - Ledger's shared fact reaches Scout's recall.
 
-  A deliberately slow chain also exercised the late-answer path once (not asserted). Also the app build and the Swift tests. **Not verified:** app captures (the display was asleep); real-model behavior between agents; a restart in the middle of an ask.
+  A deliberately slow chain also exercised the late-answer path once (not asserted). Also the app build, the Swift tests, and captures of the agent messages in a chat and of the trace sheet. **Not verified:** real-model behavior between agents; a restart in the middle of an ask.
 
 ## Phase 5 — Agents (cloud) + channels
 Scope: Cloud Engine (02 §5), cloud setup wizard, deploy/rollback, Telegram, WhatsApp (Cloud API + template), approvals over channels, cloud cost ledger sync, live view.
