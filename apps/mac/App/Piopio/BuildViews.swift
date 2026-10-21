@@ -40,7 +40,7 @@ struct BuildSessionView: View {
     var chatLens = false
 
     @AppStorage("buildInspector") private var showInspector = true
-    @State private var inspectorTab = ChatInspectorTab.files
+    @AppStorage("inspectorTab") private var inspectorTab = ChatInspectorTab.changes
     @State private var previewing: String?
     @State private var reviewing = false
     @State private var reviewFile: String?
@@ -90,7 +90,7 @@ struct BuildSessionView: View {
             }
             if showInspector && !reviewing {
                 VStack(spacing: 0) {
-                    if chatLens {
+                    do {
                         Picker("", selection: $inspectorTab) {
                             ForEach(ChatInspectorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                         }
@@ -99,7 +99,7 @@ struct BuildSessionView: View {
                         .padding(.horizontal, 12)
                         .padding(.top, 12)
                     }
-                    if chatLens, inspectorTab == .files, let cwd = summary.cwd {
+                    if inspectorTab == .files, let cwd = summary.cwd {
                         FileBrowser(engine: engine, cwd: cwd, selected: $previewing)
                     } else {
                         BuildInspector(session: session, commit: !chatLens && git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil) { file in
@@ -164,6 +164,10 @@ struct BuildSessionView: View {
                                 session.document.bottomInset = 150 + height + 8
                             }
                     }
+                    if session.state?.status != .running, session.prompts.isEmpty, let followUps = summary.followUps, !followUps.isEmpty {
+                        FollowUps(items: followUps, label: nil) { text in Task { await session.send(text) } }
+                            .frame(maxWidth: 636).padding(.horizontal, 24)
+                    }
                     Composer(engine: engine, thread: session)
                         .frame(maxWidth: 636)
                         .padding(.horizontal, 24)
@@ -176,7 +180,7 @@ struct BuildSessionView: View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                subtitle.font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
             Spacer(minLength: 12)
             Button { session.showTree = true } label: {
@@ -228,16 +232,22 @@ struct BuildSessionView: View {
         .gesture(WindowDragGesture())
     }
 
-    private var subtitle: String {
+    /// "financial_ia · main · ● Done · $0.0011" (docs/design v2, 2a).
+    private var subtitle: Text {
         var parts = [project?.name ?? URL(fileURLWithPath: summary.cwd ?? "").lastPathComponent]
-        parts.append("started \(Self.relative(summary.createdAt))")
-        if let usage = session.state?.usage, usage.costUsd > 0 {
-            parts.append(usage.costUsd < 0.01 ? String(format: "$%.4f", usage.costUsd) : String(format: "$%.2f", usage.costUsd))
+        if let branch = summary.worktree?.branch ?? project?.branch { parts.append(branch) }
+        let (state, color): (String, Color) = switch session.state?.status {
+        case .running?: ("Working", .accentColor)
+        case .waitingApproval?: ("Needs you", .dsAmber)
+        case .error?: ("Failed", .dsRed)
+        default: ("Done", .dsGreen)
         }
-        if session.state?.status == .running { parts.append("working…") }
-        if session.state?.status == .waitingApproval { parts.append("waiting for you") }
-        if session.planMode { parts.append("plan mode") }
-        return parts.joined(separator: " · ")
+        var tail: [String] = []
+        if let usage = session.state?.usage, usage.costUsd > 0 {
+            tail.append(usage.costUsd < 0.01 ? String(format: "$%.4f", usage.costUsd) : String(format: "$%.2f", usage.costUsd))
+        }
+        if session.planMode { tail.append("plan mode") }
+        return Text(parts.joined(separator: " · ") + " · ") + Text("● \(state)").foregroundColor(color) + Text(tail.isEmpty ? "" : " · " + tail.joined(separator: " · "))
     }
 
     static func relative(_ iso: String) -> String {
@@ -256,8 +266,8 @@ struct BuildSessionView: View {
 
 
 enum ChatInspectorTab: String, CaseIterable {
-    case files = "Files"
     case changes = "Changes"
+    case files = "Files"
 }
 
 /// Build with no session selected (docs/design 5c, 7a). With no project yet: open a folder (button, ⌘O or drop).

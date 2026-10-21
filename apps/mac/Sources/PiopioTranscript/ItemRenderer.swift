@@ -153,41 +153,74 @@ nonisolated struct ItemRenderer: Sendable {
 
     /// "Worked 1.2s · 2 steps" (06-agents UI2): one line for a turn's tool calls; it opens to each step.
     static func stepsCard(_ s: StepsItem) -> DisclosureCard {
-        let running = s.tools.contains { $0.status == .running || $0.status == .pendingApproval }
+        let running = s.tools.contains { $0.status == .running }
+        let waiting = s.tools.contains { $0.status == .pendingApproval }
         let seconds = s.tools.compactMap(\.durationMs).reduce(0, +) / 1000
-        let time = seconds < 10 ? String(format: "%.1fs", seconds) : String(format: "%.0fs", seconds)
-        let body = s.tools.map { t -> String in
-            let (title, detail) = toolTitle(t)
-            let mark = switch t.status { case .done: "✓"; case .error: "✗"; case .running: "…"; default: "·" }
-            return "\(mark) \(title)\(detail.isEmpty ? "" : " — \(detail)")"
-        }.joined(separator: "\n")
-        let count = s.tools.count == 1 ? "1 step" : "\(s.tools.count) steps"
-        let worked = seconds >= 0.05 ? "Worked \(time) · \(count)" : "Worked · \(count)"
-        let card = DisclosureCard(kind: .thinking, title: running ? "Working… · \(count)" : worked, body: body)
+        let time = seconds < 10 ? String(format: "%.0fs", max(1, seconds.rounded())) : String(format: "%.0fs", seconds)
+        let lead = running ? "Working" : waiting ? "Waiting on you" : seconds >= 0.5 ? "Worked for \(time)" : "Worked"
+        let parts = [lead] + activitySummary(s.tools)
+        let card = DisclosureCard(kind: .activity, title: parts.joined(separator: " · "), body: "")
+        card.content = .cards(s.tools.map(toolCard))
+        card.working = running
+        card.waiting = waiting
         card.failed = s.tools.contains { $0.status == .error }
         return card
     }
 
-    /// "✎ Saved to memory: “…”  Undo" (docs/design 2b), or a topic's proposal with Save and Dismiss.
+    /// "read README.md, package.json", "edited App.swift", "1 command", "searched the web".
+    static func activitySummary(_ tools: [ToolItem]) -> [String] {
+        func names(_ kind: Set<String>) -> [String] {
+            var seen: [String] = []
+            for t in tools where kind.contains(t.tool) {
+                let path = t.args?["path"]?.stringValue ?? ""
+                let name = (path as NSString).lastPathComponent
+                if !name.isEmpty, !seen.contains(name) { seen.append(name) }
+            }
+            return seen
+        }
+        func list(_ verb: String, _ items: [String]) -> String? {
+            guard !items.isEmpty else { return nil }
+            let shown = items.prefix(3).joined(separator: ", ")
+            return items.count > 3 ? "\(verb) \(shown) +\(items.count - 3)" : "\(verb) \(shown)"
+        }
+        var out: [String] = []
+        if let r = list("read", names(["read"])) { out.append(r) }
+        if let e = list("edited", names(["edit", "write"])) { out.append(e) }
+        let commands = tools.filter { $0.tool == "bash" }.count
+        if commands > 0 { out.append("\(commands) command\(commands == 1 ? "" : "s")") }
+        let searches = tools.filter { $0.tool == "web_search" }.count
+        if searches > 0 { out.append(searches == 1 ? "searched the web" : "searched the web \(searches) times") }
+        let pages = tools.filter { $0.tool == "web_fetch" }.count
+        if pages > 0 { out.append("read \(pages) page\(pages == 1 ? "" : "s")") }
+        let known: Set<String> = ["read", "edit", "write", "bash", "web_search", "web_fetch"]
+        let others = tools.filter { !known.contains($0.tool) }.count
+        if others > 0 { out.append(out.isEmpty ? "\(others) step\(others == 1 ? "" : "s")" : "\(others) more") }
+        return out
+    }
+
+    /// "✎ Saved 2 facts to notebook memory · Undo" (docs/design v2, 4a), or a topic's proposal with Save and Dismiss.
+    /// The facts themselves show on hover.
     private func memoryNote(_ m: MemoryItem) -> NSAttributedString {
         let facts = (m.added.map { "“\($0)”" } + m.removed.map { "removed “\($0)”" }).joined(separator: ", ")
+        let count = m.added.count + m.removed.count
+        let n = m.removed.isEmpty ? (count == 1 ? "1 fact" : "\(count) facts") : (count == 1 ? "1 change" : "\(count) changes")
         let lead: String = switch (m.action, m.status) {
         case (_, .failed): "Memory not changed: \(m.reason ?? "the change failed")"
-        case (_, .undone): "Undone: \(facts)"
-        case (.saved, _): "Saved to memory: \(facts)"
-        case (.proposed, .pending): "Proposed for memory: \(facts)"
-        case (.proposed, .saved): "Saved to memory: \(facts)"
+        case (_, .undone): "Undone: \(n) no longer in memory"
+        case (.saved, _): m.removed.isEmpty ? "Saved \(n) to notebook memory" : "Updated notebook memory · \(n)"
+        case (.proposed, .pending): "Suggested for memory: \(facts)"
+        case (.proposed, .saved): "Saved \(n) to notebook memory"
         case (.proposed, .dismissed): "Dismissed: \(facts)"
-        case (.proposed, _): "Proposed: \(facts)"
+        case (.proposed, _): "Suggested: \(facts)"
         }
         let m2 = NSMutableAttributedString(string: "✎  ", attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: DS.fg3])
-        m2.append(NSAttributedString(string: lead, attributes: [.font: small, .foregroundColor: m.status == .undone || m.status == .dismissed ? DS.fg3 : DS.fg2]))
+        m2.append(NSAttributedString(string: lead, attributes: [.font: small, .foregroundColor: m.status == .undone || m.status == .dismissed ? DS.fg3 : DS.fg2, .toolTip: facts]))
         if !compact {
             let link: (String, TranscriptAction) -> NSAttributedString = { title, action in
                 NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: action.url])
             }
             if m.status == .saved, let revision = m.revisionId {
-                m2.append(NSAttributedString(string: "   ", attributes: [.font: small]))
+                m2.append(NSAttributedString(string: "  ·  ", attributes: [.font: small, .foregroundColor: DS.fg3]))
                 m2.append(link("Undo", .undoMemory(revisionId: revision)))
             } else if m.status == .pending, let proposal = m.proposalId {
                 m2.append(NSAttributedString(string: "   ", attributes: [.font: small]))
@@ -202,36 +235,38 @@ nonisolated struct ItemRenderer: Sendable {
         return line(m2, paragraph(spacing: 14, before: 4))
     }
 
-    /// A Space's Main (04-chat S1): where a message went, a live status and one line of the reply,
-    /// with Open and Wrong topic. The reply itself lives in the topic.
+    /// A notebook's Main (docs/design v2, 4a): one compact row per topic a message went to — status dot,
+    /// the topic, one line of where it stands, Open › — instead of a full card. The reply lives in the topic.
     private func routingCard(_ r: RoutingItem) -> NSAttributedString {
         let (status, dot): (String, NSColor) = switch r.status {
-        case .thinking: ("thinking…", DS.accent)
-        case .replying: ("replying…", DS.accent)
-        case .replied: (r.message.isEmpty ? "created" : "replied", DS.green)
-        case .needsYou: ("needs you", DS.amber)
-        case .failed: ("failed", DS.red)
+        case .thinking: ("Thinking…", DS.accent)
+        case .replying: ("Replying…", DS.accent)
+        case .replied: (r.message.isEmpty ? "Created" : "Replied", DS.green)
+        case .needsYou: ("Needs you", DS.amber)
+        case .failed: ("Failed", DS.red)
         }
         let m = NSMutableAttributedString()
         m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5]))
-        m.append(NSAttributedString(string: r.decision == .create ? "New topic " : "Routed to ", attributes: [.font: small, .foregroundColor: DS.fg2]))
-        m.append(NSAttributedString(string: r.topicTitle, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .semibold), .foregroundColor: DS.fg]))
-        m.append(NSAttributedString(string: "  ·  \(status)", attributes: [.font: small, .foregroundColor: DS.fg3]))
-        if !r.reason.isEmpty {
-            m.append(NSAttributedString(string: lineSeparator + r.reason, attributes: [.font: small, .foregroundColor: DS.fg3]))
-        }
-        if let preview = r.preview {
-            m.append(NSAttributedString(string: lineSeparator + "“\(preview)”", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg]))
-        }
+        m.append(NSAttributedString(string: r.topicTitle, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
+        let kind = r.decision == .create ? "new topic" : "sent here"
+        m.append(NSAttributedString(string: "  ·  \(kind)  ·  ", attributes: [.font: small, .foregroundColor: DS.fg3, .toolTip: r.reason]))
+        m.append(NSAttributedString(string: status, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: r.status == .needsYou ? DS.amber : r.status == .failed ? DS.red : DS.fg3]))
         if !compact, !r.topicId.isEmpty {
-            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-            m.append(pill("Open →", .openTopic(topicId: r.topicId, itemId: r.replyItemId), .secondary))
+            let link: (String, TranscriptAction) -> NSAttributedString = { title, action in
+                NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: action.url])
+            }
+            m.append(NSAttributedString(string: "     ", attributes: [.font: small]))
+            m.append(link("Open ›", .openTopic(topicId: r.topicId, itemId: r.replyItemId)))
             if !r.message.isEmpty, r.status != .failed {
-                m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
-                m.append(pill("Wrong topic…", .wrongTopic(itemId: r.id), .secondary))
+                m.append(NSAttributedString(string: "   ", attributes: [.font: small]))
+                m.append(NSAttributedString(string: "Change", attributes: [.font: small, .foregroundColor: DS.fg3, .link: TranscriptAction.wrongTopic(itemId: r.id).url, .toolTip: "Send this to another topic"]))
             }
         }
-        return card(m, .link, lineHeight: 1.75)
+        let line2 = r.preview.map { String($0.prefix(140)) } ?? (r.reason.isEmpty ? nil : r.reason)
+        if let line2 {
+            m.append(NSAttributedString(string: lineSeparator + "    " + line2, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
+        }
+        return card(m, .link, lineHeight: 1.5)
     }
 
     // MARK: Messages
@@ -532,7 +567,7 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(gap(a.id))
         }
         if versions, a.outbound == nil {
-            m.append(action("Regenerate", .regenerate(itemId: a.id), itemId: a.id, help: "Ask again (keeps this version)"))
+            m.append(action("Retry", .regenerate(itemId: a.id), itemId: a.id, help: "Ask again (keeps this version)"))
             m.append(gap(a.id))
             m.append(action("Fork", .fork(itemId: a.id), itemId: a.id, help: "Continue from here in a new thread"))
         } else if a.text.isEmpty {

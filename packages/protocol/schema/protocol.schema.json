@@ -9478,6 +9478,12 @@
 							}
 						}
 					}
+				},
+				"followUps": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
 				}
 			}
 		},
@@ -15810,6 +15816,12 @@
 										}
 									}
 								}
+							},
+							"followUps": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
 							}
 						}
 					}
@@ -16353,6 +16365,12 @@
 										}
 									}
 								}
+							},
+							"followUps": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
 							}
 						}
 					}
@@ -16575,6 +16593,9 @@
 							"type": "string"
 						}
 					}
+				},
+				"fold": {
+					"type": "boolean"
 				}
 			}
 		},
@@ -18245,6 +18266,9 @@
 							"type": "string"
 						}
 					}
+				},
+				"fold": {
+					"type": "boolean"
 				}
 			}
 		},
@@ -23158,6 +23182,50 @@
 							}
 						}
 					}
+				},
+				"proposals": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"at",
+							"topicId",
+							"title",
+							"added",
+							"removed",
+							"reason"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"topicId": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							},
+							"added": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"removed": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"reason": {
+								"type": "string"
+							}
+						}
+					}
 				}
 			}
 		},
@@ -23737,6 +23805,9 @@
 						},
 						"suggestSpaces": {
 							"type": "boolean"
+						},
+						"followUps": {
+							"type": "boolean"
 						}
 					}
 				},
@@ -23911,6 +23982,9 @@
 						},
 						"suggestSpaces": {
 							"type": "boolean"
+						},
+						"followUps": {
+							"type": "boolean"
 						}
 					}
 				},
@@ -24083,6 +24157,9 @@
 							"type": "boolean"
 						},
 						"suggestSpaces": {
+							"type": "boolean"
+						},
+						"followUps": {
 							"type": "boolean"
 						}
 					}

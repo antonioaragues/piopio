@@ -437,8 +437,14 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		await this.refreshMemory();
 	}
 
-	memoryInfo(): { text: string; revisions: Omit<Revision, "before" | "after">[] } {
-		return { text: this.memory.text, revisions: [...this.memory.revisions].reverse().map(({ before: _b, after: _a, ...r }) => r) };
+	memoryInfo(): { text: string; revisions: Omit<Revision, "before" | "after">[]; proposals: Omit<Proposal, "status" | "revisionId">[] } {
+		return {
+			text: this.memory.text,
+			revisions: [...this.memory.revisions].reverse().map(({ before: _b, after: _a, ...r }) => r),
+			proposals: Object.values(this.memory.proposals)
+				.filter((p) => p.status === "pending")
+				.map(({ status: _s, revisionId: _r, ...p }) => p),
+		};
 	}
 
 	revision(id: string): Revision | undefined {

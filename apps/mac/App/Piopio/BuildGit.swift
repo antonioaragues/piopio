@@ -357,7 +357,7 @@ struct NewSessionSheet: View {
                 Button(engine.model(model).map(ModelChip.short) ?? model?.id ?? "Choose…") { showModels = true }
                     .buttonStyle(PillStyle(compact: true))
                     .popover(isPresented: $showModels) {
-                        ModelPicker(engine: engine, selected: model) { m in model = m; showModels = false }
+                        ModelPicker(engine: engine, selected: model, role: .build) { m in model = m; showModels = false }
                     }
                 Spacer()
             }
@@ -391,7 +391,7 @@ struct NewSessionSheet: View {
             if let raw = defaults.string(forKey: "newSession.workOn.\(project.id)"), let k = Kind(rawValue: raw), project.branch != nil { workOn = k }
             if ProcessInfo.processInfo.environment["PIOPIO_DEMO_WORKTREE"] == "1" { workOn = .worktree }
             mode = project.approvalMode
-            model = engine.preferredModel
+            model = engine.model(for: .build)
         }
         .onChange(of: prompt) { _, text in
             guard !branchEdited else { return }

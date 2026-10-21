@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+:root{--win:#fdfdfc;--glass:rgba(242,242,246,.78);--glassSolid:#f2f2f5;--card:#fff;--chip:rgba(0,0,0,.045);--bubble:#f1f1f3;--pill:rgba(255,255,255,.9);--fg:#1d1d1f;--fg2:#5b5b61;--fg3:#8e8e93;--line:rgba(0,0,0,.08);--inv:#1d1d1f;--invfg:#fff;--green:oklch(0.64 0.15 150);--amber:oklch(0.74 0.15 70);--red:oklch(0.62 0.18 25);--accent:#0a84ff;--accentSoft:color-mix(in srgb,var(--accent) 14%,transparent);--accentLine:color-mix(in srgb,var(--accent) 45%,transparent);--yolk:oklch(0.88 0.16 92);--yolkSoft:oklch(0.97 0.04 92);--beak:oklch(0.68 0.17 45);--addbg:oklch(.96 .035 150);--canvas:#e8e8eb;--mono:"SF Mono",ui-monospace,Menlo,monospace}
+body[data-theme="dark"]{--win:#1a1a1c;--glass:rgba(40,40,44,.85);--glassSolid:#2a2a2e;--card:#242426;--chip:rgba(255,255,255,.08);--bubble:#2e2e31;--pill:rgba(74,74,78,.95);--fg:#f5f5f7;--fg2:#b8b8bd;--fg3:#8e8e93;--line:rgba(255,255,255,.12);--inv:#f5f5f7;--invfg:#1d1d1f;--accentSoft:color-mix(in srgb,var(--accent) 26%,transparent);--accentLine:color-mix(in srgb,var(--accent) 60%,transparent);--yolkSoft:oklch(0.3 0.05 92);--addbg:oklch(.32 .06 150);--canvas:#0e0e10}
+body{margin:0;background:var(--canvas);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+</style>
+</helmet>
+<header style="padding:56px 80px 0;display:flex;flex-direction:column;gap:14px">
+  <div style="display:flex;align-items:center;gap:16px">
+    <img src="assets/chick.png" style="width:56px;height:56px;border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,.12)">
+    <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:32px;font-weight:700;letter-spacing:-0.02em">Piopio v2 · chosen direction</div><div style="font-size:15px;color:var(--fg2)">One sidebar, no modes. Every screen below uses it. Earlier exploration: <a href="Piopio Redesign 1 - Home and Build.dc.html">files 1–4</a>.</div></div>
+  </div>
+</header>
+<section style="padding:64px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">One sidebar at scale</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">With 6 projects, 23 sessions, 3 notebooks, 4 agents and 49 chats, the sidebar only shows what's live. Everything else stays one click away.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="0a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">0a</span><span style="font-size:15px;font-weight:600">Busy sidebar and its rules</span></div>
+      <div style="display:flex;gap:32px;align-items:flex-start">
+        <div style="width:268px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+          <dc-import name="Piopio Sidebar" variant="b" busy="{{ true }}" active="fin-kutxa" hint-size="268px,100%"></dc-import>
+        </div>
+        <div style="width:460px;display:flex;flex-direction:column;gap:14px;padding-top:8px">
+          <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;gap:14px"><span style="font-size:20px;font-weight:700;color:var(--fg3);width:24px">1</span><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">Only what's live</span><span style="font-size:13.5px;line-height:1.5;color:var(--fg2)">Under each project: sessions that are running, waiting on you, or touched in the last 3 days. The rest fold into "9 earlier sessions".</span></div></div>
+          <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;gap:14px"><span style="font-size:20px;font-weight:700;color:var(--fg3);width:24px">2</span><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">Attention floats up</span><span style="font-size:13.5px;line-height:1.5;color:var(--fg2)">Waiting (amber) and running items sort first inside their project, and also count in Needs you, so you never scroll to find them.</span></div></div>
+          <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;gap:14px"><span style="font-size:20px;font-weight:700;color:var(--fg3);width:24px">3</span><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">Caps per section</span><span style="font-size:13.5px;line-height:1.5;color:var(--fg2)">Each section shows only its most recent few (here 2 projects, 2 notebooks, 1 agent, 1 chat), sized to fit the window. The header count ("Projects · 6") and "4 more ›" open the full list.</span></div></div>
+          <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;gap:14px"><span style="font-size:20px;font-weight:700;color:var(--fg3);width:24px">4</span><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">Pin and collapse</span><span style="font-size:13.5px;line-height:1.5;color:var(--fg2)">Pinned keeps any item at the top regardless of activity. Click a section header to collapse it; the state is remembered.</span></div></div>
+          <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;gap:14px"><span style="font-size:20px;font-weight:700;color:var(--fg3);width:24px">5</span><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">Search filters in place</span><span style="font-size:13.5px;line-height:1.5;color:var(--fg2)">Typing in Search narrows the sidebar across all sections, including folded items. ⌘K jumps anywhere.</span></div></div>
+          <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;gap:14px"><span style="font-size:20px;font-weight:700;color:var(--fg3);width:24px">6</span><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">Auto-archive</span><span style="font-size:13.5px;line-height:1.5;color:var(--fg2)">Done sessions and chats untouched for 30 days move to Archived in the index. Nothing is deleted.</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="0b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">0b</span><span style="font-size:15px;font-weight:600">"Projects · 6" opens the full index</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" busy="{{ true }}" active="fin" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;padding:40px 40px 0;display:flex;flex-direction:column;gap:18px;min-width:0">
+          <div style="display:flex;align-items:flex-end;gap:12px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px"><div style="font-size:26px;font-weight:700;letter-spacing:-0.02em">Projects</div><div style="font-size:13.5px;color:var(--fg2)">6 projects · 23 sessions · 2 need you</div></div>
+            <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--inv);color:var(--invfg);font-size:12.5px;font-weight:600;display:flex;align-items:center">Open Folder… ⌘O</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div style="flex:1;height:30px;border-radius:8px;background:var(--chip);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;color:var(--fg3)"><span>⌕</span>Filter projects and sessions</div>
+            <div style="display:flex;padding:2px;border-radius:999px;background:var(--chip);font-size:12px"><span style="padding:4px 12px;border-radius:999px;background:var(--pill);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)">Active</span><span style="padding:4px 12px;color:var(--fg2)">All</span><span style="padding:4px 12px;color:var(--fg2)">Archived</span></div>
+            <span style="height:28px;padding:0 10px;border-radius:14px;background:var(--chip);font-size:12px;display:flex;align-items:center">Recent ⌄</span>
+          </div>
+          <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column;font-size:13px">
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 110px 120px;gap:12px;padding:8px 16px;font-size:11px;font-weight:600;color:var(--fg3);border-bottom:.5px solid var(--line)"><span>Name</span><span>Branch</span><span>Changes</span><span>Updated</span></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 110px 120px;gap:12px;padding:10px 16px;align-items:center;background:var(--accentSoft)"><span style="display:flex;align-items:center;gap:8px;font-weight:600"><span style="color:var(--fg3);font-size:10px">⌄</span><span style="width:18px;height:18px;border-radius:5px;background:oklch(0.62 0.17 250);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">F</span>financial_ia <span style="font-weight:400;color:var(--fg3)">12 sessions</span></span><span style="font-family:var(--mono);font-size:12px;color:var(--fg2)">main</span><span style="color:var(--fg2)">+96 −12</span><span style="color:var(--fg3)">2 min ago</span></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 110px 120px;gap:12px;padding:9px 16px 9px 58px;align-items:center"><span style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber)"></span>Fix Kutxabank parser</span><span style="font-family:var(--mono);font-size:12px;color:var(--fg2)">fix/kutxa</span><span style="color:var(--fg2)">+12 −4</span><span style="color:var(--amber)">Needs you</span></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 110px 120px;gap:12px;padding:9px 16px 9px 58px;align-items:center"><span style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)"></span>CSV import preview</span><span style="font-family:var(--mono);font-size:12px;color:var(--fg2)">feat/csv</span><span style="color:var(--fg2)">+84 −8</span><span style="color:var(--fg3)">Running</span></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 110px 120px;gap:12px;padding:9px 16px 9px 58px;align-items:center"><span style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;background:var(--green)"></span>Qué es este proyecto?</span><span style="font-family:var(--mono);font-size:12px;color:var(--fg2)">main</span><span style="color:var(--fg3)">—</span><span style="color:var(--fg3)">1 h ago</span></div>
+            <div style="padding:8px 16px 10px 58px;font-size:12.5px;color:var(--accent)">Show 9 earlier sessions</div>
+            <div style="height:.5px;background:var(--line)"></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 110px 120px;gap:12px;padding:10px 16px;align-items:center"><span style="display:flex;align-items:center;gap:8px;font-weight:600"><span style="color:var(--fg3);font-size:10px">›</span><span style="width:18px;height:18px;border-radius:5px;background:oklch(0.68 0.17 45);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">P</span>piopio <span style="font-weight:400;color:var(--fg3)">5 sessions</span></span><span style="font-family:var(--mono);font-size:12px;color:var(--fg2)">sidebar</span><span style="color:var(--fg2)">+210 −88</span><span style="color:var(--fg3)">Running</span></div>
+            <div style="height:.5px;background:var(--line)"></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 110px 120px;gap:12px;padding:10px 16px;align-items:center"><span style="display:flex;align-items:center;gap:8px;font-weight:600"><span style="color:var(--fg3);font-size:10px">›</span><span style="width:18px;height:18px;border-radius:5px;background:oklch(0.65 0.14 160);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">S</span>smart-paste <span style="font-weight:400;color:var(--fg3)">1 session</span></span><span style="font-family:var(--mono);font-size:12px;color:var(--fg3)">no git</span><span style="color:var(--fg3)">—</span><span style="color:var(--fg3)">Yesterday</span></div>
+            <div style="height:.5px;background:var(--line)"></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 130px 110px 120px;gap:12px;padding:10px 16px;align-items:center"><span style="display:flex;align-items:center;gap:8px;font-weight:600"><span style="color:var(--fg3);font-size:10px">›</span><span style="width:18px;height:18px;border-radius:5px;background:oklch(0.55 0.08 250);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">M</span>moneda-mobile <span style="font-weight:400;color:var(--fg3)">3 sessions</span></span><span style="font-family:var(--mono);font-size:12px;color:var(--fg2)">main</span><span style="color:var(--fg3)">—</span><span style="color:var(--fg3)">5 days ago</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:80px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Agent page · recommendation</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Mix of B and A. Talking to an agent is the main thing you do, so the page opens on the conversation (B). What made A useful (next run, last run, "teach it") goes into the side card. Three tabs instead of five: Chat · Activity · Setup. Other contacts' conversations sit behind the "with" picker in the header.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="7c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">7c</span><span style="font-size:15px;font-weight:600">Conversation first, overview in the side card</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" active="daily" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative">
+          <div style="padding:18px 20px 0 28px;display:flex;align-items:center;gap:12px;flex:none">
+            <div style="width:36px;height:36px;border-radius:50%;background:oklch(0.95 0.06 90);display:flex;align-items:center;justify-content:center;font-size:18px">☀️</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:17px;font-weight:700">Daily briefing</span><span style="font-size:12px;color:var(--fg3);display:flex;gap:6px;align-items:center"><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>This Mac · every day 7:00</span></div>
+            <span style="height:28px;padding:0 10px;border-radius:14px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:4px">with Antonio (you) <span style="font-size:9px;color:var(--fg3)">⌄</span></span>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--pill);box-shadow:inset 0 0 0 .5px var(--line);font-size:12px;font-weight:500;display:flex;align-items:center">Run now</span>
+          </div>
+          <div style="display:flex;gap:22px;padding:12px 28px 0;border-bottom:.5px solid var(--line);font-size:13px;flex:none">
+            <span style="padding:8px 0;font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)">Chat</span><span style="padding:8px 0;color:var(--fg2)">Activity</span><span style="padding:8px 0;color:var(--fg2)">Setup</span>
+          </div>
+          <div style="flex:1;overflow:hidden;display:flex;justify-content:center;padding:20px 32px 150px">
+            <div style="width:100%;max-width:600px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--fg3)"><div style="flex:1;height:.5px;background:var(--line)"></div><span>Automatic run · today 7:00</span><div style="flex:1;height:.5px;background:var(--line)"></div></div>
+              <div style="display:flex;gap:10px">
+                <div style="width:28px;height:28px;border-radius:50%;background:oklch(0.95 0.06 90);display:flex;align-items:center;justify-content:center;font-size:14px;flex:none">☀️</div>
+                <div style="display:flex;flex-direction:column;gap:8px;font-size:13.5px;line-height:1.6">
+                  <span>Good morning, Antonio. Today's briefing is thin because I don't have much to work from yet: no calendar, no city, no news topics.</span>
+                  <span>Tell me your city and what you follow, and tomorrow's will be better.</span>
+                  <span style="font-size:12px;color:var(--fg3)">Searched the web · 6s · $0.0009</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;padding-left:38px">
+                <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">I live in Bilbao</span>
+                <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">I follow tech and markets</span>
+                <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">Move it to 8:00</span>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;left:0;right:0;bottom:20px;display:flex;justify-content:center;padding:0 32px">
+            <div style="width:100%;max-width:600px;background:var(--glass);backdrop-filter:blur(30px);border-radius:20px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.08);padding:12px 12px 10px 16px;display:flex;align-items:center;gap:8px">
+              <span style="flex:1;font-size:13.5px;color:var(--fg3)">Message Daily briefing…</span>
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-size:13px">↑</div>
+            </div>
+          </div>
+        </div>
+        <div style="width:300px;padding:8px 8px 8px 0;box-sizing:border-box;flex:none;display:flex">
+          <div style="flex:1;background:var(--glass);border-radius:14px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.07);display:flex;flex-direction:column;padding:18px;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:11px;font-weight:600;color:var(--fg3)">Next run</span><span style="font-size:22px;font-weight:700">Tomorrow 7:00</span><span style="font-size:12px;color:var(--fg3)">Last: today 7:00 · 6s · ✓</span></div>
+            <div style="border-radius:12px;background:var(--yolkSoft);padding:14px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:8px"><img src="assets/chick.png" style="width:24px;height:24px;border-radius:50%;object-fit:cover"><span style="font-size:13px;font-weight:600">Teach it 3 things</span><span style="font-size:11.5px;color:var(--fg3)">0 / 3</span></div>
+              <div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px">
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--fg3)"></span>Your city</div>
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--fg3)"></span>News you follow</div>
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--fg3)"></span>Connect Calendar <span style="color:var(--accent);margin-left:auto">Allow</span></div>
+              </div>
+            </div>
+            <div style="height:.5px;background:var(--line)"></div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px">
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">Can</span><span>Web · memory · message you</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">Reaches you via</span><span>Piopio</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">Model</span><span>Haiku 5.5</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">This month</span><span>$0.0009 of $1</span></div>
+            </div>
+            <div style="flex:1"></div>
+            <span style="font-size:12px;color:var(--accent)">Edit in Setup ›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:80px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Home and Needs you</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Home is the front door; Needs you is the single triage feed for approvals, agent messages and topic questions.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+<div id="1b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">1b</span><span style="font-size:15px;font-weight:600">B · Home, one sidebar without modes</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" active="home" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;overflow:hidden;display:flex;justify-content:center;padding:56px 48px 0">
+          <div style="width:100%;max-width:820px;display:flex;flex-direction:column;gap:28px">
+            <div style="display:flex;align-items:center;gap:16px">
+              <img src="assets/chick.png" style="width:52px;height:52px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 3px var(--yolkSoft)">
+              <div style="display:flex;flex-direction:column;gap:3px"><div style="font-size:26px;font-weight:700;letter-spacing:-0.02em">Good evening, Antonio</div><div style="font-size:13.5px;color:var(--fg2)">Tuesday 21 October · 3 things need you · $0.05 spent today</div></div>
+            </div>
+            <div style="background:var(--card);border-radius:16px;box-shadow:0 0 0 .5px var(--line),0 6px 24px rgba(0,0,0,.06);padding:14px 16px 12px;display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:15px;color:var(--fg3)">Ask anything, start a build session, or message an agent…</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px">New chat <span style="color:var(--fg3);font-size:9px">⌄</span></span>
+                <span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Claude Haiku 5.5</span>
+                <div style="flex:1"></div>
+                <span style="font-size:11.5px;color:var(--fg3)">@financial_ia starts a session · @Daily briefing messages the agent</span>
+                <div style="width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-size:13px;margin-left:8px">↑</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center">Needs you <span style="color:var(--fg3);font-weight:400">3</span></div>
+                <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px">
+                    <div style="width:7px;height:7px;border-radius:50%;background:var(--amber);flex:none"></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;font-weight:600">Run <span style="font-family:var(--mono);font-weight:500;font-size:12px">pnpm test</span>?</div><div style="font-size:12px;color:var(--fg3)">Fix Kutxabank parser · financial_ia</div></div>
+                    <span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Deny</span>
+                    <span style="height:24px;padding:0 10px;border-radius:12px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center">Allow</span>
+                  </div>
+                  <div style="height:.5px;background:var(--line);margin-left:31px"></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px">
+                    <div style="width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none"></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;font-weight:600">Your morning briefing</div><div style="font-size:12px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Daily briefing · It needs your city to say more</div></div>
+                    <span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Read</span>
+                  </div>
+                  <div style="height:.5px;background:var(--line);margin-left:31px"></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px">
+                    <div style="width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none"></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;font-weight:600">2 questions about the layout</div><div style="font-size:12px;color:var(--fg3)">Kitchen renovation · Distribución</div></div>
+                    <span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Answer</span>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:13px;font-weight:600">Running now</div>
+                <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:11px;height:11px;border-radius:50%;border:1.6px solid var(--accent);border-top-color:transparent"></div><span style="font-size:13px;font-weight:600">CSV import preview</span><div style="flex:1"></div><span style="font-size:12px;color:var(--fg3)">3 min</span></div>
+                  <div style="font-size:12px;color:var(--fg2)">Editing <span style="font-family:var(--mono)">import_preview.tsx</span> · +84 −12</div>
+                </div>
+                <div style="font-size:13px;font-weight:600;padding-top:8px">Coming up</div>
+                <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px">
+                  <span style="font-size:15px">☀️</span><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px;font-weight:600">Daily briefing</span><span style="font-size:12px;color:var(--fg3)">Tomorrow at 7:00 · this Mac</span></div><span style="font-size:12px;color:var(--fg2)">Run now</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="font-size:13px;font-weight:600">Jump back in</div>
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+                <div style="background:var(--chip);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:11px;font-weight:600;color:var(--fg3)">Notebook</span><span style="font-size:13px;font-weight:600">Kitchen renovation</span><span style="font-size:12px;color:var(--fg3)">3 topics · 20 h ago</span></div>
+                <div style="background:var(--chip);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:11px;font-weight:600;color:var(--fg3)">Session · financial_ia</span><span style="font-size:13px;font-weight:600">Qué es este proyecto?</span><span style="font-size:12px;color:var(--fg3)">Done · just now</span></div>
+                <div style="background:var(--chip);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:11px;font-weight:600;color:var(--fg3)">Chat</span><span style="font-size:13px;font-weight:600">Porto weekend ideas</span><span style="font-size:12px;color:var(--fg3)">Yesterday</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><div id="6b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">6b</span><span style="font-size:15px;font-weight:600">B · One triage feed</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" active="needs" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;overflow:hidden;display:flex;justify-content:center;padding:44px 48px 0">
+          <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:flex-end;gap:12px"><div style="flex:1;display:flex;flex-direction:column;gap:3px"><div style="font-size:26px;font-weight:700;letter-spacing:-0.02em">Needs you</div><div style="font-size:13.5px;color:var(--fg2)">3 items · oldest first</div></div>
+              <div style="display:flex;gap:6px;font-size:12px"><span style="height:26px;padding:0 11px;border-radius:13px;background:var(--inv);color:var(--invfg);font-weight:600;display:flex;align-items:center">All 3</span><span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);display:flex;align-items:center">Approvals 1</span><span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);display:flex;align-items:center">Messages 2</span></div></div>
+            <div style="background:var(--card);border-radius:14px;box-shadow:0 0 0 1px var(--accentLine),0 0 0 4px var(--accentSoft);padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:10px"><div style="width:28px;height:28px;border-radius:50%;background:oklch(0.95 0.06 90);display:flex;align-items:center;justify-content:center;font-size:14px">☀️</div><div style="flex:1;display:flex;flex-direction:column"><span style="font-size:13.5px;font-weight:600">Daily briefing wants to know where you are</span><span style="font-size:12px;color:var(--fg3)">Automatic run · 7:02</span></div><span style="font-size:12px;color:var(--fg2)">Read briefing ›</span></div>
+              <div style="font-size:13.5px;line-height:1.55;color:var(--fg2)">“Tell me your city and the news topics you follow, and I'll tailor future briefings.”</div>
+              <div style="height:36px;border-radius:10px;background:var(--chip);display:flex;align-items:center;padding:0 6px 0 12px;gap:8px"><span style="flex:1;font-size:13px;color:var(--fg3)">Bilbao. Tech, AI and markets.</span><span style="height:26px;padding:0 11px;border-radius:13px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center">Send ↩</span></div>
+            </div>
+            <div style="background:var(--card);border-radius:14px;box-shadow:0 0 0 .5px var(--line);padding:14px 18px;display:flex;align-items:center;gap:10px">
+              <div style="width:7px;height:7px;border-radius:50%;background:var(--amber)"></div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13.5px;font-weight:600">Habit coach paused itself</span><span style="font-size:12px;color:var(--fg3)">Reached the $1.00 monthly budget you set · Monday</span></div>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Keep paused</span>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:12px;font-weight:600;display:flex;align-items:center">Raise to $2</span>
+            </div>
+            <div style="background:var(--card);border-radius:14px;box-shadow:0 0 0 .5px var(--line);padding:14px 18px;display:flex;align-items:center;gap:10px">
+              <div style="width:7px;height:7px;border-radius:50%;background:var(--amber)"></div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13.5px;font-weight:600">Run <span style="font-family:var(--mono);font-size:12.5px;font-weight:500">pnpm test</span>?</span><span style="font-size:12px;color:var(--fg3)">Fix Kutxabank parser · financial_ia</span></div>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Deny</span>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center">Allow once</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:28px">
+              <img src="assets/chick.png" style="width:44px;height:44px;border-radius:50%;object-fit:cover;opacity:.9">
+              <span style="font-size:13px;color:var(--fg3)">That's everything. Piopio will chirp when something new comes in.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:80px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Build session</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Activity folded into one line; the inspector holds changes, the turn timeline and context.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+<div id="2a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">2a</span><span style="font-size:15px;font-weight:600">A · Activity folded, inspector with a job</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" active="fin-q" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative">
+          <div style="height:60px;display:flex;align-items:center;padding:0 20px 0 24px;gap:8px;flex:none">
+            <div style="display:flex;flex-direction:column;gap:1px;flex:1;min-width:0"><div style="font-size:15px;font-weight:600">Qué es este proyecto?</div><div style="font-size:11.5px;color:var(--fg3);display:flex;gap:6px;align-items:center"><span>financial_ia</span><span>·</span><span style="font-family:var(--mono)">main</span><span>·</span><span style="color:var(--green)">● Done</span><span>·</span><span>$0.0011</span></div></div>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--pill);box-shadow:inset 0 0 0 .5px var(--line),0 1px 2px rgba(0,0,0,.05);font-size:12px;font-weight:500;display:flex;align-items:center;gap:6px">Open in VS Code <span style="color:var(--fg3);font-size:9px">⌄</span></span>
+            <span style="width:28px;height:28px;border-radius:14px;background:var(--pill);box-shadow:inset 0 0 0 .5px var(--line);font-size:11px;font-family:var(--mono);display:flex;align-items:center;justify-content:center">›_</span>
+            <span style="width:28px;height:28px;border-radius:14px;background:var(--accentSoft);color:var(--accent);font-size:13px;display:flex;align-items:center;justify-content:center">◫</span>
+          </div>
+          <div style="flex:1;overflow:hidden;display:flex;justify-content:center;padding:4px 32px 150px">
+            <div style="width:100%;max-width:640px;display:flex;flex-direction:column;gap:14px">
+              <div style="align-self:flex-end;background:var(--bubble);border-radius:16px 16px 4px 16px;padding:9px 14px;font-size:13.5px">Qué es este proyecto?</div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg3)"><span style="color:var(--green)">✓</span><span>Worked for 4s</span><span>·</span><span>read README.md, package.json, REQUIREMENTS.md</span><span>·</span><span>1 command</span><span style="font-size:10px">›</span></div>
+              <div style="font-size:13.5px;line-height:1.6">Es <b>Moneda</b>, una app de finanzas personales <i>local-first</i>, todavía en fase de prototipo. Importa tus exportaciones bancarias y muestra tu patrimonio neto sin conectarse a ningún banco.</div>
+              <div style="font-size:13.5px;font-weight:600;margin-top:2px">Qué hace</div>
+              <div style="display:flex;flex-direction:column;gap:5px;font-size:13.5px;line-height:1.5;padding-left:4px">
+                <div style="display:flex;gap:10px"><span style="color:var(--fg3)">•</span><span>Importa PDF, CSV y XLSX con vista previa antes de guardar.</span></div>
+                <div style="display:flex;gap:10px"><span style="color:var(--fg3)">•</span><span>Cuentas de banco, bróker, cripto e hipoteca; cierre mensual por cuenta.</span></div>
+                <div style="display:flex;gap:10px"><span style="color:var(--fg3)">•</span><span>Análisis mensual opcional con un LLM y un parser genérico.</span></div>
+              </div>
+              <div style="font-size:13.5px;font-weight:600;margin-top:2px">Estructura</div>
+              <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:10px 14px;display:grid;grid-template-columns:150px 1fr;row-gap:6px;font-size:12.5px">
+                <span style="font-family:var(--mono)">backend/</span><span style="color:var(--fg2)">FastAPI · SQLite · parsers</span>
+                <span style="font-family:var(--mono)">frontend/</span><span style="color:var(--fg2)">React + Vite, proxy de /api al 8000</span>
+                <span style="font-family:var(--mono)">REQUIREMENTS.md</span><span style="color:var(--fg2)">Requisitos (no leído en detalle)</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;font-size:12px;color:var(--fg3)"><span>Copy</span><span>Retry</span><span>Fork</span><div style="flex:1"></div><span>Haiku 5.5 · $0.0006</span></div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">Run it locally</span>
+                <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">Review the parsers</span>
+                <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">Write an AGENTS.md</span>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;left:0;right:0;bottom:20px;display:flex;justify-content:center;padding:0 32px">
+            <div style="width:100%;max-width:640px;background:var(--glass);backdrop-filter:blur(30px);border-radius:20px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.08);padding:12px 12px 10px 16px;display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:13.5px;color:var(--fg3)">Ask, @mention files, or /command…</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span>Ask before edits</span>
+                <span style="height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Haiku 5.5</span>
+                <span style="height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Think · medium</span>
+                <div style="flex:1"></div>
+                <div style="width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-size:13px">↑</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="width:288px;padding:8px 8px 8px 0;box-sizing:border-box;flex:none;display:flex">
+          <div style="flex:1;background:var(--glass);border-radius:14px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.07);display:flex;flex-direction:column;padding:16px;gap:14px">
+            <div style="display:flex;padding:2px;border-radius:999px;background:var(--chip);font-size:12px">
+              <span style="flex:1;text-align:center;padding:4px 0;border-radius:999px;background:var(--pill);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)">Changes</span><span style="flex:1;text-align:center;padding:4px 0;color:var(--fg2)">Files</span>
+            </div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:14px;display:flex;flex-direction:column;gap:6px">
+              <div style="font-size:13px;font-weight:600">No changes yet</div>
+              <div style="font-size:12px;line-height:1.5;color:var(--fg2)">Edits land here as the agent makes them. Each turn saves a checkpoint first, so you can roll back.</div>
+            </div>
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding-top:4px">Timeline</div>
+            <div style="display:flex;flex-direction:column;gap:0;position:relative;padding-left:4px">
+              <div style="position:absolute;left:8px;top:8px;bottom:8px;width:1px;background:var(--line)"></div>
+              <div style="display:flex;gap:10px;align-items:flex-start;padding:2px 0 12px"><div style="width:9px;height:9px;border-radius:50%;background:var(--green);margin-top:3px;position:relative"></div><div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:12.5px;font-weight:500">Turn 1 · answered</span><span style="font-size:11.5px;color:var(--fg3)">4s · 0 files · just now</span></div></div>
+              <div style="display:flex;gap:10px;align-items:flex-start;padding:2px 0"><div style="width:9px;height:9px;border-radius:50%;background:var(--win);box-shadow:inset 0 0 0 1.5px var(--fg3);margin-top:3px;position:relative"></div><div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:12.5px;font-weight:500">Checkpoint · session start</span><span style="font-size:11.5px;color:var(--fg3)">Restore…</span></div></div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">Context</span><span>7k of 1M</span></div>
+              <div style="height:4px;border-radius:2px;background:var(--chip)"><div style="width:2%;min-width:4px;height:100%;border-radius:2px;background:var(--accent)"></div></div>
+              <div style="display:flex;justify-content:space-between;padding-top:4px"><span style="color:var(--fg2)">This session</span><span>$0.0011</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:80px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Chat, Notebook, Memory</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Light chat with actionable dead ends; notebooks with quiet routing and a progress inspector; memory as a fact list.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+<div id="3a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">3a</span><span style="font-size:15px;font-weight:600">A · Light chat, dead ends become actions</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" active="spchat" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative">
+          <div style="height:60px;display:flex;align-items:center;padding:0 20px 0 24px;gap:8px;flex:none">
+            <div style="display:flex;flex-direction:column;gap:1px;flex:1"><div style="font-size:15px;font-weight:600">what is this project about?</div><div style="font-size:11.5px;color:var(--fg3)">Chat · yesterday · $0.0007</div></div>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--pill);box-shadow:inset 0 0 0 .5px var(--line);font-size:12px;font-weight:500;display:flex;align-items:center">Move to Notebook…</span>
+            <span style="width:28px;height:28px;border-radius:14px;background:var(--pill);box-shadow:inset 0 0 0 .5px var(--line);font-size:13px;display:flex;align-items:center;justify-content:center">⋯</span>
+          </div>
+          <div style="flex:1;overflow:hidden;display:flex;justify-content:center;padding:12px 32px 150px">
+            <div style="width:100%;max-width:660px;display:flex;flex-direction:column;gap:14px">
+              <div style="align-self:flex-end;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+                <span style="height:24px;padding:0 10px;border-radius:6px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:12px;height:10px;border-radius:2px;background:oklch(0.65 0.14 160)"></span>smart-paste</span>
+                <div style="background:var(--bubble);border-radius:16px 16px 4px 16px;padding:9px 14px;font-size:13.5px">what is this project about?</div>
+              </div>
+              <div style="font-size:12px;color:var(--fg3);display:flex;gap:8px"><span style="color:var(--green)">✓</span><span>Listed smart-paste · 2 commands · 3s</span><span style="font-size:10px">›</span></div>
+              <div style="font-size:13.5px;line-height:1.6">The <span style="font-family:var(--mono);font-size:12.5px;background:var(--chip);padding:1px 5px;border-radius:4px">smart-paste</span> folder is empty: no files, no hidden files, and it isn't a git repository. There's nothing to describe yet.</div>
+              <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:12px 14px;display:flex;align-items:center;gap:12px">
+                <div style="width:34px;height:28px;border-radius:6px;background:oklch(0.65 0.14 160);opacity:.9;flex:none"></div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:13px;font-weight:600">~/Proyectos/smart-paste</span><span style="font-size:12px;color:var(--fg3)">Empty folder · not a git repo</span></div>
+                <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Reveal in Finder</span>
+                <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:12px;font-weight:600;display:flex;align-items:center">Choose another folder…</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;font-size:12px;color:var(--fg3)"><span>Copy</span><span>Retry</span><div style="flex:1"></div><span>Haiku 5.5 · $0.0001</span></div>
+              <div style="display:flex;flex-direction:column;gap:6px;padding-top:6px">
+                <div style="font-size:11px;font-weight:600;color:var(--fg3)">You could also</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">Scaffold a new project here</span>
+                  <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">Tell it what smart-paste should do</span>
+                  <span style="height:28px;padding:0 12px;border-radius:14px;box-shadow:inset 0 0 0 .5px var(--line);font-size:12.5px;display:flex;align-items:center">Open as a Build project</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;left:0;right:0;bottom:20px;display:flex;justify-content:center;padding:0 32px">
+            <div style="width:100%;max-width:660px;background:var(--glass);backdrop-filter:blur(30px);border-radius:20px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.08);padding:12px 12px 10px 16px;display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:13.5px;color:var(--fg3)">Reply…</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="width:24px;height:24px;border-radius:12px;background:var(--chip);font-size:14px;display:flex;align-items:center;justify-content:center">+</span>
+                <span style="height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:10px;height:8px;border-radius:2px;background:oklch(0.65 0.14 160)"></span>smart-paste</span>
+                <span style="height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Haiku 5.5</span>
+                <div style="flex:1"></div>
+                <div style="width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-size:13px">↑</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><div id="4a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">4a</span><span style="font-size:15px;font-weight:600">A · Quiet routing, progress inspector</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" active="kitchen" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative">
+          <div style="height:60px;display:flex;align-items:center;padding:0 20px 0 24px;gap:8px;flex:none">
+            <div style="display:flex;flex-direction:column;gap:1px;flex:1"><div style="font-size:15px;font-weight:600">Kitchen renovation</div><div style="font-size:11.5px;color:var(--fg3)">Notebook · $0.0043</div></div>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--pill);box-shadow:inset 0 0 0 .5px var(--line);font-size:12px;font-weight:500;display:flex;align-items:center">Files</span>
+            <span style="width:28px;height:28px;border-radius:14px;background:var(--accentSoft);color:var(--accent);font-size:13px;display:flex;align-items:center;justify-content:center">◫</span>
+          </div>
+          <div style="display:flex;gap:20px;padding:0 24px;border-bottom:.5px solid var(--line);font-size:13px;flex:none">
+            <span style="padding:8px 0;font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)">Main</span>
+            <span style="padding:8px 0;color:var(--fg2);display:flex;gap:6px;align-items:center">Distribución <span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span></span>
+            <span style="padding:8px 0;color:var(--fg2);display:flex;gap:6px;align-items:center">Muebles <span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></span>
+            <span style="padding:8px 0;color:var(--fg2);display:flex;gap:6px;align-items:center">Colores <span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></span>
+            <span style="padding:8px 0;color:var(--fg3)">+ Topic</span>
+          </div>
+          <div style="flex:1;overflow:hidden;display:flex;justify-content:center;padding:20px 32px 150px">
+            <div style="width:100%;max-width:620px;display:flex;flex-direction:column;gap:14px">
+              <div style="align-self:flex-end;max-width:460px;background:var(--bubble);border-radius:16px 16px 4px 16px;padding:9px 14px;font-size:13.5px;line-height:1.5">Quiero reformar la cocina: 4 × 3 m, unos 30.000 €. Hay que decidir muebles, distribución y colores.</div>
+              <div style="background:var(--chip);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+                <div style="font-size:12px;color:var(--fg2);display:flex;gap:8px;align-items:center"><span style="font-weight:600;color:var(--fg)">Organizer</span><span>created 3 topics and shared the measurements</span><div style="flex:1"></div><span style="color:var(--fg3)">Change</span></div>
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+                  <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span><span style="font-weight:500;width:150px">Distribución</span><span style="color:var(--fg2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Asked 2 questions about window and door</span><span style="color:var(--fg3);font-size:12px">Open ›</span></div>
+                  <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span><span style="font-weight:500;width:150px">Muebles de cocina</span><span style="color:var(--fg2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Assumes 4 m is the long wall</span><span style="color:var(--fg3);font-size:12px">Open ›</span></div>
+                  <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span><span style="font-weight:500;width:150px">Colores y acabados</span><span style="color:var(--fg2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Proposed a base palette</span><span style="color:var(--fg3);font-size:12px">Open ›</span></div>
+                </div>
+              </div>
+              <div style="font-size:12px;color:var(--fg3);display:flex;gap:8px"><span>✎</span><span>Saved 2 facts to notebook memory</span><span style="color:var(--fg2)">Undo</span></div>
+              <div style="font-size:13.5px;line-height:1.6">He creado los tres temas. Os recomiendo este orden, porque cada uno depende del anterior:</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;gap:10px;align-items:baseline;font-size:13.5px;line-height:1.5"><span style="width:20px;height:20px;border-radius:50%;background:var(--chip);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">1</span><span><b>Distribución</b>: U, L o isla; dónde van fregadero, placa y nevera.</span></div>
+                <div style="display:flex;gap:10px;align-items:baseline;font-size:13.5px;line-height:1.5"><span style="width:20px;height:20px;border-radius:50%;background:var(--chip);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">2</span><span><b>Muebles</b>: materiales, herrajes y electrodomésticos dentro de 30.000 €.</span></div>
+                <div style="display:flex;gap:10px;align-items:baseline;font-size:13.5px;line-height:1.5"><span style="width:20px;height:20px;border-radius:50%;background:var(--chip);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">3</span><span><b>Colores</b>: muebles, encimera, azulejos, suelo y paredes.</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;left:0;right:0;bottom:20px;display:flex;justify-content:center;padding:0 32px">
+            <div style="width:100%;max-width:620px;background:var(--glass);backdrop-filter:blur(30px);border-radius:20px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.08);padding:12px 12px 10px 16px;display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:13.5px;color:var(--fg3)">Message the notebook — the organizer picks the topic</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Auto-route ⌄</span>
+                <span style="height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Haiku 5.5</span>
+                <div style="flex:1"></div>
+                <div style="width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-size:13px">↑</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="width:288px;padding:8px 8px 8px 0;box-sizing:border-box;flex:none;display:flex">
+          <div style="flex:1;background:var(--glass);border-radius:14px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.07);display:flex;flex-direction:column;padding:16px;gap:12px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Progress</span><span style="font-size:12px;color:var(--fg3)">0 of 3 decided</span></div>
+            <div style="display:flex;gap:4px"><div style="flex:1;height:4px;border-radius:2px;background:var(--amber)"></div><div style="flex:1;height:4px;border-radius:2px;background:var(--chip)"></div><div style="flex:1;height:4px;border-radius:2px;background:var(--chip)"></div></div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div style="display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:8px;background:var(--card);box-shadow:0 0 0 .5px var(--line)"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600"><span>1 · Distribución</span><span style="font-size:11px;color:var(--amber)">Needs you</span></div><span style="font-size:12px;color:var(--fg2)">Which wall has the window?</span></div>
+              <div style="display:flex;flex-direction:column;gap:2px;padding:8px 10px"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600"><span>2 · Muebles</span><span style="font-size:11px;color:var(--fg3)">Waiting on 1</span></div><span style="font-size:12px;color:var(--fg2)">Draft: módulos lacados, 14 k€</span></div>
+              <div style="display:flex;flex-direction:column;gap:2px;padding:8px 10px"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600"><span>3 · Colores</span><span style="font-size:11px;color:var(--fg3)">Waiting on 2</span></div><span style="font-size:12px;color:var(--fg2)">Base palette proposed</span></div>
+            </div>
+            <div style="height:.5px;background:var(--line)"></div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Memory</span><span style="font-size:12px;color:var(--accent)">Open</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;font-size:12.5px"><span style="color:var(--fg2)">Size</span><span style="font-weight:500">4 × 3 m · 12 m²</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px"><span style="color:var(--fg2)">Budget</span><span style="font-weight:500">~ €30,000</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px"><span style="color:var(--fg2)">To decide</span><span style="font-weight:500">Layout, furniture, colours</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><div id="5a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">5a</span><span style="font-size:15px;font-weight:600">A · Fact list sheet, Markdown optional</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:color-mix(in srgb,var(--win) 70%,var(--fg3));box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;align-items:center;justify-content:center">
+        <div style="width:880px;height:620px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 30px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;align-items:center;padding:20px 22px;gap:12px;border-bottom:.5px solid var(--line)">
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px"><div style="font-size:20px;font-weight:700">Memory</div><div style="font-size:12.5px;color:var(--fg2)">Kitchen renovation · every topic reads these facts</div></div>
+            <div style="display:flex;padding:2px;border-radius:999px;background:var(--chip);font-size:12px"><span style="padding:4px 12px;border-radius:999px;background:var(--pill);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)">Facts</span><span style="padding:4px 12px;color:var(--fg2)">Markdown</span></div>
+            <span style="height:28px;padding:0 14px;border-radius:14px;background:var(--inv);color:var(--invfg);font-size:12px;font-weight:600;display:flex;align-items:center">Done</span>
+          </div>
+          <div style="flex:1;display:flex;min-height:0">
+            <div style="flex:1;padding:18px 22px;display:flex;flex-direction:column;gap:10px">
+              <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+                <div style="display:flex;gap:12px;padding:12px 14px;align-items:flex-start">
+                  <span style="font-size:11px;font-weight:600;color:var(--fg3);width:64px;padding-top:2px">Project</span>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:13.5px;line-height:1.5">Renovación de la cocina de casa. Hay que decidir muebles, distribución (U, L, isla…) y colores.</span><span style="font-size:11.5px;color:var(--fg3)">From Main · Organizer · 20 h ago</span></div>
+                </div>
+                <div style="height:.5px;background:var(--line);margin-left:90px"></div>
+                <div style="display:flex;gap:12px;padding:12px 14px;align-items:flex-start;background:var(--accentSoft)">
+                  <span style="font-size:11px;font-weight:600;color:var(--fg3);width:64px;padding-top:2px">Size</span>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:13.5px;line-height:1.5">Cocina de 4 m × 3 m (unos 12 m²).</span><span style="font-size:11.5px;color:var(--fg3)">From Main · Organizer · 20 h ago</span></div>
+                  <span style="font-size:12px;color:var(--fg2)">Edit</span><span style="font-size:12px;color:var(--red)">Forget</span>
+                </div>
+                <div style="height:.5px;background:var(--line);margin-left:90px"></div>
+                <div style="display:flex;gap:12px;padding:12px 14px;align-items:flex-start">
+                  <span style="font-size:11px;font-weight:600;color:var(--fg3);width:64px;padding-top:2px">Budget</span>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:13.5px;line-height:1.5">Presupuesto orientativo de la reforma: unos 30.000 €.</span><span style="font-size:11.5px;color:var(--fg3)">From Main · Organizer · 20 h ago</span></div>
+                </div>
+              </div>
+              <div style="height:38px;border-radius:10px;box-shadow:inset 0 0 0 .5px var(--line);display:flex;align-items:center;padding:0 14px;font-size:13px;color:var(--fg3);gap:8px"><span>+</span>Add a fact every topic should know…</div>
+              <div style="font-size:11px;font-weight:600;color:var(--fg3);padding-top:10px">Suggested by topics</div>
+              <div style="border-radius:12px;background:var(--yolkSoft);padding:12px 14px;display:flex;align-items:center;gap:12px">
+                <div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:13.5px">Prefer an open L layout towards the dining room.</span><span style="font-size:11.5px;color:var(--fg2)">Distribución wants to remember this · from your message 18 h ago</span></div>
+                <span style="font-size:12px;color:var(--fg2)">Dismiss</span>
+                <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:12px;font-weight:600;display:flex;align-items:center">Save fact</span>
+              </div>
+            </div>
+            <div style="width:250px;border-left:.5px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:14px">
+              <span style="font-size:11px;font-weight:600;color:var(--fg3)">History</span>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:12.5px"><b>Added</b> Size, Budget</span><span style="font-size:11.5px;color:var(--fg3)">Organizer · 20 h ago · <span style="color:var(--accent)">Restore</span></span></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:12.5px"><b>Added</b> Project</span><span style="font-size:11.5px;color:var(--fg3)">Organizer · 20 h ago · <span style="color:var(--accent)">Restore</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:80px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Agent setup</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Grouped settings with a jump list, under the recommended Chat · Activity · Setup tabs.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+<div id="8a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">8a</span><span style="font-size:15px;font-weight:600">A · Grouped settings with a jump list</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" active="daily" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+          <div style="padding:20px 32px 0;display:flex;align-items:center;gap:12px;flex:none">
+            <div style="width:36px;height:36px;border-radius:50%;background:oklch(0.95 0.06 90);display:flex;align-items:center;justify-content:center;font-size:18px">☀️</div>
+            <div style="flex:1;font-size:18px;font-weight:700">Daily briefing</div>
+            <span style="font-size:12px;color:var(--amber);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span>1 unsaved change</span>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--chip);font-size:12px;display:flex;align-items:center">Revert</span>
+            <span style="height:28px;padding:0 14px;border-radius:14px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center">Save ⌘S</span>
+          </div>
+          <div style="display:flex;gap:22px;padding:12px 32px 0;border-bottom:.5px solid var(--line);font-size:13px;flex:none">
+            <span style="padding:8px 0;color:var(--fg2)">Chat</span><span style="padding:8px 0;color:var(--fg2)">Activity</span><span style="padding:8px 0;font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)">Setup</span>
+          </div>
+          <div style="flex:1;display:flex;min-height:0">
+            <div style="width:170px;padding:22px 0 0 32px;display:flex;flex-direction:column;gap:2px;font-size:13px;flex:none">
+              <span style="padding:5px 10px;border-radius:7px;background:var(--chip);font-weight:600">Instructions</span>
+              <span style="padding:5px 10px;color:var(--fg2)">Model</span>
+              <span style="padding:5px 10px;color:var(--fg2)">Abilities</span>
+              <span style="padding:5px 10px;color:var(--fg2)">Mac apps</span>
+              <span style="padding:5px 10px;color:var(--fg2)">Schedule</span>
+              <span style="padding:5px 10px;color:var(--fg2)">People</span>
+              <div style="flex:1"></div>
+              <span style="padding:5px 10px 24px;color:var(--fg3);font-size:12px">View as JSON</span>
+            </div>
+            <div style="flex:1;padding:22px 32px;display:flex;flex-direction:column;gap:18px;min-width:0;overflow:hidden">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Instructions</span><span style="font-size:11.5px;color:var(--fg3)">Markdown · 51 tokens</span></div>
+                <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:14px 16px;font-size:13.5px;line-height:1.6">Every morning you write Antonio a short briefing: what's planned today, what was left open yesterday, and anything worth knowing (weather, news they follow). <span style="background:var(--addbg);border-radius:3px;padding:0 2px">Five bullet points at most.</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:13px;font-weight:600">Model</span>
+                <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+                  <div style="display:flex;align-items:center;padding:10px 14px;font-size:13px"><span style="flex:1">Model</span><span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Claude Haiku 5.5 ⌄</span></div>
+                  <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                  <div style="display:flex;align-items:center;padding:10px 14px;font-size:13px"><span style="flex:1">Thinking</span><span style="color:var(--fg2)">Off ⌄</span></div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:13px;font-weight:600">Abilities</span>
+                <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+                  <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Search and read the web</span><span style="font-size:11.5px;color:var(--fg3)">Web search, fetch pages</span></div><span style="font-size:11.5px;color:var(--fg2)">Allowed</span><span style="width:32px;height:19px;border-radius:10px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff"></span></span></div>
+                  <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Remember things</span><span style="font-size:11.5px;color:var(--fg3)">Remember, recall, forget</span></div><span style="font-size:11.5px;color:var(--fg2)">Allowed</span><span style="width:32px;height:19px;border-radius:10px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff"></span></span></div>
+                  <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Send messages</span><span style="font-size:11.5px;color:var(--fg3)">To you; to others asks first</span></div><span style="font-size:11.5px;color:var(--amber)">Asks first</span><span style="width:32px;height:19px;border-radius:10px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff"></span></span></div>
+                  <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Set reminders and schedules</span><span style="font-size:11.5px;color:var(--fg3)">Off</span></div><span style="width:32px;height:19px;border-radius:10px;background:var(--chip);box-shadow:inset 0 0 0 .5px var(--line);position:relative;display:block"><span style="position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span></span></div>
+                </div>
+                <span style="font-size:11.5px;color:var(--fg3)">HTTP requests, code and workspace files are coming later and stay hidden until then.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:80px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Settings and model picker</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Providers first, then a default model per mode. The picker puts Recent first with a detail pane.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+<div id="9a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">9a</span><span style="font-size:15px;font-weight:600">A · Providers, then defaults per mode</span></div>
+      <div style="width:960px;height:680px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <div style="width:230px;padding:8px;box-sizing:border-box;flex:none;display:flex">
+          <div style="flex:1;background:var(--glass);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:10px 8px;display:flex;flex-direction:column;gap:2px;font-size:13px">
+            <div style="display:flex;gap:8px;padding:4px 8px 14px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#8e8e93;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">⚙︎</span>General</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;background:var(--accentSoft);font-weight:600"><span style="width:20px;height:20px;border-radius:5px;background:#0a84ff;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✦</span>Models</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#30b0c7;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">◌</span>Chat</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#f2a33a;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✓</span>Approvals</div>
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding:12px 8px 4px">Extend</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#bf5af2;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">⌁</span>MCP servers</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#5e5ce6;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">◆</span>Extensions</div>
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding:12px 8px 4px">Where it runs</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#34c759;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">▣</span>This Mac &amp; cloud</div>
+          </div>
+        </div>
+        <div style="flex:1;padding:30px 36px;display:flex;flex-direction:column;gap:20px;min-width:0">
+          <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Models</div><div style="font-size:13.5px;color:var(--fg2)">Billed to your own accounts. Keys stay in the macOS Keychain.</div></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:600">Providers</span><span style="font-size:12.5px;color:var(--accent)">+ Add provider</span></div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+                <div style="width:32px;height:32px;border-radius:8px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">OR</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">OpenRouter</span><span style="font-size:11.5px;color:var(--green);font-weight:600">● Connected</span></div><span style="font-size:12px;color:var(--fg3);font-family:var(--mono)">sk-or-v1-755…a30</span></div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="font-size:14px;font-weight:600">$0.47</span><span style="font-size:11.5px;color:var(--fg3)">this month</span></div>
+                <span style="width:26px;height:26px;border-radius:13px;background:var(--chip);font-size:13px;display:flex;align-items:center;justify-content:center">⋯</span>
+              </div>
+              <div style="height:.5px;background:var(--line);margin-left:60px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;opacity:.6">
+                <div style="width:32px;height:32px;border-radius:8px;background:var(--chip);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">G</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">ChatGPT subscription</span><span style="font-size:12px;color:var(--fg3)">Sign in with OpenAI</span></div>
+                <span style="height:22px;padding:0 9px;border-radius:11px;background:var(--chip);font-size:11px;font-weight:600;display:flex;align-items:center">Coming soon</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">Default model</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;padding:11px 16px;font-size:13px"><span style="flex:1">Build sessions</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Claude Haiku 5.5 ⌄</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;padding:11px 16px;font-size:13px"><span style="flex:1">Chats and notebooks</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Claude Haiku 5.5 ⌄</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;padding:11px 16px;font-size:13px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span>Quick Chat</span><span style="font-size:11.5px;color:var(--fg3)">Pick something fast</span></div><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Claude Haiku 5.5 ⌄</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;padding:11px 16px;font-size:13px"><span style="flex:1">New agents</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Claude Haiku 5.5 ⌄</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><div id="10a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">10a</span><span style="font-size:15px;font-weight:600">A · Recent first, detail on the right</span></div>
+      <div style="width:760px;height:520px;border-radius:16px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 24px 60px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:14px;display:flex;gap:8px;align-items:center;border-bottom:.5px solid var(--line)">
+          <div style="flex:1;height:34px;border-radius:9px;background:var(--chip);display:flex;align-items:center;gap:8px;padding:0 12px;font-size:14px;color:var(--fg3)"><span>⌕</span>Search 396 models</div>
+          <div style="display:flex;gap:4px;font-size:12px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--accentSoft);color:var(--accent);font-weight:600;display:flex;align-items:center">All</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);display:flex;align-items:center">Reasoning</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);display:flex;align-items:center">Vision</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);display:flex;align-items:center">Free</span></div>
+        </div>
+        <div style="flex:1;display:flex;min-height:0">
+          <div style="flex:1;padding:8px;display:flex;flex-direction:column;gap:1px;border-right:.5px solid var(--line)">
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding:6px 8px">Recent</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--accent);color:#fff"><span style="flex:1;font-size:13px;font-weight:600">Claude Haiku 5.5</span><span style="font-size:11.5px;opacity:.85">$</span><span style="font-size:12px">✓</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px"><span style="flex:1;font-size:13px">Claude Fable 5.1</span><span style="font-size:11.5px;color:var(--fg3)">$$$</span></div>
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding:10px 8px 6px">Anthropic</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px"><span style="flex:1;font-size:13px">Claude Fable 5</span><span style="font-size:11.5px;color:var(--fg3)">$$$</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px"><span style="flex:1;font-size:13px">Claude Haiku 4.5</span><span style="font-size:11.5px;color:var(--fg3)">$$</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;color:var(--fg3)"><span style="flex:1;font-size:12.5px">Show batch and alias variants (4)</span></div>
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding:10px 8px 6px">OpenAI · Google · 41 more providers</div>
+          </div>
+          <div style="width:300px;padding:18px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.93 0.05 70);color:oklch(0.5 0.1 60);font-weight:700;display:flex;align-items:center;justify-content:center">A</div><div style="display:flex;flex-direction:column"><span style="font-size:15px;font-weight:700">Claude Haiku 5.5</span><span style="font-size:11.5px;color:var(--fg3);font-family:var(--mono)">anthropic/claude-haiku-5.5</span></div></div>
+            <div style="font-size:13px;line-height:1.5;color:var(--fg2)">Fast and cheap. Good default for chat, quick questions and simple agent runs.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="background:var(--chip);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:2px"><span style="font-size:11px;color:var(--fg3)">Input</span><span style="font-size:14px;font-weight:600">$0.10</span><span style="font-size:10.5px;color:var(--fg3)">per 1M tokens</span></div>
+              <div style="background:var(--chip);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:2px"><span style="font-size:11px;color:var(--fg3)">Output</span><span style="font-size:14px;font-weight:600">$0.50</span><span style="font-size:10.5px;color:var(--fg3)">per 1M tokens</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px">
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">Context</span><span>1M tokens</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">Reasoning</span><span>Yes</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">Images</span><span>Yes</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--fg2)">You've spent</span><span>$0.47</span></div>
+            </div>
+            <div style="flex:1"></div>
+            <span style="font-size:11.5px;color:var(--fg3)">↑↓ move · ↩ choose · ⌘↩ set as default</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:80px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Empty states</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">The same pattern in every section of the one sidebar.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+<div id="11a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">11a</span><span style="font-size:15px;font-weight:600">Build · no projects</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" empty="{{ true }}" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px">
+          <div style="width:100%;max-width:520px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+            <img src="assets/chick.png" style="width:72px;height:72px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 6px var(--yolkSoft)">
+            <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Point Piopio at some code</div>
+            <div style="font-size:14px;line-height:1.5;color:var(--fg2);max-width:400px">Pick a folder and describe what you want. The agent works in a session you can review, roll back or turn into a PR.</div>
+            <div style="width:100%;height:96px;border-radius:14px;border:1.5px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;margin-top:6px">
+              <span style="font-size:13px;color:var(--fg2)">Drop a folder here, or</span>
+              <span style="height:28px;padding:0 14px;border-radius:14px;background:var(--inv);color:var(--invfg);font-size:12.5px;font-weight:600;display:flex;align-items:center">Open Folder… ⌘O</span>
+            </div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:6px;text-align:left;padding-top:6px">
+              <span style="font-size:11px;font-weight:600;color:var(--fg3)">Found in ~/Proyectos</span>
+              <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px"><span style="width:18px;height:18px;border-radius:5px;background:oklch(0.62 0.17 250);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">F</span><span style="flex:1;font-size:13px;font-weight:500">financial_ia</span><span style="font-size:11.5px;color:var(--fg3);font-family:var(--mono)">main · 2 h ago</span><span style="font-size:12px;color:var(--accent)">Add</span></div>
+                <div style="height:.5px;background:var(--line);margin-left:42px"></div>
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px"><span style="width:18px;height:18px;border-radius:5px;background:oklch(0.68 0.17 45);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">P</span><span style="flex:1;font-size:13px;font-weight:500">piopio</span><span style="font-size:11.5px;color:var(--fg3);font-family:var(--mono)">main · today</span><span style="font-size:12px;color:var(--accent)">Add</span></div>
+              </div>
+              <span style="font-size:12px;color:var(--fg3);padding-top:4px">Using the pi CLI? <span style="color:var(--accent)">Import 12 sessions from ~/.pi</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><div id="11b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">11b</span><span style="font-size:15px;font-weight:600">Chat · nothing yet</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" empty="{{ true }}" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px">
+          <div style="width:100%;max-width:620px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+            <img src="assets/chick.png" style="width:72px;height:72px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 6px var(--yolkSoft)">
+            <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">What's on your mind?</div>
+            <div style="width:100%;background:var(--card);border-radius:18px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.07);padding:14px 14px 12px 18px;display:flex;flex-direction:column;gap:12px;text-align:left;margin-top:6px">
+              <span style="font-size:15px;color:var(--fg3)">Ask anything…</span>
+              <div style="display:flex;align-items:center;gap:6px"><span style="width:24px;height:24px;border-radius:12px;background:var(--chip);font-size:14px;display:flex;align-items:center;justify-content:center">+</span><span style="height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Haiku 5.5</span><div style="flex:1"></div><div style="width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invfg);display:flex;align-items:center;justify-content:center;font-size:13px">↑</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;text-align:left;padding-top:10px">
+              <div style="border-radius:12px;background:var(--chip);padding:12px 14px;display:flex;flex-direction:column;gap:3px"><span style="font-size:13px;font-weight:600">New chat <span style="font-weight:400;color:var(--fg3)">⌘N</span></span><span style="font-size:12px;color:var(--fg2)">One conversation, saved automatically</span></div>
+              <div style="border-radius:12px;background:var(--chip);padding:12px 14px;display:flex;flex-direction:column;gap:3px"><span style="font-size:13px;font-weight:600">New notebook <span style="font-weight:400;color:var(--fg3)">⌘⇧N</span></span><span style="font-size:12px;color:var(--fg2)">For subjects with several topics and shared memory</span></div>
+            </div>
+            <span style="font-size:12px;color:var(--fg3)">Tip: ⌥Space opens Quick Chat from any app</span>
+          </div>
+        </div>
+      </div>
+    </div><div id="11c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">11c</span><span style="font-size:15px;font-weight:600">Agents · no agents</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Sidebar" variant="b" empty="{{ true }}" hint-size="268px,100%"></dc-import>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px">
+          <div style="width:100%;max-width:700px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+            <img src="assets/chick.png" style="width:72px;height:72px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 6px var(--yolkSoft)">
+            <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Hatch your first agent</div>
+            <div style="font-size:14px;line-height:1.5;color:var(--fg2);max-width:440px">Agents run on a schedule, remember what you tell them and message you when something matters.</div>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:100%;text-align:left;padding-top:10px">
+              <div style="background:var(--card);border-radius:14px;box-shadow:0 0 0 .5px var(--line);padding:14px;display:flex;flex-direction:column;gap:6px"><span style="font-size:22px">☀️</span><span style="font-size:13.5px;font-weight:600">Daily briefing</span><span style="font-size:12px;line-height:1.45;color:var(--fg2)">Every morning: your day, the weather, your news.</span></div>
+              <div style="background:var(--card);border-radius:14px;box-shadow:0 0 0 .5px var(--line);padding:14px;display:flex;flex-direction:column;gap:6px"><span style="font-size:22px">🌱</span><span style="font-size:13.5px;font-weight:600">Habit coach</span><span style="font-size:12px;line-height:1.45;color:var(--fg2)">Checks in each evening and tracks streaks.</span></div>
+              <div style="background:var(--card);border-radius:14px;box-shadow:0 0 0 .5px var(--line);padding:14px;display:flex;flex-direction:column;gap:6px"><span style="font-size:22px">📚</span><span style="font-size:13.5px;font-weight:600">Reading list</span><span style="font-size:12px;line-height:1.45;color:var(--fg2)">Send it links; it summarises them on Sunday.</span></div>
+            </div>
+            <span style="font-size:13px;color:var(--accent);padding-top:4px">Start from scratch…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:80px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">First run</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">The chick walks you through setup in the same chat UI you use afterwards.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+<div id="12b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">12b</span><span style="font-size:15px;font-weight:600">B · The chick walks you through it</span></div>
+      <div style="width:1280px;height:800px;border-radius:18px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;flex-direction:column;align-items:center;position:relative">
+        <div style="position:absolute;left:18px;top:18px;display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+        <div style="width:100%;max-width:620px;padding-top:90px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;gap:14px;align-items:flex-start">
+            <img src="assets/chick.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 0 0 4px var(--yolkSoft)">
+            <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
+              <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Pío pío! I'm Piopio.</div>
+              <div style="font-size:15px;line-height:1.55;color:var(--fg2)">I run agents on your Mac: coding sessions, chats and little helpers that work on a schedule. First I need a model provider.</div>
+            </div>
+          </div>
+          <div style="margin-left:62px;background:var(--card);border-radius:16px;box-shadow:0 0 0 .5px var(--line),0 6px 24px rgba(0,0,0,.06);padding:16px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px"><div style="width:28px;height:28px;border-radius:7px;background:var(--inv);color:var(--invfg);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">OR</div><span style="flex:1;font-size:14px;font-weight:600">OpenRouter key</span><span style="font-size:12px;color:var(--green);font-weight:600">✓ Verified</span></div>
+            <div style="height:36px;border-radius:9px;background:var(--chip);display:flex;align-items:center;padding:0 12px;font-family:var(--mono);font-size:13px">sk-or-v1-755••••••••a30</div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-start;padding-top:10px">
+            <img src="assets/chick.png" style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex:none;opacity:0">
+            <div style="font-size:15px;line-height:1.55;color:var(--fg2);padding-top:4px">That works. What should we do first?</div>
+          </div>
+          <div style="margin-left:62px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line)"><span style="font-size:13.5px;font-weight:600;flex:1">Look at a project on my Mac</span><span style="font-size:12px;color:var(--fg3)">Build ›</span></div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line)"><span style="font-size:13.5px;font-weight:600;flex:1">Just ask something</span><span style="font-size:12px;color:var(--fg3)">Chat ›</span></div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line)"><span style="font-size:13.5px;font-weight:600;flex:1">Get a morning briefing tomorrow</span><span style="font-size:12px;color:var(--fg3)">Agent ›</span></div>
+          </div>
+        </div>
+        <div style="position:absolute;bottom:24px;font-size:12px;color:var(--fg3)">Skip setup · you can change all of this in Settings</div>
+      </div>
+    </div>
+  </div>
+</section>
+<div style="height:120px"></div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;appearance&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;blue&quot;,&quot;beak&quot;,&quot;graphite&quot;],&quot;default&quot;:&quot;blue&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  apply() {
+    const b = document.body;
+    b.dataset.theme = this.props.appearance ?? 'light';
+    const acc = { blue: '#0a84ff', beak: 'oklch(0.66 0.17 45)', graphite: '#6e6e73' }[this.props.accent ?? 'blue'];
+    b.style.setProperty('--accent', acc);
+  }
+  componentDidMount() { this.apply(); }
+  componentDidUpdate() { this.apply(); }
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

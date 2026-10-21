@@ -414,6 +414,8 @@ export const EngineSettings = Type.Object({
 		mcp: Type.Boolean(),
 		/** Suggest moving a thread into a Space (04-chat S11). */
 		suggestSpaces: Type.Boolean(),
+		/** After an answer, suggest a few next messages (docs/design v2 "You could also"). */
+		followUps: Type.Optional(Type.Boolean()),
 	}),
 	aboutMe: Type.Object({
 		/** Shown to the agents. */
@@ -504,6 +506,8 @@ export const SessionSummary = Type.Object({
 	suggestion: Type.Optional(SpaceSuggestion),
 	/** Agents. Refs to a person's conversation carry `conversationId: "person:<contactId>"`. */
 	agent: Type.Optional(AgentInfo),
+	/** Threads and sessions: next messages the utility model suggests after the latest answer (until you write). */
+	followUps: Type.Optional(Type.Array(Type.String())),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -641,11 +645,12 @@ export const methods = {
 		result: Type.Object({ ref: ContainerRef }),
 	},
 	"sessions.open": {
-		params: Type.Object({ ref: ContainerRef }),
+		/** `fold`: a turn's tool calls come as one `steps` item (the app's folded activity line, docs/design v2). */
+		params: Type.Object({ ref: ContainerRef, fold: Type.Optional(Type.Boolean()) }),
 		result: Snapshot,
 	},
 	"sessions.subscribe": {
-		params: Type.Object({ ref: ContainerRef }),
+		params: Type.Object({ ref: ContainerRef, fold: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({ subscriptionId: Type.String(), snapshot: Snapshot }),
 	},
 	"sessions.unsubscribe": {
@@ -894,6 +899,10 @@ export const methods = {
 					removed: Type.Array(Type.String()),
 					undone: Type.Optional(Type.Boolean()),
 				}),
+			),
+			/** Changes topics proposed that wait for you (docs/design v2 "Suggested by topics"). */
+			proposals: Type.Optional(
+				Type.Array(Type.Object({ id: Type.String(), at: Type.String(), topicId: Type.String(), title: Type.String(), added: Type.Array(Type.String()), removed: Type.Array(Type.String()), reason: Type.String() })),
 			),
 		}),
 	},

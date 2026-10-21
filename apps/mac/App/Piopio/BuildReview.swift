@@ -15,6 +15,8 @@ struct BuildInspector: View {
     @State private var files: [FileChange] = []
     @State private var reverting: FileChange?
     @State private var loadedRevision = -1
+    /// The session's turns, for the timeline (rebuilt as the transcript changes).
+    @State private var turns: [(at: String, status: AssistantItem.Status?, files: Int)] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -22,7 +24,7 @@ struct BuildInspector: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if !session.todos.isEmpty { checklist }
                     changes
-                    checkpoints
+                    timeline
                 }
                 .padding(14)
             }
@@ -30,6 +32,7 @@ struct BuildInspector: View {
             footer.padding(14)
         }
         .task(id: session.revision / 4) { await refresh() } // event batches arrive quickly while working
+        .task(id: session.revision) { turns = Self.turns(session.document.items) }
         .onChange(of: session.state?.status) { _, _ in Task { await refresh() } }
         .alert(item: $reverting) { file in
             Alert(
@@ -52,7 +55,15 @@ struct BuildInspector: View {
             }
             .font(.system(size: 12, weight: .medium).monospacedDigit())
             if files.isEmpty {
-                Text("No files changed yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No changes yet").font(.system(size: 13, weight: .semibold))
+                    Text("Edits land here as the agent makes them. Each turn saves a checkpoint first, so you can roll back.")
+                        .font(.system(size: 12)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
             }
             ForEach(files) { file in
                 ChangeRow(file: file, open: { onReview(file.path) }, revert: { reverting = file })
@@ -95,28 +106,67 @@ struct BuildInspector: View {
         }
     }
 
-    private var checkpoints: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Checkpoints").font(.system(size: 13, weight: .semibold))
-            if session.checkpoints.isEmpty {
-                Text("Taken before the agent first changes files in a turn.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+    /// Turns and checkpoints on one line, newest first (docs/design v2, 2a): green = answered, hollow = a checkpoint.
+    private var timeline: some View {
+        let entries: [(at: String, view: AnyView)] =
+            turns.enumerated().map { i, t in (t.at, AnyView(turnRow(i + 1, t))) } +
+            session.checkpoints.map { c in (c.at, AnyView(checkpointRow(c))) }
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Timeline").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+            if entries.isEmpty {
+                Text("Each turn and checkpoint shows up here.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
-            ForEach(session.checkpoints.reversed(), id: \.id) { checkpoint in
-                Button { session.restoring = checkpoint } label: {
-                    HStack(alignment: .top, spacing: 9) {
-                        Circle().strokeBorder(Color.dsFg3, lineWidth: 1.2).frame(width: 9, height: 9).padding(.top, 3)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(checkpoint.label).font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
-                            Text(subtitle(checkpoint)).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Restore to here…")
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(entries.sorted { $0.at > $1.at }.enumerated()), id: \.offset) { _, e in e.view }
+            }
+            .background(alignment: .leading) {
+                if entries.count > 1 { Rectangle().fill(Color.dsLine).frame(width: 1).padding(.leading, 4).padding(.vertical, 8) }
             }
         }
+    }
+
+    private func turnRow(_ n: Int, _ t: (at: String, status: AssistantItem.Status?, files: Int)) -> some View {
+        let (label, color): (String, Color) = switch t.status {
+        case .streaming?: ("working", .accentColor)
+        case .error?: ("failed", .dsRed)
+        case .aborted?: ("stopped", .dsFg3)
+        case nil: ("waiting", .dsAmber)
+        default: ("answered", .dsGreen)
+        }
+        return HStack(alignment: .top, spacing: 10) {
+            Circle().fill(color).frame(width: 9, height: 9).padding(.top, 3)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Turn \(n) · \(label)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
+                Text("\(t.files == 1 ? "1 file" : "\(t.files) files") · \(BuildSessionView.relative(t.at))").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+            }
+        }
+    }
+
+    private func checkpointRow(_ checkpoint: CheckpointItem) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle().fill(Color.dsCard).overlay(Circle().strokeBorder(Color.dsFg3, lineWidth: 1.2)).frame(width: 9, height: 9).padding(.top, 3)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Checkpoint · \(checkpoint.label)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
+                Button("Restore…") { session.restoring = checkpoint }
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                    .help("Put the files back as they were here")
+            }
+        }
+    }
+
+    /// A turn per message you sent: its time, how its answer ended, how many files it edited.
+    static func turns(_ items: [TimelineItem]) -> [(at: String, status: AssistantItem.Status?, files: Int)] {
+        var out: [(at: String, status: AssistantItem.Status?, files: Int)] = []
+        for item in items {
+            switch item {
+            case .user(let u): out.append((u.at, nil, 0))
+            case .assistant(let a) where !out.isEmpty: out[out.count - 1].status = a.status
+            case .tool(let t) where !out.isEmpty && (t.tool == "edit" || t.tool == "write"): out[out.count - 1].files += 1
+            case .steps(let s) where !out.isEmpty: out[out.count - 1].files += s.tools.filter { $0.tool == "edit" || $0.tool == "write" }.count
+            default: break
+            }
+        }
+        return out
     }
 
     private var footer: some View {
@@ -125,7 +175,7 @@ struct BuildInspector: View {
                 HStack {
                     Text("Context").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                     Spacer()
-                    Text("\(context.tokens.map { ContextChip.short($0) } ?? "–") / \(ContextChip.short(context.window))").font(.system(size: 12).monospacedDigit())
+                    Text("\(context.tokens.map { ContextChip.short($0) } ?? "–") of \(ContextChip.short(context.window))").font(.system(size: 12).monospacedDigit())
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -136,9 +186,10 @@ struct BuildInspector: View {
                 .frame(height: 4)
             }
             HStack {
-                Text("Spent this session").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                Text("This session").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                 Spacer()
-                Text(String(format: "$%.2f", session.state?.usage.costUsd ?? 0)).font(.system(size: 12).monospacedDigit())
+                let cost = session.state?.usage.costUsd ?? 0
+                Text(cost > 0 && cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)).font(.system(size: 12).monospacedDigit())
             }
         }
     }

@@ -1181,7 +1181,7 @@ describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () 
 
 	test("About me: off by default, then shown and captured; MCP servers reach Threads and Spaces when allowed", async () => {
 		const a = await start();
-		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" }, memory: { providers: [] } });
+		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: true, followUps: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" }, memory: { providers: [] } });
 		const tools = (s: Snapshot) => s.items.flatMap((i) => (i.kind === "tool" ? [i] : []));
 
 		let t = await thread(a, 'call: remember_about_me | {"add":["Lives in Valencia"],"section":"Home"}');
@@ -1758,4 +1758,23 @@ describe("Agents: agent-to-agent (milestone 4.6)", () => {
 		const recall = mine.filter((i) => i.kind === "steps").flatMap((s) => (s.kind === "steps" ? s.tools : [])).find((t) => t.tool === "recall")!;
 		expect(recall.output).toContain("The travel budget is 500 euros");
 	}, 120_000);
+});
+
+describe("Folded transcripts (docs/design v2)", () => {
+	test("a subscription with fold gets a turn's tool calls as one steps item; without it, tool items", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		const folded = await a.client.call("sessions.subscribe", { ref, fold: true });
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: web_search | {"query":"pío pío"}' } });
+		await a.client.waitFor(settled(folded.subscriptionId), 15_000);
+		const kinds = (s: Snapshot) => s.items.map((i) => i.kind);
+		const plain: Snapshot = await a.client.call("sessions.open", { ref });
+		const grouped: Snapshot = await a.client.call("sessions.open", { ref, fold: true });
+		expect(kinds(plain)).toContain("tool");
+		expect(kinds(grouped)).not.toContain("tool");
+		expect(kinds(grouped)).toContain("steps");
+		const live = a.client.events.filter((n) => n.subscriptionId === folded.subscriptionId).flatMap((n) => n.events);
+		expect(live.some((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "tool")).toBe(false);
+		expect(live.some((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "steps")).toBe(true);
+	}, 30_000);
 });

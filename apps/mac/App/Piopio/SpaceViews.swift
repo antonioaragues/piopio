@@ -326,50 +326,222 @@ struct MemoryEditorSheet: View {
     @State private var text = ""
     @State private var saved = ""
     @State private var revisions: [MemoryRevision] = []
+    @State private var proposals: [MemoryResult.Proposal] = []
+    @AppStorage("memoryMode") private var mode: Mode = .facts
+    @State private var selected: Int?
+    @State private var editing: Int?
+    @State private var draft = ""
+    @State private var adding = ""
+
+    enum Mode: String, CaseIterable { case facts = "Facts", markdown = "Markdown" }
+
+    /// One `- fact` line: its label (a "Label: …" prefix, or its section), the text, and where it sits.
+    struct Fact { let line: Int; let label: String; let text: String; let raw: String }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(space.title): memory").font(.system(size: 15, weight: .semibold))
-                    Text("Facts every topic reads. `## Heading` for sections, `- ` for each fact.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    Text("Memory").font(.system(size: 20, weight: .bold))
+                    Text("\(space.title) · every topic reads these facts").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
                 }
                 Spacer()
-                Button("Done") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
-                Button("Save") { save() }.buttonStyle(PillStyle(kind: .primary)).keyboardShortcut("s").disabled(text == saved)
+                Picker("", selection: $mode) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                if mode == .markdown, text != saved {
+                    Button("Save") { save(text) }.buttonStyle(PillStyle(kind: .primary)).keyboardShortcut("s")
+                }
+                Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .strong)).keyboardShortcut(.cancelAction)
             }
-            .padding(16)
+            .padding(.horizontal, 22).padding(.vertical, 18)
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             HStack(spacing: 0) {
-                TextEditor(text: $text)
-                    .font(.system(size: 13, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(10)
-                Rectangle().fill(Color.dsLine).frame(width: 0.5)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        SectionLabel("History")
-                        if revisions.isEmpty { Text("No changes yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                        ForEach(revisions) { r in
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(r.summary).font(.system(size: 12.5)).foregroundStyle(r.undone == true ? Color.dsFg3 : Color.dsFg).strikethrough(r.undone == true)
-                                HStack(spacing: 6) {
-                                    Text("\(author(r)) · \(BuildSessionView.relative(r.at))").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-                                    Button("Restore") { restore(r) }.buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.accentColor)
-                                        .help("Put the memory back as it was after this change")
-                                }
-                            }
-                        }
-                    }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if mode == .markdown {
+                    TextEditor(text: $text)
+                        .font(.system(size: 13, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .padding(14)
+                } else {
+                    factsList
                 }
-                .frame(width: 260)
+                Rectangle().fill(Color.dsLine).frame(width: 0.5)
+                history.frame(width: 250)
             }
         }
-        .frame(width: 820, height: 560)
+        .frame(width: 880, height: 620)
         .background(Color.dsWin)
         .task { await load() }
+    }
+
+    // MARK: Facts
+
+    private var facts: [Fact] {
+        var section = "Notes"
+        var out: [Fact] = []
+        for (i, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            let l = line.trimmingCharacters(in: .whitespaces)
+            if l.hasPrefix("## ") { section = String(l.dropFirst(3)); continue }
+            guard l.hasPrefix("- ") || l.hasPrefix("* ") else { continue }
+            let body = String(l.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            if let colon = body.firstIndex(of: ":"), body.distance(from: body.startIndex, to: colon) <= 18, !body[..<colon].contains(" ") || body[..<colon].split(separator: " ").count <= 2 {
+                out.append(Fact(line: i, label: String(body[..<colon]), text: String(body[body.index(after: colon)...]).trimmingCharacters(in: .whitespaces), raw: body))
+            } else {
+                out.append(Fact(line: i, label: section, text: body, raw: body))
+            }
+        }
+        return out
+    }
+
+    private var factsList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(spacing: 0) {
+                    ForEach(Array(facts.enumerated()), id: \.offset) { i, fact in
+                        if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+                        factRow(fact)
+                    }
+                    if facts.isEmpty {
+                        Text("Nothing remembered yet. Topics add facts as you talk; you can add your own below.")
+                            .font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card))
+                HStack(spacing: 8) {
+                    Image(systemName: "plus").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                    TextField("Add a fact every topic should know…", text: $adding).textFieldStyle(.plain).font(.system(size: 13)).onSubmit(add)
+                }
+                .padding(.horizontal, 14).frame(height: 38)
+                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                if !proposals.isEmpty {
+                    Text("Suggested by topics").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3).padding(.top, 8)
+                    ForEach(proposals) { p in suggestion(p) }
+                }
+            }
+            .padding(22)
+        }
+    }
+
+    private func factRow(_ fact: Fact) -> some View {
+        let isSelected = selected == fact.line
+        return HStack(alignment: .top, spacing: 12) {
+            Text(fact.label).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3).frame(width: 64, alignment: .leading).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 4) {
+                if editing == fact.line {
+                    TextField("", text: $draft).textFieldStyle(.roundedBorder).font(.system(size: 13.5)).onSubmit { replace(fact, with: draft) }
+                } else {
+                    Text(fact.text).font(.system(size: 13.5)).lineSpacing(3).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
+                }
+                Text(provenance(fact)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+            }
+            Spacer(minLength: 8)
+            if isSelected {
+                if editing == fact.line {
+                    Button("Save") { replace(fact, with: draft) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+                } else {
+                    Button("Edit") { draft = fact.raw; editing = fact.line }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                }
+                Button("Forget") { forget(fact) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsRed)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(isSelected ? Color.dsAccentSoft : .clear)
+        .contentShape(Rectangle())
+        .onTapGesture { if selected != fact.line { selected = fact.line; editing = nil } }
+    }
+
+    /// "From Main · Organizer · 20 h ago": the newest change that added it.
+    private func provenance(_ fact: Fact) -> String {
+        guard let r = revisions.first(where: { r in r.undone != true && r.added.contains { $0.contains(fact.text) || fact.raw.contains($0) } }) else { return "Added by you" }
+        let who = switch r.by.kind {
+        case "organizer": "From Main · Organizer"
+        case "topic": "From \(r.by.title ?? "a topic")"
+        default: "Added by you"
+        }
+        return "\(who) · \(BuildSessionView.relative(r.at))"
+    }
+
+    private func suggestion(_ p: MemoryResult.Proposal) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(p.added, id: \.self) { Text($0).font(.system(size: 13.5)).foregroundStyle(Color.dsFg) }
+                ForEach(p.removed, id: \.self) { Text("Forget: \($0)").font(.system(size: 13.5)).foregroundStyle(Color.dsFg2) }
+                Text("\(p.title) wants to remember this · \(BuildSessionView.relative(p.at))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+            }
+            Spacer()
+            Button("Dismiss") { decide(p, false) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+            Button("Save fact") { decide(p, true) }.buttonStyle(PillStyle(kind: .strong, compact: true))
+        }
+        .padding(14)
+        .background(Color.dsYolkSoft, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+    }
+
+    private var history: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("History").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                if revisions.isEmpty { Text("No changes yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                ForEach(revisions) { r in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(r.summary).font(.system(size: 12.5)).foregroundStyle(r.undone == true ? Color.dsFg3 : Color.dsFg).strikethrough(r.undone == true).lineLimit(3)
+                        HStack(spacing: 4) {
+                            Text("\(author(r)) · \(BuildSessionView.relative(r.at)) ·").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                            Button("Restore") { restore(r) }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Color.accentColor)
+                                .help("Put the memory back as it was after this change")
+                        }
+                    }
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: Changes
+
+    private func lines() -> [String] { text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) }
+
+    private func replace(_ fact: Fact, with value: String) {
+        var l = lines()
+        let v = value.trimmingCharacters(in: .whitespaces)
+        guard l.indices.contains(fact.line), !v.isEmpty else { return }
+        l[fact.line] = "- \(v)"
+        editing = nil
+        save(l.joined(separator: "\n"))
+    }
+
+    private func forget(_ fact: Fact) {
+        var l = lines()
+        guard l.indices.contains(fact.line) else { return }
+        l.remove(at: fact.line)
+        selected = nil
+        save(l.joined(separator: "\n"))
+    }
+
+    private func add() {
+        let fact = adding.trimmingCharacters(in: .whitespaces)
+        guard !fact.isEmpty else { return }
+        adding = ""
+        var l = lines()
+        if !l.contains(where: { $0.trimmingCharacters(in: .whitespaces).lowercased() == "## notes" }) {
+            if !(l.last ?? "").isEmpty, !text.isEmpty { l.append("") }
+            l.append("## Notes")
+        }
+        let heading = l.firstIndex { $0.trimmingCharacters(in: .whitespaces).lowercased() == "## notes" }!
+        var at = heading + 1
+        while at < l.count, !l[at].hasPrefix("## ") { at += 1 }
+        while at > heading + 1, l[at - 1].trimmingCharacters(in: .whitespaces).isEmpty { at -= 1 }
+        l.insert("- \(fact)", at: at)
+        save(l.joined(separator: "\n"))
+    }
+
+    private func decide(_ p: MemoryResult.Proposal, _ accept: Bool) {
+        run {
+            try await engine.spaceCall("spaces.memory.decide", DecideParams(ref: space.ref, proposalId: p.id, accept: accept))
+            await load()
+        }
     }
 
     private func author(_ r: MemoryRevision) -> String {
@@ -385,11 +557,13 @@ struct MemoryEditorSheet: View {
         text = memory.text
         saved = memory.text
         revisions = memory.revisions
+        proposals = memory.proposals ?? []
     }
 
-    private func save() {
+    private func save(_ next: String) {
+        text = next
         run {
-            try await engine.spaceCall("spaces.memory.set", MemorySetParams(ref: space.ref, text: text))
+            try await engine.spaceCall("spaces.memory.set", MemorySetParams(ref: space.ref, text: next))
             await load()
         }
     }
@@ -525,15 +699,15 @@ struct SpaceView: View {
                 Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
             Spacer(minLength: 12)
-            if space.space?.memory != false {
-                Button("Memory") { showMemory = true }.buttonStyle(PillStyle(kind: .toolbar)).help("Facts every topic reads, and their history")
-            }
             Button("Files") { showFiles = true }.buttonStyle(PillStyle(kind: .toolbar)).help("Documents every topic can read")
             Button { withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() } } label: {
-                Image(systemName: "sidebar.right").font(.system(size: 12, weight: .medium))
+                Image(systemName: "sidebar.right").font(.system(size: 12, weight: .medium)).foregroundStyle(showInspector ? Color.accentColor : Color.dsFg)
+                    .frame(width: 28, height: 28)
+                    .background(showInspector ? Color.dsAccentSoft : Color.dsPill, in: Circle())
+                    .overlay(Circle().strokeBorder(showInspector ? .clear : Color.dsLine, lineWidth: 0.5))
             }
-            .buttonStyle(PillStyle(kind: .toolbar))
-            .help(showInspector ? "Hide topics and memory" : "Show topics and memory")
+            .buttonStyle(.plain)
+            .help(showInspector ? "Hide progress and memory" : "Show progress and memory")
             Menu {
                 SpaceMenu(engine: engine, space: space, selection: $selection)
             } label: {
@@ -553,48 +727,48 @@ struct SpaceView: View {
     }
 
     private var subtitle: String {
-        var parts = ["Notebook", topics.count == 1 ? "1 topic" : "\(topics.count) topics"]
+        var parts = ["Notebook"]
         if let info = space.space {
-            if info.memory, info.memoryLines > 0 { parts.append(info.memoryLines == 1 ? "1 memory" : "\(info.memoryLines) memories") }
-            if info.files > 0 { parts.append(info.files == 1 ? "1 file" : "\(info.files) files") }
             if info.costUsd > 0 { parts.append(info.costUsd < 0.01 ? String(format: "$%.4f", info.costUsd) : String(format: "$%.2f", info.costUsd)) }
+            if info.files > 0 { parts.append(info.files == 1 ? "1 file" : "\(info.files) files") }
         }
-        if let topic { parts.append(topic.title) }
         if thread.state?.status == .running { parts.append(topicId == nil ? "organizing…" : "answering…") }
         return parts.joined(separator: " · ")
     }
 
-    /// Main, then the topics; + Topic starts one (/new in Main).
+    /// Main, then the topics, as underlined tabs (docs/design v2, 4a); + Topic starts one (/new in Main).
     private var capsules: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                capsule("Main", selected: topicId == nil, unread: false) { selection = space.ref.id }
-                ForEach(topics) { t in
-                    capsule(t.title, selected: topicId == t.id, unread: t.unread == true) { selection = space.ref(topic: t.id).key }
-                        .contextMenu { TopicMenu(engine: engine, space: space, topic: t, selection: $selection) }
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 22) {
+                    tab("Main", selected: topicId == nil, dot: nil) { selection = space.ref.id }
+                    ForEach(topics) { t in
+                        tab(t.title, selected: topicId == t.id, dot: t.running == true ? .accentColor : t.unread == true ? .accentColor : nil) { selection = space.ref(topic: t.id).key }
+                            .contextMenu { TopicMenu(engine: engine, space: space, topic: t, selection: $selection) }
+                    }
+                    Button { newTopic() } label: {
+                        Text("+ Topic").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.bottom, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Start a topic yourself")
                 }
-                Button { newTopic() } label: {
-                    Text("+ Topic").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 10).frame(height: 26)
-                }
-                .buttonStyle(.plain)
-                .help("Start a topic yourself")
+                .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 24)
+            Rectangle().fill(Color.dsLine).frame(height: 0.5)
         }
-        .frame(height: 34)
-        .padding(.bottom, 4)
     }
 
-    private func capsule(_ title: String, selected: Bool, unread: Bool, action: @escaping () -> Void) -> some View {
+    private func tab(_ title: String, selected: Bool, dot: Color?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Text(title).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
-                if unread { Circle().fill(Color.accentColor).frame(width: 5, height: 5) }
+            VStack(spacing: 6) {
+                HStack(spacing: 5) {
+                    Text(title).font(.system(size: 13, weight: selected ? .semibold : .regular)).foregroundStyle(selected ? Color.dsFg : Color.dsFg2).lineLimit(1)
+                    if let dot { Circle().fill(dot).frame(width: 6, height: 6) }
+                }
+                Rectangle().fill(selected ? Color.accentColor : .clear).frame(height: 2)
             }
-            .foregroundStyle(selected ? Color.dsWin : Color.dsFg)
-            .padding(.horizontal, 11)
-            .frame(height: 26)
-            .background(selected ? Color.dsFg : Color.dsChip, in: Capsule())
+            .fixedSize()
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -623,54 +797,72 @@ struct SpaceView: View {
     }
 }
 
-/// The Space's inspector (docs/design 2b): topics with where they stand, then the latest memory changes.
+/// The notebook's inspector (docs/design v2, 4a): progress across its topics, then a preview of its memory.
 struct SpaceInspector: View {
     let engine: EngineController
     let space: SessionSummary
     @Binding var selection: String?
     @Binding var showMemory: Bool
-    @State private var recent: [MemoryRevision] = []
+    @State private var memoryText = ""
+
+    private var topics: [TopicInfo] { space.activeTopics }
+    /// A topic is settled when it has answered and nothing new waits to be read.
+    private func settled(_ t: TopicInfo) -> Bool { t.running != true && t.unread != true && t.summary != nil }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Topics").font(.system(size: 13, weight: .semibold))
-                ForEach(space.activeTopics) { topic in
+                HStack {
+                    Text("Progress").font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    if !topics.isEmpty {
+                        Text("\(topics.filter(settled).count) of \(topics.count) settled").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    }
+                }
+                if !topics.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(topics) { t in
+                            Capsule().fill(settled(t) ? Color.dsGreen : t.running == true || t.unread == true ? Color.dsAmber : Color.dsLine).frame(height: 4)
+                        }
+                    }
+                }
+                ForEach(Array(topics.enumerated()), id: \.element.id) { i, topic in
+                    let selected = selection == space.ref(topic: topic.id).key
                     Button { selection = space.ref(topic: topic.id).key } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {
-                                Text(topic.title).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg).lineLimit(1)
+                                Text("\(i + 1) · \(topic.title)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
                                 Spacer()
-                                Text(BuildSessionView.relative(topic.lastActiveAt)).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                                Text(state(topic)).font(.system(size: 11.5, weight: .medium)).foregroundStyle(topic.unread == true ? Color.dsAmber : Color.dsFg3)
                             }
                             if let line = topic.summary ?? topic.brief {
                                 Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(2)
                             }
                         }
+                        .padding(10)
+                        .background(selected ? Color.dsCard : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(selected ? Color.dsLine : .clear, lineWidth: 0.5))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
-                Button { selection = space.ref.id } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Main").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg)
-                        Text("Front door; routes to topics").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                    }
-                    .contentShape(Rectangle())
+                if topics.isEmpty {
+                    Text("Write in Main: the organizer starts topics as subjects come up.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
-                .buttonStyle(.plain)
                 if space.space?.memory != false {
+                    Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.vertical, 6)
                     HStack {
-                        Text("Recent memory").font(.system(size: 13, weight: .semibold))
+                        Text("Memory").font(.system(size: 13, weight: .semibold))
                         Spacer()
-                        Button("All \(space.space?.memoryLines ?? 0)") { showMemory = true }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
+                        Button("Open") { showMemory = true }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
                     }
-                    .padding(.top, 10)
-                    if recent.isEmpty { Text("Nothing remembered yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                    ForEach(recent.prefix(4)) { r in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(r.summary).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(3)
-                            Text("\(r.by.kind == "organizer" ? "Main" : r.by.title ?? "You") · \(BuildSessionView.relative(r.at))").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                    let facts = Self.preview(memoryText)
+                    if facts.isEmpty { Text("Nothing remembered yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                    ForEach(Array(facts.enumerated()), id: \.offset) { _, f in
+                        HStack(alignment: .top) {
+                            Text(f.0).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                            Spacer(minLength: 8)
+                            Text(f.1).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg).multilineTextAlignment(.trailing).lineLimit(2)
                         }
                     }
                 }
@@ -678,6 +870,28 @@ struct SpaceInspector: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: space.space?.memoryLines) { recent = (await engine.memory(of: space.ref))?.revisions.filter { $0.undone != true } ?? [] }
+        .task(id: space.space?.memoryLines) { memoryText = (await engine.memory(of: space.ref))?.text ?? "" }
+    }
+
+    private func state(_ t: TopicInfo) -> String {
+        if t.running == true { return "Working" }
+        if t.unread == true { return "New reply" }
+        return t.summary == nil ? "Waiting" : "Settled"
+    }
+
+    /// The first few facts as key/value pairs ("Size · 4 × 3 m"): a "Label: value" fact, or its first words.
+    static func preview(_ text: String) -> [(String, String)] {
+        text.split(separator: "\n").compactMap { line -> (String, String)? in
+            let l = line.trimmingCharacters(in: .whitespaces)
+            guard l.hasPrefix("- ") else { return nil }
+            let body = l.dropFirst(2)
+            if let colon = body.firstIndex(of: ":"), body.distance(from: body.startIndex, to: colon) <= 18 {
+                return (String(body[..<colon]), String(body[body.index(after: colon)...]).trimmingCharacters(in: .whitespaces))
+            }
+            let words = body.split(separator: " ")
+            return (words.prefix(2).joined(separator: " "), words.dropFirst(2).joined(separator: " "))
+        }
+        .prefix(4)
+        .map { $0 }
     }
 }

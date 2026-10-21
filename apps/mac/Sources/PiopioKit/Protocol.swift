@@ -446,6 +446,8 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var space: SpaceInfo?
     /// Threads: a Space it seems to belong in (04-chat S11).
     public var suggestion: SpaceSuggestion?
+    /// Next messages suggested after the latest answer (docs/design v2 "You could also").
+    public var followUps: [String]?
     /// Agents.
     public var agent: AgentInfo?
 }
@@ -537,6 +539,8 @@ public struct InboxItem: Decodable, Sendable, Hashable, Identifiable {
     public var approval: ApprovalItem?
 }
 public struct InboxListResult: Decodable, Sendable { public var count: Int; public var items: [InboxItem] }
+/// `fold`: a turn's tool calls come as one steps item (the folded activity line).
+public struct SubscribeParams: Encodable, Sendable { public var ref: ContainerRef; public var fold: Bool?; public init(ref: ContainerRef, fold: Bool? = nil) { self.ref = ref; self.fold = fold } }
 /// What the model provider has billed (OpenRouter's key endpoint): the sidebar's "$0.05 today", Settings › Models.
 public struct UsageSummary: Decodable, Sendable, Equatable {
     public var connected: Bool
@@ -605,7 +609,7 @@ public struct SpaceSuggestion: Codable, Sendable, Hashable {
 
 /// Engine-wide settings (Settings › Chat, Settings › MCP servers).
 public struct EngineSettings: Codable, Sendable, Hashable {
-    public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var suggestSpaces: Bool }
+    public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var suggestSpaces: Bool; public var followUps: Bool? }
     public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var provider: String }
     public struct Memory: Codable, Sendable, Hashable { public var providers: [McpMemoryProvider] }
     public var chat: Chat
@@ -658,8 +662,8 @@ public struct MemoryRecallResult: Decodable, Sendable { public struct Hit: Decod
 
 public struct SettingsPatch: Encodable, Sendable {
     public struct Chat: Encodable, Sendable {
-        public var mcp: Bool?; public var suggestSpaces: Bool?
-        public init(mcp: Bool? = nil, suggestSpaces: Bool? = nil) { self.mcp = mcp; self.suggestSpaces = suggestSpaces }
+        public var mcp: Bool?; public var suggestSpaces: Bool?; public var followUps: Bool?
+        public init(mcp: Bool? = nil, suggestSpaces: Bool? = nil, followUps: Bool? = nil) { self.mcp = mcp; self.suggestSpaces = suggestSpaces; self.followUps = followUps }
     }
     public struct AboutMe: Encodable, Sendable {
         public var enabled, capture, inThreads, inSpaces: Bool?
@@ -735,6 +739,9 @@ public struct MemoryRevision: Codable, Sendable, Hashable, Identifiable {
 public struct MemoryResult: Decodable, Sendable {
     public var text: String
     public var revisions: [MemoryRevision]
+    /// Notebooks: changes topics proposed that wait for you.
+    public struct Proposal: Decodable, Sendable, Hashable, Identifiable { public var id, at, topicId, title: String; public var added, removed: [String]; public var reason: String }
+    public var proposals: [Proposal]?
     /// About me: the provider it lives in, and whether that provider can list what it stored.
     public var provider: String?
     public var limited: Bool?

@@ -7,11 +7,11 @@ import type { SessionEvent, TimelineItem, ToolItem } from "@piopio/protocol";
 
 type Steps = Extract<TimelineItem, { kind: "steps" }>;
 
-export function groupSteps(items: readonly TimelineItem[]): TimelineItem[] {
+export function groupSteps(items: readonly TimelineItem[], standalone: (tool: ToolItem) => boolean = () => false): TimelineItem[] {
 	const out: TimelineItem[] = [];
 	let current: Steps | undefined;
 	for (const item of items) {
-		if (item.kind === "tool") {
+		if (item.kind === "tool" && !standalone(item as ToolItem)) {
 			if (!current) {
 				current = { kind: "steps", id: `steps:${item.id}`, at: item.at, tools: [] };
 				out.push(current);

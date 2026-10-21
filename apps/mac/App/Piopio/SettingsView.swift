@@ -2,15 +2,23 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// Settings (docs/design 4b): a sidebar of sections; providers and engines are lists of cards.
+/// Settings (docs/design v2, 9a): a grouped sidebar of sections; models and engines are lists of cards.
 struct SettingsView: View {
     let engine: EngineController
-    // PIOPIO_DEMO_SETTINGS_SECTION=General|Providers|Engines picks the first section (captures).
-    @State private var section: Section = Section(rawValue: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
+    // PIOPIO_DEMO_SETTINGS_SECTION=General|Models|Engines picks the first section (captures).
+    @State private var section: Section = Section(demo: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Providers", chat = "Chat", mcp = "MCP servers", extensions = "Extensions", approvals = "Approvals", engines = "Engines"
+        case general = "General", providers = "Models", chat = "Chat", approvals = "Approvals", mcp = "MCP servers", extensions = "Extensions", engines = "This Mac & cloud"
         var id: String { rawValue }
+        init?(demo: String) {
+            switch demo {
+            case "Providers": self = .providers
+            case "Engines": self = .engines
+            default: self.init(rawValue: demo)
+            }
+        }
+        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .chat, .approvals]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
         var icon: (String, Color) {
             switch self {
             case .general: ("gearshape.fill", .gray)
@@ -27,7 +35,12 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(Section.allCases) { s in
+                ForEach(Array(Section.groups.enumerated()), id: \.offset) { _, group in
+                    if let title = group.0 {
+                        Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                            .padding(.horizontal, 8).padding(.top, 14).padding(.bottom, 2)
+                    }
+                    ForEach(group.1) { s in
                     Button { section = s } label: {
                         HStack(spacing: 10) {
                             RoundedRectangle(cornerRadius: 5).fill(s.icon.1.gradient).frame(width: 20, height: 20)
@@ -41,6 +54,7 @@ struct SettingsView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    }
                 }
                 Spacer()
             }
@@ -174,72 +188,128 @@ private struct GeneralPane: View {
     }
 }
 
-// MARK: Providers
+// MARK: Models
 
+/// Settings › Models (docs/design v2, 9a): the providers billed for models, then the default model per mode.
 private struct ProvidersPane: View {
     let engine: EngineController
     @State private var replacing = false
     @State private var key = ""
     @State private var info: VerifyKeyResult?
-    @State private var showDefault = false
-    @State private var showQuick = false
+    @State private var picking: EngineController.ModelRole?
 
     var body: some View {
-        PaneTitle(title: "Providers", subtitle: "Where models come from. Everything is billed to your own accounts.")
-        HStack {
-            SectionLabel("Model providers")
-            Spacer()
-            Text("+ Add provider").font(.system(size: 12)).foregroundStyle(Color.dsFg3).help("More providers are coming")
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Models").font(.system(size: 24, weight: .bold))
+            Text("Billed to your own accounts. Keys stay in the macOS Keychain.").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
         }
-        .padding(.bottom, 6)
+        .padding(.bottom, 18)
+        SectionLabel("Providers").padding(.bottom, 6)
         ListCard {
-            Row(title: "OpenRouter") {
+            HStack(spacing: 12) {
+                Text("OR").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Color(red: 0.39, green: 0.40, blue: 0.95).gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("OpenRouter").font(.system(size: 13, weight: .semibold))
+                        if engine.hasKey {
+                            Text(info?.ok == false ? "● Not verified" : "● Connected").font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(info?.ok == false ? Color.dsRed : Color.dsGreen)
+                                .help(info?.message ?? "")
+                        }
+                    }
+                    if engine.hasKey, !replacing {
+                        Text(engine.usage?.keyHint ?? info?.label ?? "Saved in Keychain").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    } else {
+                        Text("Hundreds of models with one key").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    }
+                }
+                Spacer(minLength: 12)
                 if replacing || !engine.hasKey {
-                    SecureField("sk-or-v1-…", text: $key).textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
+                    SecureField("sk-or-v1-…", text: $key).textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced)).frame(maxWidth: 240)
                     Button("Save") {
                         Task {
                             try? await engine.saveKey(key)
                             key = ""
                             replacing = false
                             await refresh()
+                            await engine.loadUsage(refresh: true)
                         }
                     }
                     .buttonStyle(PillStyle(kind: .primary, compact: true))
                     .disabled(key.isEmpty)
                     if engine.hasKey { Button("Cancel") { replacing = false }.buttonStyle(PillStyle(compact: true)) }
                 } else {
-                    Text(info?.label ?? "Saved in Keychain").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1).fixedSize()
-                    if info?.ok == true { Text("✓ Verified").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen) }
-                    if let failed = info, !failed.ok { Text(failed.message ?? "Not verified").font(.system(size: 12)).foregroundStyle(Color.dsRed) }
-                    Spacer()
-                    if let usage = info?.usageUsd { Text(String(format: "$%.2f used", usage)).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
-                    Button("Replace") { replacing = true }.buttonStyle(.plain).foregroundStyle(Color.accentColor).font(.system(size: 12))
-                    Button("Remove") { Task { await engine.removeKey(); info = nil } }.buttonStyle(.plain).foregroundStyle(Color.dsRed).font(.system(size: 12))
+                    if let month = engine.usage?.monthUsd ?? info?.usageUsd {
+                        Text("\(MainSidebar.money(month)) this month").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                    }
+                    Menu {
+                        Button("Replace key…") { replacing = true }
+                        Button("Remove", role: .destructive) { Task { await engine.removeKey(); info = nil } }
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2).frame(width: 24, height: 24)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                 }
             }
-            Row(title: "Default model") {
-                Button(modelName(engine.preferredModel)) { showDefault = true }
-                    .buttonStyle(PillStyle(compact: true))
-                    .popover(isPresented: $showDefault) {
-                        ModelPicker(engine: engine, selected: engine.preferredModel) { m in engine.setPreferredModel(m); showDefault = false }
-                    }
-                Text("Quick Chat uses").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                Button(modelName(engine.quickChatModel)) { showQuick = true }
-                    .buttonStyle(PillStyle(compact: true))
-                    .popover(isPresented: $showQuick) {
-                        ModelPicker(engine: engine, selected: engine.quickChatModel) { m in engine.setQuickChatModel(m); showQuick = false }
-                    }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 60)
+            Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 58)
+            HStack(spacing: 12) {
+                Image(systemName: "sparkle").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Color.black.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ChatGPT").font(.system(size: 13, weight: .semibold))
+                    Text("Use your subscription · sign in with OpenAI").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                }
                 Spacer()
+                Badge("Coming soon")
             }
-            Row(title: "ChatGPT", last: true) {
-                Text("Subscription · sign in with OpenAI").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                Spacer()
-                Badge("Soon")
-            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 60)
+            .opacity(0.6)
         }
-        Text("Keys are stored in the macOS Keychain. Cloud agents will receive them as secrets on their target, which you can revoke at any time.")
+        SectionLabel("Default model").padding(.top, 22).padding(.bottom, 6)
+        ListCard {
+            roleRow(.build, "Build sessions", "Writing and changing code")
+            roleRow(.chat, "Chats and notebooks", "Everyday questions")
+            roleRow(.quick, "Quick Chat", "Pick something fast")
+            roleRow(.agent, "New agents", "You can change each agent in its Setup", last: true)
+        }
+        Text("Cloud agents will receive keys as secrets on their target, which you can revoke at any time.")
             .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10)
             .task { await refresh() }
+    }
+
+    private func roleRow(_ role: EngineController.ModelRole, _ title: String, _ hint: String, last: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text(hint).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                }
+                Spacer()
+                Button {
+                    picking = role
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(modelName(engine.model(for: role)))
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                    }
+                }
+                .buttonStyle(PillStyle(compact: true))
+                .popover(isPresented: Binding(get: { picking == role }, set: { if !$0 { picking = nil } })) {
+                    ModelPicker(engine: engine, selected: engine.model(for: role), role: role) { m in engine.setModel(m, for: role); picking = nil }
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 52)
+            if !last { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 14) }
+        }
     }
 
     private func modelName(_ ref: ModelRef?) -> String {

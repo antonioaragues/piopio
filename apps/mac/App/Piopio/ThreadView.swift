@@ -23,6 +23,10 @@ struct ThreadView: View {
                         }
                         .buttonStyle(PillStyle(kind: .toolbar, compact: true))
                     }
+                    if thread.state?.status != .running, let followUps = summary.followUps, !followUps.isEmpty {
+                        FollowUps(items: followUps, label: "You could also") { text in Task { await thread.send(text) } }
+                            .frame(maxWidth: 636).padding(.horizontal, 24)
+                    }
                     Composer(engine: engine, thread: thread)
                         .frame(maxWidth: 636)
                         .padding(.horizontal, 24)
@@ -50,19 +54,33 @@ struct ThreadView: View {
             }
             Spacer(minLength: 12)
             Menu {
+                ForEach(engine.spaces, id: \.ref.id) { space in
+                    Button(space.title) {
+                        run {
+                            let ids = try await engine.importThreads([summary.ref], into: space.ref, topic: nil)
+                            if let id = ids.first { NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: space.ref.id, topicId: id, itemId: nil)) }
+                        }
+                    }
+                }
+                if !engine.spaces.isEmpty { Divider() }
+                Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: summary.ref.id) }
+            } label: { Text("Move to Notebook…") }
+                .menuStyle(.button).buttonStyle(PillStyle(kind: .toolbar)).menuIndicator(.hidden).fixedSize()
+                .help("Make this chat a topic in a notebook")
+            Menu {
                 Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
                 Divider()
                 Button("Export as Markdown…") { Task { await thread.export(.markdown) } }
                 Button("Export as HTML…") { Task { await thread.export(.html) } }
                 Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
             } label: {
-                Image(systemName: "square.and.arrow.up").font(.system(size: 12, weight: .medium))
+                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold))
             }
             .menuStyle(.button)
             .buttonStyle(PillStyle(kind: .toolbar))
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Copy or export this thread")
+            .help("Copy or export this chat")
         }
         .padding(.leading, 24)
         .padding(.trailing, 16)
@@ -72,7 +90,7 @@ struct ThreadView: View {
     }
 
     private var subtitle: String {
-        var parts = ["Thread"]
+        var parts = ["Chat", BuildSessionView.relative(summary.updatedAt)]
         let files = thread.attachmentCount
         if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
         if let usage = thread.state?.usage, usage.costUsd > 0 {

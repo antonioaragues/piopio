@@ -196,9 +196,12 @@ final class CardLayoutDelegate: NSObject, NSTextLayoutManagerDelegate {
 /// Model behind an expandable card. Built on any thread; mutated on the main thread.
 @Observable
 public final class DisclosureCard: @unchecked Sendable {
-    public enum Kind: Sendable { case tool, thinking }
-    /// How the expanded body is drawn: plain text, terminal output, or diff rows.
-    public enum Body: Sendable { case text(String), terminal(String), diff([DiffLine]) }
+    /// `activity`: a turn's tool calls folded into one quiet line that opens to their cards (docs/design v2).
+    public enum Kind: Sendable { case tool, thinking, activity }
+    /// How the expanded body is drawn: plain text, terminal output, diff rows, or nested cards (activity).
+    public enum Body: Sendable { case text(String), terminal(String), diff([DiffLine]), cards([DisclosureCard]) }
+    /// Activity: done (✓), still working (spinner).
+    public var working = false
     public let kind: Kind
     public var title: String
     public var detail: String
@@ -241,6 +244,7 @@ public final class DisclosureCard: @unchecked Sendable {
             switch content {
             case .text(let s), .terminal(let s): s
             case .diff(let lines): lines.map(\.text).joined(separator: "\n")
+            case .cards(let cards): cards.map(\.title).joined(separator: "\n")
             }
         }
         set { content = .text(newValue) }
@@ -250,8 +254,13 @@ public final class DisclosureCard: @unchecked Sendable {
         switch content {
         case .text(let s), .terminal(let s): s.isEmpty
         case .diff(let lines): lines.isEmpty
+        case .cards(let cards): cards.isEmpty
         }
     }
+
+    /// The quiet line's height (activity, thinking).
+    static let lineHeight: CGFloat = 26
+    static let nestedSpacing: CGFloat = 6
 
     static let collapsedHeight: CGFloat = 34
     static let diffRowHeight: CGFloat = 17
@@ -265,7 +274,11 @@ public final class DisclosureCard: @unchecked Sendable {
     }
 
     func height(width: CGFloat) -> CGFloat {
-        guard expanded, !isEmpty else { return Self.collapsedHeight }
+        let header = kind == .tool ? Self.collapsedHeight : Self.lineHeight
+        guard expanded, !isEmpty else { return header }
+        if case .cards(let cards) = content {
+            return header + cards.reduce(0) { $0 + $1.height(width: width) + Self.nestedSpacing } + 2
+        }
         if case .diff = content {
             let (lines, hidden) = visibleDiff
             return Self.collapsedHeight + CGFloat(lines.count) * Self.diffRowHeight + (hidden > 0 ? 24 : 0) + 10
@@ -274,7 +287,7 @@ public final class DisclosureCard: @unchecked Sendable {
         let text = NSAttributedString(string: body, attributes: [.font: font])
         let h = text.boundingRect(with: NSSize(width: max(50, width - 28), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height
         // Long outputs scroll inside the card.
-        return Self.collapsedHeight + min(ceil(h) + 20, 360)
+        return header + min(ceil(h) + 20, 360)
     }
 }
 
@@ -345,17 +358,74 @@ final class DisclosureViewProvider: NSTextAttachmentViewProvider {
     }
 }
 
-/// Quiet collapsible card: chevron, verb, monospace detail, duration (docs/design 2a tool cards).
+/// Quiet collapsible card: chevron, verb, monospace detail, duration (docs/design 2a tool cards). Activity and thinking
+/// are a single 12-pt line instead (docs/design v2), the activity opening to its tool cards.
 struct DisclosureCardView: View {
     let card: DisclosureCard
+    /// For nested cards: what relays a toggle to the line that holds them (it changes height).
+    var relay: (@MainActor () -> Void)?
 
     var body: some View {
+        if card.kind == .tool { toolCard } else { quietLine }
+    }
+
+    private func toggle() {
+        card.expanded.toggle()
+        card.toggledByReader = true
+        if let relay { relay() } else { card.onToggle?(card) }
+    }
+
+    private var quietLine: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button {
-                card.expanded.toggle()
-                card.toggledByReader = true
-                card.onToggle?(card)
-            } label: {
+            Button(action: toggle) {
+                HStack(spacing: 6) {
+                    if card.kind == .activity {
+                        if card.working {
+                            ProgressView().controlSize(.mini).frame(width: 12)
+                        } else if card.failed {
+                            Circle().fill(Color(nsColor: DS.red)).frame(width: 6, height: 6).frame(width: 12)
+                        } else if card.waiting {
+                            Circle().fill(Color(nsColor: DS.amber)).frame(width: 6, height: 6).frame(width: 12)
+                        } else {
+                            Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color(nsColor: DS.green)).frame(width: 12)
+                        }
+                    } else {
+                        Image(systemName: "sparkle").font(.system(size: 9.5)).foregroundStyle(Color(nsColor: DS.fg3)).frame(width: 12)
+                    }
+                    Text(card.title).font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).truncationMode(.tail)
+                    if !card.detail.isEmpty { Text("· \(card.detail)").font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1) }
+                    Image(systemName: card.expanded ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
+                    Spacer(minLength: 0)
+                }
+                .frame(height: DisclosureCard.lineHeight)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if card.expanded {
+                switch card.content {
+                case .cards(let cards):
+                    VStack(alignment: .leading, spacing: DisclosureCard.nestedSpacing) {
+                        ForEach(Array(cards.enumerated()), id: \.offset) { _, child in
+                            DisclosureCardView(card: child, relay: { [card] in card.onToggle?(card) })
+                                .frame(height: child.height(width: 600))
+                                .onAppear { child.onAction = card.onAction }
+                        }
+                    }
+                case .text(let text), .terminal(let text):
+                    ScrollView {
+                        Text(text).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: DS.fg2)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 18).padding(.vertical, 6)
+                    }
+                case .diff: EmptyView()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var toolCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: toggle) {
                 HStack(spacing: 8) {
                     Image(systemName: card.expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
@@ -395,6 +465,7 @@ struct DisclosureCardView: View {
                 case .diff: diff
                 case .terminal(let text): scrolling(text, terminal: true)
                 case .text(let text): scrolling(text, terminal: false)
+                case .cards: EmptyView()
                 }
             }
         }
@@ -434,7 +505,7 @@ struct DisclosureCardView: View {
             if hidden > 0 {
                 Button {
                     card.showAll = true
-                    card.onToggle?(card)
+                    if let relay { relay() } else { card.onToggle?(card) }
                 } label: {
                     Text("… \(hidden) more lines").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.fg3))
                         .padding(.leading, 18).frame(height: 24).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())

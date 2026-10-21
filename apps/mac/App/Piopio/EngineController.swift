@@ -346,7 +346,7 @@ final class EngineController {
     /// A Build session on the project as it is, a new branch, or its own worktree (docs/design 7a).
     func createBuildSession(in project: ProjectInfo, workOn: WorkOn, mode: ApprovalMode?, model: ModelRef?, profile: SessionSummary.Profile = .build) async throws -> ContainerRef {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
-        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: model ?? preferredModel, workOn: workOn, approvalMode: mode, profile: profile), as: CreateSessionResult.self).ref
+        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: model ?? self.model(for: .build), workOn: workOn, approvalMode: mode, profile: profile), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return ref
     }
@@ -374,33 +374,33 @@ final class EngineController {
         _ = try? await client?.call("sessions.delete", RefParams(ref: ref), as: Empty.self)
     }
 
-    /// The model new threads start with: the user's choice, else the engine default.
-    var preferredModel: ModelRef? {
-        _ = preferenceTick
-        if let raw = UserDefaults.standard.string(forKey: "defaultChatModel"), let i = raw.firstIndex(of: "/") {
-            return ModelRef(provider: String(raw[..<i]), id: String(raw[raw.index(after: i)...]))
-        }
-        return defaultModel
+    /// What a default model is for (Settings › Models, docs/design v2 9a); each stored as "provider/id".
+    enum ModelRole: String, CaseIterable, Identifiable {
+        case build = "buildModel", chat = "defaultChatModel", quick = "quickChatModel", agent = "agentModel"
+        var id: String { rawValue }
     }
 
-    func setPreferredModel(_ model: ModelRef) {
-        UserDefaults.standard.set("\(model.provider)/\(model.id)", forKey: "defaultChatModel")
+    /// The model a new session of that kind starts with: the user's choice, else the chat default, else the engine's.
+    func model(for role: ModelRole) -> ModelRef? {
+        _ = preferenceTick
+        if let raw = UserDefaults.standard.string(forKey: role.rawValue), let i = raw.firstIndex(of: "/") {
+            return ModelRef(provider: String(raw[..<i]), id: String(raw[raw.index(after: i)...]))
+        }
+        return role == .chat ? defaultModel : model(for: .chat)
+    }
+
+    func setModel(_ model: ModelRef, for role: ModelRole) {
+        UserDefaults.standard.set("\(model.provider)/\(model.id)", forKey: role.rawValue)
         preferenceTick += 1
     }
 
-    /// Quick Chat's model (a fast one by choice); defaults to the default model.
-    var quickChatModel: ModelRef? {
-        _ = preferenceTick
-        if let raw = UserDefaults.standard.string(forKey: "quickChatModel"), let i = raw.firstIndex(of: "/") {
-            return ModelRef(provider: String(raw[..<i]), id: String(raw[raw.index(after: i)...]))
-        }
-        return preferredModel
-    }
+    /// The model new chats and notebooks start with.
+    var preferredModel: ModelRef? { model(for: .chat) }
+    func setPreferredModel(_ model: ModelRef) { setModel(model, for: .chat) }
 
-    func setQuickChatModel(_ model: ModelRef) {
-        UserDefaults.standard.set("\(model.provider)/\(model.id)", forKey: "quickChatModel")
-        preferenceTick += 1
-    }
+    /// Quick Chat's model (a fast one by choice); defaults to the chat model.
+    var quickChatModel: ModelRef? { model(for: .quick) }
+    func setQuickChatModel(_ model: ModelRef) { setModel(model, for: .quick) }
 
     private var preferenceTick = 0
 
@@ -493,7 +493,7 @@ final class EngineController {
 
     func createAgent(name: String, template: String?, avatar: String) async throws -> ContainerRef {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let ref = try await client.call("agents.create", CreateAgentParams(name: name, template: template, avatar: avatar.isEmpty ? nil : avatar, model: preferredModel, owner: NSFullUserName().split(separator: " ").first.map(String.init)), as: CreateSessionResult.self).ref
+        let ref = try await client.call("agents.create", CreateAgentParams(name: name, template: template, avatar: avatar.isEmpty ? nil : avatar, model: model(for: .agent), owner: NSFullUserName().split(separator: " ").first.map(String.init)), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return ref
     }
@@ -633,7 +633,7 @@ final class EngineController {
 
     func subscribe(_ ref: ContainerRef, handler: @escaping ([SessionEvent]) -> Void) async throws -> SubscribeResult {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let sub = try await client.call("sessions.subscribe", RefParams(ref: ref), as: SubscribeResult.self)
+        let sub = try await client.call("sessions.subscribe", SubscribeParams(ref: ref, fold: true), as: SubscribeResult.self)
         handlers[sub.subscriptionId] = handler
         // Events that raced ahead of the subscribe response.
         for events in orphans.removeValue(forKey: sub.subscriptionId) ?? [] { handler(events) }

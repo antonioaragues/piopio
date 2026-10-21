@@ -99,8 +99,21 @@ struct RootView: View {
         .onChange(of: engine.status) { _, status in
             if status == .ready, engine.needsKey || ProcessInfo.processInfo.environment["PIOPIO_DEMO_WELCOME"] == "1" { showOnboarding = true }
         }
-        .sheet(isPresented: $showOnboarding) {
-            WelcomeView(engine: engine) { showOnboarding = false }
+        .overlay {
+            if showOnboarding {
+                WelcomeView(engine: engine) { step in
+                    showOnboarding = false
+                    switch step {
+                    case .build: itemRaw = SidebarItem.index(.projects).raw
+                    case .chat, nil: itemRaw = SidebarItem.home.raw
+                    case .briefing:
+                        Task {
+                            if let ref = try? await engine.createAgent(name: "Daily briefing", template: "daily-briefing", avatar: "☀️") { itemRaw = SidebarItem.agent(ref.id).raw }
+                        }
+                    }
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 
@@ -130,10 +143,20 @@ struct RootView: View {
             HomeView(engine: engine, item: itemBinding)
         case .needsYou:
             NeedsYouView(engine: engine, item: itemBinding)
+        case .index(.projects) where engine.projects(in: .build).isEmpty:
+            BuildFirstRun(engine: engine, item: itemBinding)
         case .index(.projects):
             ProjectsIndex(engine: engine, item: itemBinding)
         case .project(let id):
             ProjectsIndex(engine: engine, item: itemBinding, focus: id)
+        case .index(.agents) where engine.agents.isEmpty:
+            AgentsFirstRun(engine: engine, item: itemBinding)
+        case .index(.chats) where engine.threads.isEmpty:
+            ChatFirstRun(engine: engine, item: itemBinding)
+        case .index(.notebooks) where engine.spaces.isEmpty:
+            HatchEmpty(title: "Start a notebook", message: "A notebook keeps one subject together: write in Main and it splits into topics that share files and memory.") {
+                Button("New Notebook ⌘⇧N") { NotificationCenter.default.post(name: .newSpace, object: nil) }.buttonStyle(PillStyle(kind: .primary))
+            }
         case .index(let section):
             SectionIndex(engine: engine, section: section, item: itemBinding)
         case .session(let id):

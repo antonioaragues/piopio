@@ -6,7 +6,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import type { EngineSettings } from "@piopio/protocol";
 
 export const DEFAULT_SETTINGS: EngineSettings = {
-	chat: { mcp: false, suggestSpaces: true },
+	chat: { mcp: false, suggestSpaces: true, followUps: true },
 	aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" },
 	memory: { providers: [] },
 };

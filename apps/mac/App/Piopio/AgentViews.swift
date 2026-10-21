@@ -159,8 +159,15 @@ struct AgentPage: View {
     let summary: SessionSummary
     @Binding var selection: String?
     @AppStorage("agentTab") private var tab: Tab = .chat
+    /// Whose conversation the Chat tab shows: the owner's (nil), a contact's (`person:<id>`), another agent's (`agent:<id>`).
+    @State private var conversation: String?
+    @State private var people: [AgentPerson] = []
+    @State private var runs: AgentRunsResult?
+    @State private var def: AgentDef?
 
-    enum Tab: String, CaseIterable { case chat = "Chat", conversations = "Conversations", runs = "Runs", memory = "Memory", definition = "Definition" }
+    /// docs/design v2 (7c): Chat · Activity · Setup. Conversations moved into the "with …" picker, Runs became
+    /// Activity, Memory moved into Setup.
+    enum Tab: String, CaseIterable { case chat = "Chat", activity = "Activity", setup = "Setup" }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -178,55 +185,208 @@ struct AgentPage: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 28)
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             switch tab {
-            case .chat: AgentChat(engine: engine, ref: summary.ref, simulated: nil)
-            case .conversations: AgentConversations(engine: engine, summary: summary)
-            case .runs: AgentRunsView(engine: engine, summary: summary)
-            case .memory: AgentMemoryView(engine: engine, summary: summary)
-            case .definition: AgentDefinitionView(engine: engine, summary: summary)
+            case .chat:
+                HStack(spacing: 0) {
+                    chat
+                    AgentSideCard(engine: engine, summary: summary, def: def, runs: runs, tab: $tab)
+                        .frame(width: 300)
+                        .glassPanel()
+                        .padding([.top, .bottom, .trailing], 8)
+                }
+            case .activity: AgentRunsView(engine: engine, summary: summary)
+            case .setup: AgentDefinitionView(engine: engine, summary: summary)
             }
+        }
+        .task(id: summary.updatedAt) { await load() }
+    }
+
+    private func load() async {
+        people = await engine.agentPeople(summary.ref)
+        runs = await engine.agentRuns(summary.ref)
+        if let got = await engine.agentDefinition(summary.ref) { def = AgentDef(got.definition) }
+    }
+
+    @ViewBuilder private var chat: some View {
+        let person = people.first { $0.conversationId == conversation }
+        if let conversation, person?.role == "agent" {
+            AgentRunTranscript(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: conversation))
+        } else if let conversation, let person, person.role != "owner" {
+            AgentChat(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: conversation), simulated: person.name)
+        } else {
+            AgentChat(engine: engine, ref: summary.ref, simulated: nil)
         }
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            AgentAvatar(summary: summary, size: 32)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg)
+        HStack(spacing: 12) {
+            AgentAvatar(summary: summary, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(summary.title).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.dsFg)
                 HStack(spacing: 5) {
-                    Circle().fill(Color.dsGreen).frame(width: 6, height: 6)
-                    Text("This Mac · \(engine.model(modelRef(summary.agent?.model))?.name ?? summary.agent?.model ?? "")").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    let paused = summary.agent?.status?.paused == true
+                    Circle().fill(paused ? Color.dsFg3 : Color.dsGreen).frame(width: 6, height: 6)
+                    Text(statusLine).font(.system(size: 12)).foregroundStyle(paused ? Color.dsAmber : Color.dsFg3)
                 }
             }
-            // UI1: the approval mode as a badge.
-            Text(summary.agent?.asksFirst == true ? "Asks first" : "Auto")
-                .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Color.dsFg2)
-                .padding(.horizontal, 7).frame(height: 18)
-                .background(Color.dsChip, in: Capsule())
-                .help(summary.agent?.asksFirst == true ? "Some actions wait for your approval (Definition › Policies)" : "Acts without asking; every change can be undone for 24 hours")
             Spacer()
             if summary.agent?.invalid == true {
-                Text("Definition has errors").font(.system(size: 11.5)).foregroundStyle(Color.dsRed)
+                Text("Setup has errors").font(.system(size: 11.5)).foregroundStyle(Color.dsRed)
             }
-            if let status = summary.agent?.status {
-                Text(status.budgetUsd.map { String(format: "$%.2f of $%.0f this month", status.spendUsd, $0) } ?? String(format: "$%.2f this month", status.spendUsd))
-                    .font(.system(size: 11.5)).foregroundStyle(status.budgetUsd.map { status.spendUsd >= $0 } == true ? Color.dsRed : Color.dsFg3)
-                Button {
-                    Task { try? await engine.pause(summary.ref, paused: !status.paused) }
-                } label: {
-                    Label(status.paused ? "Resume" : "Pause", systemImage: status.paused ? "play.fill" : "pause.fill").font(.system(size: 12, weight: .medium))
+            if tab == .chat { personPicker }
+            Button("Run now") { runNow() }.buttonStyle(PillStyle(kind: .toolbar))
+            Menu {
+                if let status = summary.agent?.status {
+                    Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
                 }
-                .buttonStyle(PillStyle(kind: status.paused ? .primary : .secondary, compact: true))
-                .help(status.paused ? "Runs and messages start again" : "Stop all runs and messages now (the owner can also write /pause)")
-            }
+                Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
+            } label: { Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)) }
+                .menuStyle(.button).buttonStyle(PillStyle(kind: .toolbar)).menuIndicator(.hidden).fixedSize()
         }
-        .padding(.leading, 24)
+        .padding(.leading, 28)
         .padding(.trailing, 16)
-        .frame(height: 60)
+        .frame(height: 64)
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
+    }
+
+    /// "This Mac · every day 7:00", "This Mac · paused".
+    private var statusLine: String {
+        if summary.agent?.status?.paused == true { return "This Mac · paused" }
+        if let cron = def?.schedules?.first?.cron { return "This Mac · \(CronText.short(cron))" }
+        if let next = summary.agent?.status?.nextRun { return "This Mac · next \(MainSidebar.when(next))" }
+        return "This Mac"
+    }
+
+    private var personPicker: some View {
+        let current = people.first { $0.conversationId == conversation }
+        let ownerName = people.first { $0.role == "owner" }?.name ?? "you"
+        return Menu {
+            Button("\(ownerName) (you)") { conversation = nil }
+            let others = people.filter { $0.role != "owner" }
+            if !others.isEmpty {
+                Divider()
+                ForEach(others) { p in
+                    Button(p.role == "agent" ? "\(p.name) (agent)" : p.name) { conversation = p.conversationId }
+                }
+            }
+        } label: {
+            Text(current.map { $0.role == "owner" ? "with \($0.name) (you)" : "with \($0.name)" } ?? "with \(ownerName) (you)")
+        }
+        .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.visible).fixedSize()
+        .help("Whose conversation to show (contacts' are simulated here until channels arrive)")
+    }
+
+    private func runNow() {
+        Task {
+            let upcoming = runs?.upcoming.first { $0.kind == "schedule" }
+            _ = try? await engine.agentRunNow(summary.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
+            tab = .activity
+        }
+    }
+}
+
+/// The agent's overview beside its chat (7c): next and last run, what to teach it, what it can do, what it costs.
+private struct AgentSideCard: View {
+    let engine: EngineController
+    let summary: SessionSummary
+    let def: AgentDef?
+    let runs: AgentRunsResult?
+    @Binding var tab: AgentPage.Tab
+    @State private var knowsYou = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Next run").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                Text(summary.agent?.status?.nextRun.map { MainSidebar.when($0).capitalizedFirst } ?? "Nothing scheduled")
+                    .font(.system(size: 22, weight: .bold)).tracking(-0.3)
+                if let last = runs?.runs.first {
+                    Text("Last: \(MainSidebar.when(last.firedAt)) · \(last.status == "done" ? "✓" : last.status)").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                }
+            }
+            if !checklist.allSatisfy(\.done) { teach }
+            Rectangle().fill(Color.dsLine).frame(height: 0.5)
+            VStack(spacing: 9) {
+                fact("Can", can)
+                fact("Reaches you via", "Piopio")
+                fact("Model", engine.model(modelRef(def?.models.default ?? summary.agent?.model)).map(ModelChip.short) ?? def?.models.default ?? "—")
+                fact("This month", month)
+            }
+            Spacer()
+            Button { tab = .setup } label: {
+                HStack(spacing: 3) { Text("Edit in Setup"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)) }
+                    .font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(18)
+        .task(id: summary.updatedAt) { await checkMemory() }
+    }
+
+    private struct Item { let title: String; let done: Bool; let action: String; let run: () -> Void }
+
+    /// Three things that make an agent useful: something about you, a schedule, a Mac app.
+    private var checklist: [Item] {
+        [
+            Item(title: "Tell it about you", done: knowsYou, action: "Tell") {
+                engine.thread(summary.ref).draft = "A few things about me: "
+            },
+            Item(title: "Give it a schedule", done: !(def?.schedules ?? []).isEmpty, action: "Add") { tab = .setup },
+            Item(title: "Connect a Mac app", done: !(def?.tools.apple ?? []).isEmpty, action: "Allow") { tab = .setup },
+        ]
+    }
+
+    private var teach: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Chick(size: 24)
+                Text("Teach it \(checklist.count) things").font(.system(size: 13, weight: .semibold))
+                Text("\(checklist.filter(\.done).count) / \(checklist.count)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+            }
+            ForEach(checklist, id: \.title) { item in
+                HStack(spacing: 8) {
+                    Image(systemName: item.done ? "checkmark.circle.fill" : "circle").font(.system(size: 13)).foregroundStyle(item.done ? Color.dsGreen : Color.dsFg3)
+                    Text(item.title).font(.system(size: 13)).strikethrough(item.done).foregroundStyle(item.done ? Color.dsFg3 : Color.dsFg)
+                    Spacer()
+                    if !item.done { Button(item.action, action: item.run).buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor) }
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.dsYolkSoft, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+    }
+
+    private func fact(_ key: String, _ value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(key).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+            Spacer(minLength: 10)
+            Text(value).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).multilineTextAlignment(.trailing)
+        }
+    }
+
+    private var can: String {
+        let tools = def?.tools.builtin ?? []
+        var parts: [String] = []
+        if tools.contains("web_search") || tools.contains("web_fetch") { parts.append("Web") }
+        if tools.contains("memory") { parts.append("memory") }
+        if tools.contains("send_message") { parts.append("message you") }
+        if tools.contains("schedule") { parts.append("reminders") }
+        if !(def?.tools.apple ?? []).isEmpty { parts.append("Mac apps") }
+        return parts.isEmpty ? "Just chat" : parts.joined(separator: " · ")
+    }
+
+    private var month: String {
+        guard let s = summary.agent?.status else { return "—" }
+        let spent = s.spendUsd < 0.01 && s.spendUsd > 0 ? String(format: "$%.4f", s.spendUsd) : String(format: "$%.2f", s.spendUsd)
+        return s.budgetUsd.map { "\(spent) of \(MainSidebar.money($0))" } ?? spent
+    }
+
+    private func checkMemory() async {
+        guard let memory = await engine.agentMemory(summary.ref), let owner = memory.partitions.first(where: { $0.id == "owner" }) else { return }
+        knowsYou = await engine.memoryList(provider: memory.provider, bank: owner.bank)?.records.contains { $0.kind != "message" } ?? false
     }
 }
 
@@ -265,47 +425,6 @@ struct AgentChat: View {
         }
         .task(id: ref.key) { await thread.open() }
         .id(ref.key)
-    }
-}
-
-/// Everyone the agent talks with (§12): pick a person to read the conversation; contacts can be simulated.
-struct AgentConversations: View {
-    let engine: EngineController
-    let summary: SessionSummary
-    @State private var people: [AgentPerson] = []
-    @State private var selected: String?
-
-    var body: some View {
-        HStack(spacing: 0) {
-            List(people, selection: $selected) { p in
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Text(p.name).font(.system(size: 13, weight: .medium))
-                        if p.role == "owner" || p.role == "agent" { Text(p.role).font(.system(size: 10.5)).foregroundStyle(Color.dsFg3) }
-                        Spacer()
-                        if let at = p.lastAt { Text(BuildSessionView.relative(at)).font(.system(size: 11)).foregroundStyle(Color.dsFg3) }
-                    }
-                    Text(p.preview ?? (p.started ? "" : "No messages yet")).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
-                }
-                .padding(.vertical, 3)
-                .tag(p.contactId)
-            }
-            .listStyle(.sidebar)
-            .frame(width: 240)
-            Rectangle().fill(Color.dsLine).frame(width: 0.5)
-            if let person = people.first(where: { $0.contactId == selected }), person.role == "agent" {
-                // Between agents: read-only (06-agents §7).
-                AgentRunTranscript(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: person.conversationId))
-            } else if let person = people.first(where: { $0.contactId == selected }) {
-                AgentChat(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: person.conversationId), simulated: person.role == "owner" ? nil : person.name)
-            } else {
-                Text("Pick someone to see their conversation.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .task(id: summary.updatedAt) {
-            people = await engine.agentPeople(summary.ref)
-            if selected == nil { selected = people.first(where: { $0.role != "owner" })?.contactId ?? people.first?.contactId }
-        }
     }
 }
 

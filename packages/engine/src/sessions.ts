@@ -844,6 +844,35 @@ export class Sessions {
 	 * Thread → Space suggestion (S11): after the first exchange, and again after the fifth (the subject may have
 	 * drifted), the utility model compares the thread with every Space's topics.
 	 */
+	/** After an answer: three short next messages (docs/design v2 "You could also"), from the utility model. */
+	private async suggestFollowUps(entry: CatalogEntry, runtime: Runtime): Promise<void> {
+		if (this.chat?.settings.get().chat.followUps === false) return;
+		const items = runtime.snapshot().items;
+		const answer = [...items].reverse().find((i) => i.kind === "assistant" && i.status === "done" && i.parts.some((p) => p.type === "text" && p.text.trim()));
+		const asked = [...items].reverse().find((i) => i.kind === "user");
+		if (!answer || answer.kind !== "assistant" || !asked || asked.kind !== "user") return;
+		const text = answer.parts.filter((p) => p.type === "text").map((p) => p.text).join("").slice(0, 4000);
+		const reply = await this.hub
+			.utility(
+				'Suggest what the user might say next to the assistant: three short replies in the user\'s language, each under 7 words, concrete to this exchange (a next step, a check, a question). Answer with a JSON array of three strings only.',
+				`User: ${asked.text.slice(0, 1500)}\n\nAssistant: ${text}`,
+			)
+			.catch(() => undefined);
+		const list = reply ? (/\[[\s\S]*\]/.exec(reply)?.[0] ?? "") : "";
+		let followUps: string[] = [];
+		try {
+			followUps = (JSON.parse(list) as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 3);
+		} catch {
+			return;
+		}
+		// Still the latest answer, and nobody wrote meanwhile.
+		const latest = [...runtime.snapshot().items].reverse().find((i) => i.kind === "assistant");
+		if (!followUps.length || latest?.id !== answer.id || !this.entries.has(entry.ref.id)) return;
+		entry.followUps = followUps;
+		this.save();
+		this.changed(entry);
+	}
+
 	private async suggestSpace(entry: CatalogEntry, runtime: Runtime): Promise<void> {
 		if (!this.chat?.settings.get().chat.suggestSpaces || entry.suggestionDismissed || entry.suggestion) return;
 		const items = runtime.snapshot().items;
@@ -905,6 +934,7 @@ export class Sessions {
 	touch(ref: ContainerRef, firstInput?: string): void {
 		const entry = this.entries.get(ref.id);
 		if (!entry) return;
+		delete entry.followUps;
 		entry.updatedAt = new Date().toISOString();
 		if (firstInput && (entry.title === "New thread" || entry.title === "New session")) {
 			entry.title = titleFrom(firstInput) || entry.title;
@@ -1032,7 +1062,9 @@ export class Sessions {
 		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
 		runtime.onEvents((events) => {
 			this.index(entry, events);
-			if (entry.ref.kind === "thread" && events.some((e) => e.type === "state" && e.state.status === "idle")) void this.suggestSpace(entry, runtime);
+			const idle = events.some((e) => e.type === "state" && e.state.status === "idle");
+			if (entry.ref.kind === "thread" && idle) void this.suggestSpace(entry, runtime);
+			if ((entry.ref.kind === "thread" || entry.ref.kind === "build") && idle) void this.suggestFollowUps(entry, runtime);
 		});
 		return runtime;
 	}

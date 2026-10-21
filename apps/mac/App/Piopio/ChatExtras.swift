@@ -122,6 +122,7 @@ struct ChatPane: View {
         ListCard {
             Row(title: "Suggestions", last: true) {
                 Toggle("Suggest moving a thread into a Notebook when it fits one", isOn: binding(\.chat.suggestSpaces) { SettingsPatch(chat: .init(suggestSpaces: $0)) })
+                Toggle("Suggest a few next messages after each answer", isOn: Binding(get: { engine.settings?.chat.followUps ?? true }, set: { v in Task { await engine.updateSettings(SettingsPatch(chat: .init(followUps: v))) } }))
                     .toggleStyle(.switch).controlSize(.small).font(.system(size: 13))
                 Spacer()
             }
@@ -217,5 +218,32 @@ struct ChatPane: View {
         saved = memory.text
         revisions = memory.revisions
         limited = memory.limited ?? false
+    }
+}
+
+
+/// Suggested next messages (docs/design v2): 28-tall outlined capsules; one click sends it.
+struct FollowUps: View {
+    let items: [String]
+    let label: String?
+    let send: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let label { Text(label).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3) }
+            HStack(spacing: 6) {
+                ForEach(items, id: \.self) { item in
+                    Button { send(item) } label: {
+                        Text(item).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1)
+                            .padding(.horizontal, 12).frame(height: 28)
+                            .background(Color.dsCard, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Color.dsLine, lineWidth: 1))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+        }
     }
 }

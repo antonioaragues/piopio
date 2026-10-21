@@ -1,5 +1,7 @@
 # Handoff: Piopio for macOS
 
+> **v2 supersedes the shell described here.** The current design is in [`v2/`](v2/README.md): one sidebar instead of the Build · Chat · Agents switcher, Home and Needs you, Notebooks, the agent page, Settings › Models and the empty states. What is implemented is listed in [`v2/IMPLEMENTATION.md`](v2/IMPLEMENTATION.md). The screens below still describe the parts v2 doesn't redraw (Build review, terminal, PRs, cloud targets, channels).
+
 ## Overview
 Piopio is a native Mac app for working with agents on the pi harness. It has three modes inside one window:
 - **Build**: coding sessions in folder Projects (pi-coding-agent), git/GitHub, approvals, checkpoints, diff review, terminal, PRs.

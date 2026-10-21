@@ -24,6 +24,11 @@ import { Packages } from "./packages.js";
 import { MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
 import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
+import { groupSteps, StepsView } from "./timeline/steps.js";
+import type { ToolItem } from "@piopio/protocol";
+
+/** Subagents keep their own card (it opens their session). */
+const keepAlone = (tool: ToolItem) => tool.tool === "task";
 import { AppServices } from "./app-services.js";
 import { TEMPLATES } from "@piopio/runtime";
 
@@ -260,17 +265,25 @@ export class Engine {
 			}
 			case "sessions.open": {
 				const p = params as Params<"sessions.open">;
-				return (await this.sessions.runtime(p.ref)).snapshot() satisfies Result<"sessions.open">;
+				const snapshot = (await this.sessions.runtime(p.ref)).snapshot();
+				return (p.fold ? { ...snapshot, items: groupSteps(snapshot.items, keepAlone) } : snapshot) satisfies Result<"sessions.open">;
 			}
 			case "sessions.subscribe": {
 				const p = params as Params<"sessions.subscribe">;
 				const runtime = await this.sessions.runtime(p.ref);
 				const subscriptionId = `sub_${randomUUID().slice(0, 8)}`;
 				let seq = 0;
-				const off = runtime.onEvents((events) => conn.notify("session.events", { subscriptionId, seq: ++seq, events }));
+				// Folded: this subscription sees a turn's tool calls as one steps item.
+				const steps = p.fold ? new StepsView((items) => groupSteps(items, keepAlone)) : undefined;
+				const snapshot = runtime.snapshot();
+				const first = steps ? { ...snapshot, items: steps.snapshot(snapshot.items) } : snapshot;
+				const off = runtime.onEvents((events) => {
+					const out = steps ? steps.events(events, () => runtime.snapshot().items) : events;
+					if (out.length) conn.notify("session.events", { subscriptionId, seq: ++seq, events: out });
+				});
 				this.subscriptions.set(subscriptionId, off);
 				owned.add(subscriptionId);
-				return { subscriptionId, snapshot: runtime.snapshot() } satisfies Result<"sessions.subscribe">;
+				return { subscriptionId, snapshot: first } satisfies Result<"sessions.subscribe">;
 			}
 			case "sessions.unsubscribe": {
 				const p = params as Params<"sessions.unsubscribe">;
