@@ -293,6 +293,7 @@ struct CommitSheet: View {
 struct NewSessionSheet: View {
     let engine: EngineController
     let project: ProjectInfo
+    var initialPrompt = ""
     let onStart: (ContainerRef) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var prompt = ""
@@ -384,6 +385,7 @@ struct NewSessionSheet: View {
         .frame(width: 560)
         .onAppear {
             focused = true
+            if prompt.isEmpty { prompt = initialPrompt }
             if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_NEW_SESSION"], prompt.isEmpty { prompt = demo }
             let defaults = UserDefaults.standard
             if let raw = defaults.string(forKey: "newSession.workOn.\(project.id)"), let k = Kind(rawValue: raw), project.branch != nil { workOn = k }

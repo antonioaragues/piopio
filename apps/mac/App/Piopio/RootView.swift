@@ -12,6 +12,8 @@ struct RootView: View {
     @State private var showNewAgent = false
     @State private var newSessionProject: ProjectInfo?
     @State private var showOnboarding = false
+    /// What the Build start screen typed before opening the new session sheet.
+    @State private var newSessionPrompt = ""
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
     @State private var showNewSpace = false
@@ -48,10 +50,11 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .newBuildSession)) { note in
             mode = .build
+            newSessionPrompt = note.userInfo?["prompt"] as? String ?? ""
             newSessionProject = engine.projects.first { $0.id == note.object as? String }
         }
         .sheet(item: $newSessionProject) { project in
-            NewSessionSheet(engine: engine, project: project) { buildSelection = $0.id }
+            NewSessionSheet(engine: engine, project: project, initialPrompt: newSessionPrompt) { buildSelection = $0.id }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in
             mode = .build

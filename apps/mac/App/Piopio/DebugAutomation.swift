@@ -13,6 +13,16 @@ enum DebugAutomation {
         if let appearance = env["PIOPIO_DEMO_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
         }
+        // PIOPIO_DEMO_RESIZE=<width>: resize the main window to this width after 5 s (layout after a resize).
+        if let width = env["PIOPIO_DEMO_RESIZE"].flatMap(Double.init) {
+            Task {
+                try? await Task.sleep(for: .seconds(5))
+                guard let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) else { return }
+                var frame = window.frame
+                frame.size.width = width
+                window.setFrame(frame, display: true, animate: false)
+            }
+        }
         if let mode = env["PIOPIO_DEMO_MODE"].flatMap(AppMode.init(rawValue:)) {
             NotificationCenter.default.post(name: .setMode, object: mode)
         }
@@ -165,6 +175,8 @@ enum DebugAutomation {
             Task {
                 NotificationCenter.default.post(name: .setMode, object: AppMode.build)
                 guard let project = await engine.addProject(URL(fileURLWithPath: folder)) else { return }
+                // PIOPIO_DEMO_PROJECT_ONLY=1: just add it (the empty state with a project).
+                if env["PIOPIO_DEMO_PROJECT_ONLY"] == "1" { return }
                 // PIOPIO_DEMO_NEW_SESSION=<prompt>: open the new session sheet with this prompt (PIOPIO_DEMO_WORKTREE=1: on a worktree).
                 if env["PIOPIO_DEMO_NEW_SESSION"] != nil {
                     NotificationCenter.default.post(name: .newBuildSession, object: project.id)

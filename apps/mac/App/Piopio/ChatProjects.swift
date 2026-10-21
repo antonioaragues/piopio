@@ -58,14 +58,24 @@ struct ChatProjectsSection: View {
                 Button("Remove from Piopio") { Task { await engine.removeProject(project) } }
             }
             if open {
-                ForEach(engine.sessions(in: project).filter { $0.parent == nil }, id: \.ref.id) { session in
-                    row(session)
+                // Sessions sit under the project: aligned with its name, with a guide line from its folder icon.
+                VStack(spacing: 0) {
+                    ForEach(engine.sessions(in: project).filter { $0.parent == nil }, id: \.ref.id) { session in
+                        row(session)
+                    }
+                    Button { newSession(project) } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "plus").font(.system(size: 9.5, weight: .semibold))
+                            Text("New session").font(.system(size: 12))
+                        }
+                        .foregroundStyle(Color.dsFg3)
+                        .padding(.leading, Self.childIndent).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                Button { newSession(project) } label: {
-                    Label("New session", systemImage: "plus").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                        .padding(.leading, 22).frame(height: 24).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                .overlay(alignment: .topLeading) {
+                    Rectangle().fill(Color.dsLine).frame(width: 1).padding(.leading, 29).padding(.vertical, 3)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -80,10 +90,13 @@ struct ChatProjectsSection: View {
                     Image(systemName: "hammer").font(.system(size: 9.5)).foregroundStyle(Color.dsFg3).help("Started in Build (coding tools)")
                 }
             }
-            .padding(.leading, 22)
+            .padding(.leading, Self.childIndent)
             .padding(.trailing, 8)
             .frame(height: 28)
-            .background(selected ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+            .background(alignment: .leading) {
+                // The selection starts at the guide line, so the row still reads as inside the project.
+                RoundedRectangle(cornerRadius: DS.Radius.row).fill(selected ? Color.dsAccentSoft : .clear).padding(.leading, 36)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -94,6 +107,9 @@ struct ChatProjectsSection: View {
             }
         }
     }
+
+    /// Where a project's sessions start: under its name (8 padding + chevron 8 + 7 + folder 14 + 7).
+    private static let childIndent: CGFloat = 44
 
     private func newSession(_ project: ProjectInfo) {
         Task { if let ref = await engine.createBuildSession(in: project, profile: .chat) { selection = ref.id } }

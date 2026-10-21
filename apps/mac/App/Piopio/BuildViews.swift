@@ -45,12 +45,7 @@ struct BuildSidebarList: View {
                 }
             }
         }
-        Button { BuildActions.addProject(engine: engine) { selection = $0 } } label: {
-            Label("Add project", systemImage: "plus").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-                .padding(.horizontal, 8).frame(height: 28).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 4)
+        Color.clear.frame(height: 0)
         .alert("Rename Session", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Title", text: $newTitle)
             Button("Rename") {
@@ -406,42 +401,165 @@ enum ChatInspectorTab: String, CaseIterable {
     case changes = "Changes"
 }
 
-/// Build with no session selected: open a folder (button, ⌘O or drop), or start a session in a project.
+/// Build with no session selected (docs/design 5c, 7a). With no project yet: open a folder (button, ⌘O or drop).
+/// With projects: what to build first (a prompt, the project, Start ⌘↩), then recent sessions to pick up again.
 struct BuildEmptyState: View {
     let engine: EngineController
     @Binding var selection: String?
     @State private var targeted = false
+    @State private var prompt = ""
+    @State private var projectId: String?
+    @FocusState private var focused: Bool
+
+    private var projects: [ProjectInfo] { engine.projects(in: .build) }
 
     var body: some View {
-        EmptyState(label: "Build", title: engine.projects(in: .build).isEmpty ? "Open a folder to start building" : "Pick a session, or start one", message: "Each folder becomes a Project. Sessions run with pi-coding-agent inside it, and sessions you start with the pi CLI show up here too.") {
-            VStack(spacing: 12) {
-                VStack(spacing: 10) {
-                    Text("Drop a folder here").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-                    Button("Open Folder… ⌘O") { BuildActions.addProject(engine: engine) { selection = $0 } }
-                        .buttonStyle(PillStyle(kind: .primary))
+        Group {
+            if projects.isEmpty { firstFolder } else { start }
+        }
+        .background(targeted ? Color.dsAccentSoft.opacity(0.4) : .clear)
+        .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in await BuildActions.add(url, engine: engine) { selection = $0 } }
+            }
+            return true
+        }
+    }
+
+    private var firstFolder: some View {
+        EmptyState(label: "Build", title: "Open a folder to start building", message: "Each folder becomes a Project. Sessions run with pi-coding-agent inside it, and sessions you start with the pi CLI show up here too.") {
+            VStack(spacing: 10) {
+                Text("Drop a folder here").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                Button("Open Folder… ⌘O") { BuildActions.addProject(engine: engine) { selection = $0 } }
+                    .buttonStyle(PillStyle(kind: .primary))
+            }
+            .frame(width: 360, height: 110)
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(targeted ? Color.dsAccentLine : Color.dsLine, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        }
+    }
+
+    private var project: ProjectInfo? { projects.first { $0.id == projectId } ?? projects.first }
+
+    private var start: some View {
+        GeometryReader { geo in
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("BUILD").font(.system(size: 11, weight: .semibold)).tracking(0.5).foregroundStyle(Color.dsFg3)
+                Text("What do you want to build?").font(.system(size: 22, weight: .bold)).foregroundStyle(Color.dsFg).padding(.top, 6)
+                Text("Describe a task; a session starts in the project, on its current branch or a new one.").font(.system(size: 13)).foregroundStyle(Color.dsFg2).padding(.top, 4)
+                promptCard.padding(.top, 18)
+                let recent = Array(engine.buildSessions.filter { $0.parent == nil }.sorted { $0.updatedAt > $1.updatedAt }.prefix(6))
+                if !recent.isEmpty {
+                    Text("RECENT").font(.system(size: 10.5, weight: .semibold)).tracking(0.4).foregroundStyle(Color.dsFg3).padding(.top, 28).padding(.bottom, 6)
+                    VStack(spacing: 2) { ForEach(recent, id: \.ref.id) { recentRow($0) } }
                 }
-                .frame(width: 360, height: 110)
-                .background(targeted ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(targeted ? Color.dsAccentLine : Color.dsLine, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-                .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in
-                    guard let provider = providers.first else { return false }
-                    _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                        guard let url else { return }
-                        Task { @MainActor in await BuildActions.add(url, engine: engine) { selection = $0 } }
-                    }
-                    return true
+                HStack(spacing: 4) {
+                    Button("Open another folder… ⌘O") { BuildActions.addProject(engine: engine) { selection = $0 } }
+                        .buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                    Text("or drop one anywhere here").foregroundStyle(Color.dsFg3)
                 }
-                if !engine.projects(in: .build).isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(engine.projects(in: .build).prefix(4)) { project in
-                            Button("New session in \(project.name)") {
-                                NotificationCenter.default.post(name: .newBuildSession, object: project.id)
-                            }
-                            .buttonStyle(PillStyle())
+                .font(.system(size: 12))
+                .padding(.top, 22)
+            }
+            .frame(maxWidth: 600, alignment: .leading)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 40)
+            .frame(maxWidth: .infinity, minHeight: geo.size.height * 0.85)
+        }
+        }
+        .onAppear { focused = true }
+    }
+
+    /// docs/design 7a: the prompt first, with an accent halo while focused.
+    private var promptCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                if prompt.isEmpty {
+                    Text("Fix the flaky upload test, add a dark mode toggle, explain this codebase…")
+                        .font(.system(size: 14)).foregroundStyle(Color.dsFg3).padding(.top, 8).padding(.leading, 5).allowsHitTesting(false)
+                }
+                TextEditor(text: $prompt)
+                    .font(.system(size: 14))
+                    .scrollContentBackground(.hidden)
+                    .focused($focused)
+                    .frame(height: 76)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(projects) { p in
+                        Button { projectId = p.id } label: {
+                            if p.id == project?.id { Label(p.name, systemImage: "checkmark") } else { Text(p.name) }
                         }
                     }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "folder").font(.system(size: 11))
+                        Text(project?.name ?? "Project")
+                        if let branch = project?.branch { Text(branch).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3) }
+                    }
                 }
+                .menuStyle(.button)
+                .buttonStyle(ChipStyle())
+                .fixedSize()
+                Spacer()
+                Button {
+                    begin()
+                } label: {
+                    Text("Start ⌘↩").font(.system(size: 12.5, weight: .semibold))
+                }
+                .buttonStyle(PillStyle(kind: .primary, compact: true))
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(project == nil)
             }
+            .padding(10)
+        }
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.panel, style: .continuous).strokeBorder(focused ? Color.dsAccentLine : Color.dsLine, lineWidth: focused ? 1 : 0.5))
+        .background(RoundedRectangle(cornerRadius: DS.Radius.panel + 4, style: .continuous).fill(focused ? Color.dsAccentSoft : .clear).padding(-4))
+        .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
+    }
+
+    /// The new session sheet, with this prompt (where branch, permissions and model are chosen).
+    private func begin() {
+        guard let project else { return }
+        NotificationCenter.default.post(name: .newBuildSession, object: project.id, userInfo: ["prompt": prompt.trimmingCharacters(in: .whitespacesAndNewlines)])
+        prompt = ""
+    }
+
+    private func recentRow(_ s: SessionSummary) -> some View {
+        Button { selection = s.ref.id } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "text.bubble").font(.system(size: 12)).foregroundStyle(Color.dsFg3).frame(width: 18)
+                Text(s.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Spacer(minLength: 8)
+                Text(projects.first { $0.path == (s.projectPath ?? s.cwd) }?.name ?? "").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                Text(BuildSessionView.relative(s.updatedAt)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).frame(width: 64, alignment: .trailing)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(Color.clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(HoverRowStyle())
+    }
+}
+
+/// A row that tints on hover.
+private struct HoverRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { HoverRow(configuration: configuration) }
+
+    private struct HoverRow: View {
+        let configuration: Configuration
+        @State private var hovering = false
+        var body: some View {
+            configuration.label
+                .background(hovering ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+                .onHover { hovering = $0 }
+                .opacity(configuration.isPressed ? 0.7 : 1)
         }
     }
 }

@@ -54,7 +54,16 @@ final class CardLayoutFragment: NSTextLayoutFragment {
         switch card {
         case .code, .table, .errorCard, .link, .approval: return columnRect(text, pad: Self.padding)
         case .quote: return columnRect(text, pad: 2)
-        case .user: return text.insetBy(dx: -Self.bubblePadH, dy: -Self.bubblePadV)
+        case .user:
+            // The bubble hugs the text. Line metrics can come back narrower than the text (seen as a 28-pt bubble
+            // behind longer text), so the width measured when the message was rendered is the floor.
+            var r = text
+            if let p = (textElement as? NSTextParagraph)?.attributedString, p.length > 0,
+               let natural = p.attribute(.piopioBubbleWidth, at: 0, effectiveRange: nil) as? NSNumber {
+                let available = columnRect(text, pad: 0).maxX - r.minX - Self.bubblePadH
+                r.size.width = max(r.width, min(CGFloat(natural.doubleValue), available))
+            }
+            return r.insetBy(dx: -Self.bubblePadH, dy: -Self.bubblePadV)
         case .note: return text.insetBy(dx: -12, dy: -5)
         case .pills: return .zero
         case .divider: return columnRect(text, pad: 0)
