@@ -81,6 +81,9 @@ export class Engine {
 		this.sessions.onChange((change) => {
 			for (const conn of this.authed) conn.notify("catalog.changed", change);
 		});
+		this.sessions.onInbox = (change) => {
+			for (const conn of this.authed) conn.notify("inbox.changed", change);
+		};
 		this.sessions.onAttention = (change) => {
 			for (const conn of this.authed) conn.notify("session.attention", change);
 		};
@@ -482,6 +485,38 @@ export class Engine {
 				const def = this.sessions.agentDefinition(p.ref.id).definition;
 				if (!this.hooks.port) throw new EngineError("INTERNAL", "Webhook triggers are off (the port couldn't be opened).");
 				return { triggers: (def.triggers ?? []).map((t) => ({ id: t.id, url: this.hooks.url(p.ref.id, t.id) })) } satisfies Result<"agents.triggers">;
+			}
+			case "agents.decide": {
+				const p = params as Params<"agents.decide">;
+				const runtime = await this.sessions.agent(p.ref);
+				try {
+					const a = await runtime.core.safety.decide(p.approvalId, { approve: p.approve, ...(p.args && typeof p.args === "object" ? { args: p.args as never } : {}), ...(p.always ? { always: true } : {}), ...(p.reason ? { reason: p.reason } : {}) });
+					return { status: a.status } satisfies Result<"agents.decide">;
+				} catch (error) {
+					throw new EngineError("CONFLICT", (error as Error).message);
+				}
+			}
+			case "agents.undo": {
+				const p = params as Params<"agents.undo">;
+				const runtime = await this.sessions.agent(p.ref);
+				try {
+					await runtime.core.safety.undo(p.undoId);
+				} catch (error) {
+					throw new EngineError("CONFLICT", (error as Error).message);
+				}
+				return {} satisfies Result<"agents.undo">;
+			}
+			case "agents.pause": {
+				const p = params as Params<"agents.pause">;
+				await (await this.sessions.agent(p.ref)).core.safety.setPaused(p.paused);
+				return {} satisfies Result<"agents.pause">;
+			}
+			case "inbox.list":
+				return (await this.sessions.inbox()) satisfies Result<"inbox.list">;
+			case "inbox.read": {
+				const p = params as Params<"inbox.read">;
+				await this.sessions.inboxRead(p.items);
+				return {} satisfies Result<"inbox.read">;
 			}
 			case "agents.memory": {
 				const p = params as Params<"agents.memory">;

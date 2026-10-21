@@ -270,6 +270,8 @@ final class SwiftUIRenderer: LabRenderer {
         case .routing(let r): MessageModel(id: r.id, role: .system, text: r.topicTitle)
         case .memory(let m): MessageModel(id: m.id, role: .system, text: m.added.joined(separator: ", "))
         case .steps(let s): MessageModel(id: s.id, role: .system, text: "\(s.tools.count) steps")
+        case .approval(let a): MessageModel(id: a.id, role: .system, text: a.title)
+        case .result(let r): MessageModel(id: r.id, role: .system, text: r.card.title)
         }
     }
 }

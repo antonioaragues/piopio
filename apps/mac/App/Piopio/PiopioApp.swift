@@ -15,6 +15,7 @@ struct PiopioApp: App {
                     _ = AppUpdater.shared
                     if QuickChatController.shared == nil { _ = QuickChatController(engine: engine) }
                     Notifier.shared.setUp()
+                    Notifier.shared.engine = engine
                     if engine.status != .ready { await engine.start() }
                     DebugAutomation.run(engine: engine)
                 }
@@ -44,6 +45,14 @@ struct PiopioApp: App {
                 Button("Search Messages") { NotificationCenter.default.post(name: .showPalette, object: true) }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
             }
+        }
+
+        // The Inbox in the menu bar (06-agents §12), once there are agents.
+        MenuBarExtra(isInserted: .constant(!engine.agents.isEmpty)) {
+            InboxMenu(engine: engine)
+        } label: {
+            Image(systemName: engine.inboxCount > 0 ? "tray.full" : "tray")
+            if engine.inboxCount > 0 { Text("\(engine.inboxCount)") }
         }
 
         Settings {

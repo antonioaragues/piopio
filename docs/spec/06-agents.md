@@ -199,9 +199,10 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
   1. the app, if connected (notification + inline card), and
   2. the **owner's preferred channel** (Telegram inline buttons / WhatsApp reply buttons: Approve / Deny).
   The first answer wins. Approval tokens are single-use and expire (default 24 h → denied).
-- **AS2** Messages from non-owner contacts can never trigger: memory writes to the owner partition, `send_message` to other contacts, or `ask_agent`, unless explicitly enabled.
+  Locally (4.4) the call waits in pi-durable's `beforeTool` hook. The decision lives in the agent's state doc, so a request answered after an engine restart still runs. Rules are `tool` or `tool:qualifier`: `to_owner`, `to_non_owner`, `to:<contactId>`, an HTTP method, or `*`; and `mcp:<server>:<tool>`. The owner can approve as asked or with edited arguments, deny with a reason, or tick "Always allow …" (kept per agent: messages to one person, one tool, one HTTP method).
+- **AS2** Messages from non-owner contacts can never trigger: memory writes to the owner partition, `send_message` to other contacts, or `ask_agent`, unless explicitly enabled. (A contact's conversation may still message that contact or the owner.)
 - **AS3** **Budget:** a monthly $ cap per agent. At 80% the owner is notified. At 100% the agent replies with a canned "I'm out of budget" and stops runs, and the owner can raise the cap from the app or the channel.
-- **AS4** **Kill switch:** "Pause agent" (app or `/pause` from the owner on any channel) stops all runs and outbound immediately.
+- **AS4** **Kill switch:** "Pause agent" (app or `/pause` from the owner on any channel) stops all runs and outbound immediately. Paused, fires are recorded as skipped runs, messages wait in the outbox, and people's messages are kept without a turn; `/resume` or the app's Resume starts it again and releases what was held.
 
 ## 10. Mac Bridge (later)
 While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud Engine and registers **bridge tools**: the Apple app tools of §4.1 (served by the Mac app), `mac_files`, `mac_imessage_send`, and `mac_shell` with mandatory approval. Cloud agents see these tools only while the bridge is connected. Otherwise the tool returns "Mac offline". The agent header says where an agent runs ("Cloud", "This Mac", or another of the user's Macs once multi-Mac exists).

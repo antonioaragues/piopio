@@ -1356,7 +1356,7 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 		await a.client.call("sessions.subscribe", { ref });
 		await a.client.call("sessions.submit", { ref, input: { text: 'call: remember | {"fact":"Antonio runs in the morning"}' } });
 		let chat = await until(a, ref, idleAfter(1));
-		expect(chat.items.map((i) => i.kind)).toEqual(["user", "assistant", "steps", "assistant"]);
+		expect(chat.items.map((i) => i.kind)).toEqual(["user", "assistant", "steps", "result", "assistant"]);
 		const steps = chat.items.find((i) => i.kind === "steps")!;
 		expect(steps.kind === "steps" && steps.tools.map((t) => [t.tool, t.status])).toEqual([["remember", "done"]]);
 		const { provider, partitions } = await a.client.call("agents.memory", { ref });
@@ -1452,7 +1452,7 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 		// The run's conversation: the prompt, the step, the answer; read-only.
 		const runRef = { ...ref, conversationId: `run:${r.runs[0]!.id}` };
 		const runSnap: Snapshot = await a.client.call("sessions.open", { ref: runRef });
-		expect(runSnap.items.map((i) => i.kind)).toEqual(["user", "assistant", "steps", "assistant"]);
+		expect(runSnap.items.map((i) => i.kind)).toEqual(["user", "assistant", "steps", "result", "assistant"]);
 		await expect(a.client.call("sessions.submit", { ref: runRef, input: { text: "hi" } })).rejects.toThrow(/read-only/);
 
 		// A webhook trigger: signed URL, the body in the prompt, a retried delivery is the same run.
@@ -1496,4 +1496,110 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 		expect(items.filter((i) => i.kind === "system").map((i) => (i.kind === "system" ? i.text : ""))).toEqual(["Helper reached its limit of 2 messages today; the rest wait until tomorrow."]);
 		expect(outbound(items)).toHaveLength(2);
 	}, 60_000);
+});
+
+describe("Agents: approvals, budgets and the Inbox (milestone 4.4)", () => {
+	async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean, timeout = 15_000): Promise<T> {
+		const end = Date.now() + timeout;
+		for (;;) {
+			const value = await read();
+			if (ready(value)) return value;
+			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(value)}`);
+			await new Promise((r) => setTimeout(r, 150));
+		}
+	}
+	const call = (tool: string, args: object) => `call: ${tool} | ${JSON.stringify(args)}`;
+	type Item = Snapshot["items"][number];
+	const approvals = (items: Item[]) => items.filter((i): i is Extract<Item, { kind: "approval" }> => i.kind === "approval");
+	const results = (items: Item[]) => items.filter((i): i is Extract<Item, { kind: "result" }> => i.kind === "result");
+
+	test("approval waits, edits and denials; contacts can't relay; result cards with Undo; pause; budget; the Inbox; restart while waiting", async () => {
+		let a = await start();
+		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		const got = await a.client.call("agents.get", { ref });
+		const def = got.definition as Record<string, unknown> & { contacts: object[] };
+		const base = { ...def, tools: { builtin: ["memory", "schedule", "send_message"] }, contacts: [...def.contacts, { id: "maria", name: "María", role: "contact" }, { id: "luis", name: "Luis", role: "contact" }] };
+		const save = async (policies: object) => expect(await a.client.call("agents.save", { ref, definition: { ...base, policies }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+		await save({ requireApproval: ["send_message:to_non_owner"] });
+		const owner = () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+		const maria = { ...ref, conversationId: "person:maria" };
+		const ofMaria = () => a.client.call("sessions.open", { ref: maria }).then((s: Snapshot) => s.items);
+		const inbox = () => a.client.call("inbox.list", {});
+		const outbound = (items: Item[]) => items.filter((i) => i.kind === "assistant" && i.outbound).map((i) => (i.kind === "assistant" ? i.parts[0]!.text : ""));
+		expect((await a.client.call("sessions.list", { kind: "agent" })).sessions[0]!.agent).toMatchObject({ asksFirst: true });
+
+		// A message to María waits for the owner; approved with an edit, it goes as edited.
+		await a.client.call("sessions.submit", { ref, input: { text: call("send_message", { to: "maria", text: "Dinner at 8?" }) } });
+		let items = await until(owner, (xs) => approvals(xs)[0]?.status === "pending");
+		const asked = approvals(items)[0]!;
+		expect(asked).toMatchObject({ tool: "send_message", title: "Send to María: “Dinner at 8?”", always: "Always allow messages to María" });
+		let box = await until(inbox, (b) => b.count === 1);
+		expect(box.items[0]).toMatchObject({ kind: "approval", agentName: "Helper", needsYou: true, conversationId: "person:owner", approval: { approvalId: asked.approvalId } });
+		await a.client.call("agents.decide", { ref, approvalId: asked.approvalId, approve: true, args: { to: "maria", text: "Dinner at 8:30?" } });
+		items = await until(owner, (xs) => xs.some((i) => i.kind === "result"));
+		expect(approvals(items)[0]).toMatchObject({ status: "approved", editedArgs: { text: "Dinner at 8:30?" } });
+		expect(results(items)[0]).toMatchObject({ card: { kind: "message", title: "Sent to María", detail: "Dinner at 8:30?" } });
+		expect(outbound(await until(ofMaria, (xs) => outbound(xs).length === 1))).toEqual(["Dinner at 8:30?"]);
+		await expect(a.client.call("agents.decide", { ref, approvalId: asked.approvalId, approve: false })).rejects.toThrow(/already approved/);
+
+		// Denied: the step fails with the reason and nothing goes.
+		await a.client.call("sessions.submit", { ref, input: { text: call("send_message", { to: "maria", text: "Second" }) } });
+		items = await until(owner, (xs) => approvals(xs).some((x) => x.status === "pending"));
+		await a.client.call("agents.decide", { ref, approvalId: approvals(items).find((x) => x.status === "pending")!.approvalId, approve: false, reason: "not now" });
+		items = await until(owner, (xs) => xs.filter((i) => i.kind === "steps").length === 2 && xs.at(-1)?.kind === "assistant");
+		expect(approvals(items).at(-1)).toMatchObject({ status: "denied", reason: "not now" });
+		const denied = items.filter((i) => i.kind === "steps").at(-1)!;
+		expect(denied.kind === "steps" && [denied.tools[0]!.status, denied.tools[0]!.output]).toEqual(["error", expect.stringContaining("not now")]);
+		box = await inbox();
+		expect(box.count).toBe(0);
+
+		// AS2: María can't make the agent write to Luis; writing to the owner is fine (and lands in the Inbox).
+		await a.client.call("sessions.submit", { ref: maria, input: { text: `${call("send_message", { to: "luis", text: "psst" })}\n${call("send_message", { to: "owner", text: "María says hi" })}` } });
+		const fromMaria = await until(ofMaria, (xs) => xs.some((i) => i.kind === "steps" && i.tools.length === 2 && i.tools.every((t) => t.status === "done" || t.status === "error")));
+		const relay = fromMaria.find((i) => i.kind === "steps" && i.tools.length === 2)!;
+		expect(relay.kind === "steps" && relay.tools.map((t) => t.status)).toEqual(["error", "done"]);
+		box = await until(inbox, (b) => b.items.some((i) => i.kind === "message"));
+		expect(box.items.find((i) => i.kind === "message")).toMatchObject({ body: "María says hi", needsYou: true });
+		await a.client.call("inbox.read", { items: box.items.filter((i) => i.kind === "message").map((i) => ({ agentId: ref.id, id: i.id })) });
+		expect((await inbox()).count).toBe(0);
+
+		// Result cards with Undo: a saved fact goes away, and the conversation says so.
+		await a.client.call("sessions.submit", { ref, input: { text: call("remember", { fact: "Antonio likes tea" }) } });
+		items = await until(owner, (xs) => results(xs).some((r) => r.card.kind === "memory"));
+		const saved = results(items).find((r) => r.card.kind === "memory")!;
+		expect(saved).toMatchObject({ card: { title: "Saved to memory", detail: "Antonio likes tea" }, undo: { status: "available" } });
+		await a.client.call("agents.undo", { ref, undoId: saved.undo!.id });
+		await until(owner, (xs) => results(xs).find((r) => r.id === saved.id)?.undo?.status === "undone" && xs.some((i) => i.kind === "system" && i.text === "Undone: saving “Antonio likes tea”"));
+		expect((await a.client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner` })).records.some((r) => r.text === "Antonio likes tea")).toBe(false);
+		await expect(a.client.call("agents.undo", { ref, undoId: saved.undo!.id })).rejects.toThrow(/Already undone/);
+
+		// Restart while an approval waits: answered after, the call goes on.
+		await a.client.call("sessions.submit", { ref, input: { text: call("send_message", { to: "maria", text: "After the restart" }) } });
+		items = await until(owner, (xs) => approvals(xs).some((x) => x.status === "pending"));
+		const waiting = approvals(items).find((x) => x.status === "pending")!;
+		await stop(a);
+		a = await start(a.home);
+		expect((await until(inbox, (b) => b.count === 1)).items[0]!.approval).toMatchObject({ approvalId: waiting.approvalId, status: "pending" });
+		await a.client.call("agents.decide", { ref, approvalId: waiting.approvalId, approve: true });
+		expect(outbound(await until(ofMaria, (xs) => outbound(xs).length === 2))).toEqual(["Dinner at 8:30?", "After the restart"]);
+
+		// Pause (AS4): messages don't start turns, runs are skipped; /resume from the owner's chat.
+		await a.client.call("agents.pause", { ref, paused: true });
+		expect((await until(() => a.client.call("sessions.list", { kind: "agent" }), (l) => l.sessions[0]!.agent?.status?.paused === true)).sessions[0]!.agent!.status).toMatchObject({ paused: true });
+		await a.client.call("sessions.submit", { ref, input: { text: "Are you there?" } });
+		items = await until(owner, (xs) => xs.some((i) => i.kind === "system" && i.text.includes("is paused")));
+		expect(items.at(-2)).toMatchObject({ kind: "user", text: "Are you there?" });
+		const { runId } = await a.client.call("agents.runNow", { ref, prompt: "Anything new?" });
+		expect((await a.client.call("agents.runs", { ref })).runs.find((r) => r.id === runId)).toMatchObject({ status: "skipped", summary: "Helper is paused." });
+		await a.client.call("sessions.submit", { ref, input: { text: "/resume" } });
+		await until(() => a.client.call("sessions.list", { kind: "agent" }), (l) => l.sessions[0]!.agent?.status?.paused === false);
+
+		// Budget (AS3): at $0 the agent is out of budget; the owner gets a note and an Inbox item, María a short answer.
+		await save({ requireApproval: ["send_message:to_non_owner"], budgetUsdPerMonth: 0 });
+		await a.client.call("sessions.submit", { ref: maria, input: { text: "Hello?" } });
+		expect(outbound(await until(ofMaria, (xs) => outbound(xs).length === 3)).at(-1)).toBe("Sorry, I can't answer right now. I'll be back soon.");
+		box = await until(inbox, (b) => b.items.some((i) => i.kind === "budget"));
+		expect(box.items.find((i) => i.kind === "budget")).toMatchObject({ title: "Budget used up", needsYou: true });
+		expect((await owner()).some((i) => i.kind === "system" && i.text.startsWith("Helper used its budget"))).toBe(true);
+	}, 90_000);
 });

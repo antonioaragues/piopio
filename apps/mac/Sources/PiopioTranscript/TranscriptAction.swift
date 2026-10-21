@@ -23,6 +23,12 @@ public enum TranscriptAction: Equatable, Sendable {
     case undoMemory(revisionId: String)
     /// Saves or dismisses a topic's memory proposal.
     case decideMemory(proposalId: String, accept: Bool)
+    /// Answers an agent's approval request (06-agents §9).
+    case decideApproval(approvalId: String, approve: Bool)
+    /// Opens the approval in the Inbox, to edit what it does before approving.
+    case editApproval(approvalId: String)
+    /// Reverses a change a result card shows (06-agents §4.2).
+    case undoChange(undoId: String)
 
     static let scheme = "piopio-action"
 
@@ -45,6 +51,9 @@ public enum TranscriptAction: Equatable, Sendable {
         case .wrongTopic(let id): c.host = "wrong-topic"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .undoMemory(let id): c.host = "undo-memory"; c.queryItems = [URLQueryItem(name: "revision", value: id)]
         case .decideMemory(let id, let accept): c.host = "decide-memory"; c.queryItems = [URLQueryItem(name: "proposal", value: id), URLQueryItem(name: "accept", value: accept ? "1" : "0")]
+        case .decideApproval(let id, let approve): c.host = "approval"; c.queryItems = [URLQueryItem(name: "id", value: id), URLQueryItem(name: "approve", value: approve ? "1" : "0")]
+        case .editApproval(let id): c.host = "edit-approval"; c.queryItems = [URLQueryItem(name: "id", value: id)]
+        case .undoChange(let id): c.host = "undo"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         }
         return c.url!
     }
@@ -68,6 +77,9 @@ public enum TranscriptAction: Equatable, Sendable {
         case "wrong-topic": guard let id = q("item") else { return nil }; self = .wrongTopic(itemId: id)
         case "undo-memory": guard let id = q("revision") else { return nil }; self = .undoMemory(revisionId: id)
         case "decide-memory": guard let id = q("proposal") else { return nil }; self = .decideMemory(proposalId: id, accept: q("accept") == "1")
+        case "approval": guard let id = q("id") else { return nil }; self = .decideApproval(approvalId: id, approve: q("approve") == "1")
+        case "edit-approval": guard let id = q("id") else { return nil }; self = .editApproval(approvalId: id)
+        case "undo": guard let id = q("id") else { return nil }; self = .undoChange(undoId: id)
         default: return nil
         }
     }

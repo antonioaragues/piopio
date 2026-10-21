@@ -5,13 +5,14 @@
  * system section; after it the message and the answer are retained in the person's partition (ME2, ME2a).
  * A turn's tool calls show as one `steps` line (UI2). Schedules, the heartbeat, reminders and triggers start runs,
  * each its own read-only conversation (`run:<id>`, 06 §6); what the agent sends on its own shows in the person's
- * conversation as an outbound message.
+ * conversation as an outbound message. Tool calls that need the owner show an approval item until answered, and
+ * changes show result cards with Undo (06 §4.2, §9).
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import type { ContainerRef, ModelRef, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
-import { AgentCore, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type MemoryProvider, type RunRecord } from "@piopio/runtime";
+import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
+import { AgentCore, alwaysLabel, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder } from "../timeline/builder.js";
@@ -34,12 +35,18 @@ export type AgentOpenOptions = {
 	onActivity?: () => void;
 	/** Tests move the clock. */
 	now?: () => Date;
+	/** Pause, spend or the Inbox changed (catalog, badges). */
+	onStatus?: () => void;
+	/** An approval was asked or answered (notifications). */
+	onApproval?: (approval: Approval) => void;
 };
 
 type RawEntry = { id: string | number; kind: string; data?: unknown; model?: { timestamp?: number }[] };
 
 export class AgentRuntime implements Runtime {
 	private readonly views = new Map<string, Promise<AgentView>>();
+	/** The views attached, to route approvals and undos to their conversation. */
+	readonly live = new Set<AgentView>();
 	private owner!: AgentView;
 
 	private constructor(
@@ -58,6 +65,7 @@ export class AgentRuntime implements Runtime {
 		const web = createWebExtension(options.hub, options.webOptions) as unknown as Extension;
 		const wantsWeb = () => options.definition().tools.builtin.some((t) => t === "web_search" || t === "web_fetch");
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
+		let runtime: AgentRuntime | undefined;
 		const core = new AgentCore({
 			harness,
 			definition: options.definition,
@@ -68,14 +76,26 @@ export class AgentRuntime implements Runtime {
 			...(options.now ? { now: options.now } : {}),
 			onRun: () => options.onActivity?.(),
 			onOutbound: () => options.onActivity?.(),
+			onApproval: (approval) => {
+				for (const view of runtime?.live ?? []) if (view.conversationId === approval.conversationId) view.approval(approval);
+				options.onApproval?.(approval);
+			},
+			onUndo: (undo) => {
+				for (const view of runtime?.live ?? []) if (view.conversationId === undo.conversationId) view.undone(undo);
+			},
+			onStatus: () => options.onStatus?.(),
 		});
 		for (const e of [web, core.extension]) registry.install(e as never);
-		const runtime = new AgentRuntime(options, harness, core);
+		runtime = new AgentRuntime(options, harness, core);
 		runtime.owner = await runtime.view(ownerOf(options.definition()));
 		await core.configureAll();
 		harness.resume();
 		await core.start();
 		return runtime;
+	}
+
+	definition(): AgentDefinition {
+		return this.options.definition();
 	}
 
 	/** A run's conversation, read-only. */
@@ -210,6 +230,7 @@ export class AgentRuntime implements Runtime {
 	}
 
 	async close(): Promise<void> {
+		this.core.close();
 		for (const view of await Promise.allSettled(this.views.values())) if (view.status === "fulfilled") await view.value.stop();
 		await this.harness.close(ctx);
 	}
@@ -220,13 +241,19 @@ export class AgentView implements Runtime {
 	private readonly emitter = new Emitter();
 	private readonly builder: TimelineBuilder;
 	private readonly mapper: DurableEventMapper;
-	private readonly steps = new StepsView();
+	private readonly steps = new StepsView((items) => this.group(items));
 	private stream?: AgentEventStream;
 	private readonly queueTexts = new Map<string, string>();
 	/** What the person said, for each turn still running (retained with the answer when it ends). */
 	private readonly pending: { said: string; itemCount: number }[] = [];
 	/** Messages the agent sent on its own (entry id → text and where from); shown as its, not the person's. */
 	private readonly outbound = new Map<string, { text: string; from: string }>();
+	/** This conversation's approvals, result cards (by tool call) and undo records. */
+	private readonly approvals = new Map<string, Approval>();
+	private readonly cards = new Map<string, { card: ResultCard; undo?: string }>();
+	private readonly undos = new Map<string, UndoRecord>();
+	/** Tool call id → its arguments, from the assistant's messages (for calls blocked before they ran). */
+	private readonly calls = new Map<string, unknown>();
 	readonly contactId?: string;
 	readonly run?: RunRecord;
 
@@ -250,7 +277,10 @@ export class AgentView implements Runtime {
 		const stream = await agent.watch(conversation);
 		view.stream = stream;
 		view.load(stream.snapshot as never, false);
+		for (const undo of await agent.core.safety.undos()) if (undo.conversationId === view.conversationId) view.undos.set(undo.id, undo);
+		for (const approval of await agent.core.safety.approvals(view.conversationId)) view.approval(approval, false);
 		view.steps.snapshot(view.items());
+		agent.live.add(view);
 		await view.settings();
 		view.builder.flush();
 		stream.start(async (events) => {
@@ -277,8 +307,79 @@ export class AgentView implements Runtime {
 		if (emit) this.builder.resnapshot();
 	}
 
+	get conversationId(): string {
+		return String(this.conversation.id);
+	}
+
+	/** An approval asked here, or its answer: one item, placed when it was asked. */
+	approval(approval: Approval, live = true): void {
+		const had = this.approvals.has(approval.id);
+		this.approvals.set(approval.id, approval);
+		if (!had) this.builder.insert(this.approvalItem(approval), live ? undefined : this.builder.firstAfter(approval.requestedAt), live);
+		if (live) this.emit(had ? [{ type: "item.updated", item: this.approvalItem(approval) }] : this.builder.flush());
+	}
+
+	undone(undo: UndoRecord): void {
+		this.undos.set(undo.id, undo);
+		const callId = [...this.cards].find(([, c]) => c.undo === undo.id)?.[0];
+		if (callId) this.emit([{ type: "item.updated", item: { kind: "system", id: "touch", at: undo.at, level: "info", text: "" } }]);
+	}
+
+	private approvalItem(a: Approval): ApprovalItem {
+		return {
+			kind: "approval",
+			id: `approval:${a.id}`,
+			at: a.requestedAt,
+			approvalId: a.id,
+			tool: a.tool,
+			title: a.title,
+			args: a.args,
+			status: a.status,
+			...(a.editedArgs ? { editedArgs: a.editedArgs } : {}),
+			...(a.reason ? { reason: a.reason } : {}),
+			expiresAt: new Date(a.expiresAt).toISOString(),
+			always: alwaysLabel(a.key, this.agent.definition()),
+		};
+	}
+
+	/** Steps lines, each followed by the cards of what its tools changed (UI2: result cards stay visible). */
+	private group(items: readonly TimelineItem[]): TimelineItem[] {
+		const out: TimelineItem[] = [];
+		for (const item of groupSteps(items)) {
+			out.push(item);
+			if (item.kind !== "steps") continue;
+			for (const tool of item.tools) {
+				const card = this.cards.get(tool.callId);
+				if (card && tool.status === "done") out.push(this.resultItem(tool.callId, tool.at, card));
+			}
+		}
+		return out;
+	}
+
+	private resultItem(callId: string, at: string, { card, undo }: { card: ResultCard; undo?: string }): ResultItem {
+		const record = undo ? this.undos.get(undo) : undefined;
+		const until = record ? record.until : Date.parse(at) + 24 * 3600_000;
+		const status = record?.status === "undone" || record?.status === "failed" ? record.status : until < Date.now() ? ("expired" as const) : ("available" as const);
+		return { kind: "result", id: `result:${callId}`, at, callId, card, ...(undo ? { undo: { id: undo, status, until: new Date(until).toISOString() } } : {}) };
+	}
+
 	private noteEntry(entry: RawEntry, live: boolean): void {
 		const id = String(entry.id);
+		type Message = { role?: string; toolCallId?: string; toolName?: string; isError?: boolean; content?: unknown; details?: { card?: ResultCard; undo?: string } };
+		for (const m of (entry.model ?? []) as Message[]) {
+			if (m.role === "assistant" && Array.isArray(m.content)) {
+				for (const b of m.content as { type: string; id?: string; arguments?: unknown }[]) if (b.type === "toolCall" && b.id) this.calls.set(b.id, b.arguments);
+			}
+			if (m.role !== "toolResult" || !m.toolCallId) continue;
+			if (m.details?.card) this.cards.set(m.toolCallId, { card: m.details.card, ...(m.details.undo ? { undo: m.details.undo } : {}) });
+			// A call that was blocked before it ran (denied, paused, not allowed) has no tool item: show it failed.
+			if (m.isError && !this.builder.currentItems.some((i) => i.id === `tool:${m.toolCallId}`)) {
+				const text = Array.isArray(m.content) ? (m.content as { text?: string }[]).map((b) => b.text ?? "").join("") : String(m.content ?? "");
+				this.builder.toolStart(m.toolCallId, m.toolName ?? "tool", this.calls.get(m.toolCallId) ?? {});
+				this.builder.toolEnd(m.toolCallId, text, true);
+				if (!live) this.builder.flush();
+			}
+		}
 		if (entry.kind === OUT_ENTRY) {
 			const data = entry.data as { text: string; from: string };
 			this.outbound.set(id, data);
@@ -295,7 +396,9 @@ export class AgentView implements Runtime {
 	private items(): TimelineItem[] {
 		return this.builder.snapshot().items.map((item) => {
 			const out = item.kind === "user" ? this.outbound.get(item.id) : undefined;
-			return out ? { kind: "assistant", id: item.id, at: item.at, parts: [{ type: "text", text: out.text }], status: "done", outbound: { from: out.from } } : item;
+			if (out) return { kind: "assistant", id: item.id, at: item.at, parts: [{ type: "text", text: out.text }], status: "done", outbound: { from: out.from } };
+			const approval = item.kind === "approval" ? this.approvals.get(item.approvalId) : undefined;
+			return approval ? this.approvalItem(approval) : item;
 		});
 	}
 
@@ -324,11 +427,12 @@ export class AgentView implements Runtime {
 		const answer = [...items].reverse().find((i) => i.kind === "assistant" && i.parts.some((p) => p.type === "text" && p.text.trim()));
 		const text = answer?.kind === "assistant" ? answer.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
 		await this.agent.core.afterTurn(this.contactId, turn.said, text, { ref: `person:${this.contactId}`, ...(answer ? { itemId: answer.id } : {}) }).catch(() => undefined);
+		await this.agent.core.safety.checkBudget().catch(() => undefined);
 		this.agent.activity();
 	}
 
 	snapshot(): Snapshot {
-		return { ...this.builder.snapshot(), items: groupSteps(this.items()) };
+		return { ...this.builder.snapshot(), items: this.group(this.items()) };
 	}
 
 	onEvents(listener: (events: SessionEvent[]) => void): () => void {
@@ -337,6 +441,11 @@ export class AgentView implements Runtime {
 
 	async submit(text: string, options: SubmitOptions) {
 		if (!this.contactId) throw new EngineError("INVALID", "A run's conversation is read-only.");
+		// /pause, /resume, and messages while paused or out of budget (06 §9 AS3–AS4) don't start a turn.
+		if (await this.agent.core.intercept(this.contactId, text)) {
+			this.agent.activity();
+			return { disposition: "started" as const };
+		}
 		const busy = this.builder.status === "running";
 		await this.agent.ensureCredential();
 		await this.agent.core.beforeTurn(this.contactId, this.conversation.id, text).catch(() => undefined);
@@ -377,6 +486,7 @@ export class AgentView implements Runtime {
 	}
 
 	async stop(): Promise<void> {
+		this.agent.live.delete(this);
 		await this.stream?.stop();
 	}
 

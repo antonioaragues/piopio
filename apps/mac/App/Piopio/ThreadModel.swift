@@ -170,6 +170,12 @@ final class ThreadModel {
             Task { do { try await engine?.spaceCall("spaces.memory.undo", RevisionParams(ref: spaceRef, revisionId: revisionId)) } catch { report(error) } }
         case .decideMemory(let proposalId, let accept):
             Task { do { try await engine?.spaceCall("spaces.memory.decide", DecideParams(ref: spaceRef, proposalId: proposalId, accept: accept)) } catch { report(error) } }
+        case .decideApproval(let approvalId, let approve):
+            Task { do { try await engine?.decide(ref, approvalId: approvalId, approve: approve) } catch { report(error) } }
+        case .editApproval(let approvalId):
+            NotificationCenter.default.post(name: .openInbox, object: approvalId)
+        case .undoChange(let undoId):
+            Task { do { try await engine?.undo(ref, undoId: undoId) } catch { report(error) } }
         }
     }
 

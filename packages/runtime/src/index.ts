@@ -4,4 +4,5 @@ export * from "./agents/definition.js";
 export * from "./agents/templates.js";
 export * from "./agents/core.js";
 export * from "./agents/proactive.js";
+export * from "./agents/safety.js";
 export * from "./agents/time.js";

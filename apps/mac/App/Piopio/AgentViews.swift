@@ -75,15 +75,24 @@ struct AgentsSection: View {
     @Binding var selection: String?
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "tray").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            Text("Inbox").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-            Spacer()
-            Text("Soon").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+        Button { selection = "inbox" } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "tray").font(.system(size: 12)).foregroundStyle(selection == "inbox" ? Color.dsFg : Color.dsFg2)
+                Text("Inbox").font(.system(size: 13, weight: selection == "inbox" ? .semibold : .regular)).foregroundStyle(Color.dsFg)
+                Spacer()
+                if engine.inboxCount > 0 {
+                    Text("\(engine.inboxCount)").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 6).frame(minWidth: 18, minHeight: 16)
+                        .background(Color.accentColor, in: Capsule())
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 30)
+            .background(selection == "inbox" ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
-        .help("Approvals and messages for you, across agents (milestone 4.4)")
+        .buttonStyle(.plain)
+        .help("Approvals, messages for you and failed runs, across agents")
         HStack {
             SectionLabel("Agents")
             Spacer()
@@ -109,7 +118,11 @@ struct AgentsSection: View {
                     }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(agent.title).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg).lineLimit(1)
-                        Text(agent.agent?.description ?? "Local agent").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                        if agent.agent?.status?.paused == true {
+                            Text("Paused").font(.system(size: 11.5)).foregroundStyle(Color.dsAmber).lineLimit(1)
+                        } else {
+                            Text(agent.agent?.description ?? "Local agent").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                        }
                     }
                     Spacer(minLength: 4)
                     Text(agent.agent?.location == "cloud" ? "CLOUD" : "LOCAL")
@@ -269,9 +282,26 @@ struct AgentPage: View {
                     Text("This Mac · \(engine.model(modelRef(summary.agent?.model))?.name ?? summary.agent?.model ?? "")").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                 }
             }
+            // UI1: the approval mode as a badge.
+            Text(summary.agent?.asksFirst == true ? "Asks first" : "Auto")
+                .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Color.dsFg2)
+                .padding(.horizontal, 7).frame(height: 18)
+                .background(Color.dsChip, in: Capsule())
+                .help(summary.agent?.asksFirst == true ? "Some actions wait for your approval (Definition › Policies)" : "Acts without asking; every change can be undone for 24 hours")
             Spacer()
             if summary.agent?.invalid == true {
                 Text("Definition has errors").font(.system(size: 11.5)).foregroundStyle(Color.dsRed)
+            }
+            if let status = summary.agent?.status {
+                Text(status.budgetUsd.map { String(format: "$%.2f of $%.0f this month", status.spendUsd, $0) } ?? String(format: "$%.2f this month", status.spendUsd))
+                    .font(.system(size: 11.5)).foregroundStyle(status.budgetUsd.map { status.spendUsd >= $0 } == true ? Color.dsRed : Color.dsFg3)
+                Button {
+                    Task { try? await engine.pause(summary.ref, paused: !status.paused) }
+                } label: {
+                    Label(status.paused ? "Resume" : "Pause", systemImage: status.paused ? "play.fill" : "pause.fill").font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(PillStyle(kind: status.paused ? .primary : .secondary, compact: true))
+                .help(status.paused ? "Runs and messages start again" : "Stop all runs and messages now (the owner can also write /pause)")
             }
         }
         .padding(.leading, 24)

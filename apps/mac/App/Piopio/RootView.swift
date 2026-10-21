@@ -165,7 +165,9 @@ struct RootView: View {
     }
 
     @ViewBuilder private var agentsContent: some View {
-        if let summary = engine.agents.first(where: { $0.ref.id == agentSelection }) {
+        if agentSelection == "inbox" {
+            InboxView(engine: engine, agentSelection: $agentSelection)
+        } else if let summary = engine.agents.first(where: { $0.ref.id == agentSelection }) {
             AgentPage(engine: engine, summary: summary, selection: $agentSelection)
                 .id(summary.ref.id)
         } else {
@@ -227,6 +229,8 @@ extension Notification.Name {
     /// Object: a folder URL to add, or nil to ask for one.
     static let openProject = Notification.Name("piopio.openProject")
     static let selectBuildSession = Notification.Name("piopio.selectBuildSession")
+    /// Object: an approval id to show, or nil.
+    static let openInbox = Notification.Name("piopio.openInbox")
 }
 
 // MARK: Sidebar
@@ -424,6 +428,11 @@ private struct SpaceAndAgentSheets: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .onReceive(NotificationCenter.default.publisher(for: .openInbox)) { note in
+                mode = .agents
+                agentSelection = "inbox"
+                if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in
                 mode = .agents
                 showNewAgent = true

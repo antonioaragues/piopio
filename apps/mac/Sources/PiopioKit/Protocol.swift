@@ -234,6 +234,31 @@ public struct StepsItem: Codable, Sendable, Hashable {
     public var tools: [ToolItem]
 }
 
+/// An agent's tool call waiting for the owner, or how it was answered (06-agents §9 AS1).
+public struct ApprovalItem: Codable, Sendable, Hashable {
+    public enum Status: String, Codable, Sendable { case pending, approved, denied, expired, cancelled }
+    public var id, at, approvalId, tool, title: String
+    public var args: JSONValue
+    public var status: Status
+    public var editedArgs: JSONValue?
+    public var reason: String?
+    public var expiresAt: String
+    /// "Always allow messages to María".
+    public var always: String
+}
+
+/// What an agent's tool changed, with Undo while it lasts (06-agents §4.2).
+public struct ResultItem: Codable, Sendable, Hashable {
+    public struct Card: Codable, Sendable, Hashable { public var kind, title: String; public var detail: String? }
+    public struct Undo: Codable, Sendable, Hashable {
+        public enum Status: String, Codable, Sendable { case available, undone, failed, expired }
+        public var id: String; public var status: Status; public var until: String
+    }
+    public var id, at, callId: String
+    public var card: Card
+    public var undo: Undo?
+}
+
 public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case user(UserItem)
     case assistant(AssistantItem)
@@ -244,6 +269,8 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case routing(RoutingItem)
     case memory(MemoryItem)
     case steps(StepsItem)
+    case approval(ApprovalItem)
+    case result(ResultItem)
 
     private enum Key: String, CodingKey { case kind }
 
@@ -259,6 +286,8 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case "routing": self = .routing(try RoutingItem(from: decoder))
         case "memory": self = .memory(try MemoryItem(from: decoder))
         case "steps": self = .steps(try StepsItem(from: decoder))
+        case "approval": self = .approval(try ApprovalItem(from: decoder))
+        case "result": self = .result(try ResultItem(from: decoder))
         default: throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown item kind \(kind)"))
         }
     }
@@ -275,6 +304,8 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .routing(let v): try c.encode("routing", forKey: .kind); try v.encode(to: encoder)
         case .memory(let v): try c.encode("memory", forKey: .kind); try v.encode(to: encoder)
         case .steps(let v): try c.encode("steps", forKey: .kind); try v.encode(to: encoder)
+        case .approval(let v): try c.encode("approval", forKey: .kind); try v.encode(to: encoder)
+        case .result(let v): try c.encode("result", forKey: .kind); try v.encode(to: encoder)
         }
     }
 
@@ -289,6 +320,8 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .routing(let v): v.id
         case .memory(let v): v.id
         case .steps(let v): v.id
+        case .approval(let v): v.id
+        case .result(let v): v.id
         }
     }
 }
@@ -407,6 +440,10 @@ public struct AgentInfo: Codable, Sendable, Hashable {
     public var model: String
     public var contacts: [Contact]
     public var invalid: Bool?
+    /// Some tool calls wait for the owner: the header's "Asks first".
+    public var asksFirst: Bool?
+    public struct Status: Codable, Sendable, Hashable { public var paused: Bool; public var spendUsd: Double; public var budgetUsd: Double?; public var inbox: Int }
+    public var status: Status?
 }
 
 public struct AgentTemplate: Decodable, Sendable, Hashable, Identifiable { public var id, name, avatar, description: String }
@@ -460,6 +497,36 @@ public struct AgentRunNowParams: Encodable, Sendable {
     public init(ref: ContainerRef, scheduleId: String? = nil, prompt: String? = nil) { self.ref = ref; self.scheduleId = scheduleId; self.prompt = prompt }
 }
 public struct AgentRunNowResult: Decodable, Sendable { public var runId: String }
+public struct AgentDecideParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var approvalId: String; public var approve: Bool; public var args: JSONValue?; public var always: Bool?; public var reason: String?
+    public init(ref: ContainerRef, approvalId: String, approve: Bool, args: JSONValue? = nil, always: Bool? = nil, reason: String? = nil) { self.ref = ref; self.approvalId = approvalId; self.approve = approve; self.args = args; self.always = always; self.reason = reason }
+}
+public struct AgentUndoParams: Encodable, Sendable { public var ref: ContainerRef; public var undoId: String; public init(ref: ContainerRef, undoId: String) { self.ref = ref; self.undoId = undoId } }
+public struct AgentPauseParams: Encodable, Sendable { public var ref: ContainerRef; public var paused: Bool; public init(ref: ContainerRef, paused: Bool) { self.ref = ref; self.paused = paused } }
+/// The Inbox across agents (06-agents §12, docs/design 4d).
+public struct InboxItem: Decodable, Sendable, Hashable, Identifiable {
+    public var id: String
+    public var agent: ContainerRef
+    public var agentName: String
+    public var avatar: String?
+    public var kind: String
+    public var at, title, body: String
+    public var needsYou: Bool
+    public var read: Bool
+    public var conversationId: String?
+    public var approval: ApprovalItem?
+}
+public struct InboxListResult: Decodable, Sendable { public var count: Int; public var items: [InboxItem] }
+public struct InboxReadParams: Encodable, Sendable {
+    public struct Item: Encodable, Sendable { public var agentId, id: String; public init(agentId: String, id: String) { self.agentId = agentId; self.id = id } }
+    public var items: [Item]
+    public init(items: [Item]) { self.items = items }
+}
+public struct InboxChanged: Decodable, Sendable {
+    public struct Approval: Decodable, Sendable { public var agent: ContainerRef; public var agentName, approvalId, title: String }
+    public var count: Int
+    public var approval: Approval?
+}
 public struct AgentTriggersResult: Decodable, Sendable {
     public struct Trigger: Decodable, Sendable, Hashable, Identifiable { public var id, url: String }
     public var triggers: [Trigger]

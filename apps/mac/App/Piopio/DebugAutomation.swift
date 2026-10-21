@@ -66,6 +66,12 @@ enum DebugAutomation {
                 NotificationCenter.default.post(name: .setMode, object: AppMode.agents)
                 if let contact = env["PIOPIO_DEMO_AGENT_CONTACT"], let got = await engine.agentDefinition(ref), var def = AgentDef(got.definition) {
                     def.contacts.append(.init(id: "maria", name: contact, role: "contact"))
+                    // PIOPIO_DEMO_AGENT_APPROVE: approval rules (comma-separated), e.g. send_message:to_non_owner.
+                    if let rules = env["PIOPIO_DEMO_AGENT_APPROVE"] {
+                        var p = def.policies ?? .init()
+                        p.requireApproval = rules.components(separatedBy: ",")
+                        def.policies = p
+                    }
                     _ = try? await engine.saveAgent(ref, definition: def.json, instructions: got.instructions, message: "Add \(contact)")
                     let maria = engine.thread(ContainerRef(kind: .agent, id: ref.id, conversationId: "person:maria"))
                     await maria.open()
@@ -86,6 +92,8 @@ enum DebugAutomation {
                     _ = try? await engine.agentRunNow(ref, prompt: prompt.replacingOccurrences(of: "\\n", with: "\n"))
                     try? await Task.sleep(for: .milliseconds(1500))
                 }
+                // PIOPIO_DEMO_INBOX=1: then show the Inbox.
+                if env["PIOPIO_DEMO_INBOX"] == "1" { NotificationCenter.default.post(name: .openInbox, object: nil) }
             }
         }
         // PIOPIO_DEMO_SPACE=<name>: a new Space; PIOPIO_DEMO_SPACE_MESSAGES: messages to Main, separated by "||",

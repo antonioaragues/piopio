@@ -24,7 +24,7 @@ import type { ChatResources } from "./tools/chat-resources.js";
 import { AgentRuntime } from "./runtimes/agent.js";
 import type { AgentFiles } from "./agent-files.js";
 import type { MemoryProviders } from "./memory.js";
-import { newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError } from "@piopio/runtime";
+import { alwaysLabel, newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
@@ -93,6 +93,8 @@ export class Sessions {
 	private aboutMeExtensions = new Map<"thread" | "space", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
+	/** The Inbox changed (badges), with the approval an agent just asked for (notifications). */
+	onInbox?: (change: { count: number; approval?: { agent: ContainerRef; agentName: string; approvalId: string; title: string } }) => void;
 
 	constructor(
 		private readonly paths: EnginePaths,
@@ -505,7 +507,80 @@ export class Sessions {
 	async startAgents(log: (line: string) => void): Promise<void> {
 		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent")) {
 			await this.agent(entry.ref).catch((error: unknown) => log(`Agent ${entry.title}: couldn't start: ${(error as Error).message}`));
+			await this.agentStatus(entry);
 		}
+	}
+
+	/** Pause, spend and the Inbox count, from the running agent into the catalog (sidebar, header, badges). */
+	private async agentStatus(entry: CatalogEntry): Promise<void> {
+		const runtime = await this.open.get(entry.ref.id)?.catch(() => undefined);
+		if (!(runtime instanceof AgentRuntime) || !entry.agent) return;
+		const status = await runtime.core.safety.status().catch(() => undefined);
+		if (!status || !this.entries.has(entry.ref.id)) return;
+		const changed = JSON.stringify(status) !== JSON.stringify(entry.agent.status);
+		entry.agent.status = status;
+		if (changed) {
+			this.save();
+			this.changed(entry);
+		}
+		this.onInbox?.({ count: this.inboxCount() });
+	}
+
+	/** What waits for you across agents. */
+	inboxCount(): number {
+		return [...this.entries.values()].reduce((n, e) => n + (e.ref.kind === "agent" ? (e.agent?.status?.inbox ?? 0) : 0), 0);
+	}
+
+	/** The Inbox (06 §12): every agent's entries, newest first. */
+	async inbox() {
+		const items = [];
+		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent")) {
+			const runtime = await this.agent(entry.ref).catch(() => undefined);
+			if (!runtime) continue;
+			const def = runtime.definition();
+			for (const e of await runtime.core.safety.entries()) {
+				const a = e.approval;
+				items.push({
+					id: e.id,
+					agent: entry.ref,
+					agentName: entry.title,
+					...(entry.agent?.avatar ? { avatar: entry.agent.avatar } : {}),
+					kind: e.kind,
+					at: e.at,
+					title: e.title,
+					body: e.body,
+					needsYou: e.needsYou && (a ? true : !e.read),
+					read: e.read ?? false,
+					...(e.conversation ? { conversationId: e.conversation } : {}),
+					...(a
+						? {
+								approval: {
+									kind: "approval" as const,
+									id: `approval:${a.id}`,
+									at: a.requestedAt,
+									approvalId: a.id,
+									tool: a.tool,
+									title: a.title,
+									args: a.args,
+									status: a.status,
+									...(a.editedArgs ? { editedArgs: a.editedArgs } : {}),
+									...(a.reason ? { reason: a.reason } : {}),
+									expiresAt: new Date(a.expiresAt).toISOString(),
+									always: alwaysLabel(a.key, def),
+								},
+							}
+						: {}),
+				});
+			}
+		}
+		items.sort((a, b) => b.at.localeCompare(a.at));
+		return { count: this.inboxCount(), items };
+	}
+
+	async inboxRead(items: readonly { agentId: string; id: string }[]): Promise<void> {
+		const byAgent = new Map<string, string[]>();
+		for (const i of items) byAgent.set(i.agentId, [...(byAgent.get(i.agentId) ?? []), i.id]);
+		for (const [agentId, ids] of byAgent) await (await this.agent({ kind: "agent", id: agentId })).core.safety.markRead(ids);
 	}
 
 	/** A webhook trigger (hooks.ts): the agent must exist and have it. */
@@ -553,7 +628,10 @@ export class Sessions {
 	}
 
 	private setAgentInfo(entry: CatalogEntry, def: AgentDefinition): void {
+		const status = entry.agent?.status;
 		entry.agent = {
+			...(status ? { status } : {}),
+			...(def.policies?.requireApproval?.length ? { asksFirst: true } : {}),
 			slug: def.slug,
 			...(def.avatar ? { avatar: def.avatar } : {}),
 			...(def.description ? { description: def.description } : {}),
@@ -904,6 +982,10 @@ export class Sessions {
 				memory: () => this.host.memory.get(this.agentDefinition(id).definition.memory?.provider ?? "builtin"),
 				webOptions: this.webOptions,
 				onActivity: () => this.touch(entry.ref),
+				onStatus: () => void this.agentStatus(entry),
+				onApproval: (approval) => {
+					if (approval.status === "pending") this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });
+				},
 			});
 		}
 		if (entry.ref.kind === "space") {

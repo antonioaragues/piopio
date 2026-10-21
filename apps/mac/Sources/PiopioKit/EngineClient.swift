@@ -21,6 +21,8 @@ public actor EngineClient {
     private let projectsContinuation: AsyncStream<[ProjectInfo]>.Continuation
     public nonisolated let attention: AsyncStream<SessionAttention>
     private let attentionContinuation: AsyncStream<SessionAttention>.Continuation
+    public nonisolated let inboxChanges: AsyncStream<InboxChanged>
+    private let inboxContinuation: AsyncStream<InboxChanged>.Continuation
 
     private let socketPath: String
     private let queue = DispatchQueue(label: "piopio.engine-client")
@@ -38,6 +40,7 @@ public actor EngineClient {
         (catalogChanges, catalogContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
         (projectChanges, projectsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         (attention, attentionContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
+        (inboxChanges, inboxContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
 
     /// Default Local Engine socket: `$PIOPIO_HOME/engine.sock` or `~/Library/Application Support/Piopio/engine.sock`.
@@ -131,6 +134,10 @@ public actor EngineClient {
                     if let n = try? decoder.decode(NotificationEnvelope<SessionAttention>.self, from: line) {
                         attentionContinuation.yield(n.params)
                     }
+                } else if method == "inbox.changed" {
+                    if let n = try? decoder.decode(NotificationEnvelope<InboxChanged>.self, from: line) {
+                        inboxContinuation.yield(n.params)
+                    }
                 } else if method == "projects.changed" {
                     if let n = try? decoder.decode(NotificationEnvelope<ProjectsChanged>.self, from: line) {
                         projectsContinuation.yield(n.params.projects)
@@ -172,6 +179,7 @@ public actor EngineClient {
         catalogContinuation.finish()
         projectsContinuation.finish()
         attentionContinuation.finish()
+        inboxContinuation.finish()
     }
 }
 

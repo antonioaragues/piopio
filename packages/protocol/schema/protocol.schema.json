@@ -1018,6 +1018,169 @@
 							}
 						}
 					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"id",
+						"at",
+						"approvalId",
+						"tool",
+						"title",
+						"args",
+						"status",
+						"expiresAt",
+						"always"
+					],
+					"properties": {
+						"kind": {
+							"type": "string",
+							"const": "approval"
+						},
+						"id": {
+							"type": "string"
+						},
+						"at": {
+							"type": "string"
+						},
+						"approvalId": {
+							"type": "string"
+						},
+						"tool": {
+							"type": "string"
+						},
+						"title": {
+							"type": "string"
+						},
+						"args": {},
+						"status": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "pending"
+								},
+								{
+									"type": "string",
+									"const": "approved"
+								},
+								{
+									"type": "string",
+									"const": "denied"
+								},
+								{
+									"type": "string",
+									"const": "expired"
+								},
+								{
+									"type": "string",
+									"const": "cancelled"
+								}
+							]
+						},
+						"editedArgs": {},
+						"reason": {
+							"type": "string"
+						},
+						"expiresAt": {
+							"type": "string"
+						},
+						"always": {
+							"type": "string"
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"id",
+						"at",
+						"callId",
+						"card"
+					],
+					"properties": {
+						"kind": {
+							"type": "string",
+							"const": "result"
+						},
+						"id": {
+							"type": "string"
+						},
+						"at": {
+							"type": "string"
+						},
+						"callId": {
+							"type": "string"
+						},
+						"card": {
+							"type": "object",
+							"required": [
+								"kind",
+								"title"
+							],
+							"properties": {
+								"kind": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "reminder"
+										},
+										{
+											"type": "string",
+											"const": "message"
+										},
+										{
+											"type": "string",
+											"const": "memory"
+										}
+									]
+								},
+								"title": {
+									"type": "string"
+								},
+								"detail": {
+									"type": "string"
+								}
+							}
+						},
+						"undo": {
+							"type": "object",
+							"required": [
+								"id",
+								"status",
+								"until"
+							],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"status": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "available"
+										},
+										{
+											"type": "string",
+											"const": "undone"
+										},
+										{
+											"type": "string",
+											"const": "failed"
+										},
+										{
+											"type": "string",
+											"const": "expired"
+										}
+									]
+								},
+								"until": {
+									"type": "string"
+								}
+							}
+						}
+					}
 				}
 			]
 		},
@@ -2311,6 +2474,169 @@
 											}
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"approvalId",
+										"tool",
+										"title",
+										"args",
+										"status",
+										"expiresAt",
+										"always"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "approval"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"approvalId": {
+											"type": "string"
+										},
+										"tool": {
+											"type": "string"
+										},
+										"title": {
+											"type": "string"
+										},
+										"args": {},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "pending"
+												},
+												{
+													"type": "string",
+													"const": "approved"
+												},
+												{
+													"type": "string",
+													"const": "denied"
+												},
+												{
+													"type": "string",
+													"const": "expired"
+												},
+												{
+													"type": "string",
+													"const": "cancelled"
+												}
+											]
+										},
+										"editedArgs": {},
+										"reason": {
+											"type": "string"
+										},
+										"expiresAt": {
+											"type": "string"
+										},
+										"always": {
+											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"callId",
+										"card"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "result"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"callId": {
+											"type": "string"
+										},
+										"card": {
+											"type": "object",
+											"required": [
+												"kind",
+												"title"
+											],
+											"properties": {
+												"kind": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "reminder"
+														},
+														{
+															"type": "string",
+															"const": "message"
+														},
+														{
+															"type": "string",
+															"const": "memory"
+														}
+													]
+												},
+												"title": {
+													"type": "string"
+												},
+												"detail": {
+													"type": "string"
+												}
+											}
+										},
+										"undo": {
+											"type": "object",
+											"required": [
+												"id",
+												"status",
+												"until"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "available"
+														},
+														{
+															"type": "string",
+															"const": "undone"
+														},
+														{
+															"type": "string",
+															"const": "failed"
+														},
+														{
+															"type": "string",
+															"const": "expired"
+														}
+													]
+												},
+												"until": {
+													"type": "string"
+												}
+											}
+										}
+									}
 								}
 							]
 						},
@@ -3347,6 +3673,169 @@
 											}
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"approvalId",
+										"tool",
+										"title",
+										"args",
+										"status",
+										"expiresAt",
+										"always"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "approval"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"approvalId": {
+											"type": "string"
+										},
+										"tool": {
+											"type": "string"
+										},
+										"title": {
+											"type": "string"
+										},
+										"args": {},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "pending"
+												},
+												{
+													"type": "string",
+													"const": "approved"
+												},
+												{
+													"type": "string",
+													"const": "denied"
+												},
+												{
+													"type": "string",
+													"const": "expired"
+												},
+												{
+													"type": "string",
+													"const": "cancelled"
+												}
+											]
+										},
+										"editedArgs": {},
+										"reason": {
+											"type": "string"
+										},
+										"expiresAt": {
+											"type": "string"
+										},
+										"always": {
+											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"callId",
+										"card"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "result"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"callId": {
+											"type": "string"
+										},
+										"card": {
+											"type": "object",
+											"required": [
+												"kind",
+												"title"
+											],
+											"properties": {
+												"kind": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "reminder"
+														},
+														{
+															"type": "string",
+															"const": "message"
+														},
+														{
+															"type": "string",
+															"const": "memory"
+														}
+													]
+												},
+												"title": {
+													"type": "string"
+												},
+												"detail": {
+													"type": "string"
+												}
+											}
+										},
+										"undo": {
+											"type": "object",
+											"required": [
+												"id",
+												"status",
+												"until"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "available"
+														},
+														{
+															"type": "string",
+															"const": "undone"
+														},
+														{
+															"type": "string",
+															"const": "failed"
+														},
+														{
+															"type": "string",
+															"const": "expired"
+														}
+													]
+												},
+												"until": {
+													"type": "string"
+												}
+											}
+										}
+									}
 								}
 							]
 						}
@@ -4359,6 +4848,169 @@
 													"parentCallId": {
 														"type": "string"
 													}
+												}
+											}
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"approvalId",
+										"tool",
+										"title",
+										"args",
+										"status",
+										"expiresAt",
+										"always"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "approval"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"approvalId": {
+											"type": "string"
+										},
+										"tool": {
+											"type": "string"
+										},
+										"title": {
+											"type": "string"
+										},
+										"args": {},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "pending"
+												},
+												{
+													"type": "string",
+													"const": "approved"
+												},
+												{
+													"type": "string",
+													"const": "denied"
+												},
+												{
+													"type": "string",
+													"const": "expired"
+												},
+												{
+													"type": "string",
+													"const": "cancelled"
+												}
+											]
+										},
+										"editedArgs": {},
+										"reason": {
+											"type": "string"
+										},
+										"expiresAt": {
+											"type": "string"
+										},
+										"always": {
+											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"callId",
+										"card"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "result"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"callId": {
+											"type": "string"
+										},
+										"card": {
+											"type": "object",
+											"required": [
+												"kind",
+												"title"
+											],
+											"properties": {
+												"kind": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "reminder"
+														},
+														{
+															"type": "string",
+															"const": "message"
+														},
+														{
+															"type": "string",
+															"const": "memory"
+														}
+													]
+												},
+												"title": {
+													"type": "string"
+												},
+												"detail": {
+													"type": "string"
+												}
+											}
+										},
+										"undo": {
+											"type": "object",
+											"required": [
+												"id",
+												"status",
+												"until"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "available"
+														},
+														{
+															"type": "string",
+															"const": "undone"
+														},
+														{
+															"type": "string",
+															"const": "failed"
+														},
+														{
+															"type": "string",
+															"const": "expired"
+														}
+													]
+												},
+												"until": {
+													"type": "string"
 												}
 											}
 										}
@@ -5714,6 +6366,169 @@
 														}
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"approvalId",
+													"tool",
+													"title",
+													"args",
+													"status",
+													"expiresAt",
+													"always"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "approval"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"approvalId": {
+														"type": "string"
+													},
+													"tool": {
+														"type": "string"
+													},
+													"title": {
+														"type": "string"
+													},
+													"args": {},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "approved"
+															},
+															{
+																"type": "string",
+																"const": "denied"
+															},
+															{
+																"type": "string",
+																"const": "expired"
+															},
+															{
+																"type": "string",
+																"const": "cancelled"
+															}
+														]
+													},
+													"editedArgs": {},
+													"reason": {
+														"type": "string"
+													},
+													"expiresAt": {
+														"type": "string"
+													},
+													"always": {
+														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"callId",
+													"card"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "result"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"callId": {
+														"type": "string"
+													},
+													"card": {
+														"type": "object",
+														"required": [
+															"kind",
+															"title"
+														],
+														"properties": {
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "reminder"
+																	},
+																	{
+																		"type": "string",
+																		"const": "message"
+																	},
+																	{
+																		"type": "string",
+																		"const": "memory"
+																	}
+																]
+															},
+															"title": {
+																"type": "string"
+															},
+															"detail": {
+																"type": "string"
+															}
+														}
+													},
+													"undo": {
+														"type": "object",
+														"required": [
+															"id",
+															"status",
+															"until"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "available"
+																	},
+																	{
+																		"type": "string",
+																		"const": "undone"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "expired"
+																	}
+																]
+															},
+															"until": {
+																"type": "string"
+															}
+														}
+													}
+												}
 											}
 										]
 									}
@@ -7046,6 +7861,169 @@
 										}
 									}
 								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"approvalId",
+									"tool",
+									"title",
+									"args",
+									"status",
+									"expiresAt",
+									"always"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "approval"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"approvalId": {
+										"type": "string"
+									},
+									"tool": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"args": {},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "approved"
+											},
+											{
+												"type": "string",
+												"const": "denied"
+											},
+											{
+												"type": "string",
+												"const": "expired"
+											},
+											{
+												"type": "string",
+												"const": "cancelled"
+											}
+										]
+									},
+									"editedArgs": {},
+									"reason": {
+										"type": "string"
+									},
+									"expiresAt": {
+										"type": "string"
+									},
+									"always": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"callId",
+									"card"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "result"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"callId": {
+										"type": "string"
+									},
+									"card": {
+										"type": "object",
+										"required": [
+											"kind",
+											"title"
+										],
+										"properties": {
+											"kind": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "reminder"
+													},
+													{
+														"type": "string",
+														"const": "message"
+													},
+													{
+														"type": "string",
+														"const": "memory"
+													}
+												]
+											},
+											"title": {
+												"type": "string"
+											},
+											"detail": {
+												"type": "string"
+											}
+										}
+									},
+									"undo": {
+										"type": "object",
+										"required": [
+											"id",
+											"status",
+											"until"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "available"
+													},
+													{
+														"type": "string",
+														"const": "undone"
+													},
+													{
+														"type": "string",
+														"const": "failed"
+													},
+													{
+														"type": "string",
+														"const": "expired"
+													}
+												]
+											},
+											"until": {
+												"type": "string"
+											}
+										}
+									}
+								}
 							}
 						]
 					}
@@ -7654,6 +8632,31 @@
 						},
 						"invalid": {
 							"type": "boolean"
+						},
+						"asksFirst": {
+							"type": "boolean"
+						},
+						"status": {
+							"type": "object",
+							"required": [
+								"paused",
+								"spendUsd",
+								"inbox"
+							],
+							"properties": {
+								"paused": {
+									"type": "boolean"
+								},
+								"spendUsd": {
+									"type": "number"
+								},
+								"budgetUsd": {
+									"type": "number"
+								},
+								"inbox": {
+									"type": "number"
+								}
+							}
 						}
 					}
 				}
@@ -8664,6 +9667,169 @@
 																"parentCallId": {
 																	"type": "string"
 																}
+															}
+														}
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"approvalId",
+													"tool",
+													"title",
+													"args",
+													"status",
+													"expiresAt",
+													"always"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "approval"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"approvalId": {
+														"type": "string"
+													},
+													"tool": {
+														"type": "string"
+													},
+													"title": {
+														"type": "string"
+													},
+													"args": {},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "approved"
+															},
+															{
+																"type": "string",
+																"const": "denied"
+															},
+															{
+																"type": "string",
+																"const": "expired"
+															},
+															{
+																"type": "string",
+																"const": "cancelled"
+															}
+														]
+													},
+													"editedArgs": {},
+													"reason": {
+														"type": "string"
+													},
+													"expiresAt": {
+														"type": "string"
+													},
+													"always": {
+														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"callId",
+													"card"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "result"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"callId": {
+														"type": "string"
+													},
+													"card": {
+														"type": "object",
+														"required": [
+															"kind",
+															"title"
+														],
+														"properties": {
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "reminder"
+																	},
+																	{
+																		"type": "string",
+																		"const": "message"
+																	},
+																	{
+																		"type": "string",
+																		"const": "memory"
+																	}
+																]
+															},
+															"title": {
+																"type": "string"
+															},
+															"detail": {
+																"type": "string"
+															}
+														}
+													},
+													"undo": {
+														"type": "object",
+														"required": [
+															"id",
+															"status",
+															"until"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "available"
+																	},
+																	{
+																		"type": "string",
+																		"const": "undone"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "expired"
+																	}
+																]
+															},
+															"until": {
+																"type": "string"
 															}
 														}
 													}
@@ -9704,6 +10870,169 @@
 														}
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"approvalId",
+													"tool",
+													"title",
+													"args",
+													"status",
+													"expiresAt",
+													"always"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "approval"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"approvalId": {
+														"type": "string"
+													},
+													"tool": {
+														"type": "string"
+													},
+													"title": {
+														"type": "string"
+													},
+													"args": {},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "approved"
+															},
+															{
+																"type": "string",
+																"const": "denied"
+															},
+															{
+																"type": "string",
+																"const": "expired"
+															},
+															{
+																"type": "string",
+																"const": "cancelled"
+															}
+														]
+													},
+													"editedArgs": {},
+													"reason": {
+														"type": "string"
+													},
+													"expiresAt": {
+														"type": "string"
+													},
+													"always": {
+														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"callId",
+													"card"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "result"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"callId": {
+														"type": "string"
+													},
+													"card": {
+														"type": "object",
+														"required": [
+															"kind",
+															"title"
+														],
+														"properties": {
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "reminder"
+																	},
+																	{
+																		"type": "string",
+																		"const": "message"
+																	},
+																	{
+																		"type": "string",
+																		"const": "memory"
+																	}
+																]
+															},
+															"title": {
+																"type": "string"
+															},
+															"detail": {
+																"type": "string"
+															}
+														}
+													},
+													"undo": {
+														"type": "object",
+														"required": [
+															"id",
+															"status",
+															"until"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "available"
+																	},
+																	{
+																		"type": "string",
+																		"const": "undone"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "expired"
+																	}
+																]
+															},
+															"until": {
+																"type": "string"
+															}
+														}
+													}
+												}
 											}
 										]
 									}
@@ -10716,6 +12045,169 @@
 																"parentCallId": {
 																	"type": "string"
 																}
+															}
+														}
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"approvalId",
+													"tool",
+													"title",
+													"args",
+													"status",
+													"expiresAt",
+													"always"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "approval"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"approvalId": {
+														"type": "string"
+													},
+													"tool": {
+														"type": "string"
+													},
+													"title": {
+														"type": "string"
+													},
+													"args": {},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending"
+															},
+															{
+																"type": "string",
+																"const": "approved"
+															},
+															{
+																"type": "string",
+																"const": "denied"
+															},
+															{
+																"type": "string",
+																"const": "expired"
+															},
+															{
+																"type": "string",
+																"const": "cancelled"
+															}
+														]
+													},
+													"editedArgs": {},
+													"reason": {
+														"type": "string"
+													},
+													"expiresAt": {
+														"type": "string"
+													},
+													"always": {
+														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"callId",
+													"card"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "result"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"callId": {
+														"type": "string"
+													},
+													"card": {
+														"type": "object",
+														"required": [
+															"kind",
+															"title"
+														],
+														"properties": {
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "reminder"
+																	},
+																	{
+																		"type": "string",
+																		"const": "message"
+																	},
+																	{
+																		"type": "string",
+																		"const": "memory"
+																	}
+																]
+															},
+															"title": {
+																"type": "string"
+															},
+															"detail": {
+																"type": "string"
+															}
+														}
+													},
+													"undo": {
+														"type": "object",
+														"required": [
+															"id",
+															"status",
+															"until"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "available"
+																	},
+																	{
+																		"type": "string",
+																		"const": "undone"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "expired"
+																	}
+																]
+															},
+															"until": {
+																"type": "string"
 															}
 														}
 													}
@@ -12071,6 +13563,169 @@
 																	}
 																}
 															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"approvalId",
+																"tool",
+																"title",
+																"args",
+																"status",
+																"expiresAt",
+																"always"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "approval"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"approvalId": {
+																	"type": "string"
+																},
+																"tool": {
+																	"type": "string"
+																},
+																"title": {
+																	"type": "string"
+																},
+																"args": {},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending"
+																		},
+																		{
+																			"type": "string",
+																			"const": "approved"
+																		},
+																		{
+																			"type": "string",
+																			"const": "denied"
+																		},
+																		{
+																			"type": "string",
+																			"const": "expired"
+																		},
+																		{
+																			"type": "string",
+																			"const": "cancelled"
+																		}
+																	]
+																},
+																"editedArgs": {},
+																"reason": {
+																	"type": "string"
+																},
+																"expiresAt": {
+																	"type": "string"
+																},
+																"always": {
+																	"type": "string"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"callId",
+																"card"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "result"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"callId": {
+																	"type": "string"
+																},
+																"card": {
+																	"type": "object",
+																	"required": [
+																		"kind",
+																		"title"
+																	],
+																	"properties": {
+																		"kind": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "reminder"
+																				},
+																				{
+																					"type": "string",
+																					"const": "message"
+																				},
+																				{
+																					"type": "string",
+																					"const": "memory"
+																				}
+																			]
+																		},
+																		"title": {
+																			"type": "string"
+																		},
+																		"detail": {
+																			"type": "string"
+																		}
+																	}
+																},
+																"undo": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"status",
+																		"until"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"status": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "available"
+																				},
+																				{
+																					"type": "string",
+																					"const": "undone"
+																				},
+																				{
+																					"type": "string",
+																					"const": "failed"
+																				},
+																				{
+																					"type": "string",
+																					"const": "expired"
+																				}
+																			]
+																		},
+																		"until": {
+																			"type": "string"
+																		}
+																	}
+																}
+															}
 														}
 													]
 												}
@@ -12762,6 +14417,31 @@
 									},
 									"invalid": {
 										"type": "boolean"
+									},
+									"asksFirst": {
+										"type": "boolean"
+									},
+									"status": {
+										"type": "object",
+										"required": [
+											"paused",
+											"spendUsd",
+											"inbox"
+										],
+										"properties": {
+											"paused": {
+												"type": "boolean"
+											},
+											"spendUsd": {
+												"type": "number"
+											},
+											"budgetUsd": {
+												"type": "number"
+											},
+											"inbox": {
+												"type": "number"
+											}
+										}
 									}
 								}
 							}
@@ -13271,6 +14951,31 @@
 									},
 									"invalid": {
 										"type": "boolean"
+									},
+									"asksFirst": {
+										"type": "boolean"
+									},
+									"status": {
+										"type": "object",
+										"required": [
+											"paused",
+											"spendUsd",
+											"inbox"
+										],
+										"properties": {
+											"paused": {
+												"type": "boolean"
+											},
+											"spendUsd": {
+												"type": "number"
+											},
+											"budgetUsd": {
+												"type": "number"
+											},
+											"inbox": {
+												"type": "number"
+											}
+										}
 									}
 								}
 							}
@@ -14519,6 +16224,169 @@
 												"parentCallId": {
 													"type": "string"
 												}
+											}
+										}
+									}
+								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"approvalId",
+									"tool",
+									"title",
+									"args",
+									"status",
+									"expiresAt",
+									"always"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "approval"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"approvalId": {
+										"type": "string"
+									},
+									"tool": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"args": {},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "approved"
+											},
+											{
+												"type": "string",
+												"const": "denied"
+											},
+											{
+												"type": "string",
+												"const": "expired"
+											},
+											{
+												"type": "string",
+												"const": "cancelled"
+											}
+										]
+									},
+									"editedArgs": {},
+									"reason": {
+										"type": "string"
+									},
+									"expiresAt": {
+										"type": "string"
+									},
+									"always": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"callId",
+									"card"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "result"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"callId": {
+										"type": "string"
+									},
+									"card": {
+										"type": "object",
+										"required": [
+											"kind",
+											"title"
+										],
+										"properties": {
+											"kind": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "reminder"
+													},
+													{
+														"type": "string",
+														"const": "message"
+													},
+													{
+														"type": "string",
+														"const": "memory"
+													}
+												]
+											},
+											"title": {
+												"type": "string"
+											},
+											"detail": {
+												"type": "string"
+											}
+										}
+									},
+									"undo": {
+										"type": "object",
+										"required": [
+											"id",
+											"status",
+											"until"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "available"
+													},
+													{
+														"type": "string",
+														"const": "undone"
+													},
+													{
+														"type": "string",
+														"const": "failed"
+													},
+													{
+														"type": "string",
+														"const": "expired"
+													}
+												]
+											},
+											"until": {
+												"type": "string"
 											}
 										}
 									}
@@ -15900,6 +17768,169 @@
 														"parentCallId": {
 															"type": "string"
 														}
+													}
+												}
+											}
+										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"id",
+											"at",
+											"approvalId",
+											"tool",
+											"title",
+											"args",
+											"status",
+											"expiresAt",
+											"always"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "approval"
+											},
+											"id": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											},
+											"approvalId": {
+												"type": "string"
+											},
+											"tool": {
+												"type": "string"
+											},
+											"title": {
+												"type": "string"
+											},
+											"args": {},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "pending"
+													},
+													{
+														"type": "string",
+														"const": "approved"
+													},
+													{
+														"type": "string",
+														"const": "denied"
+													},
+													{
+														"type": "string",
+														"const": "expired"
+													},
+													{
+														"type": "string",
+														"const": "cancelled"
+													}
+												]
+											},
+											"editedArgs": {},
+											"reason": {
+												"type": "string"
+											},
+											"expiresAt": {
+												"type": "string"
+											},
+											"always": {
+												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"id",
+											"at",
+											"callId",
+											"card"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "result"
+											},
+											"id": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											},
+											"callId": {
+												"type": "string"
+											},
+											"card": {
+												"type": "object",
+												"required": [
+													"kind",
+													"title"
+												],
+												"properties": {
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "reminder"
+															},
+															{
+																"type": "string",
+																"const": "message"
+															},
+															{
+																"type": "string",
+																"const": "memory"
+															}
+														]
+													},
+													"title": {
+														"type": "string"
+													},
+													"detail": {
+														"type": "string"
+													}
+												}
+											},
+											"undo": {
+												"type": "object",
+												"required": [
+													"id",
+													"status",
+													"until"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "available"
+															},
+															{
+																"type": "string",
+																"const": "undone"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															},
+															{
+																"type": "string",
+																"const": "expired"
+															}
+														]
+													},
+													"until": {
+														"type": "string"
 													}
 												}
 											}
@@ -21715,6 +23746,10 @@
 									{
 										"type": "string",
 										"const": "failed"
+									},
+									{
+										"type": "string",
+										"const": "skipped"
 									}
 								]
 							},
@@ -21763,6 +23798,10 @@
 									{
 										"type": "string",
 										"const": "limit"
+									},
+									{
+										"type": "string",
+										"const": "paused"
 									}
 								]
 							}
@@ -21937,6 +23976,420 @@
 					}
 				}
 			}
+		},
+		"agents.decide.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"approvalId",
+				"approve"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"approvalId": {
+					"type": "string"
+				},
+				"approve": {
+					"type": "boolean"
+				},
+				"args": {},
+				"always": {
+					"type": "boolean"
+				},
+				"reason": {
+					"type": "string"
+				}
+			}
+		},
+		"agents.decide.result": {
+			"type": "object",
+			"required": [
+				"status"
+			],
+			"properties": {
+				"status": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "pending"
+						},
+						{
+							"type": "string",
+							"const": "approved"
+						},
+						{
+							"type": "string",
+							"const": "denied"
+						},
+						{
+							"type": "string",
+							"const": "expired"
+						},
+						{
+							"type": "string",
+							"const": "cancelled"
+						}
+					]
+				}
+			}
+		},
+		"agents.undo.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"undoId"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"undoId": {
+					"type": "string"
+				}
+			}
+		},
+		"agents.undo.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"agents.pause.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"paused"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"paused": {
+					"type": "boolean"
+				}
+			}
+		},
+		"agents.pause.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"inbox.list.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"inbox.list.result": {
+			"type": "object",
+			"required": [
+				"count",
+				"items"
+			],
+			"properties": {
+				"count": {
+					"type": "number"
+				},
+				"items": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"agent",
+							"agentName",
+							"kind",
+							"at",
+							"title",
+							"body",
+							"needsYou",
+							"read"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"agent": {
+								"type": "object",
+								"required": [
+									"kind",
+									"id"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "build"
+											},
+											{
+												"type": "string",
+												"const": "thread"
+											},
+											{
+												"type": "string",
+												"const": "space"
+											},
+											{
+												"type": "string",
+												"const": "agent"
+											}
+										]
+									},
+									"id": {
+										"type": "string"
+									},
+									"conversationId": {
+										"type": "string"
+									}
+								}
+							},
+							"agentName": {
+								"type": "string"
+							},
+							"avatar": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "approval"
+									},
+									{
+										"type": "string",
+										"const": "message"
+									},
+									{
+										"type": "string",
+										"const": "run_failed"
+									},
+									{
+										"type": "string",
+										"const": "budget"
+									},
+									{
+										"type": "string",
+										"const": "paused"
+									}
+								]
+							},
+							"at": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							},
+							"body": {
+								"type": "string"
+							},
+							"needsYou": {
+								"type": "boolean"
+							},
+							"read": {
+								"type": "boolean"
+							},
+							"conversationId": {
+								"type": "string"
+							},
+							"approval": {
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"approvalId",
+									"tool",
+									"title",
+									"args",
+									"status",
+									"expiresAt",
+									"always"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "approval"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"approvalId": {
+										"type": "string"
+									},
+									"tool": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"args": {},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "approved"
+											},
+											{
+												"type": "string",
+												"const": "denied"
+											},
+											{
+												"type": "string",
+												"const": "expired"
+											},
+											{
+												"type": "string",
+												"const": "cancelled"
+											}
+										]
+									},
+									"editedArgs": {},
+									"reason": {
+										"type": "string"
+									},
+									"expiresAt": {
+										"type": "string"
+									},
+									"always": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"inbox.read.params": {
+			"type": "object",
+			"required": [
+				"items"
+			],
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"agentId",
+							"id"
+						],
+						"properties": {
+							"agentId": {
+								"type": "string"
+							},
+							"id": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"inbox.read.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"agents.memory.params": {
 			"type": "object",

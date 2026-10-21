@@ -7,12 +7,13 @@
  */
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "@earendil-works/pi-ai";
-import { configure, defineDoc, defineExtension, defineTool, section, type ConversationId, type Extension, type Harness } from "@earendil-works/pi-durable";
+import { configure, defineDoc, defineExtension, defineTool, hook, section, ToolTask, type ConversationId, type Extension, type Harness, type JsonObject } from "@earendil-works/pi-durable";
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
-import { Proactivity, type ProactiveState, type RunRecord } from "./proactive.js";
+import { OUT_ENTRY, Proactivity, type ProactiveState, type Reminder, type RunRecord } from "./proactive.js";
+import { Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
 
-type AgentState = ProactiveState & {
+type AgentState = ProactiveState & SafetyState & {
 	/** contact id → conversation id. */
 	people: Record<string, string>;
 	/** conversation id → the memory recalled for its current turn (the system section shows it). */
@@ -50,22 +51,54 @@ export type AgentCoreOptions = {
 	/** Someone was sent a message, or a run started or settled (the app shows them). */
 	onOutbound?: (to: string, text: string, from: string) => void;
 	onRun?: (run: RunRecord) => void;
+	/** An approval was asked or answered, a change undone, or the Inbox, pause or spend changed. */
+	onApproval?: (approval: Approval) => void;
+	onUndo?: (undo: UndoRecord) => void;
+	onStatus?: () => void;
 };
 
 export class AgentCore {
 	readonly extension: Extension;
 	readonly proactive: Proactivity;
+	readonly safety: Safety;
 	private memoryTools: { name: string }[] = [];
 
 	constructor(private readonly options: AgentCoreOptions) {
 		const { harness, context } = options;
+		const now = () => (options.now?.() ?? new Date()).getTime();
+		const read = async () => ({ people: {}, recalled: {}, ...((await harness.snapshot(AgentStateDoc, context)) ?? {}) }) as AgentState;
+		const write = (change: (state: AgentState) => void) => harness.commit(async (tx) => change((await tx.doc(AgentStateDoc)) as never), context);
+		this.safety = new Safety({
+			harness,
+			context,
+			definition: () => this.def,
+			now,
+			read,
+			write,
+			whose: async (conversationId) => {
+				const contact = await this.contactOf(conversationId);
+				if (contact) return { contact };
+				const run = await this.proactive.runOf(conversationId);
+				return run ? { runId: run.id, ...(this.owner ? { contact: this.owner } : {}) } : {};
+			},
+			note: (contactId, text, forModel) => this.proactive.notice(text, contactId, forModel),
+			abortAll: () => this.abortAll(),
+			release: () => this.proactive.release(),
+			reverse: (undo) => this.reverse(undo),
+			...(options.onApproval ? { onApproval: options.onApproval } : {}),
+			...(options.onUndo ? { onUndo: options.onUndo } : {}),
+			...(options.onStatus ? { onStatus: options.onStatus } : {}),
+		});
 		this.proactive = new Proactivity({
 			harness,
 			context,
 			definition: () => this.def,
-			now: () => (options.now?.() ?? new Date()).getTime(),
-			read: async () => ({ people: {}, recalled: {}, ...((await harness.snapshot(AgentStateDoc, context)) ?? {}) }) as never,
-			write: (change) => harness.commit(async (tx) => change((await tx.doc(AgentStateDoc)) as never), context),
+			now,
+			read: read as never,
+			write: write as never,
+			gate: () => this.safety.gate(),
+			paused: async () => (await read()).paused ?? false,
+			recordUndo: (kind, data, title, conversationId) => this.safety.recordUndo(kind, data, title, conversationId),
 			person: (id) => this.conversation(id) as never,
 			newConversation: () => this.newConversation(),
 			recallForRun: (conversationId, prompt) => this.recallInto(conversationId, ["owner", "shared"], prompt),
@@ -78,11 +111,89 @@ export class AgentCore {
 						.retain(bankOf(this.def.id, partitionsFor(contact).home), { content: `${this.def.name} (on its own): ${text}`, kind: "message", createdBy: "agent", source: { ref: from, title: this.def.name } })
 						.catch(() => undefined);
 				}
+				// What it sent the owner on its own (from a run, or from someone else's conversation) is in the Inbox.
+				if (to === this.owner?.id && from !== `person:${to}`) void this.safety.inbox({ kind: "message", title: "Message for you", body: text, needsYou: true, conversation: `person:${to}` });
 				options.onOutbound?.(to, text, from);
 			},
-			...(options.onRun ? { onRun: options.onRun } : {}),
+			onRun: (run) => {
+				if (run.status === "failed") void this.safety.inbox({ kind: "run_failed", title: "Run failed", body: `${run.kind === "heartbeat" ? "Heartbeat" : run.source}: ${run.summary ?? run.prompt.slice(0, 120)}`, needsYou: true, conversation: `run:${run.id}` });
+				if (run.status === "done" || run.status === "failed") void this.safety.checkBudget().catch(() => undefined);
+				options.onRun?.(run);
+			},
 		});
 		this.extension = this.makeExtension();
+	}
+
+	private get owner(): Contact | undefined {
+		return this.def.contacts.find((c) => c.role === "owner");
+	}
+
+	/** The engine is stopping. */
+	close(): void {
+		this.safety.close();
+	}
+
+	/** The kill switch: every person's turn and every run stops. */
+	private async abortAll(): Promise<void> {
+		const { harness, context } = this.options;
+		const state = await this.proactive.overview();
+		const ids = [...Object.values(await this.people()), ...state.runs.filter((r) => r.status === "running" && r.conversationId).map((r) => r.conversationId)];
+		for (const id of ids) await (await harness.conversation(Number(id) as never, context))?.abort(context).catch(() => undefined);
+	}
+
+	/** Undo (§4.2 RC2). */
+	private async reverse(undo: UndoRecord): Promise<void> {
+		const d = undo.data;
+		switch (undo.kind) {
+			case "reminder.cancel":
+				return this.proactive.cancelReminder(String(d.id));
+			case "reminder.restore":
+				return this.proactive.restoreReminder(d.reminder as Reminder);
+			case "outbox.withdraw":
+				return this.proactive.withdraw(String(d.outboxId));
+			case "memory.forget": {
+				const provider = this.options.memory();
+				if (!provider.forget) throw new Error("This memory can't forget.");
+				return provider.forget(String(d.bank), String(d.id), "user");
+			}
+			case "memory.restore":
+				await this.options.memory().retain(String(d.bank), { content: String(d.text), kind: (d.kind as MemoryRecord["kind"]) ?? "fact", createdBy: "user" });
+				return;
+		}
+	}
+
+	/**
+	 * What a person says while the agent can't work: `/pause` and `/resume` from the owner (AS4) are handled; while
+	 * paused or out of budget the message is kept with a note, and a contact gets a short answer (AS3). True when the
+	 * message was handled here and must not start a turn.
+	 */
+	async intercept(contactId: string, text: string): Promise<boolean> {
+		const contact = this.contact(contactId);
+		const command = text.trim().toLowerCase();
+		if (contact?.role === "owner" && (command === "/pause" || command === "/resume")) {
+			await this.keep(contactId, text);
+			await this.safety.setPaused(command === "/pause");
+			await this.proactive.notice(command === "/pause" ? `${this.def.name} is paused: no runs and no messages. Write /resume to start again.` : `${this.def.name} is running again.`, contactId);
+			return true;
+		}
+		const gate = await this.safety.gate();
+		if (gate.ok) return false;
+		await this.keep(contactId, text);
+		if (gate.reason === "budget") await this.safety.checkBudget().catch(() => undefined);
+		if (contact?.role === "owner") {
+			await this.proactive.notice(gate.reason === "paused" ? `${gate.message} Write /resume to start it again.` : `${gate.message} Raise the cap in its Definition to continue.`, contactId);
+		} else if (gate.reason === "budget") {
+			const reply = "Sorry, I can't answer right now. I'll be back soon.";
+			const conversation = await this.conversation(contactId);
+			await conversation.submit({ type: "write", entry: { kind: OUT_ENTRY, data: { text: reply, from: "budget" }, model: [{ role: "user", content: `(${this.def.name} answered automatically, out of budget:)\n${reply}`, timestamp: Date.now() }] } } as never, this.options.context);
+		}
+		return true;
+	}
+
+	/** A person's message, kept in their conversation without a turn. */
+	private async keep(contactId: string, text: string): Promise<void> {
+		const conversation = await this.conversation(contactId);
+		await conversation.submit({ type: "write", entry: { kind: "piopio.user", data: { text }, model: [{ role: "user", content: text, timestamp: Date.now() }] } } as never, this.options.context);
 	}
 
 	/** Schedules running, runs a previous engine left followed again, held messages flushed. */
@@ -222,8 +333,11 @@ export class AgentCore {
 				if (!s.write.includes(partition) && !(s.contact.role === "owner" && partition.startsWith("contacts/"))) {
 					return { output: [{ type: "text", text: `Can't write to ${partition} from ${s.contact.name}'s conversation.` }], isError: true };
 				}
-				const [record] = await core.options.memory().retain(bankOf(core.def.id, partition), { content: args.fact, kind: "fact", createdBy: "agent", source: { ref: `person:${s.contact.id}`, title: s.contact.name } });
-				return { output: [{ type: "text", text: `Remembered (${partition}): ${args.fact}` }], details: { partition, ...(record ? { id: record.id } : {}) } as never };
+				const bank = bankOf(core.def.id, partition);
+				const [record] = await core.options.memory().retain(bank, { content: args.fact, kind: "fact", createdBy: "agent", source: { ref: `person:${s.contact.id}`, title: s.contact.name } });
+				const card: ResultCard = { kind: "memory", title: "Saved to memory", detail: args.fact };
+				const undo = record ? await core.safety.recordUndo("memory.forget", { bank, id: record.id }, `saving “${args.fact.slice(0, 60)}”`, api.conversationId) : undefined;
+				return { output: [{ type: "text", text: `Remembered (${partition}): ${args.fact}` }], details: { partition, ...(record ? { id: record.id } : {}), card, ...(undo ? { undo } : {}) } as never };
 			},
 		});
 
@@ -247,12 +361,17 @@ export class AgentCore {
 				const provider = core.options.memory();
 				if (!provider.forget) return { output: [{ type: "text", text: "This memory can't forget from here." }], isError: true };
 				for (const p of s.write) {
+					const bank = bankOf(core.def.id, p);
+					// What it said, so Undo can put it back.
+					const old = provider.list ? (await provider.list(bank, { limit: 500 }).catch(() => ({ records: [] as MemoryRecord[] }))).records.find((r) => r.id === args.id) : undefined;
 					try {
-						await provider.forget(bankOf(core.def.id, p), args.id, "agent");
-						return { output: [{ type: "text", text: "Forgotten." }] };
+						await provider.forget(bank, args.id, "agent");
 					} catch {
-						// not in this partition
+						continue; // not in this partition
 					}
+					const card: ResultCard = { kind: "memory", title: "Forgotten", ...(old ? { detail: old.text } : {}) };
+					const undo = old ? await core.safety.recordUndo("memory.restore", { bank, text: old.text, kind: old.kind }, `forgetting “${old.text.slice(0, 60)}”`, api.conversationId) : undefined;
+					return { output: [{ type: "text", text: "Forgotten." }], details: { card, ...(undo ? { undo } : {}) } as never };
 				}
 				return { output: [{ type: "text", text: `No fact ${args.id} you can delete here.` }], isError: true };
 			},
@@ -264,6 +383,8 @@ export class AgentCore {
 			name: "piopio-agent",
 			tools: [remember, recall, forget, p.send, p.schedule, p.list, p.cancel],
 			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
+			// Approvals, the pause and the budget apply to every tool call (06 §9).
+			hooks: [hook(ToolTask, { beforeTool: (call, api, context) => core.safety.beforeTool(call, api.conversationId, context) as Promise<{ arguments?: JsonObject; block?: string } | undefined> })],
 			sections: [
 				section("agent", async (input, context) => {
 					const contact = await core.contactOf(input.conversationId, context);

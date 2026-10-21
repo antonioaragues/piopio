@@ -20,7 +20,7 @@ extension NSAttributedString.Key {
     static let piopioFooterColor = NSAttributedString.Key("piopio.footerColor")
 }
 
-public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, link, note, pills, divider }
+public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, link, note, pills, divider, approval }
 
 enum PillStyle: String { case primary, secondary, file }
 
@@ -52,7 +52,7 @@ final class CardLayoutFragment: NSTextLayoutFragment {
         let text = textBounds
         guard text != .zero else { return .zero }
         switch card {
-        case .code, .table, .errorCard, .link: return columnRect(text, pad: Self.padding)
+        case .code, .table, .errorCard, .link, .approval: return columnRect(text, pad: Self.padding)
         case .quote: return columnRect(text, pad: 2)
         case .user: return text.insetBy(dx: -Self.bubblePadH, dy: -Self.bubblePadV)
         case .note: return text.insetBy(dx: -12, dy: -5)
@@ -75,6 +75,11 @@ final class CardLayoutFragment: NSTextLayoutFragment {
         case .table, .errorCard, .link:
             fill(context, rect, DS.card, radius: DS.Radius.card)
             stroke(context, rect, DS.line, radius: DS.Radius.card)
+        case .approval:
+            // docs/design 2a: a 1pt accent line with a 4pt soft halo.
+            fill(context, rect.insetBy(dx: -4, dy: -4), DS.accentSoft, radius: DS.Radius.card + 4)
+            fill(context, rect, DS.card, radius: DS.Radius.card)
+            stroke(context, rect, DS.accentLine, radius: DS.Radius.card)
         case .quote:
             context.setFillColor(DS.line.cgColor)
             context.fill(CGRect(x: rect.minX, y: rect.minY, width: 3, height: rect.height))

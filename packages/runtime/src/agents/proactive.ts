@@ -7,8 +7,9 @@
  */
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "@earendil-works/pi-ai";
-import { defineTask, defineTool, type ConversationId, type Harness, type TaskId } from "@earendil-works/pi-durable";
+import { defineTask, defineTool, type ConversationId, type Harness, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
 import { cronError, type AgentDefinition } from "./definition.js";
+import type { ResultCard, UndoKind } from "./safety.js";
 import { dayOf, inWindow, nextDay, nextFire, nextHeartbeat, windowEnd } from "./time.js";
 
 export type RunKind = "schedule" | "heartbeat" | "reminder" | "trigger" | "manual";
@@ -21,7 +22,8 @@ export type RunRecord = {
 	firedAt: string;
 	conversationId: string;
 	deliverTo?: string;
-	status: "running" | "done" | "failed";
+	/** `skipped`: the agent was paused or out of budget when it fired. */
+	status: "running" | "done" | "failed" | "skipped";
 	/** The run's last answer, in a line. */
 	summary?: string;
 	sent: number;
@@ -29,7 +31,7 @@ export type RunRecord = {
 };
 /** A reminder or schedule the agent made (the `schedule` tool). */
 export type Reminder = { id: string; prompt: string; deliverTo?: string; at?: number; cron?: string; tz?: string; createdAt: string; by: string };
-export type Outbound = { id: string; to: string; text: string; from: string; queuedAt: string; notBefore: number; reason: "quiet" | "limit"; urgent?: boolean };
+export type Outbound = { id: string; to: string; text: string; from: string; queuedAt: string; notBefore: number; reason: "quiet" | "limit" | "paused"; urgent?: boolean };
 /** A schedule, the heartbeat or a reminder, with its next fire (the Runs tab). */
 export type Upcoming = { id: string; kind: "schedule" | "heartbeat" | "reminder"; label: string; next?: number };
 export type ProactiveState = {
@@ -46,6 +48,8 @@ export type ProactiveState = {
 };
 
 const MAX_RUNS = 200;
+/** Held while paused: far enough to never come up by itself (resuming releases it). */
+const PAUSED = 10 * 365 * 24 * 3600_000;
 export const OUT_ENTRY = "piopio.channel-out";
 export const NOTICE_ENTRY = "piopio.notice";
 
@@ -64,6 +68,11 @@ export interface ProactiveHost {
 	newConversation(): Promise<ConversationId>;
 	/** Memory for a run: what's relevant to its prompt, from the owner's and shared partitions. */
 	recallForRun(conversationId: ConversationId, prompt: string): Promise<void>;
+	/** Whether the agent may work now (pause, budget: 06 §9). */
+	gate?(): Promise<{ ok: true } | { ok: false; message: string }>;
+	paused?(): Promise<boolean>;
+	/** Records how to undo a change; returns the id a result card carries (§4.2). */
+	recordUndo?(kind: UndoKind, data: JsonObject, title: string, conversationId: ConversationId | string): Promise<string>;
 	/** Someone was sent a message (the app shows it; channels deliver it). */
 	onOutbound?(to: string, text: string, from: string): void;
 	/** A run started or settled (the Runs tab). */
@@ -238,6 +247,13 @@ export class Proactivity {
 		const key = requestKey ?? `${kind}:${source}@${this.host.now()}`;
 		const existing = ((await this.host.read()).runs ?? []).find((r) => r.id === runId(key));
 		if (existing) return existing;
+		const gate = (await this.host.gate?.()) ?? { ok: true as const };
+		if (!gate.ok) {
+			const skipped: RunRecord = { id: runId(key), kind, source, prompt, firedAt: new Date(this.host.now()).toISOString(), conversationId: "", status: "skipped", summary: gate.message, sent: 0, costUsd: 0 };
+			await this.host.write((s) => void (s.runs = [...(s.runs ?? []), skipped].slice(-MAX_RUNS)));
+			this.host.onRun?.(skipped);
+			return skipped;
+		}
 		const conversationId = await this.host.newConversation();
 		const run: RunRecord = { id: runId(key), kind, source, prompt, firedAt: new Date(this.host.now()).toISOString(), conversationId: String(conversationId), ...(deliverTo ? { deliverTo } : {}), status: "running", sent: 0 };
 		await this.host.write((s) => {
@@ -321,11 +337,12 @@ export class Proactivity {
 
 	// ── Messages ──
 
-	/** Sends now, or queues for after quiet hours or the daily limits (PR4, PR5). */
-	async send(to: string, text: string, from: string, urgent = false): Promise<{ status: "sent" | "queued"; until?: number; reason?: "quiet" | "limit" }> {
+	/** Sends now, or queues for after quiet hours or the daily limits (PR4, PR5), or until a pause ends (AS4). */
+	async send(to: string, text: string, from: string, urgent = false): Promise<{ status: "sent" | "queued"; until?: number; reason?: "quiet" | "limit" | "paused"; outboxId?: string }> {
 		const def = this.def;
 		if (!def.contacts.some((c) => c.id === to)) throw new Error(`No contact “${to}”. Contacts: ${def.contacts.map((c) => c.id).join(", ")}.`);
 		const now = this.host.now();
+		if (await this.host.paused?.()) return this.queue(to, text, from, now + PAUSED, "paused", urgent);
 		const quiet = def.policies?.quietHours;
 		if (quiet && inWindow(quiet, now, this.tz) && !(urgent && def.policies?.urgentBypassesQuiet)) return this.queue(to, text, from, windowEnd(quiet, now, this.tz), "quiet", urgent);
 		const today = dayOf(now, this.tz);
@@ -348,12 +365,45 @@ export class Proactivity {
 		return this.def.contacts.find((c) => c.id === contactId)?.name ?? contactId;
 	}
 
-	private async queue(to: string, text: string, from: string, notBefore: number, reason: "quiet" | "limit", urgent: boolean) {
+	private async queue(to: string, text: string, from: string, notBefore: number, reason: Outbound["reason"], urgent: boolean) {
+		const id = `out_${this.host.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 		await this.host.write((s) => {
-			s.outbox = [...(s.outbox ?? []), { id: `out_${this.host.now().toString(36)}_${(s.outbox?.length ?? 0) + 1}`, to, text, from, queuedAt: new Date(this.host.now()).toISOString(), notBefore, reason, ...(urgent ? { urgent } : {}) }];
+			s.outbox = [...(s.outbox ?? []), { id, to, text, from, queuedAt: new Date(this.host.now()).toISOString(), notBefore, reason, ...(urgent ? { urgent } : {}) }];
 		});
-		await this.ensureOutbox();
-		return { status: "queued" as const, until: notBefore, reason };
+		if (reason !== "paused") await this.ensureOutbox();
+		return { status: "queued" as const, until: notBefore, reason, outboxId: id };
+	}
+
+	/** After a pause: what was held goes now (or waits for quiet hours and limits as usual). */
+	async release(): Promise<void> {
+		const now = this.host.now();
+		await this.host.write((s) => {
+			for (const o of s.outbox ?? []) if (o.reason === "paused") o.notBefore = now;
+		});
+		await this.flush();
+		if ((await this.host.read()).outbox?.length) await this.ensureOutbox();
+	}
+
+	/** Undo: a held message that hasn't gone yet. */
+	async withdraw(outboxId: string): Promise<void> {
+		const held = ((await this.host.read()).outbox ?? []).some((o) => o.id === outboxId);
+		if (!held) throw new Error("That message was already sent.");
+		await this.host.write((s) => void (s.outbox = (s.outbox ?? []).filter((o) => o.id !== outboxId)));
+	}
+
+	/** Undo: a reminder the agent set. */
+	async cancelReminder(id: string): Promise<void> {
+		const had = ((await this.host.read()).reminders ?? []).some((r) => r.id === id);
+		if (!had) throw new Error("That reminder already fired or was cancelled.");
+		await this.host.write((s) => void (s.reminders = (s.reminders ?? []).filter((r) => r.id !== id)));
+		await this.reconcile();
+	}
+
+	/** Undo: a reminder that was cancelled comes back (unless its moment has passed). */
+	async restoreReminder(reminder: Reminder): Promise<void> {
+		if (reminder.at !== undefined && reminder.at <= this.host.now()) throw new Error("Its moment has passed.");
+		await this.host.write((s) => void (s.reminders = [...(s.reminders ?? []).filter((r) => r.id !== reminder.id), reminder]));
+		await this.reconcile();
 	}
 
 	/** Sends what may go now; the rest stays (with a new time) until it can. */
@@ -381,10 +431,11 @@ export class Proactivity {
 		this.host.onOutbound?.(to, text, from);
 	}
 
-	/** A note for the owner in their conversation (not a message from the agent, not counted). */
-	private async notice(text: string): Promise<void> {
-		const conversation = await this.host.person(this.owner);
-		await conversation.submit({ type: "write", entry: { kind: NOTICE_ENTRY, data: { text, at: new Date(this.host.now()).toISOString() } } } as never, this.host.context);
+	/** A note in someone's conversation, the owner's by default (not a message from the agent, not counted). */
+	async notice(text: string, contactId = this.owner, forModel?: string): Promise<void> {
+		const conversation = await this.host.person(contactId);
+		const model = forModel ? { model: [{ role: "user", content: forModel, timestamp: this.host.now() }] } : {};
+		await conversation.submit({ type: "write", entry: { kind: NOTICE_ENTRY, data: { text, at: new Date(this.host.now()).toISOString() }, ...model } } as never, this.host.context);
 	}
 
 	// ── Tools ──
@@ -400,7 +451,12 @@ export class Proactivity {
 				try {
 					const r = await self.send(args.to, args.text, from, args.urgent ?? false);
 					const when = r.until ? new Date(r.until).toISOString().slice(0, 16).replace("T", " ") : "";
-					return { output: [{ type: "text", text: r.status === "sent" ? `Sent to ${args.to}.` : `Held until ${when} UTC (${r.reason === "quiet" ? "quiet hours" : "daily limit"}); it goes then.` }], details: r as never };
+					const name = self.def.contacts.find((c) => c.id === args.to)?.name ?? args.to;
+					const why = r.reason === "quiet" ? "quiet hours" : r.reason === "limit" ? "daily limit" : "paused";
+					const card: ResultCard = { kind: "message", title: r.status === "sent" ? `Sent to ${name}` : `Held for ${name} (${why})`, detail: args.text };
+					const undo = r.outboxId ? await self.host.recordUndo?.("outbox.withdraw", { outboxId: r.outboxId }, `the message to ${name}`, api.conversationId) : undefined;
+					const text = r.status === "sent" ? `Sent to ${args.to}.` : r.reason === "paused" ? "Held: the agent is paused; it goes when it's resumed." : `Held until ${when} UTC (${why}); it goes then.`;
+					return { output: [{ type: "text", text }], details: { ...r, card, ...(undo ? { undo } : {}) } as never };
 				} catch (error) {
 					return { output: [{ type: "text", text: (error as Error).message }], isError: true };
 				}
@@ -429,7 +485,9 @@ export class Proactivity {
 				await self.host.write((s) => void (s.reminders = [...(s.reminders ?? []), reminder]));
 				await self.reconcile();
 				const next = reminder.at ?? nextFire(reminder.cron!, self.tz, now);
-				return { output: [{ type: "text", text: `Scheduled ${reminder.id}: next ${new Date(next).toISOString().slice(0, 16).replace("T", " ")} UTC.` }], details: { id: reminder.id, next } as never };
+				const card: ResultCard = { kind: "reminder", title: reminder.cron ? `Every ${reminder.cron}` : `Reminder ${new Date(next).toISOString().slice(0, 16).replace("T", " ")} UTC`, detail: args.prompt };
+				const undo = await self.host.recordUndo?.("reminder.cancel", { id: reminder.id }, `the reminder “${args.prompt.slice(0, 60)}”`, api.conversationId);
+				return { output: [{ type: "text", text: `Scheduled ${reminder.id}: next ${new Date(next).toISOString().slice(0, 16).replace("T", " ")} UTC.` }], details: { id: reminder.id, next, card, ...(undo ? { undo } : {}) } as never };
 			},
 		});
 
@@ -451,12 +509,14 @@ export class Proactivity {
 			name: "cancel_schedule",
 			description: "Cancel a reminder you set (by id). Schedules in your definition are changed by the owner.",
 			parameters: Type.Object({ id: Type.String() }),
-			execute: async (args) => {
-				const had = ((await self.host.read()).reminders ?? []).some((r) => r.id === args.id);
-				if (!had) return { output: [{ type: "text", text: `No reminder ${args.id}.` }], isError: true };
+			execute: async (args, api) => {
+				const reminder = ((await self.host.read()).reminders ?? []).find((r) => r.id === args.id);
+				if (!reminder) return { output: [{ type: "text", text: `No reminder ${args.id}.` }], isError: true };
 				await self.host.write((s) => void (s.reminders = (s.reminders ?? []).filter((r) => r.id !== args.id)));
 				await self.reconcile();
-				return { output: [{ type: "text", text: `Cancelled ${args.id}.` }] };
+				const card: ResultCard = { kind: "reminder", title: "Reminder cancelled", detail: reminder.prompt };
+				const undo = await self.host.recordUndo?.("reminder.restore", { reminder }, `cancelling “${reminder.prompt.slice(0, 60)}”`, api.conversationId);
+				return { output: [{ type: "text", text: `Cancelled ${args.id}.` }], details: { card, ...(undo ? { undo } : {}) } as never };
 			},
 		});
 

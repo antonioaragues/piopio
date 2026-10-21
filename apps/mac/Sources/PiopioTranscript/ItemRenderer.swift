@@ -58,7 +58,65 @@ nonisolated struct ItemRenderer: Sendable {
             return memoryNote(m)
         case .steps(let s):
             return attachmentParagraph(DisclosureAttachment(card: Self.stepsCard(s)))
+        case .approval(let a):
+            return approvalCard(a)
+        case .result(let r):
+            return resultCard(r)
         }
+    }
+
+    /// An agent asks before acting (06-agents §9 AS1, docs/design 2a): what it wants to do, Deny / Edit… / Approve.
+    /// Once answered, one line says how.
+    private func approvalCard(_ a: ApprovalItem) -> NSAttributedString {
+        let m = NSMutableAttributedString()
+        let (dot, state): (NSColor, String) = switch a.status {
+        case .pending: (DS.amber, "Needs your approval")
+        case .approved: (DS.green, a.editedArgs == nil ? "Approved" : "Approved with your changes")
+        case .denied: (DS.red, a.reason.map { "Declined: \($0)" } ?? "Declined")
+        case .expired: (DS.fg3, "No answer in 24 hours: not done")
+        case .cancelled: (DS.fg3, "Cancelled")
+        }
+        if a.status != .pending {
+            m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5]))
+            m.append(NSAttributedString(string: "\(state) · \(a.title)", attributes: [.font: small, .foregroundColor: DS.fg2]))
+            let p = paragraph(spacing: 14, before: 6, indent: 12)
+            let out = NSMutableAttributedString(attributedString: line(m, p))
+            out.addAttribute(.piopioCard, value: CardStyle.note.rawValue, range: NSRange(location: 0, length: out.length))
+            return out
+        }
+        m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: dot, .baselineOffset: 1]))
+        m.append(NSAttributedString(string: state, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
+        m.append(NSAttributedString(string: lineSeparator + a.title, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
+        if !compact {
+            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            m.append(pill("Deny", .decideApproval(approvalId: a.approvalId, approve: false), .secondary))
+            m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
+            m.append(pill("Edit…", .editApproval(approvalId: a.approvalId), .secondary))
+            m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
+            m.append(pill("Approve", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
+        }
+        return card(m, .approval, lineHeight: 1.75)
+    }
+
+    /// What a tool changed (06-agents §4.2 RC1): the change, and Undo while it can be undone.
+    private func resultCard(_ r: ResultItem) -> NSAttributedString {
+        let icon = switch r.card.kind { case "reminder": "◷"; case "message": "✉︎"; default: "✎" }
+        let undone = r.undo?.status == .undone
+        let m = NSMutableAttributedString(string: "\(icon)  ", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg3])
+        m.append(NSAttributedString(string: r.card.title, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .semibold), .foregroundColor: undone ? DS.fg3 : DS.fg, .strikethroughStyle: undone ? NSUnderlineStyle.single.rawValue : 0]))
+        if let undo = r.undo, !compact {
+            m.append(NSAttributedString(string: "   ", attributes: [.font: small]))
+            switch undo.status {
+            case .available: m.append(NSAttributedString(string: "Undo", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: TranscriptAction.undoChange(undoId: undo.id).url, .toolTip: "Reverse this change (for 24 hours)"]))
+            case .undone: m.append(NSAttributedString(string: "Undone", attributes: [.font: small, .foregroundColor: DS.fg3]))
+            case .failed: m.append(NSAttributedString(string: "Couldn't undo", attributes: [.font: small, .foregroundColor: DS.red]))
+            case .expired: break
+            }
+        }
+        if let detail = r.card.detail, !detail.isEmpty {
+            m.append(NSAttributedString(string: lineSeparator + detail, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: undone ? DS.fg3 : DS.fg2]))
+        }
+        return card(m, .link, lineHeight: 1.5)
     }
 
     /// "Worked 1.2s · 2 steps" (06-agents UI2): one line for a turn's tool calls; it opens to each step.

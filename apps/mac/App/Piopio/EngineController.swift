@@ -194,6 +194,15 @@ final class EngineController {
         Task { [weak self] in
             for await change in client.attention { self?.attention(change) }
         }
+        Task { [weak self] in
+            for await change in client.inboxChanges {
+                guard let self else { return }
+                self.inboxCount = change.count
+                if let a = change.approval { Notifier.shared.approval(agent: a.agent, agentName: a.agentName, approvalId: a.approvalId, title: a.title) }
+                await self.loadInbox()
+            }
+        }
+        Task { [weak self] in await self?.loadInbox() }
         return hello
     }
 
@@ -504,6 +513,42 @@ final class EngineController {
 
     func agentTriggers(_ ref: ContainerRef) async -> [AgentTriggersResult.Trigger] {
         (try? await client?.call("agents.triggers", RefParams(ref: ref), as: AgentTriggersResult.self).triggers) ?? []
+    }
+
+    // MARK: Approvals, Undo, pause and the Inbox (06-agents §4.2, §9, §12)
+
+    /// What waits for you across agents: the sidebar's Inbox count, the Dock badge and the menu bar.
+    private(set) var inboxCount = 0 {
+        didSet { NSApp.dockTile.badgeLabel = inboxCount > 0 ? "\(inboxCount)" : nil }
+    }
+    private(set) var inbox: [InboxItem] = []
+
+    func loadInbox() async {
+        guard let result = try? await client?.call("inbox.list", Empty(), as: InboxListResult.self) else { return }
+        inbox = result.items
+        inboxCount = result.count
+    }
+
+    func markInboxRead(_ items: [InboxItem]) async {
+        let unread = items.filter { !$0.read && $0.approval == nil }
+        guard !unread.isEmpty else { return }
+        _ = try? await client?.call("inbox.read", InboxReadParams(items: unread.map { .init(agentId: $0.agent.id, id: $0.id) }), as: Empty.self)
+        await loadInbox()
+    }
+
+    func decide(_ agent: ContainerRef, approvalId: String, approve: Bool, args: JSONValue? = nil, always: Bool = false, reason: String? = nil) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let ref = ContainerRef(kind: .agent, id: agent.id)
+        _ = try await client.call("agents.decide", AgentDecideParams(ref: ref, approvalId: approvalId, approve: approve, args: args, always: always ? true : nil, reason: reason), as: JSONValue.self)
+        await loadInbox()
+    }
+
+    func undo(_ agent: ContainerRef, undoId: String) async throws {
+        try await spaceCall("agents.undo", AgentUndoParams(ref: ContainerRef(kind: .agent, id: agent.id), undoId: undoId))
+    }
+
+    func pause(_ agent: ContainerRef, paused: Bool) async throws {
+        try await spaceCall("agents.pause", AgentPauseParams(ref: ContainerRef(kind: .agent, id: agent.id), paused: paused))
     }
 
     func agentMemory(_ ref: ContainerRef) async -> AgentMemoryResult? {

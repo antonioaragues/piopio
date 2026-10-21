@@ -196,10 +196,38 @@ export const StepsItem = Type.Object({
 	tools: Type.Array(ToolItem),
 });
 
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem]);
+/** An agent's tool call waiting for the owner (06-agents §9 AS1), or how it was answered. */
+export const ApprovalItem = Type.Object({
+	kind: Type.Literal("approval"),
+	id: Type.String(),
+	at: Type.String(),
+	approvalId: Type.String(),
+	tool: Type.String(),
+	/** "Send to María: “…”". */
+	title: Type.String(),
+	args: Type.Unknown(),
+	status: literals("pending", "approved", "denied", "expired", "cancelled"),
+	editedArgs: Type.Optional(Type.Unknown()),
+	reason: Type.Optional(Type.String()),
+	expiresAt: Type.String(),
+	/** What "Always allow" would allow, in words. */
+	always: Type.String(),
+});
+/** What an agent's tool changed, with Undo while it can be undone (06-agents §4.2 RC1–RC2). */
+export const ResultItem = Type.Object({
+	kind: Type.Literal("result"),
+	id: Type.String(),
+	at: Type.String(),
+	callId: Type.String(),
+	card: Type.Object({ kind: literals("reminder", "message", "memory"), title: Type.String(), detail: Type.Optional(Type.String()) }),
+	undo: Type.Optional(Type.Object({ id: Type.String(), status: literals("available", "undone", "failed", "expired"), until: Type.String() })),
+});
+export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem, ApprovalItem, ResultItem]);
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
+export type ApprovalItem = Static<typeof ApprovalItem>;
+export type ResultItem = Static<typeof ResultItem>;
 export type ToolItem = Static<typeof ToolItem>;
 export type SystemItem = Static<typeof SystemItem>;
 export type CheckpointItem = Static<typeof CheckpointItem>;
@@ -417,6 +445,10 @@ export const AgentInfo = Type.Object({
 	contacts: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), role: literals("owner", "contact") })),
 	/** The definition on disk doesn't validate (the agent keeps running its last good version). */
 	invalid: Type.Optional(Type.Boolean()),
+	/** Some tool calls wait for the owner (`policies.requireApproval`): the header's "Asks first". */
+	asksFirst: Type.Optional(Type.Boolean()),
+	/** While the engine runs it: paused (AS4), this month's spend against the budget (AS3), Inbox items waiting. */
+	status: Type.Optional(Type.Object({ paused: Type.Boolean(), spendUsd: Type.Number(), budgetUsd: Type.Optional(Type.Number()), inbox: Type.Number() })),
 });
 export type AgentInfo = Static<typeof AgentInfo>;
 
@@ -948,14 +980,14 @@ export const methods = {
 					source: Type.String(),
 					prompt: Type.String(),
 					firedAt: Type.String(),
-					status: literals("running", "done", "failed"),
+					status: literals("running", "done", "failed", "skipped"),
 					summary: Type.Optional(Type.String()),
 					sent: Type.Number(),
 					costUsd: Type.Optional(Type.Number()),
 				}),
 			),
 			/** Messages held by quiet hours or the daily limit. */
-			outbox: Type.Array(Type.Object({ id: Type.String(), to: Type.String(), text: Type.String(), notBefore: Type.String(), reason: literals("quiet", "limit") })),
+			outbox: Type.Array(Type.Object({ id: Type.String(), to: Type.String(), text: Type.String(), notBefore: Type.String(), reason: literals("quiet", "limit", "paused") })),
 			/** The schedules and reminders, with their next time. */
 			upcoming: Type.Array(Type.Object({ id: Type.String(), kind: literals("schedule", "heartbeat", "reminder"), label: Type.String(), next: Type.Optional(Type.String()) })),
 		}),
@@ -969,6 +1001,49 @@ export const methods = {
 	"agents.triggers": {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({ triggers: Type.Array(Type.Object({ id: Type.String(), url: Type.String() })) }),
+	},
+	/** Answers an approval: approve (as asked, or with `args`), or deny; `always` stops asking for this kind of call. */
+	"agents.decide": {
+		params: Type.Object({ ref: ContainerRef, approvalId: Type.String(), approve: Type.Boolean(), args: Type.Optional(Type.Unknown()), always: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.String()) }),
+		result: Type.Object({ status: literals("pending", "approved", "denied", "expired", "cancelled") }),
+	},
+	/** Reverses a change a result card shows (within 24 hours). */
+	"agents.undo": {
+		params: Type.Object({ ref: ContainerRef, undoId: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** The kill switch (AS4): paused, the agent runs nothing and sends nothing until it's resumed. */
+	"agents.pause": {
+		params: Type.Object({ ref: ContainerRef, paused: Type.Boolean() }),
+		result: Type.Object({}),
+	},
+	/** The Inbox across agents, newest first (06 §12, docs/design 4d). `count` is what waits for you. */
+	"inbox.list": {
+		params: Type.Object({}),
+		result: Type.Object({
+			count: Type.Number(),
+			items: Type.Array(
+				Type.Object({
+					id: Type.String(),
+					agent: ContainerRef,
+					agentName: Type.String(),
+					avatar: Type.Optional(Type.String()),
+					kind: literals("approval", "message", "run_failed", "budget", "paused"),
+					at: Type.String(),
+					title: Type.String(),
+					body: Type.String(),
+					needsYou: Type.Boolean(),
+					read: Type.Boolean(),
+					/** The conversation it's about, to open (`person:<id>` or `run:<id>`). */
+					conversationId: Type.Optional(Type.String()),
+					approval: Type.Optional(ApprovalItem),
+				}),
+			),
+		}),
+	},
+	"inbox.read": {
+		params: Type.Object({ items: Type.Array(Type.Object({ agentId: Type.String(), id: Type.String() })) }),
+		result: Type.Object({}),
 	},
 	/** The agent's memory: its provider and partitions, each a bank (06 §8). */
 	"agents.memory": {
@@ -1024,6 +1099,8 @@ export const notifications = {
 	"projects.changed": ProjectsChanged,
 	/** A session needs you (it's waiting on a prompt) or told you something (notify_user). Sent to every client. */
 	"session.attention": Type.Object({ ref: ContainerRef, title: Type.String(), kind: literals("waiting", "notify"), message: Type.String() }),
+	/** The Inbox changed; `count` is what waits for you (badges). `approval` is set when an agent asks (notifications). */
+	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
 } satisfies Record<string, TSchema>;
 
 // ── JSON-RPC envelope ───────────────────────────────────────────────────────

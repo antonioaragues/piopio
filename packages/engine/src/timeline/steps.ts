@@ -35,9 +35,12 @@ export class StepsView {
 	private shown = new Map<string, string>();
 	private order: string[] = [];
 
+	/** `group`: how items are folded (agents add result cards after each steps line). */
+	constructor(private readonly group: (items: readonly TimelineItem[]) => TimelineItem[] = groupSteps) {}
+
 	/** The grouped items to send in a snapshot; remembers them as sent. */
 	snapshot(items: readonly TimelineItem[]): TimelineItem[] {
-		const grouped = groupSteps(items);
+		const grouped = this.group(items);
 		this.shown = new Map(grouped.map((i) => [i.id, JSON.stringify(i)]));
 		this.order = grouped.map((i) => i.id);
 		return grouped;
@@ -59,7 +62,7 @@ export class StepsView {
 			out.push(e);
 		}
 		if (!touched) return out;
-		const next = groupSteps(items());
+		const next = this.group(items());
 		const ids = new Set(next.map((i) => i.id));
 		for (const id of this.order) if (!ids.has(id)) out.push({ type: "item.removed", itemId: id });
 		next.forEach((item, i) => {
