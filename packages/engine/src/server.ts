@@ -221,7 +221,7 @@ export class Engine {
 
 	/** A topic's conversation id, from its ref. */
 	private topicOf(ref: Params<"sessions.open">["ref"]): string {
-		if (ref.kind !== "space" || !ref.conversationId) throw new EngineError("INVALID", "Give a topic (a Space ref with its conversationId).");
+		if (ref.kind !== "space" || !ref.conversationId) throw new EngineError("INVALID", "Give a topic (a Notebook ref with its conversationId).");
 		return ref.conversationId;
 	}
 

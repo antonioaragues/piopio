@@ -62,6 +62,7 @@ Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release o
 | AQ9 | The pending-items view is called **Inbox** (not "Waiting for You"). | User |
 | AQ10 | Later: side-by-side agents, link previews, voice, quick entry to an agent, agent boards. | User |
 | AQ11 | Long-term memory goes through a **memory provider** interface (07-shared §5.1). The built-in provider is the default. **Hindsight** comes as an opt-in provider, local (supervised daemon) or remote, first for Agents, then About me. Spike S6 decides whether it can become the default. **S6 (2026-10-21):** not yet. Built-in stays the default; Hindsight is opt-in for Agents, remote first. | User |
+| AQ13 | **Spaces are called Notebooks in the app** (2026-10-21). The UI, the models' prompts and tool descriptions say Notebook; the spec, the protocol (`kind: "space"`, `spaces.*`) and the code keep "space". | User |
 | AQ12 | **No Piopio plugin format.** Extensions are MCP servers (tools, every mode), pi packages (Build extensions; skills and prompt templates everywhere) and memory providers (built-in, Hindsight, any MCP memory server). See 07-shared §6. | User |
 
 Open questions found later are tracked in [09-roadmap.md § Open questions](09-roadmap.md#open-questions).

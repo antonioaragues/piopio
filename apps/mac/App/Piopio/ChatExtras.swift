@@ -54,7 +54,7 @@ struct MoveToSpaceMenu: View {
     let thread: SessionSummary
 
     var body: some View {
-        Menu("Move to Space") {
+        Menu("Move to Notebook") {
             ForEach(engine.spaces, id: \.ref.id) { space in
                 Menu(space.title) {
                     Button("As a New Topic") { move(space, topic: nil) }
@@ -66,7 +66,7 @@ struct MoveToSpaceMenu: View {
                 }
             }
             if !engine.spaces.isEmpty { Divider() }
-            Button("New Space…") { NotificationCenter.default.post(name: .newSpace, object: thread.ref.id) }
+            Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: thread.ref.id) }
         }
     }
 
@@ -101,7 +101,7 @@ struct ThreadPicker: View {
             .frame(height: 120)
             .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
-            Text("Each becomes a topic with its whole conversation; the threads move into the Space.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+            Text("Each becomes a topic with its whole conversation; the threads move into the Notebook.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
         }
     }
 }
@@ -118,10 +118,10 @@ struct ChatPane: View {
     private var settings: EngineSettings? { engine.settings }
 
     var body: some View {
-        PaneTitle(title: "Chat", subtitle: "Threads and Spaces: suggestions and what they know about you.")
+        PaneTitle(title: "Chat", subtitle: "Threads and Notebooks: suggestions and what they know about you.")
         ListCard {
             Row(title: "Suggestions", last: true) {
-                Toggle("Suggest moving a thread into a Space when it fits one", isOn: binding(\.chat.suggestSpaces) { SettingsPatch(chat: .init(suggestSpaces: $0)) })
+                Toggle("Suggest moving a thread into a Notebook when it fits one", isOn: binding(\.chat.suggestSpaces) { SettingsPatch(chat: .init(suggestSpaces: $0)) })
                     .toggleStyle(.switch).controlSize(.small).font(.system(size: 13))
                 Spacer()
             }
@@ -140,7 +140,7 @@ struct ChatPane: View {
             }
             Row(title: "Where") {
                 Toggle("Threads", isOn: binding(\.aboutMe.inThreads) { SettingsPatch(aboutMe: .init(inThreads: $0)) }).toggleStyle(.checkbox)
-                Toggle("Spaces", isOn: binding(\.aboutMe.inSpaces) { SettingsPatch(aboutMe: .init(inSpaces: $0)) }).toggleStyle(.checkbox)
+                Toggle("Notebooks", isOn: binding(\.aboutMe.inSpaces) { SettingsPatch(aboutMe: .init(inSpaces: $0)) }).toggleStyle(.checkbox)
                 Text("Never in Build").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 Spacer()
             }

@@ -439,9 +439,9 @@ nonisolated struct ItemRenderer: Sendable {
         case "ask_topic":
             return (running ? "Asking \(t.args?["topic"]?.stringValue ?? "a topic")" : "Asked \(t.args?["topic"]?.stringValue ?? "a topic")", t.args?["question"]?.stringValue ?? "")
         case "search_space":
-            return (running ? "Searching the Space" : "Searched the Space", t.args?["query"]?.stringValue ?? "")
+            return (running ? "Searching the Notebook" : "Searched the Notebook", t.args?["query"]?.stringValue ?? "")
         case "space_files_list", "space_files_read", "space_files_search":
-            return (running ? "Reading the Space's files" : "Read the Space's files", t.args?["name"]?.stringValue ?? t.args?["query"]?.stringValue ?? "")
+            return (running ? "Reading the Notebook's files" : "Read the Notebook's files", t.args?["name"]?.stringValue ?? t.args?["query"]?.stringValue ?? "")
         case "rename_topic", "archive_topic", "merge_topics":
             return (failed ? "Suggested tidying" : "Tidied topics", t.args?["topic"]?.stringValue ?? t.args?["from"]?.stringValue ?? "")
         case "ask_user":

@@ -1,5 +1,7 @@
 # 04 — Chat mode
 
+> The app calls Spaces **Notebooks** (README AQ13); this spec, the protocol and the code keep "Space".
+
 Chat has three kinds of container, shown in one sidebar:
 
 ```

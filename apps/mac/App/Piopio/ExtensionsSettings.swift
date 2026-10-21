@@ -59,7 +59,7 @@ struct ExtensionsPane: View {
                 }
             }
         }
-        Text("Extensions run in Build only, with your permissions. Skills and templates are text, so Threads, Spaces and Agents use them too. Terminal-UI parts of an extension don't show in Piopio.")
+        Text("Extensions run in Build only, with your permissions. Skills and templates are text, so Threads, Notebooks and Agents use them too. Terminal-UI parts of an extension don't show in Piopio.")
             .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).padding(.top, 8)
             .task { await load() }
     }

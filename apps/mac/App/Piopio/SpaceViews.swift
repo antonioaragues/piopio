@@ -124,19 +124,19 @@ struct SpacesSection: View {
 
     var body: some View {
         HStack {
-            SectionLabel("Spaces")
+            SectionLabel("Notebooks")
             Spacer()
             Button { NotificationCenter.default.post(name: .newSpace, object: nil) } label: {
                 Image(systemName: "plus").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.dsFg3)
             }
             .buttonStyle(.plain)
-            .help("New Space (⌘⇧N)")
+            .help("New Notebook (⌘⇧N)")
         }
         .padding(.horizontal, 8)
         .padding(.top, 12)
         .padding(.bottom, 4)
         if engine.spaces.isEmpty {
-            Text("A Space keeps a long-running subject organized into topics.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.horizontal, 8)
+            Text("A Notebook keeps a long-running subject organized into topics.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.horizontal, 8)
         }
         ForEach(engine.spaces, id: \.ref.id) { space in
             let inside = selection == space.ref.id || selection?.hasPrefix(space.ref.id + "/") == true
@@ -204,7 +204,7 @@ struct SpaceMenu: View {
 
     var body: some View {
         Button("Rename…") { rename() }
-        Button("Space Settings…") { NotificationCenter.default.post(name: .editSpaceInstructions, object: space.ref.id) }
+        Button("Notebook Settings…") { NotificationCenter.default.post(name: .editSpaceInstructions, object: space.ref.id) }
         let archived = (space.topics ?? []).filter { $0.archived == true }
         if !archived.isEmpty {
             Menu("Archived Topics") {
@@ -216,7 +216,7 @@ struct SpaceMenu: View {
             }
         }
         Divider()
-        Button("Delete Space…", role: .destructive) {
+        Button("Delete Notebook…", role: .destructive) {
             let alert = NSAlert()
             alert.messageText = "Delete “\(space.title)”?"
             alert.informativeText = "Main and all \(space.topics?.count ?? 0) topics are deleted. This can't be undone."
@@ -231,7 +231,7 @@ struct SpaceMenu: View {
 
     private func rename() {
         let alert = NSAlert()
-        alert.messageText = "Rename Space"
+        alert.messageText = "Rename Notebook"
         let field = NSTextField(string: space.title)
         field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
         alert.accessoryView = field
@@ -264,8 +264,8 @@ struct NewSpaceSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("New Space").font(.system(size: 17, weight: .bold))
-            Text("A Space is a long-running area of your life or work. You write in Main; the organizer sends each message to the right topic, or starts one.")
+            Text("New Notebook").font(.system(size: 17, weight: .bold))
+            Text("A Notebook is a long-running area of your life or work. You write in Main; the organizer sends each message to the right topic, or starts one.")
                 .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Name").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg2)
@@ -276,7 +276,7 @@ struct NewSpaceSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
-                Button(creating ? "Creating…" : "Create Space") {
+                Button(creating ? "Creating…" : "Create Notebook") {
                     creating = true
                     Task {
                         if let ref = await engine.createSpace(name: name.trimmingCharacters(in: .whitespaces), instructions: instructions.trimmingCharacters(in: .whitespacesAndNewlines)) {
@@ -311,7 +311,7 @@ private struct InstructionsField: View {
                 .frame(height: 96)
                 .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
-            Text("Every agent in the Space is told this: who you are, what matters, how to answer.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+            Text("Every agent in the Notebook is told this: who you are, what matters, how to answer.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
         }
     }
 }
@@ -632,7 +632,7 @@ struct SpaceView: View {
     }
 
     private var subtitle: String {
-        var parts = ["Space", topics.count == 1 ? "1 topic" : "\(topics.count) topics"]
+        var parts = ["Notebook", topics.count == 1 ? "1 topic" : "\(topics.count) topics"]
         if let info = space.space {
             if info.memory, info.memoryLines > 0 { parts.append(info.memoryLines == 1 ? "1 memory" : "\(info.memoryLines) memories") }
             if info.files > 0 { parts.append(info.files == 1 ? "1 file" : "\(info.files) files") }

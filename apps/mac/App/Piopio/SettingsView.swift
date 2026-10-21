@@ -333,7 +333,7 @@ private struct McpPane: View {
         PaneTitle(title: "MCP servers", subtitle: "Tools from Model Context Protocol servers. Same files as the pi CLI.")
         ListCard {
             Row(title: "In Chat", last: true) {
-                Toggle("Also in Threads and Spaces (all servers; Chat doesn't ask before a tool runs)", isOn: Binding(get: { engine.settings?.chat.mcp ?? false }, set: { on in Task { await engine.updateSettings(SettingsPatch(chat: .init(mcp: on))) } }))
+                Toggle("Also in Threads and Notebooks (all servers; Chat doesn't ask before a tool runs)", isOn: Binding(get: { engine.settings?.chat.mcp ?? false }, set: { on in Task { await engine.updateSettings(SettingsPatch(chat: .init(mcp: on))) } }))
                     .toggleStyle(.switch).controlSize(.small).font(.system(size: 13))
                 Spacer()
             }

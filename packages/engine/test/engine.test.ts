@@ -1110,7 +1110,7 @@ describe("Spaces (milestone 3.2)", () => {
 		expect((await list()).space).toMatchObject({ memory: false, autoTidy: true, organizerModel: { provider: "faux", id: "faux-1" } });
 		await a.client.call("sessions.submit", { ref, input: { text: 'call: update_memory | {"add":["x"]}' } });
 		const off = await until(a, ref, (s) => s.items.some((i) => i.kind === "memory") && s.state.status === "idle");
-		expect(off.items.find((i) => i.kind === "memory")).toMatchObject({ status: "failed", reason: "Memory is off for this Space." });
+		expect(off.items.find((i) => i.kind === "memory")).toMatchObject({ status: "failed", reason: "Memory is off for this Notebook." });
 	}, 90_000);
 });
 

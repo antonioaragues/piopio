@@ -103,7 +103,7 @@ export function organizerExtension(host: () => SpaceHost) {
 
 	const memoryTool = defineTool({
 		name: "update_memory",
-		description: "Change the Space's memory: decisions, facts and preferences that every topic should know. Add short, self-contained facts; remove ones that are wrong or outdated. The user sees each change and can undo it.",
+		description: "Change the Notebook's memory: decisions, facts and preferences that every topic should know. Add short, self-contained facts; remove ones that are wrong or outdated. The user sees each change and can undo it.",
 		parameters: Type.Object({
 			add: Type.Optional(Type.Array(Type.String(), { description: "Facts to add, one sentence each" })),
 			remove: Type.Optional(Type.Array(Type.String(), { description: "Facts to remove (their text, or enough of it to find them)" })),
@@ -111,7 +111,7 @@ export function organizerExtension(host: () => SpaceHost) {
 		}),
 		execute: async (args) => {
 			const space = host();
-			if (!space.settings.memory) return text("Memory is off for this Space.", true);
+			if (!space.settings.memory) return text("Memory is off for this Notebook.", true);
 			const revision = await space.updateMemory({ kind: "organizer" }, args.add ?? [], args.remove ?? [], args.section);
 			if (!revision.added.length && !revision.removed.length) return text("Nothing changed: those facts were already there, or weren't found.");
 			return { ...text(`Memory updated: ${revision.summary}.`), details: { revisionId: revision.id, added: revision.added, removed: revision.removed } as never };
@@ -120,7 +120,7 @@ export function organizerExtension(host: () => SpaceHost) {
 
 	const tidy = (run: (space: SpaceHost) => Promise<string>) => async () => {
 		const space = host();
-		if (!space.settings.autoTidy) return text("Not done: auto-tidy is off in this Space. Suggest it to the user in your answer instead; they can do it from the topic's menu.", true);
+		if (!space.settings.autoTidy) return text("Not done: auto-tidy is off in this Notebook. Suggest it to the user in your answer instead; they can do it from the topic's menu.", true);
 		return text(await run(space));
 	};
 
@@ -180,7 +180,7 @@ function organizerPrompt(space: SpaceHost): string {
 1. Route it: when it continues the subject of an existing topic, call route_to_topic.
 2. Create a topic: when it starts a new subject that will likely come back or needs depth, call create_topic (it also sends the message there).
 3. Answer it yourself, here: quick one-offs, questions about the Space or its topics, and questions across topics (ask_topic and search_space help). Call no routing tool then.
-When you route or create, the topic's agent answers in the topic, so don't answer the message yourself. The reason you give is shown to the user: one short line.${memory}${tidy}${instructions ? `\n\nThe Space's instructions:\n${instructions}` : ""}
+When you route or create, the topic's agent answers in the topic, so don't answer the message yourself. The reason you give is shown to the user: one short line.${memory}${tidy}${instructions ? `\n\nThe Notebook's instructions:\n${instructions}` : ""}
 
 Topics, most recently active first:
 ${topics}${hints}`;
@@ -191,7 +191,7 @@ ${topics}${hints}`;
 export function topicExtension(host: () => SpaceHost) {
 	const proposeTool = defineTool({
 		name: "propose_memory",
-		description: "Propose a change to the Space's memory (facts every topic should know). The user saves or dismisses it.",
+		description: "Propose a change to the Notebook's memory (facts every topic should know). The user saves or dismisses it.",
 		parameters: Type.Object({
 			add: Type.Optional(Type.Array(Type.String(), { description: "Facts to add, one sentence each" })),
 			remove: Type.Optional(Type.Array(Type.String(), { description: "Facts to remove" })),
@@ -199,7 +199,7 @@ export function topicExtension(host: () => SpaceHost) {
 		}),
 		execute: async (args, api) => {
 			const space = host();
-			if (!space.settings.memory) return text("Memory is off for this Space.", true);
+			if (!space.settings.memory) return text("Memory is off for this Notebook.", true);
 			if (!args.add?.length && !args.remove?.length) return text("Nothing to propose.", true);
 			const proposal = await space.proposeMemory(String(api.conversationId), args.add ?? [], args.remove ?? [], args.reason);
 			return { ...text("Proposed. The user saves or dismisses it."), details: { proposalId: proposal.id } as never };
@@ -215,8 +215,8 @@ export function topicExtension(host: () => SpaceHost) {
 				const topic = space.topics.find((t) => t.id === String(input.conversationId));
 				if (!topic) return undefined;
 				const { name, instructions } = space.info;
-				return `You are the agent for the topic “${topic.title}” in the Space “${name}”.${topic.brief ? ` ${topic.brief}` : ""}
-Messages here come from the user: typed here, or routed from the Space's Main conversation by its organizer. Answer them fully here.${space.settings.memory ? " When something should be remembered across the Space, propose it with propose_memory." : ""}${instructions ? `\n\nThe Space's instructions:\n${instructions}` : ""}`;
+				return `You are the agent for the topic “${topic.title}” in the Notebook “${name}”.${topic.brief ? ` ${topic.brief}` : ""}
+Messages here come from the user: typed here, or routed from the Space's Main conversation by its organizer. Answer them fully here.${space.settings.memory ? " When something should be remembered across the Notebook, propose it with propose_memory." : ""}${instructions ? `\n\nThe Notebook's instructions:\n${instructions}` : ""}`;
 			}),
 		],
 	});
@@ -234,14 +234,14 @@ export function sharedExtension(host: () => SpaceHost) {
 			const topic = space.topic(args.topic);
 			if (!topic) return noTopic(space, args.topic);
 			if (topic.id === String(api.conversationId)) return text("That's this topic: answer from your own history.", true);
-			const answer = await askFork(api as unknown as ToolApi, topic.id, `${args.question}\n\n(This is a side question from elsewhere in the Space. Answer from this topic's history, briefly.)`, context);
+			const answer = await askFork(api as unknown as ToolApi, topic.id, `${args.question}\n\n(This is a side question from elsewhere in the Notebook. Answer from this topic's history, briefly.)`, context);
 			return text(`“${topic.title}” says:\n${answer || "(no answer)"}`);
 		},
 	});
 
 	const searchTool = defineTool({
 		name: "search_space",
-		description: "Search every topic, Main and the memory of this Space for words (substring match). Returns matching lines with where they are.",
+		description: "Search every topic, Main and the memory of this Notebook for words (substring match). Returns matching lines with where they are.",
 		parameters: Type.Object({ query: Type.String() }),
 		execute: async (args) => {
 			const hits = await host().search(args.query);
@@ -251,17 +251,17 @@ export function sharedExtension(host: () => SpaceHost) {
 
 	const listFiles = defineTool({
 		name: "space_files_list",
-		description: "List the Space's files (documents the user added for every topic).",
+		description: "List the Notebook's files (documents the user added for every topic).",
 		parameters: Type.Object({}),
 		execute: async () => {
 			const files = host().files.list();
-			return text(files.length ? files.map((f) => `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`).join("\n") : "The Space has no files.");
+			return text(files.length ? files.map((f) => `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)`).join("\n") : "The Notebook has no files.");
 		},
 	});
 
 	const readFile = defineTool({
 		name: "space_files_read",
-		description: "Read one of the Space's files as text.",
+		description: "Read one of the Notebook's files as text.",
 		parameters: Type.Object({ name: Type.String({ description: "The file name, as space_files_list shows it" }) }),
 		execute: async (args) => {
 			try {
@@ -274,7 +274,7 @@ export function sharedExtension(host: () => SpaceHost) {
 
 	const searchFiles = defineTool({
 		name: "space_files_search",
-		description: "Find lines in the Space's files that contain some text.",
+		description: "Find lines in the Notebook's files that contain some text.",
 		parameters: Type.Object({ query: Type.String() }),
 		execute: async (args) => {
 			const hits = host().files.search(args.query);
@@ -290,7 +290,7 @@ export function sharedExtension(host: () => SpaceHost) {
 				const space = host();
 				if (!space.settings.memory) return undefined;
 				const files = space.files.list();
-				return `The Space's memory (shared by every topic):\n${memoryPrompt(space.memoryText)}${files.length ? `\n\nThe Space has ${files.length} file${files.length === 1 ? "" : "s"} (space_files_list).` : ""}`;
+				return `The Notebook's memory (shared by every topic):\n${memoryPrompt(space.memoryText)}${files.length ? `\n\nThe Space has ${files.length} file${files.length === 1 ? "" : "s"} (space_files_list).` : ""}`;
 			}),
 		],
 	});

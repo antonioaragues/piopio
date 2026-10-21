@@ -295,7 +295,7 @@ export class Sessions {
 		const now = new Date().toISOString();
 		const entry: CatalogEntry = {
 			ref,
-			title: params.title?.trim() || (params.kind === "thread" ? "New thread" : params.kind === "space" ? "New Space" : "New session"),
+			title: params.title?.trim() || (params.kind === "thread" ? "New thread" : params.kind === "space" ? "New Notebook" : "New session"),
 			createdAt: now,
 			updatedAt: now,
 			model: params.model ?? this.hub.defaultModel,
@@ -712,7 +712,7 @@ export class Sessions {
 
 	async space(ref: ContainerRef): Promise<SpaceRuntime> {
 		const runtime = await this.runtime({ kind: "space", id: ref.id });
-		if (!(runtime instanceof SpaceRuntime)) throw new EngineError("INVALID", "Not a Space.");
+		if (!(runtime instanceof SpaceRuntime)) throw new EngineError("INVALID", "Not a Notebook.");
 		return runtime;
 	}
 
@@ -864,11 +864,11 @@ export class Sessions {
 
 	private async askUtility(text: string, spaces: CatalogEntry[]): Promise<SpaceSuggestion | undefined> {
 		const index = spaces
-			.map((s) => `Space ${s.ref.id} “${s.title}”${s.instructions ? ` (${s.instructions.slice(0, 200)})` : ""}\n${(s.topics ?? []).filter((t) => !t.archived).map((t) => `  - topic ${t.id} “${t.title}”: ${t.brief ?? ""} ${t.summary ?? ""}`.trimEnd()).join("\n") || "  (no topics)"}`)
+			.map((s) => `Notebook ${s.ref.id} “${s.title}”${s.instructions ? ` (${s.instructions.slice(0, 200)})` : ""}\n${(s.topics ?? []).filter((t) => !t.archived).map((t) => `  - topic ${t.id} “${t.title}”: ${t.brief ?? ""} ${t.summary ?? ""}`.trimEnd()).join("\n") || "  (no topics)"}`)
 			.join("\n");
 		const reply = await this.hub.utility(
-			'You decide whether a chat thread belongs in one of the user\'s Spaces (long-running areas of their life or work, split into topics). Answer with JSON only: {"space": "<space id or null>", "topic": "<topic id or null>", "confidence": <0..1>, "reason": "<one short line>"}. Pick a topic only when the thread continues its subject. Use null when nothing fits well.',
-			`Spaces:\n${index}\n\nThread:\n${text}`,
+			'You decide whether a chat thread belongs in one of the user\'s Notebooks (long-running areas of their life or work, split into topics). Answer with JSON only: {"space": "<notebook id or null>", "topic": "<topic id or null>", "confidence": <0..1>, "reason": "<one short line>"}. Pick a topic only when the thread continues its subject. Use null when nothing fits well.',
+			`Notebooks:\n${index}\n\nThread:\n${text}`,
 		);
 		if (reply === undefined) return undefined;
 		const json = /\{[\s\S]*\}/.exec(reply)?.[0];

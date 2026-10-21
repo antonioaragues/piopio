@@ -132,7 +132,7 @@ struct RootView: View {
                 SpaceView(engine: engine, space: space, topicId: topicId, thread: engine.thread(space.ref(topic: topicId)), selection: $selection)
                     .id(key)
             } else {
-                EmptyState(label: "Chat", title: "Start a thread, or a Space", message: "A thread is one conversation. A Space keeps a long-running subject organized into topics.") {
+                EmptyState(label: "Chat", title: "Start a thread, or a Notebook", message: "A thread is one conversation. A Notebook keeps a long-running subject organized into topics.") {
                     VStack(spacing: 12) {
                         HStack(spacing: 10) {
                             Button(action: newThread) {
@@ -148,7 +148,7 @@ struct RootView: View {
                             .buttonStyle(.plain)
                             Button { newSpaceThreads = []; showNewSpace = true } label: {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("New Space").font(.system(size: 13, weight: .semibold))
+                                    Text("New Notebook").font(.system(size: 13, weight: .semibold))
                                     Text("⌘⇧N").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                                 }
                                 .frame(width: 160, alignment: .leading)

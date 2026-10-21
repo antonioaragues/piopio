@@ -32,7 +32,7 @@ struct PiopioApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New Thread / Session") { NotificationCenter.default.post(name: .newThread, object: nil) }
                     .keyboardShortcut("n")
-                Button("New Space…") { NotificationCenter.default.post(name: .newSpace, object: nil) }
+                Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: nil) }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Quick Chat") { QuickChatController.shared?.show() }
                 Divider()
