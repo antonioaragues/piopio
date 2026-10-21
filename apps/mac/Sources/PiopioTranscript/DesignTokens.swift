@@ -8,7 +8,7 @@ public enum DS {
     public static let card = dynamic(.white, rgb(0x242426))
     public static let chip = dynamic(NSColor.black.withAlphaComponent(0.045), NSColor.white.withAlphaComponent(0.08))
     public static let bubble = dynamic(rgb(0xF1F1F3), rgb(0x2E2E31))
-    public static let pill = dynamic(NSColor.white.withAlphaComponent(0.78), NSColor(srgbRed: 74 / 255, green: 74 / 255, blue: 78 / 255, alpha: 0.88))
+    public static let pill = dynamic(NSColor.white.withAlphaComponent(0.9), NSColor(srgbRed: 74 / 255, green: 74 / 255, blue: 78 / 255, alpha: 0.95))
     public static let glassEdge = dynamic(NSColor.white.withAlphaComponent(0.85), NSColor.white.withAlphaComponent(0.13))
     public static let fg = dynamic(rgb(0x1D1D1F), rgb(0xF5F5F7))
     public static let fg2 = dynamic(rgb(0x5B5B61), rgb(0xB8B8BD))
@@ -24,10 +24,14 @@ public enum DS {
     public static let addbg = dynamic(rgb(0xE3F4E6), rgb(0x1F3B28))
     public static let delbg = dynamic(rgb(0xFBE7E3), rgb(0x47231F))
 
+    // MARK: Brand (v2): the chick's yolk, only at brand moments (Home, empty states, onboarding, suggestions)
+    public static let yolk = rgb(0xF7CE3E)
+    public static let yolkSoft = dynamic(rgb(0xFDF7E1), rgb(0x3A3420))
+
     // MARK: Accent (follows the system accent)
     public static let accent = NSColor.controlAccentColor
     public static let accentSoft = NSColor(name: "piopio.accentSoft") { a in
-        NSColor.controlAccentColor.withAlphaComponent(isDark(a) ? 0.26 : 0.16)
+        NSColor.controlAccentColor.withAlphaComponent(isDark(a) ? 0.26 : 0.14)
     }
     public static let accentLine = NSColor(name: "piopio.accentLine") { a in
         NSColor.controlAccentColor.withAlphaComponent(isDark(a) ? 0.60 : 0.45)

@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { existsSync, unlinkSync, chmodSync } from "node:fs";
 import { createConnection, createServer, type Server } from "node:net";
-import { methods, PROTOCOL_VERSION, reverseMethods, type MethodName, type Params, type Result } from "@piopio/protocol";
+import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
-import { EngineError, ModelHub, verifyProviderKey } from "./models.js";
+import { EngineError, keyHint, ModelHub, providerUsage, verifyProviderKey } from "./models.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
@@ -64,6 +64,7 @@ export class Engine {
 	readonly memory: MemoryProviders;
 	readonly hooks: Hooks;
 	readonly app = new AppServices();
+	private usageCache?: { at: number; value: Result<"usage.summary"> };
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
@@ -525,6 +526,15 @@ export class Engine {
 				const p = params as Params<"agents.pause">;
 				await (await this.sessions.agent(p.ref)).core.safety.setPaused(p.paused);
 				return {} satisfies Result<"agents.pause">;
+			}
+			case "usage.summary": {
+				const p = params as Params<"usage.summary">;
+				if (this.usageCache && !p.refresh && Date.now() - this.usageCache.at < 60_000) return this.usageCache.value;
+				const key = await this.secrets.get(SECRET_OPENROUTER, "Show what your provider has billed").catch(() => null);
+				const usage = key ? await providerUsage(key) : undefined;
+				const value: Result<"usage.summary"> = { connected: Boolean(key), ...(key ? { keyHint: keyHint(key) } : {}), ...(usage ?? {}) };
+				this.usageCache = { at: Date.now(), value };
+				return value;
 			}
 			case "agents.trace": {
 				const p = params as Params<"agents.trace">;

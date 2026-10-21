@@ -464,7 +464,7 @@ export const AgentInfo = Type.Object({
 	/** Some tool calls wait for the owner (`policies.requireApproval`): the header's "Asks first". */
 	asksFirst: Type.Optional(Type.Boolean()),
 	/** While the engine runs it: paused (AS4), this month's spend against the budget (AS3), Inbox items waiting. */
-	status: Type.Optional(Type.Object({ paused: Type.Boolean(), spendUsd: Type.Number(), budgetUsd: Type.Optional(Type.Number()), inbox: Type.Number() })),
+	status: Type.Optional(Type.Object({ paused: Type.Boolean(), spendUsd: Type.Number(), budgetUsd: Type.Optional(Type.Number()), inbox: Type.Number(), nextRun: Type.Optional(Type.String()) })),
 });
 export type AgentInfo = Static<typeof AgentInfo>;
 
@@ -715,6 +715,18 @@ export const methods = {
 		params: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Number()) }),
 		result: Type.Object({
 			results: Type.Array(Type.Object({ ref: ContainerRef, title: Type.String(), itemId: Type.Optional(Type.String()), kind: literals("title", "user", "assistant"), snippet: Type.String(), at: Type.String() })),
+		}),
+	},
+	/** What the model provider has billed, from its own account (OpenRouter's key endpoint; cached a minute). */
+	"usage.summary": {
+		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),
+		result: Type.Object({
+			connected: Type.Boolean(),
+			/** "sk-or-v1-755…a30". */
+			keyHint: Type.Optional(Type.String()),
+			todayUsd: Type.Optional(Type.Number()),
+			monthUsd: Type.Optional(Type.Number()),
+			totalUsd: Type.Optional(Type.Number()),
 		}),
 	},
 	/** Checks a provider key without saving it (welcome, settings). */

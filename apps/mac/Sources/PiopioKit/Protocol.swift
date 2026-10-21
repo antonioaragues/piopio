@@ -462,7 +462,7 @@ public struct AgentInfo: Codable, Sendable, Hashable {
     public var invalid: Bool?
     /// Some tool calls wait for the owner: the header's "Asks first".
     public var asksFirst: Bool?
-    public struct Status: Codable, Sendable, Hashable { public var paused: Bool; public var spendUsd: Double; public var budgetUsd: Double?; public var inbox: Int }
+    public struct Status: Codable, Sendable, Hashable { public var paused: Bool; public var spendUsd: Double; public var budgetUsd: Double?; public var inbox: Int; public var nextRun: String? }
     public var status: Status?
 }
 
@@ -537,6 +537,15 @@ public struct InboxItem: Decodable, Sendable, Hashable, Identifiable {
     public var approval: ApprovalItem?
 }
 public struct InboxListResult: Decodable, Sendable { public var count: Int; public var items: [InboxItem] }
+/// What the model provider has billed (OpenRouter's key endpoint): the sidebar's "$0.05 today", Settings › Models.
+public struct UsageSummary: Decodable, Sendable, Equatable {
+    public var connected: Bool
+    public var keyHint: String?
+    public var todayUsd: Double?
+    public var monthUsd: Double?
+    public var totalUsd: Double?
+}
+public struct UsageParams: Encodable, Sendable { public var refresh: Bool?; public init(refresh: Bool? = nil) { self.refresh = refresh } }
 /// A trace between agents (06-agents §7 AA5): its messages as a tree, with what answering cost.
 public struct AgentTrace: Decodable, Sendable {
     public struct Hop: Decodable, Sendable, Hashable, Identifiable {

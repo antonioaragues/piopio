@@ -2,17 +2,15 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The main window (docs/design 2a–2c): floating glass sidebar with the mode switcher, then the content.
+/// The main window (docs/design v2): one floating glass sidebar (Home, Needs you, Projects, Notebooks, Agents,
+/// Chats), and the content for what it selects. There are no modes: the item's type decides the view.
 struct RootView: View {
     let engine: EngineController
-    @AppStorage("mode") private var mode: AppMode = .chat
-    @State private var selection: String?
-    @State private var buildSelection: String?
-    @AppStorage("agentSelection") private var agentSelection: String?
+    @AppStorage("sidebarItem") private var itemRaw = "home"
     @State private var showNewAgent = false
     @State private var newSessionProject: ProjectInfo?
     @State private var showOnboarding = false
-    /// What the Build start screen typed before opening the new session sheet.
+    /// What a start screen typed before opening the new session sheet.
     @State private var newSessionPrompt = ""
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
@@ -22,9 +20,12 @@ struct RootView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
+    private var item: SidebarItem { SidebarItem(raw: itemRaw) }
+    private var itemBinding: Binding<SidebarItem> { Binding(get: { SidebarItem(raw: itemRaw) }, set: { itemRaw = $0.raw }) }
+
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(engine: engine, mode: $mode, selection: $selection, buildSelection: $buildSelection, agentSelection: $agentSelection, onSearch: { palette = .messages; paletteQuery = "" })
+            MainSidebar(engine: engine, item: itemBinding)
                 .frame(width: 268)
                 .glassPanel()
                 .padding(8)
@@ -40,56 +41,63 @@ struct RootView: View {
             if let mode = palette, engine.status == .ready {
                 ZStack(alignment: .top) {
                     Color.black.opacity(0.08).ignoresSafeArea().onTapGesture { palette = nil }
-                    CommandPalette(engine: engine, thread: selectedThread, close: { palette = nil }, newThread: newThread, openThread: open(_:item:), mode: mode, query: paletteQuery)
+                    CommandPalette(engine: engine, thread: selectedThread, close: { palette = nil }, newThread: newChat, openThread: open(_:item:), mode: mode, query: paletteQuery)
                         .padding(.top, 96)
                 }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in
-            if mode == .build { newBuildSession() } else { newThread() }
+            // ⌘N follows the selection: a session in its project, otherwise a chat.
+            if case .session = item { newBuildSession() } else if case .project = item { newBuildSession() } else { newChat() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .newChat)) { _ in newChat() }
         .onReceive(NotificationCenter.default.publisher(for: .newBuildSession)) { note in
-            mode = .build
             newSessionPrompt = note.userInfo?["prompt"] as? String ?? ""
             newSessionProject = engine.projects.first { $0.id == note.object as? String }
         }
         .sheet(item: $newSessionProject) { project in
-            NewSessionSheet(engine: engine, project: project, initialPrompt: newSessionPrompt) { buildSelection = $0.id }
+            NewSessionSheet(engine: engine, project: project, initialPrompt: newSessionPrompt) { itemRaw = SidebarItem.session($0.id).raw }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in
-            mode = .build
             if let url = note.object as? URL {
-                Task { await BuildActions.add(url, engine: engine) { buildSelection = $0 } }
+                Task { await BuildActions.add(url, engine: engine) { itemRaw = SidebarItem.session($0).raw } }
             } else {
-                BuildActions.addProject(engine: engine) { buildSelection = $0 }
+                BuildActions.addProject(engine: engine) { itemRaw = SidebarItem.session($0).raw }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .selectBuildSession)) { note in
-            mode = .build
-            buildSelection = note.object as? String
+            if let id = note.object as? String { itemRaw = SidebarItem.session(id).raw }
         }
-        .modifier(SpaceAndAgentSheets(engine: engine, mode: $mode, selection: $selection, agentSelection: $agentSelection, showNewAgent: $showNewAgent, showNewSpace: $showNewSpace, newSpaceThreads: $newSpaceThreads, editingInstructions: $editingInstructions))
+        .modifier(SpaceAndAgentSheets(engine: engine, item: itemBinding, showNewAgent: $showNewAgent, showNewSpace: $showNewSpace, newSpaceThreads: $newSpaceThreads, editingInstructions: $editingInstructions))
         .onReceive(NotificationCenter.default.publisher(for: .selectThread)) { note in
-            mode = .chat
-            selection = note.object as? String
+            guard let id = note.object as? String else { return }
+            itemRaw = (engine.item(for: id) ?? .chat(id)).raw
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .selectItem)) { note in
+            if let raw = note.object as? String { itemRaw = raw }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showPalette)) { note in
             paletteQuery = (note.object as? String) ?? ""
             palette = (note.object as? Bool) == true || note.object is String ? .messages : .all
         }
-        .onChange(of: selection) { _, _ in updateSelected() }
-        .onChange(of: buildSelection) { _, _ in updateSelected() }
-        .onChange(of: mode) { _, _ in updateSelected() }
+        .onChange(of: itemRaw) { _, _ in engine.selectedThreadId = item.engineId }
         .onAppear {
+            engine.selectedThreadId = item.engineId
             WindowOpener.shared.openMain = { [openWindow] in openWindow(id: "main") }
             WindowOpener.shared.openSettings = { [openSettings] in openSettings() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .setMode)) { note in
-            if let m = note.object as? AppMode { mode = m }
+            // Older entry points (automation, links) name a mode: the closest place in the one sidebar.
+            guard let m = note.object as? AppMode else { return }
+            switch m {
+            case .build: itemRaw = SidebarItem.index(.projects).raw
+            case .chat: itemRaw = SidebarItem.home.raw
+            case .agents:
+                if let id = UserDefaults.standard.string(forKey: "agentSelection"), engine.agents.contains(where: { $0.ref.id == id }) { itemRaw = SidebarItem.agent(id).raw } else { itemRaw = SidebarItem.index(.agents).raw }
+            }
         }
         .onChange(of: engine.status) { _, status in
             if status == .ready, engine.needsKey || ProcessInfo.processInfo.environment["PIOPIO_DEMO_WELCOME"] == "1" { showOnboarding = true }
-            if status == .ready, selection == nil { selection = engine.threads.first?.ref.id }
         }
         .sheet(isPresented: $showOnboarding) {
             WelcomeView(engine: engine) { showOnboarding = false }
@@ -97,130 +105,115 @@ struct RootView: View {
     }
 
     @ViewBuilder private var content: some View {
-        switch (engine.status, mode) {
-        case (.starting, _):
+        switch engine.status {
+        case .starting:
             VStack(spacing: 10) {
                 ProgressView().controlSize(.small)
                 Text("Starting the local engine…").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case (.failed(let message), _) where !engine.wasReady:
+        case .failed(let message) where !engine.wasReady:
             EmptyState(label: "Local engine", title: "The engine didn't start", message: message) {
                 HStack {
                     Button("Try Again") { Task { await engine.start() } }.buttonStyle(PillStyle(kind: .primary))
                     Button("Show Logs") { engine.revealLogs() }.buttonStyle(PillStyle())
                 }
             }
-        case (_, .build):
-            if let id = buildSelection, let summary = engine.buildSessions.first(where: { $0.ref.id == id }) {
-                BuildSessionView(engine: engine, session: engine.thread(summary.ref), summary: summary)
+        default:
+            page
+        }
+    }
+
+    @ViewBuilder private var page: some View {
+        switch item {
+        case .home:
+            HomeView(engine: engine, item: itemBinding)
+        case .needsYou:
+            NeedsYouView(engine: engine, item: itemBinding)
+        case .index(.projects):
+            ProjectsIndex(engine: engine, item: itemBinding)
+        case .project(let id):
+            ProjectsIndex(engine: engine, item: itemBinding, focus: id)
+        case .index(let section):
+            SectionIndex(engine: engine, section: section, item: itemBinding)
+        case .session(let id):
+            if let summary = engine.buildSessions.first(where: { $0.ref.id == id }) {
+                BuildSessionView(engine: engine, session: engine.thread(summary.ref), summary: summary, chatLens: summary.profile == .chat)
                     .id(id)
             } else {
-                BuildEmptyState(engine: engine, selection: $buildSelection)
+                missing
             }
-        case (_, .agents):
-            agentsContent
-        case (_, .chat):
-            if let id = selection, let summary = engine.threads.first(where: { $0.ref.id == id }) {
+        case .chat(let id):
+            if let summary = engine.threads.first(where: { $0.ref.id == id }) {
                 ThreadView(engine: engine, thread: engine.thread(summary.ref), summary: summary)
                     .id(id)
-            } else if let id = selection, let summary = engine.buildSessions.first(where: { $0.ref.id == id }) {
-                BuildSessionView(engine: engine, session: engine.thread(summary.ref), summary: summary, chatLens: true)
-                    .id(id)
-            } else if let key = selection, let space = engine.space(String(key.split(separator: "/").first ?? "")) {
+            } else {
+                missing
+            }
+        case .notebook(let key):
+            if let space = engine.space(String(key.split(separator: "/").first ?? "")) {
                 let topicId = key.split(separator: "/").dropFirst().first.map(String.init)
-                SpaceView(engine: engine, space: space, topicId: topicId, thread: engine.thread(space.ref(topic: topicId)), selection: $selection)
+                SpaceView(engine: engine, space: space, topicId: topicId, thread: engine.thread(space.ref(topic: topicId)), selection: chatSelection)
                     .id(key)
             } else {
-                EmptyState(label: "Chat", title: "Start a thread, or a Notebook", message: "A thread is one conversation. A Notebook keeps a long-running subject organized into topics.") {
-                    VStack(spacing: 12) {
-                        HStack(spacing: 10) {
-                            Button(action: newThread) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("New thread").font(.system(size: 13, weight: .semibold))
-                                    Text("⌘N").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                                }
-                                .frame(width: 160, alignment: .leading)
-                                .padding(14)
-                                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                            }
-                            .buttonStyle(.plain)
-                            Button { newSpaceThreads = []; showNewSpace = true } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("New Notebook").font(.system(size: 13, weight: .semibold))
-                                    Text("⌘⇧N").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                                }
-                                .frame(width: 160, alignment: .leading)
-                                .padding(14)
-                                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        if let shortcut = QuickChatController.shortcutLabel {
-                            Text("Tip: \(shortcut) opens Quick Chat from any app").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                        }
-                    }
-                }
+                missing
+            }
+        case .agent(let id):
+            if let summary = engine.agents.first(where: { $0.ref.id == id }) {
+                AgentPage(engine: engine, summary: summary, selection: agentSelection)
+                    .id(id)
+            } else {
+                missing
             }
         }
     }
 
-    @ViewBuilder private var agentsContent: some View {
-        if agentSelection == "inbox" {
-            InboxView(engine: engine, agentSelection: $agentSelection)
-        } else if let summary = engine.agents.first(where: { $0.ref.id == agentSelection }) {
-            AgentPage(engine: engine, summary: summary, selection: $agentSelection)
-                .id(summary.ref.id)
-        } else {
-                EmptyState(label: "Agents", title: "Create your first agent", message: "Agents live in your messaging apps, run on schedules and keep their own memory.") {
-                    VStack(spacing: 10) {
-                        Button { showNewAgent = true } label: {
-                            Label("New Agent…", systemImage: "plus").font(.system(size: 13, weight: .semibold))
-                        }
-                        .buttonStyle(PillStyle(kind: .primary))
-                        Text("Start from a template (personal assistant, daily briefing, habit coach…) or from scratch. It runs on this Mac; channels like Telegram come later.")
-                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).multilineTextAlignment(.center).frame(width: 360)
-                    }
-                }
-        }
+    /// The item is gone (deleted elsewhere) or not in the catalog yet.
+    private var missing: some View {
+        HomeView(engine: engine, item: itemBinding)
     }
 
-    /// What notifications treat as "you're looking at it".
-    private func updateSelected() {
-        engine.selectedThreadId = mode == .build ? buildSelection : mode == .chat ? selection : agentSelection
+    /// The selection as older views take it: a thread id or a "space/topic" key.
+    private var chatSelection: Binding<String?> {
+        Binding(get: { item.engineId }, set: { id in itemRaw = (id.flatMap(engine.item(for:)) ?? .home).raw })
+    }
+
+    private var agentSelection: Binding<String?> {
+        Binding(get: { if case .agent(let id) = item { id } else { nil } }, set: { id in itemRaw = (id.map { SidebarItem.agent($0) } ?? .home).raw })
     }
 
     private var selectedThread: ThreadModel? {
-        guard mode == .chat, let id = selection, let summary = engine.threads.first(where: { $0.ref.id == id }) else { return nil }
+        guard case .chat(let id) = item, let summary = engine.threads.first(where: { $0.ref.id == id }) else { return nil }
         return engine.thread(summary.ref)
     }
 
-    private func open(_ threadId: String, item: String?) {
-        mode = .chat
-        selection = threadId
-        guard let item, let summary = engine.threads.first(where: { $0.ref.id == threadId }) else { return }
-        engine.thread(summary.ref).reveal(item)
+    private func open(_ threadId: String, item found: String?) {
+        itemRaw = (engine.item(for: threadId) ?? .chat(threadId)).raw
+        guard let found, let summary = engine.threads.first(where: { $0.ref.id == threadId }) else { return }
+        engine.thread(summary.ref).reveal(found)
     }
 
-    /// ⌘N in Build: a new session in the selected session's project (or the first project).
+    /// ⌘N on a session or project: a new session in that project (or the first one).
     private func newBuildSession() {
-        let current = engine.buildSessions.first { $0.ref.id == buildSelection }
-        let path = current?.projectPath ?? current?.cwd
-        if let project = engine.projects.first(where: { $0.path == path }) ?? engine.projects.first {
+        let project: ProjectInfo? = {
+            switch item {
+            case .session(let id): return engine.buildSessions.first { $0.ref.id == id }.flatMap { engine.project(of: $0) }
+            case .project(let id): return engine.projects.first { $0.id == id }
+            default: return nil
+            }
+        }()
+        if let project = project ?? engine.projects.first {
             newSessionProject = project
         } else {
             NotificationCenter.default.post(name: .openProject, object: nil)
         }
     }
 
-    private func newThread() {
-        mode = .chat
+    private func newChat() {
         Task {
             if let ref = await engine.createThread() {
                 try? await engine.refreshCatalog()
-                selection = ref.id
+                itemRaw = SidebarItem.chat(ref.id).raw
             }
         }
     }
@@ -236,164 +229,6 @@ extension Notification.Name {
     static let openInbox = Notification.Name("piopio.openInbox")
     /// Object: a trace id between agents.
     static let openTrace = Notification.Name("piopio.openTrace")
-}
-
-// MARK: Sidebar
-
-struct Sidebar: View {
-    let engine: EngineController
-    @Binding var mode: AppMode
-    @Binding var selection: String?
-    @Binding var buildSelection: String?
-    @Binding var agentSelection: String?
-    let onSearch: () -> Void
-    @State private var renaming: SessionSummary?
-    @State private var newTitle = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Color.clear.frame(height: 36) // traffic lights
-            ModeSwitcher(mode: $mode).padding(.horizontal, 12)
-            Button(action: onSearch) {
-                HStack {
-                    Image(systemName: "magnifyingglass").font(.system(size: 11))
-                    Text("Search")
-                    Spacer()
-                    Text("⌘⇧F").font(.system(size: 11))
-                }
-                .font(.system(size: 13))
-                .foregroundStyle(Color.dsFg3)
-                .padding(.horizontal, 10)
-                .frame(height: 28)
-                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 1) {
-                    switch mode {
-                    case .chat: chatList
-                    case .build: BuildSidebarList(engine: engine, selection: $buildSelection)
-                    case .agents: AgentsSection(engine: engine, selection: $agentSelection)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 12)
-            }
-
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            HStack(spacing: 6) {
-                StatusDot(status: engineDot, size: 6)
-                Text("Local engine").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                Spacer()
-                if let shortcut = QuickChatController.shortcutLabel {
-                    Button { QuickChatController.shared?.show() } label: {
-                        Text("\(shortcut) Quick Chat").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 40)
-        }
-        .alert("Rename Thread", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Title", text: $newTitle)
-            Button("Rename") {
-                if let thread = renaming { Task { await engine.rename(thread.ref, to: newTitle) } }
-                renaming = nil
-            }
-            Button("Cancel", role: .cancel) { renaming = nil }
-        }
-    }
-
-    private var engineDot: StatusDot.Status {
-        switch engine.status {
-        case .ready: .done
-        case .starting: .waiting
-        case .failed: .failed
-        }
-    }
-
-    @ViewBuilder private var chatList: some View {
-        SpacesSection(engine: engine, selection: $selection)
-        ChatProjectsSection(engine: engine, selection: $selection)
-        if engine.threads.isEmpty {
-            placeholder("Threads", "Your conversations appear here.")
-        }
-        ForEach(groups, id: \.title) { group in
-            SectionLabel(group.title).padding(.horizontal, 8).padding(.top, 12).padding(.bottom, 4)
-            ForEach(group.threads, id: \.ref.id) { thread in
-                row(thread)
-            }
-        }
-    }
-
-    private func row(_ thread: SessionSummary) -> some View {
-        let selected = selection == thread.ref.id
-        return Button { selection = thread.ref.id } label: {
-            HStack(spacing: 8) {
-                Text(thread.title)
-                    .font(.system(size: 13, weight: selected ? .medium : .regular))
-                    .foregroundStyle(Color.dsFg)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if let status = engine.liveStatus[thread.ref.id] {
-                    switch status {
-                    case .running: StatusDot(status: .running)
-                    case .error: StatusDot(status: .failed, size: 6)
-                    default: EmptyView()
-                    }
-                }
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 28)
-            .background(selected ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button("Rename…") {
-                newTitle = thread.title
-                renaming = thread
-            }
-            Divider()
-            MoveToSpaceMenu(engine: engine, thread: thread)
-            Divider()
-            Button("Delete", role: .destructive) {
-                if selection == thread.ref.id { selection = nil }
-                Task { await engine.delete(thread.ref) }
-            }
-        }
-    }
-
-    private func placeholder(_ title: String, _ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            SectionLabel(title)
-            Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-        }
-        .padding(.horizontal, 8)
-        .padding(.top, 12)
-    }
-
-    private struct Group { let title: String; let threads: [SessionSummary] }
-
-    /// Today / Yesterday / Previous 7 days / Older, by last activity.
-    private var groups: [Group] {
-        let calendar = Calendar.current
-        let now = Date()
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var buckets: [(String, [SessionSummary])] = [("Today", []), ("Yesterday", []), ("Previous 7 days", []), ("Older", [])]
-        for t in engine.threads {
-            let date = iso.date(from: t.updatedAt) ?? .distantPast
-            let index = calendar.isDateInToday(date) ? 0 : calendar.isDateInYesterday(date) ? 1 : now.timeIntervalSince(date) < 7 * 86_400 ? 2 : 3
-            buckets[index].1.append(t)
-        }
-        return buckets.filter { !$0.1.isEmpty }.map { Group(title: $0.0, threads: $0.1) }
-    }
 }
 
 // MARK: Banner (8d: what happened → what's safe → one action)
@@ -420,12 +255,10 @@ struct EngineBanner: View {
     }
 }
 
-/// The Space and Agent sheets and their notifications (kept apart so the root view type-checks quickly).
+/// The notebook and agent sheets and their notifications (kept apart so the root view type-checks quickly).
 private struct SpaceAndAgentSheets: ViewModifier {
     let engine: EngineController
-    @Binding var mode: AppMode
-    @Binding var selection: String?
-    @Binding var agentSelection: String?
+    @Binding var item: SidebarItem
     @Binding var showNewAgent: Bool
     @Binding var showNewSpace: Bool
     @Binding var newSpaceThreads: [String]
@@ -439,24 +272,19 @@ private struct SpaceAndAgentSheets: ViewModifier {
             }
             .sheet(item: $trace) { TraceSheet(engine: engine, traceId: $0.id) }
             .onReceive(NotificationCenter.default.publisher(for: .openInbox)) { note in
-                mode = .agents
-                agentSelection = "inbox"
+                item = .needsYou
                 if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in
-                mode = .agents
-                showNewAgent = true
-            }
+            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in showNewAgent = true }
             .sheet(isPresented: $showNewAgent) {
-                NewAgentSheet(engine: engine) { agentSelection = $0.id }
+                NewAgentSheet(engine: engine) { item = .agent($0.id) }
             }
             .onReceive(NotificationCenter.default.publisher(for: .newSpace)) { note in
-                mode = .chat
                 newSpaceThreads = (note.object as? String).map { [$0] } ?? []
                 showNewSpace = true
             }
             .sheet(isPresented: $showNewSpace) {
-                NewSpaceSheet(engine: engine, preselected: Set(newSpaceThreads)) { selection = $0 }
+                NewSpaceSheet(engine: engine, preselected: Set(newSpaceThreads)) { item = .notebook($0) }
             }
             .onReceive(NotificationCenter.default.publisher(for: .editSpaceInstructions)) { note in
                 editingInstructions = engine.space(note.object as? String ?? "")
@@ -466,10 +294,9 @@ private struct SpaceAndAgentSheets: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openTopic)) { note in
                 guard let target = note.object as? TopicTarget else { return }
-                mode = .chat
                 let ref = ContainerRef(kind: .space, id: target.spaceId, conversationId: target.topicId)
-                selection = ref.key
-                if let item = target.itemId { engine.thread(ref).reveal(item) }
+                item = .notebook(ref.key)
+                if let found = target.itemId { engine.thread(ref).reveal(found) }
             }
     }
 }

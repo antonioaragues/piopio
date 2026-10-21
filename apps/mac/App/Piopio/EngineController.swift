@@ -205,6 +205,13 @@ final class EngineController {
             }
         }
         Task { [weak self] in await self?.loadInbox() }
+        Task { [weak self] in
+            // Spend (sidebar footer, Home): now, then every few minutes.
+            while let self, self.client != nil {
+                await self.loadUsage()
+                try? await Task.sleep(for: .seconds(180))
+            }
+        }
         return hello
     }
 
@@ -529,6 +536,18 @@ final class EngineController {
         guard let result = try? await client?.call("inbox.list", Empty(), as: InboxListResult.self) else { return }
         inbox = result.items
         inboxCount = result.count
+    }
+
+    /// What the provider has billed (sidebar footer, Home, Settings › Models).
+    private(set) var usage: UsageSummary?
+
+    func loadUsage(refresh: Bool = false) async {
+        if let u = try? await client?.call("usage.summary", UsageParams(refresh: refresh ? true : nil), as: UsageSummary.self) { usage = u }
+    }
+
+    /// Everything that waits for you (docs/design v2 "Needs you"): agents' Inbox items and Build sessions waiting on an approval.
+    var needsYouCount: Int {
+        inboxCount + buildSessions.filter { liveStatus[$0.ref.id] == .waitingApproval }.count
     }
 
     func markInboxRead(_ items: [InboxItem]) async {

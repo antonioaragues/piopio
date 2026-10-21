@@ -170,6 +170,28 @@ export class EngineError extends Error {
 	}
 }
 
+/** What an OpenRouter key has spent: today, this month and in all (GET /api/v1/key, no cost). */
+export async function providerUsage(key: string, fetchImpl: typeof fetch = fetch): Promise<{ todayUsd?: number; monthUsd?: number; totalUsd?: number } | undefined> {
+	try {
+		const response = await fetchImpl("https://openrouter.ai/api/v1/key", { headers: { authorization: `Bearer ${key.trim()}` }, signal: AbortSignal.timeout(15_000) });
+		if (!response.ok) return undefined;
+		const data = ((await response.json()) as { data?: { usage?: number; usage_daily?: number; usage_monthly?: number } }).data ?? {};
+		return {
+			...(typeof data.usage_daily === "number" ? { todayUsd: data.usage_daily } : {}),
+			...(typeof data.usage_monthly === "number" ? { monthUsd: data.usage_monthly } : {}),
+			...(typeof data.usage === "number" ? { totalUsd: data.usage } : {}),
+		};
+	} catch {
+		return undefined;
+	}
+}
+
+/** "sk-or-v1-755…a30". */
+export function keyHint(key: string): string {
+	const k = key.trim();
+	return k.length > 16 ? `${k.slice(0, 12)}…${k.slice(-3)}` : "••••";
+}
+
 /** Checks an OpenRouter key against GET /api/v1/key (no completion, no cost). */
 export async function verifyProviderKey(provider: string, key: string, fetchImpl: typeof fetch = fetch): Promise<{ ok: boolean; message?: string; label?: string; usageUsd?: number; limitUsd?: number | null }> {
 	if (provider !== "openrouter") return { ok: false, message: `${provider} keys can't be checked yet.` };

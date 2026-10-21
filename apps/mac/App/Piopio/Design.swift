@@ -21,6 +21,46 @@ extension Color {
     static let dsRed = Color(nsColor: DS.red)
     static let dsAccentSoft = Color(nsColor: DS.accentSoft)
     static let dsAccentLine = Color(nsColor: DS.accentLine)
+    static let dsYolk = Color(nsColor: DS.yolk)
+    static let dsYolkSoft = Color(nsColor: DS.yolkSoft)
+}
+
+/// The app icon's chick, cropped round (docs/design v2 · brand moments), with an optional yolkSoft ring.
+struct Chick: View {
+    var size: CGFloat = 52
+    var ring: CGFloat = 0
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let image = NSImage(named: scheme == .dark ? "ChickDark" : "Chick") ?? NSApp.applicationIconImage ?? NSImage()
+        Image(nsImage: image)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fill)
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .background(Circle().fill(Color.dsYolkSoft).padding(-ring))
+    }
+}
+
+/// A project's or notebook's tile: its initial on a color of its own (radius 5, docs/design v2 sidebar).
+struct InitialTile: View {
+    let name: String
+    var size: CGFloat = 18
+
+    var body: some View {
+        Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
+            .font(.system(size: size * 0.56, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(Self.color(for: name), in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+    }
+
+    static let palette: [Color] = [.blue, .green, .orange, .pink, .purple, .teal, .indigo, .red, .mint, .brown]
+
+    static func color(for name: String) -> Color {
+        palette[Int(name.unicodeScalars.reduce(UInt32(7)) { ($0 &* 31) &+ $1.value } % UInt32(palette.count))]
+    }
 }
 
 /// Floating glass panel: sidebar, inspector, composer, popovers (radius 14, hairline edge, soft shadow).
@@ -124,33 +164,6 @@ struct StatusDot: View {
         case .failed: .dsRed
         case .idle, .running: .dsFg3.opacity(0.5)
         }
-    }
-}
-
-/// Build · Chat · Agents capsule segmented control.
-struct ModeSwitcher: View {
-    @Binding var mode: AppMode
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(AppMode.allCases) { m in
-                Button { mode = m } label: {
-                    Text(m.title)
-                        .font(.system(size: 13, weight: mode == m ? .semibold : .regular))
-                        .foregroundStyle(mode == m ? Color.dsFg : Color.dsFg2)
-                        .frame(maxWidth: .infinity, minHeight: 26)
-                        .background {
-                            if mode == m { Capsule().fill(Color.dsPill).shadow(color: .black.opacity(0.08), radius: 2, y: 1) }
-                        }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(m.shortcut, modifiers: .command)
-                .help("\(m.title) (⌘\(m.index + 1))")
-            }
-        }
-        .padding(3)
-        .background(Color.dsChip, in: Capsule())
     }
 }
 

@@ -581,8 +581,11 @@ export class Sessions {
 	private async agentStatus(entry: CatalogEntry): Promise<void> {
 		const runtime = await this.open.get(entry.ref.id)?.catch(() => undefined);
 		if (!(runtime instanceof AgentRuntime) || !entry.agent) return;
-		const status = await runtime.core.safety.status().catch(() => undefined);
-		if (!status || !this.entries.has(entry.ref.id)) return;
+		const safety = await runtime.core.safety.status().catch(() => undefined);
+		if (!safety || !this.entries.has(entry.ref.id)) return;
+		// What fires next (the sidebar's "Next run tomorrow 7:00").
+		const next = (await runtime.runs().catch(() => undefined))?.upcoming.map((u) => u.next).filter((n): n is number => typeof n === "number").sort((a, b) => a - b)[0];
+		const status = { ...safety, ...(next && !safety.paused ? { nextRun: new Date(next).toISOString() } : {}) };
 		const changed = JSON.stringify(status) !== JSON.stringify(entry.agent.status);
 		entry.agent.status = status;
 		if (changed) {

@@ -13,6 +13,14 @@ enum DebugAutomation {
         if let appearance = env["PIOPIO_DEMO_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
         }
+        // PIOPIO_DEMO_ITEM=<sidebar item> (home, needs, index:projects, project:<id>…): select it after the demo set-up
+        // (PIOPIO_DEMO_ITEM_DELAY seconds, default 10).
+        if let raw = env["PIOPIO_DEMO_ITEM"] {
+            Task {
+                try? await Task.sleep(for: .seconds(Double(env["PIOPIO_DEMO_ITEM_DELAY"] ?? "") ?? 10))
+                NotificationCenter.default.post(name: .selectItem, object: raw)
+            }
+        }
         // PIOPIO_DEMO_RESIZE=<width>: resize the main window to this width after 5 s (layout after a resize).
         if let width = env["PIOPIO_DEMO_RESIZE"].flatMap(Double.init) {
             Task {

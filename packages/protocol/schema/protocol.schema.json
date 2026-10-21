@@ -9471,6 +9471,9 @@
 								},
 								"inbox": {
 									"type": "number"
+								},
+								"nextRun": {
+									"type": "string"
 								}
 							}
 						}
@@ -15800,6 +15803,9 @@
 											},
 											"inbox": {
 												"type": "number"
+											},
+											"nextRun": {
+												"type": "string"
 											}
 										}
 									}
@@ -16340,6 +16346,9 @@
 											},
 											"inbox": {
 												"type": "number"
+											},
+											"nextRun": {
+												"type": "string"
 											}
 										}
 									}
@@ -20798,6 +20807,37 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"usage.summary.params": {
+			"type": "object",
+			"properties": {
+				"refresh": {
+					"type": "boolean"
+				}
+			}
+		},
+		"usage.summary.result": {
+			"type": "object",
+			"required": [
+				"connected"
+			],
+			"properties": {
+				"connected": {
+					"type": "boolean"
+				},
+				"keyHint": {
+					"type": "string"
+				},
+				"todayUsd": {
+					"type": "number"
+				},
+				"monthUsd": {
+					"type": "number"
+				},
+				"totalUsd": {
+					"type": "number"
 				}
 			}
 		},
