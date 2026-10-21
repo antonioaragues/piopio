@@ -1181,7 +1181,7 @@ describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () 
 
 	test("About me: off by default, then shown and captured; MCP servers reach Threads and Spaces when allowed", async () => {
 		const a = await start();
-		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true } });
+		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" }, memory: { providers: [] } });
 		const tools = (s: Snapshot) => s.items.flatMap((i) => (i.kind === "tool" ? [i] : []));
 
 		let t = await thread(a, 'call: remember_about_me | {"add":["Lives in Valencia"],"section":"Home"}');
@@ -1194,8 +1194,8 @@ describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () 
 		await a.client.call("aboutMe.set", { text: "## Home\n- Lives in Madrid" });
 		me = await a.client.call("aboutMe.get", {});
 		expect(me.revisions[0]).toMatchObject({ by: { kind: "user" }, added: ["Lives in Madrid"], removed: ["Lives in Valencia"] });
-		await a.client.call("aboutMe.restore", { revisionId: me.revisions[1]!.id });
-		expect((await a.client.call("aboutMe.get", {})).text).toContain("Valencia");
+		await a.client.call("aboutMe.undo", { revisionId: me.revisions[0]!.id });
+		expect((await a.client.call("aboutMe.get", {})).text).toBe("## Home\n- Lives in Valencia");
 
 		const server = fileURLToPath(new URL("./fixtures/echo-mcp-server.mjs", import.meta.url));
 		await a.client.call("mcp.add", { scope: "global", name: "test", command: process.execPath, args: [server] });
@@ -1215,4 +1215,115 @@ describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () 
 		const main = await idle(a, space);
 		expect(tools(main)[0]).toMatchObject({ status: "done", output: "echo: from main" });
 	}, 60_000);
+});
+
+describe("Extensions and memory providers (milestone 4.1)", () => {
+	async function idleWith(ctx: Ctx, ref: unknown, ready: (s: Snapshot) => boolean, timeout = 10_000): Promise<Snapshot> {
+		const end = Date.now() + timeout;
+		for (;;) {
+			const snap: Snapshot = await ctx.client.call("sessions.open", { ref });
+			if (ready(snap)) return snap;
+			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(snap.items)}`);
+			await new Promise((r) => setTimeout(r, 100));
+		}
+	}
+
+	test("pi packages: install a local package, its skills and templates reach threads, off and remove", async () => {
+		const a = await start();
+		const pkg = realpathSync(mkdtempSync(join(tmpdir(), "piopio-pkg-")));
+		writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "demo-pi-package", version: "1.0.0", keywords: ["pi-package"], pi: { skills: ["./skills"], prompts: ["./prompts/*.md"] } }));
+		mkdirSync(join(pkg, "skills", "greet"), { recursive: true });
+		writeFileSync(join(pkg, "skills", "greet", "SKILL.md"), "---\nname: greet\ndescription: Greets people warmly in Valencian.\n---\nSay “Bon dia!” first, then answer.\n");
+		mkdirSync(join(pkg, "prompts"));
+		writeFileSync(join(pkg, "prompts", "summarize.md"), "---\ndescription: Summarize something briefly\nargument-hint: <what> <words>\n---\nSummarize $1 in $2 words.\n");
+
+		await a.client.call("packages.install", { source: pkg });
+		const [installed] = (await a.client.call("packages.list", {})).packages;
+		// pi keeps local paths relative to its settings file; the listed source is the one to pass back.
+		expect(installed).toMatchObject({ source: expect.stringContaining(basename(pkg)), enabled: true, off: [] });
+		const source = installed!.source;
+		expect(installed!.resources.skills.length).toBe(1);
+		expect(installed!.resources.prompts.length).toBe(1);
+
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		expect((await a.client.call("sessions.commands", { ref })).commands).toEqual(
+			expect.arrayContaining([
+				{ name: "summarize", description: "Summarize something briefly", kind: "template", hint: "<what> <words>" },
+				{ name: "skill:greet", description: "Greets people warmly in Valencian.", kind: "skill" },
+			]),
+		);
+		await a.client.call("sessions.submit", { ref, input: { text: "/summarize report 50" } });
+		let snap = await idleWith(a, ref, (s) => s.state.status === "idle" && s.items.some((i) => i.kind === "assistant"));
+		expect(texts(snap)).toEqual([
+			["user", "/summarize report 50"],
+			["assistant", "Echo: Summarize report in 50 words."],
+		]);
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: read_skill | {"name":"greet"}' } });
+		snap = await idleWith(a, ref, (s) => s.state.status === "idle" && s.items.some((i) => i.kind === "tool" && i.status === "done"));
+		expect(snap.items.find((i) => i.kind === "tool")).toMatchObject({ tool: "read_skill", output: expect.stringContaining("Bon dia!") });
+
+		await a.client.call("packages.setEnabled", { source, enabled: false });
+		expect((await a.client.call("packages.list", {})).packages[0]).toMatchObject({ enabled: false, off: ["extensions", "skills", "prompts", "themes"] });
+		// Only this package's commands go (the user's own skills, which pi also finds, stay).
+		const ours = async () => (await a.client.call("sessions.commands", { ref })).commands.filter((c) => c.name === "summarize" || c.name === "skill:greet");
+		for (let i = 0; i < 20 && (await ours()).length; i++) await new Promise((r) => setTimeout(r, 100));
+		expect(await ours()).toEqual([]);
+		await a.client.call("packages.setEnabled", { source, enabled: true, kinds: ["prompts"] });
+		expect((await a.client.call("packages.list", {})).packages[0]!.off).toEqual(["extensions", "skills", "themes"]);
+		await a.client.call("packages.remove", { source });
+		expect((await a.client.call("packages.list", {})).packages).toEqual([]);
+	}, 60_000);
+
+	test("About me lives in the built-in provider: the old doc comes in, edits and Undo are grouped changes", async () => {
+		const home = mkdtempSync(join(tmpdir(), "piopio-test-"));
+		writeFileSync(join(home, "about-me.json"), JSON.stringify({ text: "## Home\n- Lives in Valencia\n\n## Work\n- Nurse", revisions: [], proposals: {} }));
+		const a = await start(home);
+		let me = await a.client.call("aboutMe.get", {});
+		expect(me).toMatchObject({ text: "## Home\n- Lives in Valencia\n\n## Work\n- Nurse", provider: "builtin", limited: false });
+		expect(existsSync(join(home, "about-me.json.migrated"))).toBe(true);
+		await a.client.call("aboutMe.set", { text: "## Home\n- Lives in Madrid\n\n## Work\n- Nurse\n- Night shifts in April" });
+		me = await a.client.call("aboutMe.get", {});
+		expect(me.text).toBe("## Work\n- Nurse\n- Night shifts in April\n\n## Home\n- Lives in Madrid");
+		expect(me.revisions[0]).toMatchObject({ by: { kind: "user" }, added: ["Lives in Madrid", "Night shifts in April"], removed: ["Lives in Valencia"] });
+		await a.client.call("aboutMe.undo", { revisionId: me.revisions[0]!.id });
+		expect((await a.client.call("aboutMe.get", {})).text).toBe("## Work\n- Nurse\n\n## Home\n- Lives in Valencia");
+		const hits = (await a.client.call("memory.recall", { provider: "builtin", bank: "about-me", query: "where does the user live" })).hits;
+		expect(hits[0]!.text).toBe("Lives in Valencia");
+	});
+
+	test("an MCP memory provider: tools listed, About me stored and recalled through it, limited without a list tool", async () => {
+		const a = await start();
+		const server = fileURLToPath(new URL("./fixtures/memory-mcp-server.mjs", import.meta.url));
+		const store = join(a.home, "memories.json");
+		await a.client.call("mcp.add", { scope: "global", name: "mem", command: process.execPath, args: [server, store] });
+		expect((await a.client.call("memory.tools", { server: "mem" })).tools.map((t) => t.name)).toEqual(["remember", "search", "all_memories", "forget"]);
+		const provider = {
+			id: "mem",
+			name: "Test memory",
+			server: "mem",
+			tools: {
+				recall: { tool: "search", args: { query: "{query}", user: "{bank}" } },
+				retain: { tool: "remember", args: { text: "{content}", user: "{bank}" } },
+				list: { tool: "all_memories", args: { user: "{bank}" } },
+				forget: { tool: "forget", args: { id: "{id}" } },
+			},
+		};
+		await a.client.call("settings.set", { memory: { providers: [provider] }, aboutMe: { provider: "mem", enabled: true, capture: true } });
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: remember_about_me | {"add":["Has a dog called Kiwi"]}' } });
+		await a.client.waitFor(settled((await a.client.call("sessions.subscribe", { ref })).subscriptionId), 10_000).catch(() => undefined);
+		for (let i = 0; i < 50 && !existsSync(store); i++) await new Promise((r) => setTimeout(r, 100));
+		expect(JSON.parse(readFileSync(store, "utf8"))).toEqual([{ id: "mem1", user: "about-me", memory: "Has a dog called Kiwi", created_at: "2026-10-21T10:00:00Z" }]);
+		expect(await a.client.call("aboutMe.get", {})).toMatchObject({ text: "## Notes\n- Has a dog called Kiwi", provider: "mem", limited: false, revisions: [] });
+		expect((await a.client.call("memory.recall", { provider: "mem", bank: "about-me", query: "dog name" })).hits.map((h) => h.text)).toEqual(["Has a dog called Kiwi"]);
+		await a.client.call("aboutMe.set", { text: "" });
+		expect(JSON.parse(readFileSync(store, "utf8"))).toEqual([]);
+
+		// Without a list tool: About me can't show what's stored ("limited"); the agents recall instead.
+		const { list: _list, ...tools } = provider.tools;
+		await a.client.call("settings.set", { memory: { providers: [{ ...provider, tools }] } });
+		expect(await a.client.call("aboutMe.get", {})).toMatchObject({ text: "", limited: true });
+	}, 30_000);
 });

@@ -16709,7 +16709,8 @@
 			"type": "object",
 			"required": [
 				"chat",
-				"aboutMe"
+				"aboutMe",
+				"memory"
 			],
 			"properties": {
 				"chat": {
@@ -16733,7 +16734,8 @@
 						"enabled",
 						"capture",
 						"inThreads",
-						"inSpaces"
+						"inSpaces",
+						"provider"
 					],
 					"properties": {
 						"enabled": {
@@ -16747,6 +16749,140 @@
 						},
 						"inSpaces": {
 							"type": "boolean"
+						},
+						"provider": {
+							"type": "string"
+						}
+					}
+				},
+				"memory": {
+					"type": "object",
+					"required": [
+						"providers"
+					],
+					"properties": {
+						"providers": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"tools"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"server": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"tools": {
+										"type": "object",
+										"required": [
+											"recall"
+										],
+										"properties": {
+											"recall": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"retain": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"list": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"forget": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"reflect": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -16780,6 +16916,137 @@
 						},
 						"inSpaces": {
 							"type": "boolean"
+						},
+						"provider": {
+							"type": "string"
+						}
+					}
+				},
+				"memory": {
+					"type": "object",
+					"properties": {
+						"providers": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"tools"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"server": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"tools": {
+										"type": "object",
+										"required": [
+											"recall"
+										],
+										"properties": {
+											"recall": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"retain": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"list": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"forget": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"reflect": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -16789,7 +17056,8 @@
 			"type": "object",
 			"required": [
 				"chat",
-				"aboutMe"
+				"aboutMe",
+				"memory"
 			],
 			"properties": {
 				"chat": {
@@ -16813,7 +17081,8 @@
 						"enabled",
 						"capture",
 						"inThreads",
-						"inSpaces"
+						"inSpaces",
+						"provider"
 					],
 					"properties": {
 						"enabled": {
@@ -16827,6 +17096,140 @@
 						},
 						"inSpaces": {
 							"type": "boolean"
+						},
+						"provider": {
+							"type": "string"
+						}
+					}
+				},
+				"memory": {
+					"type": "object",
+					"required": [
+						"providers"
+					],
+					"properties": {
+						"providers": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"tools"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"server": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"tools": {
+										"type": "object",
+										"required": [
+											"recall"
+										],
+										"properties": {
+											"recall": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"retain": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"list": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"forget": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											},
+											"reflect": {
+												"type": "object",
+												"required": [
+													"tool",
+													"args"
+												],
+												"properties": {
+													"tool": {
+														"type": "string"
+													},
+													"args": {
+														"type": "object",
+														"patternProperties": {
+															"^.*$": {}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -16840,7 +17243,9 @@
 			"type": "object",
 			"required": [
 				"text",
-				"revisions"
+				"revisions",
+				"provider",
+				"limited"
 			],
 			"properties": {
 				"text": {
@@ -16906,6 +17311,12 @@
 							}
 						}
 					}
+				},
+				"provider": {
+					"type": "string"
+				},
+				"limited": {
+					"type": "boolean"
 				}
 			}
 		},
@@ -16924,7 +17335,7 @@
 			"type": "object",
 			"properties": {}
 		},
-		"aboutMe.restore.params": {
+		"aboutMe.undo.params": {
 			"type": "object",
 			"required": [
 				"revisionId"
@@ -16935,9 +17346,97 @@
 				}
 			}
 		},
-		"aboutMe.restore.result": {
+		"aboutMe.undo.result": {
 			"type": "object",
 			"properties": {}
+		},
+		"memory.tools.params": {
+			"type": "object",
+			"properties": {
+				"server": {
+					"type": "string"
+				},
+				"url": {
+					"type": "string"
+				}
+			}
+		},
+		"memory.tools.result": {
+			"type": "object",
+			"required": [
+				"tools"
+			],
+			"properties": {
+				"tools": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"memory.recall.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"bank",
+				"query"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"bank": {
+					"type": "string"
+				},
+				"query": {
+					"type": "string"
+				}
+			}
+		},
+		"memory.recall.result": {
+			"type": "object",
+			"required": [
+				"hits"
+			],
+			"properties": {
+				"hits": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"text",
+							"score"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"text": {
+								"type": "string"
+							},
+							"score": {
+								"type": "number"
+							},
+							"at": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
 		},
 		"threads.dismissSuggestion.params": {
 			"type": "object",
@@ -17173,6 +17672,235 @@
 					}
 				}
 			}
+		},
+		"packages.list.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"packages.list.result": {
+			"type": "object",
+			"required": [
+				"packages"
+			],
+			"properties": {
+				"packages": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"source",
+							"installed",
+							"enabled",
+							"off",
+							"resources"
+						],
+						"properties": {
+							"source": {
+								"type": "string"
+							},
+							"installedPath": {
+								"type": "string"
+							},
+							"installed": {
+								"type": "boolean"
+							},
+							"enabled": {
+								"type": "boolean"
+							},
+							"off": {
+								"type": "array",
+								"items": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "extensions"
+										},
+										{
+											"type": "string",
+											"const": "skills"
+										},
+										{
+											"type": "string",
+											"const": "prompts"
+										},
+										{
+											"type": "string",
+											"const": "themes"
+										}
+									]
+								}
+							},
+							"resources": {
+								"type": "object",
+								"required": [
+									"extensions",
+									"skills",
+									"prompts",
+									"themes"
+								],
+								"properties": {
+									"extensions": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"path",
+												"enabled"
+											],
+											"properties": {
+												"path": {
+													"type": "string"
+												},
+												"enabled": {
+													"type": "boolean"
+												}
+											}
+										}
+									},
+									"skills": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"path",
+												"enabled"
+											],
+											"properties": {
+												"path": {
+													"type": "string"
+												},
+												"enabled": {
+													"type": "boolean"
+												}
+											}
+										}
+									},
+									"prompts": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"path",
+												"enabled"
+											],
+											"properties": {
+												"path": {
+													"type": "string"
+												},
+												"enabled": {
+													"type": "boolean"
+												}
+											}
+										}
+									},
+									"themes": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"path",
+												"enabled"
+											],
+											"properties": {
+												"path": {
+													"type": "string"
+												},
+												"enabled": {
+													"type": "boolean"
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"packages.install.params": {
+			"type": "object",
+			"required": [
+				"source"
+			],
+			"properties": {
+				"source": {
+					"type": "string"
+				}
+			}
+		},
+		"packages.install.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"packages.remove.params": {
+			"type": "object",
+			"required": [
+				"source"
+			],
+			"properties": {
+				"source": {
+					"type": "string"
+				}
+			}
+		},
+		"packages.remove.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"packages.update.params": {
+			"type": "object",
+			"properties": {
+				"source": {
+					"type": "string"
+				}
+			}
+		},
+		"packages.update.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"packages.setEnabled.params": {
+			"type": "object",
+			"required": [
+				"source",
+				"enabled"
+			],
+			"properties": {
+				"source": {
+					"type": "string"
+				},
+				"enabled": {
+					"type": "boolean"
+				},
+				"kinds": {
+					"type": "array",
+					"items": {
+						"anyOf": [
+							{
+								"type": "string",
+								"const": "extensions"
+							},
+							{
+								"type": "string",
+								"const": "skills"
+							},
+							{
+								"type": "string",
+								"const": "prompts"
+							},
+							{
+								"type": "string",
+								"const": "themes"
+							}
+						]
+					}
+				}
+			}
+		},
+		"packages.setEnabled.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"projects.remove.params": {
 			"type": "object",

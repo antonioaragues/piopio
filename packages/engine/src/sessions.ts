@@ -20,6 +20,7 @@ import { SpaceRuntime, type SpaceStats, type TopicSummary } from "./runtimes/spa
 import { aboutMeExtension, type AboutMe } from "./about-me.js";
 import type { Settings } from "./settings.js";
 import type { ChatMcp } from "./tools/mcp-chat.js";
+import type { ChatResources } from "./tools/chat-resources.js";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
@@ -77,7 +78,8 @@ export class Sessions {
 	readonly checkpoints: CheckpointStore;
 	policy: ApprovalPolicy = { projectFor: () => undefined, modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
 	/** Settings, About me and MCP for Threads and Spaces (set by the engine). */
-	chat?: { settings: Settings; aboutMe: AboutMe; mcp: ChatMcp };
+	chat?: { settings: Settings; aboutMe: AboutMe; mcp: ChatMcp; resources: ChatResources };
+	private skillsExtension?: Extension;
 	private aboutMeExtensions = new Map<"thread" | "space", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
@@ -456,14 +458,22 @@ export class Sessions {
 		this.changed(entry);
 	}
 
-	private chatExtras(kind: "thread" | "space"): { extensions?: Extension[]; mcp?: ChatMcp } {
+	private chatExtras(kind: "thread" | "space"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {
 		if (!this.chat) return {};
 		let aboutMe = this.aboutMeExtensions.get(kind);
 		if (!aboutMe) {
 			aboutMe = aboutMeExtension(this.chat.aboutMe, this.chat.settings, kind) as unknown as Extension;
 			this.aboutMeExtensions.set(kind, aboutMe);
 		}
-		return { extensions: [aboutMe], mcp: this.chat.mcp };
+		const resources = this.chat.resources;
+		this.skillsExtension ??= resources.extension() as unknown as Extension;
+		return { extensions: [aboutMe, this.skillsExtension], mcp: this.chat.mcp, expand: (text) => resources.expand(text) };
+	}
+
+	/** `/commands` of a Thread or Space: prompt templates and skills from pi's folder and packages. */
+	async chatCommands() {
+		await this.chat?.resources.ready();
+		return this.chat?.resources.commands() ?? [];
 	}
 
 	// ── Moving threads and topics (04-chat S5, S9, S11) ─────────────────────
@@ -698,6 +708,7 @@ export class Sessions {
 	}
 
 	private async openRuntime(entry: CatalogEntry): Promise<Runtime> {
+		if (entry.ref.kind !== "build") await this.chat?.resources.ready();
 		const runtime = await this.createRuntime(entry);
 		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
 		runtime.onEvents((events) => {

@@ -94,7 +94,7 @@ export class ChatMcp {
 	}
 }
 
-function transport(server: RawServer) {
+export function transport(server: RawServer) {
 	const expand = (v: string) => v.replace(/\$\{(\w+)\}/g, (_, k: string) => process.env[k] ?? "");
 	if (server.url) {
 		const headers = Object.fromEntries(Object.entries((server.headers as Record<string, string> | undefined) ?? {}).map(([k, v]) => [k, expand(v)]));
@@ -104,7 +104,7 @@ function transport(server: RawServer) {
 	return new StdioClientTransport({ command: server.command!, args: server.args ?? [], env, stderr: "ignore" });
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	return new Promise((resolve, reject) => {
 		const timer = setTimeout(() => reject(new Error(`no answer in ${ms / 1000}s`)), ms);
 		promise.then(

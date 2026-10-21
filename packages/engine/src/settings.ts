@@ -7,10 +7,11 @@ import type { EngineSettings } from "@piopio/protocol";
 
 export const DEFAULT_SETTINGS: EngineSettings = {
 	chat: { mcp: false, suggestSpaces: true },
-	aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true },
+	aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" },
+	memory: { providers: [] },
 };
 
-export type SettingsPatch = { chat?: Partial<EngineSettings["chat"]>; aboutMe?: Partial<EngineSettings["aboutMe"]> };
+export type SettingsPatch = { chat?: Partial<EngineSettings["chat"]>; aboutMe?: Partial<EngineSettings["aboutMe"]>; memory?: Partial<EngineSettings["memory"]> };
 
 export class Settings {
 	private value: EngineSettings;
@@ -18,7 +19,7 @@ export class Settings {
 
 	constructor(private readonly file: string) {
 		const saved = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as SettingsPatch) : {};
-		this.value = { chat: { ...DEFAULT_SETTINGS.chat, ...saved.chat }, aboutMe: { ...DEFAULT_SETTINGS.aboutMe, ...saved.aboutMe } };
+		this.value = { chat: { ...DEFAULT_SETTINGS.chat, ...saved.chat }, aboutMe: { ...DEFAULT_SETTINGS.aboutMe, ...saved.aboutMe }, memory: { ...DEFAULT_SETTINGS.memory, ...saved.memory } };
 	}
 
 	get(): EngineSettings {
@@ -27,7 +28,7 @@ export class Settings {
 
 	set(patch: SettingsPatch): EngineSettings {
 		const previous = this.value;
-		this.value = { chat: { ...previous.chat, ...patch.chat }, aboutMe: { ...previous.aboutMe, ...patch.aboutMe } };
+		this.value = { chat: { ...previous.chat, ...patch.chat }, aboutMe: { ...previous.aboutMe, ...patch.aboutMe }, memory: { ...previous.memory, ...patch.memory } };
 		const tmp = `${this.file}.tmp`;
 		writeFileSync(tmp, JSON.stringify(this.value, null, "\t"));
 		renameSync(tmp, this.file);

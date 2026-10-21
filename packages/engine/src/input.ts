@@ -43,6 +43,13 @@ export function buildInput(text: string, attachments: readonly Attachment[] = []
 	return { content: blocks, entry: { kind: USER_ENTRY, data: { text, attachments: infos } } };
 }
 
+/** A `/command` the engine expanded: the model gets `expanded`, the transcript shows what was typed. */
+export function commandInput(text: string, attachments: readonly Attachment[] = [], expanded?: string): BuiltInput {
+	if (expanded === undefined) return buildInput(text, attachments);
+	const base = buildInput(expanded, attachments);
+	return { content: base.content, entry: { kind: USER_ENTRY, data: { text, attachments: base.entry?.data.attachments ?? [] } } };
+}
+
 /** The same input with new words (edits keep the attachments). */
 export function withText(content: unknown, entry: { kind: string; data?: unknown }, text: string): BuiltInput {
 	if (entry.kind !== USER_ENTRY || !Array.isArray(content)) return { content: text };

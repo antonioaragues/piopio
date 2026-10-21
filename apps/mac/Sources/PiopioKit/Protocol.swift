@@ -393,10 +393,55 @@ public struct SpaceSuggestion: Codable, Sendable, Hashable {
 /// Engine-wide settings (Settings › Chat, Settings › MCP servers).
 public struct EngineSettings: Codable, Sendable, Hashable {
     public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var suggestSpaces: Bool }
-    public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool }
+    public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var provider: String }
+    public struct Memory: Codable, Sendable, Hashable { public var providers: [McpMemoryProvider] }
     public var chat: Chat
     public var aboutMe: AboutMe
+    public var memory: Memory
 }
+
+/// A memory system reached through its MCP server (07-shared §6.2).
+public struct McpMemoryProvider: Codable, Sendable, Hashable, Identifiable {
+    public struct Mapping: Codable, Sendable, Hashable {
+        public var tool: String
+        public var args: [String: JSONValue]
+        public init(tool: String, args: [String: JSONValue]) { self.tool = tool; self.args = args }
+    }
+    public struct Tools: Codable, Sendable, Hashable {
+        public var recall: Mapping
+        public var retain, list, forget, reflect: Mapping?
+        public init(recall: Mapping, retain: Mapping? = nil, list: Mapping? = nil, forget: Mapping? = nil, reflect: Mapping? = nil) { self.recall = recall; self.retain = retain; self.list = list; self.forget = forget; self.reflect = reflect }
+    }
+    public var id: String
+    public var name: String
+    public var server: String?
+    public var url: String?
+    public var tools: Tools
+    public init(id: String, name: String, server: String? = nil, url: String? = nil, tools: Tools) { self.id = id; self.name = name; self.server = server; self.url = url; self.tools = tools }
+}
+
+/// A pi package (Settings › Extensions).
+public struct PiPackage: Codable, Sendable, Hashable, Identifiable {
+    public struct Resource: Codable, Sendable, Hashable { public var path: String; public var enabled: Bool }
+    public struct Resources: Codable, Sendable, Hashable { public var extensions, skills, prompts, themes: [Resource] }
+    public var source: String
+    public var installedPath: String?
+    public var installed: Bool
+    public var enabled: Bool
+    public var off: [String]
+    public var resources: Resources
+    public var id: String { source }
+}
+public struct PackagesResult: Decodable, Sendable { public var packages: [PiPackage] }
+public struct PackageParams: Encodable, Sendable { public var source: String?; public init(source: String?) { self.source = source } }
+public struct PackageEnableParams: Encodable, Sendable {
+    public var source: String; public var enabled: Bool; public var kinds: [String]?
+    public init(source: String, enabled: Bool, kinds: [String]? = nil) { self.source = source; self.enabled = enabled; self.kinds = kinds }
+}
+public struct MemoryToolsParams: Encodable, Sendable { public var server: String?; public var url: String?; public init(server: String?, url: String?) { self.server = server; self.url = url } }
+public struct MemoryToolsResult: Decodable, Sendable { public struct Tool: Decodable, Sendable, Hashable { public var name: String; public var description: String? }; public var tools: [Tool] }
+public struct MemoryRecallParams: Encodable, Sendable { public var provider: String; public var bank: String; public var query: String; public init(provider: String, bank: String, query: String) { self.provider = provider; self.bank = bank; self.query = query } }
+public struct MemoryRecallResult: Decodable, Sendable { public struct Hit: Decodable, Sendable, Hashable { public var id: String; public var text: String; public var score: Double }; public var hits: [Hit] }
 
 public struct SettingsPatch: Encodable, Sendable {
     public struct Chat: Encodable, Sendable {
@@ -405,11 +450,14 @@ public struct SettingsPatch: Encodable, Sendable {
     }
     public struct AboutMe: Encodable, Sendable {
         public var enabled, capture, inThreads, inSpaces: Bool?
-        public init(enabled: Bool? = nil, capture: Bool? = nil, inThreads: Bool? = nil, inSpaces: Bool? = nil) { self.enabled = enabled; self.capture = capture; self.inThreads = inThreads; self.inSpaces = inSpaces }
+        public var provider: String?
+        public init(enabled: Bool? = nil, capture: Bool? = nil, inThreads: Bool? = nil, inSpaces: Bool? = nil, provider: String? = nil) { self.enabled = enabled; self.capture = capture; self.inThreads = inThreads; self.inSpaces = inSpaces; self.provider = provider }
     }
+    public struct Memory: Encodable, Sendable { public var providers: [McpMemoryProvider]?; public init(providers: [McpMemoryProvider]?) { self.providers = providers } }
     public var chat: Chat?
     public var aboutMe: AboutMe?
-    public init(chat: Chat? = nil, aboutMe: AboutMe? = nil) { self.chat = chat; self.aboutMe = aboutMe }
+    public var memory: Memory?
+    public init(chat: Chat? = nil, aboutMe: AboutMe? = nil, memory: Memory? = nil) { self.chat = chat; self.aboutMe = aboutMe; self.memory = memory }
 }
 
 public struct TextParams: Encodable, Sendable { public var text: String; public init(text: String) { self.text = text } }
@@ -471,7 +519,13 @@ public struct MemoryRevision: Codable, Sendable, Hashable, Identifiable {
     public var added, removed: [String]
     public var undone: Bool?
 }
-public struct MemoryResult: Decodable, Sendable { public var text: String; public var revisions: [MemoryRevision] }
+public struct MemoryResult: Decodable, Sendable {
+    public var text: String
+    public var revisions: [MemoryRevision]
+    /// About me: the provider it lives in, and whether that provider can list what it stored.
+    public var provider: String?
+    public var limited: Bool?
+}
 public struct MemorySetParams: Encodable, Sendable { public var ref: ContainerRef; public var text: String; public init(ref: ContainerRef, text: String) { self.ref = ref; self.text = text } }
 public struct RevisionParams: Encodable, Sendable { public var ref: ContainerRef; public var revisionId: String; public init(ref: ContainerRef, revisionId: String) { self.ref = ref; self.revisionId = revisionId } }
 public struct DecideParams: Encodable, Sendable { public var ref: ContainerRef; public var proposalId: String; public var accept: Bool; public init(ref: ContainerRef, proposalId: String, accept: Bool) { self.ref = ref; self.proposalId = proposalId; self.accept = accept } }

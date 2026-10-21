@@ -6,7 +6,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { Attachment, ContainerRef, ModelRef, Snapshot } from "@piopio/protocol";
-import { asSubmitted, buildInput, isUserEntry, withText, type BuiltInput } from "../input.js";
+import { asSubmitted, commandInput, isUserEntry, withText, type BuiltInput } from "../input.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock } from "../timeline/builder.js";
@@ -40,6 +40,8 @@ export type ThreadOpenOptions = {
 	extensions?: Extension[];
 	/** MCP servers, when Chat may use them. */
 	mcp?: ChatMcp;
+	/** Expands a `/command` (prompt templates, skills), or undefined. */
+	expand?: (text: string) => string | undefined;
 };
 
 export class ThreadRuntime implements Runtime {
@@ -78,6 +80,7 @@ export class ThreadRuntime implements Runtime {
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
 		const runtime = new ThreadRuntime(options.ref, options.hub, harness, options.model, options.thinking, options.branches, options.onBranchState, options.web ?? true, webExtension);
 		runtime.detachMcp = detachMcp;
+		runtime.expand = options.expand;
 		const root = await harness.root(ctx, { agent: runtime.agent() } as Parameters<Harness["root"]>[1]);
 		const saved = options.branches?.active ? await harness.conversation(Number(options.branches.active) as never, ctx) : undefined;
 		await runtime.attach(saved ?? root, false);
@@ -170,7 +173,7 @@ export class ThreadRuntime implements Runtime {
 
 	async submit(text: string, options: SubmitOptions) {
 		const busy = this.builder.status === "running";
-		await this.submitInput(buildInput(text, options.attachments), text, options);
+		await this.submitInput(commandInput(text, options.attachments, this.expand?.(text)), text, options);
 		return { disposition: busy ? ("queued" as const) : ("started" as const) };
 	}
 
@@ -278,6 +281,7 @@ export class ThreadRuntime implements Runtime {
 	}
 
 	private detachMcp?: () => void;
+	private expand?: (text: string) => string | undefined;
 
 	// MARK: Moving (04-chat S5, S9)
 

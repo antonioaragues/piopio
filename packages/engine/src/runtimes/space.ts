@@ -11,7 +11,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { configure, ConversationBusy, createRegistry, defineExtension, Harness, watchEvents, type AgentEventStream, type Conversation, type ConversationId, type Extension, type Tx } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { ContainerRef, MemoryItem, ModelRef, RoutingItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
-import { buildInput, USER_ENTRY, type BuiltInput } from "../input.js";
+import { buildInput, commandInput, USER_ENTRY, type BuiltInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock } from "../timeline/builder.js";
 import { DurableEventMapper } from "../timeline/pi-durable.js";
@@ -52,6 +52,8 @@ export type SpaceOpenOptions = {
 	extensions?: Extension[];
 	/** MCP servers, when Chat may use them. */
 	mcp?: ChatMcp;
+	/** Expands a `/command` (prompt templates, skills), or undefined. */
+	expand?: (text: string) => string | undefined;
 	/** The topics or the header's numbers changed (sidebar, header). */
 	onTopics?: (topics: TopicSummary[], stats: SpaceStats) => void;
 };
@@ -586,6 +588,10 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		return (submissionId && this.live.get(submissionId)) || { status: "thinking" };
 	}
 
+	expand(text: string): string | undefined {
+		return this.options.expand?.(text);
+	}
+
 	reroute(itemId: string): Route | undefined {
 		return this.state.reroutes[itemId];
 	}
@@ -908,7 +914,7 @@ export class SpaceView implements Runtime {
 			const forced = await this.forced(text);
 			if (forced) return { disposition: "started" as const };
 		}
-		let input = buildInput(text, options.attachments);
+		let input = commandInput(text, options.attachments, this.space.expand(text));
 		if (this.isMain && /^\/main\s/i.test(text)) {
 			// /main …: the organizer answers here.
 			const words = text.replace(/^\/main\s+/i, "");

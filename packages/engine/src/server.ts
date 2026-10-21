@@ -19,6 +19,9 @@ import { Sessions } from "./sessions.js";
 import { AboutMe } from "./about-me.js";
 import { Settings } from "./settings.js";
 import { ChatMcp } from "./tools/mcp-chat.js";
+import { ChatResources } from "./tools/chat-resources.js";
+import { Packages } from "./packages.js";
+import { MemoryProviders } from "./memory.js";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
 declare const PIOPIO_ENGINE_VERSION: string | undefined;
@@ -46,6 +49,9 @@ export class Engine {
 	readonly settings: Settings;
 	readonly aboutMe: AboutMe;
 	readonly chatMcp: ChatMcp;
+	readonly packages: Packages;
+	readonly chatResources: ChatResources;
+	readonly memory: MemoryProviders;
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
@@ -76,9 +82,13 @@ export class Engine {
 		this.projects = new Projects(options.paths.projectsIndex, agentDir);
 		this.mcp = new McpConfig(agentDir);
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
-		this.aboutMe = new AboutMe(join(options.paths.home, "about-me.json"));
+		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings);
+		this.aboutMe = new AboutMe(this.memory, this.settings, join(options.paths.home, "about-me.json"));
 		this.chatMcp = new ChatMcp(this.mcp, () => this.settings.get().chat.mcp);
-		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp };
+		this.packages = new Packages(agentDir);
+		this.chatResources = new ChatResources(agentDir);
+		this.packages.onChange(() => void this.chatResources.reload());
+		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp, resources: this.chatResources };
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp) void this.chatMcp.reset();
 		});
@@ -103,6 +113,7 @@ export class Engine {
 			unlinkSync(socket);
 		}
 		this.token = loadOrCreateToken(this.options.paths);
+		await this.aboutMe.migrate().catch((error) => this.log(`About me: couldn't bring in the old doc: ${(error as Error).message}`));
 		this.server = createServer((stream) => this.accept(new RpcConnectionFor(stream)));
 		await new Promise<void>((resolve, reject) => {
 			this.server!.once("error", reject);
@@ -125,6 +136,7 @@ export class Engine {
 		await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()));
 		await this.sessions.closeAll();
 		await this.chatMcp.close();
+		await this.memory.reset();
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
 	}
 
@@ -328,6 +340,7 @@ export class Engine {
 			}
 			case "sessions.commands": {
 				const p = params as Params<"sessions.commands">;
+				if (p.ref.kind !== "build") return { commands: await this.sessions.chatCommands() } satisfies Result<"sessions.commands">;
 				return { commands: (await this.sessions.build(p.ref)).commands() } satisfies Result<"sessions.commands">;
 			}
 			case "sessions.tree": {
@@ -383,6 +396,28 @@ export class Engine {
 				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
 			}
+			case "packages.list":
+				return { packages: await this.packages.list() } satisfies Result<"packages.list">;
+			case "packages.install": {
+				const p = params as Params<"packages.install">;
+				await this.packages.install(p.source);
+				return {};
+			}
+			case "packages.remove": {
+				const p = params as Params<"packages.remove">;
+				await this.packages.remove(p.source);
+				return {};
+			}
+			case "packages.update": {
+				const p = params as Params<"packages.update">;
+				await this.packages.update(p.source);
+				return {};
+			}
+			case "packages.setEnabled": {
+				const p = params as Params<"packages.setEnabled">;
+				await this.packages.setEnabled(p.source, p.enabled, p.kinds);
+				return {};
+			}
 			case "settings.get":
 				return this.settings.get() satisfies Result<"settings.get">;
 			case "settings.set": {
@@ -390,16 +425,26 @@ export class Engine {
 				return this.settings.set(p) satisfies Result<"settings.set">;
 			}
 			case "aboutMe.get":
-				return this.aboutMe.info() satisfies Result<"aboutMe.get">;
+				return (await this.aboutMe.info()) satisfies Result<"aboutMe.get">;
 			case "aboutMe.set": {
 				const p = params as Params<"aboutMe.set">;
-				this.aboutMe.set(p.text);
+				await this.aboutMe.set(p.text);
 				return {};
 			}
-			case "aboutMe.restore": {
-				const p = params as Params<"aboutMe.restore">;
-				this.aboutMe.restore(p.revisionId);
+			case "aboutMe.undo": {
+				const p = params as Params<"aboutMe.undo">;
+				await this.aboutMe.undo(p.revisionId);
 				return {};
+			}
+			case "memory.tools": {
+				const p = params as Params<"memory.tools">;
+				if (!p.server === !p.url) throw new EngineError("INVALID", "Give an MCP server's name or a URL.");
+				return { tools: await this.memory.tools(p) } satisfies Result<"memory.tools">;
+			}
+			case "memory.recall": {
+				const p = params as Params<"memory.recall">;
+				const hits = await this.memory.get(p.provider).recall([p.bank], p.query, { budgetTokens: 2000 });
+				return { hits: hits.map((h) => ({ id: h.id, text: h.text, score: h.score, ...(h.at ? { at: h.at } : {}) })) } satisfies Result<"memory.recall">;
 			}
 			case "threads.dismissSuggestion": {
 				const p = params as Params<"threads.dismissSuggestion">;

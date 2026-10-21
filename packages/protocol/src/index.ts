@@ -335,6 +335,24 @@ export const SpaceInfo = Type.Object({
 });
 export type SpaceInfo = Static<typeof SpaceInfo>;
 
+/** One operation of an MCP memory provider: the tool, and its arguments with {placeholders} (07-shared §6.2 MM1). */
+export const McpMemoryMapping = Type.Object({ tool: Type.String(), args: Type.Record(Type.String(), Type.Unknown()) });
+/** A memory system reached through its MCP server: a server from mcp.json, or a URL. */
+export const McpMemoryProvider = Type.Object({
+	id: Type.String(),
+	name: Type.String(),
+	server: Type.Optional(Type.String()),
+	url: Type.Optional(Type.String()),
+	tools: Type.Object({
+		recall: McpMemoryMapping,
+		retain: Type.Optional(McpMemoryMapping),
+		list: Type.Optional(McpMemoryMapping),
+		forget: Type.Optional(McpMemoryMapping),
+		reflect: Type.Optional(McpMemoryMapping),
+	}),
+});
+export type McpMemoryProvider = Static<typeof McpMemoryProvider>;
+
 /** Engine-wide settings (07-shared §5, §7). */
 export const EngineSettings = Type.Object({
 	chat: Type.Object({
@@ -350,9 +368,33 @@ export const EngineSettings = Type.Object({
 		capture: Type.Boolean(),
 		inThreads: Type.Boolean(),
 		inSpaces: Type.Boolean(),
+		/** Where About me lives: "builtin", or an MCP memory provider's id. */
+		provider: Type.String(),
+	}),
+	memory: Type.Object({
+		/** MCP memory providers (07-shared §6.2). */
+		providers: Type.Array(McpMemoryProvider),
 	}),
 });
 export type EngineSettings = Static<typeof EngineSettings>;
+
+/** A pi package (07-shared §6.1): what it brings, and what of it is on. */
+export const PiPackage = Type.Object({
+	source: Type.String(),
+	installedPath: Type.Optional(Type.String()),
+	installed: Type.Boolean(),
+	/** Some of it is on. */
+	enabled: Type.Boolean(),
+	/** Kinds of resources turned off. */
+	off: Type.Array(literals("extensions", "skills", "prompts", "themes")),
+	resources: Type.Object({
+		extensions: Type.Array(Type.Object({ path: Type.String(), enabled: Type.Boolean() })),
+		skills: Type.Array(Type.Object({ path: Type.String(), enabled: Type.Boolean() })),
+		prompts: Type.Array(Type.Object({ path: Type.String(), enabled: Type.Boolean() })),
+		themes: Type.Array(Type.Object({ path: Type.String(), enabled: Type.Boolean() })),
+	}),
+});
+export type PiPackage = Static<typeof PiPackage>;
 
 /** Where a thread seems to belong (04-chat S11). */
 export const SpaceSuggestion = Type.Object({
@@ -787,7 +829,7 @@ export const methods = {
 	"spaces.files.remove": { params: Type.Object({ ref: ContainerRef, name: Type.String() }), result: Type.Object({}) },
 	"settings.get": { params: Type.Object({}), result: EngineSettings },
 	"settings.set": {
-		params: Type.Object({ chat: Type.Optional(Type.Partial(EngineSettings.properties.chat)), aboutMe: Type.Optional(Type.Partial(EngineSettings.properties.aboutMe)) }),
+		params: Type.Object({ chat: Type.Optional(Type.Partial(EngineSettings.properties.chat)), aboutMe: Type.Optional(Type.Partial(EngineSettings.properties.aboutMe)), memory: Type.Optional(Type.Partial(EngineSettings.properties.memory)) }),
 		result: EngineSettings,
 	},
 	/** The "About me" memory and its history, newest first. */
@@ -796,10 +838,24 @@ export const methods = {
 		result: Type.Object({
 			text: Type.String(),
 			revisions: Type.Array(Type.Object({ id: Type.String(), at: Type.String(), by: Type.Object({ kind: literals("organizer", "topic", "user") }), summary: Type.String(), added: Type.Array(Type.String()), removed: Type.Array(Type.String()) })),
+			/** The provider it lives in, and whether that provider can list what it stored (07 §6.2 MM3). */
+			provider: Type.String(),
+			limited: Type.Boolean(),
 		}),
 	},
 	"aboutMe.set": { params: Type.Object({ text: Type.String() }), result: Type.Object({}) },
-	"aboutMe.restore": { params: Type.Object({ revisionId: Type.String() }), result: Type.Object({}) },
+	/** Takes one change back (a revision of the history). */
+	"aboutMe.undo": { params: Type.Object({ revisionId: Type.String() }), result: Type.Object({}) },
+	/** The tools of an MCP server or URL, for the memory provider's mapping editor. */
+	"memory.tools": {
+		params: Type.Object({ server: Type.Optional(Type.String()), url: Type.Optional(Type.String()) }),
+		result: Type.Object({ tools: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()) })) }),
+	},
+	/** Try a provider: what it recalls for a query in a bank. */
+	"memory.recall": {
+		params: Type.Object({ provider: Type.String(), bank: Type.String(), query: Type.String() }),
+		result: Type.Object({ hits: Type.Array(Type.Object({ id: Type.String(), text: Type.String(), score: Type.Number(), at: Type.Optional(Type.String()) })) }),
+	},
 	/** Dismiss on a thread's Space suggestion: it won't be suggested again. */
 	"threads.dismissSuggestion": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({}) },
 	/**
@@ -812,6 +868,15 @@ export const methods = {
 	},
 	/** Promote to Thread (S9): copies a topic out into a new thread. The topic stays. */
 	"spaces.topics.promote": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({ ref: ContainerRef }) },
+	/** pi packages (Settings › Extensions). */
+	"packages.list": { params: Type.Object({}), result: Type.Object({ packages: Type.Array(PiPackage) }) },
+	"packages.install": { params: Type.Object({ source: Type.String() }), result: Type.Object({}) },
+	"packages.remove": { params: Type.Object({ source: Type.String() }), result: Type.Object({}) },
+	"packages.update": { params: Type.Object({ source: Type.Optional(Type.String()) }), result: Type.Object({}) },
+	"packages.setEnabled": {
+		params: Type.Object({ source: Type.String(), enabled: Type.Boolean(), kinds: Type.Optional(Type.Array(literals("extensions", "skills", "prompts", "themes"))) }),
+		result: Type.Object({}),
+	},
 	/** Forgets a project. Its session files stay where pi keeps them. */
 	"projects.remove": {
 		params: Type.Object({ id: Type.String() }),

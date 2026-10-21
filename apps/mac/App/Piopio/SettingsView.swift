@@ -9,13 +9,14 @@ struct SettingsView: View {
     @State private var section: Section = Section(rawValue: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Providers", chat = "Chat", mcp = "MCP servers", approvals = "Approvals", engines = "Engines"
+        case general = "General", providers = "Providers", chat = "Chat", mcp = "MCP servers", extensions = "Extensions", approvals = "Approvals", engines = "Engines"
         var id: String { rawValue }
         var icon: (String, Color) {
             switch self {
             case .general: ("gearshape.fill", .gray)
             case .providers: ("key.fill", .blue)
             case .chat: ("bubble.left.and.bubble.right.fill", .teal)
+            case .extensions: ("shippingbox.fill", .indigo)
             case .approvals: ("checkmark.shield.fill", .orange)
             case .mcp: ("puzzlepiece.extension.fill", .purple)
             case .engines: ("cpu.fill", .green)
@@ -55,6 +56,7 @@ struct SettingsView: View {
                     case .general: GeneralPane()
                     case .providers: ProvidersPane(engine: engine)
                     case .chat: ChatPane(engine: engine)
+                    case .extensions: ExtensionsPane(engine: engine)
                     case .approvals: ApprovalsPane(engine: engine)
                     case .mcp: McpPane(engine: engine)
                     case .engines: EnginesPane(engine: engine)

@@ -113,6 +113,7 @@ struct ChatPane: View {
     @State private var text = ""
     @State private var saved = ""
     @State private var revisions: [MemoryRevision] = []
+    @State private var limited = false
 
     private var settings: EngineSettings? { engine.settings }
 
@@ -141,6 +142,15 @@ struct ChatPane: View {
                 Toggle("Threads", isOn: binding(\.aboutMe.inThreads) { SettingsPatch(aboutMe: .init(inThreads: $0)) }).toggleStyle(.checkbox)
                 Toggle("Spaces", isOn: binding(\.aboutMe.inSpaces) { SettingsPatch(aboutMe: .init(inSpaces: $0)) }).toggleStyle(.checkbox)
                 Text("Never in Build").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                Spacer()
+            }
+            Row(title: "Stored in") {
+                Picker("", selection: Binding(get: { settings?.aboutMe.provider ?? "builtin" }, set: { id in Task { await engine.updateSettings(SettingsPatch(aboutMe: .init(provider: id))); await load() } })) {
+                    Text("Built-in").tag("builtin")
+                    ForEach(settings?.memory.providers ?? []) { Text($0.name).tag($0.id) }
+                }
+                .labelsHidden().fixedSize()
+                if limited { Text("This provider can't list what it stores; the agents recall from it.").font(.system(size: 12)).foregroundStyle(Color.dsAmber) }
                 Spacer()
             }
             Row(title: "Learning", last: true) {
@@ -176,9 +186,9 @@ struct ChatPane: View {
                         Text(r.summary).font(.system(size: 12)).lineLimit(2)
                         HStack(spacing: 6) {
                             Text("\(r.by.kind == "user" ? "You" : "An agent") · \(BuildSessionView.relative(r.at))").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-                            Button("Restore") {
+                            Button("Undo") {
                                 run {
-                                    try await engine.spaceCall("aboutMe.restore", RevisionIdParams(revisionId: r.id))
+                                    try await engine.spaceCall("aboutMe.undo", RevisionIdParams(revisionId: r.id))
                                     await load()
                                 }
                             }
@@ -189,6 +199,8 @@ struct ChatPane: View {
             }
             .frame(width: 200, alignment: .leading)
         }
+        .padding(.bottom, 18)
+        MemoryProvidersSection(engine: engine)
         .task {
             await engine.loadSettings()
             await load()
@@ -204,5 +216,6 @@ struct ChatPane: View {
         text = memory.text
         saved = memory.text
         revisions = memory.revisions
+        limited = memory.limited ?? false
     }
 }

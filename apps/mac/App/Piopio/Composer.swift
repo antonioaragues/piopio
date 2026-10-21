@@ -48,14 +48,15 @@ struct Composer: View {
             if !suggestions.isEmpty { suggestionList }
             box
         }
-        .onChange(of: text) { _, value in if isBuild || isSpaceMain { suggest(for: value) } }
+        .onChange(of: text) { _, value in suggest(for: value) }
         .onChange(of: thread.draft) { _, draft in
             guard let draft else { return }
             text = draft
             thread.draft = nil
             focused = true
         }
-        .task(id: thread.ref.id) { if isBuild { sessionCommands = await thread.commands() } }
+        // Build: pi's commands. Chat: prompt templates and skills from pi's folder and packages.
+        .task(id: thread.ref.id) { sessionCommands = await thread.commands() }
         .onChange(of: thread.editing?.itemId) { _, id in
             guard id != nil, let original = thread.editing?.original else { return }
             text = original
@@ -445,11 +446,23 @@ extension Composer {
             if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
                 let q = trimmed.dropFirst().lowercased()
                 suggestions = Suggestion.spaceCommands.filter { if case .spaceCommand(let name, _) = $0 { q.isEmpty || name.hasPrefix(q) } else { false } }
+                    + sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.prefix(10).map(Suggestion.command)
             } else if trimmed.hasPrefix("@"), !value.contains("\n") {
                 let q = trimmed.dropFirst().lowercased()
                 let topics = engine.space(thread.ref.id)?.topics ?? []
                 // Stop suggesting once a whole title (and a space) was typed.
                 suggestions = topics.contains(where: { q.hasPrefix($0.title.lowercased() + " ") }) ? [] : topics.filter { q.isEmpty || $0.title.lowercased().hasPrefix(q) || $0.title.lowercased().contains(q) }.prefix(8).map(Suggestion.topic)
+            } else if !suggestions.isEmpty {
+                suggestions = []
+            }
+            highlighted = 0
+            return
+        }
+        if !isBuild {
+            // Threads and topics: templates and skills after "/".
+            if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
+                let q = trimmed.dropFirst().lowercased()
+                suggestions = Array(sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.prefix(12).map(Suggestion.command))
             } else if !suggestions.isEmpty {
                 suggestions = []
             }
