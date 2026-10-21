@@ -137,7 +137,7 @@ struct Composer: View {
                 }
                 if let context = thread.state?.context { ContextChip(context: context) }
                 // Spaces always have the web tools (no per-conversation switch yet).
-                if thread.editing == nil && !isBuild && thread.ref.kind != .space {
+                if thread.editing == nil && !isBuild && thread.ref.kind != .space && thread.ref.kind != .agent {
                     Button { Task { await thread.setWeb(!thread.webEnabled) } } label: {
                         Label("Web search", systemImage: "globe").labelStyle(.titleOnly)
                     }

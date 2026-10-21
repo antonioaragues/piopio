@@ -8,6 +8,8 @@ struct RootView: View {
     @AppStorage("mode") private var mode: AppMode = .chat
     @State private var selection: String?
     @State private var buildSelection: String?
+    @AppStorage("agentSelection") private var agentSelection: String?
+    @State private var showNewAgent = false
     @State private var newSessionProject: ProjectInfo?
     @State private var showOnboarding = false
     @State private var palette: CommandPalette.Mode?
@@ -20,7 +22,7 @@ struct RootView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(engine: engine, mode: $mode, selection: $selection, buildSelection: $buildSelection, onSearch: { palette = .messages; paletteQuery = "" })
+            Sidebar(engine: engine, mode: $mode, selection: $selection, buildSelection: $buildSelection, agentSelection: $agentSelection, onSearch: { palette = .messages; paletteQuery = "" })
                 .frame(width: 268)
                 .glassPanel()
                 .padding(8)
@@ -63,27 +65,7 @@ struct RootView: View {
             mode = .build
             buildSelection = note.object as? String
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newSpace)) { note in
-            mode = .chat
-            newSpaceThreads = (note.object as? String).map { [$0] } ?? []
-            showNewSpace = true
-        }
-        .sheet(isPresented: $showNewSpace) {
-            NewSpaceSheet(engine: engine, preselected: Set(newSpaceThreads)) { selection = $0 }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .editSpaceInstructions)) { note in
-            editingInstructions = engine.space(note.object as? String ?? "")
-        }
-        .sheet(item: $editingInstructions) { space in
-            SpaceSettingsSheet(engine: engine, space: space)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openTopic)) { note in
-            guard let target = note.object as? TopicTarget else { return }
-            mode = .chat
-            let ref = ContainerRef(kind: .space, id: target.spaceId, conversationId: target.topicId)
-            selection = ref.key
-            if let item = target.itemId { engine.thread(ref).reveal(item) }
-        }
+        .modifier(SpaceAndAgentSheets(engine: engine, mode: $mode, selection: $selection, agentSelection: $agentSelection, showNewAgent: $showNewAgent, showNewSpace: $showNewSpace, newSpaceThreads: $newSpaceThreads, editingInstructions: $editingInstructions))
         .onReceive(NotificationCenter.default.publisher(for: .selectThread)) { note in
             mode = .chat
             selection = note.object as? String
@@ -134,23 +116,7 @@ struct RootView: View {
                 BuildEmptyState(engine: engine, selection: $buildSelection)
             }
         case (_, .agents):
-            EmptyState(label: "Agents", title: "Create your first agent", message: "Agents live in your messaging apps, run on schedules and keep their own memory.") {
-                VStack(spacing: 8) {
-                    ForEach([("Personal assistant", "Telegram · calendar"), ("Repo watcher", "GitHub triggers")], id: \.0) { t in
-                        CardTile {
-                            HStack {
-                                Text(t.0).font(.system(size: 13, weight: .semibold))
-                                Text(t.1).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Color.dsFg3)
-                            }
-                        }
-                    }
-                    Text("Agents arrive in Phase 4.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 4)
-                }
-                .frame(width: 380)
-                .opacity(0.7)
-            }
+            agentsContent
         case (_, .chat):
             if let id = selection, let summary = engine.threads.first(where: { $0.ref.id == id }) {
                 ThreadView(engine: engine, thread: engine.thread(summary.ref), summary: summary)
@@ -198,9 +164,27 @@ struct RootView: View {
         }
     }
 
+    @ViewBuilder private var agentsContent: some View {
+        if let summary = engine.agents.first(where: { $0.ref.id == agentSelection }) {
+            AgentPage(engine: engine, summary: summary, selection: $agentSelection)
+                .id(summary.ref.id)
+        } else {
+                EmptyState(label: "Agents", title: "Create your first agent", message: "Agents live in your messaging apps, run on schedules and keep their own memory.") {
+                    VStack(spacing: 10) {
+                        Button { showNewAgent = true } label: {
+                            Label("New Agent…", systemImage: "plus").font(.system(size: 13, weight: .semibold))
+                        }
+                        .buttonStyle(PillStyle(kind: .primary))
+                        Text("Start from a template (personal assistant, daily briefing, habit coach…) or from scratch. It runs on this Mac; channels like Telegram come later.")
+                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).multilineTextAlignment(.center).frame(width: 360)
+                    }
+                }
+        }
+    }
+
     /// What notifications treat as "you're looking at it".
     private func updateSelected() {
-        engine.selectedThreadId = mode == .build ? buildSelection : mode == .chat ? selection : nil
+        engine.selectedThreadId = mode == .build ? buildSelection : mode == .chat ? selection : agentSelection
     }
 
     private var selectedThread: ThreadModel? {
@@ -252,6 +236,7 @@ struct Sidebar: View {
     @Binding var mode: AppMode
     @Binding var selection: String?
     @Binding var buildSelection: String?
+    @Binding var agentSelection: String?
     let onSearch: () -> Void
     @State private var renaming: SessionSummary?
     @State private var newTitle = ""
@@ -283,7 +268,7 @@ struct Sidebar: View {
                     switch mode {
                     case .chat: chatList
                     case .build: BuildSidebarList(engine: engine, selection: $buildSelection)
-                    case .agents: placeholder("Agents", "Agents you create appear here.")
+                    case .agents: AgentsSection(engine: engine, selection: $agentSelection)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -423,5 +408,49 @@ struct EngineBanner: View {
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsRed.opacity(0.35), lineWidth: 0.5))
         .padding(.horizontal, 16)
         .padding(.top, 12)
+    }
+}
+
+/// The Space and Agent sheets and their notifications (kept apart so the root view type-checks quickly).
+private struct SpaceAndAgentSheets: ViewModifier {
+    let engine: EngineController
+    @Binding var mode: AppMode
+    @Binding var selection: String?
+    @Binding var agentSelection: String?
+    @Binding var showNewAgent: Bool
+    @Binding var showNewSpace: Bool
+    @Binding var newSpaceThreads: [String]
+    @Binding var editingInstructions: SessionSummary?
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in
+                mode = .agents
+                showNewAgent = true
+            }
+            .sheet(isPresented: $showNewAgent) {
+                NewAgentSheet(engine: engine) { agentSelection = $0.id }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .newSpace)) { note in
+                mode = .chat
+                newSpaceThreads = (note.object as? String).map { [$0] } ?? []
+                showNewSpace = true
+            }
+            .sheet(isPresented: $showNewSpace) {
+                NewSpaceSheet(engine: engine, preselected: Set(newSpaceThreads)) { selection = $0 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .editSpaceInstructions)) { note in
+                editingInstructions = engine.space(note.object as? String ?? "")
+            }
+            .sheet(item: $editingInstructions) { space in
+                SpaceSettingsSheet(engine: engine, space: space)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openTopic)) { note in
+                guard let target = note.object as? TopicTarget else { return }
+                mode = .chat
+                let ref = ContainerRef(kind: .space, id: target.spaceId, conversationId: target.topicId)
+                selection = ref.key
+                if let item = target.itemId { engine.thread(ref).reveal(item) }
+            }
     }
 }

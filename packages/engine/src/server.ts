@@ -22,6 +22,8 @@ import { ChatMcp } from "./tools/mcp-chat.js";
 import { ChatResources } from "./tools/chat-resources.js";
 import { Packages } from "./packages.js";
 import { MemoryProviders } from "./memory.js";
+import { AgentFiles } from "./agent-files.js";
+import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
 declare const PIOPIO_ENGINE_VERSION: string | undefined;
@@ -34,6 +36,8 @@ export type EngineOptions = {
 	piAgentDir?: string;
 	/** Where deleted build session files go (tests); default ~/.Trash. */
 	trashDir?: string;
+	/** Where agent folders go (tests); default ~/Piopio/Agents or PIOPIO_AGENTS_DIR. */
+	agentsDir?: string;
 	/** Let web_fetch read localhost (tests). */
 	allowPrivateFetch?: boolean;
 	log?: (line: string) => void;
@@ -89,6 +93,7 @@ export class Engine {
 		this.chatResources = new ChatResources(agentDir);
 		this.packages.onChange(() => void this.chatResources.reload());
 		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp, resources: this.chatResources };
+		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory };
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp) void this.chatMcp.reset();
 		});
@@ -434,6 +439,54 @@ export class Engine {
 			case "aboutMe.undo": {
 				const p = params as Params<"aboutMe.undo">;
 				await this.aboutMe.undo(p.revisionId);
+				return {};
+			}
+			case "agents.templates":
+				return { templates: TEMPLATES.map(({ id, name, avatar, description }) => ({ id, name, avatar, description })) } satisfies Result<"agents.templates">;
+			case "agents.create": {
+				const p = params as Params<"agents.create">;
+				return { ref: await this.sessions.createAgent(p) } satisfies Result<"agents.create">;
+			}
+			case "agents.get": {
+				const p = params as Params<"agents.get">;
+				return (await this.sessions.getAgent(p.ref)) satisfies Result<"agents.get">;
+			}
+			case "agents.save": {
+				const p = params as Params<"agents.save">;
+				return (await this.sessions.saveAgent(p.ref, p.definition, p.instructions, p.message)) satisfies Result<"agents.save">;
+			}
+			case "agents.conversations": {
+				const p = params as Params<"agents.conversations">;
+				return { people: await this.sessions.agentConversations(p.ref) } satisfies Result<"agents.conversations">;
+			}
+			case "agents.memory": {
+				const p = params as Params<"agents.memory">;
+				return this.sessions.agentMemory(p.ref) satisfies Result<"agents.memory">;
+			}
+			case "memory.list": {
+				const p = params as Params<"memory.list">;
+				const provider = this.memory.get(p.provider);
+				if (!provider.list || !provider.capabilities.list) return { records: [], limited: true } satisfies Result<"memory.list">;
+				const page = await provider.list(p.bank, { ...(p.cursor ? { cursor: p.cursor } : {}), ...(p.kinds ? { kinds: p.kinds as never } : {}) });
+				return { records: page.records.map(({ bank: _b, tags: _t, confidence: _c, ...r }) => r), ...(page.cursor ? { cursor: page.cursor } : {}), limited: false } satisfies Result<"memory.list">;
+			}
+			case "memory.add": {
+				const p = params as Params<"memory.add">;
+				await this.memory.get(p.provider).retain(p.bank, { content: p.text, kind: "fact", createdBy: "user" });
+				return {};
+			}
+			case "memory.forget": {
+				const p = params as Params<"memory.forget">;
+				const provider = this.memory.get(p.provider);
+				if (!provider.forget) throw new EngineError("INVALID", "This memory provider can't forget from here.");
+				await provider.forget(p.bank, p.id, "user");
+				return {};
+			}
+			case "memory.update": {
+				const p = params as Params<"memory.update">;
+				const provider = this.memory.get(p.provider);
+				if (!provider.update) throw new EngineError("INVALID", "This memory provider can't edit from here.");
+				await provider.update(p.bank, p.id, { ...(p.text !== undefined ? { text: p.text } : {}), ...(p.pinned !== undefined ? { pinned: p.pinned } : {}) }, "user");
 				return {};
 			}
 			case "memory.tools": {

@@ -21,6 +21,10 @@ import { aboutMeExtension, type AboutMe } from "./about-me.js";
 import type { Settings } from "./settings.js";
 import type { ChatMcp } from "./tools/mcp-chat.js";
 import type { ChatResources } from "./tools/chat-resources.js";
+import { AgentRuntime } from "./runtimes/agent.js";
+import type { AgentFiles } from "./agent-files.js";
+import type { MemoryProviders } from "./memory.js";
+import { newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
@@ -49,6 +53,8 @@ type CatalogEntry = SessionSummary & {
 	memoryOff?: boolean;
 	autoTidy?: boolean;
 	stats?: SpaceStats;
+	/** Agents: the definition folder. */
+	agentFolder?: string;
 	/** Threads: Dismiss on a Space suggestion; and the exchanges a suggestion was already looked for at. */
 	suggestionDismissed?: boolean;
 	suggestChecked?: number[];
@@ -79,6 +85,10 @@ export class Sessions {
 	policy: ApprovalPolicy = { projectFor: () => undefined, modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
 	/** Settings, About me and MCP for Threads and Spaces (set by the engine). */
 	chat?: { settings: Settings; aboutMe: AboutMe; mcp: ChatMcp; resources: ChatResources };
+	/** Agent folders and memory (set by the engine). */
+	agentHost?: { files: AgentFiles; memory: MemoryProviders };
+	/** Each agent's last valid definition, as the runtime uses it. */
+	private definitions = new Map<string, { definition: AgentDefinition; instructions: string }>();
 	private skillsExtension?: Extension;
 	private aboutMeExtensions = new Map<"thread" | "space", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
@@ -242,6 +252,11 @@ export class Sessions {
 		if (entry.file) for (const suffix of ["", "-wal", "-shm"]) rmSync(entry.file + suffix, { force: true });
 		if (entry.ref.kind === "space") rmSync(join(this.paths.spacesDir, entry.ref.id), { recursive: true, force: true });
 		if (entry.sessionFile && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
+		if (entry.ref.kind === "agent") {
+			this.agentHost?.memory.builtin.dropBanks(`${entry.ref.id}/`);
+			if (entry.agentFolder) this.agentHost?.files.trash(entry.agentFolder, this.piOverrides.trashDir);
+			this.definitions.delete(entry.ref.id);
+		}
 		this.search.deleteSession(ref.id);
 		this.entries.delete(ref.id);
 		this.save();
@@ -294,6 +309,7 @@ export class Sessions {
 
 	async runtime(ref: ContainerRef): Promise<Runtime> {
 		if (ref.kind === "space" && ref.conversationId) return (await this.space(ref)).view(ref.conversationId);
+		if (ref.kind === "agent" && ref.conversationId) return (await this.agent(ref)).view(ref.conversationId.replace(/^person:/, ""));
 		const entry = this.entry(ref);
 		let pending = this.open.get(ref.id);
 		if (!pending) {
@@ -390,6 +406,136 @@ export class Sessions {
 			slot.running--;
 			slot.waiting.shift()?.();
 		}
+	}
+
+	// ── Agents (docs/spec/06-agents) ─────────────────────────────────────────
+
+	async agent(ref: ContainerRef): Promise<AgentRuntime> {
+		const runtime = await this.runtime({ kind: "agent", id: ref.id });
+		if (!(runtime instanceof AgentRuntime)) throw new EngineError("INVALID", "Not an agent.");
+		return runtime;
+	}
+
+	private get host() {
+		if (!this.agentHost) throw new EngineError("INTERNAL", "Agents aren't set up in this engine.");
+		return this.agentHost;
+	}
+
+	/** A new local agent from a template (or from scratch): its folder, its git repo, its catalog entry. */
+	async createAgent(params: { name: string; template?: string; avatar?: string; model?: ModelRef; owner?: string }): Promise<ContainerRef> {
+		const name = params.name.trim();
+		if (!name) throw new EngineError("INVALID", "The agent needs a name.");
+		if (params.template && !TEMPLATES.some((t) => t.id === params.template)) throw new EngineError("INVALID", `No template “${params.template}”.`);
+		const id = `agt_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+		const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "agent";
+		const model = params.model ?? this.hub.defaultModel;
+		const folder = this.host.files.folderFor(slug);
+		const made = newDefinition({ id, slug: basename(folder), name, owner: params.owner?.trim() || "Owner", model: model.provider === "openrouter" ? model.id : `${model.provider}:${model.id}`, ...(params.template ? { template: params.template } : {}), ...(params.avatar ? { avatar: params.avatar } : {}) });
+		await this.host.files.create(folder, made);
+		this.definitions.set(id, made);
+		const now = new Date().toISOString();
+		const entry: CatalogEntry = { ref: { kind: "agent", id }, title: name, createdAt: now, updatedAt: now, file: join(this.paths.home, "agents", `${id}.sqlite`), agentFolder: folder };
+		mkdirSync(dirname(entry.file!), { recursive: true });
+		this.setAgentInfo(entry, made.definition);
+		this.entries.set(id, entry);
+		this.save();
+		this.changed(entry);
+		return entry.ref;
+	}
+
+	/** The definition as it is on disk, its errors and history. */
+	async getAgent(ref: ContainerRef): Promise<{ definition: unknown; instructions: string; folder: string; errors: DefinitionError[]; history: { commit: string; at: string; message: string }[] }> {
+		const entry = this.entry({ kind: "agent", id: ref.id });
+		const folder = entry.agentFolder!;
+		let definition: unknown;
+		let instructions = "";
+		let errors: DefinitionError[];
+		try {
+			const read = this.host.files.read(folder);
+			definition = read.definition;
+			instructions = read.instructions;
+			errors = this.validateAgent(definition, ref.id);
+		} catch (error) {
+			definition = this.definitions.get(ref.id)?.definition ?? {};
+			errors = [{ path: "/", message: `agent.json can't be read: ${(error as Error).message}` }];
+		}
+		return { definition, instructions, folder, errors, history: await this.host.files.history(folder) };
+	}
+
+	/** Validates; with no errors, writes, commits and reconfigures the running agent. */
+	async saveAgent(ref: ContainerRef, definition: unknown, instructions: string, message?: string): Promise<{ errors: DefinitionError[]; saved: boolean }> {
+		const entry = this.entry({ kind: "agent", id: ref.id });
+		const def = definition as AgentDefinition;
+		const errors = this.validateAgent(definition, ref.id);
+		if (!errors.length && def.id !== ref.id) errors.push({ path: "/id", message: "The id can't change." });
+		if (errors.length) return { errors, saved: false };
+		const saved = await this.host.files.save(entry.agentFolder!, { definition: def, instructions }, message?.trim() || "Edit the definition");
+		this.definitions.set(ref.id, { definition: def, instructions });
+		entry.title = def.name;
+		this.setAgentInfo(entry, def);
+		entry.updatedAt = new Date().toISOString();
+		this.save();
+		this.changed(entry);
+		if (this.open.has(ref.id)) await (await this.agent(ref)).reconfigure();
+		return { errors: [], saved };
+	}
+
+	async agentConversations(ref: ContainerRef) {
+		const def = this.agentDefinition(ref.id).definition;
+		const people = await (await this.agent(ref)).people();
+		return def.contacts.map((c) => {
+			const p = people.find((x) => x.contactId === c.id);
+			return { contactId: c.id, name: c.name, role: c.role, conversationId: `person:${c.id}`, started: p?.started ?? false, ...(p?.lastAt ? { lastAt: p.lastAt } : {}), ...(p?.preview ? { preview: p.preview } : {}) };
+		});
+	}
+
+	agentMemory(ref: ContainerRef) {
+		const def = this.agentDefinition(ref.id).definition;
+		const partitions = [
+			{ id: "owner", label: def.contacts.find((c) => c.role === "owner")?.name ?? "Owner", bank: `${def.id}/owner` },
+			{ id: "shared", label: "Shared", bank: `${def.id}/shared` },
+			...def.contacts.filter((c) => c.role === "contact").map((c) => ({ id: `contacts/${c.id}`, label: c.name, bank: `${def.id}/contacts/${c.id}` })),
+		];
+		return { provider: def.memory?.provider ?? "builtin", partitions };
+	}
+
+	private validateAgent(definition: unknown, id: string): DefinitionError[] {
+		const knownAgents = [...this.entries.values()].filter((e) => e.ref.kind === "agent" && e.ref.id !== id).map((e) => e.ref.id);
+		return validate(definition, {
+			knownAgents,
+			knownModels: (m) => {
+				const { provider, modelId } = modelOf(m);
+				return Boolean(this.hub.models.getModel(provider, modelId));
+			},
+		});
+	}
+
+	/** The last valid definition: from memory, else from disk (falling back to nothing usable). */
+	private agentDefinition(id: string): { definition: AgentDefinition; instructions: string } {
+		let cached = this.definitions.get(id);
+		if (!cached) {
+			const entry = this.entry({ kind: "agent", id });
+			const read = this.host.files.read(entry.agentFolder!);
+			if (validate(read.definition).length) {
+				entry.agent = entry.agent ? { ...entry.agent, invalid: true } : entry.agent;
+				throw new EngineError("INVALID", `${entry.title}'s agent.json doesn't validate; fix it in the Definition tab.`);
+			}
+			cached = read;
+			this.definitions.set(id, cached);
+		}
+		return cached;
+	}
+
+	private setAgentInfo(entry: CatalogEntry, def: AgentDefinition): void {
+		entry.agent = {
+			slug: def.slug,
+			...(def.avatar ? { avatar: def.avatar } : {}),
+			...(def.description ? { description: def.description } : {}),
+			folder: entry.agentFolder!,
+			location: "local",
+			model: def.models.default,
+			contacts: def.contacts.map((c) => ({ id: c.id, name: c.name, role: c.role })),
+		};
 	}
 
 	// ── Spaces (docs/spec/04-chat §3) ─────────────────────────────────────────
@@ -720,6 +866,20 @@ export class Sessions {
 
 	private async createRuntime(entry: CatalogEntry): Promise<Runtime> {
 		const model = entry.model ?? this.hub.defaultModel;
+		if (entry.ref.kind === "agent") {
+			const id = entry.ref.id;
+			this.agentDefinition(id);
+			return AgentRuntime.open({
+				ref: entry.ref,
+				file: entry.file!,
+				hub: this.hub,
+				definition: () => this.agentDefinition(id).definition,
+				instructions: () => this.agentDefinition(id).instructions,
+				memory: () => this.host.memory.get(this.agentDefinition(id).definition.memory?.provider ?? "builtin"),
+				webOptions: this.webOptions,
+				onActivity: () => this.touch(entry.ref),
+			});
+		}
 		if (entry.ref.kind === "space") {
 			return SpaceRuntime.open({
 				ref: entry.ref,

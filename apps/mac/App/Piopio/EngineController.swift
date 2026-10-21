@@ -13,6 +13,8 @@ final class EngineController {
     private(set) var threads: [SessionSummary] = []
     /// Chat: Spaces, with their topics (docs/spec/04-chat §3).
     private(set) var spaces: [SessionSummary] = []
+    /// Agents (docs/spec/06-agents).
+    private(set) var agents: [SessionSummary] = []
     /// Build: folders added as projects, and their sessions (newest first).
     private(set) var projects: [ProjectInfo] = []
     private(set) var buildSessions: [SessionSummary] = []
@@ -263,6 +265,7 @@ final class EngineController {
         threads = try await client.call("sessions.list", ListSessionsParams(kind: .thread), as: ListSessionsResult.self).sessions
         buildSessions = try await client.call("sessions.list", ListSessionsParams(kind: .build), as: ListSessionsResult.self).sessions
         spaces = try await client.call("sessions.list", ListSessionsParams(kind: .space), as: ListSessionsResult.self).sessions
+        agents = try await client.call("sessions.list", ListSessionsParams(kind: .agent), as: ListSessionsResult.self).sessions
         if settings == nil { await loadSettings() }
         projects = try await client.call("projects.list", Empty(), as: ProjectsListResult.self).projects
     }
@@ -279,6 +282,7 @@ final class EngineController {
         threads = merged(threads, kind: .thread)
         buildSessions = merged(buildSessions, kind: .build)
         spaces = merged(spaces, kind: .space)
+        agents = merged(agents, kind: .agent)
         for id in removed { forget(id) }
     }
 
@@ -461,6 +465,40 @@ final class EngineController {
 
     func spaceFiles(_ space: ContainerRef) async -> [SpaceFile] {
         (try? await client?.call("spaces.files.list", RefParams(ref: space), as: SpaceFilesResult.self).files) ?? []
+    }
+
+    // MARK: Agents
+
+    func agentTemplates() async -> [AgentTemplate] {
+        (try? await client?.call("agents.templates", Empty(), as: AgentTemplatesResult.self).templates) ?? []
+    }
+
+    func createAgent(name: String, template: String?, avatar: String) async throws -> ContainerRef {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let ref = try await client.call("agents.create", CreateAgentParams(name: name, template: template, avatar: avatar.isEmpty ? nil : avatar, model: preferredModel, owner: NSFullUserName().split(separator: " ").first.map(String.init)), as: CreateSessionResult.self).ref
+        try? await refreshCatalog()
+        return ref
+    }
+
+    func agentDefinition(_ ref: ContainerRef) async -> AgentGetResult? {
+        try? await client?.call("agents.get", RefParams(ref: ref), as: AgentGetResult.self)
+    }
+
+    func saveAgent(_ ref: ContainerRef, definition: JSONValue, instructions: String, message: String) async throws -> AgentSaveResult {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("agents.save", AgentSaveParams(ref: ref, definition: definition, instructions: instructions, message: message.isEmpty ? nil : message), as: AgentSaveResult.self)
+    }
+
+    func agentPeople(_ ref: ContainerRef) async -> [AgentPerson] {
+        (try? await client?.call("agents.conversations", RefParams(ref: ref), as: AgentPeopleResult.self).people) ?? []
+    }
+
+    func agentMemory(_ ref: ContainerRef) async -> AgentMemoryResult? {
+        try? await client?.call("agents.memory", RefParams(ref: ref), as: AgentMemoryResult.self)
+    }
+
+    func memoryList(provider: String, bank: String) async -> MemoryListResult? {
+        try? await client?.call("memory.list", MemoryListParams(provider: provider, bank: bank), as: MemoryListResult.self)
     }
 
     // MARK: Chat settings, About me, moving threads

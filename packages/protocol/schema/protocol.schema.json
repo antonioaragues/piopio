@@ -761,6 +761,252 @@
 							"type": "string"
 						}
 					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"id",
+						"at",
+						"tools"
+					],
+					"properties": {
+						"kind": {
+							"type": "string",
+							"const": "steps"
+						},
+						"id": {
+							"type": "string"
+						},
+						"at": {
+							"type": "string"
+						},
+						"tools": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"callId",
+									"tool",
+									"args",
+									"status"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "tool"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"callId": {
+										"type": "string"
+									},
+									"tool": {
+										"type": "string"
+									},
+									"args": {},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "pending_approval"
+											},
+											{
+												"type": "string",
+												"const": "running"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "error"
+											},
+											{
+												"type": "string",
+												"const": "interrupted"
+											},
+											{
+												"type": "string",
+												"const": "denied"
+											}
+										]
+									},
+									"output": {
+										"type": "string"
+									},
+									"details": {
+										"anyOf": [
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"path",
+													"diff"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "diff"
+													},
+													"path": {
+														"type": "string"
+													},
+													"diff": {
+														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"path"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "file"
+													},
+													"path": {
+														"type": "string"
+													},
+													"language": {
+														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"command"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "terminal"
+													},
+													"command": {
+														"type": "string"
+													},
+													"exitCode": {
+														"type": "number"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"value"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "json"
+													},
+													"value": {}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"items"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "todos"
+													},
+													"items": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"text",
+																"status"
+															],
+															"properties": {
+																"text": {
+																	"type": "string"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending"
+																		},
+																		{
+																			"type": "string",
+																			"const": "in_progress"
+																		},
+																		{
+																			"type": "string",
+																			"const": "done"
+																		}
+																	]
+																}
+															}
+														}
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "task"
+													},
+													"sessionId": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "done"
+															},
+															{
+																"type": "string",
+																"const": "error"
+															},
+															{
+																"type": "string",
+																"const": "stopped"
+															}
+														]
+													},
+													"costUsd": {
+														"type": "number"
+													}
+												}
+											}
+										]
+									},
+									"durationMs": {
+										"type": "number"
+									},
+									"parentCallId": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
 				}
 			]
 		},
@@ -1797,6 +2043,252 @@
 											"type": "string"
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"tools"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "steps"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"tools": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"callId",
+													"tool",
+													"args",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "tool"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"callId": {
+														"type": "string"
+													},
+													"tool": {
+														"type": "string"
+													},
+													"args": {},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending_approval"
+															},
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "done"
+															},
+															{
+																"type": "string",
+																"const": "error"
+															},
+															{
+																"type": "string",
+																"const": "interrupted"
+															},
+															{
+																"type": "string",
+																"const": "denied"
+															}
+														]
+													},
+													"output": {
+														"type": "string"
+													},
+													"details": {
+														"anyOf": [
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"path",
+																	"diff"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "diff"
+																	},
+																	"path": {
+																		"type": "string"
+																	},
+																	"diff": {
+																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"path"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "file"
+																	},
+																	"path": {
+																		"type": "string"
+																	},
+																	"language": {
+																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"command"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "terminal"
+																	},
+																	"command": {
+																		"type": "string"
+																	},
+																	"exitCode": {
+																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"value"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "json"
+																	},
+																	"value": {}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"items"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "todos"
+																	},
+																	"items": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"text",
+																				"status"
+																			],
+																			"properties": {
+																				"text": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "pending"
+																						},
+																						{
+																							"type": "string",
+																							"const": "in_progress"
+																						},
+																						{
+																							"type": "string",
+																							"const": "done"
+																						}
+																					]
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "task"
+																	},
+																	"sessionId": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "done"
+																			},
+																			{
+																				"type": "string",
+																				"const": "error"
+																			},
+																			{
+																				"type": "string",
+																				"const": "stopped"
+																			}
+																		]
+																	},
+																	"costUsd": {
+																		"type": "number"
+																	}
+																}
+															}
+														]
+													},
+													"durationMs": {
+														"type": "number"
+													},
+													"parentCallId": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
 								}
 							]
 						},
@@ -2576,6 +3068,252 @@
 											"type": "string"
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"tools"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "steps"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"tools": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"callId",
+													"tool",
+													"args",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "tool"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"callId": {
+														"type": "string"
+													},
+													"tool": {
+														"type": "string"
+													},
+													"args": {},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending_approval"
+															},
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "done"
+															},
+															{
+																"type": "string",
+																"const": "error"
+															},
+															{
+																"type": "string",
+																"const": "interrupted"
+															},
+															{
+																"type": "string",
+																"const": "denied"
+															}
+														]
+													},
+													"output": {
+														"type": "string"
+													},
+													"details": {
+														"anyOf": [
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"path",
+																	"diff"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "diff"
+																	},
+																	"path": {
+																		"type": "string"
+																	},
+																	"diff": {
+																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"path"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "file"
+																	},
+																	"path": {
+																		"type": "string"
+																	},
+																	"language": {
+																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"command"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "terminal"
+																	},
+																	"command": {
+																		"type": "string"
+																	},
+																	"exitCode": {
+																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"value"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "json"
+																	},
+																	"value": {}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"items"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "todos"
+																	},
+																	"items": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"text",
+																				"status"
+																			],
+																			"properties": {
+																				"text": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "pending"
+																						},
+																						{
+																							"type": "string",
+																							"const": "in_progress"
+																						},
+																						{
+																							"type": "string",
+																							"const": "done"
+																						}
+																					]
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "task"
+																	},
+																	"sessionId": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "done"
+																			},
+																			{
+																				"type": "string",
+																				"const": "error"
+																			},
+																			{
+																				"type": "string",
+																				"const": "stopped"
+																			}
+																		]
+																	},
+																	"costUsd": {
+																		"type": "number"
+																	}
+																}
+															}
+														]
+													},
+													"durationMs": {
+														"type": "number"
+													},
+													"parentCallId": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
 								}
 							]
 						}
@@ -3333,6 +4071,252 @@
 										},
 										"proposalId": {
 											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"tools"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "steps"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"tools": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"callId",
+													"tool",
+													"args",
+													"status"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "tool"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"callId": {
+														"type": "string"
+													},
+													"tool": {
+														"type": "string"
+													},
+													"args": {},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "pending_approval"
+															},
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "done"
+															},
+															{
+																"type": "string",
+																"const": "error"
+															},
+															{
+																"type": "string",
+																"const": "interrupted"
+															},
+															{
+																"type": "string",
+																"const": "denied"
+															}
+														]
+													},
+													"output": {
+														"type": "string"
+													},
+													"details": {
+														"anyOf": [
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"path",
+																	"diff"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "diff"
+																	},
+																	"path": {
+																		"type": "string"
+																	},
+																	"diff": {
+																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"path"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "file"
+																	},
+																	"path": {
+																		"type": "string"
+																	},
+																	"language": {
+																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"command"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "terminal"
+																	},
+																	"command": {
+																		"type": "string"
+																	},
+																	"exitCode": {
+																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"value"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "json"
+																	},
+																	"value": {}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"items"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "todos"
+																	},
+																	"items": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"text",
+																				"status"
+																			],
+																			"properties": {
+																				"text": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "pending"
+																						},
+																						{
+																							"type": "string",
+																							"const": "in_progress"
+																						},
+																						{
+																							"type": "string",
+																							"const": "done"
+																						}
+																					]
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "task"
+																	},
+																	"sessionId": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "done"
+																			},
+																			{
+																				"type": "string",
+																				"const": "error"
+																			},
+																			{
+																				"type": "string",
+																				"const": "stopped"
+																			}
+																		]
+																	},
+																	"costUsd": {
+																		"type": "number"
+																	}
+																}
+															}
+														]
+													},
+													"durationMs": {
+														"type": "number"
+													},
+													"parentCallId": {
+														"type": "string"
+													}
+												}
+											}
 										}
 									}
 								}
@@ -4429,6 +5413,252 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"tools"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "steps"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"tools": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"callId",
+																"tool",
+																"args",
+																"status"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "tool"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"callId": {
+																	"type": "string"
+																},
+																"tool": {
+																	"type": "string"
+																},
+																"args": {},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending_approval"
+																		},
+																		{
+																			"type": "string",
+																			"const": "running"
+																		},
+																		{
+																			"type": "string",
+																			"const": "done"
+																		},
+																		{
+																			"type": "string",
+																			"const": "error"
+																		},
+																		{
+																			"type": "string",
+																			"const": "interrupted"
+																		},
+																		{
+																			"type": "string",
+																			"const": "denied"
+																		}
+																	]
+																},
+																"output": {
+																	"type": "string"
+																},
+																"details": {
+																	"anyOf": [
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"path",
+																				"diff"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "diff"
+																				},
+																				"path": {
+																					"type": "string"
+																				},
+																				"diff": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"path"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "file"
+																				},
+																				"path": {
+																					"type": "string"
+																				},
+																				"language": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"command"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "terminal"
+																				},
+																				"command": {
+																					"type": "string"
+																				},
+																				"exitCode": {
+																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"value"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "json"
+																				},
+																				"value": {}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"items"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "todos"
+																				},
+																				"items": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"text",
+																							"status"
+																						],
+																						"properties": {
+																							"text": {
+																								"type": "string"
+																							},
+																							"status": {
+																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "pending"
+																									},
+																									{
+																										"type": "string",
+																										"const": "in_progress"
+																									},
+																									{
+																										"type": "string",
+																										"const": "done"
+																									}
+																								]
+																							}
+																						}
+																					}
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "task"
+																				},
+																				"sessionId": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "done"
+																						},
+																						{
+																							"type": "string",
+																							"const": "error"
+																						},
+																						{
+																							"type": "string",
+																							"const": "stopped"
+																						}
+																					]
+																				},
+																				"costUsd": {
+																					"type": "number"
+																				}
+																			}
+																		}
+																	]
+																},
+																"durationMs": {
+																	"type": "number"
+																},
+																"parentCallId": {
+																	"type": "string"
+																}
+															}
+														}
+													}
+												}
 											}
 										]
 									}
@@ -5504,6 +6734,252 @@
 										"type": "string"
 									}
 								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"tools"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "steps"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"tools": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"kind",
+												"id",
+												"at",
+												"callId",
+												"tool",
+												"args",
+												"status"
+											],
+											"properties": {
+												"kind": {
+													"type": "string",
+													"const": "tool"
+												},
+												"id": {
+													"type": "string"
+												},
+												"at": {
+													"type": "string"
+												},
+												"callId": {
+													"type": "string"
+												},
+												"tool": {
+													"type": "string"
+												},
+												"args": {},
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "pending_approval"
+														},
+														{
+															"type": "string",
+															"const": "running"
+														},
+														{
+															"type": "string",
+															"const": "done"
+														},
+														{
+															"type": "string",
+															"const": "error"
+														},
+														{
+															"type": "string",
+															"const": "interrupted"
+														},
+														{
+															"type": "string",
+															"const": "denied"
+														}
+													]
+												},
+												"output": {
+													"type": "string"
+												},
+												"details": {
+													"anyOf": [
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"path",
+																"diff"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "diff"
+																},
+																"path": {
+																	"type": "string"
+																},
+																"diff": {
+																	"type": "string"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"path"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "file"
+																},
+																"path": {
+																	"type": "string"
+																},
+																"language": {
+																	"type": "string"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"command"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "terminal"
+																},
+																"command": {
+																	"type": "string"
+																},
+																"exitCode": {
+																	"type": "number"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"value"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "json"
+																},
+																"value": {}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"items"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "todos"
+																},
+																"items": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"text",
+																			"status"
+																		],
+																		"properties": {
+																			"text": {
+																				"type": "string"
+																			},
+																			"status": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "pending"
+																					},
+																					{
+																						"type": "string",
+																						"const": "in_progress"
+																					},
+																					{
+																						"type": "string",
+																						"const": "done"
+																					}
+																				]
+																			}
+																		}
+																	}
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "task"
+																},
+																"sessionId": {
+																	"type": "string"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "done"
+																		},
+																		{
+																			"type": "string",
+																			"const": "error"
+																		},
+																		{
+																			"type": "string",
+																			"const": "stopped"
+																		}
+																	]
+																},
+																"costUsd": {
+																	"type": "number"
+																}
+															}
+														}
+													]
+												},
+												"durationMs": {
+													"type": "number"
+												},
+												"parentCallId": {
+													"type": "string"
+												}
+											}
+										}
+									}
+								}
 							}
 						]
 					}
@@ -6039,6 +7515,79 @@
 						},
 						"reason": {
 							"type": "string"
+						}
+					}
+				},
+				"agent": {
+					"type": "object",
+					"required": [
+						"slug",
+						"folder",
+						"location",
+						"model",
+						"contacts"
+					],
+					"properties": {
+						"slug": {
+							"type": "string"
+						},
+						"avatar": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"location": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "local"
+								},
+								{
+									"type": "string",
+									"const": "cloud"
+								}
+							]
+						},
+						"model": {
+							"type": "string"
+						},
+						"contacts": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"role"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"role": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "owner"
+											},
+											{
+												"type": "string",
+												"const": "contact"
+											}
+										]
+									}
+								}
+							}
+						},
+						"invalid": {
+							"type": "boolean"
 						}
 					}
 				}
@@ -6794,6 +8343,252 @@
 													},
 													"proposalId": {
 														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"tools"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "steps"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"tools": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"callId",
+																"tool",
+																"args",
+																"status"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "tool"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"callId": {
+																	"type": "string"
+																},
+																"tool": {
+																	"type": "string"
+																},
+																"args": {},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending_approval"
+																		},
+																		{
+																			"type": "string",
+																			"const": "running"
+																		},
+																		{
+																			"type": "string",
+																			"const": "done"
+																		},
+																		{
+																			"type": "string",
+																			"const": "error"
+																		},
+																		{
+																			"type": "string",
+																			"const": "interrupted"
+																		},
+																		{
+																			"type": "string",
+																			"const": "denied"
+																		}
+																	]
+																},
+																"output": {
+																	"type": "string"
+																},
+																"details": {
+																	"anyOf": [
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"path",
+																				"diff"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "diff"
+																				},
+																				"path": {
+																					"type": "string"
+																				},
+																				"diff": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"path"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "file"
+																				},
+																				"path": {
+																					"type": "string"
+																				},
+																				"language": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"command"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "terminal"
+																				},
+																				"command": {
+																					"type": "string"
+																				},
+																				"exitCode": {
+																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"value"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "json"
+																				},
+																				"value": {}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"items"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "todos"
+																				},
+																				"items": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"text",
+																							"status"
+																						],
+																						"properties": {
+																							"text": {
+																								"type": "string"
+																							},
+																							"status": {
+																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "pending"
+																									},
+																									{
+																										"type": "string",
+																										"const": "in_progress"
+																									},
+																									{
+																										"type": "string",
+																										"const": "done"
+																									}
+																								]
+																							}
+																						}
+																					}
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "task"
+																				},
+																				"sessionId": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "done"
+																						},
+																						{
+																							"type": "string",
+																							"const": "error"
+																						},
+																						{
+																							"type": "string",
+																							"const": "stopped"
+																						}
+																					]
+																				},
+																				"costUsd": {
+																					"type": "number"
+																				}
+																			}
+																		}
+																	]
+																},
+																"durationMs": {
+																	"type": "number"
+																},
+																"parentCallId": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											}
@@ -7575,6 +9370,252 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"tools"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "steps"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"tools": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"callId",
+																"tool",
+																"args",
+																"status"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "tool"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"callId": {
+																	"type": "string"
+																},
+																"tool": {
+																	"type": "string"
+																},
+																"args": {},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending_approval"
+																		},
+																		{
+																			"type": "string",
+																			"const": "running"
+																		},
+																		{
+																			"type": "string",
+																			"const": "done"
+																		},
+																		{
+																			"type": "string",
+																			"const": "error"
+																		},
+																		{
+																			"type": "string",
+																			"const": "interrupted"
+																		},
+																		{
+																			"type": "string",
+																			"const": "denied"
+																		}
+																	]
+																},
+																"output": {
+																	"type": "string"
+																},
+																"details": {
+																	"anyOf": [
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"path",
+																				"diff"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "diff"
+																				},
+																				"path": {
+																					"type": "string"
+																				},
+																				"diff": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"path"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "file"
+																				},
+																				"path": {
+																					"type": "string"
+																				},
+																				"language": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"command"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "terminal"
+																				},
+																				"command": {
+																					"type": "string"
+																				},
+																				"exitCode": {
+																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"value"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "json"
+																				},
+																				"value": {}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"items"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "todos"
+																				},
+																				"items": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"text",
+																							"status"
+																						],
+																						"properties": {
+																							"text": {
+																								"type": "string"
+																							},
+																							"status": {
+																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "pending"
+																									},
+																									{
+																										"type": "string",
+																										"const": "in_progress"
+																									},
+																									{
+																										"type": "string",
+																										"const": "done"
+																									}
+																								]
+																							}
+																						}
+																					}
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "task"
+																				},
+																				"sessionId": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "done"
+																						},
+																						{
+																							"type": "string",
+																							"const": "error"
+																						},
+																						{
+																							"type": "string",
+																							"const": "stopped"
+																						}
+																					]
+																				},
+																				"costUsd": {
+																					"type": "number"
+																				}
+																			}
+																		}
+																	]
+																},
+																"durationMs": {
+																	"type": "number"
+																},
+																"parentCallId": {
+																	"type": "string"
+																}
+															}
+														}
+													}
+												}
 											}
 										]
 									}
@@ -8332,6 +10373,252 @@
 													},
 													"proposalId": {
 														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"tools"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "steps"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"tools": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"callId",
+																"tool",
+																"args",
+																"status"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "tool"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"callId": {
+																	"type": "string"
+																},
+																"tool": {
+																	"type": "string"
+																},
+																"args": {},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "pending_approval"
+																		},
+																		{
+																			"type": "string",
+																			"const": "running"
+																		},
+																		{
+																			"type": "string",
+																			"const": "done"
+																		},
+																		{
+																			"type": "string",
+																			"const": "error"
+																		},
+																		{
+																			"type": "string",
+																			"const": "interrupted"
+																		},
+																		{
+																			"type": "string",
+																			"const": "denied"
+																		}
+																	]
+																},
+																"output": {
+																	"type": "string"
+																},
+																"details": {
+																	"anyOf": [
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"path",
+																				"diff"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "diff"
+																				},
+																				"path": {
+																					"type": "string"
+																				},
+																				"diff": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"path"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "file"
+																				},
+																				"path": {
+																					"type": "string"
+																				},
+																				"language": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"command"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "terminal"
+																				},
+																				"command": {
+																					"type": "string"
+																				},
+																				"exitCode": {
+																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"value"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "json"
+																				},
+																				"value": {}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"items"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "todos"
+																				},
+																				"items": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"text",
+																							"status"
+																						],
+																						"properties": {
+																							"text": {
+																								"type": "string"
+																							},
+																							"status": {
+																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "pending"
+																									},
+																									{
+																										"type": "string",
+																										"const": "in_progress"
+																									},
+																									{
+																										"type": "string",
+																										"const": "done"
+																									}
+																								]
+																							}
+																						}
+																					}
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "task"
+																				},
+																				"sessionId": {
+																					"type": "string"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "done"
+																						},
+																						{
+																							"type": "string",
+																							"const": "error"
+																						},
+																						{
+																							"type": "string",
+																							"const": "stopped"
+																						}
+																					]
+																				},
+																				"costUsd": {
+																					"type": "number"
+																				}
+																			}
+																		}
+																	]
+																},
+																"durationMs": {
+																	"type": "number"
+																},
+																"parentCallId": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											}
@@ -9428,6 +11715,252 @@
 																	"type": "string"
 																}
 															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"tools"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "steps"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"tools": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"kind",
+																			"id",
+																			"at",
+																			"callId",
+																			"tool",
+																			"args",
+																			"status"
+																		],
+																		"properties": {
+																			"kind": {
+																				"type": "string",
+																				"const": "tool"
+																			},
+																			"id": {
+																				"type": "string"
+																			},
+																			"at": {
+																				"type": "string"
+																			},
+																			"callId": {
+																				"type": "string"
+																			},
+																			"tool": {
+																				"type": "string"
+																			},
+																			"args": {},
+																			"status": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "pending_approval"
+																					},
+																					{
+																						"type": "string",
+																						"const": "running"
+																					},
+																					{
+																						"type": "string",
+																						"const": "done"
+																					},
+																					{
+																						"type": "string",
+																						"const": "error"
+																					},
+																					{
+																						"type": "string",
+																						"const": "interrupted"
+																					},
+																					{
+																						"type": "string",
+																						"const": "denied"
+																					}
+																				]
+																			},
+																			"output": {
+																				"type": "string"
+																			},
+																			"details": {
+																				"anyOf": [
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"path",
+																							"diff"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "diff"
+																							},
+																							"path": {
+																								"type": "string"
+																							},
+																							"diff": {
+																								"type": "string"
+																							}
+																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"path"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "file"
+																							},
+																							"path": {
+																								"type": "string"
+																							},
+																							"language": {
+																								"type": "string"
+																							}
+																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"command"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "terminal"
+																							},
+																							"command": {
+																								"type": "string"
+																							},
+																							"exitCode": {
+																								"type": "number"
+																							}
+																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"value"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "json"
+																							},
+																							"value": {}
+																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"items"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "todos"
+																							},
+																							"items": {
+																								"type": "array",
+																								"items": {
+																									"type": "object",
+																									"required": [
+																										"text",
+																										"status"
+																									],
+																									"properties": {
+																										"text": {
+																											"type": "string"
+																										},
+																										"status": {
+																											"anyOf": [
+																												{
+																													"type": "string",
+																													"const": "pending"
+																												},
+																												{
+																													"type": "string",
+																													"const": "in_progress"
+																												},
+																												{
+																													"type": "string",
+																													"const": "done"
+																												}
+																											]
+																										}
+																									}
+																								}
+																							}
+																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "task"
+																							},
+																							"sessionId": {
+																								"type": "string"
+																							},
+																							"status": {
+																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "done"
+																									},
+																									{
+																										"type": "string",
+																										"const": "error"
+																									},
+																									{
+																										"type": "string",
+																										"const": "stopped"
+																									}
+																								]
+																							},
+																							"costUsd": {
+																								"type": "number"
+																							}
+																						}
+																					}
+																				]
+																			},
+																			"durationMs": {
+																				"type": "number"
+																			},
+																			"parentCallId": {
+																				"type": "string"
+																			}
+																		}
+																	}
+																}
+															}
 														}
 													]
 												}
@@ -10048,6 +12581,79 @@
 										"type": "string"
 									}
 								}
+							},
+							"agent": {
+								"type": "object",
+								"required": [
+									"slug",
+									"folder",
+									"location",
+									"model",
+									"contacts"
+								],
+								"properties": {
+									"slug": {
+										"type": "string"
+									},
+									"avatar": {
+										"type": "string"
+									},
+									"description": {
+										"type": "string"
+									},
+									"folder": {
+										"type": "string"
+									},
+									"location": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "local"
+											},
+											{
+												"type": "string",
+												"const": "cloud"
+											}
+										]
+									},
+									"model": {
+										"type": "string"
+									},
+									"contacts": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"id",
+												"name",
+												"role"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												},
+												"role": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "owner"
+														},
+														{
+															"type": "string",
+															"const": "contact"
+														}
+													]
+												}
+											}
+										}
+									},
+									"invalid": {
+										"type": "boolean"
+									}
+								}
 							}
 						}
 					}
@@ -10482,6 +13088,79 @@
 									},
 									"reason": {
 										"type": "string"
+									}
+								}
+							},
+							"agent": {
+								"type": "object",
+								"required": [
+									"slug",
+									"folder",
+									"location",
+									"model",
+									"contacts"
+								],
+								"properties": {
+									"slug": {
+										"type": "string"
+									},
+									"avatar": {
+										"type": "string"
+									},
+									"description": {
+										"type": "string"
+									},
+									"folder": {
+										"type": "string"
+									},
+									"location": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "local"
+											},
+											{
+												"type": "string",
+												"const": "cloud"
+											}
+										]
+									},
+									"model": {
+										"type": "string"
+									},
+									"contacts": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"id",
+												"name",
+												"role"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												},
+												"role": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "owner"
+														},
+														{
+															"type": "string",
+															"const": "contact"
+														}
+													]
+												}
+											}
+										}
+									},
+									"invalid": {
+										"type": "boolean"
 									}
 								}
 							}
@@ -11475,6 +14154,252 @@
 									},
 									"proposalId": {
 										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"tools"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "steps"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"tools": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"kind",
+												"id",
+												"at",
+												"callId",
+												"tool",
+												"args",
+												"status"
+											],
+											"properties": {
+												"kind": {
+													"type": "string",
+													"const": "tool"
+												},
+												"id": {
+													"type": "string"
+												},
+												"at": {
+													"type": "string"
+												},
+												"callId": {
+													"type": "string"
+												},
+												"tool": {
+													"type": "string"
+												},
+												"args": {},
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "pending_approval"
+														},
+														{
+															"type": "string",
+															"const": "running"
+														},
+														{
+															"type": "string",
+															"const": "done"
+														},
+														{
+															"type": "string",
+															"const": "error"
+														},
+														{
+															"type": "string",
+															"const": "interrupted"
+														},
+														{
+															"type": "string",
+															"const": "denied"
+														}
+													]
+												},
+												"output": {
+													"type": "string"
+												},
+												"details": {
+													"anyOf": [
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"path",
+																"diff"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "diff"
+																},
+																"path": {
+																	"type": "string"
+																},
+																"diff": {
+																	"type": "string"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"path"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "file"
+																},
+																"path": {
+																	"type": "string"
+																},
+																"language": {
+																	"type": "string"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"command"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "terminal"
+																},
+																"command": {
+																	"type": "string"
+																},
+																"exitCode": {
+																	"type": "number"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"value"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "json"
+																},
+																"value": {}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"items"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "todos"
+																},
+																"items": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"text",
+																			"status"
+																		],
+																		"properties": {
+																			"text": {
+																				"type": "string"
+																			},
+																			"status": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "pending"
+																					},
+																					{
+																						"type": "string",
+																						"const": "in_progress"
+																					},
+																					{
+																						"type": "string",
+																						"const": "done"
+																					}
+																				]
+																			}
+																		}
+																	}
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "task"
+																},
+																"sessionId": {
+																	"type": "string"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "done"
+																		},
+																		{
+																			"type": "string",
+																			"const": "error"
+																		},
+																		{
+																			"type": "string",
+																			"const": "stopped"
+																		}
+																	]
+																},
+																"costUsd": {
+																	"type": "number"
+																}
+															}
+														}
+													]
+												},
+												"durationMs": {
+													"type": "number"
+												},
+												"parentCallId": {
+													"type": "string"
+												}
+											}
+										}
 									}
 								}
 							}
@@ -12599,6 +15524,252 @@
 											},
 											"proposalId": {
 												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"id",
+											"at",
+											"tools"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "steps"
+											},
+											"id": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											},
+											"tools": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"kind",
+														"id",
+														"at",
+														"callId",
+														"tool",
+														"args",
+														"status"
+													],
+													"properties": {
+														"kind": {
+															"type": "string",
+															"const": "tool"
+														},
+														"id": {
+															"type": "string"
+														},
+														"at": {
+															"type": "string"
+														},
+														"callId": {
+															"type": "string"
+														},
+														"tool": {
+															"type": "string"
+														},
+														"args": {},
+														"status": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "pending_approval"
+																},
+																{
+																	"type": "string",
+																	"const": "running"
+																},
+																{
+																	"type": "string",
+																	"const": "done"
+																},
+																{
+																	"type": "string",
+																	"const": "error"
+																},
+																{
+																	"type": "string",
+																	"const": "interrupted"
+																},
+																{
+																	"type": "string",
+																	"const": "denied"
+																}
+															]
+														},
+														"output": {
+															"type": "string"
+														},
+														"details": {
+															"anyOf": [
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"path",
+																		"diff"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "diff"
+																		},
+																		"path": {
+																			"type": "string"
+																		},
+																		"diff": {
+																			"type": "string"
+																		}
+																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"path"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "file"
+																		},
+																		"path": {
+																			"type": "string"
+																		},
+																		"language": {
+																			"type": "string"
+																		}
+																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"command"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "terminal"
+																		},
+																		"command": {
+																			"type": "string"
+																		},
+																		"exitCode": {
+																			"type": "number"
+																		}
+																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"value"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "json"
+																		},
+																		"value": {}
+																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"items"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "todos"
+																		},
+																		"items": {
+																			"type": "array",
+																			"items": {
+																				"type": "object",
+																				"required": [
+																					"text",
+																					"status"
+																				],
+																				"properties": {
+																					"text": {
+																						"type": "string"
+																					},
+																					"status": {
+																						"anyOf": [
+																							{
+																								"type": "string",
+																								"const": "pending"
+																							},
+																							{
+																								"type": "string",
+																								"const": "in_progress"
+																							},
+																							{
+																								"type": "string",
+																								"const": "done"
+																							}
+																						]
+																					}
+																				}
+																			}
+																		}
+																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "task"
+																		},
+																		"sessionId": {
+																			"type": "string"
+																		},
+																		"status": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "done"
+																				},
+																				{
+																					"type": "string",
+																					"const": "error"
+																				},
+																				{
+																					"type": "string",
+																					"const": "stopped"
+																				}
+																			]
+																		},
+																		"costUsd": {
+																			"type": "number"
+																		}
+																	}
+																}
+															]
+														},
+														"durationMs": {
+															"type": "number"
+														},
+														"parentCallId": {
+															"type": "string"
+														}
+													}
+												}
 											}
 										}
 									}
@@ -17899,6 +21070,640 @@
 			}
 		},
 		"packages.setEnabled.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"agents.templates.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"agents.templates.result": {
+			"type": "object",
+			"required": [
+				"templates"
+			],
+			"properties": {
+				"templates": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"avatar",
+							"description"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"avatar": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"agents.create.params": {
+			"type": "object",
+			"required": [
+				"name"
+			],
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"template": {
+					"type": "string"
+				},
+				"avatar": {
+					"type": "string"
+				},
+				"model": {
+					"type": "object",
+					"required": [
+						"provider",
+						"id"
+					],
+					"properties": {
+						"provider": {
+							"type": "string"
+						},
+						"id": {
+							"type": "string"
+						}
+					}
+				},
+				"owner": {
+					"type": "string"
+				}
+			}
+		},
+		"agents.create.result": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"agents.get.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"agents.get.result": {
+			"type": "object",
+			"required": [
+				"definition",
+				"instructions",
+				"folder",
+				"errors",
+				"history"
+			],
+			"properties": {
+				"definition": {},
+				"instructions": {
+					"type": "string"
+				},
+				"folder": {
+					"type": "string"
+				},
+				"errors": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path",
+							"message"
+						],
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"message": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"history": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"commit",
+							"at",
+							"message"
+						],
+						"properties": {
+							"commit": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"message": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"agents.save.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"definition",
+				"instructions"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"definition": {},
+				"instructions": {
+					"type": "string"
+				},
+				"message": {
+					"type": "string"
+				}
+			}
+		},
+		"agents.save.result": {
+			"type": "object",
+			"required": [
+				"errors",
+				"saved"
+			],
+			"properties": {
+				"errors": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path",
+							"message"
+						],
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"message": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"saved": {
+					"type": "boolean"
+				}
+			}
+		},
+		"agents.conversations.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"agents.conversations.result": {
+			"type": "object",
+			"required": [
+				"people"
+			],
+			"properties": {
+				"people": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"contactId",
+							"name",
+							"role",
+							"conversationId",
+							"started"
+						],
+						"properties": {
+							"contactId": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"role": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "owner"
+									},
+									{
+										"type": "string",
+										"const": "contact"
+									}
+								]
+							},
+							"conversationId": {
+								"type": "string"
+							},
+							"started": {
+								"type": "boolean"
+							},
+							"lastAt": {
+								"type": "string"
+							},
+							"preview": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"agents.memory.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"agents.memory.result": {
+			"type": "object",
+			"required": [
+				"provider",
+				"partitions"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"partitions": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"label",
+							"bank"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"bank": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"memory.list.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"bank"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"bank": {
+					"type": "string"
+				},
+				"cursor": {
+					"type": "string"
+				},
+				"kinds": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"memory.list.result": {
+			"type": "object",
+			"required": [
+				"records",
+				"limited"
+			],
+			"properties": {
+				"records": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"text",
+							"kind",
+							"createdBy",
+							"at"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"text": {
+								"type": "string"
+							},
+							"kind": {
+								"type": "string"
+							},
+							"createdBy": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"pinned": {
+								"type": "boolean"
+							},
+							"source": {
+								"type": "object",
+								"properties": {
+									"ref": {
+										"type": "string"
+									},
+									"itemId": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				},
+				"cursor": {
+					"type": "string"
+				},
+				"limited": {
+					"type": "boolean"
+				}
+			}
+		},
+		"memory.add.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"bank",
+				"text"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"bank": {
+					"type": "string"
+				},
+				"text": {
+					"type": "string"
+				}
+			}
+		},
+		"memory.add.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"memory.forget.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"bank",
+				"id"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"bank": {
+					"type": "string"
+				},
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"memory.forget.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"memory.update.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"bank",
+				"id"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"bank": {
+					"type": "string"
+				},
+				"id": {
+					"type": "string"
+				},
+				"text": {
+					"type": "string"
+				},
+				"pinned": {
+					"type": "boolean"
+				}
+			}
+		},
+		"memory.update.result": {
 			"type": "object",
 			"properties": {}
 		},

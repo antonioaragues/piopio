@@ -138,6 +138,13 @@ export class BuiltinMemory implements MemoryProvider {
 		return this.sql.all<Row>("SELECT * FROM memory_records WHERE bank = ? AND pinned = 1 ORDER BY at", bank).map(toRecord);
 	}
 
+	/** Deletes every bank whose name starts with `prefix` (an agent being deleted), with their history. */
+	dropBanks(prefix: string): void {
+		const like = `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+		this.sql.run("DELETE FROM memory_records WHERE bank LIKE ? ESCAPE '\\'", like);
+		this.sql.run("DELETE FROM memory_events WHERE bank LIKE ? ESCAPE '\\'", like);
+	}
+
 	/** Groups the events written until `end()` (one change in the editor, one tool call) into one batch. Nested batches join the outer one. */
 	batch(): { end(): void } {
 		if (this.currentBatch) return { end: () => {} };

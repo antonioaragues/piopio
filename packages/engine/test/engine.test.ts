@@ -16,7 +16,7 @@ const open: Ctx[] = [];
 
 async function start(home = mkdtempSync(join(tmpdir(), "piopio-test-")), faux = true): Promise<Ctx> {
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), allowPrivateFetch: true, log: () => {} });
+	const engine = new Engine({ paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), allowPrivateFetch: true, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0" });
@@ -1326,4 +1326,88 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		await a.client.call("settings.set", { memory: { providers: [{ ...provider, tools }] } });
 		expect(await a.client.call("aboutMe.get", {})).toMatchObject({ text: "", limited: true });
 	}, 30_000);
+});
+
+describe("Agents: definition and runtime (milestone 4.2)", () => {
+	async function until(ctx: Ctx, ref: unknown, ready: (s: Snapshot) => boolean, timeout = 10_000): Promise<Snapshot> {
+		const end = Date.now() + timeout;
+		for (;;) {
+			const snap: Snapshot = await ctx.client.call("sessions.open", { ref });
+			if (ready(snap)) return snap;
+			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(snap.items)}`);
+			await new Promise((r) => setTimeout(r, 100));
+		}
+	}
+	const idleAfter = (n: number) => (s: Snapshot) => s.state.status === "idle" && s.items.filter((i) => i.kind === "assistant" && i.parts.some((p) => p.text)).length >= n;
+
+	test("an agent from a template: owner chat with compact steps and memory, edits with validation, contacts kept apart, restart, delete", async () => {
+		const a = await start();
+		expect((await a.client.call("agents.templates", {})).templates.map((t) => t.id)).toEqual(["personal-assistant", "daily-briefing", "habit-coach", "family-helper", "research-watcher"]);
+		const { ref } = await a.client.call("agents.create", { name: "Coach", template: "habit-coach", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		expect(ref.kind).toBe("agent");
+		const [listed] = (await a.client.call("sessions.list", { kind: "agent" })).sessions;
+		expect(listed).toMatchObject({ title: "Coach", agent: { slug: "coach", avatar: "🏃", location: "local", model: "faux:faux-1", contacts: [{ id: "owner", name: "Antonio", role: "owner" }] } });
+		const folder = join(a.home, "Agents", "coach");
+		expect(readFileSync(join(folder, "instructions.md"), "utf8")).toContain("You coach Antonio");
+		let got = await a.client.call("agents.get", { ref });
+		expect(got).toMatchObject({ folder, errors: [], history: [{ message: "Create Coach" }] });
+
+		// The owner's chat: a remembered fact, and the turn's tool call as one steps line.
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: remember | {"fact":"Antonio runs in the morning"}' } });
+		let chat = await until(a, ref, idleAfter(1));
+		expect(chat.items.map((i) => i.kind)).toEqual(["user", "assistant", "steps", "assistant"]);
+		const steps = chat.items.find((i) => i.kind === "steps")!;
+		expect(steps.kind === "steps" && steps.tools.map((t) => [t.tool, t.status])).toEqual([["remember", "done"]]);
+		const { provider, partitions } = await a.client.call("agents.memory", { ref });
+		expect(provider).toBe("builtin");
+		expect(partitions.map((p) => p.id)).toEqual(["owner", "shared"]);
+		let owner = (await a.client.call("memory.list", { provider, bank: partitions[0]!.bank })).records;
+		for (let i = 0; i < 30 && owner.length < 3; i++) {
+			await new Promise((r) => setTimeout(r, 100));
+			owner = (await a.client.call("memory.list", { provider, bank: partitions[0]!.bank })).records;
+		}
+		expect(owner.map((r) => [r.kind, r.text]).sort()).toEqual([
+			["fact", "Antonio runs in the morning"],
+			["message", "Antonio: call: remember | {\"fact\":\"Antonio runs in the morning\"}"],
+			["message", "Coach: Echo: call: remember | {\"fact\":\"Antonio runs in the morning\"}"],
+		]);
+
+		// Edits: an invalid one is refused; a valid one adds María.
+		const def = got.definition as Record<string, unknown> & { contacts: object[]; schedules: { cron: string }[] };
+		const bad = await a.client.call("agents.save", { ref, definition: { ...def, schedules: [{ ...def.schedules[0], cron: "0 25 * * *" }] }, instructions: got.instructions });
+		expect(bad).toEqual({ saved: false, errors: [{ path: "/schedules/0/cron", message: "The hour must be between 0 and 23." }] });
+		const good = await a.client.call("agents.save", { ref, definition: { ...def, contacts: [...def.contacts, { id: "maria", name: "María", role: "contact" }] }, instructions: got.instructions, message: "Add María" });
+		expect(good).toEqual({ saved: true, errors: [] });
+		got = await a.client.call("agents.get", { ref });
+		expect(got.history.map((h) => h.message)).toEqual(["Add María", "Create Coach"]);
+
+		// The channel simulator: talking as María. Her facts stay in her partition; she can't write the owner's.
+		const maria = { ...ref, conversationId: "person:maria" };
+		await a.client.call("sessions.subscribe", { ref: maria });
+		await a.client.call("sessions.submit", { ref: maria, input: { text: 'call: remember | {"fact":"María is vegetarian"}\ncall: remember | {"fact":"x","partition":"owner"}' } });
+		const asMaria = await until(a, maria, idleAfter(1));
+		const mariaSteps = asMaria.items.find((i) => i.kind === "steps")!;
+		expect(mariaSteps.kind === "steps" && mariaSteps.tools.map((t) => t.status)).toEqual(["done", "error"]);
+		expect((await a.client.call("memory.list", { provider, bank: `${ref.id}/contacts/maria` })).records.some((r) => r.text === "María is vegetarian")).toBe(true);
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: recall | {"query":"vegetarian"}' } });
+		chat = await until(a, ref, idleAfter(2));
+		const recall = chat.items.filter((i) => i.kind === "steps").at(-1)!;
+		expect(recall.kind === "steps" && recall.tools[0]!.output).toBe("Nothing found.");
+		const people = (await a.client.call("agents.conversations", { ref })).people;
+		expect(people.map((p) => [p.contactId, p.role, p.started])).toEqual([
+			["owner", "owner", true],
+			["maria", "contact", true],
+		]);
+		expect(people[1]!.preview).toContain("Echo:");
+
+		await stop(a);
+		const b = await start(a.home);
+		const reopened: Snapshot = await b.client.call("sessions.open", { ref });
+		expect(reopened.items.map((i) => i.id)).toEqual(chat.items.map((i) => i.id));
+		await b.client.call("sessions.delete", { ref });
+		expect(existsSync(folder)).toBe(false);
+		expect(existsSync(join(b.home, "trash", "coach"))).toBe(true);
+		expect((await b.client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner` })).records).toEqual([]);
+	}, 60_000);
 });

@@ -186,7 +186,15 @@ export const MemoryItem = Type.Object({
 });
 export type MemoryItem = Static<typeof MemoryItem>;
 
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem]);
+/** A turn's tool calls as one line, "Worked 18s · 2 steps" (06-agents §12 UI2): agents' conversations. */
+export const StepsItem = Type.Object({
+	kind: Type.Literal("steps"),
+	id: Type.String(),
+	at: Type.String(),
+	tools: Type.Array(ToolItem),
+});
+
+export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem]);
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
@@ -396,6 +404,22 @@ export const PiPackage = Type.Object({
 });
 export type PiPackage = Static<typeof PiPackage>;
 
+/** An agent in the catalog (06-agents §12): enough for the sidebar and the header. */
+export const AgentInfo = Type.Object({
+	slug: Type.String(),
+	avatar: Type.Optional(Type.String()),
+	description: Type.Optional(Type.String()),
+	folder: Type.String(),
+	location: literals("local", "cloud"),
+	model: Type.String(),
+	contacts: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), role: literals("owner", "contact") })),
+	/** The definition on disk doesn't validate (the agent keeps running its last good version). */
+	invalid: Type.Optional(Type.Boolean()),
+});
+export type AgentInfo = Static<typeof AgentInfo>;
+
+export const DefinitionError = Type.Object({ path: Type.String(), message: Type.String() });
+
 /** Where a thread seems to belong (04-chat S11). */
 export const SpaceSuggestion = Type.Object({
 	spaceId: Type.String(),
@@ -428,6 +452,8 @@ export const SessionSummary = Type.Object({
 	space: Type.Optional(SpaceInfo),
 	/** Threads: a Space it seems to belong in (S11), until moved or dismissed. */
 	suggestion: Type.Optional(SpaceSuggestion),
+	/** Agents. Refs to a person's conversation carry `conversationId: "person:<contactId>"`. */
+	agent: Type.Optional(AgentInfo),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -877,6 +903,55 @@ export const methods = {
 		params: Type.Object({ source: Type.String(), enabled: Type.Boolean(), kinds: Type.Optional(Type.Array(literals("extensions", "skills", "prompts", "themes"))) }),
 		result: Type.Object({}),
 	},
+	/** Agents (06-agents §2, §11). */
+	"agents.templates": {
+		params: Type.Object({}),
+		result: Type.Object({ templates: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.String(), description: Type.String() })) }),
+	},
+	"agents.create": {
+		params: Type.Object({ name: Type.String(), template: Type.Optional(Type.String()), avatar: Type.Optional(Type.String()), model: Type.Optional(ModelRef), owner: Type.Optional(Type.String()) }),
+		result: Type.Object({ ref: ContainerRef }),
+	},
+	/** The definition as saved, its validation and its history (git log). */
+	"agents.get": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({
+			definition: Type.Unknown(),
+			instructions: Type.String(),
+			folder: Type.String(),
+			errors: Type.Array(DefinitionError),
+			history: Type.Array(Type.Object({ commit: Type.String(), at: Type.String(), message: Type.String() })),
+		}),
+	},
+	/** Validates, then writes and commits. With errors, nothing is saved. */
+	"agents.save": {
+		params: Type.Object({ ref: ContainerRef, definition: Type.Unknown(), instructions: Type.String(), message: Type.Optional(Type.String()) }),
+		result: Type.Object({ errors: Type.Array(DefinitionError), saved: Type.Boolean() }),
+	},
+	/** Everyone the agent talks with: the owner and contacts, with the last message. */
+	"agents.conversations": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({
+			people: Type.Array(Type.Object({ contactId: Type.String(), name: Type.String(), role: literals("owner", "contact"), conversationId: Type.String(), started: Type.Boolean(), lastAt: Type.Optional(Type.String()), preview: Type.Optional(Type.String()) })),
+		}),
+	},
+	/** The agent's memory: its provider and partitions, each a bank (06 §8). */
+	"agents.memory": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({ provider: Type.String(), partitions: Type.Array(Type.Object({ id: Type.String(), label: Type.String(), bank: Type.String() })) }),
+	},
+	/** A memory provider's records (the memory views). */
+	"memory.list": {
+		params: Type.Object({ provider: Type.String(), bank: Type.String(), cursor: Type.Optional(Type.String()), kinds: Type.Optional(Type.Array(Type.String())) }),
+		result: Type.Object({
+			records: Type.Array(Type.Object({ id: Type.String(), text: Type.String(), kind: Type.String(), createdBy: Type.String(), at: Type.String(), pinned: Type.Optional(Type.Boolean()), source: Type.Optional(Type.Object({ ref: Type.Optional(Type.String()), itemId: Type.Optional(Type.String()), title: Type.Optional(Type.String()) })) })),
+			cursor: Type.Optional(Type.String()),
+			limited: Type.Boolean(),
+		}),
+	},
+	"memory.add": { params: Type.Object({ provider: Type.String(), bank: Type.String(), text: Type.String() }), result: Type.Object({}) },
+	"memory.forget": { params: Type.Object({ provider: Type.String(), bank: Type.String(), id: Type.String() }), result: Type.Object({}) },
+	"memory.update": { params: Type.Object({ provider: Type.String(), bank: Type.String(), id: Type.String(), text: Type.Optional(Type.String()), pinned: Type.Optional(Type.Boolean()) }), result: Type.Object({}) },
 	/** Forgets a project. Its session files stay where pi keeps them. */
 	"projects.remove": {
 		params: Type.Object({ id: Type.String() }),

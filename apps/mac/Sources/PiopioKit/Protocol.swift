@@ -225,6 +225,12 @@ public struct MemoryItem: Codable, Sendable, Hashable {
     public var proposalId: String?
 }
 
+/// A turn's tool calls as one line (agents' conversations, 06-agents UI2).
+public struct StepsItem: Codable, Sendable, Hashable {
+    public var id, at: String
+    public var tools: [ToolItem]
+}
+
 public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case user(UserItem)
     case assistant(AssistantItem)
@@ -234,6 +240,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case checkpoint(CheckpointItem)
     case routing(RoutingItem)
     case memory(MemoryItem)
+    case steps(StepsItem)
 
     private enum Key: String, CodingKey { case kind }
 
@@ -248,6 +255,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case "checkpoint": self = .checkpoint(try CheckpointItem(from: decoder))
         case "routing": self = .routing(try RoutingItem(from: decoder))
         case "memory": self = .memory(try MemoryItem(from: decoder))
+        case "steps": self = .steps(try StepsItem(from: decoder))
         default: throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown item kind \(kind)"))
         }
     }
@@ -263,6 +271,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .checkpoint(let v): try c.encode("checkpoint", forKey: .kind); try v.encode(to: encoder)
         case .routing(let v): try c.encode("routing", forKey: .kind); try v.encode(to: encoder)
         case .memory(let v): try c.encode("memory", forKey: .kind); try v.encode(to: encoder)
+        case .steps(let v): try c.encode("steps", forKey: .kind); try v.encode(to: encoder)
         }
     }
 
@@ -276,6 +285,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .checkpoint(let v): v.id
         case .routing(let v): v.id
         case .memory(let v): v.id
+        case .steps(let v): v.id
         }
     }
 }
@@ -380,7 +390,69 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var space: SpaceInfo?
     /// Threads: a Space it seems to belong in (04-chat S11).
     public var suggestion: SpaceSuggestion?
+    /// Agents.
+    public var agent: AgentInfo?
 }
+
+public struct AgentInfo: Codable, Sendable, Hashable {
+    public struct Contact: Codable, Sendable, Hashable, Identifiable { public var id: String; public var name: String; public var role: String }
+    public var slug: String
+    public var avatar: String?
+    public var description: String?
+    public var folder: String
+    public var location: String
+    public var model: String
+    public var contacts: [Contact]
+    public var invalid: Bool?
+}
+
+public struct AgentTemplate: Decodable, Sendable, Hashable, Identifiable { public var id, name, avatar, description: String }
+public struct AgentTemplatesResult: Decodable, Sendable { public var templates: [AgentTemplate] }
+public struct CreateAgentParams: Encodable, Sendable {
+    public var name: String; public var template: String?; public var avatar: String?; public var model: ModelRef?; public var owner: String?
+    public init(name: String, template: String?, avatar: String?, model: ModelRef?, owner: String?) { self.name = name; self.template = template; self.avatar = avatar; self.model = model; self.owner = owner }
+}
+public struct DefinitionError: Codable, Sendable, Hashable {
+    public var path: String
+    public var message: String
+    public init(path: String, message: String) { self.path = path; self.message = message }
+}
+public struct AgentGetResult: Decodable, Sendable {
+    public struct Commit: Decodable, Sendable, Hashable { public var commit, at, message: String }
+    public var definition: JSONValue
+    public var instructions: String
+    public var folder: String
+    public var errors: [DefinitionError]
+    public var history: [Commit]
+}
+public struct AgentSaveParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var definition: JSONValue; public var instructions: String; public var message: String?
+    public init(ref: ContainerRef, definition: JSONValue, instructions: String, message: String?) { self.ref = ref; self.definition = definition; self.instructions = instructions; self.message = message }
+}
+public struct AgentSaveResult: Decodable, Sendable { public var errors: [DefinitionError]; public var saved: Bool }
+public struct AgentPerson: Decodable, Sendable, Hashable, Identifiable {
+    public var contactId, name, role, conversationId: String
+    public var started: Bool
+    public var lastAt: String?
+    public var preview: String?
+    public var id: String { contactId }
+}
+public struct AgentPeopleResult: Decodable, Sendable { public var people: [AgentPerson] }
+public struct AgentMemoryResult: Decodable, Sendable {
+    public struct Partition: Decodable, Sendable, Hashable, Identifiable { public var id, label, bank: String }
+    public var provider: String
+    public var partitions: [Partition]
+}
+public struct MemoryListParams: Encodable, Sendable { public var provider, bank: String; public var cursor: String?; public init(provider: String, bank: String, cursor: String? = nil) { self.provider = provider; self.bank = bank; self.cursor = cursor } }
+public struct MemoryRecordInfo: Decodable, Sendable, Hashable, Identifiable {
+    public struct Source: Decodable, Sendable, Hashable { public var ref, itemId, title: String? }
+    public var id, text, kind, createdBy, at: String
+    public var pinned: Bool?
+    public var source: Source?
+}
+public struct MemoryListResult: Decodable, Sendable { public var records: [MemoryRecordInfo]; public var cursor: String?; public var limited: Bool }
+public struct MemoryAddParams: Encodable, Sendable { public var provider, bank, text: String; public init(provider: String, bank: String, text: String) { self.provider = provider; self.bank = bank; self.text = text } }
+public struct MemoryIdParams: Encodable, Sendable { public var provider, bank, id: String; public var pinned: Bool?; public init(provider: String, bank: String, id: String, pinned: Bool? = nil) { self.provider = provider; self.bank = bank; self.id = id; self.pinned = pinned } }
 
 public struct SpaceSuggestion: Codable, Sendable, Hashable {
     public var spaceId: String

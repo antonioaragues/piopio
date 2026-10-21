@@ -56,6 +56,33 @@ enum DebugAutomation {
                 ThreadModel.openSettings()
             }
         }
+        // PIOPIO_DEMO_AGENT=<template>: a new agent "Coach"; PIOPIO_DEMO_AGENT_MESSAGES: messages to it ("||");
+        // PIOPIO_DEMO_AGENT_CONTACT=<name>: add that contact and write as them once; PIOPIO_DEMO_AGENT_TAB: the tab to show.
+        if let template = env["PIOPIO_DEMO_AGENT"], engine.status == .ready {
+            Task {
+                if let tab = env["PIOPIO_DEMO_AGENT_TAB"] { UserDefaults.standard.set(tab, forKey: "agentTab") }
+                guard let ref = try? await engine.createAgent(name: "Coach", template: template.isEmpty ? nil : template, avatar: "") else { return }
+                UserDefaults.standard.set(ref.id, forKey: "agentSelection")
+                NotificationCenter.default.post(name: .setMode, object: AppMode.agents)
+                if let contact = env["PIOPIO_DEMO_AGENT_CONTACT"], let got = await engine.agentDefinition(ref), var def = AgentDef(got.definition) {
+                    def.contacts.append(.init(id: "maria", name: contact, role: "contact"))
+                    _ = try? await engine.saveAgent(ref, definition: def.json, instructions: got.instructions, message: "Add \(contact)")
+                    let maria = engine.thread(ContainerRef(kind: .agent, id: ref.id, conversationId: "person:maria"))
+                    await maria.open()
+                    await maria.send("call: remember | {\"fact\":\"\(contact) is vegetarian\"}")
+                }
+                let owner = engine.thread(ref)
+                await owner.open()
+                for message in (env["PIOPIO_DEMO_AGENT_MESSAGES"] ?? "").components(separatedBy: "||") where !message.isEmpty {
+                    await owner.send(message.replacingOccurrences(of: "\\n", with: "\n"))
+                    for _ in 0..<60 {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        if owner.state?.status == .idle { break }
+                    }
+                    try? await Task.sleep(for: .milliseconds(800))
+                }
+            }
+        }
         // PIOPIO_DEMO_SPACE=<name>: a new Space; PIOPIO_DEMO_SPACE_MESSAGES: messages to Main, separated by "||",
         // each sent once the previous settles; PIOPIO_DEMO_TOPIC=<title>: then open that topic.
         if let name = env["PIOPIO_DEMO_SPACE"], engine.status == .ready {

@@ -55,7 +55,26 @@ nonisolated struct ItemRenderer: Sendable {
             return routingCard(r)
         case .memory(let m):
             return memoryNote(m)
+        case .steps(let s):
+            return attachmentParagraph(DisclosureAttachment(card: Self.stepsCard(s)))
         }
+    }
+
+    /// "Worked 1.2s · 2 steps" (06-agents UI2): one line for a turn's tool calls; it opens to each step.
+    static func stepsCard(_ s: StepsItem) -> DisclosureCard {
+        let running = s.tools.contains { $0.status == .running || $0.status == .pendingApproval }
+        let seconds = s.tools.compactMap(\.durationMs).reduce(0, +) / 1000
+        let time = seconds < 10 ? String(format: "%.1fs", seconds) : String(format: "%.0fs", seconds)
+        let body = s.tools.map { t -> String in
+            let (title, detail) = toolTitle(t)
+            let mark = switch t.status { case .done: "✓"; case .error: "✗"; case .running: "…"; default: "·" }
+            return "\(mark) \(title)\(detail.isEmpty ? "" : " — \(detail)")"
+        }.joined(separator: "\n")
+        let count = s.tools.count == 1 ? "1 step" : "\(s.tools.count) steps"
+        let worked = seconds >= 0.05 ? "Worked \(time) · \(count)" : "Worked · \(count)"
+        let card = DisclosureCard(kind: .thinking, title: running ? "Working… · \(count)" : worked, body: body)
+        card.failed = s.tools.contains { $0.status == .error }
+        return card
     }
 
     /// "✎ Saved to memory: “…”  Undo" (docs/design 2b), or a topic's proposal with Save and Dismiss.
