@@ -371,7 +371,7 @@ struct AgentRunsView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            List(selection: $selected) {
+            List {
                 if let result, !result.upcoming.isEmpty {
                     Section("Next") { ForEach(result.upcoming) { upcoming($0) } }
                 }
@@ -385,12 +385,17 @@ struct AgentRunsView: View {
                     if result?.runs.isEmpty ?? true {
                         Text("No runs yet. Schedules, the heartbeat, reminders and webhooks start them.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                     }
-                    ForEach(result?.runs ?? []) { run in row(run).tag(run.id) }
+                    ForEach(result?.runs ?? []) { run in
+                        row(run)
+                            .contentShape(Rectangle())
+                            .onTapGesture { selected = run.id }
+                            .listRowBackground(RoundedRectangle(cornerRadius: 6).fill(selected == run.id ? Color.dsAccentSoft : .clear).padding(.horizontal, 6))
+                    }
                 }
             }
             .listStyle(.sidebar)
-            .frame(width: 320)
             .safeAreaInset(edge: .bottom) { runBar }
+            .frame(width: 320)
             Rectangle().fill(Color.dsLine).frame(width: 0.5)
             if let id = selected, result?.runs.contains(where: { $0.id == id }) == true {
                 AgentRunTranscript(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: "run:\(id)"))
@@ -447,7 +452,6 @@ struct AgentRunsView: View {
                 Button("Run now") { runNow(scheduleId: u.id) }.buttonStyle(PillStyle(compact: true))
             }
         }
-        .selectionDisabled()
     }
 
     private func held(_ h: AgentRunsResult.Held) -> some View {
@@ -455,7 +459,6 @@ struct AgentRunsView: View {
             Text(h.text).font(.system(size: 12.5)).lineLimit(2)
             Text("To \(h.to) · \(h.reason == "quiet" ? "quiet hours" : "daily limit") · goes \(Self.when(h.notBefore))").font(.system(size: 11)).foregroundStyle(Color.dsAmber)
         }
-        .selectionDisabled()
     }
 
     private func trigger(_ t: AgentTriggersResult.Trigger) -> some View {
@@ -472,7 +475,6 @@ struct AgentRunsView: View {
             } label: { Image(systemName: "doc.on.doc").font(.system(size: 11)) }
                 .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Copy the URL (POST to it; the body goes into the prompt)")
         }
-        .selectionDisabled()
     }
 
     private func row(_ r: AgentRunsResult.Run) -> some View {
