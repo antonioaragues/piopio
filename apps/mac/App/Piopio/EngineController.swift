@@ -21,6 +21,10 @@ final class EngineController {
     private(set) var models: [ModelInfo] = []
     private(set) var defaultModel: ModelRef?
     private(set) var hasKey = Keychain.read(secretOpenRouter) != nil
+    /// Model providers and how each is connected (docs/spec/10-model-providers).
+    private(set) var providers: [ProviderInfo] = []
+    /// The sign-in in progress (Settings › Models shows it as a sheet).
+    var login: ProviderLogin?
     /// The engine has worked in this run (so a failure now is a crash, shown as a banner).
     private(set) var wasReady = false
     /// Latest session status per open thread (sidebar status dots).
@@ -38,7 +42,7 @@ final class EngineController {
     let home = EngineClient.defaultHome()
     private var socket: URL { home.appending(path: "engine.sock") }
 
-    var needsKey: Bool { !faux && !hasKey }
+    var needsKey: Bool { !faux && !hasKey && !providers.contains(where: \.isConnected) }
 
     // MARK: Lifecycle
 
@@ -73,9 +77,8 @@ final class EngineController {
             }
             engineVersion = hello?.version
             try await refreshCatalog()
-            let list = try await client!.call("models.list", ModelsListParams(), as: ModelsListResult.self)
-            models = list.models.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            defaultModel = list.defaultModel
+            try await loadModels()
+            await loadProviders()
             status = .ready
             wasReady = true
         } catch {
@@ -171,12 +174,21 @@ final class EngineController {
         await client.setReverseHandler { method, params in
             // Apple app tools for agents (06-agents §4.1), run with this app's permissions.
             if method == "app.tool" { return await AppleTools.shared.handle(params) }
+            // Provider sign-ins and refreshed tokens (docs/spec/10 §10): the Keychain is the store.
+            if method == "secrets.set", let name = params["name"]?.stringValue, let value = params["value"]?.stringValue {
+                try? Keychain.write(name, value: value)
+                return .object([:])
+            }
+            if method == "secrets.delete", let name = params["name"]?.stringValue {
+                Keychain.delete(name)
+                return .object([:])
+            }
             guard method == "secrets.get", let name = params["name"]?.stringValue else { return .object(["value": .null]) }
             return .object(["value": Keychain.read(name).map(JSONValue.string) ?? .null])
         }
         let hello: HelloResult
         do {
-            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"), services: ["app.tool"])
+            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"), services: ["app.tool", "secrets.set"])
         } catch {
             await client.close()
             return nil
@@ -205,6 +217,18 @@ final class EngineController {
             }
         }
         Task { [weak self] in await self?.loadInbox() }
+        Task { [weak self] in
+            for await note in client.providerEvents {
+                guard let self else { return }
+                switch note {
+                case .changed:
+                    await self.loadProviders()
+                    try? await self.loadModels()
+                case .auth(let auth):
+                    if self.login?.loginId == auth.loginId { self.login?.apply(auth.event) }
+                }
+            }
+        }
         Task { [weak self] in
             // Spend (sidebar footer, Home): now, then every few minutes.
             while let self, self.client != nil {
@@ -693,6 +717,51 @@ final class EngineController {
     /// Sessions working or waiting on you (quitting would stop them unless the engine runs in the background).
     var busySessions: [SessionSummary] {
         (threads + buildSessions).filter { [.running, .waitingApproval].contains(liveStatus[$0.ref.id]) }
+    }
+
+    // MARK: Models and providers
+
+    func loadModels() async throws {
+        guard let client else { return }
+        let list = try await client.call("models.list", ModelsListParams(), as: ModelsListResult.self)
+        models = list.models.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        defaultModel = list.defaultModel
+    }
+
+    func loadProviders() async {
+        guard let client, let list = try? await client.call("providers.list", Empty(), as: ProvidersListResult.self) else { return }
+        providers = list.providers
+        hasKey = Keychain.read(secretOpenRouter) != nil
+    }
+
+    /// Starts connecting a provider; the sign-in sheet follows `login`.
+    func connect(_ provider: ProviderInfo, method: ProviderInfo.Method.Kind) async {
+        guard let client else { return }
+        let state = ProviderLogin(provider: provider, method: method)
+        login = state
+        do {
+            state.loginId = try await client.call("providers.login", ProviderLoginParams(provider: provider.id, method: method), as: ProviderLoginResult.self).loginId
+        } catch {
+            state.apply(ProviderAuthEvent(type: "failed", message: (error as? EngineError)?.message ?? error.localizedDescription))
+        }
+    }
+
+    func answerLogin(_ value: String?) async {
+        guard let login, let loginId = login.loginId, let promptId = login.prompt?.promptId else { return }
+        login.prompt = nil
+        _ = try? await client?.call("providers.answer", ProviderAnswerParams(loginId: loginId, promptId: promptId, value: value), as: Empty.self)
+    }
+
+    func cancelLogin() async {
+        if let id = login?.loginId, login?.finished == false { _ = try? await client?.call("providers.cancelLogin", LoginIdParams(loginId: id), as: Empty.self) }
+        login = nil
+    }
+
+    func disconnect(_ provider: ProviderInfo) async {
+        _ = try? await client?.call("providers.logout", ProviderParams(provider: provider.id), as: Empty.self)
+        if provider.id == "openrouter" { hasKey = false }
+        await loadProviders()
+        try? await loadModels()
     }
 
     // MARK: Secrets

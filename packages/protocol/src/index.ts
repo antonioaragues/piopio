@@ -520,8 +520,49 @@ export const ModelInfo = Type.Object({
 	/** USD per million tokens. */
 	pricing: Type.Object({ input: Type.Number(), output: Type.Number(), cacheRead: Type.Number(), cacheWrite: Type.Number() }),
 	supports: Type.Object({ vision: Type.Boolean(), reasoning: Type.Boolean() }),
+	/** The provider's display name ("OpenAI", "OpenAI API", "OpenRouter"). */
+	providerName: Type.Optional(Type.String()),
+	/** Who bills for it: "ChatGPT subscription", "OpenRouter credits", "OpenAI API billing" (docs/spec/10 FR2). */
+	billing: Type.Optional(Type.String()),
 });
 export type ModelInfo = Static<typeof ModelInfo>;
+
+/** A model provider and how it's connected (docs/spec/10-model-providers FR1). */
+export const ProviderInfo = Type.Object({
+	id: Type.String(),
+	name: Type.String(),
+	/** Ways to connect it: an API key, or signing in (OAuth); `subscription` when sign-in uses a paid plan. */
+	methods: Type.Array(Type.Object({ type: literals("api_key", "oauth"), label: Type.String(), subscription: Type.Optional(Type.Boolean()) })),
+	status: literals("not_connected", "connecting", "connected", "needs_attention"),
+	connectedWith: Type.Optional(literals("api_key", "oauth")),
+	billing: Type.Optional(Type.String()),
+	/** Why it needs attention ("Sign-in expired"). */
+	message: Type.Optional(Type.String()),
+	/** Shown first in Settings (OpenRouter, ChatGPT, OpenAI API). */
+	featured: Type.Boolean(),
+	models: Type.Number(),
+});
+export type ProviderInfo = Static<typeof ProviderInfo>;
+
+/** One step of a provider sign-in (pi's AuthInteraction, docs/spec/10 §10). `prompt` waits for `providers.answer`. */
+export const ProviderAuthEvent = Type.Union([
+	Type.Object({ type: Type.Literal("auth_url"), url: Type.String(), instructions: Type.Optional(Type.String()) }),
+	Type.Object({ type: Type.Literal("device_code"), userCode: Type.String(), verificationUri: Type.String(), expiresInSeconds: Type.Optional(Type.Number()) }),
+	Type.Object({ type: Type.Literal("progress"), message: Type.String() }),
+	Type.Object({ type: Type.Literal("info"), message: Type.String(), links: Type.Optional(Type.Array(Type.Object({ url: Type.String(), label: Type.Optional(Type.String()) }))) }),
+	Type.Object({
+		type: Type.Literal("prompt"),
+		promptId: Type.String(),
+		kind: literals("text", "secret", "select", "manual_code"),
+		message: Type.String(),
+		placeholder: Type.Optional(Type.String()),
+		options: Type.Optional(Type.Array(Type.Object({ id: Type.String(), label: Type.String(), description: Type.Optional(Type.String()) }))),
+	}),
+	Type.Object({ type: Type.Literal("prompt_closed"), promptId: Type.String() }),
+	Type.Object({ type: Type.Literal("done") }),
+	Type.Object({ type: Type.Literal("failed"), message: Type.String() }),
+]);
+export type ProviderAuthEvent = Static<typeof ProviderAuthEvent>;
 
 /** A folder added in Build (docs/spec/05-build BP1). */
 export const ProjectInfo = Type.Object({
@@ -614,7 +655,7 @@ export const methods = {
 			token: Type.String(),
 			client: Type.String(),
 			protocolVersion: Type.String(),
-			/** Reverse requests this client answers besides `secrets.get` (§3.12): `app.tool`. */
+			/** Reverse requests this client answers besides `secrets.get` (§3.12): `app.tool`, `secrets.set` (also `secrets.delete`). */
 			services: Type.Optional(Type.Array(Type.String())),
 		}),
 		result: Type.Object({ engineId: Type.String(), kind: Type.Union([Type.Literal("local"), Type.Literal("cloud")]), version: Type.String(), protocolVersion: Type.String(), capabilities: EngineCapabilities }),
@@ -742,6 +783,30 @@ export const methods = {
 	"models.list": {
 		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({ models: Type.Array(ModelInfo), defaultModel: ModelRef }),
+	},
+	/** Every model provider pi knows, and how each is connected (docs/spec/10 FR1). */
+	"providers.list": {
+		params: Type.Object({}),
+		result: Type.Object({ providers: Type.Array(ProviderInfo) }),
+	},
+	/** Starts connecting a provider; its steps arrive as `providers.auth` notifications with this `loginId`. */
+	"providers.login": {
+		params: Type.Object({ provider: Type.String(), method: literals("api_key", "oauth") }),
+		result: Type.Object({ loginId: Type.String() }),
+	},
+	/** Answers a sign-in prompt (`value`), or cancels it (no value). */
+	"providers.answer": {
+		params: Type.Object({ loginId: Type.String(), promptId: Type.String(), value: Type.Optional(Type.String()) }),
+		result: Type.Object({}),
+	},
+	"providers.cancelLogin": {
+		params: Type.Object({ loginId: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Disconnects one provider; the others stay as they are. */
+	"providers.logout": {
+		params: Type.Object({ provider: Type.String() }),
+		result: Type.Object({}),
 	},
 	"projects.list": {
 		params: Type.Object({}),
@@ -1153,6 +1218,15 @@ export const reverseMethods = {
 		params: Type.Object({ name: Type.String(), purpose: Type.String() }),
 		result: Type.Object({ value: Type.Union([Type.String(), Type.Null()]) }),
 	},
+	/** Stores a secret in the client's Keychain (provider sign-ins, refreshed tokens). Only for clients offering `secrets.set`. */
+	"secrets.set": {
+		params: Type.Object({ name: Type.String(), value: Type.String() }),
+		result: Type.Object({}),
+	},
+	"secrets.delete": {
+		params: Type.Object({ name: Type.String() }),
+		result: Type.Object({}),
+	},
 	/**
 	 * An Apple app tool, run by the Mac app with the user's permissions (06-agents §4.1). The app checks `groups`
 	 * (and `shortcuts`) again. `undo` is the call that reverses a change (§4.2).
@@ -1188,6 +1262,10 @@ export const notifications = {
 	/** A session needs you (it's waiting on a prompt) or told you something (notify_user). Sent to every client. */
 	"session.attention": Type.Object({ ref: ContainerRef, title: Type.String(), kind: literals("waiting", "notify"), message: Type.String() }),
 	/** The Inbox changed; `count` is what waits for you (badges). `approval` is set when an agent asks (notifications). */
+	/** A step of a provider sign-in started with `providers.login`. */
+	"providers.auth": Type.Object({ loginId: Type.String(), provider: Type.String(), event: ProviderAuthEvent }),
+	/** Providers or their models changed (connected, disconnected, needs attention): list them again. */
+	"providers.changed": Type.Object({}),
 	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
 } satisfies Record<string, TSchema>;
 

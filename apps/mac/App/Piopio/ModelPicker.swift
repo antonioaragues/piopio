@@ -109,7 +109,8 @@ struct ModelPicker: View {
                         fact("Context", "\(Self.context(m)) tokens")
                         fact("Longest answer", "\(Self.tokens(m.maxOutputTokens)) tokens")
                         fact("Reasoning", m.supports.reasoning ? "Yes" : "No")
-                        fact("Images", m.supports.vision ? "Reads them" : "No", last: true)
+                        fact("Images", m.supports.vision ? "Reads them" : "No", last: m.billing == nil)
+                        if let billing = m.billing { fact("Billed to", billing, last: true) }
                     }
                     .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
@@ -218,7 +219,7 @@ struct ModelPicker: View {
                         if model.supports.reasoning { capability("brain", "Reasons before answering").foregroundStyle(fg3) }
                         if model.supports.vision { capability("eye", "Reads images").foregroundStyle(fg3) }
                     }
-                    Text("\(Self.maker(model)) · \(Self.context(model)) context").font(.system(size: 11)).foregroundStyle(fg3).lineLimit(1)
+                    Text("\(multiProvider ? "via \(Self.providerTag(model))" : Self.maker(model)) · \(Self.context(model)) context").font(.system(size: 11)).foregroundStyle(fg3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 Text(Self.tier(model))
@@ -249,7 +250,7 @@ struct ModelPicker: View {
     private var matching: [ModelInfo] {
         let terms = query.lowercased().split(separator: " ")
         return engine.models.filter { m in
-            let hay = "\(m.name) \(m.id) \(m.provider)".lowercased()
+            let hay = "\(m.name) \(m.id) \(m.provider) \(m.providerName ?? "") \(m.billing ?? "")".lowercased()
             guard terms.allSatisfy({ hay.contains($0) }) else { return false }
             switch filter {
             case .all: return true
@@ -261,6 +262,9 @@ struct ModelPicker: View {
     }
 
     private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
+
+    /// More than one provider connected: rows say which one, OpenRouter's sections say so too.
+    private var multiProvider: Bool { Set(engine.models.map(\.provider)).subtracting(["faux"]).count > 1 }
 
     /// Batch and alias variants stay folded unless searching, filtering for free models, or asked for.
     private var foldsVariants: Bool { !showVariants && query.isEmpty && filter != .free }
@@ -277,14 +281,24 @@ struct ModelPicker: View {
             if !recents.isEmpty { out.append(Section(id: "recent", title: "Recent", models: Array(recents.prefix(5)))) }
         }
         let listed = foldsVariants ? all.filter { !Self.isVariant($0) } : all
-        let byMaker = Dictionary(grouping: listed, by: Self.maker)
+        // Providers other than OpenRouter first, one section each, titled with who bills (docs/spec/10 FR2):
+        // the same model through two providers stays two choices.
+        let direct = Dictionary(grouping: listed.filter { $0.provider != "openrouter" }, by: \.provider)
+        let providerOrder = ["faux", "openai", "openai-api"]
+        for provider in direct.keys.sorted(by: { (providerOrder.firstIndex(of: $0) ?? 9, $0) < (providerOrder.firstIndex(of: $1) ?? 9, $1) }) {
+            let models = direct[provider]!
+            let title = [Self.providerTag(models[0]), models[0].billing].compactMap { $0 }.joined(separator: " · ")
+            out.append(Section(id: "provider:\(provider)", title: title, models: models.sorted { Self.shortName($0) < Self.shortName($1) }))
+        }
+        let routed = listed.filter { $0.provider == "openrouter" }
+        let byMaker = Dictionary(grouping: routed, by: Self.maker)
         // Well-known makers first, then the rest by how many models they have; models by name within a maker.
         let rank = { (maker: String) in Self.knownMakers.firstIndex { $0.caseInsensitiveCompare(maker) == .orderedSame } ?? Self.knownMakers.count }
         let ordered = byMaker.keys.sorted { a, b in
             rank(a) != rank(b) ? rank(a) < rank(b) : byMaker[a]!.count != byMaker[b]!.count ? byMaker[a]!.count > byMaker[b]!.count : a < b
         }
         for maker in ordered {
-            out.append(Section(id: "maker:\(maker)", title: maker, models: byMaker[maker]!.sorted { Self.shortName($0) < Self.shortName($1) }))
+            out.append(Section(id: "maker:\(maker)", title: multiProvider ? "OpenRouter · \(maker)" : maker, models: byMaker[maker]!.sorted { Self.shortName($0) < Self.shortName($1) }))
         }
         return out
     }
@@ -318,9 +332,20 @@ struct ModelPicker: View {
 
     /// "Anthropic: Claude Haiku 5.5" → "Anthropic"; otherwise the id's vendor ("anthropic/…") or the provider.
     static func maker(_ m: ModelInfo) -> String {
+        if m.provider == "openai" || m.provider == "openai-api" { return "OpenAI" }
         if let colon = m.name.firstIndex(of: ":") { return String(m.name[..<colon]).trimmingCharacters(in: .whitespaces) }
         if let slash = m.id.firstIndex(of: "/") { return String(m.id[..<slash]).capitalized }
         return m.provider.capitalized
+    }
+
+    /// How the picker and chips name where a model runs: "ChatGPT", "OpenAI API", "OpenRouter".
+    static func providerTag(_ m: ModelInfo) -> String {
+        switch m.provider {
+        case "openai": "ChatGPT"
+        case "openai-api": "OpenAI API"
+        case "openrouter": "OpenRouter"
+        default: m.providerName ?? m.provider.capitalized
+        }
     }
 
     static func shortName(_ m: ModelInfo) -> String {
@@ -330,8 +355,9 @@ struct ModelPicker: View {
 
     static func isFree(_ m: ModelInfo) -> Bool { m.pricing.input == 0 && m.pricing.output == 0 }
 
-    /// "$" under $2, "$$" under $15, "$$$" above, per million output tokens.
+    /// "$" under $2, "$$" under $15, "$$$" above, per million output tokens; "Plan" when a subscription pays.
     static func tier(_ m: ModelInfo) -> String {
+        if m.billing?.contains("subscription") == true { return "Plan" }
         if isFree(m) { return "Free" }
         return m.pricing.output < 2 ? "$" : m.pricing.output < 15 ? "$$" : "$$$"
     }

@@ -173,6 +173,19 @@ After implementing, report: what changed; which pi capabilities were reused; bac
 7. **Fallbacks:** the utility model and web search use the session's provider when OpenRouter isn't connected, or say clearly that they're unavailable.
 8. **Tests:** a fake `CredentialStore` and a faux OAuth provider cover login, refresh written back, logout of one provider leaving the others, model listing across providers, switching provider mid-conversation, and persistence across restart.
 
+## 11. Status (2026-10-22): P0 built
+**Decision:** ChatGPT signs in through pi's `openai` provider; the OpenAI API key goes to a second provider, `openai-api`, registered as an alias of `openai` (same models, API key only).
+
+**Built**
+- Engine: one `ModelRuntime` for every runtime (`models.ts`), credentials in the Keychain through `KeychainCredentialStore` (`credentials.ts`) with `secrets.set`/`secrets.delete` reverse requests, the OpenAI API alias and sign-in flows (`providers.ts`), `providers.list` / `login` / `answer` / `cancelLogin` / `logout`, `providers.auth` and `providers.changed` notifications. `models.list` returns only connected providers' models, each with `providerName` and `billing`. Errors name the provider and mark it "Needs attention" on a rejected key or sign-in. Web search says it needs OpenRouter when it isn't connected; the utility model falls back to a connected provider's small model.
+- App: Settings › Models lists ChatGPT, OpenAI API and OpenRouter first and every other pi provider under "More providers", with Connect, Replace key / Sign in again, Reconnect and Disconnect (warning when a default model uses it). A sign-in sheet follows pi's steps (browser page, device code, key, pasted code). The model picker gives each non-OpenRouter provider its own section titled with who bills; rows say "via ChatGPT" etc.; subscription models show "Plan" instead of a price tier; the composer chip names the provider once more than one is connected.
+- The existing OpenRouter key keeps working untouched (its Keychain item is read as OpenRouter's credential).
+- Tests: engine (key login through the sheet's prompt, Keychain write, both providers listed, switching a conversation's provider, restart, logout of one provider, sign-in steps and cancel, refreshed tokens written back) and Swift decoding.
+
+**Not verified yet**
+- A real ChatGPT sign-in and real requests with real keys (needs your accounts). Captures used fake keys in a separate Keychain service (`PIOPIO_KEYCHAIN_SERVICE`).
+- Switching provider while a turn is running relies on the existing `sessions.configure` behavior (the change applies to the next turn).
+
 ## References
 - https://pi.dev/docs/latest/models
 - https://pi.dev/docs/latest/providers

@@ -358,7 +358,7 @@ struct ModelChip: View {
 
     var body: some View {
         Button { thread.showModelPicker = true } label: {
-            Text(engine.model(thread.state?.model).map(Self.short) ?? thread.state?.model?.id ?? "Model")
+            Text(engine.model(thread.state?.model).map { Self.label($0, engine: engine) } ?? thread.state?.model?.id ?? "Model")
         }
         .buttonStyle(ChipStyle())
         .help("Change model")
@@ -373,6 +373,12 @@ struct ModelChip: View {
     /// "Anthropic: Claude Haiku 5.5" → "Claude Haiku 5.5".
     static func short(_ m: ModelInfo) -> String {
         m.name.split(separator: ":", maxSplits: 1).last.map { $0.trimmingCharacters(in: .whitespaces) } ?? m.name
+    }
+
+    /// The chip's text: the model, and where it runs once more than one provider is connected (docs/spec/10:
+    /// the selected model's provider is always visible).
+    static func label(_ m: ModelInfo, engine: EngineController) -> String {
+        Set(engine.models.map(\.provider)).subtracting(["faux"]).count > 1 ? "\(short(m)) · \(ModelPicker.providerTag(m))" : short(m)
     }
 }
 

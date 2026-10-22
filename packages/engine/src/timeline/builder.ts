@@ -294,7 +294,7 @@ export class TimelineBuilder {
 			status: assistantStatus(m.stopReason),
 			...(m.model ? { model: m.provider ? `${m.provider}/${m.model}` : m.model } : {}),
 			...(usage ? { usage } : {}),
-			...(m.stopReason === "error" || m.errorMessage ? errorFields(m.errorMessage) : {}),
+			...(m.stopReason === "error" || m.errorMessage ? errorFields(m.errorMessage, m.provider) : {}),
 		};
 	}
 
@@ -360,8 +360,8 @@ export class TimelineBuilder {
 	}
 }
 
-function errorFields(raw: string | undefined): Pick<AssistantItem, "error" | "errorKind" | "errorDetail"> {
-	const { kind, message } = describeModelError(raw);
+function errorFields(raw: string | undefined, provider: string | undefined): Pick<AssistantItem, "error" | "errorKind" | "errorDetail"> {
+	const { kind, message } = describeModelError(raw, provider);
 	return { error: message, errorKind: kind, ...(raw ? { errorDetail: raw } : {}) };
 }
 

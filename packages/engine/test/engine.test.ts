@@ -19,7 +19,7 @@ async function start(home = mkdtempSync(join(tmpdir(), "piopio-test-")), faux = 
 	const engine = new Engine({ ...extra, paths, faux, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, allowPrivateFetch: true, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
-	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0" });
+	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0", services: ["secrets.set"] });
 	const ctx = { home, engine, client };
 	open.push(ctx);
 	return ctx;
@@ -107,6 +107,8 @@ test("configure, rename and delete a thread, with catalog notifications", async 
 	const sub = await a.client.call("sessions.subscribe", { ref });
 	expect(sub.snapshot.state.model).toEqual({ provider: "faux", id: "faux-1" });
 
+	// Models come from connected providers only (docs/spec/10 FR2): connect OpenRouter.
+	a.client.secrets["provider.openrouter.apiKey"] = "sk-or-test";
 	const { models, defaultModel } = await a.client.call("models.list", {});
 	expect(defaultModel).toEqual({ provider: "faux", id: "faux-1" });
 	expect(models.some((m: { provider: string }) => m.provider === "openrouter")).toBe(true);
@@ -265,6 +267,7 @@ describe("milestone 1.3", () => {
 
 	test("images need a vision model", async () => {
 		const a = await start();
+		a.client.secrets["provider.openrouter.apiKey"] = "sk-or-test";
 		const { models } = await a.client.call("models.list", {});
 		const blind = models.find((m: { provider: string; supports: { vision: boolean } }) => m.provider === "openrouter" && !m.supports.vision);
 		const { ref } = await a.client.call("sessions.create", { kind: "thread", model: { provider: "openrouter", id: blind.id } });
@@ -1791,4 +1794,113 @@ describe("Folded transcripts (docs/design v2)", () => {
 		expect(live.some((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "steps")).toBe(true);
 	}, 30_000);
 
+});
+
+describe("model providers (docs/spec/10-model-providers)", () => {
+	type Info = { id: string; status: string; billing?: string; connectedWith?: string; featured: boolean; methods: { type: string }[] };
+	const providers = async (a: Ctx) => ((await a.client.call("providers.list", {})) as { providers: Info[] }).providers;
+	const authEvents = (a: Ctx, loginId: string) => a.client.notifications.filter((n) => n.method === "providers.auth" && n.params.loginId === loginId).map((n) => n.params.event);
+	const until = async (check: () => boolean, timeoutMs = 10_000) => {
+		for (const started = Date.now(); !check(); ) {
+			if (Date.now() - started > timeoutMs) throw new Error("timed out");
+			await new Promise((r) => setTimeout(r, 20));
+		}
+	};
+
+	test("OpenRouter's original key counts as connected; the featured three come first", async () => {
+		const a = await start();
+		a.client.secrets["provider.openrouter.apiKey"] = "sk-or-test";
+		const list = await providers(a);
+		expect(list.slice(0, 3).map((p) => p.id)).toEqual(["openrouter", "openai", "openai-api"]);
+		expect(list[0]).toMatchObject({ status: "connected", connectedWith: "api_key", billing: "OpenRouter credits" });
+		// ChatGPT is sign-in only on `openai`; its API key goes to the alias.
+		expect(list[1]).toMatchObject({ status: "not_connected", methods: [{ type: "oauth", subscription: true }] });
+		expect(list[2]).toMatchObject({ status: "not_connected", methods: [{ type: "api_key" }] });
+	});
+
+	test("connecting the OpenAI API with a key keeps OpenRouter, lists both, and survives a restart; logout removes only it", async () => {
+		const a = await start();
+		a.client.secrets["provider.openrouter.apiKey"] = "sk-or-test";
+		const { loginId } = await a.client.call("providers.login", { provider: "openai-api", method: "api_key" });
+		await until(() => authEvents(a, loginId).some((e) => e.type === "prompt"));
+		const prompt = authEvents(a, loginId).find((e) => e.type === "prompt");
+		expect(prompt).toMatchObject({ kind: "secret" });
+		await a.client.call("providers.answer", { loginId, promptId: prompt.promptId, value: "sk-openai-test" });
+		await until(() => authEvents(a, loginId).some((e) => e.type === "done" || e.type === "failed"));
+		expect(authEvents(a, loginId).at(-1)).toEqual({ type: "done" });
+		// Stored in the app's Keychain, never in the engine's files.
+		expect(JSON.parse(a.client.secrets["provider.openai-api.credential"]!)).toMatchObject({ type: "api_key", key: "sk-openai-test" });
+		expect(readFileSync(join(a.home, "credentials.json"), "utf8")).not.toContain("sk-openai-test");
+
+		const list = await providers(a);
+		expect(list.find((p) => p.id === "openai-api")).toMatchObject({ status: "connected", billing: "OpenAI API billing" });
+		expect(list.find((p) => p.id === "openrouter")).toMatchObject({ status: "connected" });
+		const { models } = await a.client.call("models.list", {});
+		expect(models.find((m: { provider: string; id: string }) => m.provider === "openai-api" && m.id === "gpt-6-sol")).toMatchObject({ providerName: "OpenAI API", billing: "OpenAI API billing" });
+		expect(models.some((m: { provider: string }) => m.provider === "openrouter")).toBe(true);
+
+		// A conversation can switch to it and keep its history.
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.submit", { ref, input: { text: "hello" } });
+		await a.client.call("sessions.configure", { ref, model: { provider: "openai-api", id: "gpt-6-sol" } });
+		const opened: Snapshot = await a.client.call("sessions.open", { ref });
+		expect(opened.state.model).toEqual({ provider: "openai-api", id: "gpt-6-sol" });
+		expect(opened.items.some((i) => i.kind === "user")).toBe(true);
+
+		await stop(a);
+		const b = await start(a.home);
+		b.client.secrets = { ...a.client.secrets };
+		expect((await providers(b)).find((p) => p.id === "openai-api")).toMatchObject({ status: "connected" });
+		expect(((await b.client.call("sessions.open", { ref })) as Snapshot).state.model).toEqual({ provider: "openai-api", id: "gpt-6-sol" });
+
+		await b.client.call("providers.logout", { provider: "openai-api" });
+		expect(b.client.secrets["provider.openai-api.credential"]).toBeUndefined();
+		const after = await providers(b);
+		expect(after.find((p) => p.id === "openai-api")).toMatchObject({ status: "not_connected" });
+		expect(after.find((p) => p.id === "openrouter")).toMatchObject({ status: "connected" });
+	}, 30_000);
+
+	test("a sign-in flow passes its steps through and can be cancelled", async () => {
+		const { LoginFlows } = await import("../src/providers.js");
+		const events: { type: string; promptId?: string }[] = [];
+		let finished: boolean | undefined;
+		const runtime = {
+			login: async (_provider: string, _type: string, interaction: { prompt: (p: unknown) => Promise<string>; notify: (e: unknown) => void }) => {
+				interaction.notify({ type: "auth_url", url: "https://auth.example/authorize" });
+				const code = await interaction.prompt({ type: "manual_code", message: "Paste the callback URL" });
+				if (code !== "http://localhost:1455/auth/callback?code=x") throw new Error("bad code");
+				return { type: "oauth", access: "a", refresh: "r", expires: 0 };
+			},
+		};
+		const flows = new LoginFlows(() => runtime as never, (_id, _p, e) => events.push(e), { agentName: "Piopio", deviceId: () => "d", finished: (_p, ok) => (finished = ok) });
+		const id = flows.start("openai", "oauth");
+		expect(flows.connecting("openai")).toBe(true);
+		await new Promise((r) => setTimeout(r, 10));
+		expect(events[0]).toEqual({ type: "auth_url", url: "https://auth.example/authorize" });
+		const prompt = events.find((e) => e.type === "prompt")!;
+		flows.answer(id, prompt.promptId!, "http://localhost:1455/auth/callback?code=x");
+		await new Promise((r) => setTimeout(r, 10));
+		expect(events.at(-1)).toEqual({ type: "done" });
+		expect(finished).toBe(true);
+
+		const second = flows.start("openai", "oauth");
+		await new Promise((r) => setTimeout(r, 10));
+		flows.cancel(second);
+		await new Promise((r) => setTimeout(r, 10));
+		expect(events.at(-1)).toEqual({ type: "failed", message: "Cancelled." });
+		expect(flows.connecting("openai")).toBe(false);
+	});
+
+	test("refreshed sign-in tokens are written back to the Keychain", async () => {
+		const { KeychainCredentialStore } = await import("../src/credentials.js");
+		const { SecretBroker } = await import("../src/secrets.js");
+		const keychain: Record<string, string> = {};
+		const broker = new SecretBroker({});
+		broker.addRequester(async (name) => keychain[name] ?? null, { set: async (n, v) => void (keychain[n] = v), delete: async (n) => void delete keychain[n] });
+		const store = new KeychainCredentialStore(broker);
+		await store.modify("openai", async () => ({ type: "oauth", access: "a1", refresh: "r1", expires: 1 }));
+		await store.modify("openai", async (current) => ({ ...(current as { type: "oauth"; access: string; refresh: string; expires: number }), access: "a2", expires: 2 }));
+		expect(JSON.parse(keychain["provider.openai.credential"]!)).toMatchObject({ type: "oauth", access: "a2", refresh: "r1", expires: 2 });
+		expect(await store.list()).toEqual([{ providerId: "openai", type: "oauth" }]);
+	});
 });

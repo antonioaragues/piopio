@@ -4,7 +4,8 @@ import Security
 /// Generic-password items under service "Piopio", account = secret name (e.g. provider.openrouter.apiKey).
 /// The app owns secrets; the engine asks for them with `secrets.get`.
 public enum Keychain {
-    public static let service = "Piopio"
+    /// `PIOPIO_KEYCHAIN_SERVICE` keeps captures and experiments out of the real items.
+    public static let service = ProcessInfo.processInfo.environment["PIOPIO_KEYCHAIN_SERVICE"] ?? "Piopio"
 
     public static func read(_ account: String) -> String? {
         let query: [String: Any] = [

@@ -1062,6 +1062,12 @@ export class Sessions {
 		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
 		runtime.onEvents((events) => {
 			this.index(entry, events);
+			// A rejected sign-in or key marks its provider "Needs attention" in Settings › Models (docs/spec/10 FR1).
+			for (const e of events) {
+				if ((e.type === "item.added" || e.type === "item.updated") && e.item.kind === "assistant" && e.item.errorKind === "auth" && e.item.model) {
+					this.hub.needsAttention(e.item.model.split("/")[0]!, e.item.error ?? "Sign-in or key rejected.");
+				}
+			}
 			const idle = events.some((e) => e.type === "state" && e.state.status === "idle");
 			if (entry.ref.kind === "thread" && idle) void this.suggestSpace(entry, runtime);
 			if ((entry.ref.kind === "thread" || entry.ref.kind === "build") && idle) void this.suggestFollowUps(entry, runtime);

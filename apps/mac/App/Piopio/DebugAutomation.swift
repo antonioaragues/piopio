@@ -72,6 +72,27 @@ enum DebugAutomation {
                 }
             }
         }
+        // PIOPIO_DEMO_CONNECT=<provider>:<key>,…: connect providers with these (fake) API keys, answering the sign-in
+        // sheet's prompt; PIOPIO_DEMO_CONNECT_SHOW=<provider>: then open its sheet and leave it (captures). Use with
+        // PIOPIO_KEYCHAIN_SERVICE so nothing lands in the real Keychain.
+        if env["PIOPIO_DEMO_CONNECT"] != nil || env["PIOPIO_DEMO_CONNECT_SHOW"] != nil {
+            Task {
+                await engine.loadProviders()
+                for pair in (env["PIOPIO_DEMO_CONNECT"] ?? "").split(separator: ",") {
+                    let parts = pair.split(separator: ":", maxSplits: 1).map(String.init)
+                    guard parts.count == 2, let provider = engine.providers.first(where: { $0.id == parts[0] }) else { continue }
+                    await engine.connect(provider, method: .apiKey)
+                    for _ in 0..<50 where engine.login?.prompt == nil { try? await Task.sleep(for: .milliseconds(100)) }
+                    await engine.answerLogin(parts[1])
+                    for _ in 0..<50 where engine.login?.finished != true { try? await Task.sleep(for: .milliseconds(100)) }
+                    await engine.cancelLogin()
+                }
+                if let id = env["PIOPIO_DEMO_CONNECT_SHOW"], let provider = engine.providers.first(where: { $0.id == id }) {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    await engine.connect(provider, method: provider.methods.first?.type ?? .apiKey)
+                }
+            }
+        }
         // PIOPIO_DEMO_SETTINGS=1: open Settings (snapshot it with PIOPIO_SNAPSHOT_WINDOW=key).
         if env["PIOPIO_DEMO_SETTINGS"] == "1" {
             Task {

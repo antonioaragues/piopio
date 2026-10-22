@@ -15469,6 +15469,12 @@
 							"type": "boolean"
 						}
 					}
+				},
+				"providerName": {
+					"type": "string"
+				},
+				"billing": {
+					"type": "string"
 				}
 			}
 		},
@@ -20991,6 +20997,12 @@
 										"type": "boolean"
 									}
 								}
+							},
+							"providerName": {
+								"type": "string"
+							},
+							"billing": {
+								"type": "string"
 							}
 						}
 					}
@@ -21011,6 +21023,201 @@
 					}
 				}
 			}
+		},
+		"providers.list.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"providers.list.result": {
+			"type": "object",
+			"required": [
+				"providers"
+			],
+			"properties": {
+				"providers": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"methods",
+							"status",
+							"featured",
+							"models"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"methods": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"type",
+										"label"
+									],
+									"properties": {
+										"type": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "api_key"
+												},
+												{
+													"type": "string",
+													"const": "oauth"
+												}
+											]
+										},
+										"label": {
+											"type": "string"
+										},
+										"subscription": {
+											"type": "boolean"
+										}
+									}
+								}
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "not_connected"
+									},
+									{
+										"type": "string",
+										"const": "connecting"
+									},
+									{
+										"type": "string",
+										"const": "connected"
+									},
+									{
+										"type": "string",
+										"const": "needs_attention"
+									}
+								]
+							},
+							"connectedWith": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "api_key"
+									},
+									{
+										"type": "string",
+										"const": "oauth"
+									}
+								]
+							},
+							"billing": {
+								"type": "string"
+							},
+							"message": {
+								"type": "string"
+							},
+							"featured": {
+								"type": "boolean"
+							},
+							"models": {
+								"type": "number"
+							}
+						}
+					}
+				}
+			}
+		},
+		"providers.login.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"method"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"method": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "api_key"
+						},
+						{
+							"type": "string",
+							"const": "oauth"
+						}
+					]
+				}
+			}
+		},
+		"providers.login.result": {
+			"type": "object",
+			"required": [
+				"loginId"
+			],
+			"properties": {
+				"loginId": {
+					"type": "string"
+				}
+			}
+		},
+		"providers.answer.params": {
+			"type": "object",
+			"required": [
+				"loginId",
+				"promptId"
+			],
+			"properties": {
+				"loginId": {
+					"type": "string"
+				},
+				"promptId": {
+					"type": "string"
+				},
+				"value": {
+					"type": "string"
+				}
+			}
+		},
+		"providers.answer.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"providers.cancelLogin.params": {
+			"type": "object",
+			"required": [
+				"loginId"
+			],
+			"properties": {
+				"loginId": {
+					"type": "string"
+				}
+			}
+		},
+		"providers.cancelLogin.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"providers.logout.params": {
+			"type": "object",
+			"required": [
+				"provider"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				}
+			}
+		},
+		"providers.logout.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"projects.list.params": {
 			"type": "object",
@@ -26589,6 +26796,40 @@
 					]
 				}
 			}
+		},
+		"secrets.set.params": {
+			"type": "object",
+			"required": [
+				"name",
+				"value"
+			],
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"value": {
+					"type": "string"
+				}
+			}
+		},
+		"secrets.set.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"secrets.delete.params": {
+			"type": "object",
+			"required": [
+				"name"
+			],
+			"properties": {
+				"name": {
+					"type": "string"
+				}
+			}
+		},
+		"secrets.delete.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"app.tool.params": {
 			"type": "object",

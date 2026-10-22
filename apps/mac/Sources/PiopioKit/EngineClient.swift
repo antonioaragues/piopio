@@ -23,6 +23,9 @@ public actor EngineClient {
     private let attentionContinuation: AsyncStream<SessionAttention>.Continuation
     public nonisolated let inboxChanges: AsyncStream<InboxChanged>
     private let inboxContinuation: AsyncStream<InboxChanged>.Continuation
+    /// Provider sign-in steps and "providers changed" (docs/spec/10).
+    public nonisolated let providerEvents: AsyncStream<ProviderNotification>
+    private let providersContinuation: AsyncStream<ProviderNotification>.Continuation
 
     private let socketPath: String
     private let queue = DispatchQueue(label: "piopio.engine-client")
@@ -41,6 +44,7 @@ public actor EngineClient {
         (projectChanges, projectsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         (attention, attentionContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
         (inboxChanges, inboxContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
+        (providerEvents, providersContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
 
     /// Default Local Engine socket: `$PIOPIO_HOME/engine.sock` or `~/Library/Application Support/Piopio/engine.sock`.
@@ -138,6 +142,12 @@ public actor EngineClient {
                     if let n = try? decoder.decode(NotificationEnvelope<InboxChanged>.self, from: line) {
                         inboxContinuation.yield(n.params)
                     }
+                } else if method == "providers.auth" {
+                    if let n = try? decoder.decode(NotificationEnvelope<ProviderAuthNotification>.self, from: line) {
+                        providersContinuation.yield(.auth(n.params))
+                    }
+                } else if method == "providers.changed" {
+                    providersContinuation.yield(.changed)
                 } else if method == "projects.changed" {
                     if let n = try? decoder.decode(NotificationEnvelope<ProjectsChanged>.self, from: line) {
                         projectsContinuation.yield(n.params.projects)
@@ -180,6 +190,7 @@ public actor EngineClient {
         projectsContinuation.finish()
         attentionContinuation.finish()
         inboxContinuation.finish()
+        providersContinuation.finish()
     }
 }
 

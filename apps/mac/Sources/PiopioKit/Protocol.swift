@@ -1004,8 +1004,61 @@ public struct ModelInfo: Codable, Sendable, Hashable, Identifiable {
     public var maxOutputTokens: Double
     public var pricing: Pricing
     public var supports: Supports
+    /// "OpenAI", "OpenAI API", "OpenRouter" (docs/spec/10 FR2).
+    public var providerName: String?
+    /// Who bills for it: "ChatGPT subscription", "OpenRouter credits", "OpenAI API billing".
+    public var billing: String?
     public var ref: ModelRef { ModelRef(provider: provider, id: id) }
 }
+
+// MARK: Model providers (docs/spec/10-model-providers)
+
+public struct ProviderInfo: Decodable, Sendable, Hashable, Identifiable {
+    public struct Method: Decodable, Sendable, Hashable {
+        public enum Kind: String, Decodable, Sendable { case apiKey = "api_key", oauth }
+        public var type: Kind
+        public var label: String
+        public var subscription: Bool?
+    }
+    public enum Status: String, Decodable, Sendable { case notConnected = "not_connected", connecting, connected, needsAttention = "needs_attention" }
+    public var id: String
+    public var name: String
+    public var methods: [Method]
+    public var status: Status
+    public var connectedWith: Method.Kind?
+    public var billing: String?
+    public var message: String?
+    public var featured: Bool
+    public var models: Int
+    public var isConnected: Bool { status == .connected || status == .needsAttention }
+}
+public struct ProvidersListResult: Decodable, Sendable { public var providers: [ProviderInfo] }
+public struct ProviderLoginParams: Encodable, Sendable {
+    public var provider: String; public var method: ProviderInfo.Method.Kind.RawValue
+    public init(provider: String, method: ProviderInfo.Method.Kind) { self.provider = provider; self.method = method.rawValue }
+}
+public struct ProviderLoginResult: Decodable, Sendable { public var loginId: String }
+public struct ProviderAnswerParams: Encodable, Sendable {
+    public var loginId, promptId: String; public var value: String?
+    public init(loginId: String, promptId: String, value: String?) { self.loginId = loginId; self.promptId = promptId; self.value = value }
+}
+public struct LoginIdParams: Encodable, Sendable { public var loginId: String; public init(loginId: String) { self.loginId = loginId } }
+public struct ProviderParams: Encodable, Sendable { public var provider: String; public init(provider: String) { self.provider = provider } }
+
+/// One step of a sign-in (engine `providers.auth`): the union flattened, by `type`.
+public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
+    public struct Option: Decodable, Sendable, Hashable { public var id, label: String; public var description: String? }
+    public struct Link: Decodable, Sendable, Hashable { public var url: String; public var label: String? }
+    /// auth_url, device_code, progress, info, prompt, prompt_closed, done, failed
+    public var type: String
+    public var url, instructions, userCode, verificationUri, message, promptId, kind, placeholder: String?
+    public var expiresInSeconds: Double?
+    public var options: [Option]?
+    public var links: [Link]?
+    public init(type: String, message: String? = nil) { self.type = type; self.message = message }
+}
+public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed }
 
 public struct ModelsListParams: Encodable, Sendable { public var refresh: Bool?; public init(refresh: Bool? = nil) { self.refresh = refresh } }
 public struct ModelsListResult: Decodable, Sendable { public var models: [ModelInfo]; public var defaultModel: ModelRef }

@@ -54,3 +54,13 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     #expect(lines.map { String(decoding: $0, as: UTF8.self) } == [#"{"a":"x\#u{2028}y"}"#, #"{"b":1}"#])
     #expect(f.append(Data(":2}\n".utf8)).map { String(decoding: $0, as: UTF8.self) } == [#"{"c":2}"#])
 }
+
+@Test func decodesProvidersAndSignInSteps() throws {
+    let list = try decode(#"{"providers":[{"id":"openai","name":"ChatGPT","methods":[{"type":"oauth","label":"Sign in with ChatGPT","subscription":true}],"status":"connected","connectedWith":"oauth","billing":"ChatGPT subscription","featured":true,"models":44}]}"#, as: ProvidersListResult.self)
+    #expect(list.providers[0].isConnected)
+    #expect(list.providers[0].methods[0].type == .oauth)
+    let note = try decode(#"{"loginId":"l1","provider":"github-copilot","event":{"type":"device_code","userCode":"ABCD-1234","verificationUri":"https://github.com/login/device"}}"#, as: ProviderAuthNotification.self)
+    #expect(note.event.userCode == "ABCD-1234")
+    let model = try decode(#"{"provider":"openai-api","id":"gpt-6-sol","name":"GPT-6 Sol","contextWindow":400000,"maxOutputTokens":128000,"pricing":{"input":2,"output":10,"cacheRead":0,"cacheWrite":0},"supports":{"vision":true,"reasoning":true},"providerName":"OpenAI API","billing":"OpenAI API billing"}"#, as: ModelInfo.self)
+    #expect(model.billing == "OpenAI API billing")
+}

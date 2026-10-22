@@ -68,6 +68,12 @@ export class TestClient {
 			for (const l of this.eventListeners) l(m.params);
 		} else if (m.method === "secrets.get") {
 			this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, result: { value: this.secrets[m.params.name] ?? null } })}\n`);
+		} else if (m.method === "secrets.set") {
+			this.secrets[m.params.name] = m.params.value;
+			this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, result: {} })}\n`);
+		} else if (m.method === "secrets.delete") {
+			delete this.secrets[m.params.name];
+			this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, result: {} })}\n`);
 		} else if (m.method === "app.tool") {
 			try {
 				const result = this.appTool ? this.appTool(m.params) : { ok: false, output: "no handler" };

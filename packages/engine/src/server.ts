@@ -9,6 +9,7 @@ import { EngineError, keyHint, ModelHub, providerUsage, verifyProviderKey } from
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
+import { connectMethods, LoginFlows } from "./providers.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { listDir, readProjectFile, searchFiles, writeProjectFile } from "./files.js";
@@ -58,6 +59,7 @@ export type EngineOptions = {
 export class Engine {
 	readonly id = randomUUID();
 	readonly secrets = new SecretBroker();
+	private readonly logins: LoginFlows;
 	readonly hub: ModelHub;
 	readonly sessions: Sessions;
 	readonly projects: Projects;
@@ -83,7 +85,22 @@ export class Engine {
 	constructor(private readonly options: EngineOptions) {
 		this.log = options.log ?? ((line) => process.stderr.write(`${line}\n`));
 		ensureDirs(options.paths);
-		this.hub = new ModelHub(this.secrets, { faux: options.faux ?? false });
+		this.hub = new ModelHub(this.secrets, { faux: options.faux ?? false, home: options.paths.home });
+		this.hub.onProvidersChanged = () => {
+			for (const conn of this.authed) conn.notify("providers.changed", {});
+		};
+		this.logins = new LoginFlows(() => this.hub.models, (loginId, provider, event) => {
+			for (const conn of this.authed) conn.notify("providers.auth", { loginId, provider, event });
+		}, {
+			agentName: "Piopio",
+			deviceId: () => this.hub.deviceId(),
+			finished: (provider, ok) => {
+				void (async () => {
+					if (ok) await this.hub.signedIn(provider);
+					for (const conn of this.authed) conn.notify("providers.changed", {});
+				})();
+			},
+		});
 		this.sessions = new Sessions(options.paths, this.hub, {
 			...(options.piSessionDir ? { piSessionDir: options.piSessionDir } : {}),
 			...(options.piAgentDir ? { piAgentDir: options.piAgentDir } : {}),
@@ -138,6 +155,7 @@ export class Engine {
 			unlinkSync(socket);
 		}
 		this.token = loadOrCreateToken(this.options.paths);
+		await this.hub.ready();
 		await this.aboutMe.migrate().catch((error) => this.log(`About me: couldn't bring in the old doc: ${(error as Error).message}`));
 		this.server = createServer((stream) => this.accept(new RpcConnectionFor(stream)));
 		await new Promise<void>((resolve, reject) => {
@@ -187,10 +205,17 @@ export class Engine {
 				if (p.token !== this.token) throw new EngineError("AUTH", "Bad engine token.");
 				authed = true;
 				this.authed.add(conn);
+				// Clients offering `secrets.set` also store sign-ins and refreshed tokens (docs/spec/10 §10).
+				const writer = p.services?.includes("secrets.set")
+					? {
+							set: async (name: string, value: string) => void (await conn.request("secrets.set", { name, value })),
+							delete: async (name: string) => void (await conn.request("secrets.delete", { name })),
+						}
+					: undefined;
 				unregisterSecrets = this.secrets.addRequester(async (name, purpose) => {
 					const res = (await conn.request("secrets.get", { name, purpose } satisfies Params<never> | object)) as { value: string | null };
 					return Value.Check(reverseMethods["secrets.get"].result, res) ? res.value : null;
-				});
+				}, writer);
 				// The Mac app serves Apple app tools (§3.12); only a client that says so is asked.
 				if (p.services?.includes("app.tool")) {
 					unregisterTools = this.app.addToolServer(async (call) => {
@@ -746,6 +771,35 @@ export class Engine {
 			case "secrets.changed": {
 				const p = params as Params<"secrets.changed">;
 				await this.hub.forgetSecret(p.name);
+				await this.hub.connected();
+				for (const c of this.authed) c.notify("providers.changed", {});
+				return {};
+			}
+			case "providers.list":
+				return { providers: await this.hub.listProviders((id) => this.logins.connecting(id)) } satisfies Result<"providers.list">;
+			case "providers.login": {
+				const p = params as Params<"providers.login">;
+				const provider = this.hub.models.getProvider(p.provider);
+				if (!provider) throw new EngineError("NOT_FOUND", `Unknown provider ${p.provider}`);
+				if (!connectMethods(provider).some((m) => m.type === p.method)) throw new EngineError("INVALID", `${provider.name} can't be connected that way.`);
+				const loginId = this.logins.start(p.provider, p.method);
+				for (const c of this.authed) c.notify("providers.changed", {});
+				return { loginId } satisfies Result<"providers.login">;
+			}
+			case "providers.answer": {
+				const p = params as Params<"providers.answer">;
+				this.logins.answer(p.loginId, p.promptId, p.value);
+				return {};
+			}
+			case "providers.cancelLogin": {
+				const p = params as Params<"providers.cancelLogin">;
+				this.logins.cancel(p.loginId);
+				return {};
+			}
+			case "providers.logout": {
+				const p = params as Params<"providers.logout">;
+				await this.hub.logout(p.provider);
+				for (const c of this.authed) c.notify("providers.changed", {});
 				return {};
 			}
 			default:

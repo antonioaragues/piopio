@@ -193,9 +193,6 @@ private struct GeneralPane: View {
 /// Settings › Models (docs/design v2, 9a): the providers billed for models, then the default model per mode.
 private struct ProvidersPane: View {
     let engine: EngineController
-    @State private var replacing = false
-    @State private var key = ""
-    @State private var info: VerifyKeyResult?
     @State private var picking: EngineController.ModelRole?
 
     var body: some View {
@@ -205,74 +202,7 @@ private struct ProvidersPane: View {
         }
         .padding(.bottom, 18)
         SectionLabel("Providers").padding(.bottom, 6)
-        ListCard {
-            HStack(spacing: 12) {
-                Text("OR").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                    .frame(width: 32, height: 32)
-                    .background(Color(red: 0.39, green: 0.40, blue: 0.95).gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("OpenRouter").font(.system(size: 13, weight: .semibold))
-                        if engine.hasKey {
-                            Text(info?.ok == false ? "● Not verified" : "● Connected").font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(info?.ok == false ? Color.dsRed : Color.dsGreen)
-                                .help(info?.message ?? "")
-                        }
-                    }
-                    if engine.hasKey, !replacing {
-                        Text(engine.usage?.keyHint ?? info?.label ?? "Saved in Keychain").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                    } else {
-                        Text("Hundreds of models with one key").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                    }
-                }
-                Spacer(minLength: 12)
-                if replacing || !engine.hasKey {
-                    SecureField("sk-or-v1-…", text: $key).textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced)).frame(maxWidth: 240)
-                    Button("Save") {
-                        Task {
-                            try? await engine.saveKey(key)
-                            key = ""
-                            replacing = false
-                            await refresh()
-                            await engine.loadUsage(refresh: true)
-                        }
-                    }
-                    .buttonStyle(PillStyle(kind: .primary, compact: true))
-                    .disabled(key.isEmpty)
-                    if engine.hasKey { Button("Cancel") { replacing = false }.buttonStyle(PillStyle(compact: true)) }
-                } else {
-                    if let month = engine.usage?.monthUsd ?? info?.usageUsd {
-                        Text("\(MainSidebar.money(month)) this month").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                    }
-                    Menu {
-                        Button("Replace key…") { replacing = true }
-                        Button("Remove", role: .destructive) { Task { await engine.removeKey(); info = nil } }
-                    } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2).frame(width: 24, height: 24)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                }
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 60)
-            Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 58)
-            HStack(spacing: 12) {
-                Image(systemName: "sparkle").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                    .frame(width: 32, height: 32)
-                    .background(Color.black.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("ChatGPT").font(.system(size: 13, weight: .semibold))
-                    Text("Use your subscription · sign in with OpenAI").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                }
-                Spacer()
-                Badge("Coming soon")
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 60)
-            .opacity(0.6)
-        }
+        ProvidersCard(engine: engine)
         SectionLabel("Default model").padding(.top, 22).padding(.bottom, 6)
         ListCard {
             roleRow(.build, "Build sessions", "Writing and changing code")
@@ -282,7 +212,7 @@ private struct ProvidersPane: View {
         }
         Text("Cloud agents will receive keys as secrets on their target, which you can revoke at any time.")
             .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10)
-            .task { await refresh() }
+            .task { await engine.loadProviders() }
     }
 
     private func roleRow(_ role: EngineController.ModelRole, _ title: String, _ hint: String, last: Bool = false) -> some View {
@@ -313,13 +243,9 @@ private struct ProvidersPane: View {
     }
 
     private func modelName(_ ref: ModelRef?) -> String {
-        engine.model(ref).map(ModelChip.short) ?? ref?.id ?? "Choose…"
+        engine.model(ref).map { ModelChip.label($0, engine: engine) } ?? ref?.id ?? "Choose…"
     }
 
-    private func refresh() async {
-        guard engine.hasKey, let key = Keychain.read(secretOpenRouter), let client = engine.client else { return }
-        info = try? await client.call("models.verifyKey", VerifyKeyParams(provider: "openrouter", key: key), as: VerifyKeyResult.self)
-    }
 }
 
 // MARK: Approvals

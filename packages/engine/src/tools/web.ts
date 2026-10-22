@@ -61,10 +61,10 @@ export type WebResult = { text: string; isError?: boolean; details?: Record<stri
 /** web_search, shared by the pi-durable (threads) and pi SDK (Chat-lens projects) tools. */
 export async function runWebSearch(hub: ModelHub, args: { query: string; max_results?: number }, options: WebOptions = {}): Promise<WebResult> {
 	const fetchImpl = options.fetchImpl ?? fetch;
-	await hub.ensureCredential("openrouter");
-	const credential = await hub.credentials.read("openrouter");
+	// Search runs through OpenRouter's web plugin, whatever model the conversation uses (docs/spec/10 §10.7).
+	const credential = await hub.credentials.read("openrouter").catch(() => undefined);
 	const key = credential?.type === "api_key" ? credential.key : undefined;
-	if (!key) return { text: "Web search needs an OpenRouter key.", isError: true };
+	if (!key) return { text: "Web search needs OpenRouter connected (Settings › Models). Tell the user, and answer from what you know.", isError: true };
 	const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
 		method: "POST",
 		headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "x-title": "Piopio" },
