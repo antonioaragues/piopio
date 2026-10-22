@@ -37,12 +37,14 @@ nonisolated struct ItemRenderer: Sendable {
         case .assistant(let a):
             let out = NSMutableAttributedString()
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
-            if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: "Thought", detail: Self.wordsSummary(thinking), body: thinking))) }
+            if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: "Thought", detail: "", body: thinking))) }
             if let o = a.outbound { out.append(note(o.from.hasPrefix("run_") ? "Sent on its own, from an automatic run" : "Sent on its own", dot: DS.accent)) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
             if a.status != .streaming, !compact { out.append(answerFooter(a)) }
             return out
+        case .tool(let t) where t.tool == "ask_user":
+            return questionCard(t)
         case .tool(let t):
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t)))
         case .system(let s):
@@ -356,6 +358,24 @@ nonisolated struct ItemRenderer: Sendable {
         return out
     }
 
+    /// A question the agent asked (ask_user) and what you answered, kept in the transcript as Cursor and Claude
+    /// do; while it waits, the question card above the composer takes the answer.
+    private func questionCard(_ t: ToolItem) -> NSAttributedString {
+        let question = t.args?["question"]?.stringValue ?? ""
+        if t.status == .running || t.status == .pendingApproval { return note("Waiting for your answer: \(question)", dot: DS.amber) }
+        let prefix = "The user answered: "
+        let answer = t.details?["answer"]?.stringValue ?? t.output.flatMap { $0.hasPrefix(prefix) ? String($0.dropFirst(prefix.count)) : nil }
+        let m = NSMutableAttributedString(string: "The agent asked", attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .semibold), .foregroundColor: DS.fg3])
+        m.append(NSAttributedString(string: lineSeparator + question, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2]))
+        if let answer {
+            m.append(NSAttributedString(string: lineSeparator + "↳  ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.accent]))
+            m.append(NSAttributedString(string: answer, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
+        } else {
+            m.append(NSAttributedString(string: lineSeparator + (t.status == .interrupted ? "Stopped before you answered" : "Not answered"), attributes: [.font: small, .foregroundColor: DS.fg3]))
+        }
+        return card(m, .link, lineHeight: 1.5)
+    }
+
     private func note(_ text: String, dot: NSColor) -> NSAttributedString {
         let m = NSMutableAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5])
         m.append(NSAttributedString(string: text, attributes: [.font: small, .foregroundColor: DS.fg2]))
@@ -493,11 +513,6 @@ nonisolated struct ItemRenderer: Sendable {
         default:
             return (t.tool, t.status == .running ? "running" : t.status.rawValue)
         }
-    }
-
-    static func wordsSummary(_ text: String) -> String {
-        let words = text.split(whereSeparator: \.isWhitespace).count
-        return words == 1 ? "1 word" : "\(words) words"
     }
 
     // MARK: Footers (shown on hover, and for the latest answer)

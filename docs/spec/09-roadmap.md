@@ -299,12 +299,12 @@ GitHub PR/CI loop (G4–G8), worktrees UX, usage page, export everything, access
 Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 
 **Bugs**
-- B1 · The agent's icon (avatar) picker looks broken.
+- B1 · The agent's icon (avatar) picker looks broken. **Fixed 2026-10-22:** a tile that opens a grid of common emoji, with a field for any other and None.
 - B2 · The Questions UI ("The agent asks") draws each option as a one-line capsule that doesn't wrap, so long answers run past the card's right edge and over the transcript. Options should wrap inside the card. Screenshot: [docs/design/feedback/questions-overflow.png](../design/feedback/questions-overflow.png). **Fixed 2026-10-22:** a long answer wraps in a rounded box no wider than the card; short ones stay capsules.
 
 **Small changes**
-- S1 · After you answer through the Questions UI, the chat shows nothing of it. Show the question and the chosen answer inline in the transcript, as Cursor and Claude do.
-- S2 · Thinking lines read "Thought x words": drop the word count ("Thought for 4s" or just "Thought").
+- S1 · After you answer through the Questions UI, the chat shows nothing of it. Show the question and the chosen answer inline in the transcript, as Cursor and Claude do. **Fixed 2026-10-22:** an answered question stays out of the folded activity line and shows as "The agent asked … ↳ your answer".
+- S2 · Thinking lines read "Thought x words": drop the word count ("Thought for 4s" or just "Thought"). **Fixed 2026-10-22:** it reads "Thought" (pi doesn't time thinking separately).
 
 **Plan mode**
 - P1 · Show the plan inline in the transcript, not in a pop-up.
@@ -329,7 +329,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 
 **Small changes**
 - S3 · Follow-up suggestion chips are cut to one line (`FollowUps` in `ChatExtras.swift`, `lineLimit(1)`), so long ones can't be read. Let them wrap like the Questions UI options (B2), or at least show the full text as a tooltip. **Fixed 2026-10-22:** long suggestions wrap in a rounded box no wider than the column, and the full text shows on hover.
-- S4 · Attach folders as well as files from the composer's +. Today the file panel only accepts files (`Composer.swift`, `canChooseDirectories = false`); @-mentions already reach folders in Build.
+- S4 · Attach folders as well as files from the composer's +. Today the file panel only accepts files (`Composer.swift`, `canChooseDirectories = false`); @-mentions already reach folders in Build. **Fixed 2026-10-22:** the + accepts folders. In Build a folder goes in as an @path the agent reads; elsewhere its first 20 readable files are attached, skipping hidden files, dependencies and build output.
 
 **To design further**
 - D7 · A composer that keeps formatting: pasting Markdown (or rich text) today loses it. Show it formatted while typing, or at least keep the Markdown source intact and preview it.

@@ -140,7 +140,7 @@ struct AgentDefinitionView: View {
         SetupGroup("Instructions", trailing: "Markdown · \(instructions.count / 4) tokens") {
             SetupRow("Name") {
                 HStack(spacing: 6) {
-                    TextField("🙂", text: optional(\.avatar)).textFieldStyle(.roundedBorder).frame(width: 46)
+                    AvatarPicker(avatar: optional(\.avatar))
                     TextField("Name", text: bind(\.name)).textFieldStyle(.roundedBorder).frame(width: 220)
                 }
             }

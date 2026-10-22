@@ -126,7 +126,7 @@ struct Composer: View {
                     Button(action: pickFiles) { Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 24) }
                         .buttonStyle(.plain)
                         .background(Color.dsChip, in: Circle())
-                        .help("Attach images, PDFs or text files (or drop them here)")
+                        .help("Attach images, PDFs, text files or a folder (or drop them here)")
                 }
                 ModelChip(engine: engine, thread: thread)
                 if thread.supportsThinking { ThinkingChip(thread: thread) }
@@ -221,8 +221,8 @@ struct Composer: View {
     private func pickFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.image, .pdf, .text, .sourceCode, .json, .xml, .commaSeparatedText, .data]
+        panel.canChooseDirectories = true
+        panel.allowedContentTypes = [.image, .pdf, .text, .sourceCode, .json, .xml, .commaSeparatedText, .data, .folder]
         guard panel.runModal() == .OK else { return }
         add(panel.urls)
     }
@@ -230,9 +230,35 @@ struct Composer: View {
     private func add(_ urls: [URL]) {
         attachError = nil
         for url in urls {
+            // A folder: in Build the agent reads it itself (@path); elsewhere its readable files are attached.
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                if isBuild { mention(url) } else { addFolder(url) }
+                continue
+            }
             do { attachments.append(try AttachmentLoader.load(url)) } catch { attachError = error.localizedDescription }
         }
     }
+
+    /// The folder's files, skipping hidden ones, dependencies and build output, and anything that can't be attached;
+    /// at most `folderLimit`, so a whole repo can't flood the message.
+    private func addFolder(_ folder: URL) {
+        let skipped: Set<String> = ["node_modules", "build", "dist", ".build", "DerivedData", "Pods", "vendor", "__pycache__"]
+        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return }
+        var added = 0, unreadable = 0, more = false
+        for case let url as URL in walker {
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                if skipped.contains(url.lastPathComponent) { walker.skipDescendants() }
+                continue
+            }
+            guard added < Self.folderLimit else { more = true; break }
+            if let file = try? AttachmentLoader.load(url) { attachments.append(file); added += 1 } else { unreadable += 1 }
+        }
+        if more { attachError = "Attached the first \(Self.folderLimit) files of \(folder.lastPathComponent)." }
+        else if added == 0 { attachError = "Nothing in \(folder.lastPathComponent) could be attached." }
+        else if unreadable > 0 { attachError = "Skipped \(unreadable) file\(unreadable == 1 ? "" : "s") in \(folder.lastPathComponent) that can't be attached." }
+    }
+
+    private static let folderLimit = 20
 
     private func paste(_ providers: [NSItemProvider]) {
         for provider in providers {

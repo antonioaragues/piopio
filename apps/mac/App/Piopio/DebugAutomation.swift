@@ -218,6 +218,11 @@ enum DebugAutomation {
                 }
                 guard let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] else { return }
                 await session.send(prompt)
+                // PIOPIO_DEMO_ANSWER=<text>: answer the first question the agent asks with it.
+                if let reply = env["PIOPIO_DEMO_ANSWER"] {
+                    for _ in 0..<50 where session.prompts.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
+                    if let question = session.prompts.first { await session.respond(question, PromptResponse(choice: reply)) }
+                }
                 // PIOPIO_DEMO_BUILD_FOLLOWUP: a second turn; PIOPIO_DEMO_REVIEW=1 then opens the diff review,
                 // PIOPIO_DEMO_RESTORE=1 the restore sheet for the first checkpoint.
                 if let followUp = env["PIOPIO_DEMO_BUILD_FOLLOWUP"] {

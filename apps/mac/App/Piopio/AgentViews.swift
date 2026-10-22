@@ -97,7 +97,7 @@ struct NewAgentSheet: View {
                 ForEach(templates) { t in tile(id: t.id, avatar: t.avatar, name: t.name, description: t.description) }
             }
             HStack(spacing: 8) {
-                TextField("🙂", text: $avatar).textFieldStyle(.roundedBorder).frame(width: 52)
+                AvatarPicker(avatar: $avatar)
                 TextField("Name", text: $name).textFieldStyle(.roundedBorder)
             }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
@@ -675,5 +675,64 @@ struct AgentMemoryView: View {
             try await engine.spaceCall("memory.forget", MemoryIdParams(provider: info.provider, bank: bank, id: r.id))
             await load()
         }
+    }
+}
+
+/// An agent's icon: its emoji in a tile; click for a grid of common ones, or type any emoji.
+struct AvatarPicker: View {
+    @Binding var avatar: String
+    @State private var open = false
+    @State private var typed = ""
+
+    private static let choices = ["☀️", "🗓️", "📬", "🏃", "🏡", "🔭", "📚", "🧠", "💡", "📝", "🛒", "💰",
+                                  "🍳", "🌱", "🎧", "✈️", "🧳", "🐣", "🤖", "🦉", "🐝", "⚡️", "🔔", "❤️"]
+
+    var body: some View {
+        Button { open = true } label: {
+            Text(avatar.isEmpty ? "🙂" : avatar)
+                .font(.system(size: 17))
+                .opacity(avatar.isEmpty ? 0.45 : 1)
+                .frame(width: 32, height: 28)
+                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(open ? Color.dsAccentLine : Color.dsLine, lineWidth: open ? 1 : 0.5))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Choose an icon")
+        .task {
+            // PIOPIO_DEMO_AVATAR_PICKER=1: open the grid (captures).
+            if ProcessInfo.processInfo.environment["PIOPIO_DEMO_AVATAR_PICKER"] == "1" { try? await Task.sleep(for: .seconds(2)); open = true }
+        }
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(32), spacing: 4), count: 6), spacing: 4) {
+                    ForEach(Self.choices, id: \.self) { emoji in
+                        Button { pick(emoji) } label: {
+                            Text(emoji).font(.system(size: 18)).frame(width: 32, height: 32)
+                                .background(emoji == avatar ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: 7))
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                HStack(spacing: 6) {
+                    TextField("Or type any emoji", text: $typed)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12.5))
+                        .onSubmit { if let first = typed.first { pick(String(first)) } }
+                    if !avatar.isEmpty {
+                        Button("None") { pick("") }.buttonStyle(PillStyle(compact: true))
+                    }
+                }
+            }
+            .padding(12)
+            .frame(width: 236)
+        }
+    }
+
+    private func pick(_ emoji: String) {
+        avatar = emoji
+        typed = ""
+        open = false
     }
 }

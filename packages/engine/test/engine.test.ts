@@ -558,6 +558,19 @@ describe("approvals and questions (docs/spec/05-build §6)", () => {
 		expect(after.prompts).toEqual([]);
 		expect((await tools(a, s.ref)).at(-1)?.status).toBe("interrupted");
 	});
+
+	test("an answered question stays its own item, so the transcript shows what you answered", async () => {
+		const a = await start();
+		const { folder } = await newProject(a);
+		const s = await buildSession(a, folder);
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "ask: Which database? | Postgres | SQLite" } });
+		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: waiting.prompts![0]!.id, response: { choice: "SQLite" } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle");
+		const grouped: Snapshot = await a.client.call("sessions.open", { ref: s.ref, fold: true });
+		const asked = grouped.items.find((i) => i.kind === "tool");
+		expect(asked).toMatchObject({ tool: "ask_user", status: "done", args: { question: "Which database?" }, output: "The user answered: SQLite" });
+	}, 30_000);
 });
 
 test("checkpoints: before each turn's first change, with changes, diff, restore and a note for the agent", async () => {
@@ -1777,4 +1790,5 @@ describe("Folded transcripts (docs/design v2)", () => {
 		expect(live.some((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "tool")).toBe(false);
 		expect(live.some((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "steps")).toBe(true);
 	}, 30_000);
+
 });
