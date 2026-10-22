@@ -72,30 +72,31 @@ struct ProvidersCard: View {
                     Text(engine.client == nil ? "The engine isn't running." : "Loading providers…").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity).frame(height: 60)
                 }
             }
-            SectionLabel("Custom endpoints").padding(.top, 18).padding(.bottom, 6)
-            endpointsCard
-            if !others.isEmpty {
-                Button { withAnimation(.easeOut(duration: 0.15)) { showMore.toggle() } } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(showMore ? 90 : 0))
-                        Text("More providers (\(others.count))")
-                        let connected = others.filter(\.isConnected).count
-                        if connected > 0 { Text("· \(connected) connected").foregroundStyle(Color.dsFg3) }
-                    }
-                    .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg2)
-                    .contentShape(Rectangle())
+            // Everything else, custom providers included: the ones you added and servers found on this Mac first,
+            // then "Add a custom provider…", then pi's other providers (connected ones first).
+            Button { withAnimation(.easeOut(duration: 0.15)) { showMore.toggle() } } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(showMore ? 90 : 0))
+                    Text("More providers (\(others.count + endpoints.count))")
+                    let connected = others.filter(\.isConnected).count + endpoints.count
+                    if connected > 0 { Text("· \(connected) connected").foregroundStyle(Color.dsFg3) }
+                    if !detected.isEmpty { Text("· \(detected.map(\.name).joined(separator: ", ")) found on this Mac").foregroundStyle(Color.dsFg3) }
                 }
-                .buttonStyle(.plain)
-                .padding(.top, 10)
-                if showMore {
-                    ListCard {
-                        ForEach(Array(others.enumerated()), id: \.element.id) { i, p in
-                            ProviderRow(engine: engine, provider: p, disconnect: { disconnecting = p })
-                            if i < others.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 58) }
-                        }
+                .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg2)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 10)
+            if showMore {
+                ListCard {
+                    customRows
+                    let sorted = others.sorted { $0.isConnected && !$1.isConnected }
+                    ForEach(Array(sorted.enumerated()), id: \.element.id) { i, p in
+                        ProviderRow(engine: engine, provider: p, disconnect: { disconnecting = p })
+                        if i < sorted.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 58) }
                     }
-                    .padding(.top, 6)
                 }
+                .padding(.top, 6)
             }
             Text("A ChatGPT subscription, the OpenAI API and OpenRouter credits are billed separately; each model in the picker says which one it uses.")
                 .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10).fixedSize(horizontal: false, vertical: true)
@@ -108,14 +109,13 @@ struct ProvidersCard: View {
         } message: { p in
             Text(disconnectMessage(p))
         }
-        .onAppear { if others.contains(where: \.isConnected) { showMore = true } }
+        .onAppear { if !endpoints.isEmpty || others.contains(where: \.isConnected) { showMore = true } }
         .task(id: endpoints.count) { detected = await engine.detectEndpoints() }
         .sheet(item: $editing) { draft in EndpointSheet(engine: engine, draft: draft) }
     }
 
-    /// Servers added by address, the ones found running on this Mac, and "Add a custom endpoint…" (sketch 1).
-    private var endpointsCard: some View {
-        ListCard {
+    /// Custom providers you added, servers found running on this Mac, and "Add a custom provider…".
+    @ViewBuilder private var customRows: some View {
             ForEach(endpoints) { p in
                 EndpointRow(engine: engine, provider: p, edit: { editing = EndpointDraft(provider: p) }, remove: { disconnecting = p })
                 Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 58)
@@ -149,20 +149,22 @@ struct ProvidersCard: View {
                 Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 58)
             }
             Button { editing = EndpointDraft() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
-                    Text("Add a custom endpoint…")
+                HStack(spacing: 12) {
+                    Image(systemName: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.accentColor)
+                        .frame(width: 32, height: 32)
+                        .background(Color.dsAccentSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Add a custom provider…").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.accentColor)
+                        Text("Any OpenAI-compatible server: LiteLLM, Ollama, LM Studio, vLLM").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    }
                     Spacer()
-                    Text("LiteLLM, Ollama, LM Studio, vLLM").foregroundStyle(Color.dsFg3)
                 }
-                .font(.system(size: 12.5))
-                .foregroundStyle(Color.accentColor)
                 .padding(.horizontal, 14)
-                .frame(height: 40)
+                .frame(minHeight: 56)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-        }
+            if !others.isEmpty { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 
     static func host(_ url: String) -> String {
@@ -512,7 +514,7 @@ struct EndpointSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(draft.providerId == nil ? "Add a custom endpoint" : "Edit \(draft.name)").font(.system(size: 17, weight: .bold))
+                Text(draft.providerId == nil ? "Add a custom provider" : "Edit \(draft.name)").font(.system(size: 17, weight: .bold))
                 Text("Any server that speaks the OpenAI API: LiteLLM, Ollama, LM Studio, vLLM. Its models show up in the model picker.")
                     .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
             }
@@ -530,7 +532,7 @@ struct EndpointSheet: View {
                 Button("Check") { runCheck() }.buttonStyle(PillStyle()).disabled(draft.baseUrl.trimmingCharacters(in: .whitespaces).isEmpty || busy)
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
-                Button(draft.providerId == nil ? "Add endpoint" : "Save") { save() }
+                Button(draft.providerId == nil ? "Add provider" : "Save") { save() }
                     .buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction)
                     .disabled(draft.baseUrl.trimmingCharacters(in: .whitespaces).isEmpty || busy)
             }
