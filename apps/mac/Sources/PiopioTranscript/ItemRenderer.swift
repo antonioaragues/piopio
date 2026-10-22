@@ -45,6 +45,8 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .tool(let t) where t.tool == "ask_user":
             return questionCard(t)
+        case .tool(let t) where t.tool == "propose_plan":
+            return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
         case .tool(let t):
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t)))
         case .system(let s):
@@ -356,6 +358,34 @@ nonisolated struct ItemRenderer: Sendable {
         let out = NSMutableAttributedString(attributedString: line(m, p))
         out.addAttribute(.piopioCard, value: CardStyle.divider.rawValue, range: NSRange(location: 0, length: out.length))
         return out
+    }
+
+    /// A plan in the transcript (docs/spec/09 P1–P3): its details once the engine has them, else its arguments.
+    static func planContent(_ t: ToolItem) -> PlanContent {
+        let strings = { (key: String) -> [String] in
+            guard case .array(let items)? = t.args?[key] else { return [] }
+            return items.compactMap(\.stringValue)
+        }
+        var plan = PlanContent(callId: t.callId, summary: t.args?["summary"]?.stringValue ?? "", steps: strings("steps"), files: strings("files"), risks: strings("risks"), state: .pending)
+        var outcome: String?
+        if case .plan(let d)? = t.typedDetails {
+            plan.summary = d.summary.isEmpty ? plan.summary : d.summary
+            plan.steps = d.steps.isEmpty ? plan.steps : d.steps
+            plan.files = d.files
+            plan.risks = d.risks
+            outcome = d.outcome
+            if d.outcome == "approved" { plan.state = d.edited ? .approvedEdited : .approved }
+            else if d.outcome == "changes" { plan.state = .changes(d.note) }
+            else if d.outcome == "unanswered" { plan.state = .unanswered }
+        }
+        if outcome == nil {
+            switch t.status {
+            case .running, .pendingApproval: plan.state = .pending
+            case .interrupted, .error, .denied: plan.state = .unanswered
+            case .done: plan.state = (t.output ?? "").contains("approved") ? .approved : .changes(nil)
+            }
+        }
+        return plan
     }
 
     /// A question the agent asked (ask_user) and what you answered, kept in the transcript as Cursor and Claude

@@ -197,9 +197,9 @@ final class CardLayoutDelegate: NSObject, NSTextLayoutManagerDelegate {
 @Observable
 public final class DisclosureCard: @unchecked Sendable {
     /// `activity`: a turn's tool calls folded into one quiet line that opens to their cards (docs/design v2).
-    public enum Kind: Sendable { case tool, thinking, activity }
-    /// How the expanded body is drawn: plain text, terminal output, diff rows, or nested cards (activity).
-    public enum Body: Sendable { case text(String), terminal(String), diff([DiffLine]), cards([DisclosureCard]) }
+    public enum Kind: Sendable { case tool, thinking, activity, plan }
+    /// How the expanded body is drawn: plain text, terminal output, diff rows, nested cards (activity), or a plan.
+    public enum Body: Sendable { case text(String), terminal(String), diff([DiffLine]), cards([DisclosureCard]), plan(PlanContent) }
     /// Activity: done (✓), still working (spinner).
     public var working = false
     public let kind: Kind
@@ -231,6 +231,16 @@ public final class DisclosureCard: @unchecked Sendable {
         self.content = .text(body)
     }
 
+    /// A plan, always open (docs/spec/09 P1–P3).
+    public init(plan: PlanContent) {
+        self.kind = .plan
+        self.title = "Plan"
+        self.detail = ""
+        self.trailing = ""
+        self.content = .plan(plan)
+        self.expanded = true
+    }
+
     public init(tool title: String, detail: String, trailing: String, content: Body) {
         self.kind = .tool
         self.title = title
@@ -245,6 +255,7 @@ public final class DisclosureCard: @unchecked Sendable {
             case .text(let s), .terminal(let s): s
             case .diff(let lines): lines.map(\.text).joined(separator: "\n")
             case .cards(let cards): cards.map(\.title).joined(separator: "\n")
+            case .plan(let p): ([p.summary] + p.steps).joined(separator: "\n")
             }
         }
         set { content = .text(newValue) }
@@ -255,6 +266,7 @@ public final class DisclosureCard: @unchecked Sendable {
         case .text(let s), .terminal(let s): s.isEmpty
         case .diff(let lines): lines.isEmpty
         case .cards(let cards): cards.isEmpty
+        case .plan: false
         }
     }
 
@@ -274,6 +286,7 @@ public final class DisclosureCard: @unchecked Sendable {
     }
 
     func height(width: CGFloat) -> CGFloat {
+        if case .plan(let plan) = content { return plan.height(width: width) }
         let header = kind == .tool ? Self.collapsedHeight : Self.lineHeight
         guard expanded, !isEmpty else { return header }
         if case .cards(let cards) = content {
@@ -366,7 +379,8 @@ struct DisclosureCardView: View {
     var relay: (@MainActor () -> Void)?
 
     var body: some View {
-        if card.kind == .tool { toolCard } else { quietLine }
+        if case .plan(let plan) = card.content { PlanCardView(plan: plan, act: { card.onAction?($0) }) }
+        else if card.kind == .tool { toolCard } else { quietLine }
     }
 
     private func toggle() {
@@ -416,7 +430,7 @@ struct DisclosureCardView: View {
                         Text(text).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: DS.fg2)).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 18).padding(.vertical, 6)
                     }
-                case .diff: EmptyView()
+                case .diff, .plan: EmptyView()
                 }
             }
         }
@@ -465,7 +479,7 @@ struct DisclosureCardView: View {
                 case .diff: diff
                 case .terminal(let text): scrolling(text, terminal: true)
                 case .text(let text): scrolling(text, terminal: false)
-                case .cards: EmptyView()
+                case .cards, .plan: EmptyView()
                 }
             }
         }

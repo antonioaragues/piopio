@@ -21,6 +21,9 @@ final class ThreadModel {
     var showModelPicker = false
     /// Build: the checkpoint "Restore…" was clicked on (the session view confirms it).
     var restoring: CheckpointItem?
+    /// A plan being edited before approval (its sheet), and one being sent back (the bar's note field).
+    var editingPlan: PendingPrompt?
+    var revisingPlan: String?
 
     @ObservationIgnored private weak var engine: EngineController?
     @ObservationIgnored private var subscriptionId: String?
@@ -178,6 +181,13 @@ final class ThreadModel {
             Task { do { try await engine?.undo(ref, undoId: undoId) } catch { report(error) } }
         case .openTrace(let traceId):
             NotificationCenter.default.post(name: .openTrace, object: traceId)
+        case .plan(let callId, let answer):
+            guard let prompt = prompts.first(where: { $0.kind == .plan && $0.callId == callId }) else { return }
+            switch answer {
+            case .approve: Task { await respond(prompt, PromptResponse(decision: .allow)) }
+            case .edit: editingPlan = prompt
+            case .revise: revisingPlan = prompt.id
+            }
         }
     }
 

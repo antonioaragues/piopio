@@ -134,7 +134,12 @@ export class BuildRuntime implements Runtime {
 					propose: async (plan, signal) => {
 						const response = await broker.ask({ kind: "plan", title: plan.summary, steps: plan.steps, callId: plan.callId }, signal);
 						if (!response) return undefined;
-						return { approved: response.decision === "allow" || response.decision === "always", ...(response.text ? { note: response.text } : {}) };
+						return {
+							approved: response.decision === "allow" || response.decision === "always",
+							...(response.text ? { note: response.text } : {}),
+							...(response.steps?.length ? { steps: response.steps } : {}),
+							...(response.summary ? { summary: response.summary } : {}),
+						};
 					},
 				}),
 				subagentsExtension(o.runTask ? { run: o.runTask } : undefined),

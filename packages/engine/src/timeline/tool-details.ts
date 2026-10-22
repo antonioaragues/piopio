@@ -27,6 +27,12 @@ export function startDetails(tool: string, args: unknown): ToolDetails | undefin
 			return Array.isArray(a.items) ? { type: "todos", items: a.items as { text: string; status: "pending" | "in_progress" | "done" }[] } : undefined;
 		case "task":
 			return { type: "task" };
+		case "propose_plan": {
+			const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+			const files = strings(a.files);
+			const risks = strings(a.risks);
+			return { type: "plan", summary: typeof a.summary === "string" ? a.summary : "", steps: strings(a.steps), ...(files.length ? { files } : {}), ...(risks.length ? { risks } : {}) };
+		}
 		default:
 			return undefined;
 	}
@@ -39,6 +45,18 @@ export function endDetails(tool: string, args: unknown, result: PiToolResult | u
 	if (tool === "task") {
 		const d = (result?.details ?? {}) as { sessionId?: string; status?: "done" | "error" | "stopped"; costUsd?: number };
 		return { type: "task", ...(d.sessionId ? { sessionId: d.sessionId } : {}), ...(d.status ? { status: d.status } : {}), ...(typeof d.costUsd === "number" ? { costUsd: d.costUsd } : {}) };
+	}
+	if (tool === "propose_plan" && start.type === "plan") {
+		const d = (result?.details ?? {}) as { approved?: boolean; summary?: string; steps?: string[]; edited?: boolean; note?: string };
+		if (!result?.details) return { ...start, outcome: "unanswered" };
+		return {
+			...start,
+			...(d.edited && d.summary ? { summary: d.summary } : {}),
+			...(d.edited && d.steps ? { steps: d.steps } : {}),
+			outcome: d.approved ? "approved" : output?.startsWith("The plan wasn't answered") ? "unanswered" : "changes",
+			...(d.edited ? { edited: true } : {}),
+			...(d.note ? { note: d.note } : {}),
+		};
 	}
 	if (tool === "edit" && start.type === "diff") {
 		const patch = (result?.details as { patch?: unknown } | undefined)?.patch;

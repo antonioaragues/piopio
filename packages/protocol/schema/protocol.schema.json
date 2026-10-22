@@ -499,6 +499,63 @@
 											"type": "number"
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"type",
+										"summary",
+										"steps"
+									],
+									"properties": {
+										"type": {
+											"type": "string",
+											"const": "plan"
+										},
+										"summary": {
+											"type": "string"
+										},
+										"steps": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"files": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"risks": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"outcome": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "approved"
+												},
+												{
+													"type": "string",
+													"const": "changes"
+												},
+												{
+													"type": "string",
+													"const": "unanswered"
+												}
+											]
+										},
+										"edited": {
+											"type": "boolean"
+										},
+										"note": {
+											"type": "string"
+										}
+									}
 								}
 							]
 						},
@@ -1003,6 +1060,63 @@
 													},
 													"costUsd": {
 														"type": "number"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"summary",
+													"steps"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "plan"
+													},
+													"summary": {
+														"type": "string"
+													},
+													"steps": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"files": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"risks": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"outcome": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "approved"
+															},
+															{
+																"type": "string",
+																"const": "changes"
+															},
+															{
+																"type": "string",
+																"const": "unanswered"
+															}
+														]
+													},
+													"edited": {
+														"type": "boolean"
+													},
+													"note": {
+														"type": "string"
 													}
 												}
 											}
@@ -2091,6 +2205,63 @@
 															"type": "number"
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"summary",
+														"steps"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "plan"
+														},
+														"summary": {
+															"type": "string"
+														},
+														"steps": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"files": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"risks": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"outcome": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "approved"
+																},
+																{
+																	"type": "string",
+																	"const": "changes"
+																},
+																{
+																	"type": "string",
+																	"const": "unanswered"
+																}
+															]
+														},
+														"edited": {
+															"type": "boolean"
+														},
+														"note": {
+															"type": "string"
+														}
+													}
 												}
 											]
 										},
@@ -2595,6 +2766,63 @@
 																	},
 																	"costUsd": {
 																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"summary",
+																	"steps"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "plan"
+																	},
+																	"summary": {
+																		"type": "string"
+																	},
+																	"steps": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"risks": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"outcome": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "approved"
+																			},
+																			{
+																				"type": "string",
+																				"const": "changes"
+																			},
+																			{
+																				"type": "string",
+																				"const": "unanswered"
+																			}
+																		]
+																	},
+																	"edited": {
+																		"type": "boolean"
+																	},
+																	"note": {
+																		"type": "string"
 																	}
 																}
 															}
@@ -3426,6 +3654,63 @@
 															"type": "number"
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"summary",
+														"steps"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "plan"
+														},
+														"summary": {
+															"type": "string"
+														},
+														"steps": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"files": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"risks": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"outcome": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "approved"
+																},
+																{
+																	"type": "string",
+																	"const": "changes"
+																},
+																{
+																	"type": "string",
+																	"const": "unanswered"
+																}
+															]
+														},
+														"edited": {
+															"type": "boolean"
+														},
+														"note": {
+															"type": "string"
+														}
+													}
 												}
 											]
 										},
@@ -3930,6 +4215,63 @@
 																	},
 																	"costUsd": {
 																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"summary",
+																	"steps"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "plan"
+																	},
+																	"summary": {
+																		"type": "string"
+																	},
+																	"steps": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"risks": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"outcome": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "approved"
+																			},
+																			{
+																				"type": "string",
+																				"const": "changes"
+																			},
+																			{
+																				"type": "string",
+																				"const": "unanswered"
+																			}
+																		]
+																	},
+																	"edited": {
+																		"type": "boolean"
+																	},
+																	"note": {
+																		"type": "string"
 																	}
 																}
 															}
@@ -4741,6 +5083,63 @@
 															"type": "number"
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"summary",
+														"steps"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "plan"
+														},
+														"summary": {
+															"type": "string"
+														},
+														"steps": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"files": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"risks": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														},
+														"outcome": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "approved"
+																},
+																{
+																	"type": "string",
+																	"const": "changes"
+																},
+																{
+																	"type": "string",
+																	"const": "unanswered"
+																}
+															]
+														},
+														"edited": {
+															"type": "boolean"
+														},
+														"note": {
+															"type": "string"
+														}
+													}
 												}
 											]
 										},
@@ -5245,6 +5644,63 @@
 																	},
 																	"costUsd": {
 																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"summary",
+																	"steps"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "plan"
+																	},
+																	"summary": {
+																		"type": "string"
+																	},
+																	"steps": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"risks": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"outcome": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "approved"
+																			},
+																			{
+																				"type": "string",
+																				"const": "changes"
+																			},
+																			{
+																				"type": "string",
+																				"const": "unanswered"
+																			}
+																		]
+																	},
+																	"edited": {
+																		"type": "boolean"
+																	},
+																	"note": {
+																		"type": "string"
 																	}
 																}
 															}
@@ -6391,6 +6847,63 @@
 																		"type": "number"
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"summary",
+																	"steps"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "plan"
+																	},
+																	"summary": {
+																		"type": "string"
+																	},
+																	"steps": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"risks": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"outcome": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "approved"
+																			},
+																			{
+																				"type": "string",
+																				"const": "changes"
+																			},
+																			{
+																				"type": "string",
+																				"const": "unanswered"
+																			}
+																		]
+																	},
+																	"edited": {
+																		"type": "boolean"
+																	},
+																	"note": {
+																		"type": "string"
+																	}
+																}
 															}
 														]
 													},
@@ -6895,6 +7408,63 @@
 																				},
 																				"costUsd": {
 																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"summary",
+																				"steps"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "plan"
+																				},
+																				"summary": {
+																					"type": "string"
+																				},
+																				"steps": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"risks": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"outcome": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "approved"
+																						},
+																						{
+																							"type": "string",
+																							"const": "changes"
+																						},
+																						{
+																							"type": "string",
+																							"const": "unanswered"
+																						}
+																					]
+																				},
+																				"edited": {
+																					"type": "boolean"
+																				},
+																				"note": {
+																					"type": "string"
 																				}
 																			}
 																		}
@@ -8022,6 +8592,63 @@
 														"type": "number"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"summary",
+													"steps"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "plan"
+													},
+													"summary": {
+														"type": "string"
+													},
+													"steps": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"files": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"risks": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"outcome": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "approved"
+															},
+															{
+																"type": "string",
+																"const": "changes"
+															},
+															{
+																"type": "string",
+																"const": "unanswered"
+															}
+														]
+													},
+													"edited": {
+														"type": "boolean"
+													},
+													"note": {
+														"type": "string"
+													}
+												}
 											}
 										]
 									},
@@ -8526,6 +9153,63 @@
 																},
 																"costUsd": {
 																	"type": "number"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"summary",
+																"steps"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "plan"
+																},
+																"summary": {
+																	"type": "string"
+																},
+																"steps": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"files": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"risks": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"outcome": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "approved"
+																		},
+																		{
+																			"type": "string",
+																			"const": "changes"
+																		},
+																		{
+																			"type": "string",
+																			"const": "unanswered"
+																		}
+																	]
+																},
+																"edited": {
+																	"type": "boolean"
+																},
+																"note": {
+																	"type": "string"
 																}
 															}
 														}
@@ -9977,6 +10661,63 @@
 																		"type": "number"
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"summary",
+																	"steps"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "plan"
+																	},
+																	"summary": {
+																		"type": "string"
+																	},
+																	"steps": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"risks": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"outcome": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "approved"
+																			},
+																			{
+																				"type": "string",
+																				"const": "changes"
+																			},
+																			{
+																				"type": "string",
+																				"const": "unanswered"
+																			}
+																		]
+																	},
+																	"edited": {
+																		"type": "boolean"
+																	},
+																	"note": {
+																		"type": "string"
+																	}
+																}
 															}
 														]
 													},
@@ -10481,6 +11222,63 @@
 																				},
 																				"costUsd": {
 																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"summary",
+																				"steps"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "plan"
+																				},
+																				"summary": {
+																					"type": "string"
+																				},
+																				"steps": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"risks": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"outcome": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "approved"
+																						},
+																						{
+																							"type": "string",
+																							"const": "changes"
+																						},
+																						{
+																							"type": "string",
+																							"const": "unanswered"
+																						}
+																					]
+																				},
+																				"edited": {
+																					"type": "boolean"
+																				},
+																				"note": {
+																					"type": "string"
 																				}
 																			}
 																		}
@@ -11312,6 +12110,63 @@
 																		"type": "number"
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"summary",
+																	"steps"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "plan"
+																	},
+																	"summary": {
+																		"type": "string"
+																	},
+																	"steps": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"risks": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"outcome": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "approved"
+																			},
+																			{
+																				"type": "string",
+																				"const": "changes"
+																			},
+																			{
+																				"type": "string",
+																				"const": "unanswered"
+																			}
+																		]
+																	},
+																	"edited": {
+																		"type": "boolean"
+																	},
+																	"note": {
+																		"type": "string"
+																	}
+																}
 															}
 														]
 													},
@@ -11816,6 +12671,63 @@
 																				},
 																				"costUsd": {
 																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"summary",
+																				"steps"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "plan"
+																				},
+																				"summary": {
+																					"type": "string"
+																				},
+																				"steps": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"risks": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"outcome": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "approved"
+																						},
+																						{
+																							"type": "string",
+																							"const": "changes"
+																						},
+																						{
+																							"type": "string",
+																							"const": "unanswered"
+																						}
+																					]
+																				},
+																				"edited": {
+																					"type": "boolean"
+																				},
+																				"note": {
+																					"type": "string"
 																				}
 																			}
 																		}
@@ -12627,6 +13539,63 @@
 																		"type": "number"
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"summary",
+																	"steps"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "plan"
+																	},
+																	"summary": {
+																		"type": "string"
+																	},
+																	"steps": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"risks": {
+																		"type": "array",
+																		"items": {
+																			"type": "string"
+																		}
+																	},
+																	"outcome": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "approved"
+																			},
+																			{
+																				"type": "string",
+																				"const": "changes"
+																			},
+																			{
+																				"type": "string",
+																				"const": "unanswered"
+																			}
+																		]
+																	},
+																	"edited": {
+																		"type": "boolean"
+																	},
+																	"note": {
+																		"type": "string"
+																	}
+																}
 															}
 														]
 													},
@@ -13131,6 +14100,63 @@
 																				},
 																				"costUsd": {
 																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"summary",
+																				"steps"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "plan"
+																				},
+																				"summary": {
+																					"type": "string"
+																				},
+																				"steps": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"risks": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"outcome": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "approved"
+																						},
+																						{
+																							"type": "string",
+																							"const": "changes"
+																						},
+																						{
+																							"type": "string",
+																							"const": "unanswered"
+																						}
+																					]
+																				},
+																				"edited": {
+																					"type": "boolean"
+																				},
+																				"note": {
+																					"type": "string"
 																				}
 																			}
 																		}
@@ -14277,6 +15303,63 @@
 																					"type": "number"
 																				}
 																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"summary",
+																				"steps"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "plan"
+																				},
+																				"summary": {
+																					"type": "string"
+																				},
+																				"steps": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"risks": {
+																					"type": "array",
+																					"items": {
+																						"type": "string"
+																					}
+																				},
+																				"outcome": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "approved"
+																						},
+																						{
+																							"type": "string",
+																							"const": "changes"
+																						},
+																						{
+																							"type": "string",
+																							"const": "unanswered"
+																						}
+																					]
+																				},
+																				"edited": {
+																					"type": "boolean"
+																				},
+																				"note": {
+																					"type": "string"
+																				}
+																			}
 																		}
 																	]
 																},
@@ -14781,6 +15864,63 @@
 																							},
 																							"costUsd": {
 																								"type": "number"
+																							}
+																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"summary",
+																							"steps"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "plan"
+																							},
+																							"summary": {
+																								"type": "string"
+																							},
+																							"steps": {
+																								"type": "array",
+																								"items": {
+																									"type": "string"
+																								}
+																							},
+																							"files": {
+																								"type": "array",
+																								"items": {
+																									"type": "string"
+																								}
+																							},
+																							"risks": {
+																								"type": "array",
+																								"items": {
+																									"type": "string"
+																								}
+																							},
+																							"outcome": {
+																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "approved"
+																									},
+																									{
+																										"type": "string",
+																										"const": "changes"
+																									},
+																									{
+																										"type": "string",
+																										"const": "unanswered"
+																									}
+																								]
+																							},
+																							"edited": {
+																								"type": "boolean"
+																							},
+																							"note": {
+																								"type": "string"
 																							}
 																						}
 																					}
@@ -17111,6 +18251,63 @@
 														"type": "number"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"summary",
+													"steps"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "plan"
+													},
+													"summary": {
+														"type": "string"
+													},
+													"steps": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"files": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"risks": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"outcome": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "approved"
+															},
+															{
+																"type": "string",
+																"const": "changes"
+															},
+															{
+																"type": "string",
+																"const": "unanswered"
+															}
+														]
+													},
+													"edited": {
+														"type": "boolean"
+													},
+													"note": {
+														"type": "string"
+													}
+												}
 											}
 										]
 									},
@@ -17615,6 +18812,63 @@
 																},
 																"costUsd": {
 																	"type": "number"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"summary",
+																"steps"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "plan"
+																},
+																"summary": {
+																	"type": "string"
+																},
+																"steps": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"files": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"risks": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"outcome": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "approved"
+																		},
+																		{
+																			"type": "string",
+																			"const": "changes"
+																		},
+																		{
+																			"type": "string",
+																			"const": "unanswered"
+																		}
+																	]
+																},
+																"edited": {
+																	"type": "boolean"
+																},
+																"note": {
+																	"type": "string"
 																}
 															}
 														}
@@ -18794,6 +20048,63 @@
 																"type": "number"
 															}
 														}
+													},
+													{
+														"type": "object",
+														"required": [
+															"type",
+															"summary",
+															"steps"
+														],
+														"properties": {
+															"type": {
+																"type": "string",
+																"const": "plan"
+															},
+															"summary": {
+																"type": "string"
+															},
+															"steps": {
+																"type": "array",
+																"items": {
+																	"type": "string"
+																}
+															},
+															"files": {
+																"type": "array",
+																"items": {
+																	"type": "string"
+																}
+															},
+															"risks": {
+																"type": "array",
+																"items": {
+																	"type": "string"
+																}
+															},
+															"outcome": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "approved"
+																	},
+																	{
+																		"type": "string",
+																		"const": "changes"
+																	},
+																	{
+																		"type": "string",
+																		"const": "unanswered"
+																	}
+																]
+															},
+															"edited": {
+																"type": "boolean"
+															},
+															"note": {
+																"type": "string"
+															}
+														}
 													}
 												]
 											},
@@ -19298,6 +20609,63 @@
 																		},
 																		"costUsd": {
 																			"type": "number"
+																		}
+																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"summary",
+																		"steps"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "plan"
+																		},
+																		"summary": {
+																			"type": "string"
+																		},
+																		"steps": {
+																			"type": "array",
+																			"items": {
+																				"type": "string"
+																			}
+																		},
+																		"files": {
+																			"type": "array",
+																			"items": {
+																				"type": "string"
+																			}
+																		},
+																		"risks": {
+																			"type": "array",
+																			"items": {
+																				"type": "string"
+																			}
+																		},
+																		"outcome": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "approved"
+																				},
+																				{
+																					"type": "string",
+																					"const": "changes"
+																				},
+																				{
+																					"type": "string",
+																					"const": "unanswered"
+																				}
+																			]
+																		},
+																		"edited": {
+																			"type": "boolean"
+																		},
+																		"note": {
+																			"type": "string"
 																		}
 																	}
 																}
@@ -23220,6 +24588,15 @@
 						},
 						"confirmed": {
 							"type": "boolean"
+						},
+						"summary": {
+							"type": "string"
+						},
+						"steps": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
 						}
 					}
 				}

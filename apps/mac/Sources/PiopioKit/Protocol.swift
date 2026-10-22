@@ -123,6 +123,20 @@ public enum ToolDetails: Sendable, Hashable {
     case todos([Todo])
     /// A subagent: its child session once started, and how it ended.
     case task(sessionId: String?, status: String?, costUsd: Double?)
+    /// A proposed plan and how you answered it.
+    case plan(PlanDetails)
+}
+
+/// A plan (piopio-plan): what it says, and the answer — approved (perhaps with your edits), sent back, or none yet.
+public struct PlanDetails: Sendable, Hashable {
+    public var summary: String
+    public var steps: [String]
+    public var files: [String]
+    public var risks: [String]
+    /// "approved", "changes", "unanswered"; nil while it waits for you.
+    public var outcome: String?
+    public var edited: Bool
+    public var note: String?
 }
 
 /// An item of the agent's checklist (piopio-todos).
@@ -148,6 +162,14 @@ extension ToolItem {
             var cost: Double?
             if case .number(let c)? = d["costUsd"] { cost = c }
             return .task(sessionId: d["sessionId"]?.stringValue, status: d["status"]?.stringValue, costUsd: cost)
+        case "plan":
+            let strings = { (key: String) -> [String] in
+                guard case .array(let items)? = d[key] else { return [] }
+                return items.compactMap(\.stringValue)
+            }
+            var edited = false
+            if case .bool(let e)? = d["edited"] { edited = e }
+            return .plan(PlanDetails(summary: d["summary"]?.stringValue ?? "", steps: strings("steps"), files: strings("files"), risks: strings("risks"), outcome: d["outcome"]?.stringValue, edited: edited, note: d["note"]?.stringValue))
         case "terminal":
             guard let command = d["command"]?.stringValue else { return nil }
             if case .number(let code)? = d["exitCode"] { return .terminal(command: command, exitCode: Int(code)) }
@@ -1137,8 +1159,11 @@ public struct PromptResponse: Encodable, Sendable {
     public var text: String?
     public var choice: String?
     public var confirmed: Bool?
-    public init(decision: Decision? = nil, text: String? = nil, choice: String? = nil, confirmed: Bool? = nil) {
-        self.decision = decision; self.text = text; self.choice = choice; self.confirmed = confirmed
+    /// Plans: your edited version, approved with `allow`.
+    public var summary: String?
+    public var steps: [String]?
+    public init(decision: Decision? = nil, text: String? = nil, choice: String? = nil, confirmed: Bool? = nil, summary: String? = nil, steps: [String]? = nil) {
+        self.decision = decision; self.text = text; self.choice = choice; self.confirmed = confirmed; self.summary = summary; self.steps = steps
     }
 }
 

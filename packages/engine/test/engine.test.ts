@@ -778,6 +778,34 @@ describe("composer and extensions (milestone 2.5)", () => {
 		expect(existsSync(join(s.folder, "b.txt"))).toBe(false);
 	});
 
+	test("a plan can be edited before approving: the agent gets your version, and the plan stays its own item", async () => {
+		const a = await start();
+		const s = await session(a);
+		await a.client.call("sessions.configure", { ref: s.ref, planMode: true });
+		const plan = { summary: "Add a **dark mode** toggle", steps: ["Add `theme` to settings", "Draw the toggle", "Test it"], files: ["src/settings.ts"], risks: ["Old themes may clash"] };
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: `call: propose_plan | ${JSON.stringify(plan)}` } });
+		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: waiting.prompts![0]!.id, response: { decision: "allow", summary: "Add a dark mode toggle", steps: ["Draw the toggle", "Add `theme` to settings"] } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle" && st.planMode === false);
+		const folded: Snapshot = await a.client.call("sessions.open", { ref: s.ref, fold: true });
+		const item = folded.items.find((i) => i.kind === "tool");
+		expect(item).toMatchObject({
+			tool: "propose_plan",
+			output: expect.stringContaining("edited the plan"),
+			details: { type: "plan", summary: "Add a dark mode toggle", steps: ["Draw the toggle", "Add `theme` to settings"], files: ["src/settings.ts"], risks: ["Old themes may clash"], outcome: "approved", edited: true },
+		});
+		expect((item as { output: string }).output).toContain("1. Draw the toggle");
+
+		// Sent back with a note.
+		await a.client.call("sessions.configure", { ref: s.ref, planMode: true });
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "plan: Ship it | Merge" } });
+		const again = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: again.prompts![0]!.id, response: { decision: "deny", text: "Add tests first" } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle");
+		const plans = (await tools(a, s.ref)).filter((t) => t.tool === "propose_plan");
+		expect(plans.at(-1)).toMatchObject({ details: { type: "plan", outcome: "changes", note: "Add tests first" } });
+	});
+
 	test("a task runs a subagent as a child session that can be opened", async () => {
 		const a = await start();
 		const s = await session(a);

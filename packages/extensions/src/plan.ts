@@ -7,7 +7,8 @@ import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-age
 import { Type } from "typebox";
 import { readOnlyCommand } from "./policy.js";
 
-export type PlanAnswer = { approved: boolean; note?: string };
+/** The answer to a plan: approved (as proposed, or as the user edited it) or sent back with a note. */
+export type PlanAnswer = { approved: boolean; note?: string; summary?: string; steps?: string[] };
 
 export interface PlanBridge {
 	active(): boolean;
@@ -21,7 +22,8 @@ const PLAN_PROMPT = `
 The user turned on plan mode: explore and plan, don't change anything yet.
 - Read files and run read-only commands (ls, grep, git log/diff…) to understand the code.
 - Don't edit or write files, and don't run commands that change things; those calls are refused.
-- When you know what to do, call propose_plan with a short summary and concrete, ordered steps. The user approves it or asks for changes.`;
+- When you know what to do, call propose_plan with a short summary and concrete, ordered steps. Steps may use inline Markdown (\`code\`, **bold**) and should fit in one or two lines. Add the files you expect to change and any risks or open questions when you know them.
+- The user approves the plan, edits it first, or asks for changes. When they edited it, build their version.`;
 
 export function planExtension(bridge?: PlanBridge): ExtensionFactory {
 	let cliActive = process.env.PIOPIO_PLAN === "1";
@@ -54,7 +56,9 @@ export function planExtension(bridge?: PlanBridge): ExtensionFactory {
 				promptSnippet: "propose_plan: present a plan for approval (plan mode)",
 				parameters: Type.Object({
 					summary: Type.String({ description: "One or two sentences: what you'll do and why." }),
-					steps: Type.Array(Type.String({ description: "A concrete step." }), { minItems: 1 }),
+					steps: Type.Array(Type.String({ description: "A concrete step; inline Markdown is fine." }), { minItems: 1 }),
+					files: Type.Optional(Type.Array(Type.String({ description: "A file you expect to change, relative to the project." }))),
+					risks: Type.Optional(Type.Array(Type.String({ description: "A risk or an open question the user should know about." }))),
 				}),
 				async execute(toolCallId, params, signal, _onUpdate, ctx) {
 					if (!active()) return { content: [{ type: "text", text: "Plan mode is off; go ahead with the work." }], details: { approved: true } };
@@ -67,12 +71,15 @@ export function planExtension(bridge?: PlanBridge): ExtensionFactory {
 					if (!answer) return { content: [{ type: "text", text: "The plan wasn't answered." }], details: { approved: false } };
 					if (answer.approved) {
 						setActive(false);
-						return {
-							content: [{ type: "text", text: `The user approved the plan${answer.note ? ` (${answer.note})` : ""}. Plan mode is off: build it now, tracking the steps with the todo tool.` }],
-							details: { approved: true, steps: params.steps },
-						};
+						const steps = answer.steps?.length ? answer.steps : params.steps;
+						const summary = answer.summary?.trim() || params.summary;
+						const edited = steps.join("\n") !== params.steps.join("\n") || summary !== params.summary;
+						const text = edited
+							? `The user edited the plan and approved their version. Plan mode is off: build this plan, not the one you proposed, tracking the steps with the todo tool.\n\n${summary}\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`
+							: `The user approved the plan${answer.note ? ` (${answer.note})` : ""}. Plan mode is off: build it now, tracking the steps with the todo tool.`;
+						return { content: [{ type: "text", text }], details: { approved: true, summary, steps, edited } };
 					}
-					return { content: [{ type: "text", text: `The user wants changes to the plan before building${answer.note ? `: ${answer.note}` : "."} Keep exploring if needed and propose a new plan.` }], details: { approved: false } };
+					return { content: [{ type: "text", text: `The user wants changes to the plan before building${answer.note ? `: ${answer.note}` : "."} Keep exploring if needed and propose a new plan.` }], details: { approved: false, ...(answer.note ? { note: answer.note } : {}) } };
 				},
 			}),
 		);

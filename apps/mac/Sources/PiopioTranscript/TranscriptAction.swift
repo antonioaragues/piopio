@@ -31,6 +31,9 @@ public enum TranscriptAction: Equatable, Sendable {
     case undoChange(undoId: String)
     /// Opens the trace of messages between agents (06-agents §7 AA5).
     case openTrace(traceId: String)
+    /// Answers a plan from its card: approve as is, edit it first, or send it back with a note.
+    case plan(callId: String, answer: PlanAnswer)
+    public enum PlanAnswer: String, Sendable { case approve, edit, revise }
 
     static let scheme = "piopio-action"
 
@@ -57,6 +60,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .editApproval(let id): c.host = "edit-approval"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .undoChange(let id): c.host = "undo"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .openTrace(let id): c.host = "trace"; c.queryItems = [URLQueryItem(name: "id", value: id)]
+        case .plan(let id, let answer): c.host = "plan"; c.queryItems = [URLQueryItem(name: "call", value: id), URLQueryItem(name: "answer", value: answer.rawValue)]
         }
         return c.url!
     }
@@ -84,6 +88,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "edit-approval": guard let id = q("id") else { return nil }; self = .editApproval(approvalId: id)
         case "undo": guard let id = q("id") else { return nil }; self = .undoChange(undoId: id)
         case "trace": guard let id = q("id") else { return nil }; self = .openTrace(traceId: id)
+        case "plan": guard let id = q("call"), let answer = q("answer").flatMap(PlanAnswer.init(rawValue:)) else { return nil }; self = .plan(callId: id, answer: answer)
         default: return nil
         }
     }

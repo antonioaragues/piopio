@@ -144,6 +144,9 @@ struct BuildSessionView: View {
         .sheet(item: Binding(get: { session.restoring }, set: { session.restoring = $0 })) { checkpoint in
             RestoreSheet(session: session, checkpoint: checkpoint)
         }
+        .sheet(item: Binding(get: { session.editingPlan }, set: { session.editingPlan = $0 })) { prompt in
+            PlanEditorSheet(session: session, prompt: prompt)
+        }
     }
 
     private var conversation: some View {
@@ -458,6 +461,48 @@ struct PromptCard: View {
     @FocusState private var focused: Bool
 
     var body: some View {
+        if prompt.kind == .plan { planBar } else { card }
+    }
+
+    /// Plans are read in the transcript (docs/spec/09 P1); above the composer, only a bar with the answers and ⌘↩.
+    private var planBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle().fill(Color.dsAmber).frame(width: 7, height: 7)
+                Text("Plan ready").font(.system(size: 13, weight: .semibold))
+                Text("· " + prompt.title.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                Spacer(minLength: 8)
+                if !denying {
+                    Button("Keep planning…") { denying = true }.buttonStyle(PillStyle(compact: true))
+                    Button("Edit…") { session.editingPlan = prompt }.buttonStyle(PillStyle(compact: true))
+                    Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Approve and build ⌘↩" : "Approve and build") }
+                        .buttonStyle(PillStyle(kind: .primary, compact: true))
+                        .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
+                }
+            }
+            if denying {
+                HStack(spacing: 8) {
+                    TextField("What should change in the plan?", text: $text)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12.5))
+                        .focused($focused)
+                        .onSubmit { answer(PromptResponse(decision: .deny, text: note)) }
+                        .onAppear { focused = true }
+                    Button("Cancel") { denying = false; text = "" }.buttonStyle(PillStyle(compact: true))
+                    Button("Send") { answer(PromptResponse(decision: .deny, text: note)) }.buttonStyle(PillStyle(kind: .strong, compact: true))
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsAccentLine, lineWidth: 1))
+        .onChange(of: session.revisingPlan) { _, id in
+            if id == prompt.id { denying = true; session.revisingPlan = nil }
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 7) {
                 Circle().fill(Color.dsAmber).frame(width: 7, height: 7)
@@ -514,7 +559,7 @@ struct PromptCard: View {
                     .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
             }
         case .input: freeAnswer(placeholder: prompt.placeholder ?? "Your answer")
-        case .plan: planActions
+        case .plan: EmptyView() // plans answer from the plan bar
         }
     }
 
@@ -542,42 +587,6 @@ struct PromptCard: View {
                 Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Allow once ⌘↩" : "Allow once") }
                     .buttonStyle(PillStyle(kind: .primary))
                     .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
-            }
-        }
-    }
-
-    /// propose_plan: the steps, then approve (plan mode turns off and the agent builds) or ask for changes.
-    @ViewBuilder private var planActions: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let steps = prompt.steps {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("\(i + 1).").font(.system(size: 12.5).monospacedDigit()).foregroundStyle(Color.dsFg3).frame(width: 18, alignment: .trailing)
-                            Text(step).font(.system(size: 13)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-            }
-            if denying {
-                HStack(spacing: 8) {
-                    TextField("What should change in the plan?", text: $text)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12.5))
-                        .focused($focused)
-                        .onSubmit { answer(PromptResponse(decision: .deny, text: note)) }
-                        .onAppear { focused = true }
-                    Button("Cancel") { denying = false; text = "" }.buttonStyle(PillStyle())
-                    Button("Send") { answer(PromptResponse(decision: .deny, text: note)) }.buttonStyle(PillStyle(kind: .strong))
-                }
-            } else {
-                HStack {
-                    Button("Keep planning") { denying = true }.buttonStyle(PillStyle())
-                    Spacer()
-                    Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Approve and build ⌘↩" : "Approve and build") }
-                        .buttonStyle(PillStyle(kind: .primary))
-                        .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
-                }
             }
         }
     }
@@ -833,5 +842,76 @@ struct TrustBanner: View {
         .background(Color.dsAmber.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsAmber.opacity(0.35), lineWidth: 0.5))
         .help("Applies to sessions you start or reopen from now on.")
+    }
+}
+
+/// Edit a plan before approving it (docs/spec/09 P3): the summary, then the steps — change, reorder, remove, add.
+/// Approving sends your version; the agent builds it instead of its own.
+struct PlanEditorSheet: View {
+    let session: ThreadModel
+    let prompt: PendingPrompt
+    @State private var summary = ""
+    @State private var steps: [Step] = []
+    @Environment(\.dismiss) private var dismiss
+
+    struct Step: Identifiable, Hashable { let id = UUID(); var text: String }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Edit the plan").font(.system(size: 17, weight: .bold))
+            Text("Change the steps, drag to reorder, remove what you don't want. The agent builds your version.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Summary").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                TextField("What it will do", text: $summary, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...3)
+            }
+            Text("Steps").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+            List {
+                ForEach(Array(steps.enumerated()), id: \.element.id) { i, step in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("\(i + 1)").font(.system(size: 11, weight: .bold).monospacedDigit()).foregroundStyle(Color.accentColor)
+                            .frame(width: 20, height: 20).background(Circle().fill(Color.dsAccentSoft))
+                        TextField("Step", text: binding(step.id), axis: .vertical).textFieldStyle(.plain).font(.system(size: 13)).lineLimit(1...4)
+                        Button { steps.removeAll { $0.id == step.id } } label: { Image(systemName: "minus.circle").foregroundStyle(Color.dsFg3) }
+                            .buttonStyle(.plain).help("Remove this step")
+                    }
+                    .padding(.vertical, 3)
+                }
+                .onMove { steps.move(fromOffsets: $0, toOffset: $1) }
+            }
+            .listStyle(.bordered(alternatesRowBackgrounds: false))
+            .frame(minHeight: 180, maxHeight: 320)
+            Button { steps.append(Step(text: "")) } label: { Label("Add a step", systemImage: "plus") }
+                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+            HStack {
+                Button("Revert") { load() }.buttonStyle(PillStyle()).help("Back to the agent's plan")
+                Spacer()
+                Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
+                Button("Approve and build") { approve() }
+                    .buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+                    .disabled(cleaned.isEmpty)
+            }
+        }
+        .padding(22)
+        .frame(width: 560)
+        .onAppear(perform: load)
+    }
+
+    private var cleaned: [String] { steps.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty } }
+
+    private func binding(_ id: UUID) -> Binding<String> {
+        Binding(get: { steps.first { $0.id == id }?.text ?? "" }, set: { value in
+            if let i = steps.firstIndex(where: { $0.id == id }) { steps[i].text = value }
+        })
+    }
+
+    private func load() {
+        summary = prompt.title
+        steps = (prompt.steps ?? []).map { Step(text: $0) }
+    }
+
+    private func approve() {
+        let response = PromptResponse(decision: .allow, summary: summary.trimmingCharacters(in: .whitespacesAndNewlines), steps: cleaned)
+        Task { await session.respond(prompt, response) }
+        dismiss()
     }
 }

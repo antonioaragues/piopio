@@ -244,6 +244,14 @@ enum DebugAutomation {
                 }
                 guard let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] else { return }
                 await session.send(prompt)
+                // PIOPIO_DEMO_PLAN_EDIT=1: open the plan editor; =approve: approve an edited version (drops the last step).
+                if let mode = env["PIOPIO_DEMO_PLAN_EDIT"] {
+                    for _ in 0..<50 where !session.prompts.contains(where: { $0.kind == .plan }) { try? await Task.sleep(for: .milliseconds(200)) }
+                    if let plan = session.prompts.first(where: { $0.kind == .plan }) {
+                        if mode == "approve" { await session.respond(plan, PromptResponse(decision: .allow, summary: plan.title, steps: Array((plan.steps ?? []).dropLast().reversed()))) }
+                        else { session.editingPlan = plan }
+                    }
+                }
                 // PIOPIO_DEMO_ANSWER=<text>: answer the first question the agent asks with it.
                 if let reply = env["PIOPIO_DEMO_ANSWER"] {
                     for _ in 0..<50 where session.prompts.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }

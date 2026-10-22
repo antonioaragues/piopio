@@ -56,6 +56,17 @@ export const ToolDetails = Type.Union([
 	Type.Object({ type: Type.Literal("todos"), items: Type.Array(Type.Object({ text: Type.String(), status: literals("pending", "in_progress", "done") })) }),
 	/** A subagent (piopio-subagents): its child session, once started, and the outcome. */
 	Type.Object({ type: Type.Literal("task"), sessionId: Type.Optional(Type.String()), status: Type.Optional(literals("done", "error", "stopped")), costUsd: Type.Optional(Type.Number()) }),
+	/** A proposed plan (piopio-plan): what it says, and how you answered (approved, with your edits, or sent back). */
+	Type.Object({
+		type: Type.Literal("plan"),
+		summary: Type.String(),
+		steps: Type.Array(Type.String()),
+		files: Type.Optional(Type.Array(Type.String())),
+		risks: Type.Optional(Type.Array(Type.String())),
+		outcome: Type.Optional(literals("approved", "changes", "unanswered")),
+		edited: Type.Optional(Type.Boolean()),
+		note: Type.Optional(Type.String()),
+	}),
 ]);
 export type ToolDetails = Static<typeof ToolDetails>;
 
@@ -309,6 +320,9 @@ export const PromptResponse = Type.Object({
 	choice: Type.Optional(Type.String()),
 	/** Confirms. */
 	confirmed: Type.Optional(Type.Boolean()),
+	/** Plans: the user's edited version, approved with decision "allow". */
+	summary: Type.Optional(Type.String()),
+	steps: Type.Optional(Type.Array(Type.String())),
 });
 export type PromptResponse = Static<typeof PromptResponse>;
 export type SessionStatus = Static<typeof SessionStatus>;
