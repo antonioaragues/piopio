@@ -122,6 +122,57 @@ After implementing, report: what changed; which pi capabilities were reused; bac
 
 **Already in place (2026-10-22):** Settings › Models (docs/design v2, 9a) has a providers card with a "ChatGPT · Coming soon" row and a default model per mode (Build, Chats and notebooks, Quick Chat, New agents); the picker (10a) groups models by maker. Both need provider-aware labels and billing routes.
 
+## 9. Inspection (2026-10-22)
+
+### What's installed
+- pi **1.3.0** across the board: `pi-ai`, `pi-coding-agent`, `pi-durable`, `pi-agent-core` (the requirements' 0.80.8 reference predates it). Its docs ship in the package (`node_modules/@earendil-works/pi-coding-agent/docs/`).
+- The engine uses pi as an **SDK** in process, not over RPC. Build sessions run pi-coding-agent; chats, notebooks and agents run pi-durable.
+
+### How models and the OpenRouter key work today
+- `ModelHub` (`packages/engine/src/models.ts`) owns one `InMemoryCredentialStore`, shared by:
+  - a pi-ai `createModels()` collection with **only** `openrouterProvider()` registered (plus the faux provider in dev), used by pi-durable `Harness.open({ models })` in `runtimes/space.ts` and `runtimes/agent.ts`, by `sessions.ts` to validate model refs, and by `utility()`;
+  - a lazily created `ModelRuntime` for Build sessions (`buildRuntime()`), which has every built-in provider but only ever gets the OpenRouter credential.
+- The key lives in the **app's Keychain** (`provider.openrouter.apiKey`). The engine asks for it with the reverse request `secrets.get` the first time a provider is needed (`ensureCredential`) and keeps it in memory only (`secrets.ts`). `SECRET_BY_PROVIDER` maps only `openrouter`.
+- `listModels()` returns OpenRouter's catalog only. `verifyProviderKey()` and `providerUsage()` are OpenRouter-specific (`/api/v1/key`).
+- Model refs are already `{ provider, id }` everywhere (protocol, sessions, agents, the app's per-mode defaults), and each session stores its own model, so FR2/FR3's identity and per-session persistence need no data migration.
+
+### What pi 1.3.0 provides (reuse, don't rebuild)
+- **`ModelRuntime`** implements pi-ai's `Models` interface, so the same object can serve pi-durable (`Harness` takes `Models`) and pi-coding-agent. It has `getProviders()`, `getAvailable(providerId?)` (models whose provider has usable auth), `checkAuth`, `getProviderAuthStatus`, `isUsingSubscription`, `listCredentials`, `refresh()`, `login()`, `logout()`.
+- **App-owned credential storage:** `ModelRuntime.create({ credentials })` accepts any `CredentialStore` (`read`, `list`, `modify`, `delete`). `modify` is the single serialized write path; OAuth refresh runs inside it, so a Keychain-backed store gets refreshed tokens written back.
+- **Login without a terminal:** `login(providerId, "api_key" | "oauth", interaction, { agentName, getDeviceId })`. The `AuthInteraction` is two callbacks the app implements: `prompt()` (text, secret, select, or `manual_code` for pasting a callback URL) and `notify()` (events `auth_url`, `device_code`, `progress`, `info`). The ChatGPT flow runs its own callback server on localhost:1455.
+- **Providers and methods** (from `getProviders()` on this install; 43 in all):
+
+| Provider id | API key | Sign in (OAuth) |
+|---|---|---|
+| `openrouter` | ✓ | ✓ OpenRouter OAuth |
+| `openai` | ✓ OpenAI API key | ✓ ChatGPT subscription |
+| `openai-codex` (marked *legacy*) | — | ✓ ChatGPT Plus/Pro |
+| `anthropic` | ✓ | ✓ Claude Pro/Max |
+| `github-copilot` | ✓ token | ✓ subscription |
+| `google` (Gemini) | ✓ | — |
+| `xai` | ✓ | ✓ Grok/X subscription |
+| `deepseek`, `zai`, `kimi-coding`, `minimax`, `mistral`, `groq`, … | ✓ | some |
+
+### Gaps and risks
+1. **One credential per provider.** pi stores a single credential per provider id, and `openai` covers both the API key and ChatGPT sign-in. P0 asks for both at once. Options: ChatGPT through `openai` plus the API key through a second provider registered with `registerProvider` (an "OpenAI API" alias over the same models), or ChatGPT through the legacy `openai-codex`. pi's docs note that while `openai` is signed in through ChatGPT, API-key-only models (such as the Decisions API) aren't listed.
+2. **pi-durable only sees OpenRouter.** Chats, notebooks and agents get models from the pi-ai collection with one provider; switching them to the shared `ModelRuntime` is the core backend change.
+3. **Secrets are read-only today.** `secrets.get` is the only reverse request; OAuth needs writes (login, token refresh, logout), so the protocol needs `secrets.set`/`secrets.delete`, or the engine needs its own secure store.
+4. **Utility model and web search are pinned to OpenRouter** (`DEFAULT_MODEL`, `tools/web.ts`). With only ChatGPT connected, titles, commit messages, follow-ups and web search would fail; they need a fallback to whatever is connected.
+5. **Usage/spend** is OpenRouter-only (`/api/v1/key`). Fine for P0 (consolidated billing is out of scope), but the providers card should show spend only where it's known.
+
+## 10. P0 plan
+1. **One runtime.** `ModelHub` builds a single `ModelRuntime` with an app-owned `CredentialStore` and hands it to pi-durable and pi-coding-agent; drop the separate pi-ai collection. Faux stays a native provider.
+2. **Keychain-backed `CredentialStore`.** Each provider's credential (API key or OAuth JSON) is one Keychain item, `provider.<id>.credential`, read through `secrets.get` and written through new `secrets.set`/`secrets.delete` reverse requests. The existing `provider.openrouter.apiKey` item is read as OpenRouter's credential, so nothing is re-entered (acceptance: "works without reauthentication").
+3. **Protocol:** `providers.list` (id, name, methods, status Not connected / Connecting / Connected / Needs attention, subscription or API billing, source), `providers.login` (runs `ModelRuntime.login`; streams `auth_url`, `device_code`, `progress` as notifications and asks `prompt()` questions as a reverse request), `providers.cancelLogin`, `providers.logout`. `models.list` returns every available model with its provider and billing route.
+4. **OpenAI both ways:** ChatGPT subscription and OpenAI API as two separate entries, per the decision in gap 1.
+5. **App:**
+   - Settings › Models lists connected and available providers with Connect / Reconnect / Disconnect. Disconnect warns when the provider serves a default or an open session's model.
+   - Sign-in sheet: opens the browser for `auth_url`, shows the device code with Copy, and offers a paste field for `manual_code`.
+   - The model picker groups by provider and labels the billing route ("ChatGPT subscription", "OpenRouter credits", "OpenAI API").
+6. **Errors:** map `ModelsError` codes (auth, rate limit, quota, unavailable model, network) to error cards with one recovery action (Reconnect, Choose another model, Try again). Never fall back to another paid provider.
+7. **Fallbacks:** the utility model and web search use the session's provider when OpenRouter isn't connected, or say clearly that they're unavailable.
+8. **Tests:** a fake `CredentialStore` and a faux OAuth provider cover login, refresh written back, logout of one provider leaving the others, model listing across providers, switching provider mid-conversation, and persistence across restart.
+
 ## References
 - https://pi.dev/docs/latest/models
 - https://pi.dev/docs/latest/providers
