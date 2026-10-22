@@ -4,6 +4,8 @@ import SwiftUI
 
 /// A thread (docs/design 8a): 60pt header, centered transcript, floating glass composer.
 struct ThreadView: View {
+    /// PIOPIO_DEMO_FOLLOWUPS: suggestions separated by "||" when the engine has none (captures with the faux model).
+    static let demoFollowUps = ProcessInfo.processInfo.environment["PIOPIO_DEMO_FOLLOWUPS"]?.components(separatedBy: "||")
     let engine: EngineController
     let thread: ThreadModel
     let summary: SessionSummary
@@ -23,7 +25,7 @@ struct ThreadView: View {
                         }
                         .buttonStyle(PillStyle(kind: .toolbar, compact: true))
                     }
-                    if thread.state?.status != .running, let followUps = summary.followUps, !followUps.isEmpty {
+                    if thread.state?.status != .running, let followUps = summary.followUps ?? Self.demoFollowUps, !followUps.isEmpty {
                         FollowUps(items: followUps, label: "You could also") { text in Task { await thread.send(text) } }
                             .frame(maxWidth: 636).padding(.horizontal, 24)
                     }

@@ -645,7 +645,7 @@ private struct OptionStyle: ButtonStyle {
 }
 
 /// Wraps its items onto as many lines as needed; an item wider than a line gets the line's width.
-private struct FlowRow<Item: Hashable, Content: View>: View {
+struct FlowRow<Item: Hashable, Content: View>: View {
     let items: [Item]
     let content: (Item) -> Content
     init(_ items: [Item], @ViewBuilder content: @escaping (Item) -> Content) {
@@ -658,7 +658,7 @@ private struct FlowRow<Item: Hashable, Content: View>: View {
     }
 }
 
-private struct FlowLayout: Layout {
+struct FlowLayout: Layout {
     var spacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

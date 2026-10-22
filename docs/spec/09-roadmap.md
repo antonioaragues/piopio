@@ -324,8 +324,11 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 
 ### Second batch (2026-10-22)
 
+**Bugs**
+- B3 · The model picker in a notebook's settings sheet looks broken: the sheet forces it into a 420×380 frame (`SpaceViews.swift`, `.popover(item: $picking)`), but the v2 picker lays out at 760×520, so its list and detail pane are squeezed and clipped. Likely fix: drop the fixed frame and pass `role: .chat`.
+
 **Small changes**
-- S3 · Follow-up suggestion chips are cut to one line (`FollowUps` in `ChatExtras.swift`, `lineLimit(1)`), so long ones can't be read. Let them wrap like the Questions UI options (B2), or at least show the full text as a tooltip.
+- S3 · Follow-up suggestion chips are cut to one line (`FollowUps` in `ChatExtras.swift`, `lineLimit(1)`), so long ones can't be read. Let them wrap like the Questions UI options (B2), or at least show the full text as a tooltip. **Fixed 2026-10-22:** long suggestions wrap in a rounded box no wider than the column, and the full text shows on hover.
 - S4 · Attach folders as well as files from the composer's +. Today the file panel only accepts files (`Composer.swift`, `canChooseDirectories = false`); @-mentions already reach folders in Build.
 
 **To design further**
@@ -340,6 +343,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - Q1 · **Checkpoints vs fork.** Today a checkpoint is a snapshot of the project's *files* taken before each turn that writes (a shadow git dir, 05-build §7, `checkpoints.ts`); "Restore to here" rewinds the files, not the conversation. Fork (pi's session tree, BR6) branches the *conversation*. Claude Code's rewind and Cursor's "restore checkpoint" put both on each message: hover a message → restore code, conversation, or both. Proposal to evaluate: drop the separate checkpoint items from the transcript and the inspector timeline, put Restore on each of your messages with those three choices, and draw forks as a small branch marker on the message they start from.
 - Q2 · **"Worktree" at the top of a Build session.** A worktree is a second working copy of the repo on its own branch (BP5), so several sessions can change the same project at once without stepping on each other; when the session ends you merge, open a PR, keep or discard it. The word is git jargon: consider "Separate copy (branch piopio/…)" in the header and new-session sheet, with worktree in the tooltip.
 - Q3 · **How pi uses context files and skills.** To verify against pi's docs and write down in 07-shared-resources: which files pi reads into the prompt (AGENTS.md and CLAUDE.md from the project and its parents, `~/.pi/agent/AGENTS.md`, SYSTEM.md / APPEND_SYSTEM.md?), how skills (`SKILL.md` folders) load on demand, and whether anything like OpenClaw's SOUL.md exists or should exist for agents (an agent's persona today is its Setup › Instructions). The app reads AGENTS.md/CLAUDE.md only to show it per project (`projects.ts`).
+- Q5 · **Where a notebook's Files live.** Today Files is a button in the notebook's toolbar that opens a sheet. Options: the left sidebar (under the notebook, like a project's sessions), or the notebook's right-hand panel, next to Progress and Memory. The right panel looks like the better fit: it already holds what every topic shares, and the left sidebar stays a list of places.
 - Q4 · **Where things run.** Claude and Codex let you pick, per chat, whether it runs on this Mac or in the cloud. Research per kind: Build sessions (this Mac, a worktree, or a cloud machine from the GitHub repo), chats and notebooks (this Mac or the cloud engine), agents (this Mac or a Durable Object, Phase 5). Decide whether the choice lives in the composer, the new-session sheet, or per project/agent, and how a running item moves between them. Related: "cloud Threads/Spaces" and "cloud Build sessions" in Later.
 
 ## Later (unordered)
