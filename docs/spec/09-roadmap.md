@@ -325,7 +325,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 ### Second batch (2026-10-22)
 
 **Bugs**
-- B3 · The model picker in a notebook's settings sheet looks broken: the sheet forces it into a 420×380 frame (`SpaceViews.swift`, `.popover(item: $picking)`), but the v2 picker lays out at 760×520, so its list and detail pane are squeezed and clipped. Likely fix: drop the fixed frame and pass `role: .chat`.
+- B3 · The model picker in a notebook's settings sheet looks broken: the sheet forces it into a 420×380 frame (`SpaceViews.swift`, `.popover(item: $picking)`), but the v2 picker lays out at 760×520, so its list and detail pane are squeezed and clipped. **Fixed 2026-10-22:** the fixed frame is gone; the picker opens at its own 760×520 size.
 
 **Small changes**
 - S3 · Follow-up suggestion chips are cut to one line (`FollowUps` in `ChatExtras.swift`, `lineLimit(1)`), so long ones can't be read. Let them wrap like the Questions UI options (B2), or at least show the full text as a tooltip. **Fixed 2026-10-22:** long suggestions wrap in a rounded box no wider than the column, and the full text shows on hover.

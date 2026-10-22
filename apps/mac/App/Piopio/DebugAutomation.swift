@@ -159,6 +159,11 @@ enum DebugAutomation {
                 if let title = env["PIOPIO_DEMO_TOPIC"], let topic = engine.space(ref.id)?.topics?.first(where: { $0.title == title }) {
                     NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: ref.id, topicId: topic.id, itemId: nil))
                 }
+                // PIOPIO_DEMO_SPACE_SETTINGS=1: then open its settings sheet; =picker also opens the topic model picker.
+                if env["PIOPIO_DEMO_SPACE_SETTINGS"] != nil {
+                    try? await Task.sleep(for: .seconds(1))
+                    NotificationCenter.default.post(name: .editSpaceInstructions, object: ref.id)
+                }
             }
         }
         // PIOPIO_DEMO_CHAT_PROJECT: add this folder in Chat and open a chat-profile session; PIOPIO_DEMO_PREVIEW=<path>

@@ -280,13 +280,15 @@ struct SpaceSettingsSheet: View {
             autoTidy = space.space?.autoTidy ?? false
             organizer = space.space?.organizerModel ?? space.model
             topics = space.model
+            if ProcessInfo.processInfo.environment["PIOPIO_DEMO_SPACE_SETTINGS"] == "picker" {
+                Task { try? await Task.sleep(for: .seconds(1)); picking = .topics }
+            }
         }
         .popover(item: $picking) { which in
             ModelPicker(engine: engine, selected: which == .organizer ? organizer : topics) { ref in
                 if which == .organizer { organizer = ref } else { topics = ref }
                 picking = nil
             }
-            .frame(width: 420, height: 380)
         }
     }
 
