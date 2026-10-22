@@ -541,6 +541,8 @@ export const ProviderInfo = Type.Object({
 	/** Shown first in Settings (OpenRouter, ChatGPT, OpenAI API). */
 	featured: Type.Boolean(),
 	models: Type.Number(),
+	/** A custom endpoint added by address (LiteLLM, Ollama, LM Studio…). */
+	endpoint: Type.Optional(Type.Object({ baseUrl: Type.String(), local: Type.Boolean(), keyless: Type.Boolean() })),
 });
 export type ProviderInfo = Static<typeof ProviderInfo>;
 
@@ -802,6 +804,31 @@ export const methods = {
 	"providers.cancelLogin": {
 		params: Type.Object({ loginId: Type.String() }),
 		result: Type.Object({}),
+	},
+	/** Asks an OpenAI-compatible server for its models, without saving anything. */
+	"endpoints.check": {
+		params: Type.Object({ baseUrl: Type.String(), key: Type.Optional(Type.String()), id: Type.Optional(Type.String()) }),
+		result: Type.Object({
+			ok: Type.Boolean(),
+			/** The address that answered (with /v1 added when needed). */
+			baseUrl: Type.Optional(Type.String()),
+			models: Type.Array(Type.Object({ id: Type.String(), contextWindow: Type.Optional(Type.Number()) })),
+			message: Type.Optional(Type.String()),
+		}),
+	},
+	/** Adds or updates (`id`) a custom endpoint after checking it. No `key` on update keeps the stored one. */
+	"endpoints.save": {
+		params: Type.Object({ id: Type.Optional(Type.String()), name: Type.String(), baseUrl: Type.String(), key: Type.Optional(Type.String()) }),
+		result: Type.Object({ id: Type.String() }),
+	},
+	"endpoints.remove": {
+		params: Type.Object({ id: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Ollama and LM Studio answering on this Mac, and not added yet. */
+	"endpoints.detect": {
+		params: Type.Object({}),
+		result: Type.Object({ found: Type.Array(Type.Object({ name: Type.String(), baseUrl: Type.String(), models: Type.Number() })) }),
 	},
 	/** Disconnects one provider; the others stay as they are. */
 	"providers.logout": {

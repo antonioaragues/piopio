@@ -757,6 +757,30 @@ final class EngineController {
         login = nil
     }
 
+    // Custom endpoints (LiteLLM, Ollama, LM Studio…)
+
+    func checkEndpoint(_ baseUrl: String, key: String?, id: String?) async -> EndpointCheckResult? {
+        try? await client?.call("endpoints.check", EndpointCheckParams(baseUrl: baseUrl, key: key, id: id), as: EndpointCheckResult.self)
+    }
+
+    /// Adds or updates an endpoint; throws the engine's reason when the server doesn't answer as expected.
+    func saveEndpoint(id: String?, name: String, baseUrl: String, key: String?) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
+        _ = try await client.call("endpoints.save", EndpointSaveParams(id: id, name: name, baseUrl: baseUrl, key: key), as: EndpointSaveResult.self)
+        await loadProviders()
+        try? await loadModels()
+    }
+
+    func removeEndpoint(_ provider: ProviderInfo) async {
+        _ = try? await client?.call("endpoints.remove", EndpointIdParams(id: provider.id), as: Empty.self)
+        await loadProviders()
+        try? await loadModels()
+    }
+
+    func detectEndpoints() async -> [EndpointsDetectResult.Found] {
+        (try? await client?.call("endpoints.detect", Empty(), as: EndpointsDetectResult.self).found) ?? []
+    }
+
     func disconnect(_ provider: ProviderInfo) async {
         _ = try? await client?.call("providers.logout", ProviderParams(provider: provider.id), as: Empty.self)
         if provider.id == "openrouter" { hasKey = false }

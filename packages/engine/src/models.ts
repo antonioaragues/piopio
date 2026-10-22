@@ -11,6 +11,7 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Model,
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { ModelInfo, ModelRef, ProviderInfo } from "@piopio/protocol";
 import { credentialSecret, KeychainCredentialStore } from "./credentials.js";
+import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, Endpoints, isLocal } from "./endpoints.js";
 import { billingLabel, connectMethods, FEATURED, openaiApiAlias, PREFERRED_MODEL, UTILITY_MODEL } from "./providers.js";
 import type { SecretBroker } from "./secrets.js";
 
@@ -20,6 +21,7 @@ type FauxHandle = ReturnType<typeof fauxProvider>;
 
 export class ModelHub {
 	readonly credentials: KeychainCredentialStore;
+	readonly endpoints: Endpoints;
 	readonly faux?: FauxHandle;
 	private runtime?: ModelRuntime;
 	private starting?: Promise<ModelRuntime>;
@@ -33,6 +35,7 @@ export class ModelHub {
 		private readonly options: { faux?: boolean; home?: string } = {},
 	) {
 		this.credentials = new KeychainCredentialStore(secrets, options.home ? join(options.home, "credentials.json") : undefined);
+		this.endpoints = new Endpoints(options.home ? join(options.home, "endpoints.json") : undefined);
 		if (options.faux) {
 			this.faux = fauxProvider({ provider: "faux", tokensPerSecond: 40 });
 			installEcho(this.faux);
@@ -45,6 +48,7 @@ export class ModelHub {
 			const openai = rt.getProvider("openai");
 			if (openai?.auth.apiKey) rt.registerNativeProvider(openaiApiAlias(openai));
 			if (this.faux) rt.registerNativeProvider(this.faux.provider);
+			for (const e of this.endpoints.list()) rt.registerProvider(e.id, endpointConfig(e) as never);
 			this.runtime = rt;
 			return rt;
 		});
@@ -67,7 +71,7 @@ export class ModelHub {
 
 	/** Makes sure the provider has a credential, asking the app's Keychain the first time. */
 	async ensureCredential(provider: string): Promise<void> {
-		if (provider === "faux") return;
+		if (provider === "faux" || this.endpoints.get(provider)?.keyless) return;
 		if (await this.credentials.read(provider)) return;
 		const name = this.runtime?.getProvider(provider)?.name ?? provider;
 		throw new EngineError("AUTH", `${name} isn't connected. Connect it in Settings › Models.`);
@@ -76,6 +80,7 @@ export class ModelHub {
 	/** Providers with a stored credential (not ambient ones: billing stays explicit). */
 	async connected(): Promise<Set<string>> {
 		const ids = new Set((await this.credentials.list()).map((c) => c.providerId));
+		for (const e of this.endpoints.list()) ids.add(e.id);
 		this.connectedIds = ids;
 		return ids;
 	}
@@ -89,6 +94,13 @@ export class ModelHub {
 		if (this.faux) out.push(...rt.getModels("faux").map((m) => toInfo(m, "Faux", undefined)));
 		for (const id of ids) {
 			const provider = rt.getProvider(id);
+			const endpoint = this.endpoints.get(id);
+			if (endpoint && provider) {
+				// Context sizes the server didn't report stay unknown (0) in the app.
+				const known = new Map(endpoint.models.map((m) => [m.id, m.contextWindow ?? 0]));
+				out.push(...rt.getModels(id).map((m) => ({ ...toInfo(m, endpoint.name, endpointBilling(endpoint)), contextWindow: known.get(m.id) ?? 0 })));
+				continue;
+			}
 			const credential = await this.credentials.read(id).catch(() => undefined);
 			if (!provider || !credential) continue;
 			const billing = billingLabel(provider, credential.type);
@@ -102,7 +114,7 @@ export class ModelHub {
 	async listProviders(connecting: (id: string) => boolean): Promise<ProviderInfo[]> {
 		const rt = await this.ready();
 		const ids = await this.connected();
-		const providers = rt.getProviders().filter((p) => p.id !== "faux" && p.id !== "openai-codex" && connectMethods(p).length > 0);
+		const providers = rt.getProviders().filter((p) => p.id !== "faux" && p.id !== "openai-codex" && !this.endpoints.get(p.id) && connectMethods(p).length > 0);
 		const rank = (id: string) => (FEATURED.includes(id) ? FEATURED.indexOf(id) : FEATURED.length);
 		providers.sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
 		const out: ProviderInfo[] = [];
@@ -121,7 +133,63 @@ export class ModelHub {
 				models: p.getModels().length,
 			});
 		}
+		for (const e of this.endpoints.list()) {
+			const problem = this.problems.get(e.id);
+			out.push({
+				id: e.id,
+				name: e.name,
+				methods: [],
+				status: problem ? "needs_attention" : "connected",
+				...(e.keyless ? {} : { connectedWith: "api_key" as const }),
+				billing: endpointBilling(e),
+				...(problem ? { message: problem } : {}),
+				featured: false,
+				models: e.models.length,
+				endpoint: { baseUrl: e.baseUrl, local: isLocal(e.baseUrl), keyless: e.keyless },
+			});
+		}
 		return out;
+	}
+
+	/** Checks a server; on an update without a key, with the stored one. */
+	async checkEndpoint(baseUrl: string, key?: string, id?: string) {
+		const stored = !key && id ? await this.credentials.read(id).catch(() => undefined) : undefined;
+		return checkEndpoint(baseUrl, key ?? (stored?.type === "api_key" ? stored.key : undefined));
+	}
+
+	/** Adds or updates a custom endpoint: checks it, stores its key in the Keychain, registers it with pi. */
+	async saveEndpoint(input: { id?: string; name: string; baseUrl: string; key?: string }): Promise<Endpoint> {
+		const rt = await this.ready();
+		const previous = input.id ? this.endpoints.get(input.id) : undefined;
+		if (input.id && !previous) throw new EngineError("NOT_FOUND", `No endpoint ${input.id}`);
+		const key = input.key?.trim() || undefined;
+		const check = await this.checkEndpoint(input.baseUrl, key, previous?.id);
+		if (!check.ok) throw new EngineError("INVALID", check.message);
+		const id = previous?.id ?? this.endpoints.newId(input.name);
+		if (key) await this.credentials.modify(id, async () => ({ type: "api_key", key }));
+		const endpoint: Endpoint = {
+			id,
+			name: input.name.trim() || new URL(check.baseUrl).host,
+			baseUrl: check.baseUrl,
+			keyless: !key && (previous?.keyless ?? true),
+			models: check.models,
+			addedAt: previous?.addedAt ?? new Date().toISOString(),
+		};
+		this.endpoints.save(endpoint);
+		if (rt.getProvider(id)) rt.unregisterProvider(id);
+		rt.registerProvider(id, endpointConfig(endpoint) as never);
+		this.problems.delete(id);
+		await this.connected();
+		return endpoint;
+	}
+
+	async removeEndpoint(id: string): Promise<void> {
+		const rt = await this.ready();
+		if (rt.getProvider(id)) rt.unregisterProvider(id);
+		if (!this.endpoints.get(id)?.keyless) await this.credentials.delete(id);
+		this.endpoints.remove(id);
+		this.problems.delete(id);
+		await this.connected();
 	}
 
 	/** Disconnects one provider: pi forgets it, the Keychain item goes. */

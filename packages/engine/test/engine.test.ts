@@ -1904,3 +1904,67 @@ describe("model providers (docs/spec/10-model-providers)", () => {
 		expect(await store.list()).toEqual([{ providerId: "openai", type: "oauth" }]);
 	});
 });
+
+describe("custom endpoints (docs/spec/10-model-providers, P1)", () => {
+	/** A tiny OpenAI-compatible server: /v1/models, optionally behind a key. */
+	async function fakeServer(key?: string) {
+		const { createServer } = await import("node:http");
+		const server = createServer((req, res) => {
+			if (key && req.headers.authorization !== `Bearer ${key}`) return void res.writeHead(401).end();
+			if (req.url === "/v1/models") {
+				res.writeHead(200, { "content-type": "application/json" });
+				return void res.end(JSON.stringify({ object: "list", data: [{ id: "llama-3.3-70b", context_length: 131072 }, { id: "qwen3" }] }));
+			}
+			res.writeHead(404).end();
+		});
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+		const port = (server.address() as { port: number }).port;
+		return { url: `http://127.0.0.1:${port}`, close: () => server.close() };
+	}
+
+	test("an endpoint is checked, added with /v1 found, listed as a provider and in models, and removed", async () => {
+		const srv = await fakeServer();
+		const a = await start();
+		const check = await a.client.call("endpoints.check", { baseUrl: srv.url });
+		expect(check).toMatchObject({ ok: true, baseUrl: `${srv.url}/v1`, models: [{ id: "llama-3.3-70b", contextWindow: 131072 }, { id: "qwen3" }] });
+		const { id } = await a.client.call("endpoints.save", { name: "LiteLLM (home)", baseUrl: srv.url });
+		expect(id).toBe("custom-litellm-home");
+		const providers = (await a.client.call("providers.list", {})).providers as { id: string; status: string; billing?: string; endpoint?: unknown }[];
+		expect(providers.find((p) => p.id === id)).toMatchObject({ status: "connected", billing: "On this Mac", endpoint: { baseUrl: `${srv.url}/v1`, local: true, keyless: true } });
+		const { models } = await a.client.call("models.list", {});
+		expect(models.filter((m: { provider: string }) => m.provider === id).map((m: { id: string; contextWindow: number }) => [m.id, m.contextWindow])).toEqual([["llama-3.3-70b", 131072], ["qwen3", 0]]);
+		// Survives a restart, then goes away entirely.
+		await stop(a);
+		const b = await start(a.home);
+		expect(((await b.client.call("providers.list", {})).providers as { id: string }[]).some((p) => p.id === id)).toBe(true);
+		await b.client.call("endpoints.remove", { id });
+		expect(((await b.client.call("providers.list", {})).providers as { id: string }[]).some((p) => p.id === id)).toBe(false);
+		srv.close();
+	}, 30_000);
+
+	test("a server that wants a key says so; the key goes to the Keychain; an update without a key keeps it", async () => {
+		const srv = await fakeServer("sk-lite");
+		const a = await start();
+		expect(await a.client.call("endpoints.check", { baseUrl: `${srv.url}/v1` })).toMatchObject({ ok: false, message: "The server wants a key." });
+		await expect(a.client.call("endpoints.save", { name: "Work", baseUrl: `${srv.url}/v1`, key: "wrong" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		const { id } = await a.client.call("endpoints.save", { name: "Work", baseUrl: `${srv.url}/v1`, key: "sk-lite" });
+		expect(JSON.parse(a.client.secrets[`provider.${id}.credential`]!)).toMatchObject({ type: "api_key", key: "sk-lite" });
+		expect(readFileSync(join(a.home, "endpoints.json"), "utf8")).not.toContain("sk-lite");
+		await a.client.call("endpoints.save", { id, name: "Work server", baseUrl: `${srv.url}/v1` });
+		const p = ((await a.client.call("providers.list", {})).providers as { id: string; name: string; endpoint?: { keyless: boolean } }[]).find((x) => x.id === id);
+		expect(p).toMatchObject({ name: "Work server", endpoint: { keyless: false } });
+		await a.client.call("endpoints.remove", { id });
+		expect(a.client.secrets[`provider.${id}.credential`]).toBeUndefined();
+		srv.close();
+	}, 30_000);
+
+	test("an address that isn't a model server is explained", async () => {
+		const { checkEndpoint } = await import("../src/endpoints.js");
+		const html = (async () => new Response("<html></html>", { status: 200 })) as typeof fetch;
+		expect(await checkEndpoint("http://example.test/v1", undefined, html)).toEqual({ ok: false, message: "That address doesn't look like an OpenAI-compatible server." });
+		const down = (async () => {
+			throw new Error("ECONNREFUSED");
+		}) as typeof fetch;
+		expect(await checkEndpoint("localhost:4000", undefined, down)).toEqual({ ok: false, message: "Can't reach localhost:4000. Is the server running?" });
+	});
+});

@@ -21126,6 +21126,25 @@
 							},
 							"models": {
 								"type": "number"
+							},
+							"endpoint": {
+								"type": "object",
+								"required": [
+									"baseUrl",
+									"local",
+									"keyless"
+								],
+								"properties": {
+									"baseUrl": {
+										"type": "string"
+									},
+									"local": {
+										"type": "boolean"
+									},
+									"keyless": {
+										"type": "boolean"
+									}
+								}
 							}
 						}
 					}
@@ -21203,6 +21222,139 @@
 		"providers.cancelLogin.result": {
 			"type": "object",
 			"properties": {}
+		},
+		"endpoints.check.params": {
+			"type": "object",
+			"required": [
+				"baseUrl"
+			],
+			"properties": {
+				"baseUrl": {
+					"type": "string"
+				},
+				"key": {
+					"type": "string"
+				},
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"endpoints.check.result": {
+			"type": "object",
+			"required": [
+				"ok",
+				"models"
+			],
+			"properties": {
+				"ok": {
+					"type": "boolean"
+				},
+				"baseUrl": {
+					"type": "string"
+				},
+				"models": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"contextWindow": {
+								"type": "number"
+							}
+						}
+					}
+				},
+				"message": {
+					"type": "string"
+				}
+			}
+		},
+		"endpoints.save.params": {
+			"type": "object",
+			"required": [
+				"name",
+				"baseUrl"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"baseUrl": {
+					"type": "string"
+				},
+				"key": {
+					"type": "string"
+				}
+			}
+		},
+		"endpoints.save.result": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"endpoints.remove.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"endpoints.remove.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"endpoints.detect.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"endpoints.detect.result": {
+			"type": "object",
+			"required": [
+				"found"
+			],
+			"properties": {
+				"found": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name",
+							"baseUrl",
+							"models"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"baseUrl": {
+								"type": "string"
+							},
+							"models": {
+								"type": "number"
+							}
+						}
+					}
+				}
+			}
 		},
 		"providers.logout.params": {
 			"type": "object",

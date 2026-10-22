@@ -102,11 +102,17 @@ struct ModelPicker: View {
                     }
                     Text(Self.blurb(m)).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
-                        priceTile("Input", m.pricing.input)
-                        priceTile("Output", m.pricing.output)
+                        if Self.tier(m) == "Yours" {
+                            priceTile("Price", text: "Yours", caption: m.billing == "On this Mac" ? "runs on this Mac" : "your own server")
+                        } else if Self.tier(m) == "Plan" {
+                            priceTile("Price", text: "Plan", caption: "within your plan's limits")
+                        } else {
+                            priceTile("Input", m.pricing.input)
+                            priceTile("Output", m.pricing.output)
+                        }
                     }
                     VStack(spacing: 0) {
-                        fact("Context", "\(Self.context(m)) tokens")
+                        fact("Context", m.contextWindow > 0 ? "\(Self.context(m)) tokens" : "Not reported")
                         fact("Longest answer", "\(Self.tokens(m.maxOutputTokens)) tokens")
                         fact("Reasoning", m.supports.reasoning ? "Yes" : "No")
                         fact("Images", m.supports.vision ? "Reads them" : "No", last: m.billing == nil)
@@ -131,10 +137,14 @@ struct ModelPicker: View {
     }
 
     private func priceTile(_ label: String, _ value: Double) -> some View {
+        priceTile(label, text: value == 0 ? "Free" : String(format: value >= 10 ? "$%.0f" : "$%.2f", value), caption: "per million tokens")
+    }
+
+    private func priceTile(_ label: String, text: String, caption: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            Text(value == 0 ? "Free" : String(format: value >= 10 ? "$%.0f" : "$%.2f", value)).font(.system(size: 17, weight: .semibold).monospacedDigit())
-            Text("per million tokens").font(.system(size: 10.5)).foregroundStyle(Color.dsFg3)
+            Text(text).font(.system(size: 17, weight: .semibold).monospacedDigit())
+            Text(caption).font(.system(size: 10.5)).foregroundStyle(Color.dsFg3)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -332,6 +342,7 @@ struct ModelPicker: View {
 
     /// "Anthropic: Claude Haiku 5.5" → "Anthropic"; otherwise the id's vendor ("anthropic/…") or the provider.
     static func maker(_ m: ModelInfo) -> String {
+        if m.provider.hasPrefix("custom-") { return m.providerName ?? "Custom" }
         if m.provider == "openai" || m.provider == "openai-api" { return "OpenAI" }
         if let colon = m.name.firstIndex(of: ":") { return String(m.name[..<colon]).trimmingCharacters(in: .whitespaces) }
         if let slash = m.id.firstIndex(of: "/") { return String(m.id[..<slash]).capitalized }
@@ -358,6 +369,7 @@ struct ModelPicker: View {
     /// "$" under $2, "$$" under $15, "$$$" above, per million output tokens; "Plan" when a subscription pays.
     static func tier(_ m: ModelInfo) -> String {
         if m.billing?.contains("subscription") == true { return "Plan" }
+        if m.billing == "Your server" || m.billing == "On this Mac" { return "Yours" }
         if isFree(m) { return "Free" }
         return m.pricing.output < 2 ? "$" : m.pricing.output < 15 ? "$$" : "$$$"
     }
@@ -398,7 +410,8 @@ struct ModelPicker: View {
     }
 
     static func context(_ m: ModelInfo) -> String {
-        m.contextWindow >= 1_000_000 ? String(format: "%gM", (m.contextWindow / 100_000).rounded() / 10) : "\(Int(m.contextWindow / 1000))K"
+        if m.contextWindow <= 0 { return "unknown" }
+        return m.contextWindow >= 1_000_000 ? String(format: "%gM", (m.contextWindow / 100_000).rounded() / 10) : "\(Int(m.contextWindow / 1000))K"
     }
 }
 

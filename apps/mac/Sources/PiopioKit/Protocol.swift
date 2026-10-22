@@ -1030,7 +1030,28 @@ public struct ProviderInfo: Decodable, Sendable, Hashable, Identifiable {
     public var message: String?
     public var featured: Bool
     public var models: Int
+    /// A custom endpoint added by address (LiteLLM, Ollama, LM Studio…).
+    public struct Endpoint: Decodable, Sendable, Hashable { public var baseUrl: String; public var local, keyless: Bool }
+    public var endpoint: Endpoint?
     public var isConnected: Bool { status == .connected || status == .needsAttention }
+}
+public struct EndpointCheckParams: Encodable, Sendable {
+    public var baseUrl: String; public var key, id: String?
+    public init(baseUrl: String, key: String?, id: String?) { self.baseUrl = baseUrl; self.key = key; self.id = id }
+}
+public struct EndpointCheckResult: Decodable, Sendable {
+    public struct Model: Decodable, Sendable, Hashable { public var id: String; public var contextWindow: Double? }
+    public var ok: Bool; public var baseUrl: String?; public var models: [Model]; public var message: String?
+}
+public struct EndpointSaveParams: Encodable, Sendable {
+    public var id: String?; public var name, baseUrl: String; public var key: String?
+    public init(id: String?, name: String, baseUrl: String, key: String?) { self.id = id; self.name = name; self.baseUrl = baseUrl; self.key = key }
+}
+public struct EndpointSaveResult: Decodable, Sendable { public var id: String }
+public struct EndpointIdParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
+public struct EndpointsDetectResult: Decodable, Sendable {
+    public struct Found: Decodable, Sendable, Hashable { public var name, baseUrl: String; public var models: Int }
+    public var found: [Found]
 }
 public struct ProvidersListResult: Decodable, Sendable { public var providers: [ProviderInfo] }
 public struct ProviderLoginParams: Encodable, Sendable {

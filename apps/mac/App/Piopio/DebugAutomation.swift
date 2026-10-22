@@ -93,6 +93,11 @@ enum DebugAutomation {
                 }
             }
         }
+        // PIOPIO_DEMO_ENDPOINT=<name>|<address>: add a custom endpoint; PIOPIO_DEMO_ENDPOINT_SHEET=1: open the add sheet.
+        if let spec = env["PIOPIO_DEMO_ENDPOINT"] {
+            let parts = spec.split(separator: "|", maxSplits: 1).map(String.init)
+            if parts.count == 2 { Task { try? await engine.saveEndpoint(id: nil, name: parts[0], baseUrl: parts[1], key: nil) } }
+        }
         // PIOPIO_DEMO_SETTINGS=1: open Settings (snapshot it with PIOPIO_SNAPSHOT_WINDOW=key).
         if env["PIOPIO_DEMO_SETTINGS"] == "1" {
             Task {

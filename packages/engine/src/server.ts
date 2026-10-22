@@ -10,6 +10,7 @@ import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
 import { connectMethods, LoginFlows } from "./providers.js";
+import { detectLocalServers } from "./endpoints.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { listDir, readProjectFile, searchFiles, writeProjectFile } from "./files.js";
@@ -795,6 +796,27 @@ export class Engine {
 				const p = params as Params<"providers.cancelLogin">;
 				this.logins.cancel(p.loginId);
 				return {};
+			}
+			case "endpoints.check": {
+				const p = params as Params<"endpoints.check">;
+				const check = await this.hub.checkEndpoint(p.baseUrl, p.key, p.id);
+				return (check.ok ? { ok: true, baseUrl: check.baseUrl, models: check.models } : { ok: false, models: [], message: check.message }) satisfies Result<"endpoints.check">;
+			}
+			case "endpoints.save": {
+				const p = params as Params<"endpoints.save">;
+				const endpoint = await this.hub.saveEndpoint(p);
+				for (const c of this.authed) c.notify("providers.changed", {});
+				return { id: endpoint.id } satisfies Result<"endpoints.save">;
+			}
+			case "endpoints.remove": {
+				const p = params as Params<"endpoints.remove">;
+				await this.hub.removeEndpoint(p.id);
+				for (const c of this.authed) c.notify("providers.changed", {});
+				return {};
+			}
+			case "endpoints.detect": {
+				const added = new Set(this.hub.endpoints.list().map((e) => e.baseUrl));
+				return { found: (await detectLocalServers()).filter((f) => !added.has(f.baseUrl)) } satisfies Result<"endpoints.detect">;
 			}
 			case "providers.logout": {
 				const p = params as Params<"providers.logout">;

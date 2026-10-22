@@ -182,7 +182,14 @@ After implementing, report: what changed; which pi capabilities were reused; bac
 - The existing OpenRouter key keeps working untouched (its Keychain item is read as OpenRouter's credential).
 - Tests: engine (key login through the sheet's prompt, Keychain write, both providers listed, switching a conversation's provider, restart, logout of one provider, sign-in steps and cancel, refreshed tokens written back) and Swift decoding.
 
+**Custom endpoints (P1, built 2026-10-22)**
+- Any OpenAI-compatible server — LiteLLM, Ollama, LM Studio, vLLM — added by name, address and an optional key in Settings › Models › Custom endpoints. The sheet asks `GET <address>/models` (adding `/v1` when needed) and shows what it found before saving; errors say whether the server is down, wants a key, or isn't a model server.
+- Ollama (port 11434) and LM Studio (port 1234) running on this Mac are offered with one-click Add.
+- Engine: `endpoints.ts` keeps the list in `endpoints.json` (no secrets) and registers each as a pi provider (`openai-completions`); keys are Keychain credentials like any provider's. Methods `endpoints.check`, `endpoints.save` (add or update; no key keeps the stored one), `endpoints.remove`, `endpoints.detect`.
+- Picker: one section per endpoint ("LiteLLM (home) · On this Mac" / "Your server"), price tier "Yours", context "unknown" when the server doesn't report it. Endpoint models are text-only until we know more (images aren't sent to them).
+
 **Not verified yet**
+- A real LiteLLM, Ollama or LM Studio server (tested against a fake OpenAI-compatible server).
 - A real ChatGPT sign-in and real requests with real keys (needs your accounts). Captures used fake keys in a separate Keychain service (`PIOPIO_KEYCHAIN_SERVICE`).
 - Switching provider while a turn is running relies on the existing `sessions.configure` behavior (the change applies to the next turn).
 

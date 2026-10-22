@@ -53,9 +53,13 @@ struct ProvidersCard: View {
     let engine: EngineController
     @State private var showMore = false
     @State private var disconnecting: ProviderInfo?
+    @State private var detected: [EndpointsDetectResult.Found] = []
+    @State private var editing: EndpointDraft?
+    @State private var adding: String?
 
     private var featured: [ProviderInfo] { engine.providers.filter(\.featured) }
-    private var others: [ProviderInfo] { engine.providers.filter { !$0.featured } }
+    private var endpoints: [ProviderInfo] { engine.providers.filter { $0.endpoint != nil } }
+    private var others: [ProviderInfo] { engine.providers.filter { !$0.featured && $0.endpoint == nil } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -68,6 +72,8 @@ struct ProvidersCard: View {
                     Text(engine.client == nil ? "The engine isn't running." : "Loading providers…").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity).frame(height: 60)
                 }
             }
+            SectionLabel("Custom endpoints").padding(.top, 18).padding(.bottom, 6)
+            endpointsCard
             if !others.isEmpty {
                 Button { withAnimation(.easeOut(duration: 0.15)) { showMore.toggle() } } label: {
                     HStack(spacing: 5) {
@@ -97,16 +103,76 @@ struct ProvidersCard: View {
         .sheet(isPresented: Binding(get: { engine.login != nil }, set: { if !$0 { Task { await engine.cancelLogin() } } })) {
             if let login = engine.login { ProviderSignInSheet(engine: engine, login: login) }
         }
-        .confirmationDialog(disconnecting.map { "Disconnect \($0.name)?" } ?? "", isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), presenting: disconnecting) { p in
-            Button("Disconnect", role: .destructive) { Task { await engine.disconnect(p) } }
+        .confirmationDialog(disconnecting.map { $0.endpoint == nil ? "Disconnect \($0.name)?" : "Remove \($0.name)?" } ?? "", isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), presenting: disconnecting) { p in
+            Button(p.endpoint == nil ? "Disconnect" : "Remove", role: .destructive) { Task { p.endpoint == nil ? await engine.disconnect(p) : await engine.removeEndpoint(p) } }
         } message: { p in
             Text(disconnectMessage(p))
         }
         .onAppear { if others.contains(where: \.isConnected) { showMore = true } }
+        .task(id: endpoints.count) { detected = await engine.detectEndpoints() }
+        .sheet(item: $editing) { draft in EndpointSheet(engine: engine, draft: draft) }
+    }
+
+    /// Servers added by address, the ones found running on this Mac, and "Add a custom endpoint…" (sketch 1).
+    private var endpointsCard: some View {
+        ListCard {
+            ForEach(endpoints) { p in
+                EndpointRow(engine: engine, provider: p, edit: { editing = EndpointDraft(provider: p) }, remove: { disconnecting = p })
+                Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 58)
+            }
+            ForEach(detected, id: \.baseUrl) { found in
+                HStack(spacing: 12) {
+                    EndpointTile(name: found.name)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(found.name).font(.system(size: 13, weight: .semibold))
+                            Text("Found on this Mac").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                        }
+                        Text("\(Self.host(found.baseUrl)) · runs here, free · \(found.models) model\(found.models == 1 ? "" : "s")").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    }
+                    Spacer()
+                    if adding == found.baseUrl {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button("Add") {
+                            adding = found.baseUrl
+                            Task {
+                                try? await engine.saveEndpoint(id: nil, name: found.name, baseUrl: found.baseUrl, key: nil)
+                                adding = nil
+                            }
+                        }
+                        .buttonStyle(PillStyle(compact: true))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: 60)
+                Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 58)
+            }
+            Button { editing = EndpointDraft() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
+                    Text("Add a custom endpoint…")
+                    Spacer()
+                    Text("LiteLLM, Ollama, LM Studio, vLLM").foregroundStyle(Color.dsFg3)
+                }
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 14)
+                .frame(height: 40)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    static func host(_ url: String) -> String {
+        guard let u = URL(string: url), let host = u.host() else { return url }
+        return u.port.map { "\(host):\($0)" } ?? host
     }
 
     /// FR1: warn when the provider serves a default model; the others stay connected.
     private func disconnectMessage(_ p: ProviderInfo) -> String {
+        if p.endpoint != nil { return "Its models leave the model picker\(p.endpoint?.keyless == false ? " and its key is removed from the Keychain" : ""). The server itself isn't touched." }
         let names: [EngineController.ModelRole: String] = [.build: "Build sessions", .chat: "chats and notebooks", .quick: "Quick Chat", .agent: "new agents"]
         let uses = EngineController.ModelRole.allCases.filter { engine.model(for: $0)?.provider == p.id }.compactMap { names[$0] }
         let base = "Its sign-in or key is removed from this Mac. Other providers stay connected."
@@ -334,5 +400,192 @@ struct ProviderSignInSheet: View {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
         Task { await engine.answerLogin(value) }
+    }
+}
+
+/// What the endpoint sheet edits: a new endpoint, or an existing one (its key stays unless you type a new one).
+struct EndpointDraft: Identifiable {
+    let id = UUID()
+    var providerId: String?
+    var name = ""
+    var baseUrl = ""
+    var hasKey = false
+
+    init() {}
+    init(provider: ProviderInfo) {
+        providerId = provider.id
+        name = provider.name
+        baseUrl = provider.endpoint?.baseUrl ?? ""
+        hasKey = provider.endpoint?.keyless == false
+    }
+}
+
+/// A custom endpoint's row: its address and who pays, then ⋯ (Edit, Check again, Remove).
+struct EndpointRow: View {
+    let engine: EngineController
+    let provider: ProviderInfo
+    let edit: () -> Void
+    let remove: () -> Void
+    @State private var checking = false
+    @State private var problem: String?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            EndpointTile(name: provider.name)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(provider.name).font(.system(size: 13, weight: .semibold))
+                    if problem == nil, provider.status == .connected {
+                        Text("● Connected").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color.dsGreen)
+                    } else {
+                        Text("● Needs attention").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color.dsAmber)
+                    }
+                }
+                Text(problem ?? provider.message ?? "\(ProvidersCard.host(provider.endpoint?.baseUrl ?? "")) · \(provider.billing ?? "Your server") · \(provider.models) model\(provider.models == 1 ? "" : "s")")
+                    .font(.system(size: 11.5)).foregroundStyle(problem == nil ? Color.dsFg3 : Color.dsAmber).lineLimit(2)
+            }
+            Spacer(minLength: 12)
+            if checking { ProgressView().controlSize(.small) }
+            Menu {
+                Button("Edit…", action: edit)
+                Button("Check again") { recheck() }
+                Divider()
+                Button("Remove…", role: .destructive, action: remove)
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2).frame(width: 24, height: 24)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 60)
+    }
+
+    /// Reads the server's models again (new ones appear, removed ones go).
+    private func recheck() {
+        guard let baseUrl = provider.endpoint?.baseUrl else { return }
+        checking = true
+        Task {
+            do {
+                try await engine.saveEndpoint(id: provider.id, name: provider.name, baseUrl: baseUrl, key: nil)
+                problem = nil
+            } catch {
+                problem = (error as? EngineError)?.message ?? error.localizedDescription
+            }
+            checking = false
+        }
+    }
+}
+
+/// An endpoint's initials ("LiteLLM (home)" → "LH") on a color of its own.
+struct EndpointTile: View {
+    let name: String
+    var size: CGFloat = 32
+
+    var body: some View {
+        let words = name.split(separator: " ").map { $0.filter { $0.isLetter || $0.isNumber } }.filter { !$0.isEmpty }
+        let initials = (words.count > 1 ? String(words[0].prefix(1) + words[1].prefix(1)) : String(words.first?.prefix(2) ?? "?")).uppercased()
+        let hue = Double(name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) % 360 }) / 360
+        Text(initials).font(.system(size: size * 0.36, weight: .bold, design: .rounded))
+            .foregroundStyle(Color(hue: hue, saturation: 0.6, brightness: 0.45))
+            .frame(width: size, height: size)
+            .background(Color(hue: hue, saturation: 0.3, brightness: 0.95), in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
+    }
+}
+
+/// "Add a custom endpoint" (sketch 2): name, address, key; checks the server's models before saving.
+struct EndpointSheet: View {
+    let engine: EngineController
+    @State var draft: EndpointDraft
+    @State private var key = ""
+    @State private var check: EndpointCheckResult?
+    @State private var busy = false
+    @State private var error: String?
+    @Environment(\.dismiss) private var dismiss
+
+    init(engine: EngineController, draft: EndpointDraft) {
+        self.engine = engine
+        _draft = State(initialValue: draft)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(draft.providerId == nil ? "Add a custom endpoint" : "Edit \(draft.name)").font(.system(size: 17, weight: .bold))
+                Text("Any server that speaks the OpenAI API: LiteLLM, Ollama, LM Studio, vLLM. Its models show up in the model picker.")
+                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+            }
+            field("Name") { TextField("LiteLLM (home)", text: $draft.name).textFieldStyle(.roundedBorder) }
+            field("Address") {
+                TextField("http://localhost:4000/v1", text: $draft.baseUrl).textFieldStyle(.roundedBorder).font(.system(size: 13, design: .monospaced))
+                    .onChange(of: draft.baseUrl) { _, _ in check = nil }
+            }
+            field(draft.hasKey ? "Key (leave empty to keep the current one)" : "Key (optional)") {
+                SecureField(draft.hasKey ? "••••••••" : "Only if the server asks for one", text: $key).textFieldStyle(.roundedBorder)
+                    .onChange(of: key) { _, _ in check = nil }
+            }
+            status
+            HStack {
+                Button("Check") { runCheck() }.buttonStyle(PillStyle()).disabled(draft.baseUrl.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+                Spacer()
+                Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
+                Button(draft.providerId == nil ? "Add endpoint" : "Save") { save() }
+                    .buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+                    .disabled(draft.baseUrl.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+            }
+        }
+        .padding(22)
+        .frame(width: 480)
+    }
+
+    @ViewBuilder private var status: some View {
+        if busy {
+            HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Asking the server for its models…").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+        } else if let error {
+            Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 12.5)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true)
+        } else if let check {
+            if check.ok {
+                let names = check.models.prefix(3).map(\.id).joined(separator: ", ")
+                Label("Found \(check.models.count) model\(check.models.count == 1 ? "" : "s"): \(names)\(check.models.count > 3 ? "…" : "")", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12.5)).foregroundStyle(Color.dsGreen).lineLimit(2)
+            } else {
+                Label(check.message ?? "The server didn't answer as expected.", systemImage: "exclamationmark.triangle.fill").font(.system(size: 12.5)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func field<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+            content()
+        }
+    }
+
+    private var typedKey: String? { key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : key.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func runCheck() {
+        busy = true
+        error = nil
+        Task {
+            check = await engine.checkEndpoint(draft.baseUrl, key: typedKey, id: draft.providerId)
+            if let resolved = check?.baseUrl, check?.ok == true { draft.baseUrl = resolved; check = check }
+            busy = false
+        }
+    }
+
+    private func save() {
+        busy = true
+        error = nil
+        let name = draft.name.trimmingCharacters(in: .whitespaces).isEmpty ? ProvidersCard.host(draft.baseUrl) : draft.name
+        Task {
+            do {
+                try await engine.saveEndpoint(id: draft.providerId, name: name, baseUrl: draft.baseUrl, key: typedKey)
+                dismiss()
+            } catch {
+                self.error = (error as? EngineError)?.message ?? error.localizedDescription
+            }
+            busy = false
+        }
     }
 }
