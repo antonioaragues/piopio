@@ -335,7 +335,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - D7 · A composer that keeps formatting: pasting Markdown (or rich text) today loses it. Show it formatted while typing, or at least keep the Markdown source intact and preview it.
 - D8 · A file viewer for Markdown (rendered), PDF, images and more, used everywhere: chat attachments, notebook files, Build's Files tab. Build's `FileViewer` (`BuildFiles.swift`) shows files as text today.
 - D9 · Custom skills: create, edit and enable skills from the app. Today skills are read from `~/.pi/agent/skills` and enabled pi packages (`tools/chat-resources.ts`), offered as `/skill:name`, with no UI to make or manage them.
-- D10 · Computer use: let agents and chats drive the Mac's screen (screenshots, clicks, typing), with approvals. Builds on Mac apps as tools (4.5).
+- D10 · Computer use: let agents and chats drive the Mac's screen (screenshots, clicks, typing), with approvals. Builds on Mac apps as tools (4.5). **Spike done 2026-10-22:** [11-computer-use.md](11-computer-use.md) recommends accessibility-first tools built on Peekaboo's Swift automation kit, reached through `app.tool`.
 - D11 · Image generation in Chat (and as an agent ability), through a provider that offers it (see D2).
 - D12 · Web search: Chat has it already (OpenRouter web plugin, CQ3) and agents have `web_search`. Check it's on and visible in Build sessions, notebooks and the composer, and make it obvious when a turn searched the web.
 
