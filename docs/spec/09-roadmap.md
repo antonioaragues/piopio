@@ -322,6 +322,26 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 **Future idea**
 - F1 · Concept → simple 3D visualization: say a concept and Piopio shows it in 3D (reference: https://x.com/elvar_official/status/2111831136171151589). Open question: a skill, a mode, or its own item type in the sidebar.
 
+### Second batch (2026-10-22)
+
+**Small changes**
+- S3 · Follow-up suggestion chips are cut to one line (`FollowUps` in `ChatExtras.swift`, `lineLimit(1)`), so long ones can't be read. Let them wrap like the Questions UI options (B2), or at least show the full text as a tooltip.
+- S4 · Attach folders as well as files from the composer's +. Today the file panel only accepts files (`Composer.swift`, `canChooseDirectories = false`); @-mentions already reach folders in Build.
+
+**To design further**
+- D7 · A composer that keeps formatting: pasting Markdown (or rich text) today loses it. Show it formatted while typing, or at least keep the Markdown source intact and preview it.
+- D8 · A file viewer for Markdown (rendered), PDF, images and more, used everywhere: chat attachments, notebook files, Build's Files tab. Build's `FileViewer` (`BuildFiles.swift`) shows files as text today.
+- D9 · Custom skills: create, edit and enable skills from the app. Today skills are read from `~/.pi/agent/skills` and enabled pi packages (`tools/chat-resources.ts`), offered as `/skill:name`, with no UI to make or manage them.
+- D10 · Computer use: let agents and chats drive the Mac's screen (screenshots, clicks, typing), with approvals. Builds on Mac apps as tools (4.5).
+- D11 · Image generation in Chat (and as an agent ability), through a provider that offers it (see D2).
+- D12 · Web search: Chat has it already (OpenRouter web plugin, CQ3) and agents have `web_search`. Check it's on and visible in Build sessions, notebooks and the composer, and make it obvious when a turn searched the web.
+
+**Open questions**
+- Q1 · **Checkpoints vs fork.** Today a checkpoint is a snapshot of the project's *files* taken before each turn that writes (a shadow git dir, 05-build §7, `checkpoints.ts`); "Restore to here" rewinds the files, not the conversation. Fork (pi's session tree, BR6) branches the *conversation*. Claude Code's rewind and Cursor's "restore checkpoint" put both on each message: hover a message → restore code, conversation, or both. Proposal to evaluate: drop the separate checkpoint items from the transcript and the inspector timeline, put Restore on each of your messages with those three choices, and draw forks as a small branch marker on the message they start from.
+- Q2 · **"Worktree" at the top of a Build session.** A worktree is a second working copy of the repo on its own branch (BP5), so several sessions can change the same project at once without stepping on each other; when the session ends you merge, open a PR, keep or discard it. The word is git jargon: consider "Separate copy (branch piopio/…)" in the header and new-session sheet, with worktree in the tooltip.
+- Q3 · **How pi uses context files and skills.** To verify against pi's docs and write down in 07-shared-resources: which files pi reads into the prompt (AGENTS.md and CLAUDE.md from the project and its parents, `~/.pi/agent/AGENTS.md`, SYSTEM.md / APPEND_SYSTEM.md?), how skills (`SKILL.md` folders) load on demand, and whether anything like OpenClaw's SOUL.md exists or should exist for agents (an agent's persona today is its Setup › Instructions). The app reads AGENTS.md/CLAUDE.md only to show it per project (`projects.ts`).
+- Q4 · **Where things run.** Claude and Codex let you pick, per chat, whether it runs on this Mac or in the cloud. Research per kind: Build sessions (this Mac, a worktree, or a cloud machine from the GitHub repo), chats and notebooks (this Mac or the cloud engine), agents (this Mac or a Durable Object, Phase 5). Decide whether the choice lives in the composer, the new-session sheet, or per project/agent, and how a running item moves between them. Related: "cloud Threads/Spaces" and "cloud Build sessions" in Later.
+
 ## Later (unordered)
 Mac Bridge · cloud Threads/Spaces · iOS companion · direct providers + local models + subscription logins · artifacts/canvas · code execution in Chat · email/Slack/Discord channels · group chats & agent rooms · cloud Build sessions · web preview · semantic search · OS sandbox for Build.
 
