@@ -16,6 +16,7 @@ Piopio is a native macOS app on top of the **pi** agent harnesses (`pi-coding-ag
 | [09-roadmap.md](09-roadmap.md) | Phases, spikes, milestones and acceptance criteria |
 | [10-model-providers.md](10-model-providers.md) | Multi-provider model support: requirements, inspection and what's built |
 | [11-computer-use.md](11-computer-use.md) | Computer use spike: models, open-source projects, recommendation |
+| [12-connectors.md](12-connectors.md) | Connectors (Gmail, Calendar, Outlook, Jira, Datadog…): modular architecture, marketplace path, the list we'd ship |
 
 Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release of a mode. "Later" means after it.
 
