@@ -558,7 +558,30 @@ export const ProviderInfo = Type.Object({
 	featured: Type.Boolean(),
 	models: Type.Number(),
 	/** A custom endpoint added by address (LiteLLM, Ollama, LM Studio…). */
-	endpoint: Type.Optional(Type.Object({ baseUrl: Type.String(), local: Type.Boolean(), keyless: Type.Boolean() })),
+	endpoint: Type.Optional(
+		Type.Object({
+			baseUrl: Type.String(),
+			local: Type.Boolean(),
+			keyless: Type.Boolean(),
+			format: Type.Optional(literals("openai", "anthropic")),
+			headers: Type.Optional(Type.Record(Type.String(), Type.String())),
+			contextWindow: Type.Optional(Type.Number()),
+		}),
+	),
+	/** Catalog (Add provider sheet): cloud API, subscription or cloud platform. */
+	kind: Type.Optional(literals("cloud", "subscription", "platform", "custom")),
+	/** The "Popular" card's one line. */
+	popular: Type.Optional(Type.String()),
+	/** Where to create a key. */
+	keyPage: Type.Optional(Type.String()),
+	/** Model families it serves ("claude", "gpt"…), for search. */
+	families: Type.Optional(Type.Array(Type.String())),
+	/** The stored key, masked ("sk-or-v1-755…a30"). */
+	keyHint: Type.Optional(Type.String()),
+	/** Models you hid from the picker. */
+	hiddenModels: Type.Optional(Type.Number()),
+	/** A few model names, for the connect sheet's preview. */
+	sampleModels: Type.Optional(Type.Array(Type.String())),
 });
 export type ProviderInfo = Static<typeof ProviderInfo>;
 
@@ -844,18 +867,32 @@ export const methods = {
 	},
 	/** Asks an OpenAI-compatible server for its models, without saving anything. */
 	"endpoints.check": {
-		params: Type.Object({ baseUrl: Type.String(), key: Type.Optional(Type.String()), id: Type.Optional(Type.String()) }),
+		params: Type.Object({ baseUrl: Type.String(), key: Type.Optional(Type.String()), id: Type.Optional(Type.String()), format: Type.Optional(literals("openai", "anthropic")), headers: Type.Optional(Type.Record(Type.String(), Type.String())) }),
 		result: Type.Object({
 			ok: Type.Boolean(),
 			/** The address that answered (with /v1 added when needed). */
 			baseUrl: Type.Optional(Type.String()),
-			models: Type.Array(Type.Object({ id: Type.String(), contextWindow: Type.Optional(Type.Number()) })),
+			models: Type.Array(Type.Object({ id: Type.String(), contextWindow: Type.Optional(Type.Number()), embedding: Type.Optional(Type.Boolean()) })),
 			message: Type.Optional(Type.String()),
+			/** What went wrong, for the right help (design m5). */
+			error: Type.Optional(literals("refused", "auth", "not_found", "empty", "tls", "invalid", "other")),
+			latencyMs: Type.Optional(Type.Number()),
 		}),
 	},
-	/** Adds or updates (`id`) a custom endpoint after checking it. No `key` on update keeps the stored one. */
+	/** Adds or updates (`id`) a custom endpoint after checking it (`force`: save even if it doesn't answer). No `key` on update keeps the stored one. */
 	"endpoints.save": {
-		params: Type.Object({ id: Type.Optional(Type.String()), name: Type.String(), baseUrl: Type.String(), key: Type.Optional(Type.String()) }),
+		params: Type.Object({
+			id: Type.Optional(Type.String()),
+			name: Type.String(),
+			baseUrl: Type.String(),
+			key: Type.Optional(Type.String()),
+			format: Type.Optional(literals("openai", "anthropic")),
+			headers: Type.Optional(Type.Record(Type.String(), Type.String())),
+			contextWindow: Type.Optional(Type.Number()),
+			/** Model ids to keep out of the picker (embeddings are hidden by default). */
+			hidden: Type.Optional(Type.Array(Type.String())),
+			force: Type.Optional(Type.Boolean()),
+		}),
 		result: Type.Object({ id: Type.String() }),
 	},
 	"endpoints.remove": {
@@ -865,7 +902,7 @@ export const methods = {
 	/** Ollama and LM Studio answering on this Mac, and not added yet. */
 	"endpoints.detect": {
 		params: Type.Object({}),
-		result: Type.Object({ found: Type.Array(Type.Object({ name: Type.String(), baseUrl: Type.String(), models: Type.Number() })) }),
+		result: Type.Object({ found: Type.Array(Type.Object({ name: Type.String(), baseUrl: Type.String(), models: Type.Number(), preset: Type.String() })) }),
 	},
 	/** Connected apps (docs/spec/12-connectors). */
 	"connectors.list": {
@@ -894,6 +931,26 @@ export const methods = {
 	"sessions.decide": {
 		params: Type.Object({ ref: ContainerRef, approvalId: Type.String(), approve: Type.Boolean(), always: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.String()) }),
 		result: Type.Object({ status: literals("pending", "approved", "denied", "expired", "cancelled") }),
+	},
+	/** Checks a key against the provider's model list without saving it. `ok: null`: can't be checked up front. */
+	"providers.verifyKey": {
+		params: Type.Object({ provider: Type.String(), key: Type.String() }),
+		result: Type.Object({ ok: Type.Union([Type.Boolean(), Type.Null()]), message: Type.Optional(Type.String()), models: Type.Optional(Type.Number()) }),
+	},
+	/** Connects a provider with an API key directly (the Add provider sheet), replacing any key it had. */
+	"providers.saveKey": {
+		params: Type.Object({ provider: Type.String(), key: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Every model a connected provider offers, and whether it shows in the picker. */
+	"providers.models": {
+		params: Type.Object({ provider: Type.String() }),
+		result: Type.Object({ models: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), contextWindow: Type.Number(), hidden: Type.Boolean(), embedding: Type.Optional(Type.Boolean()) })) }),
+	},
+	/** Hides or shows models of a provider in the picker. */
+	"providers.setHidden": {
+		params: Type.Object({ provider: Type.String(), hidden: Type.Array(Type.String()) }),
+		result: Type.Object({}),
 	},
 	/** Disconnects one provider; the others stay as they are. */
 	"providers.logout": {

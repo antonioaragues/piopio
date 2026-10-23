@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+:root{--win:#fdfdfc;--glass:rgba(242,242,246,.78);--card:#fff;--chip:rgba(0,0,0,.045);--pill:rgba(255,255,255,.9);--fg:#1d1d1f;--fg2:#5b5b61;--fg3:#8e8e93;--line:rgba(0,0,0,.08);--inv:#1d1d1f;--invfg:#fff;--green:oklch(0.6 0.15 150);--amber:oklch(0.72 0.15 70);--red:oklch(0.6 0.19 25);--accent:#0a84ff;--accentSoft:color-mix(in srgb,var(--accent) 14%,transparent);--accentLine:color-mix(in srgb,var(--accent) 45%,transparent);--yolkSoft:oklch(0.97 0.04 92);--scrim:rgba(30,30,35,.28);--canvas:#e8e8eb;--mono:"SF Mono",ui-monospace,Menlo,monospace}
+body[data-theme="dark"]{--win:#1a1a1c;--glass:rgba(40,40,44,.85);--card:#242426;--chip:rgba(255,255,255,.08);--pill:rgba(74,74,78,.95);--fg:#f5f5f7;--fg2:#b8b8bd;--fg3:#8e8e93;--line:rgba(255,255,255,.12);--inv:#f5f5f7;--invfg:#1d1d1f;--accentSoft:color-mix(in srgb,var(--accent) 26%,transparent);--accentLine:color-mix(in srgb,var(--accent) 60%,transparent);--yolkSoft:oklch(0.3 0.05 92);--scrim:rgba(0,0,0,.5);--canvas:#0e0e10}
+body{margin:0;background:var(--canvas);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+</style>
+</helmet>
+
+<header style="padding:56px 80px 0;display:flex;flex-direction:column;gap:24px;max-width:1400px">
+  <div style="display:flex;align-items:center;gap:16px">
+    <img src="assets/chick.png" style="width:48px;height:48px;border-radius:12px">
+    <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:30px;font-weight:700;letter-spacing:-0.02em">Settings › Models</div><div style="font-size:15px;color:var(--fg2)">Show what's connected. Adding a provider is a separate, deliberate flow. Back to <a href="Piopio v2.dc.html">Piopio v2</a>.</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">
+    <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;color:var(--fg3)">What's wrong today</div><div style="font-size:13.5px;line-height:1.55;color:var(--fg2)">Connected and unconnected providers share one list. The only connected one (LiteLLM) is buried under "More providers (40)". Every row has the same Connect button, so nothing stands out.</div></div>
+    <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;color:var(--fg3)">The split</div><div style="font-size:13.5px;line-height:1.55;color:var(--fg2)"><b style="color:var(--fg)">Models page</b>: connected providers, things detected on the Mac, and which model each mode uses. <b style="color:var(--fg)">Add provider sheet</b>: the catalog of 40+ providers and custom endpoints.</div></div>
+    <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;color:var(--fg3)">Custom is first-class</div><div style="font-size:13.5px;line-height:1.55;color:var(--fg2)">Base URL, API format, optional key and headers. Piopio tests the endpoint as you type and lists the models it finds before you save.</div></div>
+  </div>
+</header>
+
+<section style="padding:64px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">1 · Models page</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Three blocks, in the order you need them: what's connected, what Piopio found on this Mac, what each mode uses. Clicking a provider opens its detail page.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+
+    <div id="m1" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">m1</span><span style="font-size:15px;font-weight:600">Connected providers</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <div style="width:230px;padding:8px;box-sizing:border-box;flex:none;display:flex">
+          <div style="flex:1;background:var(--glass);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:10px 8px;display:flex;flex-direction:column;gap:2px;font-size:13px">
+            <div style="display:flex;gap:8px;padding:4px 8px 14px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#8e8e93;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">⚙︎</span>General</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;background:var(--accentSoft);font-weight:600"><span style="width:20px;height:20px;border-radius:5px;background:#0a84ff;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✦</span>Models</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#30b0c7;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">◌</span>Chat</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#f2a33a;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✓</span>Approvals</div>
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding:12px 8px 4px">Extend</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#bf5af2;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">⌁</span>MCP servers</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#5e5ce6;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">◆</span>Extensions</div>
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding:12px 8px 4px">Where it runs</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#34c759;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">▣</span>This Mac &amp; cloud</div>
+          </div>
+        </div>
+        <div style="flex:1;padding:30px 36px;display:flex;flex-direction:column;gap:22px;min-width:0">
+          <div style="display:flex;align-items:flex-end;gap:12px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Models</div><div style="font-size:13.5px;color:var(--fg2)">2 providers · 399 models · $0.47 this month</div></div>
+            <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--inv);color:var(--invfg);font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px"><span style="font-size:15px;line-height:1">+</span>Add provider</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">Connected</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.56 0.2 280);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">OR</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">OpenRouter</span><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span></div><span style="font-size:12px;color:var(--fg3)">Cloud · API key · 396 models</span></div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px"><span style="font-size:13.5px;font-weight:600">$0.47</span><span style="font-size:11px;color:var(--fg3)">this month</span></div>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+              <div style="height:.5px;background:var(--line);margin-left:62px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.9 0.1 145);color:oklch(0.4 0.1 145);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">LH</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">LiteLLM (home)</span><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Custom</span></div><span style="font-size:12px;color:var(--fg3)"><span style="font-family:var(--mono)">localhost:4000</span> · This Mac · 3 models</span></div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px"><span style="font-size:13.5px;font-weight:600">Free</span><span style="font-size:11px;color:var(--fg3)">runs locally</span></div>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+            </div>
+          </div>
+          <div style="border-radius:12px;background:var(--yolkSoft);padding:12px 14px;display:flex;align-items:center;gap:12px">
+            <div style="width:34px;height:34px;border-radius:9px;background:var(--card);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">OL</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Ollama is running on this Mac</span><span style="font-size:12px;color:var(--fg2)"><span style="font-family:var(--mono)">localhost:11434</span> · 3 models · free, nothing leaves your Mac</span></div>
+            <span style="font-size:12px;color:var(--fg2)">Not now</span>
+            <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:12px;font-weight:600;display:flex;align-items:center">Add</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Default model</span><span style="font-size:12px;color:var(--fg3)">Any chat can still switch</span></div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;padding:10px 16px;font-size:13px;gap:10px"><span style="flex:1">Build sessions</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px">Claude Haiku 5.5 <span style="color:var(--fg3)">· OpenRouter</span> <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;padding:10px 16px;font-size:13px;gap:10px"><span style="flex:1">Chats and notebooks</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px">Claude Haiku 5.5 <span style="color:var(--fg3)">· OpenRouter</span> <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;padding:10px 16px;font-size:13px;gap:10px"><span style="flex:1">Quick Chat</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px">qwen3-8b <span style="color:var(--fg3)">· LiteLLM (home)</span> <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;padding:10px 16px;font-size:13px;gap:10px"><span style="flex:1">New agents</span><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px">Claude Haiku 5.5 <span style="color:var(--fg3)">· OpenRouter</span> <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <span style="font-size:12px;color:var(--fg3)">Billed to your own accounts. Keys stay in the macOS Keychain.</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="m0" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">m0</span><span style="font-size:15px;font-weight:600">Nothing connected yet</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <div style="width:230px;padding:8px;box-sizing:border-box;flex:none;display:flex">
+          <div style="flex:1;background:var(--glass);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:10px 8px;display:flex;flex-direction:column;gap:2px;font-size:13px">
+            <div style="display:flex;gap:8px;padding:4px 8px 14px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#8e8e93;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">⚙︎</span>General</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;background:var(--accentSoft);font-weight:600"><span style="width:20px;height:20px;border-radius:5px;background:#0a84ff;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✦</span>Models<span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--amber)"></span></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#30b0c7;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">◌</span>Chat</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#f2a33a;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✓</span>Approvals</div>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px">
+          <div style="width:100%;max-width:520px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+            <img src="assets/chick.png" style="width:64px;height:64px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 6px var(--yolkSoft)">
+            <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Connect a model to get started</div>
+            <div style="font-size:14px;line-height:1.5;color:var(--fg2);max-width:420px">Piopio uses your own accounts. Pick one; you can add more later.</div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:8px;text-align:left;padding-top:8px">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--accentLine),0 0 0 4px var(--accentSoft)">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.56 0.2 280);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">OR</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">OpenRouter <span style="font-size:11px;font-weight:600;color:var(--accent);margin-left:4px">Recommended</span></span><span style="font-size:12px;color:var(--fg2)">One key, 300+ models from every lab</span></div>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center">Connect</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line)">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.6 0.13 165);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">GPT</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">ChatGPT subscription</span><span style="font-size:12px;color:var(--fg2)">Sign in; usage counts against your plan</span></div>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Sign in</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;background:var(--yolkSoft)">
+                <div style="width:34px;height:34px;border-radius:9px;background:var(--card);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">OL</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">Ollama <span style="font-size:11px;font-weight:600;color:var(--fg2);margin-left:4px">Found on this Mac</span></span><span style="font-size:12px;color:var(--fg2)">3 models · free and private</span></div>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--card);font-size:12px;display:flex;align-items:center">Add</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:18px;font-size:13px;padding-top:6px"><span style="color:var(--accent)">Browse all providers…</span><span style="color:var(--accent)">Custom endpoint…</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:96px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">2 · Add provider</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">A sheet with the full catalog, grouped by how you connect: cloud APIs, subscriptions, cloud platforms, local and self-hosted. Search covers everything. Custom is always pinned at the bottom of the sidebar. Connected providers show a check instead of disappearing.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+
+    <div id="m2" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">m2</span><span style="font-size:15px;font-weight:600">Catalog sheet</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--scrim);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;justify-content:center;padding-top:28px;box-sizing:border-box">
+        <div style="width:800px;height:620px;border-radius:16px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 30px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:.5px solid var(--line)">
+            <span style="font-size:17px;font-weight:700">Add a provider</span>
+            <div style="flex:1;height:30px;border-radius:8px;background:var(--chip);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;color:var(--fg3)"><span>⌕</span>Search 43 providers</div>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--chip);font-size:12px;display:flex;align-items:center">Cancel</span>
+          </div>
+          <div style="flex:1;display:flex;min-height:0">
+            <div style="width:190px;padding:12px 8px;display:flex;flex-direction:column;gap:2px;font-size:13px;border-right:.5px solid var(--line)">
+              <span style="padding:6px 10px;border-radius:7px;background:var(--accentSoft);font-weight:600;display:flex;justify-content:space-between">Suggested</span>
+              <span style="padding:6px 10px;display:flex;justify-content:space-between;color:var(--fg)">Cloud APIs<span style="color:var(--fg3)">24</span></span>
+              <span style="padding:6px 10px;display:flex;justify-content:space-between;color:var(--fg)">Subscriptions<span style="color:var(--fg3)">2</span></span>
+              <span style="padding:6px 10px;display:flex;justify-content:space-between;color:var(--fg)">Cloud platforms<span style="color:var(--fg3)">4</span></span>
+              <span style="padding:6px 10px;display:flex;justify-content:space-between;color:var(--fg)">Local &amp; self-hosted<span style="color:var(--fg3)">6</span></span>
+              <div style="flex:1"></div>
+              <div style="height:.5px;background:var(--line);margin:6px 4px"></div>
+              <span style="padding:7px 10px;border-radius:7px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:8px"><span style="width:18px;height:18px;border-radius:5px;background:var(--accentSoft);display:flex;align-items:center;justify-content:center;font-size:13px">+</span>Custom endpoint</span>
+            </div>
+            <div style="flex:1;padding:16px 18px;display:flex;flex-direction:column;gap:16px;min-width:0;overflow:hidden">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:11px;font-weight:600;color:var(--fg3)">On this Mac</span>
+                <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+                  <div style="border-radius:12px;background:var(--yolkSoft);padding:12px;display:flex;gap:10px;align-items:center">
+                    <div style="width:32px;height:32px;border-radius:8px;background:var(--card);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">OL</div>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-size:13.5px;font-weight:600">Ollama</span><span style="font-size:11.5px;color:var(--fg2)">Running · 3 models</span></div>
+                    <span style="height:24px;padding:0 10px;border-radius:12px;background:var(--inv);color:var(--invfg);font-size:11.5px;font-weight:600;display:flex;align-items:center">Add</span>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;gap:10px;align-items:center">
+                    <div style="width:32px;height:32px;border-radius:8px;background:oklch(0.9 0.1 145);color:oklch(0.4 0.1 145);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">LH</div>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-size:13.5px;font-weight:600">LiteLLM (home)</span><span style="font-size:11.5px;color:var(--fg3)">Custom · localhost:4000</span></div>
+                    <span style="font-size:12px;color:var(--green);font-weight:600">✓ Added</span>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:11px;font-weight:600;color:var(--fg3)">Popular</span>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.56 0.2 280);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">OR</div><span style="font-size:12px;color:var(--green);font-weight:600">✓ Connected</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">OpenRouter</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">300+ models, one key</span></div>
+                    <span style="font-size:11px;color:var(--fg3)">API key</span>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="width:32px;height:32px;border-radius:8px;background:oklch(0.7 0.12 50);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">A</div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Anthropic</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Claude, direct from the lab</span></div>
+                    <span style="font-size:11px;color:var(--fg3)">API key</span>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="width:32px;height:32px;border-radius:8px;background:oklch(0.6 0.13 165);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">API</div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">OpenAI API</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">GPT models, pay per use</span></div>
+                    <span style="font-size:11px;color:var(--fg3)">API key</span>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="width:32px;height:32px;border-radius:8px;background:oklch(0.6 0.13 165);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">GPT</div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">ChatGPT</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Use your Plus or Pro plan</span></div>
+                    <span style="font-size:11px;color:var(--fg3)">Sign in</span>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="width:32px;height:32px;border-radius:8px;background:oklch(0.6 0.17 250);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">G</div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Google Gemini</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Long context, free tier</span></div>
+                    <span style="font-size:11px;color:var(--fg3)">API key</span>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="width:32px;height:32px;border-radius:8px;background:oklch(0.55 0.12 255);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">AB</div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Amazon Bedrock</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Through your AWS account</span></div>
+                    <span style="font-size:11px;color:var(--fg3)">AWS credentials</span>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line);border:1px dashed transparent">
+                <span style="width:28px;height:28px;border-radius:8px;background:var(--accentSoft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px">+</span>
+                <div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13.5px;font-weight:600">Don't see yours?</span><span style="font-size:12px;color:var(--fg2)">Any OpenAI- or Anthropic-compatible URL: LiteLLM, LM Studio, vLLM, a company gateway</span></div>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Custom endpoint…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="m3" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">m3</span><span style="font-size:15px;font-weight:600">Connecting a catalog provider</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--scrim);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;justify-content:center;padding-top:28px;box-sizing:border-box">
+        <div style="width:560px;align-self:flex-start;border-radius:16px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 30px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:18px 20px 6px">
+            <span style="font-size:13px;color:var(--accent)">‹ All providers</span>
+          </div>
+          <div style="padding:8px 24px 22px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:44px;height:44px;border-radius:11px;background:oklch(0.7 0.12 50);color:#fff;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center">A</div>
+              <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:19px;font-weight:700">Anthropic</span><span style="font-size:12.5px;color:var(--fg2)">Claude models, billed by Anthropic</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:13px;font-weight:600">API key</span>
+              <div style="height:36px;border-radius:9px;background:var(--card);box-shadow:0 0 0 1px var(--accentLine),0 0 0 4px var(--accentSoft);display:flex;align-items:center;padding:0 12px;gap:8px"><span style="flex:1;font-family:var(--mono);font-size:13px">sk-ant-api03-••••••••••••Qx</span><span style="font-size:12px;color:var(--green);font-weight:600">✓ Valid</span></div>
+              <span style="font-size:12px;color:var(--fg3)">Stored in your Keychain. <span style="color:var(--accent)">Create a key at console.anthropic.com ›</span></span>
+            </div>
+            <div style="border-radius:12px;background:var(--chip);padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:12.5px;font-weight:600">9 models available</span>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <span style="height:22px;padding:0 8px;border-radius:11px;background:var(--card);font-size:11.5px;display:flex;align-items:center">Claude Fable 5.1</span>
+                <span style="height:22px;padding:0 8px;border-radius:11px;background:var(--card);font-size:11.5px;display:flex;align-items:center">Claude Haiku 5.5</span>
+                <span style="height:22px;padding:0 8px;border-radius:11px;background:var(--card);font-size:11.5px;display:flex;align-items:center">Claude Fable 5</span>
+                <span style="height:22px;padding:0 8px;font-size:11.5px;color:var(--fg3);display:flex;align-items:center">+6</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:13px"><span style="width:16px;height:16px;border-radius:4px;background:var(--accent);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✓</span><span>Prefer Anthropic over OpenRouter for Claude models</span></div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px">
+              <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--chip);font-size:12.5px;display:flex;align-items:center">Cancel</span>
+              <span style="height:30px;padding:0 16px;border-radius:15px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;display:flex;align-items:center">Connect</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:96px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">3 · Custom endpoint</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Presets fill in sensible defaults (port, API format). Piopio checks the URL while you type and shows the models it finds before you save. Headers and timeouts stay under Advanced.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="m4" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">m4</span><span style="font-size:15px;font-weight:600">Custom endpoint sheet</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--scrim);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;justify-content:center;padding-top:28px;box-sizing:border-box">
+        <div style="width:600px;align-self:flex-start;border-radius:16px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 30px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden">
+          <div style="padding:18px 20px 6px"><span style="font-size:13px;color:var(--accent)">‹ All providers</span></div>
+          <div style="padding:6px 24px 20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:19px;font-weight:700">Custom endpoint</span><span style="font-size:12.5px;color:var(--fg2)">Any server that speaks the OpenAI or Anthropic API</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              <span style="font-size:11px;font-weight:600;color:var(--fg3);margin-right:4px">Start from</span>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:12px;font-weight:600;display:flex;align-items:center">LM Studio</span>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">LiteLLM</span>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">vLLM</span>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">llama.cpp</span>
+              <span style="height:26px;padding:0 11px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Blank</span>
+            </div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:10px 14px;align-items:center;font-size:13px"><span style="color:var(--fg2)">Name</span><span>LM Studio (studio-mac)</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:10px 14px;align-items:center;font-size:13px;background:var(--accentSoft)"><span style="color:var(--fg2)">Base URL</span><span style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-family:var(--mono);font-size:12.5px">http://studio-mac.local:1234/v1</span><span style="font-size:12px;color:var(--green);font-weight:600">● Reachable · 82 ms</span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:10px 14px;align-items:center;font-size:13px"><span style="color:var(--fg2)">API format</span><div style="display:flex;padding:2px;border-radius:999px;background:var(--chip);font-size:12px;justify-self:start"><span style="padding:3px 12px;border-radius:999px;background:var(--pill);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)">OpenAI-compatible</span><span style="padding:3px 12px;color:var(--fg2)">Anthropic</span></div></div>
+              <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:10px 14px;align-items:center;font-size:13px"><span style="color:var(--fg2)">API key</span><span style="color:var(--fg3)">Optional — not needed for this server</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:13px;color:var(--fg2)"><span style="font-size:10px">›</span>Advanced <span style="color:var(--fg3);font-size:12px">headers, timeout, context window override</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Found 3 models</span><span style="font-size:12px;color:var(--fg3)">Shown in the model picker</span></div>
+              <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 14px"><span style="flex:1;font-family:var(--mono);font-size:12.5px">qwen3-coder-30b</span><span style="font-size:11.5px;color:var(--fg3)">128K</span><span style="width:30px;height:18px;border-radius:9px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff"></span></span></div>
+                <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 14px"><span style="flex:1;font-family:var(--mono);font-size:12.5px">gemma-3-27b</span><span style="font-size:11.5px;color:var(--fg3)">128K</span><span style="width:30px;height:18px;border-radius:9px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff"></span></span></div>
+                <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 14px"><span style="flex:1;font-family:var(--mono);font-size:12.5px;color:var(--fg3)">text-embedding-nomic</span><span style="font-size:11.5px;color:var(--fg3)">Embeddings · hidden</span><span style="width:30px;height:18px;border-radius:9px;background:var(--chip);box-shadow:inset 0 0 0 .5px var(--line);position:relative;display:block"><span style="position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span></span></div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding-top:4px">
+              <span style="font-size:12px;color:var(--fg3);flex:1">Runs on your network · free</span>
+              <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--chip);font-size:12.5px;display:flex;align-items:center">Cancel</span>
+              <span style="height:30px;padding:0 16px;border-radius:15px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;display:flex;align-items:center">Add provider</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="m5" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">m5</span><span style="font-size:15px;font-weight:600">When the URL fails</span></div>
+      <div style="width:600px;display:flex;flex-direction:column;gap:10px;padding-top:4px">
+        <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+          <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:10px 14px;align-items:center;font-size:13px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 50%,transparent);border-radius:12px 12px 0 0"><span style="color:var(--fg2)">Base URL</span><span style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-family:var(--mono);font-size:12.5px">http://localhost:1234</span><span style="font-size:12px;color:var(--red);font-weight:600">● Can't connect</span></span></div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;line-height:1.5;color:var(--fg2)">
+            <span>Nothing is listening on port 1234. Is LM Studio's server running? In LM Studio: <b style="color:var(--fg)">Developer › Start server</b>.</span>
+            <div style="display:flex;gap:6px"><span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Try again</span><span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Add anyway</span></div>
+          </div>
+        </div>
+        <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;line-height:1.5;color:var(--fg2)">
+          <span style="font-weight:600;color:var(--fg)">Other errors, in plain words</span>
+          <span><b style="color:var(--fg)">401</b> → "The server wants an API key." The key field is focused.</span>
+          <span><b style="color:var(--fg)">404 on /models</b> → "Reachable, but no model list. Did you mean …/v1?" with a one-click fix.</span>
+          <span><b style="color:var(--fg)">0 models</b> → "Connected, but no models are loaded on the server."</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:96px 80px 120px;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">4 · Provider detail</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Clicking a connected provider pushes its page inside Settings. Connection, which of its models show in the picker, spend, and remove at the bottom. Actions that used to sit inline in the list (Replace key, Remove) live here.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="m6" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">m6</span><span style="font-size:15px;font-weight:600">LiteLLM (home)</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <div style="width:230px;padding:8px;box-sizing:border-box;flex:none;display:flex">
+          <div style="flex:1;background:var(--glass);border-radius:12px;box-shadow:0 0 0 .5px var(--line);padding:10px 8px;display:flex;flex-direction:column;gap:2px;font-size:13px">
+            <div style="display:flex;gap:8px;padding:4px 8px 14px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#8e8e93;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">⚙︎</span>General</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;background:var(--accentSoft);font-weight:600"><span style="width:20px;height:20px;border-radius:5px;background:#0a84ff;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✦</span>Models</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#30b0c7;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">◌</span>Chat</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#f2a33a;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✓</span>Approvals</div>
+            <div style="font-size:11px;font-weight:600;color:var(--fg3);padding:12px 8px 4px">Extend</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#bf5af2;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">⌁</span>MCP servers</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 8px"><span style="width:20px;height:20px;border-radius:5px;background:#5e5ce6;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">◆</span>Extensions</div>
+          </div>
+        </div>
+        <div style="flex:1;padding:24px 36px;display:flex;flex-direction:column;gap:18px;min-width:0">
+          <span style="font-size:13px;color:var(--accent)">‹ Models</span>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:48px;height:48px;border-radius:12px;background:oklch(0.9 0.1 145);color:oklch(0.4 0.1 145);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center">LH</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:22px;font-weight:700;letter-spacing:-0.01em">LiteLLM (home)</span><span style="font-size:12.5px;color:var(--fg2);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>Connected · checked 2 min ago · Custom, OpenAI-compatible</span></div>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--chip);font-size:12px;display:flex;align-items:center">Test connection</span>
+          </div>
+          <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:12px;padding:10px 16px;align-items:center;font-size:13px"><span style="color:var(--fg2)">Name</span><span>LiteLLM (home)</span><span style="font-size:12px;color:var(--accent)">Rename</span></div>
+            <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:12px;padding:10px 16px;align-items:center;font-size:13px"><span style="color:var(--fg2)">Base URL</span><span style="font-family:var(--mono);font-size:12.5px">http://localhost:4000/v1</span><span style="font-size:12px;color:var(--accent)">Edit</span></div>
+            <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:12px;padding:10px 16px;align-items:center;font-size:13px"><span style="color:var(--fg2)">API key</span><span style="font-family:var(--mono);font-size:12.5px">sk-lite-••••••3f9 <span style="font-family:-apple-system,sans-serif;font-size:11.5px;color:var(--fg3)">· Keychain</span></span><span style="font-size:12px;color:var(--accent)">Replace</span></div>
+            <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+            <div style="display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:12px;padding:10px 16px;align-items:center;font-size:13px"><span style="color:var(--fg2)">Headers</span><span style="color:var(--fg3)">None</span><span style="font-size:12px;color:var(--accent)">Add</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Models <span style="font-weight:400;color:var(--fg3)">3 shown in the picker</span></span><span style="font-size:12px;color:var(--accent)">Refresh list</span></div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 90px 150px 34px;gap:12px;padding:9px 16px;align-items:center;font-size:13px"><span style="font-family:var(--mono);font-size:12.5px">qwen3-8b</span><span style="font-size:11.5px;color:var(--fg3)">32K</span><span style="font-size:11.5px;color:var(--accent)">Default for Quick Chat</span><span style="width:30px;height:18px;border-radius:9px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff"></span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 90px 150px 34px;gap:12px;padding:9px 16px;align-items:center;font-size:13px"><span style="font-family:var(--mono);font-size:12.5px">llama-4-scout</span><span style="font-size:11.5px;color:var(--fg3)">128K</span><span></span><span style="width:30px;height:18px;border-radius:9px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff"></span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 90px 150px 34px;gap:12px;padding:9px 16px;align-items:center;font-size:13px"><span style="font-family:var(--mono);font-size:12.5px">mistral-small-3</span><span style="font-size:11.5px;color:var(--fg3)">32K</span><span></span><span style="width:30px;height:18px;border-radius:9px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff"></span></span></div>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:12px;padding-top:8px;border-top:.5px solid var(--line)">
+            <span style="flex:1;font-size:12px;color:var(--fg3)">Used by Quick Chat. Removing it switches Quick Chat to Claude Haiku 5.5.</span>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--chip);color:var(--red);font-size:12px;font-weight:500;display:flex;align-items:center">Remove provider…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;appearance&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;blue&quot;,&quot;beak&quot;,&quot;graphite&quot;],&quot;default&quot;:&quot;blue&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  apply() {
+    document.body.dataset.theme = this.props.appearance ?? 'light';
+    const acc = { blue: '#0a84ff', beak: 'oklch(0.66 0.17 45)', graphite: '#6e6e73' }[this.props.accent ?? 'blue'];
+    document.body.style.setProperty('--accent', acc);
+  }
+  componentDidMount() { this.apply(); }
+  componentDidUpdate() { this.apply(); }
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

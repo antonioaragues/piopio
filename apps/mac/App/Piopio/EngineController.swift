@@ -808,22 +808,60 @@ final class EngineController {
 
     // Custom endpoints (LiteLLM, Ollama, LM Studio…)
 
-    func checkEndpoint(_ baseUrl: String, key: String?, id: String?) async -> EndpointCheckResult? {
-        try? await client?.call("endpoints.check", EndpointCheckParams(baseUrl: baseUrl, key: key, id: id), as: EndpointCheckResult.self)
+    func checkEndpoint(_ baseUrl: String, key: String?, id: String?, format: String? = nil, headers: [String: String]? = nil) async -> EndpointCheckResult? {
+        try? await client?.call("endpoints.check", EndpointCheckParams(baseUrl: baseUrl, key: key, id: id, format: format, headers: headers), as: EndpointCheckResult.self)
     }
 
-    /// Adds or updates an endpoint; throws the engine's reason when the server doesn't answer as expected.
-    func saveEndpoint(id: String?, name: String, baseUrl: String, key: String?) async throws {
+    /// Adds or updates an endpoint; throws the engine's reason when the server doesn't answer as expected (unless `force`).
+    @discardableResult
+    func saveEndpoint(_ params: EndpointSaveParams) async throws -> String {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
-        _ = try await client.call("endpoints.save", EndpointSaveParams(id: id, name: name, baseUrl: baseUrl, key: key), as: EndpointSaveResult.self)
+        let id = try await client.call("endpoints.save", params, as: EndpointSaveResult.self).id
         await loadProviders()
         try? await loadModels()
+        return id
+    }
+
+    func saveEndpoint(id: String?, name: String, baseUrl: String, key: String?) async throws {
+        try await saveEndpoint(EndpointSaveParams(id: id, name: name, baseUrl: baseUrl, key: key))
     }
 
     func removeEndpoint(_ provider: ProviderInfo) async {
+        let roles = ModelRole.allCases.filter { model(for: $0)?.provider == provider.id }
         _ = try? await client?.call("endpoints.remove", EndpointIdParams(id: provider.id), as: Empty.self)
         await loadProviders()
         try? await loadModels()
+        reassign(roles)
+    }
+
+    // Provider keys and model visibility (Settings › Models)
+
+    func verifyKey(_ provider: String, key: String) async -> ProviderVerifyResult? {
+        try? await client?.call("providers.verifyKey", ProviderKeyParams(provider: provider, key: key), as: ProviderVerifyResult.self)
+    }
+
+    func saveKey(_ provider: String, key: String) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
+        _ = try await client.call("providers.saveKey", ProviderKeyParams(provider: provider, key: key), as: Empty.self)
+        if provider == "openrouter" { hasKey = true }
+        await loadProviders()
+        try? await loadModels()
+    }
+
+    func providerModels(_ provider: String) async -> [ProviderModelsResult.Model] {
+        (try? await client?.call("providers.models", ProviderParams(provider: provider), as: ProviderModelsResult.self).models) ?? []
+    }
+
+    func setHidden(_ provider: String, hidden: [String]) async {
+        _ = try? await client?.call("providers.setHidden", ProviderHiddenParams(provider: provider, hidden: hidden), as: Empty.self)
+        try? await loadModels()
+        await loadProviders()
+    }
+
+    /// Defaults that used a removed provider move to the first model still available.
+    private func reassign(_ roles: [ModelRole]) {
+        guard let fallback = models.first(where: { $0.provider != "faux" }) ?? models.first else { return }
+        for role in roles { setModel(fallback.ref, for: role) }
     }
 
     func detectEndpoints() async -> [EndpointsDetectResult.Found] {
@@ -831,6 +869,8 @@ final class EngineController {
     }
 
     func disconnect(_ provider: ProviderInfo) async {
+        let roles = ModelRole.allCases.filter { model(for: $0)?.provider == provider.id }
+        defer { reassign(roles) }
         _ = try? await client?.call("providers.logout", ProviderParams(provider: provider.id), as: Empty.self)
         if provider.id == "openrouter" { hasKey = false }
         await loadProviders()

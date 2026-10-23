@@ -22559,7 +22559,74 @@
 									},
 									"keyless": {
 										"type": "boolean"
+									},
+									"format": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "openai"
+											},
+											{
+												"type": "string",
+												"const": "anthropic"
+											}
+										]
+									},
+									"headers": {
+										"type": "object",
+										"patternProperties": {
+											"^.*$": {
+												"type": "string"
+											}
+										}
+									},
+									"contextWindow": {
+										"type": "number"
 									}
+								}
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "cloud"
+									},
+									{
+										"type": "string",
+										"const": "subscription"
+									},
+									{
+										"type": "string",
+										"const": "platform"
+									},
+									{
+										"type": "string",
+										"const": "custom"
+									}
+								]
+							},
+							"popular": {
+								"type": "string"
+							},
+							"keyPage": {
+								"type": "string"
+							},
+							"families": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"keyHint": {
+								"type": "string"
+							},
+							"hiddenModels": {
+								"type": "number"
+							},
+							"sampleModels": {
+								"type": "array",
+								"items": {
+									"type": "string"
 								}
 							}
 						}
@@ -22653,6 +22720,26 @@
 				},
 				"id": {
 					"type": "string"
+				},
+				"format": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "openai"
+						},
+						{
+							"type": "string",
+							"const": "anthropic"
+						}
+					]
+				},
+				"headers": {
+					"type": "object",
+					"patternProperties": {
+						"^.*$": {
+							"type": "string"
+						}
+					}
 				}
 			}
 		},
@@ -22682,12 +22769,50 @@
 							},
 							"contextWindow": {
 								"type": "number"
+							},
+							"embedding": {
+								"type": "boolean"
 							}
 						}
 					}
 				},
 				"message": {
 					"type": "string"
+				},
+				"error": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "refused"
+						},
+						{
+							"type": "string",
+							"const": "auth"
+						},
+						{
+							"type": "string",
+							"const": "not_found"
+						},
+						{
+							"type": "string",
+							"const": "empty"
+						},
+						{
+							"type": "string",
+							"const": "tls"
+						},
+						{
+							"type": "string",
+							"const": "invalid"
+						},
+						{
+							"type": "string",
+							"const": "other"
+						}
+					]
+				},
+				"latencyMs": {
+					"type": "number"
 				}
 			}
 		},
@@ -22709,6 +22834,38 @@
 				},
 				"key": {
 					"type": "string"
+				},
+				"format": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "openai"
+						},
+						{
+							"type": "string",
+							"const": "anthropic"
+						}
+					]
+				},
+				"headers": {
+					"type": "object",
+					"patternProperties": {
+						"^.*$": {
+							"type": "string"
+						}
+					}
+				},
+				"contextWindow": {
+					"type": "number"
+				},
+				"hidden": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"force": {
+					"type": "boolean"
 				}
 			}
 		},
@@ -22755,7 +22912,8 @@
 						"required": [
 							"name",
 							"baseUrl",
-							"models"
+							"models",
+							"preset"
 						],
 						"properties": {
 							"name": {
@@ -22766,6 +22924,9 @@
 							},
 							"models": {
 								"type": "number"
+							},
+							"preset": {
+								"type": "string"
 							}
 						}
 					}
@@ -23074,6 +23235,134 @@
 					]
 				}
 			}
+		},
+		"providers.verifyKey.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"key"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"key": {
+					"type": "string"
+				}
+			}
+		},
+		"providers.verifyKey.result": {
+			"type": "object",
+			"required": [
+				"ok"
+			],
+			"properties": {
+				"ok": {
+					"anyOf": [
+						{
+							"type": "boolean"
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"message": {
+					"type": "string"
+				},
+				"models": {
+					"type": "number"
+				}
+			}
+		},
+		"providers.saveKey.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"key"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"key": {
+					"type": "string"
+				}
+			}
+		},
+		"providers.saveKey.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"providers.models.params": {
+			"type": "object",
+			"required": [
+				"provider"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				}
+			}
+		},
+		"providers.models.result": {
+			"type": "object",
+			"required": [
+				"models"
+			],
+			"properties": {
+				"models": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"contextWindow",
+							"hidden"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"contextWindow": {
+								"type": "number"
+							},
+							"hidden": {
+								"type": "boolean"
+							},
+							"embedding": {
+								"type": "boolean"
+							}
+						}
+					}
+				}
+			}
+		},
+		"providers.setHidden.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"hidden"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"hidden": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"providers.setHidden.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"providers.logout.params": {
 			"type": "object",

@@ -172,3 +172,90 @@ export class LoginFlows {
 		});
 	}
 }
+
+// ── Catalog (docs/design handoff: Settings › Models, m2) ──
+
+export type ProviderKind = "cloud" | "subscription" | "platform";
+
+/** How a provider is reached: most are cloud APIs; a few are subscriptions or cloud platforms with their own credentials. */
+export function providerKind(id: string): ProviderKind {
+	if (id === "openai" || id === "github-copilot" || id === "kimi-coding") return "subscription";
+	if (["amazon-bedrock", "google-vertex", "azure", "cloudflare-ai-gateway", "cloudflare-workers-ai", "vercel-ai-gateway"].includes(id)) return "platform";
+	return "cloud";
+}
+
+/** The catalog's "Popular" cards, in order, with their one line. */
+export const POPULAR: Record<string, string> = {
+	openrouter: "300+ models, one key",
+	anthropic: "Claude, direct from the lab",
+	[OPENAI_API]: "GPT models, pay per use",
+	openai: "Use your Plus or Pro plan",
+	google: "Long context, free tier",
+	"amazon-bedrock": "Through your AWS account",
+};
+
+/** Where to create a key, for the connect sheet's help line. */
+export const KEY_PAGES: Record<string, string> = {
+	openrouter: "https://openrouter.ai/keys",
+	anthropic: "https://console.anthropic.com/settings/keys",
+	[OPENAI_API]: "https://platform.openai.com/api-keys",
+	google: "https://aistudio.google.com/apikey",
+	groq: "https://console.groq.com/keys",
+	xai: "https://console.x.ai",
+	deepseek: "https://platform.deepseek.com/api_keys",
+	mistral: "https://console.mistral.ai/api-keys",
+	together: "https://api.together.ai/settings/api-keys",
+	fireworks: "https://fireworks.ai/account/api-keys",
+};
+
+const FAMILIES = ["claude", "gpt", "gemini", "gemma", "llama", "mistral", "mixtral", "qwen", "deepseek", "grok", "kimi", "glm", "phi", "command", "nova", "o3", "o4"];
+
+/** Model families a provider serves, so searching "claude" finds Anthropic, OpenRouter, Bedrock, Vertex. */
+export function providerFamilies(models: readonly { id: string; name: string }[]): string[] {
+	const found = new Set<string>();
+	for (const m of models) {
+		const words = `${m.name} ${m.id}`.toLowerCase().split(/[^a-z0-9]+/);
+		for (const f of FAMILIES) if (words.some((w) => w === f || w.startsWith(f))) found.add(f);
+	}
+	return [...found];
+}
+
+/** "sk-or-v1-755…a30": enough to recognize a key, never enough to use it. */
+export function maskKey(key: string): string {
+	const k = key.trim();
+	return k.length > 12 ? `${k.slice(0, Math.min(10, k.length - 6))}…${k.slice(-3)}` : "••••";
+}
+
+/**
+ * Checks a key against the provider's model list (no completion, no cost). `ok: null` when Piopio can't check this
+ * provider's keys up front (cloud platforms); the key is then checked on first use.
+ */
+export async function verifyKey(provider: Provider, key: string, fetchImpl: typeof fetch = fetch): Promise<{ ok: boolean | null; message?: string; models?: number }> {
+	const k = key.trim();
+	if (!k) return { ok: false, message: "Paste a key first." };
+	const base = (provider.baseUrl ?? "").replace(/\/+$/, "");
+	if (!base) return { ok: null, message: "This provider's credentials are checked on first use." };
+	let url = `${base}/models`;
+	const headers: Record<string, string> = { authorization: `Bearer ${k}` };
+	if (provider.id === "anthropic") {
+		url = `${base}/v1/models`;
+		delete headers.authorization;
+		headers["x-api-key"] = k;
+		headers["anthropic-version"] = "2023-06-01";
+	} else if (provider.id === "google") {
+		url = `${base}/models?key=${encodeURIComponent(k)}`;
+		delete headers.authorization;
+	} else if (provider.id === "mistral" || provider.id === "deepseek") {
+		url = `${base}/v1/models`;
+	}
+	try {
+		const response = await fetchImpl(url, { headers, signal: AbortSignal.timeout(12_000) });
+		if (response.status === 401 || response.status === 403) return { ok: false, message: `This key was rejected (${response.status}).` };
+		if (!response.ok) return { ok: null, message: `${provider.name} answered ${response.status}; the key is checked again on first use.` };
+		const body = (await response.json().catch(() => ({}))) as { data?: unknown[]; models?: unknown[] };
+		const list = body.data ?? body.models;
+		return { ok: true, ...(Array.isArray(list) ? { models: list.length } : {}) };
+	} catch {
+		return { ok: false, message: `Can't reach ${provider.name}. Check your connection.` };
+	}
+}

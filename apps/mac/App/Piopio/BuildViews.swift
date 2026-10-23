@@ -421,7 +421,7 @@ struct BuildEmptyState: View {
 }
 
 /// A row that tints on hover.
-private struct HoverRowStyle: ButtonStyle {
+struct HoverRowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { HoverRow(configuration: configuration) }
 
     private struct HoverRow: View {

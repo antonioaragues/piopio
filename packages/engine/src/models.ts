@@ -11,8 +11,8 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Model,
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { ModelInfo, ModelRef, ProviderInfo } from "@piopio/protocol";
 import { credentialSecret, KeychainCredentialStore } from "./credentials.js";
-import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, Endpoints, isLocal } from "./endpoints.js";
-import { billingLabel, connectMethods, FEATURED, openaiApiAlias, PREFERRED_MODEL, UTILITY_MODEL } from "./providers.js";
+import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, type EndpointFormat, Endpoints, isEmbedding, isLocal } from "./endpoints.js";
+import { billingLabel, connectMethods, FEATURED, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, UTILITY_MODEL, verifyKey } from "./providers.js";
 import type { SecretBroker } from "./secrets.js";
 
 export const DEFAULT_MODEL: ModelRef = { provider: "openrouter", id: "anthropic/claude-haiku-5.5" };
@@ -36,6 +36,7 @@ export class ModelHub {
 	) {
 		this.credentials = new KeychainCredentialStore(secrets, options.home ? join(options.home, "credentials.json") : undefined);
 		this.endpoints = new Endpoints(options.home ? join(options.home, "endpoints.json") : undefined);
+		this.loadVisibility();
 		if (options.faux) {
 			this.faux = fauxProvider({ provider: "faux", tokensPerSecond: 40 });
 			installEcho(this.faux);
@@ -95,17 +96,18 @@ export class ModelHub {
 		for (const id of ids) {
 			const provider = rt.getProvider(id);
 			const endpoint = this.endpoints.get(id);
+			const hidden = new Set(this.hidden[id] ?? []);
 			if (endpoint && provider) {
-				// Context sizes the server didn't report stay unknown (0) in the app.
-				const known = new Map(endpoint.models.map((m) => [m.id, m.contextWindow ?? 0]));
-				out.push(...rt.getModels(id).map((m) => ({ ...toInfo(m, endpoint.name, endpointBilling(endpoint)), contextWindow: known.get(m.id) ?? 0 })));
+				// Context sizes the server didn't report stay unknown (0) in the app (unless you set one).
+				const known = new Map(endpoint.models.map((m) => [m.id, m.contextWindow ?? endpoint.contextWindow ?? 0]));
+				out.push(...rt.getModels(id).filter((m) => !hidden.has(m.id)).map((m) => ({ ...toInfo(m, endpoint.name, endpointBilling(endpoint)), contextWindow: known.get(m.id) ?? 0 })));
 				continue;
 			}
 			const credential = await this.credentials.read(id).catch(() => undefined);
 			if (!provider || !credential) continue;
 			const billing = billingLabel(provider, credential.type);
 			const available = await rt.getAvailable(id).catch(() => rt.getModels(id));
-			out.push(...available.map((m) => toInfo(m, provider.name, billing)));
+			out.push(...available.filter((m) => !hidden.has(m.id)).map((m) => toInfo(m, provider.name, billing)));
 		}
 		return out;
 	}
@@ -122,6 +124,7 @@ export class ModelHub {
 			const credential = ids.has(p.id) ? await this.credentials.read(p.id).catch(() => undefined) : undefined;
 			const problem = this.problems.get(p.id);
 			const status: ProviderInfo["status"] = connecting(p.id) ? "connecting" : credential ? (problem ? "needs_attention" : "connected") : "not_connected";
+			const models = p.getModels();
 			out.push({
 				id: p.id,
 				name: p.id === "openai" ? "ChatGPT" : p.name,
@@ -130,7 +133,14 @@ export class ModelHub {
 				...(credential ? { connectedWith: credential.type, billing: billingLabel(p, credential.type) } : {}),
 				...(credential && problem ? { message: problem } : {}),
 				featured: FEATURED.includes(p.id),
-				models: p.getModels().length,
+				models: models.length,
+				kind: providerKind(p.id),
+				...(POPULAR[p.id] ? { popular: POPULAR[p.id] } : {}),
+				...(KEY_PAGES[p.id] ? { keyPage: KEY_PAGES[p.id] } : {}),
+				families: providerFamilies(models),
+				...(credential?.type === "api_key" && credential.key ? { keyHint: maskKey(credential.key) } : {}),
+				...(this.hidden[p.id]?.length ? { hiddenModels: this.hidden[p.id]!.length } : {}),
+				sampleModels: models.slice(0, 3).map((m) => m.name),
 			});
 		}
 		for (const e of this.endpoints.list()) {
@@ -144,43 +154,132 @@ export class ModelHub {
 				billing: endpointBilling(e),
 				...(problem ? { message: problem } : {}),
 				featured: false,
-				models: e.models.length,
-				endpoint: { baseUrl: e.baseUrl, local: isLocal(e.baseUrl), keyless: e.keyless },
+				models: e.models.filter((m) => !m.embedding).length,
+				endpoint: {
+					baseUrl: e.baseUrl,
+					local: isLocal(e.baseUrl),
+					keyless: e.keyless,
+					format: e.format ?? "openai",
+					...(e.headers ? { headers: e.headers } : {}),
+					...(e.contextWindow ? { contextWindow: e.contextWindow } : {}),
+				},
+				kind: "custom",
+				...(!e.keyless ? await this.credentials.read(e.id).then((c) => (c?.type === "api_key" && c.key ? { keyHint: maskKey(c.key) } : {})).catch(() => ({})) : {}),
+				...(this.hidden[e.id]?.length ? { hiddenModels: this.hidden[e.id]!.length } : {}),
+				families: providerFamilies(e.models.map((m) => ({ id: m.id, name: m.id }))),
 			});
 		}
 		return out;
 	}
 
 	/** Checks a server; on an update without a key, with the stored one. */
-	async checkEndpoint(baseUrl: string, key?: string, id?: string) {
+	async checkEndpoint(baseUrl: string, key?: string, id?: string, options: { format?: EndpointFormat; headers?: Record<string, string> } = {}) {
 		const stored = !key && id ? await this.credentials.read(id).catch(() => undefined) : undefined;
-		return checkEndpoint(baseUrl, key ?? (stored?.type === "api_key" ? stored.key : undefined));
+		const previous = id ? this.endpoints.get(id) : undefined;
+		return checkEndpoint(baseUrl, key ?? (stored?.type === "api_key" ? stored.key : undefined), fetch, 8_000, { format: options.format ?? previous?.format ?? "openai", ...((options.headers ?? previous?.headers) ? { headers: options.headers ?? previous?.headers } : {}) });
 	}
 
-	/** Adds or updates a custom endpoint: checks it, stores its key in the Keychain, registers it with pi. */
-	async saveEndpoint(input: { id?: string; name: string; baseUrl: string; key?: string }): Promise<Endpoint> {
+	/**
+	 * Adds or updates a custom endpoint: checks it, stores its key in the Keychain, registers it with pi.
+	 * `force` saves it even when the server doesn't answer now (its models come with the next refresh).
+	 */
+	async saveEndpoint(input: { id?: string; name: string; baseUrl: string; key?: string; format?: EndpointFormat; headers?: Record<string, string>; contextWindow?: number; hidden?: string[]; force?: boolean }): Promise<Endpoint> {
 		const rt = await this.ready();
 		const previous = input.id ? this.endpoints.get(input.id) : undefined;
 		if (input.id && !previous) throw new EngineError("NOT_FOUND", `No endpoint ${input.id}`);
 		const key = input.key?.trim() || undefined;
-		const check = await this.checkEndpoint(input.baseUrl, key, previous?.id);
-		if (!check.ok) throw new EngineError("INVALID", check.message);
+		const format = input.format ?? previous?.format ?? "openai";
+		const headers = input.headers ?? previous?.headers;
+		const check = await this.checkEndpoint(input.baseUrl, key, previous?.id, { format, ...(headers ? { headers } : {}) });
+		if (!check.ok && !input.force) throw new EngineError("INVALID", check.message);
 		const id = previous?.id ?? this.endpoints.newId(input.name);
 		if (key) await this.credentials.modify(id, async () => ({ type: "api_key", key }));
+		let baseUrl = input.baseUrl.trim().replace(/\/+$/, "");
+		if (!/^https?:\/\//.test(baseUrl)) baseUrl = `http://${baseUrl}`;
 		const endpoint: Endpoint = {
 			id,
-			name: input.name.trim() || new URL(check.baseUrl).host,
-			baseUrl: check.baseUrl,
+			name: input.name.trim() || (check.ok ? new URL(check.baseUrl).host : "Custom endpoint"),
+			baseUrl: check.ok ? check.baseUrl : baseUrl,
 			keyless: !key && (previous?.keyless ?? true),
-			models: check.models,
+			models: check.ok ? check.models : (previous?.models ?? []),
 			addedAt: previous?.addedAt ?? new Date().toISOString(),
+			format,
+			...(headers && Object.keys(headers).length ? { headers } : {}),
+			...((input.contextWindow ?? previous?.contextWindow) ? { contextWindow: input.contextWindow ?? previous?.contextWindow } : {}),
 		};
 		this.endpoints.save(endpoint);
+		if (input.hidden) this.setHidden(id, input.hidden);
+		if (!check.ok) this.problems.set(id, check.message);
 		if (rt.getProvider(id)) rt.unregisterProvider(id);
 		rt.registerProvider(id, endpointConfig(endpoint) as never);
-		this.problems.delete(id);
+		if (check.ok) this.problems.delete(id);
 		await this.connected();
 		return endpoint;
+	}
+
+	// ── Keys and visibility (Settings › Models) ──
+
+	/** Models you hid from the picker, per provider (`model-visibility.json`). */
+	private hidden: Record<string, string[]> = {};
+	private get visibilityPath(): string | undefined {
+		return this.options.home ? join(this.options.home, "model-visibility.json") : undefined;
+	}
+
+	private loadVisibility(): void {
+		const path = this.visibilityPath;
+		if (path && existsSync(path)) {
+			try {
+				this.hidden = JSON.parse(readFileSync(path, "utf8")) as Record<string, string[]>;
+			} catch {
+				this.hidden = {};
+			}
+		}
+	}
+
+	setHidden(provider: string, hidden: string[]): void {
+		if (hidden.length) this.hidden[provider] = [...new Set(hidden)];
+		else delete this.hidden[provider];
+		const path = this.visibilityPath;
+		if (path) writeFileSync(path, `${JSON.stringify(this.hidden, null, "\t")}\n`, { mode: 0o600 });
+	}
+
+	/** Every model a connected provider offers, with whether it's hidden (endpoints: embeddings too). */
+	async providerModels(provider: string): Promise<{ id: string; name: string; contextWindow: number; hidden: boolean; embedding?: boolean }[]> {
+		const rt = await this.ready();
+		const hidden = new Set(this.hidden[provider] ?? []);
+		const endpoint = this.endpoints.get(provider);
+		if (endpoint) {
+			return endpoint.models.map((m) => ({ id: m.id, name: m.id, contextWindow: m.contextWindow ?? endpoint.contextWindow ?? 0, hidden: hidden.has(m.id) || Boolean(m.embedding), ...(m.embedding ? { embedding: true } : {}) }));
+		}
+		return rt.getModels(provider).map((m) => ({ id: m.id, name: m.name, contextWindow: m.contextWindow, hidden: hidden.has(m.id), ...(isEmbedding(m.id) ? { embedding: true } : {}) }));
+	}
+
+	/** Checks a key against the provider's model list without saving it. */
+	async verifyProviderKey(provider: string, key: string) {
+		const rt = await this.ready();
+		const p = rt.getProvider(provider);
+		if (!p) throw new EngineError("NOT_FOUND", `Unknown provider ${provider}`);
+		// No key: test the stored one ("Test connection").
+		if (!key.trim()) {
+			const stored = await this.credentials.read(provider).catch(() => undefined);
+			if (stored?.type !== "api_key" || !stored.key) return { ok: null, message: "Signed in; it's checked on use." };
+			const result = await verifyKey(p, stored.key);
+			if (result.ok === false) this.needsAttention(provider, result.message ?? "The key was rejected.");
+			else if (result.ok) this.problems.delete(provider);
+			return result;
+		}
+		return verifyKey(p, key);
+	}
+
+	/** Connects a provider with an API key (replacing any credential it had). */
+	async saveKey(provider: string, key: string): Promise<void> {
+		const rt = await this.ready();
+		if (!rt.getProvider(provider)) throw new EngineError("NOT_FOUND", `Unknown provider ${provider}`);
+		const k = key.trim();
+		if (!k) throw new EngineError("INVALID", "Paste a key first.");
+		await this.credentials.modify(provider, async () => ({ type: "api_key", key: k }));
+		this.problems.delete(provider);
+		await this.connected();
 	}
 
 	async removeEndpoint(id: string): Promise<void> {

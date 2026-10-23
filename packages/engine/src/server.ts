@@ -875,8 +875,28 @@ export class Engine {
 			}
 			case "endpoints.check": {
 				const p = params as Params<"endpoints.check">;
-				const check = await this.hub.checkEndpoint(p.baseUrl, p.key, p.id);
-				return (check.ok ? { ok: true, baseUrl: check.baseUrl, models: check.models } : { ok: false, models: [], message: check.message }) satisfies Result<"endpoints.check">;
+				const check = await this.hub.checkEndpoint(p.baseUrl, p.key, p.id, { ...(p.format ? { format: p.format } : {}), ...(p.headers ? { headers: p.headers } : {}) });
+				return (check.ok ? { ok: true, baseUrl: check.baseUrl, models: check.models, latencyMs: check.latencyMs } : { ok: false, models: [], message: check.message, error: check.error }) satisfies Result<"endpoints.check">;
+			}
+			case "providers.verifyKey": {
+				const p = params as Params<"providers.verifyKey">;
+				return (await this.hub.verifyProviderKey(p.provider, p.key)) satisfies Result<"providers.verifyKey">;
+			}
+			case "providers.saveKey": {
+				const p = params as Params<"providers.saveKey">;
+				await this.hub.saveKey(p.provider, p.key);
+				for (const c of this.authed) c.notify("providers.changed", {});
+				return {};
+			}
+			case "providers.models": {
+				const p = params as Params<"providers.models">;
+				return { models: await this.hub.providerModels(p.provider) } satisfies Result<"providers.models">;
+			}
+			case "providers.setHidden": {
+				const p = params as Params<"providers.setHidden">;
+				this.hub.setHidden(p.provider, p.hidden);
+				for (const c of this.authed) c.notify("providers.changed", {});
+				return {};
 			}
 			case "endpoints.save": {
 				const p = params as Params<"endpoints.save">;

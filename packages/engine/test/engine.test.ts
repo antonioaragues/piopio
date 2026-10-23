@@ -1973,7 +1973,7 @@ describe("custom endpoints (docs/spec/10-model-providers, P1)", () => {
 	test("a server that wants a key says so; the key goes to the Keychain; an update without a key keeps it", async () => {
 		const srv = await fakeServer("sk-lite");
 		const a = await start();
-		expect(await a.client.call("endpoints.check", { baseUrl: `${srv.url}/v1` })).toMatchObject({ ok: false, message: "The server wants a key." });
+		expect(await a.client.call("endpoints.check", { baseUrl: `${srv.url}/v1` })).toMatchObject({ ok: false, error: "auth", message: "The server wants an API key." });
 		await expect(a.client.call("endpoints.save", { name: "Work", baseUrl: `${srv.url}/v1`, key: "wrong" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 		const { id } = await a.client.call("endpoints.save", { name: "Work", baseUrl: `${srv.url}/v1`, key: "sk-lite" });
 		expect(JSON.parse(a.client.secrets[`provider.${id}.credential`]!)).toMatchObject({ type: "api_key", key: "sk-lite" });
@@ -1989,11 +1989,11 @@ describe("custom endpoints (docs/spec/10-model-providers, P1)", () => {
 	test("an address that isn't a model server is explained", async () => {
 		const { checkEndpoint } = await import("../src/endpoints.js");
 		const html = (async () => new Response("<html></html>", { status: 200 })) as typeof fetch;
-		expect(await checkEndpoint("http://example.test/v1", undefined, html)).toEqual({ ok: false, message: "That address doesn't look like an OpenAI-compatible server." });
+		expect(await checkEndpoint("http://example.test/v1", undefined, html)).toEqual({ ok: false, error: "not_found", message: "That address doesn't look like an OpenAI- or Anthropic-compatible server." });
 		const down = (async () => {
 			throw new Error("ECONNREFUSED");
 		}) as typeof fetch;
-		expect(await checkEndpoint("localhost:4000", undefined, down)).toEqual({ ok: false, message: "Can't reach localhost:4000. Is the server running?" });
+		expect(await checkEndpoint("localhost:4000", undefined, down)).toEqual({ ok: false, error: "refused", message: "Nothing is answering at localhost:4000. Is the server running?" });
 	});
 });
 
@@ -2156,5 +2156,63 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		const t = (h: number, m = 0) => new Date(2026, 9, 26, h, m).getTime();
 		const slots = freeSlots(new Date(t(0)), new Date(t(23, 59)), [[t(10), t(11)], [t(10, 30), t(12)], [t(15), t(15, 15)]], 30, "09:00", "18:00");
 		expect(slots).toEqual([[t(9), t(10)], [t(12), t(15)], [t(15, 15), t(18)]]);
+	});
+});
+
+describe("Settings › Models redesign (provider keys, visibility, custom endpoints)", () => {
+	test("a key is checked against the provider's model list, saved directly, and its models can be hidden", async () => {
+		const { verifyKey } = await import("../src/providers.js");
+		const anthropic = { id: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com" } as never;
+		const seen: { url: string; headers: Record<string, string> }[] = [];
+		const ok = (async (url: string, init: { headers: Record<string, string> }) => {
+			seen.push({ url, headers: init.headers });
+			return new Response(JSON.stringify({ data: [{ id: "a" }, { id: "b" }] }), { status: 200 });
+		}) as unknown as typeof fetch;
+		expect(await verifyKey(anthropic, "sk-ant-x", ok)).toEqual({ ok: true, models: 2 });
+		expect(seen[0]).toMatchObject({ url: "https://api.anthropic.com/v1/models", headers: { "x-api-key": "sk-ant-x" } });
+		const rejected = (async () => new Response("", { status: 401 })) as unknown as typeof fetch;
+		expect(await verifyKey(anthropic, "bad", rejected)).toEqual({ ok: false, message: "This key was rejected (401)." });
+		expect(await verifyKey({ id: "amazon-bedrock", name: "Bedrock" } as never, "x", ok)).toMatchObject({ ok: null });
+
+		const a = await start();
+		await a.client.call("providers.saveKey", { provider: "openai-api", key: "sk-proj-1234567890abcdef" });
+		expect(JSON.parse(a.client.secrets["provider.openai-api.credential"]!)).toMatchObject({ key: "sk-proj-1234567890abcdef" });
+		const info = ((await a.client.call("providers.list", {})).providers as { id: string; keyHint?: string; kind?: string; families?: string[] }[]).find((p) => p.id === "openai-api");
+		expect(info).toMatchObject({ kind: "cloud", keyHint: "sk-proj-12…def", families: expect.arrayContaining(["gpt"]) });
+		const before = (await a.client.call("models.list", {})).models.filter((m: { provider: string }) => m.provider === "openai-api").length;
+		await a.client.call("providers.setHidden", { provider: "openai-api", hidden: ["gpt-4", "gpt-4-turbo"] });
+		const after = (await a.client.call("models.list", {})).models.filter((m: { provider: string }) => m.provider === "openai-api");
+		expect(after.length).toBe(before - 2);
+		expect(after.some((m: { id: string }) => m.id === "gpt-4")).toBe(false);
+		const listed = (await a.client.call("providers.models", { provider: "openai-api" })).models as { id: string; hidden: boolean }[];
+		expect(listed.find((m) => m.id === "gpt-4")).toMatchObject({ hidden: true });
+	});
+
+	test("a custom endpoint speaks Anthropic or OpenAI, sends its headers, explains failures, and can be added anyway", async () => {
+		const { createServer } = await import("node:http");
+		const requests: Record<string, string | string[] | undefined>[] = [];
+		const server = createServer((req, res) => {
+			requests.push(req.headers);
+			if (req.url === "/v1/models") return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ data: [{ id: "claude-local" }, { id: "nomic-embed-text" }] }));
+			res.writeHead(404).end();
+		});
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+		const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+		const a = await start();
+		const check = await a.client.call("endpoints.check", { baseUrl: url, key: "k1", format: "anthropic", headers: { "x-team": "piopio" } });
+		expect(check).toMatchObject({ ok: true, baseUrl: `${url}/v1`, models: [{ id: "claude-local" }, { id: "nomic-embed-text", embedding: true }], latencyMs: expect.any(Number) });
+		expect(requests.at(-1)).toMatchObject({ "x-api-key": "k1", "x-team": "piopio" });
+		const { id } = await a.client.call("endpoints.save", { name: "Gateway", baseUrl: url, key: "k1", format: "anthropic", headers: { "x-team": "piopio" }, contextWindow: 200000 });
+		const provider = ((await a.client.call("providers.list", {})).providers as { id: string; endpoint?: unknown; models: number }[]).find((p) => p.id === id);
+		expect(provider).toMatchObject({ models: 1, endpoint: { format: "anthropic", headers: { "x-team": "piopio" }, contextWindow: 200000 } });
+		const models = (await a.client.call("models.list", {})).models.filter((m: { provider: string }) => m.provider === id);
+		expect(models.map((m: { id: string; contextWindow: number }) => [m.id, m.contextWindow])).toEqual([["claude-local", 200000]]);
+		expect(a.engine.hub.models.getProvider(id)?.getModels()[0]).toMatchObject({ api: "anthropic-messages" });
+
+		server.close();
+		const refused = await a.client.call("endpoints.check", { baseUrl: "http://127.0.0.1:9/v1" });
+		expect(refused).toMatchObject({ ok: false, error: "refused" });
+		const { id: later } = await a.client.call("endpoints.save", { name: "Studio", baseUrl: "http://127.0.0.1:9/v1", force: true });
+		expect(((await a.client.call("providers.list", {})).providers as { id: string; status: string }[]).find((p) => p.id === later)).toMatchObject({ status: "needs_attention" });
 	});
 });

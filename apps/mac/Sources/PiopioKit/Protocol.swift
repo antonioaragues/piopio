@@ -1055,26 +1055,56 @@ public struct ProviderInfo: Decodable, Sendable, Hashable, Identifiable {
     public var featured: Bool
     public var models: Int
     /// A custom endpoint added by address (LiteLLM, Ollama, LM Studio…).
-    public struct Endpoint: Decodable, Sendable, Hashable { public var baseUrl: String; public var local, keyless: Bool }
+    public struct Endpoint: Decodable, Sendable, Hashable {
+        public var baseUrl: String
+        public var local, keyless: Bool
+        /// "openai" or "anthropic".
+        public var format: String?
+        public var headers: [String: String]?
+        public var contextWindow: Double?
+    }
+    /// cloud, subscription, platform, custom (Add provider catalog).
+    public var kind: String?
+    /// The catalog's "Popular" card line.
+    public var popular: String?
+    public var keyPage: String?
+    public var families: [String]?
+    /// The stored key, masked.
+    public var keyHint: String?
+    public var hiddenModels: Int?
+    public var sampleModels: [String]?
     public var endpoint: Endpoint?
     public var isConnected: Bool { status == .connected || status == .needsAttention }
 }
 public struct EndpointCheckParams: Encodable, Sendable {
-    public var baseUrl: String; public var key, id: String?
-    public init(baseUrl: String, key: String?, id: String?) { self.baseUrl = baseUrl; self.key = key; self.id = id }
+    public var baseUrl: String; public var key, id, format: String?; public var headers: [String: String]?
+    public init(baseUrl: String, key: String?, id: String?, format: String? = nil, headers: [String: String]? = nil) { self.baseUrl = baseUrl; self.key = key; self.id = id; self.format = format; self.headers = headers }
 }
-public struct EndpointCheckResult: Decodable, Sendable {
-    public struct Model: Decodable, Sendable, Hashable { public var id: String; public var contextWindow: Double? }
+public struct EndpointCheckResult: Decodable, Sendable, Equatable {
+    public struct Model: Decodable, Sendable, Hashable { public var id: String; public var contextWindow: Double?; public var embedding: Bool? }
     public var ok: Bool; public var baseUrl: String?; public var models: [Model]; public var message: String?
+    /// refused, auth, not_found, empty, tls, invalid, other
+    public var error: String?
+    public var latencyMs: Double?
 }
 public struct EndpointSaveParams: Encodable, Sendable {
     public var id: String?; public var name, baseUrl: String; public var key: String?
-    public init(id: String?, name: String, baseUrl: String, key: String?) { self.id = id; self.name = name; self.baseUrl = baseUrl; self.key = key }
+    public var format: String?; public var headers: [String: String]?; public var contextWindow: Double?; public var hidden: [String]?; public var force: Bool?
+    public init(id: String?, name: String, baseUrl: String, key: String?, format: String? = nil, headers: [String: String]? = nil, contextWindow: Double? = nil, hidden: [String]? = nil, force: Bool? = nil) {
+        self.id = id; self.name = name; self.baseUrl = baseUrl; self.key = key; self.format = format; self.headers = headers; self.contextWindow = contextWindow; self.hidden = hidden; self.force = force
+    }
 }
+public struct ProviderKeyParams: Encodable, Sendable { public var provider, key: String; public init(provider: String, key: String) { self.provider = provider; self.key = key } }
+public struct ProviderVerifyResult: Decodable, Sendable, Equatable { public var ok: Bool?; public var message: String?; public var models: Int? }
+public struct ProviderModelsResult: Decodable, Sendable {
+    public struct Model: Decodable, Sendable, Hashable, Identifiable { public var id, name: String; public var contextWindow: Double; public var hidden: Bool; public var embedding: Bool? }
+    public var models: [Model]
+}
+public struct ProviderHiddenParams: Encodable, Sendable { public var provider: String; public var hidden: [String]; public init(provider: String, hidden: [String]) { self.provider = provider; self.hidden = hidden } }
 public struct EndpointSaveResult: Decodable, Sendable { public var id: String }
 public struct EndpointIdParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
 public struct EndpointsDetectResult: Decodable, Sendable {
-    public struct Found: Decodable, Sendable, Hashable { public var name, baseUrl: String; public var models: Int }
+    public struct Found: Decodable, Sendable, Hashable { public var name, baseUrl: String; public var models: Int; public var preset: String? }
     public var found: [Found]
 }
 public struct ProvidersListResult: Decodable, Sendable { public var providers: [ProviderInfo] }

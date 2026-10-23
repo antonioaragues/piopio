@@ -193,6 +193,9 @@ After implementing, report: what changed; which pi capabilities were reused; bac
 - A real ChatGPT sign-in and real requests with real keys (needs your accounts). Captures used fake keys in a separate Keychain service (`PIOPIO_KEYCHAIN_SERVICE`).
 - Switching provider while a turn is running relies on the existing `sessions.configure` behavior (the change applies to the next turn).
 
+## 12. Settings › Models redesign (2026-10-23)
+Built from the design handoff in [docs/design/models](../design/models/IMPLEMENTATION.md): the page shows only connected providers, detected servers and the default per mode; adding happens in a catalog sheet (43 providers plus custom endpoints); each provider has a detail page. New engine methods: `providers.verifyKey` (checks a key against the provider's model list; with no key, the stored one), `providers.saveKey`, `providers.models`, `providers.setHidden` (models hidden from the picker, `model-visibility.json`); endpoints gained API format (OpenAI or Anthropic), headers, context window, hidden models, "add anyway", error kinds and latency; detection covers Ollama, LM Studio, LiteLLM, vLLM and llama.cpp.
+
 ## References
 - https://pi.dev/docs/latest/models
 - https://pi.dev/docs/latest/providers

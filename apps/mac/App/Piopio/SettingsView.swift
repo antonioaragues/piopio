@@ -47,6 +47,10 @@ struct SettingsView: View {
                             RoundedRectangle(cornerRadius: 5).fill(s.icon.1.gradient).frame(width: 20, height: 20)
                                 .overlay(Image(systemName: s.icon.0).font(.system(size: 10, weight: .semibold)).foregroundStyle(.white))
                             Text(s.rawValue).font(.system(size: 13))
+                            // Nothing to think with yet (design m0): an amber dot on Models.
+                            if s == .providers, !engine.faux, !engine.providers.isEmpty, !engine.providers.contains(where: \.isConnected) {
+                                Circle().fill(Color.dsAmber).frame(width: 6, height: 6)
+                            }
                             Spacer()
                         }
                         .padding(.horizontal, 8)
@@ -69,7 +73,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     switch section {
                     case .general: GeneralPane()
-                    case .providers: ProvidersPane(engine: engine)
+                    case .providers: ModelsPane(engine: engine)
                     case .connectors: ConnectorsPane(engine: engine)
                     case .chat: ChatPane(engine: engine)
                     case .extensions: ExtensionsPane(engine: engine)
@@ -188,66 +192,6 @@ private struct GeneralPane: View {
         }
         .id(tick)
     }
-}
-
-// MARK: Models
-
-/// Settings › Models (docs/design v2, 9a): the providers billed for models, then the default model per mode.
-private struct ProvidersPane: View {
-    let engine: EngineController
-    @State private var picking: EngineController.ModelRole?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Models").font(.system(size: 24, weight: .bold))
-            Text("Billed to your own accounts. Keys stay in the macOS Keychain.").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-        }
-        .padding(.bottom, 18)
-        SectionLabel("Providers").padding(.bottom, 6)
-        ProvidersCard(engine: engine)
-        SectionLabel("Default model").padding(.top, 22).padding(.bottom, 6)
-        ListCard {
-            roleRow(.build, "Build sessions", "Writing and changing code")
-            roleRow(.chat, "Chats and notebooks", "Everyday questions")
-            roleRow(.quick, "Quick Chat", "Pick something fast")
-            roleRow(.agent, "New agents", "You can change each agent in its Setup", last: true)
-        }
-        Text("Cloud agents will receive keys as secrets on their target, which you can revoke at any time.")
-            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10)
-            .task { await engine.loadProviders() }
-    }
-
-    private func roleRow(_ role: EngineController.ModelRole, _ title: String, _ hint: String, last: Bool = false) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 13, weight: .semibold))
-                    Text(hint).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                }
-                Spacer()
-                Button {
-                    picking = role
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(modelName(engine.model(for: role)))
-                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
-                    }
-                }
-                .buttonStyle(PillStyle(compact: true))
-                .popover(isPresented: Binding(get: { picking == role }, set: { if !$0 { picking = nil } })) {
-                    ModelPicker(engine: engine, selected: engine.model(for: role), role: role) { m in engine.setModel(m, for: role); picking = nil }
-                }
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 52)
-            if !last { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 14) }
-        }
-    }
-
-    private func modelName(_ ref: ModelRef?) -> String {
-        engine.model(ref).map { ModelChip.label($0, engine: engine) } ?? ref?.id ?? "Choose…"
-    }
-
 }
 
 // MARK: Approvals
