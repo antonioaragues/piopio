@@ -11,11 +11,17 @@ import type { ProviderAuthEvent } from "@piopio/protocol";
 import type { SecretBroker } from "../secrets.js";
 import { googleCalendar } from "./google-calendar.js";
 import { outlook } from "./outlook.js";
-import type { AuthorizedFetch, Calendar, ConnectorDefinition, ConnectorEndpoints, Mailbox, Tokens } from "./types.js";
+import { CAPABILITIES, defaultPermission, groupOf, type Permission } from "./permissions.js";
+import type { AuthorizedFetch, Calendar, CalendarEntry, ConnectorDefinition, ConnectorEndpoints, Mailbox, Tokens } from "./types.js";
 
 export type Account = { id: string; connector: string; label: string; addedAt: string };
-export type ConnectorSettings = { chats: boolean; dontAsk: string[]; clientId?: string };
-type State = { accounts: Account[]; settings: Record<string, ConnectorSettings> };
+/**
+ * Per app: offered in chats, what each tool may do (`permissions`, by tool name; `dontAsk` is C1's form of "runs"),
+ * and a developer's own OAuth client.
+ */
+export type ConnectorSettings = { chats: boolean; dontAsk: string[]; permissions?: Record<string, Permission>; clientId?: string };
+/** Per account: calendars turned on or off in Settings (absent: what the app itself shows). */
+type State = { accounts: Account[]; settings: Record<string, ConnectorSettings>; calendars?: Record<string, Record<string, boolean>> };
 
 /** OAuth clients Piopio ships with (docs/spec/12 §2): empty until our Google and Microsoft apps are registered. */
 const BUILT_IN_CLIENTS: Record<string, string> = {};
@@ -99,12 +105,29 @@ export class ConnectorHub {
 		return Boolean(await this.clientSecret(connector).catch(() => undefined));
 	}
 
-	async configure(connector: string, patch: { chats?: boolean; dontAsk?: string[]; clientId?: string; clientSecret?: string }): Promise<void> {
+	/** What a tool may do with this app: set in Settings, else C1's "Don't ask again", else the safe default. */
+	permission(connector: string, tool: string): Permission {
+		const s = this.settings(connector);
+		const set = s.permissions?.[tool];
+		if (set) return set;
+		const group = groupOf(tool);
+		if (s.dontAsk.includes(tool) && group?.access === "write") return "runs";
+		return defaultPermission(group?.access ?? "write");
+	}
+
+	async configure(connector: string, patch: { chats?: boolean; dontAsk?: string[]; permissions?: Record<string, Permission>; clientId?: string; clientSecret?: string }): Promise<void> {
 		if (!this.definition(connector)) throw new Error(`No connector ${connector}`);
 		const current = this.settings(connector);
+		const permissions = { ...current.permissions, ...patch.permissions };
+		for (const [tool, p] of Object.entries(permissions)) {
+			const access = groupOf(tool)?.access;
+			if (!access) delete permissions[tool];
+			else if (p === "runs" && (access === "send" || access === "destructive")) permissions[tool] = "ask";
+		}
 		this.state.settings[connector] = {
 			chats: patch.chats ?? current.chats,
 			dontAsk: patch.dontAsk ?? current.dontAsk,
+			...(Object.keys(permissions).length ? { permissions } : {}),
 			...((patch.clientId ?? current.clientId) ? { clientId: (patch.clientId ?? current.clientId)!.trim() } : {}),
 		};
 		if (patch.clientSecret !== undefined) {
@@ -115,9 +138,34 @@ export class ConnectorHub {
 	}
 
 	/** Lets a write action run without asking from now on (an approval's "Don't ask again"). */
+	/** "Don't ask again" on an approval: the tool's whole capability runs from now on. */
 	async allow(connector: string, tool: string): Promise<void> {
-		const s = this.settings(connector);
-		if (!s.dontAsk.includes(tool)) await this.configure(connector, { dontAsk: [...s.dontAsk, tool] });
+		const tools = groupOf(tool)?.tools ?? [tool];
+		if (tools.some((t) => this.permission(connector, t) !== "runs")) await this.configure(connector, { permissions: Object.fromEntries(tools.map((t) => [t, "runs" as const])) });
+	}
+
+	/** The capabilities an app offers, as Settings shows them: each with its tools and permission. */
+	capabilities(connector: string) {
+		const def = this.definition(connector);
+		const has = new Set([...(def?.calendar ? ["calendar"] : []), ...(def?.mailbox ? ["mail"] : [])]);
+		return CAPABILITIES.filter((g) => has.has(g.capability)).map((g) => ({ ...g, permission: this.permission(connector, g.tools[0]!) }));
+	}
+
+	// ── Calendars (Settings › Connectors, the calendars card) ──
+
+	/** An account's calendars, each on or off for Piopio. */
+	async calendarList(accountId: string): Promise<(CalendarEntry & { enabled: boolean })[]> {
+		const account = this.state.accounts.find((a) => a.id === accountId);
+		const def = account && this.definition(account.connector);
+		if (!account || !def?.calendar) return [];
+		const chosen = this.state.calendars?.[accountId] ?? {};
+		return (await def.calendar(this.authorized(account)).calendars()).map((c) => ({ ...c, enabled: chosen[c.id] ?? c.shown }));
+	}
+
+	setCalendar(accountId: string, calendarId: string, enabled: boolean): void {
+		this.state.calendars ??= {};
+		this.state.calendars[accountId] = { ...this.state.calendars[accountId], [calendarId]: enabled };
+		this.save();
 	}
 
 	// ── Sign-in ──
@@ -188,6 +236,7 @@ export class ConnectorHub {
 	async disconnect(accountId: string): Promise<void> {
 		await this.secrets.delete(this.secretName(accountId));
 		this.state.accounts = this.state.accounts.filter((a) => a.id !== accountId);
+		if (this.state.calendars) delete this.state.calendars[accountId];
 		this.problems.delete(accountId);
 		this.save();
 	}
@@ -264,7 +313,11 @@ export class ConnectorHub {
 		return this.state.accounts.flatMap((account) => {
 			const def = this.definition(account.connector);
 			if (!def?.calendar || (scope === "chat" && !this.settings(def.id).chats)) return [];
-			return [{ account, calendar: def.calendar(this.authorized(account)), name: def.name }];
+			const calendar = def.calendar(this.authorized(account));
+			const chosen = this.state.calendars?.[account.id];
+			// Calendars turned off in Settings aren't read.
+			const read: Calendar = chosen ? { ...calendar, events: (range) => calendar.events({ ...range, include: (id, shown) => chosen[id] ?? shown }) } : calendar;
+			return [{ account, calendar: read, name: def.name }];
 		});
 	}
 

@@ -3,7 +3,8 @@
  * global servers from pi's `mcp.json` (the ones Settings › MCP servers edits) and offers their tools as a
  * pi-durable extension, `mcp__<server>__<tool>`. A server with `"exposure": "direct"` declares its tools to the
  * model; others are deferred and found with `tool_search` (Build reaches them through codemode instead).
- * Off unless Settings › MCP servers › "Also in Chat" is on: chat has no approvals, so the user opts in.
+ * Only the servers the user turned on for chats in Settings › MCP servers: chat has no approvals, so it's opt-in per
+ * server. Tools turned off for a server (pi's `toolExposure`: "hidden") stay out.
  */
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type Extension } from "@earendil-works/pi-durable";
@@ -11,7 +12,7 @@ import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-searc
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { McpConfig, RawServer } from "../mcp.js";
+import { hiddenTools, type McpConfig, type RawServer } from "../mcp.js";
 
 export const MCP_EXTENSION = "piopio-mcp";
 const CONNECT_TIMEOUT_MS = 15_000;
@@ -27,12 +28,16 @@ export class ChatMcp {
 
 	constructor(
 		private readonly config: McpConfig,
-		private readonly enabled: () => boolean,
+		private readonly inChat: (name: string, server: RawServer) => boolean,
 	) {}
+
+	private servers() {
+		return this.config.globalServers().filter(({ name, server }) => this.inChat(name, server));
+	}
 
 	/** The extension with every connected server's tools, or undefined when off or without servers. */
 	async extension(): Promise<Extension | undefined> {
-		if (!this.enabled() || !this.config.enabledGlobal().length) return undefined;
+		if (!this.servers().length) return undefined;
 		this.connecting ??= this.connect();
 		const servers = await this.connecting;
 		if (!servers.length) return undefined;
@@ -78,12 +83,13 @@ export class ChatMcp {
 	private async connect(): Promise<Connected[]> {
 		this.errors = [];
 		const results = await Promise.all(
-			this.config.enabledGlobal().map(async ({ name, server }) => {
+			this.servers().map(async ({ name, server }) => {
 				try {
 					const client = new Client({ name: "piopio", version: "1.0.0" });
 					await withTimeout(client.connect(transport(server)), CONNECT_TIMEOUT_MS);
 					const { tools } = await withTimeout(client.listTools(), CONNECT_TIMEOUT_MS);
-					return { name, client, tools, direct: server.exposure === "direct" } as Connected;
+					const hidden = new Set(hiddenTools(server));
+					return { name, client, tools: tools.filter((t) => !hidden.has(t.name)), direct: server.exposure === "direct" } as Connected;
 				} catch (error) {
 					this.errors.push(`${name}: ${(error as Error).message}`);
 					return undefined;
@@ -94,14 +100,14 @@ export class ChatMcp {
 	}
 }
 
-export function transport(server: RawServer) {
+export function transport(server: RawServer, stderr: "ignore" | "pipe" = "ignore") {
 	const expand = (v: string) => v.replace(/\$\{(\w+)\}/g, (_, k: string) => process.env[k] ?? "");
 	if (server.url) {
 		const headers = Object.fromEntries(Object.entries((server.headers as Record<string, string> | undefined) ?? {}).map(([k, v]) => [k, expand(v)]));
 		return new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers } });
 	}
 	const env = Object.fromEntries(Object.entries({ ...process.env, ...server.env }).filter((e): e is [string, string] => typeof e[1] === "string").map(([k, v]) => [k, expand(v)]));
-	return new StdioClientTransport({ command: server.command!, args: server.args ?? [], env, stderr: "ignore" });
+	return new StdioClientTransport({ command: server.command!, args: server.args ?? [], env, stderr });
 }
 
 export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {

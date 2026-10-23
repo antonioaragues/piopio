@@ -12,12 +12,13 @@ import { SecretBroker } from "./secrets.js";
 import { connectMethods, LoginFlows } from "./providers.js";
 import { detectLocalServers } from "./endpoints.js";
 import { ConnectorHub } from "./connectors/hub.js";
-import { connectorTools } from "./connectors/tools.js";
+import { choices } from "./connectors/permissions.js";
 import type { ConnectorEndpoints } from "./connectors/types.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { listDir, readProjectFile, searchFiles, writeProjectFile } from "./files.js";
-import { McpConfig } from "./mcp.js";
+import { McpConfig, type RawServer } from "./mcp.js";
+import { detectOtherApps, McpStatus, probe } from "./mcp-probe.js";
 import * as gitOps from "./git.js";
 import { Projects } from "./projects.js";
 import { Sessions } from "./sessions.js";
@@ -74,6 +75,7 @@ export class Engine {
 	readonly settings: Settings;
 	readonly aboutMe: AboutMe;
 	readonly chatMcp: ChatMcp;
+	private readonly mcpStatus = new McpStatus();
 	readonly packages: Packages;
 	readonly chatResources: ChatResources;
 	readonly memory: MemoryProviders;
@@ -141,7 +143,7 @@ export class Engine {
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
 		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings);
 		this.aboutMe = new AboutMe(this.memory, this.settings, join(options.paths.home, "about-me.json"));
-		this.chatMcp = new ChatMcp(this.mcp, () => this.settings.get().chat.mcp);
+		this.chatMcp = new ChatMcp(this.mcp, (name, server) => this.inChat(name, server));
 		this.packages = new Packages(agentDir);
 		this.chatResources = new ChatResources(agentDir);
 		this.packages.onChange(() => void this.chatResources.reload());
@@ -150,7 +152,7 @@ export class Engine {
 		if (options.agentAskTimeoutMs) this.sessions.agentAskTimeoutMs = options.agentAskTimeoutMs;
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
 		this.settings.onChange((next, previous) => {
-			if (next.chat.mcp !== previous.chat.mcp) void this.chatMcp.reset();
+			if (next.chat.mcp !== previous.chat.mcp || JSON.stringify(next.chat.mcpServers) !== JSON.stringify(previous.chat.mcpServers)) void this.chatMcp.reset();
 		});
 		this.sessions.policy = {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
@@ -193,13 +195,23 @@ export class Engine {
 		void this.sessions.startAgents(this.log);
 	}
 
+	/** Whether chats and notebooks use a global MCP server: chosen per server, else (before that) all that are on. */
+	private inChat(name: string, server: RawServer): boolean {
+		const chat = this.settings.get().chat;
+		return chat.mcpServers ? chat.mcpServers.includes(name) : chat.mcp && server.enabled !== false;
+	}
+
+	private setChat(name: string, on: boolean): void {
+		const current = this.mcp.globalServers().filter((g) => this.inChat(g.name, g.server)).map((g) => g.name);
+		const next = on ? [...new Set([...current, name])] : current.filter((n) => n !== name);
+		this.settings.set({ chat: { mcpServers: next } });
+	}
+
 	/** Settings › Connectors: each app, its accounts, its settings and what its tools may do. */
 	private async connectorInfos(): Promise<Result<"connectors.list">["connectors"]> {
-		const tools = connectorTools(this.connectors, "agent");
 		return Promise.all(
 			this.connectors.definitions.map(async (d) => {
 				const settings = this.connectors.settings(d.id);
-				const capabilities = new Set([...(d.calendar ? ["calendar"] : []), ...(d.mailbox ? ["mail"] : [])]);
 				const clientId = this.connectors.clientId(d.id);
 				const ready = Boolean(clientId) && (!d.oauth.needsSecret || (await this.connectors.hasClientSecret(d.id)));
 				return {
@@ -214,12 +226,7 @@ export class Engine {
 					connecting: this.connectors.connecting(d.id),
 					chats: settings.chats,
 					accounts: this.connectors.accounts(d.id).map((a) => ({ id: a.id, label: a.label, addedAt: a.addedAt, ...(this.connectors.problem(a.id) ? { problem: this.connectors.problem(a.id)! } : {}) })),
-					tools: tools
-						.filter((t) => capabilities.has(t.capability))
-						.map((t) => {
-							const access = t.access({});
-							return { name: t.name, label: t.label, access, dontAsk: access === "write" && settings.dontAsk.includes(t.name) };
-						}),
+					capabilities: this.connectors.capabilities(d.id).map((g) => ({ id: g.id, label: g.label, tools: g.tools, access: g.access, permission: g.permission, choices: choices(g.access), ...(g.note ? { note: g.note } : {}) })),
 				};
 			}),
 		);
@@ -497,15 +504,43 @@ export class Engine {
 			}
 			case "mcp.list": {
 				const p = params as Params<"mcp.list">;
-				return this.mcp.list(p.cwd ? this.folder(p) : undefined) satisfies Result<"mcp.list">;
+				const list = this.mcp.list(p.cwd ? this.folder(p) : undefined);
+				const global = new Map(this.mcp.globalServers().map((g) => [g.name, g.server]));
+				return { ...list, servers: list.servers.map((s) => (s.scope === "global" && global.has(s.name) ? { ...s, chat: this.inChat(s.name, global.get(s.name)!) } : s)) } satisfies Result<"mcp.list">;
 			}
 			case "mcp.add": {
 				const p = params as Params<"mcp.add">;
-				const { scope, cwd, name, ...server } = p;
+				const { scope, cwd, name, chat, ...server } = p;
 				this.mcp.add(scope, cwd ? this.folder({ cwd }) : undefined, name, server);
-				if (scope === "global") void this.chatMcp.reset();
+				if (scope === "global") {
+					if (chat !== undefined) this.setChat(name, chat);
+					void this.chatMcp.reset();
+				}
 				return {};
 			}
+			case "mcp.probe": {
+				const p = params as Params<"mcp.probe">;
+				if (!p.command === !p.url) throw new EngineError("INVALID", "Give either a command or a URL.");
+				return (await probe(p)) satisfies Result<"mcp.probe">;
+			}
+			case "mcp.status": {
+				const p = params as Params<"mcp.status">;
+				const cwd = p.cwd ? this.folder(p) : undefined;
+				return (await this.mcpStatus.get(`${p.scope}:${cwd ?? ""}:${p.name}`, this.mcp.resolve(p.scope, cwd, p.name), p.refresh)) satisfies Result<"mcp.status">;
+			}
+			case "mcp.setChat": {
+				const p = params as Params<"mcp.setChat">;
+				this.setChat(p.name, p.chat);
+				return {};
+			}
+			case "mcp.setTool": {
+				const p = params as Params<"mcp.setTool">;
+				this.mcp.setTool(p.scope, p.cwd ? this.folder(p) : undefined, p.name, p.tool, p.enabled);
+				if (p.scope === "global") void this.chatMcp.reset();
+				return {};
+			}
+			case "mcp.detect":
+				return { found: detectOtherApps(new Set(this.mcp.list().servers.map((s) => s.name))) } satisfies Result<"mcp.detect">;
 			case "mcp.remove": {
 				const p = params as Params<"mcp.remove">;
 				this.mcp.remove(p.scope, p.cwd ? this.folder(p) : undefined, p.name);
@@ -867,6 +902,19 @@ export class Engine {
 			case "connectors.configure": {
 				const p = params as Params<"connectors.configure">;
 				await this.connectors.configure(p.connector, p);
+				return {};
+			}
+			case "connectors.calendars": {
+				const p = params as Params<"connectors.calendars">;
+				try {
+					return { calendars: (await this.connectors.calendarList(p.accountId)).map((c) => ({ id: c.id, name: c.name, primary: c.primary, enabled: c.enabled, ...(c.color ? { color: c.color } : {}) })) } satisfies Result<"connectors.calendars">;
+				} catch (error) {
+					throw new EngineError("INVALID", (error as Error).message);
+				}
+			}
+			case "connectors.setCalendar": {
+				const p = params as Params<"connectors.setCalendar">;
+				this.connectors.setCalendar(p.accountId, p.calendarId, p.enabled);
 				return {};
 			}
 			case "sessions.decide": {

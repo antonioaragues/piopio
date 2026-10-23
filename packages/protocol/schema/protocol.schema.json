@@ -22959,7 +22959,7 @@
 							"connecting",
 							"chats",
 							"accounts",
-							"tools"
+							"capabilities"
 						],
 						"properties": {
 							"id": {
@@ -23017,22 +23017,30 @@
 									}
 								}
 							},
-							"tools": {
+							"capabilities": {
 								"type": "array",
 								"items": {
 									"type": "object",
 									"required": [
-										"name",
+										"id",
 										"label",
+										"tools",
 										"access",
-										"dontAsk"
+										"permission",
+										"choices"
 									],
 									"properties": {
-										"name": {
+										"id": {
 											"type": "string"
 										},
 										"label": {
 											"type": "string"
+										},
+										"tools": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
 										},
 										"access": {
 											"anyOf": [
@@ -23054,8 +23062,43 @@
 												}
 											]
 										},
-										"dontAsk": {
-											"type": "boolean"
+										"permission": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "runs"
+												},
+												{
+													"type": "string",
+													"const": "ask"
+												},
+												{
+													"type": "string",
+													"const": "off"
+												}
+											]
+										},
+										"choices": {
+											"type": "array",
+											"items": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "runs"
+													},
+													{
+														"type": "string",
+														"const": "ask"
+													},
+													{
+														"type": "string",
+														"const": "off"
+													}
+												]
+											}
+										},
+										"note": {
+											"type": "string"
 										}
 									}
 								}
@@ -23135,6 +23178,27 @@
 						"type": "string"
 					}
 				},
+				"permissions": {
+					"type": "object",
+					"patternProperties": {
+						"^.*$": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "runs"
+								},
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "off"
+								}
+							]
+						}
+					}
+				},
 				"clientId": {
 					"type": "string"
 				},
@@ -23144,6 +23208,77 @@
 			}
 		},
 		"connectors.configure.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"connectors.calendars.params": {
+			"type": "object",
+			"required": [
+				"accountId"
+			],
+			"properties": {
+				"accountId": {
+					"type": "string"
+				}
+			}
+		},
+		"connectors.calendars.result": {
+			"type": "object",
+			"required": [
+				"calendars"
+			],
+			"properties": {
+				"calendars": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"primary",
+							"enabled"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"primary": {
+								"type": "boolean"
+							},
+							"color": {
+								"type": "string"
+							},
+							"enabled": {
+								"type": "boolean"
+							}
+						}
+					}
+				}
+			}
+		},
+		"connectors.setCalendar.params": {
+			"type": "object",
+			"required": [
+				"accountId",
+				"calendarId",
+				"enabled"
+			],
+			"properties": {
+				"accountId": {
+					"type": "string"
+				},
+				"calendarId": {
+					"type": "string"
+				},
+				"enabled": {
+					"type": "boolean"
+				}
+			}
+		},
+		"connectors.setCalendar.result": {
 			"type": "object",
 			"properties": {}
 		},
@@ -25023,6 +25158,21 @@
 							},
 							"override": {
 								"type": "boolean"
+							},
+							"env": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"hiddenTools": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"chat": {
+								"type": "boolean"
 							}
 						}
 					}
@@ -25082,12 +25232,272 @@
 				},
 				"description": {
 					"type": "string"
+				},
+				"enabled": {
+					"type": "boolean"
+				},
+				"chat": {
+					"type": "boolean"
 				}
 			}
 		},
 		"mcp.add.result": {
 			"type": "object",
 			"properties": {}
+		},
+		"mcp.probe.params": {
+			"type": "object",
+			"properties": {
+				"command": {
+					"type": "string"
+				},
+				"args": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"url": {
+					"type": "string"
+				},
+				"env": {
+					"type": "object",
+					"patternProperties": {
+						"^.*$": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"mcp.probe.result": {
+			"type": "object",
+			"required": [
+				"ok",
+				"tools"
+			],
+			"properties": {
+				"ok": {
+					"type": "boolean"
+				},
+				"ms": {
+					"type": "number"
+				},
+				"tools": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"error": {
+					"type": "string"
+				},
+				"log": {
+					"type": "string"
+				}
+			}
+		},
+		"mcp.status.params": {
+			"type": "object",
+			"required": [
+				"scope",
+				"name"
+			],
+			"properties": {
+				"scope": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "global"
+						},
+						{
+							"type": "string",
+							"const": "project"
+						}
+					]
+				},
+				"cwd": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"refresh": {
+					"type": "boolean"
+				}
+			}
+		},
+		"mcp.status.result": {
+			"type": "object",
+			"required": [
+				"ok",
+				"tools"
+			],
+			"properties": {
+				"ok": {
+					"type": "boolean"
+				},
+				"ms": {
+					"type": "number"
+				},
+				"tools": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"error": {
+					"type": "string"
+				},
+				"log": {
+					"type": "string"
+				}
+			}
+		},
+		"mcp.setChat.params": {
+			"type": "object",
+			"required": [
+				"name",
+				"chat"
+			],
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"chat": {
+					"type": "boolean"
+				}
+			}
+		},
+		"mcp.setChat.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"mcp.setTool.params": {
+			"type": "object",
+			"required": [
+				"scope",
+				"name",
+				"tool",
+				"enabled"
+			],
+			"properties": {
+				"scope": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "global"
+						},
+						{
+							"type": "string",
+							"const": "project"
+						}
+					]
+				},
+				"cwd": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"tool": {
+					"type": "string"
+				},
+				"enabled": {
+					"type": "boolean"
+				}
+			}
+		},
+		"mcp.setTool.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"mcp.detect.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"mcp.detect.result": {
+			"type": "object",
+			"required": [
+				"found"
+			],
+			"properties": {
+				"found": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"app",
+							"path",
+							"servers"
+						],
+						"properties": {
+							"app": {
+								"type": "string"
+							},
+							"path": {
+								"type": "string"
+							},
+							"servers": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"name"
+									],
+									"properties": {
+										"name": {
+											"type": "string"
+										},
+										"command": {
+											"type": "string"
+										},
+										"args": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"url": {
+											"type": "string"
+										},
+										"env": {
+											"type": "object",
+											"patternProperties": {
+												"^.*$": {
+													"type": "string"
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 		},
 		"mcp.remove.params": {
 			"type": "object",
@@ -26179,6 +26589,12 @@
 						"mcp": {
 							"type": "boolean"
 						},
+						"mcpServers": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
 						"suggestSpaces": {
 							"type": "boolean"
 						},
@@ -26356,6 +26772,12 @@
 						"mcp": {
 							"type": "boolean"
 						},
+						"mcpServers": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
 						"suggestSpaces": {
 							"type": "boolean"
 						},
@@ -26531,6 +26953,12 @@
 					"properties": {
 						"mcp": {
 							"type": "boolean"
+						},
+						"mcpServers": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
 						},
 						"suggestSpaces": {
 							"type": "boolean"

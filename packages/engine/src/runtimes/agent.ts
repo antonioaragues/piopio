@@ -583,8 +583,13 @@ function ownerOf(definition: AgentDefinition): string {
 /** Connector writes, sends and deletes need the owner's OK in agents too (docs/spec/12 §1), except writes they said not to ask about. */
 function withConnectorApprovals(def: AgentDefinition, hub: ConnectorHub | undefined): AgentDefinition {
 	if (!hub || hub.accounts().length === 0) return def;
-	const asked = new Set(["calendar_create_event", "calendar_update_event", "calendar_delete_event", "mail_draft", "mail_send"]);
-	for (const c of hub.definitions) for (const tool of hub.settings(c.id).dontAsk) if (tool !== "calendar_delete_event" && tool !== "mail_send") asked.delete(tool);
+	// A tool asks when any connected app's setting for it asks; sending and deleting always do (when not off).
+	const asked = new Set<string>();
+	for (const c of hub.definitions) {
+		if (!hub.accounts(c.id).length) continue;
+		for (const g of hub.capabilities(c.id)) if (g.permission === "ask") for (const t of g.tools) asked.add(t);
+		for (const t of ["calendar_delete_event", "mail_send"]) if (hub.permission(c.id, t) !== "off") asked.add(t);
+	}
 	const rules = [...new Set([...(def.policies?.requireApproval ?? []), ...asked])];
 	return { ...def, policies: { ...def.policies, requireApproval: rules } };
 }

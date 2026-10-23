@@ -9,7 +9,18 @@ import type { McpServerInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 
 type Scope = "global" | "project";
-export type RawServer = { command?: string; args?: string[]; url?: string; type?: string; env?: Record<string, string>; enabled?: boolean; description?: string; [key: string]: unknown };
+export type RawServer = {
+	command?: string;
+	args?: string[];
+	url?: string;
+	type?: string;
+	env?: Record<string, string>;
+	enabled?: boolean;
+	description?: string;
+	/** pi's per-tool exposure: "hidden" turns a tool off (Settings › MCP servers, a server's tools). */
+	toolExposure?: Record<string, string>;
+	[key: string]: unknown;
+};
 type RawFile = { mcpServers?: Record<string, RawServer>; [key: string]: unknown };
 
 export class McpConfig {
@@ -40,6 +51,8 @@ export class McpConfig {
 					enabled: s.enabled !== false,
 					...(s.description ? { description: s.description } : {}),
 					...(override ? { override: true } : {}),
+					...(s.env && Object.keys(s.env).length ? { env: Object.keys(s.env) } : {}),
+					...(hiddenTools(s).length ? { hiddenTools: hiddenTools(s) } : {}),
 				});
 			}
 		}
@@ -59,7 +72,41 @@ export class McpConfig {
 			.map(([name, server]) => ({ name, server }));
 	}
 
-	add(scope: Scope, cwd: string | undefined, name: string, server: { command?: string; args?: string[]; url?: string; env?: Record<string, string>; description?: string }): void {
+	/** Every global server, on or off (Chat picks its own). */
+	globalServers(): { name: string; server: RawServer }[] {
+		let file: RawFile;
+		try {
+			file = read(this.path("global"));
+		} catch {
+			return [];
+		}
+		return Object.entries(file.mcpServers ?? {})
+			.filter(([, s]) => s.command || s.url)
+			.map(([name, server]) => ({ name, server }));
+	}
+
+	/** A server as it runs: a project entry that only overrides takes the rest from the global one. */
+	resolve(scope: Scope, cwd: string | undefined, name: string): RawServer {
+		const own = read(this.path(scope, cwd)).mcpServers?.[name];
+		if (!own) throw new EngineError("NOT_FOUND", `No MCP server “${name}”.`);
+		if (scope === "project" && !own.command && !own.url && !own.type) return { ...read(this.path("global")).mcpServers?.[name], ...own };
+		return own;
+	}
+
+	/** One tool on or off (pi's `toolExposure`: "hidden"), shared with the pi CLI. */
+	setTool(scope: Scope, cwd: string | undefined, name: string, tool: string, enabled: boolean): void {
+		this.edit(scope, cwd, (file) => {
+			const server = file.mcpServers?.[name];
+			if (!server) throw new EngineError("NOT_FOUND", `No MCP server “${name}”.`);
+			const exposure = { ...server.toolExposure };
+			if (enabled) delete exposure[tool];
+			else exposure[tool] = "hidden";
+			if (Object.keys(exposure).length) server.toolExposure = exposure;
+			else delete server.toolExposure;
+		});
+	}
+
+	add(scope: Scope, cwd: string | undefined, name: string, server: { command?: string; args?: string[]; url?: string; env?: Record<string, string>; description?: string; enabled?: boolean }): void {
 		if (!/^[A-Za-z0-9_-]+$/.test(name)) throw new EngineError("INVALID", "Server names may use only letters, digits, - and _.");
 		if (!server.command === !server.url) throw new EngineError("INVALID", "Give either a command (stdio) or a URL (HTTP).");
 		if (server.url && !/^https?:\/\//.test(server.url)) throw new EngineError("INVALID", "The URL must start with http:// or https://.");
@@ -69,6 +116,7 @@ export class McpConfig {
 				...(server.command ? { command: server.command, ...(server.args?.length ? { args: server.args } : {}) } : { url: server.url! }),
 				...(server.env && Object.keys(server.env).length ? { env: server.env } : {}),
 				...(server.description ? { description: server.description } : {}),
+				...(server.enabled === false ? { enabled: false } : {}),
 			};
 		});
 	}
@@ -115,3 +163,5 @@ function read(path: string): RawFile {
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not a JSON object");
 	return parsed as RawFile;
 }
+
+export const hiddenTools = (s: RawServer) => Object.entries(s.toolExposure ?? {}).filter(([, v]) => v === "hidden").map(([k]) => k);

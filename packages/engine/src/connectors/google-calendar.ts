@@ -57,18 +57,18 @@ function toBody(input: Partial<EventInput>) {
 function calendar(fetch: AuthorizedFetch): Calendar {
 	let names: Map<string, string> | undefined;
 	const list = async () => {
-		const data = await json<{ items?: { id: string; summary?: string; summaryOverride?: string; primary?: boolean; selected?: boolean }[] }>(await fetch("/calendar/v3/users/me/calendarList"), "list your calendars");
-		const items = (data.items ?? []).map((c) => ({ id: c.id, name: c.summaryOverride ?? c.summary ?? c.id, primary: Boolean(c.primary), selected: c.selected !== false || Boolean(c.primary) }));
+		const data = await json<{ items?: { id: string; summary?: string; summaryOverride?: string; primary?: boolean; selected?: boolean; backgroundColor?: string }[] }>(await fetch("/calendar/v3/users/me/calendarList"), "list your calendars");
+		const items = (data.items ?? []).map((c) => ({ id: c.id, name: c.summaryOverride ?? c.summary ?? c.id, primary: Boolean(c.primary), shown: c.selected !== false || Boolean(c.primary), ...(c.backgroundColor ? { color: c.backgroundColor } : {}) }));
 		names = new Map(items.map((c) => [c.id, c.name]));
 		return items;
 	};
 	const nameOf = async (id: string) => (names ?? new Map((await list()).map((c) => [c.id, c.name]))).get(id) ?? id;
 	return {
 		async calendars() {
-			return (await list()).map(({ id, name, primary }) => ({ id, name, primary }));
+			return list();
 		},
-		async events({ from, to, query }) {
-			const calendars = (await list()).filter((c) => c.selected);
+		async events({ from, to, query, include }) {
+			const calendars = (await list()).filter((c) => (include ? include(c.id, c.shown) : c.shown));
 			const all = await Promise.all(
 				calendars.map(async (c) => {
 					const params = new URLSearchParams({ timeMin: from, timeMax: to, singleEvents: "true", orderBy: "startTime", maxResults: "100", ...(query ? { q: query } : {}) });

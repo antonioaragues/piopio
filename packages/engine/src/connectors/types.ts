@@ -38,9 +38,13 @@ export type CalendarEvent = {
 
 export type EventInput = { title: string; start: string; end: string; calendar?: string; location?: string; description?: string; attendees?: string[]; allDay?: boolean };
 
+/** One of an account's calendars; `shown` is whether the app itself shows it (Google's selection, Outlook's default). */
+export type CalendarEntry = { id: string; name: string; primary: boolean; color?: string; shown: boolean };
+
 export interface Calendar {
-	calendars(): Promise<{ id: string; name: string; primary: boolean }[]>;
-	events(range: { from: string; to: string; query?: string }): Promise<CalendarEvent[]>;
+	calendars(): Promise<CalendarEntry[]>;
+	/** `include` picks the calendars to read (Settings › Connectors); without it, the ones the app shows. */
+	events(range: { from: string; to: string; query?: string; include?: (calendarId: string, shown: boolean) => boolean }): Promise<CalendarEvent[]>;
 	create(input: EventInput): Promise<CalendarEvent>;
 	update(id: string, patch: Partial<EventInput>): Promise<CalendarEvent>;
 	remove(id: string): Promise<void>;

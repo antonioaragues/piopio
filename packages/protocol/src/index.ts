@@ -426,8 +426,10 @@ export type McpMemoryProvider = Static<typeof McpMemoryProvider>;
 /** Engine-wide settings (07-shared §5, §7). */
 export const EngineSettings = Type.Object({
 	chat: Type.Object({
-		/** Threads and Spaces reach the global MCP servers (Build always does). */
+		/** Before per-server choices: every global server that's on is used in chats too. */
 		mcp: Type.Boolean(),
+		/** The global MCP servers chats and notebooks use (Settings › MCP servers, per server). Absent: `mcp` decides. */
+		mcpServers: Type.Optional(Type.Array(Type.String())),
 		/** Suggest moving a thread into a Space (04-chat S11). */
 		suggestSpaces: Type.Boolean(),
 		/** After an answer, suggest a few next messages (docs/design v2 "You could also"). */
@@ -605,6 +607,8 @@ export const ProviderAuthEvent = Type.Union([
 ]);
 export type ProviderAuthEvent = Static<typeof ProviderAuthEvent>;
 
+export const ConnectorPermission = literals("runs", "ask", "off");
+
 /** A connected app (docs/spec/12-connectors): what it is, its accounts and settings. */
 export const ConnectorInfo = Type.Object({
 	id: Type.String(),
@@ -621,8 +625,19 @@ export const ConnectorInfo = Type.Object({
 	/** Its tools are offered in chats, notebooks and Build (agents always get them). */
 	chats: Type.Boolean(),
 	accounts: Type.Array(Type.Object({ id: Type.String(), label: Type.String(), addedAt: Type.String(), problem: Type.Optional(Type.String()) })),
-	/** What it can do, and whether each asks first; `dontAsk` writes run without asking. */
-	tools: Type.Array(Type.Object({ name: Type.String(), label: Type.String(), access: literals("read", "write", "send", "destructive"), dontAsk: Type.Boolean() })),
+	/** What it can do, grouped as Settings shows it: each capability's tools and whether it runs, asks first or is off. */
+	capabilities: Type.Array(
+		Type.Object({
+			id: Type.String(),
+			label: Type.String(),
+			tools: Type.Array(Type.String()),
+			access: literals("read", "write", "send", "destructive"),
+			permission: ConnectorPermission,
+			/** The permissions it can take: sending and deleting can't run on their own. */
+			choices: Type.Array(ConnectorPermission),
+			note: Type.Optional(Type.String()),
+		}),
+	),
 });
 export type ConnectorInfo = Static<typeof ConnectorInfo>;
 
@@ -669,8 +684,24 @@ export const McpServerInfo = Type.Object({
 	description: Type.Optional(Type.String()),
 	/** A project entry that only overrides a global server's `enabled`/exposure. */
 	override: Type.Optional(Type.Boolean()),
+	/** Names of its environment variables (values stay in the file). */
+	env: Type.Optional(Type.Array(Type.String())),
+	/** Tools turned off (pi's `toolExposure`: "hidden"). */
+	hiddenTools: Type.Optional(Type.Array(Type.String())),
+	/** Global servers: chats and notebooks use it too. */
+	chat: Type.Optional(Type.Boolean()),
 });
 export type McpServerInfo = Static<typeof McpServerInfo>;
+
+/** A server started to see it works: its tools and how long it took, or what went wrong (with its stderr). */
+export const McpProbe = Type.Object({
+	ok: Type.Boolean(),
+	ms: Type.Optional(Type.Number()),
+	tools: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()) })),
+	error: Type.Optional(Type.String()),
+	log: Type.Optional(Type.String()),
+});
+export type McpProbe = Static<typeof McpProbe>;
 
 // ── Git (Build, docs/spec/05-build §8 G1–G3) ──────────────────────────────
 
@@ -922,9 +953,25 @@ export const methods = {
 		params: Type.Object({ accountId: Type.String() }),
 		result: Type.Object({}),
 	},
-	/** Use in chats, writes that don't ask, and your own OAuth client (the secret goes to the Keychain). */
+	/** Use in chats, what each tool may do (by tool name), and a developer's own OAuth client (the secret goes to the Keychain). */
 	"connectors.configure": {
-		params: Type.Object({ connector: Type.String(), chats: Type.Optional(Type.Boolean()), dontAsk: Type.Optional(Type.Array(Type.String())), clientId: Type.Optional(Type.String()), clientSecret: Type.Optional(Type.String()) }),
+		params: Type.Object({
+			connector: Type.String(),
+			chats: Type.Optional(Type.Boolean()),
+			dontAsk: Type.Optional(Type.Array(Type.String())),
+			permissions: Type.Optional(Type.Record(Type.String(), ConnectorPermission)),
+			clientId: Type.Optional(Type.String()),
+			clientSecret: Type.Optional(Type.String()),
+		}),
+		result: Type.Object({}),
+	},
+	/** An account's calendars, each on or off for Piopio (off: never read). */
+	"connectors.calendars": {
+		params: Type.Object({ accountId: Type.String() }),
+		result: Type.Object({ calendars: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), primary: Type.Boolean(), color: Type.Optional(Type.String()), enabled: Type.Boolean() })) }),
+	},
+	"connectors.setCalendar": {
+		params: Type.Object({ accountId: Type.String(), calendarId: Type.String(), enabled: Type.Boolean() }),
 		result: Type.Object({}),
 	},
 	/** Answers a connector approval in a chat, notebook topic or Build session. `always`: don't ask again for that write. */
@@ -1063,8 +1110,42 @@ export const methods = {
 			url: Type.Optional(Type.String()),
 			env: Type.Optional(Type.Record(Type.String(), Type.String())),
 			description: Type.Optional(Type.String()),
+			/** Off for Build (pi's `enabled: false`). */
+			enabled: Type.Optional(Type.Boolean()),
+			/** Global servers: use in chats and notebooks too. */
+			chat: Type.Optional(Type.Boolean()),
 		}),
 		result: Type.Object({}),
+	},
+	/** Starts a server that isn't saved yet and lists its tools (the Add server sheet). */
+	"mcp.probe": {
+		params: Type.Object({ command: Type.Optional(Type.String()), args: Type.Optional(Type.Array(Type.String())), url: Type.Optional(Type.String()), env: Type.Optional(Type.Record(Type.String(), Type.String())) }),
+		result: McpProbe,
+	},
+	/** A configured server's status: its last probe, or a new one (`refresh`: Restart). */
+	"mcp.status": {
+		params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String(), refresh: Type.Optional(Type.Boolean()) }),
+		result: McpProbe,
+	},
+	/** A global server in chats and notebooks, or not. */
+	"mcp.setChat": { params: Type.Object({ name: Type.String(), chat: Type.Boolean() }), result: Type.Object({}) },
+	/** One of a server's tools on or off. */
+	"mcp.setTool": {
+		params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String(), tool: Type.String(), enabled: Type.Boolean() }),
+		result: Type.Object({}),
+	},
+	/** Servers configured in other apps (Claude Desktop, Cursor, VS Code, Windsurf) that aren't here yet. */
+	"mcp.detect": {
+		params: Type.Object({}),
+		result: Type.Object({
+			found: Type.Array(
+				Type.Object({
+					app: Type.String(),
+					path: Type.String(),
+					servers: Type.Array(Type.Object({ name: Type.String(), command: Type.Optional(Type.String()), args: Type.Optional(Type.Array(Type.String())), url: Type.Optional(Type.String()), env: Type.Optional(Type.Record(Type.String(), Type.String())) })),
+				}),
+			),
+		}),
 	},
 	"mcp.remove": { params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String() }), result: Type.Object({}) },
 	"mcp.setEnabled": {

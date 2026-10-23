@@ -779,9 +779,9 @@ final class EngineController {
     }
 
     /// Starts signing in to an app; the browser opens, the sheet follows `connectorLogin`.
-    func connect(_ connector: ConnectorInfo) async {
+    func connect(_ connector: ConnectorInfo, inline: Bool = false) async {
         guard let client else { return }
-        let state = ConnectorLogin(connector: connector)
+        let state = ConnectorLogin(connector: connector, inline: inline)
         connectorLogin = state
         do {
             state.loginId = try await client.call("connectors.connect", ConnectorParams(connector: connector.id), as: ProviderLoginResult.self).loginId
@@ -804,6 +804,20 @@ final class EngineController {
         guard let client else { return }
         _ = try await client.call("connectors.configure", params, as: Empty.self)
         await loadConnectors()
+    }
+
+    /// One capability (all its tools) set to runs, asks first or off.
+    func setPermission(_ permission: ConnectorPermission, for capability: ConnectorInfo.Capability, of connector: ConnectorInfo) async {
+        try? await configure(ConnectorConfigureParams(connector: connector.id, permissions: Dictionary(uniqueKeysWithValues: capability.tools.map { ($0, permission) })))
+    }
+
+    func connectorCalendars(_ accountId: String) async throws -> [ConnectorCalendarsResult.Calendar] {
+        guard let client else { return [] }
+        return try await client.call("connectors.calendars", ConnectorAccountParams(accountId: accountId), as: ConnectorCalendarsResult.self).calendars
+    }
+
+    func setConnectorCalendar(_ accountId: String, _ calendarId: String, enabled: Bool) async {
+        _ = try? await client?.call("connectors.setCalendar", ConnectorSetCalendarParams(accountId: accountId, calendarId: calendarId, enabled: enabled), as: Empty.self)
     }
 
     // Custom endpoints (LiteLLM, Ollama, LM Studio…)

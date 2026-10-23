@@ -496,3 +496,18 @@ private struct EnginesPane: View {
         }
     }
 }
+
+/// The Add server form inside the Add connector sheet ("Use an MCP server"). Interim until the p2 redesign.
+struct AddMcpServerView: View {
+    let engine: EngineController
+    let back: () -> Void
+    let done: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: back) { Label("All connectors", systemImage: "chevron.left").font(.system(size: 12.5)) }
+                .buttonStyle(.plain).foregroundStyle(Color.accentColor).padding(.horizontal, 20).padding(.top, 18)
+            AddMcpServerSheet(engine: engine, added: done)
+        }
+    }
+}

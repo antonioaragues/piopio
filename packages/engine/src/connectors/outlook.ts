@@ -78,16 +78,19 @@ function toBody(input: Partial<EventInput>) {
 const prefer = () => ({ Prefer: `outlook.timezone="${zone()}"` });
 
 function calendar(fetch: AuthorizedFetch): Calendar {
+	const calendars = async () => {
+		const data = await json<{ value?: { id: string; name?: string; isDefaultCalendar?: boolean; hexColor?: string }[] }>(await fetch("/v1.0/me/calendars"), "list your calendars");
+		return (data.value ?? []).map((c) => ({ id: c.id, name: c.name ?? "Calendar", primary: Boolean(c.isDefaultCalendar), shown: Boolean(c.isDefaultCalendar), ...(c.hexColor ? { color: c.hexColor } : {}) }));
+	};
 	const select = "$select=id,subject,bodyPreview,webLink,isAllDay,start,end,location,attendees,organizer";
 	return {
-		async calendars() {
-			const data = await json<{ value?: { id: string; name?: string; isDefaultCalendar?: boolean }[] }>(await fetch("/v1.0/me/calendars"), "list your calendars");
-			return (data.value ?? []).map((c) => ({ id: c.id, name: c.name ?? "Calendar", primary: Boolean(c.isDefaultCalendar) }));
-		},
-		async events({ from, to, query }) {
+		calendars,
+		async events({ from, to, query, include }) {
 			const params = new URLSearchParams({ startDateTime: from, endDateTime: to, $top: "100", $orderby: "start/dateTime" });
-			const data = await json<{ value?: GEvent[] }>(await fetch(`/v1.0/me/calendarView?${params}&${select}`, { headers: prefer() }), "read events");
-			const events = (data.value ?? []).map(toEvent);
+			// The default calendar, unless Settings › Connectors picked others: then each picked one.
+			const paths = include ? (await calendars()).filter((c) => include(c.id, c.shown)).map((c) => `/v1.0/me/calendars/${encodeURIComponent(c.id)}/calendarView`) : ["/v1.0/me/calendarView"];
+			const pages = await Promise.all(paths.map(async (path) => (await json<{ value?: GEvent[] }>(await fetch(`${path}?${params}&${select}`, { headers: prefer() }), "read events")).value ?? []));
+			const events = pages.flat().map(toEvent);
 			if (!query) return events;
 			const q = query.toLowerCase();
 			return events.filter((e) => [e.title, e.location, e.description, ...(e.attendees ?? [])].some((v) => v?.toLowerCase().includes(q)));

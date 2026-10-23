@@ -8,6 +8,8 @@ import type { SessionEvent, Snapshot } from "@piopio/protocol";
 import { afterEach, describe, expect, test } from "vitest";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
+import { connectorTools } from "../src/connectors/tools.js";
+import { detectOtherApps } from "../src/mcp-probe.js";
 import { titleFrom } from "../src/sessions.js";
 import { TestClient } from "./client.js";
 
@@ -873,7 +875,7 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		config.mcpServers.test.exposure = "direct";
 		writeFileSync(file, JSON.stringify(config));
 		expect((await a.client.call("mcp.list", {})).servers).toEqual([
-			{ name: "test", scope: "global", transport: "stdio", command: process.execPath, args: [server], enabled: true, description: "Echoes text" },
+			{ name: "test", scope: "global", transport: "stdio", command: process.execPath, args: [server], enabled: true, description: "Echoes text", chat: false },
 		]);
 
 		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: "full_auto" });
@@ -889,6 +891,38 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		expect((await a.client.call("mcp.list", {})).servers).toEqual([]);
 		await expect(a.client.call("mcp.add", { scope: "global", name: "bad name", command: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 	}, 60_000);
+
+	test("Settings › MCP servers: a server is started to list its tools, used in chats per server, tools turned off one by one", async () => {
+		const a = await start();
+		const server = fileURLToPath(new URL("./fixtures/echo-mcp-server.mjs", import.meta.url));
+		expect(await a.client.call("mcp.probe", { command: process.execPath, args: [server] })).toMatchObject({ ok: true, tools: [{ name: "echo", description: "Returns its text." }], ms: expect.any(Number) });
+		expect(await a.client.call("mcp.probe", { command: "piopio-no-such-command" })).toMatchObject({ ok: false, error: expect.stringContaining("Can't find") });
+
+		await a.client.call("mcp.add", { scope: "global", name: "echo", command: process.execPath, args: [server], env: { TOKEN: "x" }, chat: true });
+		expect((await a.client.call("mcp.list", {})).servers[0]).toMatchObject({ name: "echo", env: ["TOKEN"], chat: true });
+		expect((await a.client.call("settings.get", {})).chat.mcpServers).toEqual(["echo"]);
+		expect(await a.client.call("mcp.status", { scope: "global", name: "echo" })).toMatchObject({ ok: true, tools: [{ name: "echo" }] });
+
+		await a.client.call("mcp.setTool", { scope: "global", name: "echo", tool: "echo", enabled: false });
+		expect((await a.client.call("mcp.list", {})).servers[0].hiddenTools).toEqual(["echo"]);
+		expect(JSON.parse(readFileSync(join(a.home, "pi-agent", "mcp.json"), "utf8")).mcpServers.echo.toolExposure).toEqual({ echo: "hidden" });
+		await a.client.call("mcp.setTool", { scope: "global", name: "echo", tool: "echo", enabled: true });
+		await a.client.call("mcp.setChat", { name: "echo", chat: false });
+		expect((await a.client.call("mcp.list", {})).servers[0].chat).toBe(false);
+		expect(await a.engine.chatMcp.extension()).toBeUndefined();
+	}, 60_000);
+
+	test("servers configured in other apps are found, never imported on their own", () => {
+		const home = mkdtempSync(join(tmpdir(), "piopio-home-"));
+		mkdirSync(join(home, "Library", "Application Support", "Claude"), { recursive: true });
+		writeFileSync(join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"), JSON.stringify({ mcpServers: { playwright: { command: "npx", args: ["@playwright/mcp"] }, linear: { url: "https://mcp.linear.app/mcp" }, known: { command: "x" } } }));
+		mkdirSync(join(home, "Library", "Application Support", "Code", "User"), { recursive: true });
+		writeFileSync(join(home, "Library", "Application Support", "Code", "User", "mcp.json"), JSON.stringify({ servers: { "my db": { type: "stdio", command: "uvx", args: ["pg-mcp"], env: { PG: "1" } } } }));
+		expect(detectOtherApps(new Set(["known"]), home)).toEqual([
+			{ app: "Claude Desktop", path: expect.stringContaining("claude_desktop_config.json"), servers: [{ name: "playwright", command: "npx", args: ["@playwright/mcp"] }, { name: "linear", url: "https://mcp.linear.app/mcp" }] },
+			{ app: "VS Code", path: expect.stringContaining("Code"), servers: [{ name: "my-db", command: "uvx", args: ["pg-mcp"], env: { PG: "1" } }] },
+		]);
+	});
 
 	test("project trust gates the project's .pi resources and is saved where the pi CLI reads it", async () => {
 		const a = await start();
@@ -2084,7 +2118,7 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		expect(readFileSync(join(a.home, "connectors.json"), "utf8")).not.toContain("tok");
 		const { connectors } = await a.client.call("connectors.list", {});
 		expect(connectors.find((c: { id: string }) => c.id === "google-calendar")).toMatchObject({ ready: true, accounts: [{ id: "google-calendar:g123", label: "me@gmail.com" }] });
-		expect(connectors.find((c: { id: string }) => c.id === "outlook")).toMatchObject({ accounts: [{ label: "me@outlook.com" }], tools: expect.arrayContaining([{ name: "mail_send", label: "Send an email", access: "send", dontAsk: false }]) });
+		expect(connectors.find((c: { id: string }) => c.id === "outlook")).toMatchObject({ accounts: [{ label: "me@outlook.com" }], capabilities: expect.arrayContaining([expect.objectContaining({ id: "mail.send", tools: ["mail_send"], permission: "ask", choices: ["ask", "off"] })]) });
 
 		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
 		await a.client.call("sessions.subscribe", { ref });
@@ -2099,6 +2133,38 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		expect(tool.output).toContain("Google Calendar (me@gmail.com)");
 		expect(tool.output).toContain("Team sync");
 		expect(tool.output).toContain("Outlook (me@outlook.com)");
+		apps.close();
+	}, 30_000);
+
+	test("what an app may do: deleting starts off, Off refuses, Runs doesn't ask; a calendar turned off isn't read", async () => {
+		const { a, apps } = await withApps();
+		await connect(a, "google-calendar");
+		const google = (await a.client.call("connectors.list", {})).connectors.find((c: { id: string }) => c.id === "google-calendar")!;
+		expect(google.capabilities.map((c) => [c.id, c.permission])).toEqual([["calendar.read", "runs"], ["calendar.write", "ask"], ["calendar.delete", "off"]]);
+		const hub = a.engine.connectors;
+		const asked: string[] = [];
+		const confirm = async (r: { tool: string }) => (asked.push(r.tool), { approved: true });
+		const run = (name: string, args: Record<string, unknown>) => connectorTools(hub, "chat").find((t) => t.name === name)!.run(args, confirm);
+
+		const id = "google-calendar:g123#primary|e1";
+		expect((await run("calendar_delete_event", { id })).text).toContain("turned off");
+		expect(apps.calls.some((c) => c.method === "DELETE")).toBe(false);
+		await a.client.call("connectors.configure", { connector: "google-calendar", permissions: { calendar_create_event: "runs", calendar_update_event: "runs", calendar_delete_event: "runs" } });
+		expect(hub.permission("google-calendar", "calendar_delete_event")).toBe("ask");
+		await run("calendar_create_event", { title: "Gym", start: apps.at(18), end: apps.at(19) });
+		expect(asked).toEqual([]);
+		await run("calendar_create_event", { title: "Lunch", start: apps.at(13), end: apps.at(14), attendees: ["ana@example.com"] });
+		expect(asked).toEqual(["calendar_create_event"]);
+		await a.client.call("connectors.configure", { connector: "google-calendar", permissions: { calendar_events: "off" } });
+		expect((await run("calendar_events", {})).text).toContain("turned off");
+		await a.client.call("connectors.configure", { connector: "google-calendar", permissions: { calendar_events: "runs" } });
+
+		expect((await a.client.call("connectors.calendars", { accountId: "google-calendar:g123" })).calendars).toEqual([{ id: "primary", name: "me@gmail.com", primary: true, enabled: true }]);
+		await a.client.call("connectors.setCalendar", { accountId: "google-calendar:g123", calendarId: "primary", enabled: false });
+		const reads = () => apps.calls.filter((c) => c.method === "GET" && c.path.includes("/calendars/primary/events")).length;
+		const before = reads();
+		expect((await run("calendar_events", {})).text).not.toContain("Dentist");
+		expect(reads()).toBe(before);
 		apps.close();
 	}, 30_000);
 

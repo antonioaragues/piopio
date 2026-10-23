@@ -633,7 +633,7 @@ public struct SpaceSuggestion: Codable, Sendable, Hashable {
 
 /// Engine-wide settings (Settings › Chat, Settings › MCP servers).
 public struct EngineSettings: Codable, Sendable, Hashable {
-    public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var suggestSpaces: Bool; public var followUps: Bool? }
+    public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var suggestSpaces: Bool; public var followUps: Bool? }
     public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var provider: String }
     public struct Memory: Codable, Sendable, Hashable { public var providers: [McpMemoryProvider] }
     public var chat: Chat
@@ -884,15 +884,43 @@ public struct McpServerInfo: Codable, Sendable, Hashable, Identifiable {
     public var enabled: Bool
     public var description: String?
     public var override: Bool?
+    public var env: [String]?
+    public var hiddenTools: [String]?
+    public var chat: Bool?
     public var id: String { "\(scope.rawValue):\(name)" }
+}
+/// A server started to see it works (Settings › MCP servers).
+public struct McpProbe: Decodable, Sendable, Hashable {
+    public struct Tool: Decodable, Sendable, Hashable { public var name: String; public var description: String? }
+    public var ok: Bool; public var ms: Double?; public var tools: [Tool]; public var error: String?; public var log: String?
+}
+public struct McpProbeParams: Encodable, Sendable {
+    public var command: String?; public var args: [String]?; public var url: String?; public var env: [String: String]?
+    public init(command: String?, args: [String]?, url: String?, env: [String: String]?) { self.command = command; self.args = args; self.url = url; self.env = env }
+}
+public struct McpStatusParams: Encodable, Sendable {
+    public var scope: McpServerInfo.Scope; public var cwd: String?; public var name: String; public var refresh: Bool?
+    public init(scope: McpServerInfo.Scope, cwd: String?, name: String, refresh: Bool? = nil) { self.scope = scope; self.cwd = cwd; self.name = name; self.refresh = refresh }
+}
+public struct McpSetChatParams: Encodable, Sendable { public var name: String; public var chat: Bool; public init(name: String, chat: Bool) { self.name = name; self.chat = chat } }
+public struct McpSetToolParams: Encodable, Sendable {
+    public var scope: McpServerInfo.Scope; public var cwd: String?; public var name: String; public var tool: String; public var enabled: Bool
+    public init(scope: McpServerInfo.Scope, cwd: String?, name: String, tool: String, enabled: Bool) { self.scope = scope; self.cwd = cwd; self.name = name; self.tool = tool; self.enabled = enabled }
+}
+public struct McpDetectResult: Decodable, Sendable {
+    public struct Server: Decodable, Sendable, Hashable, Identifiable { public var name: String; public var command: String?; public var args: [String]?; public var url: String?; public var env: [String: String]?; public var id: String { name } }
+    public struct Found: Decodable, Sendable, Hashable, Identifiable { public var app, path: String; public var servers: [Server]; public var id: String { app } }
+    public var found: [Found]
 }
 public struct McpListParams: Encodable, Sendable { public var cwd: String?; public init(cwd: String? = nil) { self.cwd = cwd } }
 public struct McpListResult: Decodable, Sendable { public var servers: [McpServerInfo]; public var errors: [String] }
 public struct McpAddParams: Encodable, Sendable {
     public var scope: McpServerInfo.Scope; public var cwd: String?; public var name: String
     public var command: String?; public var args: [String]?; public var url: String?; public var description: String?
-    public init(scope: McpServerInfo.Scope, cwd: String?, name: String, command: String?, args: [String]?, url: String?, description: String?) {
+    public var env: [String: String]?; public var enabled: Bool?; public var chat: Bool?
+    public init(scope: McpServerInfo.Scope, cwd: String?, name: String, command: String?, args: [String]?, url: String?, description: String?, env: [String: String]? = nil, enabled: Bool? = nil, chat: Bool? = nil) {
         self.scope = scope; self.cwd = cwd; self.name = name; self.command = command; self.args = args; self.url = url; self.description = description
+        self.env = env; self.enabled = enabled; self.chat = chat
     }
 }
 public struct McpNameParams: Encodable, Sendable {
@@ -1139,24 +1167,37 @@ public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification)
 
 public struct ConnectorInfo: Decodable, Sendable, Hashable, Identifiable {
     public struct Account: Decodable, Sendable, Hashable, Identifiable { public var id, label, addedAt: String; public var problem: String? }
-    public struct Tool: Decodable, Sendable, Hashable {
+    /// What it can do, grouped as Settings shows it (c2/c4): runs, asks first, or off.
+    public struct Capability: Decodable, Sendable, Hashable, Identifiable {
         public enum Access: String, Decodable, Sendable { case read, write, send, destructive }
-        public var name, label: String
+        public var id, label: String
+        public var tools: [String]
         public var access: Access
-        public var dontAsk: Bool
+        public var permission: ConnectorPermission
+        public var choices: [ConnectorPermission]
+        public var note: String?
     }
     public var id, name, category, description, setupHelp: String
     public var ready, ownClient, needsSecret, connecting, chats: Bool
     public var accounts: [Account]
-    public var tools: [Tool]
+    public var capabilities: [Capability]
+}
+public enum ConnectorPermission: String, Codable, Sendable, Hashable, CaseIterable { case runs, ask, off }
+public struct ConnectorCalendarsResult: Decodable, Sendable {
+    public struct Calendar: Decodable, Sendable, Hashable, Identifiable { public var id, name: String; public var primary: Bool; public var color: String?; public var enabled: Bool }
+    public var calendars: [Calendar]
+}
+public struct ConnectorSetCalendarParams: Encodable, Sendable {
+    public var accountId, calendarId: String; public var enabled: Bool
+    public init(accountId: String, calendarId: String, enabled: Bool) { self.accountId = accountId; self.calendarId = calendarId; self.enabled = enabled }
 }
 public struct ConnectorsListResult: Decodable, Sendable { public var connectors: [ConnectorInfo] }
 public struct ConnectorParams: Encodable, Sendable { public var connector: String; public init(connector: String) { self.connector = connector } }
 public struct ConnectorAccountParams: Encodable, Sendable { public var accountId: String; public init(accountId: String) { self.accountId = accountId } }
 public struct ConnectorConfigureParams: Encodable, Sendable {
-    public var connector: String; public var chats: Bool?; public var dontAsk: [String]?; public var clientId: String?; public var clientSecret: String?
-    public init(connector: String, chats: Bool? = nil, dontAsk: [String]? = nil, clientId: String? = nil, clientSecret: String? = nil) {
-        self.connector = connector; self.chats = chats; self.dontAsk = dontAsk; self.clientId = clientId; self.clientSecret = clientSecret
+    public var connector: String; public var chats: Bool?; public var permissions: [String: ConnectorPermission]?; public var clientId: String?; public var clientSecret: String?
+    public init(connector: String, chats: Bool? = nil, permissions: [String: ConnectorPermission]? = nil, clientId: String? = nil, clientSecret: String? = nil) {
+        self.connector = connector; self.chats = chats; self.permissions = permissions; self.clientId = clientId; self.clientSecret = clientSecret
     }
 }
 public struct ConnectorAuthNotification: Decodable, Sendable { public var loginId, connector: String; public var event: ProviderAuthEvent }
