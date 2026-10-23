@@ -391,31 +391,3 @@ private struct AboutMeHistorySheet: View {
         .frame(width: 560)
     }
 }
-
-/// Suggested next messages (docs/design v2): 28-tall outlined capsules; one click sends it.
-struct FollowUps: View {
-    let items: [String]
-    let label: String?
-    let send: (String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let label { Text(label).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3) }
-            // A long suggestion wraps in a rounded box no wider than the column instead of being cut off.
-            FlowRow(items) { item in
-                Button { send(item) } label: {
-                    Text(item).font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 12).padding(.vertical, 5)
-                        .frame(minHeight: 28)
-                        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-                        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .help(item)
-            }
-        }
-    }
-}

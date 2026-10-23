@@ -93,6 +93,8 @@ public struct AssistantItem: Codable, Sendable, Hashable {
     /// An agent's message sent on its own (send_message), from a run (`run_…`) or a person's conversation.
     public struct Outbound: Codable, Sendable, Hashable { public var from: String; public init(from: String) { self.from = from } }
     public var outbound: Outbound?
+    /// How long it thought (measured live).
+    public var thinkingMs: Double?
     public var text: String { parts.filter { $0.type == .text }.map(\.text).joined() }
     public init(id: String, at: String, parts: [AssistantPart], model: String? = nil, usage: Usage? = nil, status: Status, error: String? = nil, errorKind: ErrorKind? = nil, errorDetail: String? = nil, outbound: Outbound? = nil) {
         self.id = id; self.at = at; self.parts = parts; self.model = model; self.usage = usage; self.status = status
@@ -254,6 +256,9 @@ public struct MemoryItem: Codable, Sendable, Hashable {
 public struct StepsItem: Codable, Sendable, Hashable {
     public var id, at: String
     public var tools: [ToolItem]
+    /// What the model thought in the answers that only called these tools (folded into the line).
+    public var thinking: String?
+    public var thinkingMs: Double?
 }
 
 /// An agent's tool call waiting for the owner, or how it was answered (06-agents §9 AS1).
@@ -1214,6 +1219,12 @@ public struct ConnectorConfigureParams: Encodable, Sendable {
     }
 }
 public struct ConnectorAuthNotification: Decodable, Sendable { public var loginId, connector: String; public var event: ProviderAuthEvent }
+/// Build: back to before one of your messages (chat v3, 14b).
+public struct RewindParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var itemId: String; public var files: Bool; public var dryRun: Bool?
+    public init(ref: ContainerRef, itemId: String, files: Bool, dryRun: Bool? = nil) { self.ref = ref; self.itemId = itemId; self.files = files; self.dryRun = dryRun }
+}
+public struct RewindResult: Decodable, Sendable { public var files: [FileChange]; public var turns: Int; public var editorText: String? }
 public struct SessionDecideParams: Encodable, Sendable {
     public var ref: ContainerRef; public var approvalId: String; public var approve: Bool; public var always: Bool?
     public init(ref: ContainerRef, approvalId: String, approve: Bool, always: Bool? = nil) { self.ref = ref; self.approvalId = approvalId; self.approve = approve; self.always = always }

@@ -22,15 +22,15 @@ extension NSAttributedString.Key {
 
 public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, link, note, pills, divider, approval }
 
-enum PillStyle: String { case primary, secondary, file }
+enum PillStyle: String { case primary, secondary, file, code }
 
 let lineSeparator = "\u{2028}"
 
 /// Draws card backgrounds and pills for the paragraphs that carry them.
 final class CardLayoutFragment: NSTextLayoutFragment {
     static let padding: CGFloat = 12
-    static let bubblePadH: CGFloat = 14
-    static let bubblePadV: CGFloat = 9
+    static let bubblePadH: CGFloat = 15
+    static let bubblePadV: CGFloat = 10
     var card: CardStyle = .pills
 
     private var lines: [NSTextLineFragment] { textLineFragments.filter { $0.characterRange.length > 0 } }
@@ -93,7 +93,7 @@ final class CardLayoutFragment: NSTextLayoutFragment {
             context.setFillColor(DS.line.cgColor)
             context.fill(CGRect(x: rect.minX, y: rect.minY, width: 3, height: rect.height))
         case .user:
-            // 16/16/4/16: the corner by the sender is tighter.
+            // 18/18/4/18: the corner by the sender is tighter.
             context.addPath(bubblePath(rect))
             context.setFillColor(DS.bubble.cgColor)
             context.fillPath()
@@ -131,6 +131,9 @@ final class CardLayoutFragment: NSTextLayoutFragment {
                 case .file:
                     fill(context, rect, DS.card, radius: 8)
                     stroke(context, rect, DS.line, radius: 8)
+                case .code:
+                    // Inline code and project paths (chat v3): chip fill, radius 5, a little air around the text.
+                    fill(context, rect.insetBy(dx: 1, dy: 0.5), DS.chip, radius: 5)
                 }
             }
         }
@@ -150,7 +153,7 @@ final class CardLayoutFragment: NSTextLayoutFragment {
     }
 
     private func bubblePath(_ r: CGRect) -> CGPath {
-        let big: CGFloat = 16, small: CGFloat = 4
+        let big: CGFloat = 18, small: CGFloat = 4
         let p = CGMutablePath()
         // TextKit's drawing context is flipped: minY is the top.
         p.move(to: CGPoint(x: r.minX + big, y: r.minY))
@@ -193,6 +196,16 @@ final class CardLayoutDelegate: NSObject, NSTextLayoutManagerDelegate {
 
 // MARK: Disclosure cards (tool calls, thinking)
 
+/// One piece of an activity line: "edited" + a file chip + "+13" in green (chat v3, 14a).
+public struct ActivityPart: Sendable, Hashable {
+    public var text: String
+    public var chip: String?
+    public var added: Int?
+    public var help: String?
+    /// "1 step failed".
+    public var warning = false
+}
+
 /// Model behind an expandable card. Built on any thread; mutated on the main thread.
 @Observable
 public final class DisclosureCard: @unchecked Sendable {
@@ -204,6 +217,8 @@ public final class DisclosureCard: @unchecked Sendable {
     public var working = false
     public let kind: Kind
     public var title: String
+    /// An activity line's pieces; when empty, `title` is the line.
+    public var parts: [ActivityPart] = []
     public var detail: String
     public var trailing: String
     public var content: Body
@@ -271,7 +286,7 @@ public final class DisclosureCard: @unchecked Sendable {
     }
 
     /// The quiet line's height (activity, thinking).
-    static let lineHeight: CGFloat = 26
+    static let lineHeight: CGFloat = 28
     static let nestedSpacing: CGFloat = 6
 
     static let collapsedHeight: CGFloat = 34
@@ -389,30 +404,39 @@ struct DisclosureCardView: View {
         if let relay { relay() } else { card.onToggle?(card) }
     }
 
+    /// One line, 13 fg3, no icon (chat v3, 14a): "Thought for 3s, edited [RESUMEN.md] +13 ›", or a spinner and what's
+    /// running now. A dot only when it waits for you (amber) or a step failed (red).
     private var quietLine: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: toggle) {
-                HStack(spacing: 6) {
-                    if card.kind == .activity {
-                        if card.working {
-                            ProgressView().controlSize(.mini).frame(width: 12)
-                        } else if card.failed {
-                            Circle().fill(Color(nsColor: DS.red)).frame(width: 6, height: 6).frame(width: 12)
-                        } else if card.waiting {
-                            Circle().fill(Color(nsColor: DS.amber)).frame(width: 6, height: 6).frame(width: 12)
-                        } else {
-                            Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color(nsColor: DS.green)).frame(width: 12)
-                        }
-                    } else {
-                        Image(systemName: "sparkle").font(.system(size: 9.5)).foregroundStyle(Color(nsColor: DS.fg3)).frame(width: 12)
+                HStack(spacing: 5) {
+                    if card.working {
+                        ProgressView().controlSize(.mini).scaleEffect(0.85).frame(width: 12)
+                    } else if card.waiting {
+                        Circle().fill(Color(nsColor: DS.amber)).frame(width: 6, height: 6)
                     }
-                    Text(card.title).font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).truncationMode(.tail)
-                    if !card.detail.isEmpty { Text("· \(card.detail)").font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1) }
-                    Image(systemName: card.expanded ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
+                    if card.parts.isEmpty {
+                        Text(card.title).foregroundStyle(Color(nsColor: card.waiting ? DS.amber : DS.fg3)).lineLimit(1).truncationMode(.tail)
+                    } else {
+                        ForEach(Array(card.parts.enumerated()), id: \.offset) { i, part in
+                            Text(i == 0 ? part.text : ", " + part.text).foregroundStyle(Color(nsColor: part.warning ? DS.red : DS.fg3)).lineLimit(1).fixedSize()
+                            if let chip = part.chip {
+                                Text(chip).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.fg2)).lineLimit(1).truncationMode(.middle)
+                                    .padding(.horizontal, 5).frame(height: 20)
+                                    .background(Color(nsColor: DS.chip), in: RoundedRectangle(cornerRadius: 5))
+                            }
+                            if let added = part.added { Text("+\(added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.green)).fixedSize() }
+                        }
+                    }
+                    if !card.working && !card.isEmpty {
+                        Image(systemName: card.expanded ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
+                    }
                     Spacer(minLength: 0)
                 }
+                .font(.system(size: 13))
                 .frame(height: DisclosureCard.lineHeight)
                 .contentShape(Rectangle())
+                .help(card.parts.compactMap(\.help).joined(separator: "\n"))
             }
             .buttonStyle(.plain)
             if card.expanded {
@@ -428,7 +452,7 @@ struct DisclosureCardView: View {
                 case .text(let text), .terminal(let text):
                     ScrollView {
                         Text(text).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: DS.fg2)).textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 18).padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12).padding(.vertical, 6)
                     }
                 case .diff, .plan: EmptyView()
                 }

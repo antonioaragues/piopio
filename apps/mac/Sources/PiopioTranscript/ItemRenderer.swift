@@ -10,13 +10,20 @@ struct SendableText: @unchecked Sendable { let value: NSAttributedString }
 nonisolated struct ItemRenderer: Sendable {
     /// Compact (Quick Chat): your messages and the action footers are not shown; answers stand alone.
     var compact = false
-    /// Edit, Regenerate and Fork make new versions (threads). Build sessions show Copy only for now.
+    /// Edit, Regenerate and Fork make new versions (threads).
     var versions = true
+    /// Build sessions (docs/design chat v3): Edit and Retry rewind the conversation, Fork makes a new session, and
+    /// your messages offer "Rewind to here".
+    var build = false
+    /// The project folder: paths inside it show relative, as chips (the full path in their tooltip).
+    var root: String?
 
-    private var body: NSFont { .systemFont(ofSize: DS.transcriptSize) }
+    /// Answers 15 / 1.6 (chat v3); Quick Chat keeps the compact 13.5.
+    private var bodySize: CGFloat { compact ? DS.transcriptSize : 15 }
+    private var body: NSFont { .systemFont(ofSize: bodySize) }
     private var mono: NSFont { .monospacedSystemFont(ofSize: 12, weight: .regular) }
     private var small: NSFont { .systemFont(ofSize: 12) }
-    /// SF line height is ~1.2× its size; this gives the design's 13.5 / 1.6.
+    /// SF line height is ~1.2× its size; this gives the design's 1.6.
     private static let lineHeight: CGFloat = DS.transcriptLineHeight / 1.2
 
     func render(_ items: some Sequence<TimelineItem>) -> NSAttributedString {
@@ -37,7 +44,7 @@ nonisolated struct ItemRenderer: Sendable {
         case .assistant(let a):
             let out = NSMutableAttributedString()
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
-            if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: "Thought", detail: "", body: thinking))) }
+            if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: Self.thought(a.thinkingMs), detail: "", body: thinking))) }
             if let o = a.outbound { out.append(note(o.from.hasPrefix("run_") ? "Sent on its own, from an automatic run" : "Sent on its own", dot: DS.accent)) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
@@ -48,20 +55,21 @@ nonisolated struct ItemRenderer: Sendable {
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
         case .tool(let t):
-            return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t)))
+            return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root)))
         case .system(let s):
             if s.level == .error { return errorCard(title: s.text, safe: "Nothing was lost.", actions: []) }
             return note(s.text, dot: s.level == .warn ? DS.amber : DS.accent)
         case .compaction:
             return note("Context compacted: older messages were summarized", dot: DS.fg3)
-        case .checkpoint(let c):
-            return checkpointDivider(c)
+        case .checkpoint:
+            // Saved silently before every message (chat v3, 14b): rewinding is an action on your message.
+            return NSAttributedString()
         case .routing(let r):
             return routingCard(r)
         case .memory(let m):
             return memoryNote(m)
         case .steps(let s):
-            return attachmentParagraph(DisclosureAttachment(card: Self.stepsCard(s)))
+            return attachmentParagraph(DisclosureAttachment(card: Self.stepsCard(s, root: root)))
         case .approval(let a):
             return approvalCard(a)
         case .result(let r):
@@ -165,20 +173,80 @@ nonisolated struct ItemRenderer: Sendable {
         return card(out, .link, lineHeight: 1.5)
     }
 
-    /// "Worked 1.2s · 2 steps" (06-agents UI2): one line for a turn's tool calls; it opens to each step.
-    static func stepsCard(_ s: StepsItem) -> DisclosureCard {
-        let running = s.tools.contains { $0.status == .running }
+    /// A turn's activity as one quiet line (chat v3, 14a): "Thought for 3s, edited RESUMEN.md +13 ›", or what's running
+    /// now ("Running pnpm test…"). It opens to the thought and each step's card.
+    static func stepsCard(_ s: StepsItem, root: String? = nil) -> DisclosureCard {
+        let running = s.tools.first { $0.status == .running }
         let waiting = s.tools.contains { $0.status == .pendingApproval }
-        let seconds = s.tools.compactMap(\.durationMs).reduce(0, +) / 1000
-        let time = seconds < 10 ? String(format: "%.0fs", max(1, seconds.rounded())) : String(format: "%.0fs", seconds)
-        let lead = running ? "Working" : waiting ? "Waiting on you" : seconds >= 0.5 ? "Worked for \(time)" : "Worked"
-        let parts = [lead] + activitySummary(s.tools)
-        let card = DisclosureCard(kind: .activity, title: parts.joined(separator: " · "), body: "")
-        card.content = .cards(s.tools.map(toolCard))
-        card.working = running
+        let card = DisclosureCard(kind: .activity, title: "", body: "")
+        var nested = s.tools.map { toolCard($0, root: root) }
+        if let thinking = s.thinking, !thinking.isEmpty {
+            let thought = DisclosureCard(kind: .thinking, title: thought(s.thinkingMs), body: thinking)
+            thought.expanded = true
+            nested.insert(thought, at: 0)
+        }
+        card.content = .cards(nested)
+        card.working = running != nil
         card.waiting = waiting
         card.failed = s.tools.contains { $0.status == .error }
+        if waiting {
+            card.title = "Waiting for you"
+        } else if let running {
+            let (verb, detail) = toolTitle(running)
+            card.title = detail.isEmpty ? "\(verb)…" : "\(verb) \(relative(detail, root: root))…"
+        } else {
+            card.parts = activityParts(s, root: root)
+            card.title = card.parts.map { [$0.text, $0.chip].compactMap { $0 }.joined(separator: " ") }.joined(separator: ", ")
+        }
         return card
+    }
+
+    /// "Thought for 3s" (measured live), or "Thought" for history reloaded from disk.
+    static func thought(_ ms: Double?) -> String {
+        guard let ms, ms >= 500 else { return "Thought" }
+        let s = Int((ms / 1000).rounded())
+        return s < 60 ? "Thought for \(s)s" : "Thought for \(s / 60)m \(s % 60)s"
+    }
+
+    /// The pieces of a finished activity line: what it thought, read, edited (+lines), ran, and anything else.
+    static func activityParts(_ s: StepsItem, root: String?) -> [ActivityPart] {
+        var parts: [ActivityPart] = []
+        let tools = s.tools
+        if let thinking = s.thinking, !thinking.isEmpty { parts.append(ActivityPart(text: thought(s.thinkingMs).lowercased())) }
+        func paths(_ kinds: Set<String>) -> [String] {
+            var seen: [String] = []
+            for t in tools where kinds.contains(t.tool) && t.status != .denied {
+                let path = relative(t.args?["path"]?.stringValue ?? "", root: root)
+                if !path.isEmpty, !seen.contains(path) { seen.append(path) }
+            }
+            return seen
+        }
+        let reads = paths(["read"])
+        if reads.count == 1 { parts.append(ActivityPart(text: "read", chip: reads[0], help: reads[0])) }
+        else if reads.count > 1 { parts.append(ActivityPart(text: "read \(reads.count) files", help: reads.joined(separator: "\n"))) }
+        let edited = paths(["edit", "write"])
+        let added = tools.filter { ["edit", "write"].contains($0.tool) && $0.status != .error }.reduce(0) { n, t in
+            if case .diff(_, let patch)? = t.typedDetails { n + DiffLine.parse(patch).added } else { n }
+        }
+        if edited.count == 1 { parts.append(ActivityPart(text: "edited", chip: edited[0], added: added > 0 ? added : nil, help: edited[0])) }
+        else if edited.count > 1 { parts.append(ActivityPart(text: "edited \(edited.count) files", added: added > 0 ? added : nil, help: edited.joined(separator: "\n"))) }
+        let commands = tools.filter { $0.tool == "bash" }.count
+        if commands > 0 { parts.append(ActivityPart(text: "ran \(commands) command\(commands == 1 ? "" : "s")")) }
+        let rest = tools.filter { !["read", "edit", "write", "bash"].contains($0.tool) }
+        parts += activitySummary(rest).map { ActivityPart(text: $0) }
+        let failed = tools.filter { $0.status == .error }.count
+        if failed > 0 { parts.append(ActivityPart(text: failed == 1 ? "1 step failed" : "\(failed) steps failed", warning: true)) }
+        if parts.isEmpty { parts.append(ActivityPart(text: "worked")) }
+        parts[0].text = parts[0].text.prefix(1).uppercased() + parts[0].text.dropFirst()
+        return parts
+    }
+
+    /// A path inside the project, relative to it ("src/app.ts"); anything else as given.
+    static func relative(_ path: String, root: String?) -> String {
+        guard let root, !root.isEmpty else { return path }
+        if path == root { return URL(fileURLWithPath: root).lastPathComponent }
+        if path.hasPrefix(root + "/") { return String(path.dropFirst(root.count + 1)) }
+        return path
     }
 
     /// "read README.md, package.json", "edited App.swift", "1 command", "searched the web".
@@ -322,6 +390,7 @@ nonisolated struct ItemRenderer: Sendable {
             .map { NSAttributedString(string: String($0), attributes: attrs).size().width }
             .max() ?? 0
         let p = paragraph(spacing: 6 + CardLayoutFragment.bubblePadV, before: CardLayoutFragment.bubblePadV + 4, indent: 120, tail: -CardLayoutFragment.bubblePadH)
+        if !compact { p.lineHeightMultiple = 1.5 / 1.2 }
         let m = NSMutableAttributedString(attributedString: line(NSAttributedString(string: lines, attributes: attrs), p))
         let all = NSRange(location: 0, length: m.length)
         m.addAttribute(.piopioCard, value: CardStyle.user.rawValue, range: all)
@@ -365,22 +434,6 @@ nonisolated struct ItemRenderer: Sendable {
             }
         }
         return card(m, .errorCard, lineHeight: 1.75)
-    }
-
-    /// Routing, memory and other notes: a small capsule with a colored dot (8e "System note").
-    /// "Checkpoint · Before turn 2   Restore…" between hairlines.
-    private func checkpointDivider(_ c: CheckpointItem) -> NSAttributedString {
-        let small = NSFont.systemFont(ofSize: 11)
-        let m = NSMutableAttributedString(string: "Checkpoint · \(c.label)", attributes: [.font: small, .foregroundColor: DS.fg3])
-        if !compact {
-            m.append(NSAttributedString(string: "   ", attributes: [.font: small]))
-            m.append(NSAttributedString(string: "Restore…", attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: DS.fg2, .link: TranscriptAction.restoreCheckpoint(itemId: c.id).url, .toolTip: "Put the project's files back as they were here"]))
-        }
-        let p = paragraph(spacing: 16, before: 4)
-        p.alignment = .center
-        let out = NSMutableAttributedString(attributedString: line(m, p))
-        out.addAttribute(.piopioCard, value: CardStyle.divider.rawValue, range: NSRange(location: 0, length: out.length))
-        return out
     }
 
     /// A plan in the transcript (docs/spec/09 P1–P3): its details once the engine has them, else its arguments.
@@ -440,8 +493,9 @@ nonisolated struct ItemRenderer: Sendable {
 
     /// The card for a tool call (docs/spec/05-build BR1): edits and writes show their diff (open by default),
     /// bash its command, output and exit code, other tools their output.
-    static func toolCard(_ t: ToolItem) -> DisclosureCard {
-        let (title, detail) = toolTitle(t)
+    static func toolCard(_ t: ToolItem, root: String? = nil) -> DisclosureCard {
+        let (title, raw) = toolTitle(t)
+        let detail = relative(raw, root: root)
         let duration = t.durationMs.map { $0 < 1000 ? String(format: "%.1fs", $0 / 1000) : String(format: "%.0fs", $0 / 1000) } ?? (t.status == .running ? "…" : "")
         let failed = t.status == .error
         let card: DisclosureCard
@@ -590,22 +644,6 @@ nonisolated struct ItemRenderer: Sendable {
 
     private var footerFont: NSFont { .systemFont(ofSize: 11.5, weight: .medium) }
 
-    /// A clickable word. Footer actions start hidden; `TranscriptDocument` reveals them on hover.
-    func action(_ title: String, _ action: TranscriptAction, itemId: String? = nil, help: String? = nil) -> NSAttributedString {
-        var attrs: [NSAttributedString.Key: Any] = [.font: footerFont]
-        if let itemId {
-            attrs[.piopioFooter] = itemId
-            attrs[.piopioFooterLink] = action.url
-            attrs[.piopioFooterColor] = DS.fg3
-            attrs[.foregroundColor] = NSColor.clear
-        } else {
-            attrs[.link] = action.url
-            attrs[.foregroundColor] = DS.fg3
-        }
-        if let help { attrs[.toolTip] = help }
-        return NSAttributedString(string: title, attributes: attrs)
-    }
-
     /// A capsule button (error cards): accent fill for the primary action, chip fill otherwise.
     func pill(_ title: String, _ action: TranscriptAction, _ style: PillStyle) -> NSAttributedString {
         NSAttributedString(string: "\u{2009}\u{2009}\u{2009}\(title)\u{2009}\u{2009}\u{2009}", attributes: [
@@ -616,59 +654,51 @@ nonisolated struct ItemRenderer: Sendable {
         ])
     }
 
-    private func gap(_ itemId: String) -> NSAttributedString {
-        NSAttributedString(string: "    ", attributes: [.font: footerFont, .piopioFooter: itemId])
-    }
-
-    /// Under your message: version switcher (always visible), then Edit and Copy (on hover).
+    /// Under your message, on hover (14b): Copy, Edit and, in Build, Rewind to here; a thread's versions switcher.
     func userFooter(_ u: UserItem) -> NSAttributedString {
-        let m = NSMutableAttributedString()
-        if u.direct == true {
-            m.append(NSAttributedString(string: "direct", attributes: [.font: footerFont, .foregroundColor: DS.fg3, .toolTip: "Typed in this topic, not routed from Main"]))
-            m.append(NSAttributedString(string: "    ", attributes: [.font: footerFont]))
-        }
-        if versions {
-            m.append(action("Edit", .edit(itemId: u.id), itemId: u.id, help: "Edit and resend (keeps this version)"))
-            m.append(gap(u.id))
-        }
-        m.append(action("Copy", .copy(itemId: u.id), itemId: u.id))
-        if let b = u.branch {
-            let dim: [NSAttributedString.Key: Any] = [.font: footerFont, .foregroundColor: DS.line]
-            m.append(NSAttributedString(string: "      ", attributes: [.font: footerFont]))
-            m.append(b.previous.map { self.action("‹", .switchBranch($0), help: "Previous version") } ?? NSAttributedString(string: "‹", attributes: dim))
-            m.append(NSAttributedString(string: "  \(b.index + 1) / \(b.count)  ", attributes: [.font: footerFont, .foregroundColor: DS.fg3]))
-            m.append(b.next.map { self.action("›", .switchBranch($0), help: "Next version") } ?? NSAttributedString(string: "›", attributes: dim))
-        }
-        let p = paragraph(spacing: 14)
-        p.alignment = .right
-        p.tailIndent = -4
-        return line(m, p)
+        let actions = MessageActions(itemId: u.id, role: .user, text: u.text)
+        actions.canEdit = versions || build
+        actions.canRewind = build
+        actions.branch = versions ? u.branch : nil
+        actions.note = u.direct == true ? "direct" : nil
+        return actionsLine(actions, spacing: 10)
     }
 
-    /// Under an answer: Copy, Regenerate, Fork, then the model and cost (all on hover).
+    /// Under an answer (14a): Copy, Retry, Fork from here; the model and cost on the right.
     func answerFooter(_ a: AssistantItem) -> NSAttributedString {
-        let m = NSMutableAttributedString()
-        if !a.text.isEmpty {
-            m.append(action("Copy", .copy(itemId: a.id), itemId: a.id))
-            m.append(gap(a.id))
-        }
-        if versions, a.outbound == nil {
-            m.append(action("Retry", .regenerate(itemId: a.id), itemId: a.id, help: "Ask again (keeps this version)"))
-            m.append(gap(a.id))
-            m.append(action("Fork", .fork(itemId: a.id), itemId: a.id, help: "Continue from here in a new thread"))
-        } else if a.text.isEmpty {
-            return NSAttributedString() // a step that only called tools
-        }
+        guard !a.text.isEmpty else { return NSAttributedString() } // a step that only called tools
+        let actions = MessageActions(itemId: a.id, role: .answer, text: a.text)
+        actions.canRetry = (versions || build) && a.outbound == nil
+        actions.canFork = (versions || build) && a.outbound == nil
         var meta: [String] = []
-        if let model = a.model { meta.append(model.split(separator: "/").dropFirst().joined(separator: "/").nilIfEmpty ?? model) }
+        if let model = a.model { meta.append(Self.modelName(model)) }
         if let u = a.usage, u.costUsd > 0 { meta.append(u.costUsd < 0.01 ? String(format: "$%.4f", u.costUsd) : String(format: "$%.2f", u.costUsd)) }
-        if !meta.isEmpty {
-            var attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11.5), .foregroundColor: NSColor.clear, .piopioFooter: a.id, .piopioFooterColor: DS.fg3]
-            if let u = a.usage { attrs[.toolTip] = "\(Int(u.inputTokens)) in · \(Int(u.outputTokens)) out · \(Int(u.cacheReadTokens)) cached tokens" }
-            if versions { m.append(gap(a.id)) } // otherwise Copy's gap already separates them
-            m.append(NSAttributedString(string: meta.joined(separator: " · "), attributes: attrs))
+        actions.meta = meta.joined(separator: " · ")
+        var help: [String] = []
+        if let model = a.model { help.append(model) }
+        if let u = a.usage { help.append("\(Int(u.inputTokens)) in · \(Int(u.outputTokens)) out · \(Int(u.cacheReadTokens)) cached tokens") }
+        actions.metaHelp = help.joined(separator: "\n")
+        return actionsLine(actions, spacing: 18)
+    }
+
+    /// "anthropic/claude-haiku-5.5" → "Haiku 5.5"; other ids lose only their provider.
+    static func modelName(_ id: String) -> String {
+        var name = id.split(separator: "/").last.map(String.init) ?? id
+        if name.hasPrefix("claude-") {
+            name = name.dropFirst(7).replacingOccurrences(of: "-", with: " ")
+            return name.prefix(1).uppercased() + name.dropFirst()
         }
-        return line(m, paragraph(spacing: 20, before: 2))
+        return name
+    }
+
+    private func actionsLine(_ actions: MessageActions, spacing: CGFloat) -> NSAttributedString {
+        let s = NSMutableAttributedString(attachment: ActionsAttachment(actions: actions))
+        s.append(NSAttributedString(string: "\n"))
+        let p = NSMutableParagraphStyle()
+        p.paragraphSpacing = spacing
+        p.paragraphSpacingBefore = 0
+        s.addAttribute(.paragraphStyle, value: p, range: NSRange(location: 0, length: s.length))
+        return s
     }
 
     func thinkingCard(_ card: DisclosureCard) -> NSAttributedString {
@@ -680,10 +710,10 @@ nonisolated struct ItemRenderer: Sendable {
     func render(_ block: MarkdownBlock) -> NSAttributedString {
         switch block {
         case .heading(let level, let text):
-            let size: CGFloat = level == 1 ? 18 : level == 2 ? 16 : 14
-            return line(Inline.ns(text, font: .systemFont(ofSize: size, weight: .semibold), color: DS.fg), paragraph(spacing: 6, before: 8))
+            let size: CGFloat = level == 1 ? 19 : level == 2 ? 17 : 15
+            return line(chips(Inline.ns(text, font: .systemFont(ofSize: size, weight: .semibold), color: DS.fg)), paragraph(spacing: 6, before: 8))
         case .paragraph(let text):
-            return line(Inline.ns(text, font: body, color: DS.fg), paragraph())
+            return line(chips(Inline.ns(text, font: body, color: DS.fg)), paragraph(spacing: compact ? 10 : 12))
         case .quote(let text):
             let p = paragraph(spacing: 12, indent: 14)
             return card(Inline.ns(text.replacingOccurrences(of: "\n", with: lineSeparator), font: body, color: DS.fg2), .quote, paragraphStyle: p)
@@ -693,7 +723,7 @@ nonisolated struct ItemRenderer: Sendable {
                 let marker = item.task.map { $0 ? "☑︎\t" : "☐\t" } ?? (item.ordered ? "\(item.number ?? i + 1).\t" : "•\t")
                 let indent = CGFloat(item.indent) * 10 + 4
                 let m = NSMutableAttributedString(string: marker, attributes: [.font: body, .foregroundColor: DS.fg3])
-                m.append(Inline.ns(item.text, font: body, color: DS.fg))
+                m.append(chips(Inline.ns(item.text, font: body, color: DS.fg)))
                 let p = paragraph(spacing: i == items.count - 1 ? 10 : 2, indent: indent, head: indent + 20)
                 p.tabStops = [NSTextTab(textAlignment: .left, location: indent + 20)]
                 out.append(line(m, p))
@@ -722,6 +752,51 @@ nonisolated struct ItemRenderer: Sendable {
     }
 
     // MARK: Helpers
+
+    /// Code spans become chips (chat v3, 14f), and paths inside the project show relative: "RESUMEN.md" instead of
+    /// "/Users/…/smart-paste/RESUMEN.md", the full path in the tooltip; clicking shows the file in the inspector.
+    private func chips(_ m: NSMutableAttributedString) -> NSMutableAttributedString {
+        if compact { return m }
+        let chipFont = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        // Code spans: the chip replaces the flat background.
+        var spans: [NSRange] = []
+        m.enumerateAttribute(.backgroundColor, in: NSRange(location: 0, length: m.length)) { value, range, _ in
+            if value != nil { spans.append(range) }
+        }
+        for range in spans.reversed() {
+            let text = (m.string as NSString).substring(with: range)
+            let full = Self.absolute(text, root: root)
+            var attrs: [NSAttributedString.Key: Any] = [.font: chipFont, .foregroundColor: DS.fg, .piopioPill: PillStyle.code.rawValue]
+            if let full {
+                attrs[.toolTip] = full
+                attrs[.link] = TranscriptAction.revealFile(path: full).url
+            }
+            m.replaceCharacters(in: range, with: NSAttributedString(string: "\u{2009}\(Self.relative(full ?? text, root: root))\u{2009}", attributes: attrs))
+        }
+        // Bare absolute paths in the prose.
+        guard let root, !root.isEmpty else { return m }
+        let pattern = NSRegularExpression.escapedPattern(for: root) + #"(/[^\s`'"<>()\[\],;]*)?"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return m }
+        for match in regex.matches(in: m.string, range: NSRange(location: 0, length: m.length)).reversed() {
+            var range = match.range
+            if m.attribute(.piopioPill, at: range.location, effectiveRange: nil) != nil { continue }
+            var path = (m.string as NSString).substring(with: range)
+            while let last = path.last, ".:!?".contains(last) { path.removeLast(); range.length -= 1 }
+            m.replaceCharacters(in: range, with: NSAttributedString(string: "\u{2009}\(Self.relative(path, root: root))\u{2009}", attributes: [
+                .font: chipFont, .foregroundColor: DS.fg, .piopioPill: PillStyle.code.rawValue, .toolTip: path, .link: TranscriptAction.revealFile(path: path).url,
+            ]))
+        }
+        return m
+    }
+
+    /// A code span that names something in the project: its absolute path (it may already be relative).
+    static func absolute(_ text: String, root: String?) -> String? {
+        guard let root, !root.isEmpty, !text.contains(" "), !text.contains("\n") else { return nil }
+        if text == root || text.hasPrefix(root + "/") { return text }
+        guard text.contains("/") || text.contains("."), !text.hasPrefix("/"), !text.hasPrefix("http"), !text.hasPrefix("-") else { return nil }
+        let candidate = root + "/" + (text.hasPrefix("./") ? String(text.dropFirst(2)) : text)
+        return FileManager.default.fileExists(atPath: candidate) ? candidate : nil
+    }
 
     private func paragraph(spacing: CGFloat = 10, before: CGFloat = 0, indent: CGFloat = 0, head: CGFloat? = nil, tail: CGFloat = 0) -> NSMutableParagraphStyle {
         let p = NSMutableParagraphStyle()

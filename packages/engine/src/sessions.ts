@@ -210,6 +210,19 @@ export class Sessions {
 	 */
 	async fork(ref: ContainerRef, itemId: string): Promise<ContainerRef> {
 		const source = this.entry(ref);
+		if (ref.kind === "build") {
+			// pi writes the new session file next to this one; the folder sync picks it up like a CLI session.
+			const runtime = await this.build(ref);
+			const file = runtime.forkFile(itemId);
+			await this.syncFolder(source.cwd!);
+			const copy = [...this.entries.values()].find((e) => e.sessionFile === file);
+			if (!copy) throw new EngineError("INTERNAL", "The new session didn't show up.");
+			copy.title = `${source.title} (fork)`;
+			if (source.model) copy.model = source.model;
+			this.save();
+			this.changed(copy);
+			return copy.ref;
+		}
 		if (ref.kind !== "thread" || !source.file) throw new EngineError("INVALID", "Only threads can be branched into a new session for now.");
 		const runtime = await this.runtime(ref);
 		if (runtime.snapshot().state.status === "running") throw new EngineError("BUSY", "Wait for the answer to finish before branching into a new thread.");

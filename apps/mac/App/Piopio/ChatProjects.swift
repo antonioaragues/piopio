@@ -22,7 +22,22 @@ struct FileBrowser: View {
             }
             .padding(8)
         }
-        .task(id: cwd) { children[""] = await engine.listDir(cwd, "") }
+        .task(id: cwd) {
+            children[""] = await engine.listDir(cwd, "")
+            await expand(to: selected)
+        }
+        .onChange(of: selected) { _, path in Task { await expand(to: path) } }
+    }
+
+    /// Opens the folders above a file revealed from elsewhere (a path chip in an answer).
+    private func expand(to path: String?) async {
+        guard let path, path.contains("/") else { return }
+        var dir = ""
+        for part in path.split(separator: "/").dropLast() {
+            dir = dir.isEmpty ? String(part) : "\(dir)/\(part)"
+            expanded.insert(dir)
+            if children[dir] == nil { children[dir] = await engine.listDir(cwd, dir) }
+        }
     }
 
     private func rows(dir: String, depth: Int) -> AnyView {

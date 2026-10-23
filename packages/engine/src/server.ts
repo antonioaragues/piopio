@@ -472,6 +472,10 @@ export class Engine {
 				if (p.ref.kind !== "build") return { commands: await this.sessions.chatCommands() } satisfies Result<"sessions.commands">;
 				return { commands: (await this.sessions.build(p.ref)).commands() } satisfies Result<"sessions.commands">;
 			}
+			case "sessions.rewind": {
+				const p = params as Params<"sessions.rewind">;
+				return (await (await this.sessions.build(p.ref)).rewind(p.itemId, p.files, p.dryRun ?? false)) satisfies Result<"sessions.rewind">;
+			}
 			case "sessions.tree": {
 				const p = params as Params<"sessions.tree">;
 				return { nodes: (await this.sessions.build(p.ref)).tree() } satisfies Result<"sessions.tree">;

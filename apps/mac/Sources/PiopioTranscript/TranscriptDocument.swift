@@ -31,14 +31,26 @@ public final class TranscriptDocument {
     private var prefetching = false
     private var boundsObserver: NSObjectProtocol?
     private var frameObserver: NSObjectProtocol?
+    private var scrollFrameObserver: NSObjectProtocol?
     private let hover = HoverTracker()
     private var hoveredItem: String?
-    private var shownFooters = Set<String>()
+    /// The action row under each message, by item (shown on hover and for the latest answer).
+    private var actionRows: [String: MessageActions] = [:]
     private var columnWidth: CGFloat = 0
+    private var laidOutWidth: CGFloat = 0
     /// Extra space at the bottom so the floating composer never covers the last line.
     public var bottomInset: CGFloat = 24 { didSet { layoutColumn(force: true) } }
-    /// Widest the reading column gets (docs/design: 680–700).
-    public var maxColumnWidth: CGFloat = 700
+    /// Widest the reading column gets (docs/design chat v3: 680), with at least 40 on each side.
+    public var maxColumnWidth: CGFloat = 680
+    private let minimumInset: CGFloat = 40
+
+    /// "Ask next" (chat v3, 14e): suggestions after the last answer, as the document's last segment.
+    public let askNext = AskNextModel()
+    private var tailLength = 0
+
+    /// Build: what rewinding to before a message changes, and doing it (`files`: the files too).
+    public var rewindPreview: ((String) async -> RewindPreview?)?
+    public var rewind: ((String, Bool) async -> Void)?
 
     /// Clicks on action links (edit, regenerate, fork, branch switch, settings, error details).
     public var onAction: ((TranscriptAction) -> Void)?
@@ -49,8 +61,8 @@ public final class TranscriptDocument {
     }
     public var onFollowingChange: ((Bool) -> Void)?
 
-    public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true) {
-        renderer = ItemRenderer(compact: compact, versions: versions)
+    public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true, build: Bool = false, root: String? = nil) {
+        renderer = ItemRenderer(compact: compact, versions: versions, build: build, root: root)
         self.windowSize = windowSize
         self.pageSize = pageSize
         scrollView = NSTextView.scrollableTextView()
@@ -59,7 +71,7 @@ public final class TranscriptDocument {
         textView.isSelectable = true
         textView.allowsUndo = false
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 32, height: 24)
+        textView.textContainerInset = NSSize(width: 40, height: 24)
         textView.textContainer?.lineFragmentPadding = 0
         precondition(textView.textLayoutManager != nil, "TranscriptDocument needs TextKit 2")
         textView.textLayoutManager!.delegate = layoutDelegate
@@ -72,6 +84,11 @@ public final class TranscriptDocument {
         scrollView.contentView.postsBoundsChangedNotifications = true
         scrollView.contentView.postsFrameChangedNotifications = true
         frameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.layoutColumn() }
+        }
+        // The scroll view itself can be resized (an inspector opening) without its clip view posting first.
+        scrollView.postsFrameChangedNotifications = true
+        scrollFrameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.layoutColumn() }
         }
         textView.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: hover, userInfo: nil))
@@ -136,13 +153,15 @@ public final class TranscriptDocument {
             return (SendableText(value: out), lengths)
         }.value
         storage.setAttributedString(built.0.value)
+        tailLength = 0
+        actionRows = [:]
         documentIDs = window.map(\.id)
         lengths = Dictionary(uniqueKeysWithValues: zip(documentIDs, built.1))
         for item in window { if case .assistant(let a) = item, a.status == .streaming { startStream(a) } }
         wireCards(in: NSRange(location: 0, length: storage.length))
         layoutBubbles(in: NSRange(location: 0, length: storage.length))
-        shownFooters = [] // freshly rendered footers start hidden
         refreshFooters()
+        if !askNext.items.isEmpty { insertTail() }
         scrollToLatest()
         loading = false
         let queued = pendingEvents
@@ -285,7 +304,7 @@ public final class TranscriptDocument {
         let text = renderer.render(item)
         documentIDs.append(item.id)
         lengths[item.id] = text.length
-        edit(NSRange(location: storage.length, length: 0), with: text)
+        edit(NSRange(location: storage.length - tailLength, length: 0), with: text)
         if case .assistant(let a) = item, a.status == .streaming { startStream(a) }
     }
 
@@ -318,12 +337,6 @@ public final class TranscriptDocument {
     }
 
     private func edit(_ range: NSRange, with text: NSAttributedString) {
-        // Re-rendered footers start hidden: forget them so the next refresh shows them again.
-        if text.length > 0 {
-            text.enumerateAttribute(.piopioFooter, in: NSRange(location: 0, length: text.length)) { value, _, _ in
-                if let id = value as? String { shownFooters.remove(id) }
-            }
-        }
         storage.beginEditing()
         storage.replaceCharacters(in: range, with: text)
         storage.endEditing()
@@ -334,19 +347,21 @@ public final class TranscriptDocument {
     // MARK: Column, bubbles, footers
 
     /// Centers the reading column and re-fits user bubbles when the width changes.
-    private func layoutColumn(force: Bool = false) {
+    func layoutColumn(force: Bool = false) {
         let width = scrollView.contentView.bounds.width
         guard width > 0 else { return }
-        let inset = max(32, (width - maxColumnWidth) / 2)
+        let inset = max(minimumInset, (width - maxColumnWidth) / 2)
         let column = width - 2 * inset
-        guard force || abs(column - columnWidth) > 0.5 else { return }
+        // The width, not the column: past 680 the column stays the same while its insets change.
+        guard force || abs(width - laidOutWidth) > 0.5 else { return }
+        laidOutWidth = width
         columnWidth = column
         textView.textContainerInset = NSSize(width: inset, height: 24)
         if let tv = textView.enclosingScrollView { tv.contentInsets.bottom = bottomInset }
         layoutBubbles(in: NSRange(location: 0, length: storage.length))
     }
 
-    /// User bubbles hug their text on the right: indent = column − text width (up to 78% of the column).
+    /// User bubbles hug their text on the right: indent = column − text width (at most 480 wide, chat v3).
     private func layoutBubbles(in range: NSRange) {
         let column = columnWidth > 0 ? columnWidth : (textView.textContainer?.size.width ?? 600)
         guard range.length > 0, column > 100 else { return }
@@ -355,7 +370,7 @@ public final class TranscriptDocument {
             guard let natural = (value as? NSNumber).map({ CGFloat($0.doubleValue) }),
                   let style = (storage.attribute(.paragraphStyle, at: run.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { return }
             let pad = CardLayoutFragment.bubblePadH
-            let indent = max(56, column - pad - min(natural, column * 0.78))
+            let indent = max(56, column - pad - min(natural, min(480 - 2 * pad, column * 0.78)))
             guard abs(style.headIndent - indent) > 0.5 else { return }
             style.headIndent = indent
             style.firstLineHeadIndent = indent
@@ -364,32 +379,46 @@ public final class TranscriptDocument {
         storage.endEditing()
     }
 
-    /// Footers show for the hovered message and the latest answer.
+    /// Action rows show for the hovered message and the latest answer.
     private func refreshFooters() {
         var wanted = Set<String>()
         if let hoveredItem { wanted.insert(hoveredItem) }
-        if let last = items.last(where: { if case .assistant(let a) = $0 { a.status != .streaming } else { false } }) { wanted.insert(last.id) }
-        guard wanted != shownFooters else { return }
-        let changed = wanted.symmetricDifference(shownFooters)
-        shownFooters = wanted
+        if let last = items.last(where: { if case .assistant(let a) = $0 { a.status != .streaming && !a.text.isEmpty } else { false } }) { wanted.insert(last.id) }
+        for (id, row) in actionRows where row.visible != wanted.contains(id) { row.visible = wanted.contains(id) }
+    }
+
+    // MARK: Ask next
+
+    /// Shows suggestions after the last answer (nil or empty hides them).
+    public func showAskNext(_ suggestions: [String]?) {
+        let next = suggestions ?? []
+        guard next != askNext.items else { return }
+        removeTail()
+        askNext.items = next
+        askNext.highlighted = 0
+        if !next.isEmpty, !loading { insertTail() }
+    }
+
+    private func insertTail() {
+        guard tailLength == 0, !askNext.items.isEmpty else { return }
+        let s = NSMutableAttributedString(attachment: AskNextAttachment(model: askNext))
+        s.append(NSAttributedString(string: "\n"))
+        let p = NSMutableParagraphStyle()
+        p.paragraphSpacingBefore = 4
+        s.addAttribute(.paragraphStyle, value: p, range: NSRange(location: 0, length: s.length))
         storage.beginEditing()
-        for id in changed {
-            guard let d = documentIDs.firstIndex(of: id) else { continue }
-            let range = NSRange(location: offset(ofIndex: d), length: lengths[id] ?? 0)
-            let show = wanted.contains(id)
-            storage.enumerateAttribute(.piopioFooter, in: range) { value, run, _ in
-                guard value as? String == id else { return }
-                // A footer is several words with their own links and colors: handle each sub-run.
-                storage.enumerateAttribute(.piopioFooterColor, in: run) { color, sub, _ in
-                    storage.addAttribute(.foregroundColor, value: show ? ((color as? NSColor) ?? DS.fg3) : NSColor.clear, range: sub)
-                }
-                storage.enumerateAttribute(.piopioFooterLink, in: run) { link, sub, _ in
-                    guard let link else { return }
-                    if show { storage.addAttribute(.link, value: link, range: sub) } else { storage.removeAttribute(.link, range: sub) }
-                }
-            }
-        }
+        storage.insert(s, at: storage.length)
         storage.endEditing()
+        tailLength = s.length
+        if isFollowing { textView.scrollToEndOfDocument(nil) }
+    }
+
+    private func removeTail() {
+        guard tailLength > 0, storage.length >= tailLength else { tailLength = 0; return }
+        storage.beginEditing()
+        storage.deleteCharacters(in: NSRange(location: storage.length - tailLength, length: tailLength))
+        storage.endEditing()
+        tailLength = 0
     }
 
     func hover(at point: NSPoint?) {
@@ -428,7 +457,8 @@ public final class TranscriptDocument {
         let thinkingText = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
         let out = NSMutableAttributedString()
         if !thinkingText.isEmpty {
-            let card = DisclosureCard(kind: .thinking, title: "Thinking", detail: "…", body: thinkingText)
+            let card = DisclosureCard(kind: .thinking, title: "Thinking…", body: thinkingText)
+            card.working = a.text.isEmpty
             s.thinking = card
             let t = renderer.thinkingCard(card)
             s.thinkingLength = t.length
@@ -453,7 +483,8 @@ public final class TranscriptDocument {
                 card.body += delta
                 if card.expanded { relayout(card) }
             } else {
-                let card = DisclosureCard(kind: .thinking, title: "Thinking", detail: "…", body: delta)
+                let card = DisclosureCard(kind: .thinking, title: "Thinking…", body: delta)
+                card.working = true
                 s.thinking = card
                 let t = renderer.thinkingCard(card)
                 edit(NSRange(location: start, length: 0), with: t)
@@ -461,6 +492,11 @@ public final class TranscriptDocument {
                 lengths[id] = length + t.length
             }
             return
+        }
+        if let card = s.thinking, card.working {
+            // The answer started: the thought stops spinning.
+            card.working = false
+            card.title = "Thought"
         }
         s.markdown.append(delta)
         let tailStart = start + s.thinkingLength + s.closedLength
@@ -532,6 +568,7 @@ public final class TranscriptDocument {
 
     /// Test hooks.
     var renderedLength: Int { documentIDs.reduce(0) { $0 + (lengths[$1] ?? 0) } }
+    func actionRow(_ itemId: String) -> MessageActions? { actionRows[itemId] }
     var hasPrefetchedPage: Bool { prefetched != nil }
 
     // MARK: Cards
@@ -541,6 +578,10 @@ public final class TranscriptDocument {
         storage.enumerateAttribute(.attachment, in: range) { value, _, _ in
             (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
             (value as? DisclosureAttachment)?.card.onAction = { [weak self] action in self?.handle(action) }
+            if let row = (value as? ActionsAttachment)?.actions {
+                row.document = self
+                actionRows[row.itemId] = row
+            }
         }
     }
 

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:268px;height:100%;box-sizing:border-box;padding:8px;flex:none;display:flex">
+  <div style="flex:1;display:flex;flex-direction:column;background:var(--glass);backdrop-filter:blur(30px) saturate(1.6);border-radius:14px;box-shadow:0 0 0 .5px var(--line),0 8px 30px rgba(0,0,0,.07);overflow:hidden;min-width:0">
+    <div style="height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;flex:none">
+      <div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div>
+      <div style="flex:1"></div>
+      <sc-if value="{{ isB }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:12px;background:var(--chip);font-size:12px;font-weight:600;color:var(--fg)"><span style="font-size:14px;line-height:1">+</span><span>New</span><span style="color:var(--fg3);font-size:9px">⌄</span></div>
+      </sc-if>
+    </div>
+    <sc-if value="{{ isA }}" hint-placeholder-val="{{ true }}">
+      <div style="margin:0 12px;display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--chip)">
+        <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+          <div style="flex:1;height:26px;display:flex;align-items:center;justify-content:center;gap:5px;border-radius:999px;font-size:13px;background:{{ m.bg }};color:{{ m.color }};font-weight:{{ m.fw }};box-shadow:{{ m.shadow }}"><span>{{ m.label }}</span><sc-if value="{{ m.count }}"><span style="min-width:15px;height:15px;border-radius:8px;background:var(--amber);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ m.count }}</span></sc-if></div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <div style="margin:10px 12px 0;height:28px;border-radius:8px;background:var(--chip);display:flex;align-items:center;gap:7px;padding:0 10px;color:var(--fg3);font-size:13px;flex:none">
+      <span style="font-size:12px">⌕</span><span style="flex:1">Search</span><span style="font-size:11px">⌘K</span>
+    </div>
+    <div style="flex:1;overflow:hidden;padding:10px 8px;display:flex;flex-direction:column;gap:1px">
+      <sc-for list="{{ sections }}" as="s" hint-placeholder-count="2">
+        <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:10px">
+          <sc-if value="{{ s.title }}">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3)"><span>{{ s.title }}</span><sc-if value="{{ s.plus }}"><span style="font-size:14px;font-weight:400">+</span></sc-if></div>
+          </sc-if>
+          <sc-for list="{{ s.items }}" as="it" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:8px;min-height:{{ it.h }};padding:0 8px 0 {{ it.pl }};border-radius:8px;background:{{ it.bg }}">
+              <sc-if value="{{ it.isDot }}"><div style="width:14px;display:flex;justify-content:center;flex:none"><div style="width:7px;height:7px;border-radius:50%;background:{{ it.dot }};box-shadow:{{ it.ring }}"></div></div></sc-if>
+              <sc-if value="{{ it.isTile }}"><div style="width:18px;height:18px;border-radius:5px;background:{{ it.tile }};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">{{ it.tileText }}</div></sc-if>
+              <sc-if value="{{ it.isAvatar }}"><div style="width:26px;height:26px;border-radius:50%;background:{{ it.tile }};display:flex;align-items:center;justify-content:center;font-size:14px;flex:none;position:relative">{{ it.tileText }}<div style="position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:{{ it.dot }};box-shadow:0 0 0 2px var(--glassSolid)"></div></div></sc-if>
+              <sc-if value="{{ it.isGlyph }}"><div style="width:18px;text-align:center;font-size:13px;color:var(--fg2);flex:none">{{ it.glyph }}</div></sc-if>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+                <div style="font-size:13px;color:{{ it.color }};font-weight:{{ it.fw }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.label }}</div>
+                <sc-if value="{{ it.sub }}"><div style="font-size:11.5px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.sub }}</div></sc-if>
+              </div>
+              <sc-if value="{{ it.trail }}"><span style="font-size:11px;color:var(--fg3);font-family:'SF Mono',ui-monospace,Menlo,monospace">{{ it.trail }}</span></sc-if>
+              <sc-if value="{{ it.badge }}"><span style="min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:var(--amber);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ it.badge }}</span></sc-if>
+              <sc-if value="{{ it.unread }}"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div></sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <div style="height:0.5px;background:var(--line);flex:none"></div>
+    <div style="height:40px;display:flex;align-items:center;gap:7px;padding:0 14px;flex:none;font-size:12px">
+      <div style="width:6px;height:6px;border-radius:50%;background:var(--green)"></div>
+      <span style="color:var(--fg2)">This Mac</span>
+      <span style="color:var(--fg3)">·</span>
+      <span style="color:var(--fg3)">$0.05 today</span>
+      <div style="flex:1"></div>
+      <span style="color:var(--fg3);font-size:14px">⚙︎</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:268,&quot;height&quot;:800},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;a&quot;,&quot;b&quot;],&quot;default&quot;:&quot;a&quot;,&quot;tsType&quot;:&quot;'a'|'b'&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;build&quot;,&quot;chat&quot;,&quot;agents&quot;],&quot;default&quot;:&quot;build&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;active&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;fin-q&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const v = this.props.variant ?? 'a';
+    const mode = this.props.mode ?? 'build';
+    const active = this.props.active ?? '';
+    const status = { done: 'var(--green)', running: 'var(--accent)', waiting: 'var(--amber)', idle: 'color-mix(in srgb, var(--fg3) 50%, transparent)', failed: 'var(--red)' };
+    const row = (o) => {
+      const sel = o.key && o.key === active;
+      return {
+        label: o.label, sub: o.sub || '', trail: o.trail || '', badge: o.badge || '', unread: !!o.unread,
+        isDot: o.kind === 'dot', isTile: o.kind === 'tile', isAvatar: o.kind === 'avatar', isGlyph: o.kind === 'glyph',
+        dot: status[o.status] || status.idle,
+        ring: o.status === 'running' ? '0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent)' : 'none',
+        tile: o.tile || 'var(--accent)', tileText: o.tileText || '', glyph: o.glyph || '',
+        h: o.sub ? '40px' : '28px', pl: o.indent ? '26px' : '8px',
+        bg: sel ? 'var(--accentSoft)' : 'transparent', fw: sel ? 600 : (o.bold ? 500 : 400),
+        color: o.muted ? 'var(--fg3)' : 'var(--fg)'
+      };
+    };
+    const sec = (title, items, plus) => ({ title, plus: !!plus, items: items.map(row) });
+    const buildItems = [
+      { key: 'fin', kind: 'tile', tile: 'oklch(0.62 0.17 250)', tileText: 'F', label: 'financial_ia', trail: 'main', bold: 1 },
+      { key: 'fin-csv', kind: 'dot', status: 'running', label: 'CSV import preview', indent: 1 },
+      { key: 'fin-kutxa', kind: 'dot', status: 'waiting', label: 'Fix Kutxabank parser', indent: 1 },
+      { key: 'fin-q', kind: 'dot', status: 'done', label: 'Qué es este proyecto?', indent: 1 },
+      { key: 'sp', kind: 'tile', tile: 'oklch(0.65 0.14 160)', tileText: 'S', label: 'smart-paste', bold: 1 },
+      { key: 'sp-q', kind: 'dot', status: 'idle', label: 'what is this project about?', indent: 1 }
+    ];
+    const nbItems = [
+      { key: 'kitchen', kind: 'tile', tile: 'oklch(0.7 0.15 55)', tileText: 'K', label: 'Kitchen renovation', bold: 1 },
+      { key: 'kitchen-dist', kind: 'dot', status: 'waiting', label: 'Distribución', indent: 1 },
+      { key: 'kitchen-mueb', kind: 'dot', status: 'idle', label: 'Muebles de cocina', indent: 1, unread: 1 },
+      { key: 'kitchen-col', kind: 'dot', status: 'idle', label: 'Colores y acabados', indent: 1, unread: 1 }
+    ];
+    const chatItems = [
+      { key: 'spchat', kind: 'glyph', glyph: '◌', label: 'what is this project about?' },
+      { key: 'porto', kind: 'glyph', glyph: '◌', label: 'Porto weekend ideas' },
+      { key: 'do', kind: 'glyph', glyph: '◌', label: 'Explain Durable Objects' }
+    ];
+    const agentItems = [
+      { key: 'daily', kind: 'avatar', tile: 'oklch(0.95 0.06 90)', tileText: '☀️', status: 'done', label: 'Daily briefing', sub: 'Next run tomorrow 7:00' },
+      { key: 'habit', kind: 'avatar', tile: 'oklch(0.94 0.05 150)', tileText: '🌱', status: 'idle', label: 'Habit coach', sub: 'Paused' }
+    ];
+    let sections = [];
+    const more = (label, indent) => ({ kind: 'none', label, muted: 1, indent });
+    if (this.props.empty) {
+      const hint = (label) => ({ kind: 'none', label, muted: 1 });
+      const map = { build: [['Projects', 'Folders you add show up here']], chat: [['Notebooks', 'Long-running subjects'], ['Chats', 'Your conversations']], agents: [['Agents', 'Nothing hatched yet']] };
+      const all = [['Projects', 'Folders you add show up here'], ['Notebooks', 'Long-running subjects'], ['Agents', 'Nothing hatched yet'], ['Chats', 'Your conversations']];
+      sections = (v === 'b' ? all : map[mode]).map(([t, h]) => sec(t, [hint(h)], 1));
+      if (v === 'b') sections.unshift(sec('', [{ kind: 'glyph', glyph: '⌂', label: 'Home', bold: 1 }]));
+    } else if (this.props.busy) {
+      sections = [
+        sec('', [
+          { key: 'home', kind: 'glyph', glyph: '⌂', label: 'Home', bold: 1 },
+          { key: 'needs', kind: 'glyph', glyph: '◉', label: 'Needs you', badge: '5', bold: 1 }
+        ]),
+        sec('Pinned', [
+          { key: 'kitchen', kind: 'tile', tile: 'oklch(0.7 0.15 55)', tileText: 'K', label: 'Kitchen renovation' },
+        ]),
+        sec('Projects · 6', [
+          { key: 'fin', kind: 'tile', tile: 'oklch(0.62 0.17 250)', tileText: 'F', label: 'financial_ia', trail: 'main', bold: 1 },
+          { key: 'fin-kutxa', kind: 'dot', status: 'waiting', label: 'Fix Kutxabank parser', indent: 1 },
+          { key: 'fin-csv', kind: 'dot', status: 'running', label: 'CSV import preview', indent: 1 },
+          more('9 earlier sessions', 1),
+          { key: 'pio', kind: 'tile', tile: 'oklch(0.68 0.17 45)', tileText: 'P', label: 'piopio', trail: 'sidebar', bold: 1 },
+          { key: 'pio-1', kind: 'dot', status: 'running', label: 'Long sidebar lists', indent: 1 },
+          more('4 more projects ›')
+        ], 1),
+        sec('Notebooks · 3', [
+          { key: 'kitchen2', kind: 'tile', tile: 'oklch(0.7 0.15 55)', tileText: 'K', label: 'Kitchen renovation', unread: 1 },
+          { key: 'jp', kind: 'tile', tile: 'oklch(0.62 0.15 15)', tileText: 'J', label: 'Viaje a Japón' }
+        ], 1),
+        sec('Agents · 4', [
+          { key: 'daily2', kind: 'glyph', glyph: '☀️', label: 'Daily briefing', trail: '7:00' },
+          more('3 more ›')
+        ], 1),
+        sec('Chats · 49', [
+          { key: 'porto', kind: 'glyph', glyph: '◌', label: 'Porto weekend ideas' },
+          more('48 earlier ›')
+        ], 1)
+      ];
+    } else if (v === 'a') {
+      const top = sec('', [{ key: 'needs', kind: 'glyph', glyph: '◉', label: 'Needs you', badge: '3', bold: 1 }]);
+      if (mode === 'build') sections = [top, sec('Projects', buildItems, 1)];
+      else if (mode === 'chat') sections = [top, sec('Notebooks', nbItems, 1), sec('Chats', chatItems, 1)];
+      else sections = [top, sec('Agents', agentItems, 1)];
+    } else {
+      sections = [
+        sec('', [
+          { key: 'home', kind: 'glyph', glyph: '⌂', label: 'Home', bold: 1 },
+          { key: 'needs', kind: 'glyph', glyph: '◉', label: 'Needs you', badge: '3', bold: 1 }
+        ]),
+        sec('Projects', buildItems.filter(i => i.key !== 'sp-q' || active === 'sp-q'), 1),
+        sec('Notebooks', nbItems.slice(0, 1), 1),
+        sec('Agents', agentItems, 1),
+        sec('Chats', chatItems, 1)
+      ];
+    }
+    const modes = ['build', 'chat', 'agents'].map(m => ({
+      label: m[0].toUpperCase() + m.slice(1),
+      bg: m === mode ? 'var(--pill)' : 'transparent', color: m === mode ? 'var(--fg)' : 'var(--fg2)',
+      fw: m === mode ? 600 : 400, shadow: m === mode ? '0 1px 2px rgba(0,0,0,.08)' : 'none',
+      count: m === 'build' ? '1' : m === 'agents' ? '1' : ''
+    }));
+    return { isA: v === 'a', isB: v === 'b', modes, sections };
+  }
+}
+</script>
+</body>
+</html>

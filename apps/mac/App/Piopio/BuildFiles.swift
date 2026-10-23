@@ -44,27 +44,83 @@ struct Editor: Identifiable, Hashable {
     }
 }
 
-/// "Open in <Editor>" for the project folder (docs/design 2a toolbar), with the other editors in its menu.
-struct OpenInEditorMenu: View {
+/// "Open ⌄" (chat v3, 14d): the project in an editor, Terminal or Finder; Copy path; the default app. One click on
+/// the button repeats the last choice, whose app icon it shows.
+struct OpenMenu: View {
     let path: String
+    @AppStorage("lastOpenTarget") private var last = ""
+    @AppStorage("editor") private var defaultEditor = ""
+
+    private static let terminal = "com.apple.Terminal"
+    private static let finder = "com.apple.finder"
 
     var body: some View {
-        if let preferred = Editor.preferred {
-            Menu {
-                ForEach(Editor.installed) { editor in
-                    Button("Open in \(editor.name)") { editor.open(path) }
-                }
-                Divider()
-                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
-            } label: {
-                Text("Open in \(preferred.name)").font(.system(size: 12, weight: .medium))
-            } primaryAction: {
-                preferred.open(path)
+        Menu {
+            ForEach(Editor.installed) { editor in
+                Button { open(editor.id) } label: { Label { Text(editor.name) } icon: { AppIcon(bundleId: editor.id) } }
             }
-            .menuStyle(.button)
-            .buttonStyle(PillStyle(kind: .toolbar))
-            .fixedSize()
-            .help("Open the project in \(preferred.name) (other editors in the menu)")
+            Button { open(Self.terminal) } label: { Label { Text("Terminal") } icon: { AppIcon(bundleId: Self.terminal) } }
+            Button { open(Self.finder) } label: { Label { Text("Finder") } icon: { AppIcon(bundleId: Self.finder) } }
+            Divider()
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(path, forType: .string)
+            }
+            if !Editor.installed.isEmpty {
+                Menu("Default App") {
+                    ForEach(Editor.installed) { editor in
+                        Button { defaultEditor = editor.id } label: {
+                            if editor.id == Editor.preferred?.id { Label(editor.name, systemImage: "checkmark") } else { Text(editor.name) }
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                AppIcon(bundleId: target).frame(width: 15, height: 15)
+                Text("Open").font(.system(size: 12, weight: .medium))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.dsFg3)
+            }
+        } primaryAction: {
+            open(target)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(PillStyle(kind: .toolbar))
+        .fixedSize()
+        .help("Open the project in \(name(target)) (more in the menu)")
+    }
+
+    /// The last app used, else the default editor, else Finder.
+    private var target: String {
+        if !last.isEmpty, last == Self.terminal || last == Self.finder || Editor.installed.contains(where: { $0.id == last }) { return last }
+        return Editor.preferred?.id ?? Self.finder
+    }
+
+    private func name(_ id: String) -> String {
+        id == Self.terminal ? "Terminal" : id == Self.finder ? "Finder" : Editor.installed.first { $0.id == id }?.name ?? "the editor"
+    }
+
+    private func open(_ id: String) {
+        last = id
+        if id == Self.finder {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        } else if let editor = Editor.installed.first(where: { $0.id == id }) {
+            editor.open(path)
+        } else if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+            NSWorkspace.shared.open([URL(fileURLWithPath: path)], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+        }
+    }
+}
+
+/// An app's icon, by bundle identifier.
+struct AppIcon: View {
+    let bundleId: String
+    var body: some View {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().interpolation(.high)
+        } else {
+            Image(systemName: "app")
         }
     }
 }

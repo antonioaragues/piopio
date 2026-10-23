@@ -39,7 +39,8 @@ struct BuildSessionView: View {
     /// Shown in Chat (docs/spec/04-chat §2): file browser and preview instead of the terminal and git.
     var chatLens = false
 
-    @AppStorage("buildInspector") private var showInspector = true
+    /// Closed by default; opens the first time a turn changes files; your toggle is then kept per session (chat v3).
+    @State private var showInspector = false
     @AppStorage("inspectorTab") private var inspectorTab = ChatInspectorTab.changes
     @State private var previewing: String?
     @State private var reviewing = false
@@ -81,7 +82,7 @@ struct BuildSessionView: View {
                         .padding(.bottom, 8)
                 }
             }
-            if chatLens, !reviewing, let path = previewing, let cwd = summary.cwd {
+            if !reviewing, let path = previewing, let cwd = summary.cwd {
                 FilePreview(engine: engine, cwd: cwd, path: path, session: session) { previewing = nil }
                     .frame(width: 440)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.panel))
@@ -108,12 +109,24 @@ struct BuildSessionView: View {
                         }
                     }
                 }
-                .frame(width: chatLens ? 260 : 290)
+                .frame(width: 280)
                 .glassPanel()
                 .padding(8)
             }
         }
         .task { await session.open() }
+        .task(id: summary.ref.id) { showInspector = Self.inspectorChoice(summary.ref.id) ?? hasChanges }
+        .onChange(of: hasChanges) { _, changed in
+            if changed, Self.inspectorChoice(summary.ref.id) == nil { withAnimation(.easeOut(duration: 0.15)) { showInspector = true } }
+        }
+        .onChange(of: summary.followUps) { _, items in session.setFollowUps(items ?? ThreadView.demoFollowUps) }
+        .onAppear { session.setFollowUps(summary.followUps ?? ThreadView.demoFollowUps) }
+        .onReceive(NotificationCenter.default.publisher(for: .revealInInspector)) { note in
+            guard let target = note.object as? RevealTarget, target.sessionId == session.ref.id, let cwd = summary.cwd else { return }
+            previewing = target.path.hasPrefix(cwd + "/") ? String(target.path.dropFirst(cwd.count + 1)) : target.path
+            inspectorTab = .files
+            withAnimation(.easeOut(duration: 0.15)) { showInspector = true }
+        }
         .task(id: summary.cwd) {
             guard let cwd = summary.cwd else { return }
             let model = GitModel(cwd: cwd, engine: engine)
@@ -128,10 +141,6 @@ struct BuildSessionView: View {
         .sheet(item: Binding(get: { session.viewing }, set: { session.viewing = $0 })) { target in
             if let cwd = summary.cwd { FileViewer(engine: engine, cwd: cwd, target: target) }
         }
-        .background {
-            Button("") { if !chatLens { showTerminal.toggle() } }.keyboardShortcut("`", modifiers: .control).hidden()
-        }
-        .onChange(of: session.prompts.isEmpty) { _, empty in if empty { session.document.bottomInset = 150 } }
         .onReceive(NotificationCenter.default.publisher(for: .showCommit)) { note in
             if note.object as? String == session.ref.id { committing = true }
         }
@@ -150,95 +159,97 @@ struct BuildSessionView: View {
     }
 
     private var conversation: some View {
-            ZStack(alignment: .bottom) {
-                TranscriptView(document: session.document)
-                VStack(spacing: 8) {
-                    if !session.isFollowing {
-                        Button { session.scrollToLatest() } label: {
-                            Label("Jump to latest", systemImage: "arrow.down").font(.system(size: 12, weight: .medium))
-                        }
-                        .buttonStyle(PillStyle(kind: .toolbar, compact: true))
+        ZStack(alignment: .bottom) {
+            TranscriptView(document: session.document)
+            // The thread dissolves before it reaches the composer (chat v3).
+            LinearGradient(colors: [Color.dsWin.opacity(0), Color.dsWin], startPoint: .top, endPoint: .bottom)
+                .frame(height: 150)
+                .allowsHitTesting(false)
+            VStack(spacing: 8) {
+                if !session.isFollowing {
+                    Button { session.scrollToLatest() } label: {
+                        Label("Jump to latest", systemImage: "arrow.down").font(.system(size: 12, weight: .medium))
                     }
-                    if !session.prompts.isEmpty {
-                        PromptStack(session: session)
-                            .frame(maxWidth: 636)
-                            .padding(.horizontal, 24)
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                                session.document.bottomInset = 150 + height + 8
-                            }
-                    }
-                    if session.state?.status != .running, session.prompts.isEmpty, let followUps = summary.followUps, !followUps.isEmpty {
-                        FollowUps(items: followUps, label: nil) { text in Task { await session.send(text) } }
-                            .frame(maxWidth: 636).padding(.horizontal, 24)
-                    }
-                    Composer(engine: engine, thread: session)
-                        .frame(maxWidth: 636)
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 20)
+                    .buttonStyle(PillStyle(kind: .toolbar, compact: true))
                 }
+                if !session.prompts.isEmpty {
+                    PromptStack(session: session).frame(maxWidth: 680)
+                }
+                Composer(engine: engine, thread: session).frame(maxWidth: 680)
             }
+            .padding(.horizontal, 40)
+            .padding(.bottom, 20)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                session.document.bottomInset = height + 40
+            }
+        }
     }
 
+    /// The session changed files: the inspector opens by itself the first time.
+    private var hasChanges: Bool {
+        _ = session.revision
+        return session.document.items.contains { item in
+            switch item {
+            case .tool(let t): ["edit", "write"].contains(t.tool) && t.status == .done
+            case .steps(let s): s.tools.contains { ["edit", "write"].contains($0.tool) && $0.status == .done }
+            default: false
+            }
+        }
+    }
+
+    private static func inspectorChoice(_ id: String) -> Bool? {
+        (UserDefaults.standard.dictionary(forKey: "inspectorOpen") as? [String: Bool])?[id]
+    }
+
+    private func toggleInspector() {
+        withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() }
+        var all = (UserDefaults.standard.dictionary(forKey: "inspectorOpen") as? [String: Bool]) ?? [:]
+        all[summary.ref.id] = showInspector
+        UserDefaults.standard.set(all, forKey: "inspectorOpen")
+    }
+
+    /// Two controls (chat v3, 13a): Open ⌄ and the inspector. Git sits in the subtitle; its menu stays while there's a
+    /// branch. The session tree became Fork and Rewind on messages; the edit mode moved to the composer.
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
                 subtitle.font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
-            Spacer(minLength: 12)
-            Button { session.showTree = true } label: {
-                Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 12, weight: .medium))
-            }
-            .buttonStyle(PillStyle(kind: .toolbar))
-            .help("Session tree: go back to an earlier message (/tree)")
+            // /tree: the whole session tree, from the title.
             .popover(isPresented: Binding(get: { session.showTree }, set: { session.showTree = $0 }), arrowEdge: .bottom) {
                 SessionTreePopover(session: session)
             }
-            ApprovalModeMenu(engine: engine, session: session, project: project)
-            if !chatLens {
-                if let git { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
-                if let cwd = summary.cwd { OpenInEditorMenu(path: cwd) }
-                Button { showTerminal.toggle() } label: {
-                    Image(systemName: "terminal").font(.system(size: 12, weight: .medium))
-                }
-                .buttonStyle(PillStyle(kind: .toolbar))
-                .help(showTerminal ? "Hide the terminal (⌃`)" : "Terminal in this folder (⌃`)")
+            Spacer(minLength: 12)
+            if !chatLens, let git, git.status?.repo == true { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
+            if let cwd = summary.cwd { OpenMenu(path: cwd) }
+            Button { toggleInspector() } label: {
+                Image(systemName: "sidebar.right").font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(showInspector ? Color.accentColor : Color.dsFg2)
+                    .frame(width: 30, height: 28)
+                    .background(showInspector ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: 7))
+                    .contentShape(Rectangle())
             }
-            if let cwd = summary.cwd {
-                Menu {
-                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) }
-                    Button("Open in Terminal") { openTerminal(cwd) }
-                    Divider()
-                    Button("Copy Path") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(cwd, forType: .string)
-                    }
-                } label: {
-                    Image(systemName: "folder").font(.system(size: 12, weight: .medium))
-                }
-                .menuStyle(.button)
-                .buttonStyle(PillStyle(kind: .toolbar))
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help(cwd)
-            }
-            Button { withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() } } label: {
-                Image(systemName: "sidebar.right").font(.system(size: 12, weight: .medium))
-            }
-            .buttonStyle(PillStyle(kind: .toolbar))
-            .help(showInspector ? "Hide the inspector" : chatLens ? "Show the files and changes" : "Show changes, checkpoints and context")
+            .buttonStyle(.plain)
+            .keyboardShortcut("i", modifiers: [.command, .shift])
+            .help(showInspector ? "Hide the inspector (⌘⇧I)" : "Changes, files and turns (⌘⇧I)")
         }
         .padding(.leading, 24)
         .padding(.trailing, 16)
         .frame(height: 60)
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
+        .background {
+            Button("") { if !chatLens { showTerminal.toggle() } }.keyboardShortcut("`", modifiers: .control).hidden()
+        }
     }
 
-    /// "financial_ia · main · ● Done · $0.0011" (docs/design v2, 2a).
+    /// "smart-paste · no git · ● Done · $0.0015" (chat v3): the project, git, status and cost.
     private var subtitle: Text {
-        var parts = [project?.name ?? URL(fileURLWithPath: summary.cwd ?? "").lastPathComponent]
-        if let branch = summary.worktree?.branch ?? project?.branch { parts.append(branch) }
+        let name = project?.name ?? URL(fileURLWithPath: summary.cwd ?? "").lastPathComponent
+        let branch = git?.status?.branch ?? summary.worktree?.branch ?? project?.branch
+        let gitText = branch.map { Text($0).font(.system(size: 11, design: .monospaced)) } ?? Text(git?.status?.repo == false ? "no git" : "")
+        let parts = [name]
         let (state, color): (String, Color) = switch session.state?.status {
         case .running?: ("Working", .accentColor)
         case .waitingApproval?: ("Needs you", .dsAmber)
@@ -249,8 +260,8 @@ struct BuildSessionView: View {
         if let usage = session.state?.usage, usage.costUsd > 0 {
             tail.append(usage.costUsd < 0.01 ? String(format: "$%.4f", usage.costUsd) : String(format: "$%.2f", usage.costUsd))
         }
-        if session.planMode { tail.append("plan mode") }
-        return Text(parts.joined(separator: " · ") + " · ") + Text("● \(state)").foregroundColor(color) + Text(tail.isEmpty ? "" : " · " + tail.joined(separator: " · "))
+        let hasGit = branch != nil || git?.status?.repo == false
+        return Text(parts.joined(separator: " · ") + " · ") + (hasGit ? gitText + Text(" · ") : Text("")) + Text("● ").foregroundColor(color) + Text(state) + Text(tail.isEmpty ? "" : " · " + tail.joined(separator: " · "))
     }
 
     static func relative(_ iso: String) -> String {
@@ -261,10 +272,6 @@ struct BuildSessionView: View {
         return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
     }
 
-    private func openTerminal(_ path: String) {
-        guard let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") else { return }
-        NSWorkspace.shared.open([URL(fileURLWithPath: path)], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration())
-    }
 }
 
 

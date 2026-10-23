@@ -3,9 +3,10 @@ import PiopioTranscript
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Floating glass composer (docs/design 2a, 8a): attachments, text, then a row of chips (attach, model,
-/// thinking, web search) and a round send button. ↩ sends (queued while answering), ⌥↩ steers,
-/// ⇧↩ adds a line, esc stops or cancels an edit.
+/// Floating composer (docs/design chat v3): a card as wide as the reading column. Attachments, text, then attach,
+/// the edit mode (Build), the model with its thinking level, the context ring past 60%, and send. ↩ sends (queued
+/// while answering), ⌥↩ steers, ⇧↩ adds a line, esc or ⌘. stops or cancels an edit. With the box empty, Tab takes the
+/// highlighted "Ask next" suggestion and ↑/↓ move it.
 struct Composer: View {
     let engine: EngineController
     let thread: ThreadModel
@@ -48,7 +49,10 @@ struct Composer: View {
             if !suggestions.isEmpty { suggestionList }
             box
         }
-        .onChange(of: text) { _, value in suggest(for: value) }
+        .onChange(of: text) { _, value in
+            suggest(for: value)
+            thread.composing = !value.isEmpty
+        }
         .onChange(of: thread.draft) { _, draft in
             guard let draft else { return }
             text = draft
@@ -98,17 +102,29 @@ struct Composer: View {
                         return .handled
                     }
                     .onKeyPress(.tab) {
-                        guard !suggestions.isEmpty else { return .ignored }
-                        accept(suggestions[min(highlighted, suggestions.count - 1)])
+                        if !suggestions.isEmpty {
+                            accept(suggestions[min(highlighted, suggestions.count - 1)])
+                            return .handled
+                        }
+                        guard text.isEmpty, let next = thread.document.askNext.current else { return .ignored }
+                        text = next
                         return .handled
                     }
                     .onKeyPress(.downArrow) {
-                        guard !suggestions.isEmpty else { return .ignored }
+                        if suggestions.isEmpty {
+                            guard text.isEmpty, !thread.document.askNext.items.isEmpty else { return .ignored }
+                            thread.document.askNext.move(1)
+                            return .handled
+                        }
                         highlighted = (highlighted + 1) % suggestions.count
                         return .handled
                     }
                     .onKeyPress(.upArrow) {
-                        guard !suggestions.isEmpty else { return .ignored }
+                        if suggestions.isEmpty {
+                            guard text.isEmpty, !thread.document.askNext.items.isEmpty else { return .ignored }
+                            thread.document.askNext.move(-1)
+                            return .handled
+                        }
                         highlighted = (highlighted + suggestions.count - 1) % suggestions.count
                         return .handled
                     }
@@ -120,22 +136,16 @@ struct Composer: View {
                         return .handled
                     }
             }
-            .font(.system(size: 13.5))
+            .font(.system(size: 15))
             HStack(spacing: 6) {
-                if thread.editing == nil && !isBuild {
-                    Button(action: pickFiles) { Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).frame(width: 24, height: 24) }
+                if thread.editing == nil {
+                    Button(action: pickFiles) { Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg2).frame(width: 26, height: 26) }
                         .buttonStyle(.plain)
                         .background(Color.dsChip, in: Circle())
-                        .help("Attach images, PDFs, text files or a folder (or drop them here)")
+                        .help(isBuild ? "Mention files or folders (or drop them here)" : "Attach images, PDFs, text files or a folder (or drop them here)")
                 }
+                if isBuild { EditModeChip(engine: engine, thread: thread) }
                 ModelChip(engine: engine, thread: thread)
-                if thread.supportsThinking { ThinkingChip(thread: thread) }
-                if isBuild {
-                    Button { Task { await thread.setPlanMode(!thread.planMode) } } label: { Text("Plan") }
-                        .buttonStyle(ChipStyle(active: thread.planMode))
-                        .help(thread.planMode ? "Plan mode is on: the agent explores and proposes a plan before changing anything" : "Plan mode: explore and propose a plan before changing anything (/plan)")
-                }
-                if let context = thread.state?.context { ContextChip(context: context) }
                 // Spaces always have the web tools (no per-conversation switch yet).
                 if thread.editing == nil && !isBuild && thread.ref.kind != .space && thread.ref.kind != .agent {
                     Button { Task { await thread.setWeb(!thread.webEnabled) } } label: {
@@ -146,25 +156,32 @@ struct Composer: View {
                 }
                 Spacer(minLength: 6)
                 if thread.isRunning {
-                    Text("⌥↩ steer · esc abort").font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    Text("⌥↩ steer · esc stop").font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
-                Button { thread.isRunning && text.isEmpty ? stop() : send(steer: false) } label: {
-                    Image(systemName: thread.isRunning && text.isEmpty ? "stop.fill" : "arrow.up")
-                        .font(.system(size: thread.isRunning && text.isEmpty ? 9 : 12, weight: .bold))
-                        .foregroundStyle(Color.dsInvFg)
-                        .frame(width: 28, height: 28)
-                        .background(Color.dsInv.opacity(canSend || thread.isRunning ? 1 : 0.25), in: Circle())
+                if let context = thread.state?.context { ContextRing(context: context, compact: isBuild ? { Task { await thread.compact() } } : nil) }
+                let stopping = thread.isRunning && text.isEmpty
+                Button { stopping ? stop() : send(steer: false) } label: {
+                    Image(systemName: stopping ? "stop.fill" : "arrow.up")
+                        .font(.system(size: stopping ? 10 : 13, weight: .bold))
+                        .foregroundStyle(canSend || stopping ? Color.dsInvFg : Color.dsFg3)
+                        .frame(width: 30, height: 30)
+                        .background(canSend || stopping ? Color.dsInv : Color.dsChip, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend && !thread.isRunning)
-                .help(thread.isRunning ? (text.isEmpty ? "Stop (esc)" : "Queue after the current answer (↩) · Steer it now (⌥↩)") : "Send (↩)")
+                .help(thread.isRunning ? (text.isEmpty ? "Stop (esc, ⌘.)" : "Queue after the current answer (↩) · Steer it now (⌥↩)") : "Send (↩)")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
+        .padding(.top, 13)
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
         .padding(.bottom, 10)
-        .glassPanel(radius: DS.Radius.composer, material: .regularMaterial)
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer).strokeBorder(dropTargeted || thread.editing != nil ? Color.dsAccentLine : .clear, lineWidth: 1))
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(dropTargeted || thread.editing != nil ? Color.dsAccentLine : Color.dsLine, lineWidth: dropTargeted || thread.editing != nil ? 1 : 0.5))
+        .shadow(color: .black.opacity(0.08), radius: 15, y: 8)
+        .background {
+            Button("") { if thread.isRunning { stop() } }.keyboardShortcut(".", modifiers: .command).hidden()
+        }
         .onAppear { focused = true }
     }
 
@@ -178,12 +195,13 @@ struct Composer: View {
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
         if thread.isRunning { return "Queue a follow-up…" }
-        if isBuild && thread.planMode { return "Plan mode: describe what you want; the agent proposes a plan first" }
-        if isBuild, engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.profile == .chat { return "Ask about these files, @mention one, or search the web…" }
+        if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         if thread.ref.kind == .space, let space = engine.space(thread.ref.id) {
             if let id = thread.ref.conversationId { return "Message \(space.topics?.first { $0.id == id }?.title ?? "this topic") directly" }
             return "Message \(space.title): the organizer picks the topic (@topic to choose)"
         }
+        if thread.document.lastItem != nil { return "Reply…" }
+        if isBuild, engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.profile == .chat { return "Ask about these files, @mention one, or search the web…" }
         return isBuild ? "Ask, @mention files, or /command…" : "Message"
     }
 
@@ -219,6 +237,16 @@ struct Composer: View {
     private func stop() { Task { await thread.stop() } }
 
     private func pickFiles() {
+        if isBuild {
+            // Build reads files itself: they become @paths in the message.
+            let panel = NSOpenPanel()
+            panel.allowsMultipleSelection = true
+            panel.canChooseDirectories = true
+            if let cwd = thread.cwd { panel.directoryURL = URL(fileURLWithPath: cwd) }
+            guard panel.runModal() == .OK else { return }
+            for url in panel.urls { mention(url) }
+            return
+        }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
@@ -304,34 +332,34 @@ struct Composer: View {
     }
 }
 
-/// The context meter (docs/spec/05-build BR7): tokens in the model's context window.
-struct ContextChip: View {
+/// The context ring (chat v3, 14c): only past 60% of the model's context, amber, then red past 85%. Clicking compacts
+/// the conversation (Build). Otherwise the number lives in the inspector.
+struct ContextRing: View {
     let context: SessionState.Context
+    let compact: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 6) {
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.dsLine).frame(width: 28, height: 4)
-                Capsule().fill(fraction > 0.8 ? Color.dsAmber : Color.accentColor).frame(width: max(2, 28 * fraction), height: 4)
+        if fraction > 0.6 {
+            Button { compact?() } label: {
+                ZStack {
+                    Circle().stroke(Color.dsLine, lineWidth: 3)
+                    Circle().trim(from: 0, to: fraction).stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round)).rotationEffect(.degrees(-90))
+                }
+                .frame(width: 18, height: 18)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
             }
-            Text(label).font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).monospacedDigit()
+            .buttonStyle(.plain)
+            .disabled(compact == nil)
+            .help("Context \(Int(fraction * 100))% full: \(context.tokens.map { "\(Self.short($0)) of " } ?? "")\(Self.short(context.window)) tokens." + (compact != nil ? " Click to compact the conversation." : ""))
         }
-        .padding(.horizontal, 9)
-        .frame(height: 24)
-        .background(Color.dsChip, in: Capsule())
-        .help("Context: \(context.tokens.map { "\(Int($0)) of " } ?? "")\(Int(context.window)) tokens. pi compacts older messages automatically when it fills up.")
     }
 
     private var fraction: Double { min(1, (context.tokens ?? 0) / max(1, context.window)) }
-
-    private var label: String {
-        let window = Self.short(context.window)
-        guard let tokens = context.tokens else { return "– / \(window)" }
-        return "\(Self.short(tokens)) / \(window)"
-    }
+    private var color: Color { fraction > 0.85 ? .dsRed : .dsAmber }
 
     static func short(_ n: Double) -> String {
-        n >= 1_000_000 ? String(format: "%.1fM", n / 1_000_000) : n >= 1000 ? "\(Int((n / 1000).rounded()))k" : "\(Int(n))"
+        n >= 1_000_000 ? String(format: "%.1fM", n / 1_000_000).replacingOccurrences(of: ".0M", with: "M") : n >= 1000 ? "\(Int((n / 1000).rounded()))k" : "\(Int(n))"
     }
 }
 
@@ -352,20 +380,40 @@ struct ChipStyle: ButtonStyle {
     }
 }
 
+/// "Haiku 5.5 · medium ⌄" (chat v3, 14c): the model, with its thinking level in fg3. The popover holds the model
+/// picker and, for models that reason, Thinking: Off / Low / Medium / High.
 struct ModelChip: View {
     let engine: EngineController
     let thread: ThreadModel
 
     var body: some View {
         Button { thread.showModelPicker = true } label: {
-            Text(engine.model(thread.state?.model).map { Self.label($0, engine: engine) } ?? thread.state?.model?.id ?? "Model")
+            HStack(spacing: 4) {
+                Text(engine.model(thread.state?.model).map { Self.label($0, engine: engine) } ?? thread.state?.model?.id ?? "Model").foregroundStyle(Color.dsFg)
+                if thread.supportsThinking, let level = ThinkingLevel.title(thread.state?.thinking) { Text("· \(level.lowercased())").foregroundStyle(Color.dsFg3) }
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.dsFg3)
+            }
         }
-        .buttonStyle(ChipStyle())
-        .help("Change model")
+        .buttonStyle(ComposerChipStyle())
+        .help("Model and thinking")
         .popover(isPresented: Binding(get: { thread.showModelPicker }, set: { thread.showModelPicker = $0 }), arrowEdge: .top) {
-            ModelPicker(engine: engine, selected: thread.state?.model) { model in
-                thread.showModelPicker = false
-                Task { await thread.setModel(model) }
+            VStack(spacing: 0) {
+                ModelPicker(engine: engine, selected: thread.state?.model) { model in
+                    thread.showModelPicker = false
+                    Task { await thread.setModel(model) }
+                }
+                if thread.supportsThinking {
+                    Rectangle().fill(Color.dsLine).frame(height: 0.5)
+                    HStack {
+                        Text("Thinking").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                        Spacer()
+                        Picker("", selection: Binding(get: { ThinkingLevel.value(thread.state?.thinking) }, set: { v in Task { await thread.setThinking(v) } })) {
+                            ForEach(ThinkingLevel.levels, id: \.value) { Text($0.title).tag($0.value) }
+                        }
+                        .pickerStyle(.segmented).labelsHidden().fixedSize()
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                }
             }
         }
     }
@@ -378,34 +426,131 @@ struct ModelChip: View {
     /// The chip's text: the model, and where it runs once more than one provider is connected (docs/spec/10:
     /// the selected model's provider is always visible).
     static func label(_ m: ModelInfo, engine: EngineController) -> String {
-        Set(engine.models.map(\.provider)).subtracting(["faux"]).count > 1 ? "\(short(m)) · \(ModelPicker.providerTag(m))" : short(m)
+        let name = short(m).replacingOccurrences(of: "Claude ", with: "")
+        return Set(engine.models.map(\.provider)).subtracting(["faux"]).count > 1 ? "\(name) · \(ModelPicker.providerTag(m))" : name
     }
 }
 
-struct ThinkingChip: View {
+enum ThinkingLevel {
+    static let levels: [(value: String, title: String)] = [("off", "Off"), ("low", "Low"), ("medium", "Medium"), ("high", "High")]
+
+    /// The level to show on the chip; nil for the model's default.
+    static func title(_ level: String?) -> String? {
+        guard let level, level != "default" else { return nil }
+        return level == "xhigh" ? "Maximum" : levels.first { $0.value == level }?.title
+    }
+
+    /// The segment to select ("xhigh" shows as High; the default as Medium).
+    static func value(_ level: String?) -> String {
+        switch level {
+        case "off", "low", "medium", "high": level!
+        case "xhigh": "high"
+        default: "medium"
+        }
+    }
+}
+
+/// Composer chips (chat v3): 26 tall, chip fill, 12 pt.
+struct ComposerChipStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(Color.dsChip, in: Capsule())
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Capsule())
+    }
+}
+
+/// "● Auto-edit ⌄" (chat v3): how Build works on your files. Plan only (grey) explores and proposes a plan; Ask first
+/// (amber) asks before edits and commands; Auto-edit (green) edits on its own; Full auto asks only for risky actions.
+struct EditModeChip: View {
+    let engine: EngineController
     let thread: ThreadModel
-    static let levels: [(value: String, title: String)] = [("default", "Default"), ("off", "Off"), ("low", "Low"), ("medium", "Medium"), ("high", "High"), ("xhigh", "Maximum")]
+
+    enum Mode: CaseIterable { case planOnly, askFirst, autoEdit, fullAuto }
+
+    private var current: Mode {
+        if thread.planMode { return .planOnly }
+        return switch thread.approvalMode {
+        case .ask: .askFirst
+        case .autoEdit: .autoEdit
+        case .fullAuto: .fullAuto
+        }
+    }
+
+    private var project: ProjectInfo? {
+        let cwd = engine.buildSessions.first { $0.ref.id == thread.ref.id }.flatMap { $0.projectPath ?? $0.cwd }
+        return engine.projects.first { $0.path == cwd }
+    }
 
     var body: some View {
         Menu {
-            ForEach(Self.levels, id: \.value) { level in
-                Button {
-                    Task { await thread.setThinking(level.value) }
-                } label: {
-                    if current == level.value { Label(level.title, systemImage: "checkmark") } else { Text(level.title) }
+            ForEach(Mode.allCases, id: \.self) { mode in
+                if mode == .fullAuto { Divider() }
+                Button { set(mode) } label: {
+                    if mode == current { Label(Self.title(mode), systemImage: "checkmark") } else { Text(Self.title(mode)) }
+                    Text(Self.summary(mode))
                 }
             }
+            if let project, current != .planOnly, project.approvalMode != thread.approvalMode {
+                Divider()
+                Button("Use “\(Self.title(current))” for new sessions in \(project.name)") { Task { await engine.setApprovalMode(thread.approvalMode, for: project) } }
+            }
         } label: {
-            Text("Think · \(Self.levels.first { $0.value == current }?.title.lowercased() ?? current)")
+            HStack(spacing: 5) {
+                Circle().fill(Self.color(current)).frame(width: 6, height: 6)
+                Text(Self.title(current)).foregroundStyle(Color.dsFg)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.dsFg3)
+            }
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
-        .buttonStyle(ChipStyle())
+        .buttonStyle(ComposerChipStyle())
         .fixedSize()
-        .help("How much the model reasons before answering")
+        .help(Self.summary(current))
     }
 
-    private var current: String { thread.state?.thinking ?? "default" }
+    private func set(_ mode: Mode) {
+        Task {
+            if mode == .planOnly {
+                await thread.setPlanMode(true)
+                return
+            }
+            if thread.planMode { await thread.setPlanMode(false) }
+            await thread.setApprovalMode(mode == .askFirst ? .ask : mode == .autoEdit ? .autoEdit : .fullAuto)
+        }
+    }
+
+    static func title(_ mode: Mode) -> String {
+        switch mode {
+        case .planOnly: "Plan only"
+        case .askFirst: "Ask first"
+        case .autoEdit: "Auto-edit"
+        case .fullAuto: "Full auto"
+        }
+    }
+
+    static func summary(_ mode: Mode) -> String {
+        switch mode {
+        case .planOnly: "Explores and proposes a plan before changing anything (/plan)."
+        case .askFirst: "Asks before every edit, command and web request. Reading is automatic."
+        case .autoEdit: "Edits files on its own. Asks before commands you haven't allowed."
+        case .fullAuto: "Doesn't ask, except for risky commands and writes outside the project."
+        }
+    }
+
+    static func color(_ mode: Mode) -> Color {
+        switch mode {
+        case .planOnly: .dsFg3
+        case .askFirst: .dsAmber
+        case .autoEdit: .dsGreen
+        case .fullAuto: .accentColor
+        }
+    }
 }
 
 // MARK: Suggestions (@-mentions and /commands)

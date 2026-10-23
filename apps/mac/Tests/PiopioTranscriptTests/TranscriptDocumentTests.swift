@@ -90,11 +90,10 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     expectConsistent(doc)
 }
 
-@MainActor @Test func footersCarryActionLinksAndBranchSwitchers() async {
+@MainActor @Test func actionRowsCarryActionsAndBranchSwitchers() async {
     let edited = TimelineItem.user(UserItem(id: "21", at: "", text: "second, edited", branch: BranchInfo(index: 1, count: 2, previous: "1")))
     let failed = TimelineItem.assistant(AssistantItem(id: "24", at: "", parts: [], status: .error, error: "OpenRouter rejected the API key.", errorKind: .auth, errorDetail: "401"))
     let doc = await loaded([edited, failed])
-    #expect(doc.text.contains("2 / 2"))
     #expect(doc.text.contains("Open Settings"))
     var actions: [TranscriptAction] = []
     doc.onAction = { actions.append($0) }
@@ -102,13 +101,13 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     var urls: [URL] = []
     storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, _, _ in if let u = value as? URL { urls.append(u) } }
     let parsed = urls.compactMap(TranscriptAction.init(url:))
-    #expect(parsed.contains(.switchBranch("1")))
-    // Edit is hover-revealed: present but inactive until the pointer is over the message.
-    #expect(!parsed.contains(.edit(itemId: "21")))
-    var hidden: [URL] = []
-    storage.enumerateAttribute(.piopioFooterLink, in: NSRange(location: 0, length: storage.length)) { value, _, _ in if let u = value as? URL { hidden.append(u) } }
-    #expect(hidden.compactMap(TranscriptAction.init(url:)).contains(.edit(itemId: "21")))
-    // The latest answer keeps its actions visible.
+    // Your message: a row with its versions and Edit, shown on hover.
+    let row = doc.actionRow("21")
+    #expect(row?.branch?.index == 1 && row?.branch?.count == 2)
+    #expect(row?.canEdit == true && row?.canRewind == false)
+    #expect(row?.visible == false)
+    // The failed answer has no text to copy: its card offers the fixes.
+    #expect(doc.actionRow("24") == nil)
     #expect(parsed.contains(.regenerate(itemId: "24")))
     #expect(parsed.contains(.openSettings))
     #expect(parsed.contains(.showErrorDetail(itemId: "24")))
@@ -139,13 +138,9 @@ private func expectConsistent(_ doc: TranscriptDocument) {
 
 @MainActor @Test func latestAnswerKeepsItsActionsAfterAResnapshot() async throws {
     let doc = await loaded([user("1", "first"), answer("2", "one")])
-    func liveLinks() -> [TranscriptAction] {
-        let storage = doc.textView.textStorage!
-        var out: [TranscriptAction] = []
-        storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { v, _, _ in if let u = v as? URL, let a = TranscriptAction(url: u) { out.append(a) } }
-        return out
-    }
-    #expect(liveLinks().contains(.regenerate(itemId: "2")))
+    #expect(doc.actionRow("2")?.visible == true)
+    #expect(doc.actionRow("2")?.canRetry == true)
+    #expect(doc.actionRow("1")?.visible == false)
     // An edit: the engine resnapshots onto the new branch, then streams the new answer.
     let branch = TimelineItem.user(UserItem(id: "5", at: "", text: "first, edited", branch: BranchInfo(index: 1, count: 2, previous: "1")))
     doc.apply([.resnapshot(snapshot([branch]))])
@@ -153,6 +148,48 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     doc.apply([.itemReplaced(oldId: "gen:1", item: answer("7", "Echo"))])
     for _ in 0..<100 where doc.documentIDs != ["5", "7"] { try await Task.sleep(for: .milliseconds(10)) }
     #expect(doc.documentIDs == ["5", "7"])
-    #expect(liveLinks().contains(.regenerate(itemId: "7")))
+    #expect(doc.actionRow("7")?.visible == true)
     expectConsistent(doc)
+}
+
+@MainActor @Test func projectPathsShowRelativeAsChips() async {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("piopio-root-\(UUID().uuidString)").path
+    try? FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: root + "/RESUMEN.md", contents: Data())
+    let doc = TranscriptDocument(build: true, root: root)
+    await doc.load(snapshot([user("1", "summary please"), answer("2", "Created `\(root)/RESUMEN.md` and `RESUMEN.md`; see \(root)/docs/a.md.")]))
+    #expect(!doc.text.contains(root + "/"))
+    #expect(doc.text.contains("RESUMEN.md"))
+    #expect(doc.text.contains("docs/a.md"))
+    let storage = doc.textView.textStorage!
+    var reveals: [TranscriptAction] = []
+    storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { v, _, _ in if let u = v as? URL, let a = TranscriptAction(url: u) { reveals.append(a) } }
+    #expect(reveals.filter { $0 == .revealFile(path: root + "/RESUMEN.md") }.count == 2)
+    #expect(doc.actionRow("1")?.canRewind == true)
+    expectConsistent(doc)
+}
+
+@MainActor @Test func askNextStaysAtTheEnd() async {
+    let doc = await loaded([user("1", "hi"), answer("2", "hello")])
+    let before = doc.text
+    doc.showAskNext(["More", "Less"])
+    #expect(doc.askNext.items == ["More", "Less"])
+    doc.apply([.itemAdded(user("3", "again"))])
+    // New items go before the suggestions; hiding them leaves exactly the items.
+    #expect(doc.text.contains("again"))
+    doc.showAskNext(nil)
+    #expect(doc.text.hasPrefix(before))
+    #expect(doc.renderedLength == (doc.textView.textStorage?.length ?? 0))
+    expectConsistent(doc)
+}
+
+@MainActor @Test func columnRecentersWhenTheViewNarrows() async throws {
+    let doc = await loaded([user("1", "hi"), answer("2", "hello")])
+    // The column is 680 wide, centered, with at least 40 on each side (of the clip view, which leaves room for a scroller).
+    func expected() -> CGFloat { max(40, (doc.scrollView.contentView.bounds.width - 680) / 2) }
+    for width in [1400.0, 1000.0, 600.0] {
+        doc.scrollView.frame = NSRect(x: 0, y: 0, width: width, height: 800)
+        for _ in 0..<50 where abs(doc.textView.textContainerInset.width - expected()) > 0.5 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(abs(doc.textView.textContainerInset.width - expected()) < 0.5, "inset \(doc.textView.textContainerInset.width) clip \(doc.scrollView.contentView.bounds.width) frame \(width)")
+    }
 }

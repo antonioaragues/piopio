@@ -33,13 +33,23 @@ final class ThreadModel {
     @ObservationIgnored private let notifies: Bool
 
     init(ref: ContainerRef, engine: EngineController, notifies: Bool = true, compact: Bool = false) {
-        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread)
+        let root = ref.kind == .build ? engine.buildSessions.first { $0.ref.id == ref.id }?.cwd : nil
+        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread, build: ref.kind == .build, root: root)
         self.ref = ref
         self.engine = engine
         self.notifies = notifies
         document.onFollowingChange = { [weak self] following in self?.isFollowing = following }
         document.onAction = { [weak self] action in self?.handle(action) }
         document.bottomInset = 150 // the floating composer sits over the bottom of the transcript
+        if ref.kind == .build {
+            document.rewindPreview = { [weak self] itemId in await self?.rewindPreview(itemId) }
+            document.rewind = { [weak self] itemId, files in await self?.rewind(itemId, files: files) }
+        }
+        document.askNext.onSend = { [weak self] text in
+            self?.document.showAskNext(nil)
+            Task { await self?.send(text) }
+        }
+        document.askNext.onDismiss = { [weak self] in self?.dismissAskNext() }
     }
 
     var isRunning: Bool { state?.status == .running }
@@ -85,6 +95,7 @@ final class ThreadModel {
         let wasRunning = state?.status == .running
         for case .state(let s) in events { state = s }
         for case .resnapshot(let snap) in events { state = snap.state }
+        refreshAskNext()
         if wasRunning, state?.status == .idle, notifies { engine?.answerFinished(in: self) }
         if notifies, let status = state?.status {
             let failed: Bool = if case .assistant(let a)? = document.lastItem { a.status == .error } else { false }
@@ -144,7 +155,9 @@ final class ThreadModel {
     private func handle(_ action: TranscriptAction) {
         switch action {
         case .edit(let id):
-            if case .user(let u) = document.item(id) { beginEditing(id, original: u.text) }
+            // Build: rewind the chat (not the files) to before it, and put it in the composer (chat v3, 14b).
+            if ref.kind == .build { Task { await rewind(id, files: false) } }
+            else if case .user(let u) = document.item(id) { beginEditing(id, original: u.text) }
         case .regenerate(let id):
             Task { await call("sessions.regenerate", ItemParams(ref: ref, itemId: id)) }
         case .fork(let id):
@@ -165,6 +178,8 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .selectBuildSession, object: id)
         case .openFile(let path, let line):
             viewing = FileTarget(path: path, line: line)
+        case .revealFile(let path):
+            NotificationCenter.default.post(name: .revealInInspector, object: RevealTarget(sessionId: ref.id, path: path))
         case .openTopic(let topicId, let itemId):
             NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: ref.id, topicId: topicId, itemId: itemId))
         case .wrongTopic(let itemId):
@@ -377,5 +392,70 @@ final class ThreadModel {
 
     func scrollToLatest() {
         document.scrollToLatest()
+    }
+
+    // MARK: Rewind (Build, chat v3 14b)
+
+    func rewindPreview(_ itemId: String) async -> RewindPreview? {
+        guard let client = engine?.client,
+              let r = try? await client.call("sessions.rewind", RewindParams(ref: ref, itemId: itemId, files: true, dryRun: true), as: RewindResult.self) else { return nil }
+        return RewindPreview(files: r.files.map { "\($0.status.rewindVerb) \(URL(fileURLWithPath: $0.path).lastPathComponent)" }, turns: r.turns)
+    }
+
+    /// Back to before a message; its text goes back into the composer.
+    func rewind(_ itemId: String, files: Bool) async {
+        guard let client = engine?.client else { return }
+        do {
+            let r = try await client.call("sessions.rewind", RewindParams(ref: ref, itemId: itemId, files: files), as: RewindResult.self)
+            if let text = r.editorText { draft = text }
+            error = nil
+        } catch {
+            report(error)
+        }
+    }
+
+    // MARK: Ask next (chat v3 14e)
+
+    /// The composer has text: suggestions step aside.
+    var composing = false { didSet { if composing != oldValue { refreshAskNext() } } }
+    @ObservationIgnored private var followUps: [String]?
+
+    private static let dismissedKey = "askNextDismissed"
+    private var askNextDismissed: Bool { (UserDefaults.standard.stringArray(forKey: Self.dismissedKey) ?? []).contains(ref.id) }
+
+    /// The engine's suggestions for after the last answer (nil: none, or turned off in Settings › Chat).
+    func setFollowUps(_ items: [String]?) {
+        followUps = items
+        refreshAskNext()
+    }
+
+    func refreshAskNext() {
+        let show = !askNextDismissed && !composing && !isRunning && prompts.isEmpty && editing == nil
+        document.showAskNext(show ? followUps.map { Array($0.prefix(3)) } : nil)
+    }
+
+    private func dismissAskNext() {
+        var ids = UserDefaults.standard.stringArray(forKey: Self.dismissedKey) ?? []
+        if !ids.contains(ref.id) { ids.append(ref.id) }
+        UserDefaults.standard.set(Array(ids.suffix(500)), forKey: Self.dismissedKey)
+        document.showAskNext(nil)
+    }
+}
+
+/// A file to show in a Build session's inspector (a path chip was clicked).
+struct RevealTarget { let sessionId: String; let path: String }
+
+extension Notification.Name {
+    static let revealInInspector = Notification.Name("piopio.revealInInspector")
+}
+
+extension FileChange.Status {
+    /// What rewinding does to a file the turn touched.
+    var rewindVerb: String {
+        switch self {
+        case .added: "removes"
+        case .modified: "reverts"
+        case .deleted: "brings back"
+        }
     }
 }

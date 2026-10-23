@@ -285,6 +285,9 @@
 									"type": "string"
 								}
 							}
+						},
+						"thinkingMs": {
+							"type": "number"
 						}
 					}
 				},
@@ -1130,6 +1133,12 @@
 									}
 								}
 							}
+						},
+						"thinking": {
+							"type": "string"
+						},
+						"thinkingMs": {
+							"type": "number"
 						}
 					}
 				},
@@ -1995,6 +2004,9 @@
 													"type": "string"
 												}
 											}
+										},
+										"thinkingMs": {
+											"type": "number"
 										}
 									}
 								},
@@ -2840,6 +2852,12 @@
 													}
 												}
 											}
+										},
+										"thinking": {
+											"type": "string"
+										},
+										"thinkingMs": {
+											"type": "number"
 										}
 									}
 								},
@@ -3448,6 +3466,9 @@
 													"type": "string"
 												}
 											}
+										},
+										"thinkingMs": {
+											"type": "number"
 										}
 									}
 								},
@@ -4293,6 +4314,12 @@
 													}
 												}
 											}
+										},
+										"thinking": {
+											"type": "string"
+										},
+										"thinkingMs": {
+											"type": "number"
 										}
 									}
 								},
@@ -4881,6 +4908,9 @@
 													"type": "string"
 												}
 											}
+										},
+										"thinkingMs": {
+											"type": "number"
 										}
 									}
 								},
@@ -5726,6 +5756,12 @@
 													}
 												}
 											}
+										},
+										"thinking": {
+											"type": "string"
+										},
+										"thinkingMs": {
+											"type": "number"
 										}
 									}
 								},
@@ -6649,6 +6685,9 @@
 																"type": "string"
 															}
 														}
+													},
+													"thinkingMs": {
+														"type": "number"
 													}
 												}
 											},
@@ -7494,6 +7533,12 @@
 																}
 															}
 														}
+													},
+													"thinking": {
+														"type": "string"
+													},
+													"thinkingMs": {
+														"type": "number"
 													}
 												}
 											},
@@ -8398,6 +8443,9 @@
 												"type": "string"
 											}
 										}
+									},
+									"thinkingMs": {
+										"type": "number"
 									}
 								}
 							},
@@ -9243,6 +9291,12 @@
 												}
 											}
 										}
+									},
+									"thinking": {
+										"type": "string"
+									},
+									"thinkingMs": {
+										"type": "number"
 									}
 								}
 							},
@@ -10471,6 +10525,9 @@
 																"type": "string"
 															}
 														}
+													},
+													"thinkingMs": {
+														"type": "number"
 													}
 												}
 											},
@@ -11316,6 +11373,12 @@
 																}
 															}
 														}
+													},
+													"thinking": {
+														"type": "string"
+													},
+													"thinkingMs": {
+														"type": "number"
 													}
 												}
 											},
@@ -11924,6 +11987,9 @@
 																"type": "string"
 															}
 														}
+													},
+													"thinkingMs": {
+														"type": "number"
 													}
 												}
 											},
@@ -12769,6 +12835,12 @@
 																}
 															}
 														}
+													},
+													"thinking": {
+														"type": "string"
+													},
+													"thinkingMs": {
+														"type": "number"
 													}
 												}
 											},
@@ -13357,6 +13429,9 @@
 																"type": "string"
 															}
 														}
+													},
+													"thinkingMs": {
+														"type": "number"
 													}
 												}
 											},
@@ -14202,6 +14277,12 @@
 																}
 															}
 														}
+													},
+													"thinking": {
+														"type": "string"
+													},
+													"thinkingMs": {
+														"type": "number"
 													}
 												}
 											},
@@ -15125,6 +15206,9 @@
 																			"type": "string"
 																		}
 																	}
+																},
+																"thinkingMs": {
+																	"type": "number"
 																}
 															}
 														},
@@ -15970,6 +16054,12 @@
 																			}
 																		}
 																	}
+																},
+																"thinking": {
+																	"type": "string"
+																},
+																"thinkingMs": {
+																	"type": "number"
 																}
 															}
 														},
@@ -18077,6 +18167,9 @@
 												"type": "string"
 											}
 										}
+									},
+									"thinkingMs": {
+										"type": "number"
 									}
 								}
 							},
@@ -18922,6 +19015,12 @@
 												}
 											}
 										}
+									},
+									"thinking": {
+										"type": "string"
+									},
+									"thinkingMs": {
+										"type": "number"
 									}
 								}
 							},
@@ -19878,6 +19977,9 @@
 														"type": "string"
 													}
 												}
+											},
+											"thinkingMs": {
+												"type": "number"
 											}
 										}
 									},
@@ -20723,6 +20825,12 @@
 														}
 													}
 												}
+											},
+											"thinking": {
+												"type": "string"
+											},
+											"thinkingMs": {
+												"type": "number"
 											}
 										}
 									},
@@ -25564,6 +25672,117 @@
 		"mcp.setEnabled.result": {
 			"type": "object",
 			"properties": {}
+		},
+		"sessions.rewind.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"itemId",
+				"files"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"itemId": {
+					"type": "string"
+				},
+				"files": {
+					"type": "boolean"
+				},
+				"dryRun": {
+					"type": "boolean"
+				}
+			}
+		},
+		"sessions.rewind.result": {
+			"type": "object",
+			"required": [
+				"files",
+				"turns"
+			],
+			"properties": {
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path",
+							"status",
+							"added",
+							"removed"
+						],
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "added"
+									},
+									{
+										"type": "string",
+										"const": "modified"
+									},
+									{
+										"type": "string",
+										"const": "deleted"
+									}
+								]
+							},
+							"added": {
+								"type": "number"
+							},
+							"removed": {
+								"type": "number"
+							},
+							"binary": {
+								"type": "boolean"
+							}
+						}
+					}
+				},
+				"turns": {
+					"type": "number"
+				},
+				"editorText": {
+					"type": "string"
+				}
+			}
 		},
 		"sessions.respond.params": {
 			"type": "object",

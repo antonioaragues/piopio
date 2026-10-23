@@ -413,6 +413,72 @@ export class BuildRuntime implements Runtime {
 		return result.editorText ? { editorText: result.editorText } : {};
 	}
 
+	// ── Rewind, retry, fork (docs/design chat v3, 14a–14b) ─────────────────
+
+	/** The user message an item belongs to: itself, or the message that started its turn. */
+	private turnOf(itemId: string): { index: number; items: Snapshot["items"] } {
+		const items = this.builder.snapshot().items;
+		let index = items.findIndex((i) => i.id === itemId || (i.kind === "tool" && `steps:${i.id}` === itemId));
+		while (index >= 0 && items[index]!.kind !== "user") index--;
+		if (index < 0) throw new EngineError("NOT_FOUND", "That message isn't in this session anymore.");
+		return { index, items };
+	}
+
+	/**
+	 * The pi entry of the user message at `index`: counted from the end, which compaction doesn't disturb (it only
+	 * folds older messages into a summary).
+	 */
+	private userEntry(items: Snapshot["items"], index: number): string {
+		const fromEnd = items.slice(index + 1).filter((i) => i.kind === "user").length;
+		const entries = this.session.sessionManager.getBranch().filter((e) => e.type === "message" && (e as { message?: PiMessage }).message?.role === "user");
+		const entry = entries[entries.length - 1 - fromEnd];
+		if (!entry) throw new EngineError("NOT_FOUND", "That message isn't in this session anymore.");
+		return entry.id;
+	}
+
+	/**
+	 * Back to just before one of your messages. With `files`, the project goes back to the first checkpoint after it
+	 * (saved before that turn changed anything), after checkpointing the current state. The message's text comes back
+	 * for the composer. `dryRun` says which files would change and how many turns go.
+	 */
+	async rewind(itemId: string, files: boolean, dryRun: boolean): Promise<{ files: FileChange[]; turns: number; editorText?: string }> {
+		const { index, items } = this.turnOf(itemId);
+		const turns = items.slice(index).filter((i) => i.kind === "user").length;
+		const checkpoint = items.slice(index + 1).find((i): i is CheckpointItem => i.kind === "checkpoint");
+		const changed = files && checkpoint ? await this.checkpoints.changes(this.cwd, checkpoint.checkpointId) : [];
+		if (dryRun) return { files: changed, turns };
+		if (this.session.isStreaming) throw new EngineError("BUSY", "Stop the agent before rewinding.");
+		const entryId = this.userEntry(items, index);
+		if (checkpoint && changed.length > 0) {
+			await this.takeCheckpoint(undefined, "Before rewind");
+			await this.checkpoints.restore(this.cwd, checkpoint.checkpointId);
+		}
+		const result = await this.session.navigateTree(entryId);
+		this.rebuild(true);
+		return { files: changed, turns, ...(result.editorText ? { editorText: result.editorText } : {}) };
+	}
+
+	/** Retry: the conversation goes back to before the turn's message and asks it again (files stay as they are). */
+	async regenerate(itemId: string): Promise<void> {
+		const { editorText } = await this.rewind(itemId, false, false);
+		if (editorText) await this.submit(editorText, { whenBusy: "reject" } as SubmitOptions);
+	}
+
+	/** Fork from here: a new pi session file with the conversation up to the end of this item's turn. */
+	forkFile(itemId: string): string {
+		const { index, items } = this.turnOf(itemId);
+		const branch = this.session.sessionManager.getBranch();
+		const start = branch.findIndex((e) => e.id === this.userEntry(items, index));
+		const next = branch.findIndex((e, i) => i > start && e.type === "message" && (e as { message?: PiMessage }).message?.role === "user");
+		const leaf = branch[next > 0 ? next - 1 : branch.length - 1];
+		const file = this.session.sessionFile;
+		if (!leaf || !file) throw new EngineError("INVALID", "This session isn't saved yet.");
+		// A second manager on the same file, so the open session keeps writing to its own.
+		const path = SessionManager.open(file).createBranchedSession(leaf.id);
+		if (!path) throw new EngineError("INVALID", "Couldn't create the new session.");
+		return path;
+	}
+
 	async compact(): Promise<void> {
 		if (this.session.isStreaming) throw new EngineError("BUSY", "Wait for the agent to finish before compacting.");
 		await this.session.compact();

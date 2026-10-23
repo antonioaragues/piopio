@@ -57,7 +57,7 @@ export class TimelineBuilder {
 	private items: TimelineItem[] = [];
 	private index = new Map<string, number>();
 	private pending: SessionEvent[] = [];
-	private streaming?: { id: string; partByContentIndex: Map<number, number> };
+	private streaming?: { id: string; partByContentIndex: Map<number, number>; thinkingFrom: number | undefined; thinkingTo: number | undefined };
 	private state: SessionState = { status: "idle", queue: [], usage: emptyUsage() };
 
 	constructor(readonly ref: ContainerRef) {}
@@ -169,7 +169,7 @@ export class TimelineBuilder {
 	assistantStart(id: string, model?: string): void {
 		const item: AssistantItem = { kind: "assistant", id, at: iso(), parts: [], status: "streaming", ...(model ? { model } : {}) };
 		this.push(item);
-		this.streaming = { id, partByContentIndex: new Map() };
+		this.streaming = { id, partByContentIndex: new Map(), thinkingFrom: undefined, thinkingTo: undefined };
 		this.pending.push({ type: "item.added", item: structuredClone(item) });
 	}
 
@@ -188,6 +188,9 @@ export class TimelineBuilder {
 		const part = item.parts[partIndex];
 		if (!part) return;
 		part.text += delta;
+		// Thinking time: from its first delta to the first delta of anything else.
+		if (partType === "thinking") s.thinkingFrom ??= Date.now();
+		else if (s.thinkingFrom !== undefined) s.thinkingTo ??= Date.now();
 		if (delta.length > 0) this.pending.push({ type: "item.delta", itemId: s.id, partIndex, partType, textDelta: delta });
 	}
 
@@ -197,6 +200,7 @@ export class TimelineBuilder {
 		this.streaming = undefined;
 		const id = s?.id ?? finalId ?? `a:${Date.now()}`;
 		const item = this.assistantItem(finalId ?? id, message);
+		if (s?.thinkingFrom !== undefined) item.thinkingMs = (s.thinkingTo ?? Date.now()) - s.thinkingFrom;
 		this.addUsage(message.usage);
 		const at = this.index.get(id);
 		if (at === undefined) {

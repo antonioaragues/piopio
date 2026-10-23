@@ -5,26 +5,59 @@
  */
 import type { SessionEvent, TimelineItem, ToolItem } from "@piopio/protocol";
 
+type AssistantItem = Extract<TimelineItem, { kind: "assistant" }>;
+
 type Steps = Extract<TimelineItem, { kind: "steps" }>;
 
 export function groupSteps(items: readonly TimelineItem[], standalone: (tool: ToolItem) => boolean = () => false): TimelineItem[] {
 	const out: TimelineItem[] = [];
 	let current: Steps | undefined;
+	// A finished answer that only thought (or only called tools): it joins the steps line that follows, if any.
+	let pending: AssistantItem | undefined;
+	const flush = () => {
+		if (pending) out.push(pending);
+		pending = undefined;
+	};
 	for (const item of items) {
 		if (item.kind === "tool" && !standalone(item as ToolItem)) {
 			if (!current) {
 				current = { kind: "steps", id: `steps:${item.id}`, at: item.at, tools: [] };
+				if (pending) absorb(current, pending);
+				pending = undefined;
 				out.push(current);
 			}
 			current.tools.push(item as ToolItem);
 			continue;
 		}
-		// An answer that only called tools shows nothing; it doesn't break the run.
+		// Checkpoints are saved silently (docs/design chat v3): they don't break a turn's line.
+		if (item.kind === "checkpoint") {
+			out.push(item);
+			continue;
+		}
 		const silent = item.kind === "assistant" && !item.parts.some((p) => p.type === "text" && p.text.trim()) && item.status !== "error";
+		if (silent && item.status !== "streaming") {
+			// "Thought for 3s, edited RESUMEN.md": thinking between or before tool calls joins the line.
+			if (current) absorb(current, item);
+			else {
+				flush();
+				pending = item;
+			}
+			continue;
+		}
+		flush();
+		// An answer still streaming with no text yet doesn't break the run either.
 		if (!silent) current = undefined;
 		out.push(item);
 	}
+	flush();
 	return out;
+}
+
+/** Folds an answer's thinking (and its time) into a steps line. */
+function absorb(steps: Steps, answer: AssistantItem): void {
+	const thinking = answer.parts.filter((p) => p.type === "thinking").map((p) => p.text).join("").trim();
+	if (thinking) steps.thinking = steps.thinking ? `${steps.thinking}\n\n${thinking}` : thinking;
+	if (answer.thinkingMs) steps.thinkingMs = (steps.thinkingMs ?? 0) + answer.thinkingMs;
 }
 
 /**

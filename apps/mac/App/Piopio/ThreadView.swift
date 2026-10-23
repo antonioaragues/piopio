@@ -18,6 +18,10 @@ struct ThreadView: View {
             }
             ZStack(alignment: .bottom) {
                 TranscriptView(document: thread.document)
+                // The thread dissolves before it reaches the composer (chat v3).
+                LinearGradient(colors: [Color.dsWin.opacity(0), Color.dsWin], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 150)
+                    .allowsHitTesting(false)
                 VStack(spacing: 8) {
                     if !thread.isFollowing {
                         Button { thread.scrollToLatest() } label: {
@@ -25,18 +29,19 @@ struct ThreadView: View {
                         }
                         .buttonStyle(PillStyle(kind: .toolbar, compact: true))
                     }
-                    if thread.state?.status != .running, let followUps = summary.followUps ?? Self.demoFollowUps, !followUps.isEmpty {
-                        FollowUps(items: followUps, label: "You could also") { text in Task { await thread.send(text) } }
-                            .frame(maxWidth: 636).padding(.horizontal, 24)
-                    }
-                    Composer(engine: engine, thread: thread)
-                        .frame(maxWidth: 636)
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 20)
+                    Composer(engine: engine, thread: thread).frame(maxWidth: 680)
+                }
+                .padding(.horizontal, 40)
+                .padding(.bottom, 20)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    thread.document.bottomInset = height + 40
                 }
             }
         }
         .task { await thread.open() }
+        // "Ask next" sits in the thread after the last answer (chat v3, 14e).
+        .onChange(of: summary.followUps) { _, items in thread.setFollowUps(items ?? Self.demoFollowUps) }
+        .onAppear { thread.setFollowUps(summary.followUps ?? Self.demoFollowUps) }
         .alert("Error details", isPresented: Binding(get: { thread.errorDetail != nil }, set: { if !$0 { thread.errorDetail = nil } })) {
             Button("Copy") {
                 NSPasteboard.general.clearContents()

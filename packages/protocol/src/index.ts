@@ -119,6 +119,8 @@ export const AssistantItem = Type.Object({
 	errorDetail: Type.Optional(Type.String()),
 	/** An agent's message sent on its own (send_message), and where from: a run id or a person's conversation. */
 	outbound: Type.Optional(Type.Object({ from: Type.String() })),
+	/** How long it thought before answering or acting (measured live; absent for reloaded history). */
+	thinkingMs: Type.Optional(Type.Number()),
 });
 export const ToolItem = Type.Object({
 	kind: Type.Literal("tool"),
@@ -205,6 +207,9 @@ export const StepsItem = Type.Object({
 	id: Type.String(),
 	at: Type.String(),
 	tools: Type.Array(ToolItem),
+	/** What the model thought in the answers that only called these tools, folded into the same line. */
+	thinking: Type.Optional(Type.String()),
+	thinkingMs: Type.Optional(Type.Number()),
 });
 
 /** An agent's tool call waiting for the owner (06-agents §9 AS1), or how it was answered. */
@@ -1178,6 +1183,14 @@ export const methods = {
 	"mcp.setEnabled": {
 		params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String(), enabled: Type.Boolean() }),
 		result: Type.Object({}),
+	},
+	/**
+	 * Build: back to just before one of your messages (docs/design chat v3, 14b). `files` also puts the project's
+	 * files back as they were then; the message's text comes back for the composer. `dryRun` only says what changes.
+	 */
+	"sessions.rewind": {
+		params: Type.Object({ ref: ContainerRef, itemId: Type.String(), files: Type.Boolean(), dryRun: Type.Optional(Type.Boolean()) }),
+		result: Type.Object({ files: Type.Array(FileChange), turns: Type.Number(), editorText: Type.Optional(Type.String()) }),
 	},
 	/** Answers a pending prompt (approval, question, confirm, select, input). */
 	"sessions.respond": {

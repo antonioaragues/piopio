@@ -15,6 +15,8 @@ public enum TranscriptAction: Equatable, Sendable {
     case openSession(String)
     /// Opens a file of the session's folder in the viewer, at a line.
     case openFile(path: String, line: Int?)
+    /// A path chip in an answer: shows the file in the inspector's Files tab.
+    case revealFile(path: String)
     /// Opens a Space topic, at the reply when known.
     case openTopic(topicId: String, itemId: String?)
     /// Wrong topic: choose where a routed message should have gone.
@@ -53,6 +55,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .copy(let id): c.host = "copy"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .restoreCheckpoint(let id): c.host = "restore"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .openSession(let id): c.host = "session"; c.queryItems = [URLQueryItem(name: "id", value: id)]
+        case .revealFile(let path): c.host = "reveal"; c.queryItems = [URLQueryItem(name: "path", value: path)]
         case .openFile(let path, let line): c.host = "file"; c.queryItems = [URLQueryItem(name: "path", value: path)] + (line.map { [URLQueryItem(name: "line", value: "\($0)")] } ?? [])
         case .openTopic(let topic, let item): c.host = "topic"; c.queryItems = [URLQueryItem(name: "id", value: topic)] + (item.map { [URLQueryItem(name: "item", value: $0)] } ?? [])
         case .wrongTopic(let id): c.host = "wrong-topic"; c.queryItems = [URLQueryItem(name: "item", value: id)]
@@ -83,6 +86,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "restore": guard let id = q("item") else { return nil }; self = .restoreCheckpoint(itemId: id)
         case "session": guard let id = q("id") else { return nil }; self = .openSession(id)
         case "file": guard let path = q("path") else { return nil }; self = .openFile(path: path, line: q("line").flatMap(Int.init))
+        case "reveal": guard let path = q("path") else { return nil }; self = .revealFile(path: path)
         case "topic": guard let id = q("id") else { return nil }; self = .openTopic(topicId: id, itemId: q("item"))
         case "wrong-topic": guard let id = q("item") else { return nil }; self = .wrongTopic(itemId: id)
         case "undo-memory": guard let id = q("revision") else { return nil }; self = .undoMemory(revisionId: id)

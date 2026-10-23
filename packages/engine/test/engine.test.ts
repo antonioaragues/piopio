@@ -631,6 +631,56 @@ test("checkpoints: before each turn's first change, with changes, diff, restore 
 	expect((await b.client.call("sessions.changes", { ref, since: "turn" })).files.map((f: { path: string; status: string }) => `${f.status} ${f.path}`)).toEqual(["modified a.txt", "deleted b.txt"]);
 });
 
+test("Build turns (chat v3): one activity line per turn, rewind chat and files, fork and retry", async () => {
+	const a = await start();
+	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-rewind-")));
+	writeFileSync(join(folder, "a.txt"), "one\n");
+	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+	await a.client.call("sessions.configure", { ref, approvalMode: "full_auto" });
+	const sub = await a.client.call("sessions.subscribe", { ref });
+	const kinds = (s: Snapshot) => s.items.map((i) => (i.kind === "checkpoint" ? "checkpoint" : i.kind === "steps" ? `steps:${i.tools.map((t) => t.tool).join("+")}` : i.kind));
+	const turn = async (text: string) => {
+		const seq = Math.max(0, ...a.client.events.filter((n) => n.subscriptionId === sub.subscriptionId).map((n) => n.seq));
+		await a.client.call("sessions.submit", { ref, input: { text } });
+		await a.client.waitFor(settled(sub.subscriptionId, seq + 1), 20_000);
+	};
+	await turn("edit: a.txt | one | two\nwrite: b.txt | new file");
+	await turn("edit: a.txt | two | three");
+
+	// Folded, a turn's tool calls are one line; the checkpoint before it doesn't split it.
+	const folded: Snapshot = await a.client.call("sessions.open", { ref, fold: true });
+	expect(kinds(folded)).toEqual(["user", "checkpoint", "steps:edit+write", "assistant", "user", "checkpoint", "steps:edit", "assistant"]);
+
+	const users = folded.items.filter((i) => i.kind === "user");
+	const preview = await a.client.call("sessions.rewind", { ref, itemId: users[1]!.id, files: true, dryRun: true });
+	expect(preview).toEqual({ files: [expect.objectContaining({ path: "a.txt", status: "modified" })], turns: 1 });
+	expect(readFileSync(join(folder, "a.txt"), "utf8")).toBe("three\n");
+
+	// Fork from the first answer: a new session with just the first turn.
+	const answer = folded.items.find((i) => i.kind === "assistant")!;
+	const fork = (await a.client.call("sessions.fork", { ref, itemId: answer.id })).ref;
+	expect(fork.kind).toBe("build");
+	const forked: Snapshot = await a.client.call("sessions.open", { ref: fork });
+	expect(forked.items.filter((i) => i.kind === "user").map((i) => (i.kind === "user" ? i.text : ""))).toEqual(["edit: a.txt | one | two\nwrite: b.txt | new file"]);
+
+	// Rewind chat and files to before the second message: its text comes back, a.txt goes back to "two".
+	const rewound = await a.client.call("sessions.rewind", { ref, itemId: users[1]!.id, files: true });
+	expect(rewound).toMatchObject({ turns: 1, editorText: "edit: a.txt | two | three" });
+	expect(readFileSync(join(folder, "a.txt"), "utf8")).toBe("two\n");
+	const after: Snapshot = await a.client.call("sessions.open", { ref, fold: true });
+	expect(after.items.filter((i) => i.kind === "user")).toHaveLength(1);
+
+	// Retry the first answer: chat only, asked again; files stay.
+	const first = after.items.find((i) => i.kind === "assistant")!;
+	await a.client.call("sessions.regenerate", { ref, itemId: first.id });
+	let retried: Snapshot = await a.client.call("sessions.open", { ref });
+	for (let i = 0; i < 100 && !(retried.state.status === "idle" && retried.items.some((x) => x.kind === "tool")); i++) {
+		await new Promise((r) => setTimeout(r, 100));
+		retried = await a.client.call("sessions.open", { ref });
+	}
+	expect(retried.items.filter((i) => i.kind === "user").map((i) => (i.kind === "user" ? i.text : ""))).toEqual(["edit: a.txt | one | two\nwrite: b.txt | new file"]);
+}, 60_000);
+
 describe("git and worktrees (docs/spec/05-build §8, BP5)", () => {
 	const sh = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 	function repo() {
@@ -1454,7 +1504,7 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 		await a.client.call("sessions.subscribe", { ref });
 		await a.client.call("sessions.submit", { ref, input: { text: 'call: remember | {"fact":"Antonio runs in the morning"}' } });
 		let chat = await until(a, ref, idleAfter(1));
-		expect(chat.items.map((i) => i.kind)).toEqual(["user", "assistant", "steps", "result", "assistant"]);
+		expect(chat.items.map((i) => i.kind)).toEqual(["user", "steps", "result", "assistant"]);
 		const steps = chat.items.find((i) => i.kind === "steps")!;
 		expect(steps.kind === "steps" && steps.tools.map((t) => [t.tool, t.status])).toEqual([["remember", "done"]]);
 		const { provider, partitions } = await a.client.call("agents.memory", { ref });
@@ -1550,7 +1600,7 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 		// The run's conversation: the prompt, the step, the answer; read-only.
 		const runRef = { ...ref, conversationId: `run:${r.runs[0]!.id}` };
 		const runSnap: Snapshot = await a.client.call("sessions.open", { ref: runRef });
-		expect(runSnap.items.map((i) => i.kind)).toEqual(["user", "assistant", "steps", "result", "assistant"]);
+		expect(runSnap.items.map((i) => i.kind)).toEqual(["user", "steps", "result", "assistant"]);
 		await expect(a.client.call("sessions.submit", { ref: runRef, input: { text: "hi" } })).rejects.toThrow(/read-only/);
 
 		// A webhook trigger: signed URL, the body in the prompt, a retried delivery is the same run.
