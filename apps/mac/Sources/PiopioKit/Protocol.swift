@@ -267,6 +267,8 @@ public struct ApprovalItem: Codable, Sendable, Hashable {
     public var expiresAt: String
     /// "Always allow messages to María".
     public var always: String
+    /// "connector": a connected app's change in a chat (Allow / Deny, no editing). Else an agent's.
+    public var source: String?
 }
 
 /// What an agent's tool changed, with Undo while it lasts (06-agents §4.2).
@@ -1101,7 +1103,37 @@ public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
     public init(type: String, message: String? = nil) { self.type = type; self.message = message }
 }
 public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
-public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged }
+
+// MARK: Connected apps (docs/spec/12-connectors)
+
+public struct ConnectorInfo: Decodable, Sendable, Hashable, Identifiable {
+    public struct Account: Decodable, Sendable, Hashable, Identifiable { public var id, label, addedAt: String; public var problem: String? }
+    public struct Tool: Decodable, Sendable, Hashable {
+        public enum Access: String, Decodable, Sendable { case read, write, send, destructive }
+        public var name, label: String
+        public var access: Access
+        public var dontAsk: Bool
+    }
+    public var id, name, category, description, setupHelp: String
+    public var ready, ownClient, needsSecret, connecting, chats: Bool
+    public var accounts: [Account]
+    public var tools: [Tool]
+}
+public struct ConnectorsListResult: Decodable, Sendable { public var connectors: [ConnectorInfo] }
+public struct ConnectorParams: Encodable, Sendable { public var connector: String; public init(connector: String) { self.connector = connector } }
+public struct ConnectorAccountParams: Encodable, Sendable { public var accountId: String; public init(accountId: String) { self.accountId = accountId } }
+public struct ConnectorConfigureParams: Encodable, Sendable {
+    public var connector: String; public var chats: Bool?; public var dontAsk: [String]?; public var clientId: String?; public var clientSecret: String?
+    public init(connector: String, chats: Bool? = nil, dontAsk: [String]? = nil, clientId: String? = nil, clientSecret: String? = nil) {
+        self.connector = connector; self.chats = chats; self.dontAsk = dontAsk; self.clientId = clientId; self.clientSecret = clientSecret
+    }
+}
+public struct ConnectorAuthNotification: Decodable, Sendable { public var loginId, connector: String; public var event: ProviderAuthEvent }
+public struct SessionDecideParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var approvalId: String; public var approve: Bool; public var always: Bool?
+    public init(ref: ContainerRef, approvalId: String, approve: Bool, always: Bool? = nil) { self.ref = ref; self.approvalId = approvalId; self.approve = approve; self.always = always }
+}
 
 public struct ModelsListParams: Encodable, Sendable { public var refresh: Bool?; public init(refresh: Bool? = nil) { self.refresh = refresh } }
 public struct ModelsListResult: Decodable, Sendable { public var models: [ModelInfo]; public var defaultModel: ModelRef }

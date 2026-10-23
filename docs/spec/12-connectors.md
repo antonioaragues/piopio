@@ -37,6 +37,20 @@ What you can do at the end of C1, in any chat, notebook, Build session or agent:
 3. Connector tools reaching chats, notebooks, Build and agents, with the approval card for changes.
 4. In agent Setup › Abilities, the connected apps listed (on by default, can be turned off per agent).
 
+## C1 status (2026-10-23)
+
+**Built**
+- Settings › Connectors: Google Calendar and Outlook, Connect (browser sign-in with PKCE, loopback redirect), several accounts per app, Disconnect, Reconnect when a sign-in stops working, "Use in chats", and per action Runs / Asks first / Don't ask / Always asks.
+- Tools shared across apps: `calendar_events` (every connected calendar in one call), `calendar_free_time`, `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`, and Outlook mail: `mail_search`, `mail_read`, `mail_draft`, `mail_send`. Readable steps in the chat ("read your calendar").
+- Changes ask first: in chats, an approval card (Deny / Allow, don't ask again / Allow); in Build, Build's approval prompt; in agents, the agent's own (durable) approvals. Sending and deleting always ask; inviting attendees counts as sending.
+- Tokens in the Keychain (`connector.<app>.<account>`), refreshed automatically and written back; `connectors.json` keeps only the account list and settings.
+- Engine: `connectors/` (hub, Google Calendar, Outlook, tools, extensions), `connectors.*` methods, `sessions.decide`. Tests against a fake Google/Microsoft server: sign-in, tokens in the Keychain, both calendars in one read, approve and decline, token refresh, disconnect, free time.
+
+**Not done yet**
+- **Piopio's own Google and Microsoft OAuth apps aren't registered** (`BUILT_IN_CLIENTS` is empty). Until they are, each app shows "Set up…" and needs your own client ID (plus a secret for Google). Registering them, and applying for Google's review, is the step that makes "Connect" work for everyone.
+- Notebooks (topics) don't get the tools yet; chats, Build and agents do.
+- Not tried against real Google or Microsoft accounts.
+
 ## 3. After C1
 - **C2:** Gmail (own Google project for now), Google Drive, Slack.
 - **C3:** Jira and Confluence, Linear, Notion, GitHub, Datadog, Sentry — apps with official servers you sign in to directly.

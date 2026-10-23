@@ -1996,3 +1996,165 @@ describe("custom endpoints (docs/spec/10-model-providers, P1)", () => {
 		expect(await checkEndpoint("localhost:4000", undefined, down)).toEqual({ ok: false, message: "Can't reach localhost:4000. Is the server running?" });
 	});
 });
+
+describe("connected apps (docs/spec/12-connectors C1)", () => {
+	type Call = { method: string; path: string; body: string };
+	/** One fake for Google and Microsoft: OAuth (authorize redirects straight back), userinfo, Calendar API v3 and Graph. */
+	async function fakeApps() {
+		const { createServer } = await import("node:http");
+		const calls: Call[] = [];
+		let tokens = 0;
+		const day = new Date();
+		day.setHours(0, 0, 0, 0);
+		const at = (h: number) => new Date(day.getTime() + 86_400_000 + h * 3_600_000).toISOString();
+		const server = createServer((req, res) => {
+			let body = "";
+			req.on("data", (c) => (body += c));
+			req.on("end", () => {
+				const url = new URL(req.url ?? "/", "http://x");
+				calls.push({ method: req.method ?? "GET", path: url.pathname, body });
+				const send = (status: number, value: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(value));
+				if (url.pathname.endsWith("/authorize")) {
+					const back = new URL(url.searchParams.get("redirect_uri")!);
+					back.searchParams.set("code", "the-code");
+					back.searchParams.set("state", url.searchParams.get("state")!);
+					return void res.writeHead(302, { location: back.toString() }).end();
+				}
+				if (url.pathname.endsWith("/token")) return send(200, { access_token: `tok${++tokens}`, refresh_token: "refresh-1", expires_in: 3600 });
+				if (req.headers.authorization?.startsWith("Bearer tok") !== true) return send(401, { error: "no token" });
+				// Google
+				if (url.pathname === "/g/oauth2/v3/userinfo") return send(200, { sub: "g123", email: "me@gmail.com" });
+				if (url.pathname === "/g/calendar/v3/users/me/calendarList") return send(200, { items: [{ id: "primary", summary: "me@gmail.com", primary: true }] });
+				if (url.pathname === "/g/calendar/v3/calendars/primary/events" && req.method === "GET") return send(200, { items: [{ id: "e1", summary: "Dentist", start: { dateTime: at(9) }, end: { dateTime: at(10) } }] });
+				if (url.pathname === "/g/calendar/v3/calendars/primary/events" && req.method === "POST") {
+					const b = JSON.parse(body) as { summary: string; start: unknown; end: unknown };
+					return send(200, { id: "e2", summary: b.summary, start: b.start, end: b.end });
+				}
+				// Microsoft Graph
+				if (url.pathname === "/m/v1.0/me") return send(200, { id: "m456", mail: "me@outlook.com" });
+				if (url.pathname === "/m/v1.0/me/calendarView") return send(200, { value: [{ id: "o1", subject: "Team sync", start: { dateTime: at(11).slice(0, 19), timeZone: "UTC" }, end: { dateTime: at(12).slice(0, 19), timeZone: "UTC" } }] });
+				send(404, { error: url.pathname });
+			});
+		});
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+		const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+		return {
+			calls,
+			at,
+			endpoints: {
+				"google-calendar": { authorizeUrl: `${base}/g/authorize`, tokenUrl: `${base}/g/token`, apiBase: `${base}/g` },
+				outlook: { authorizeUrl: `${base}/m/authorize`, tokenUrl: `${base}/m/token`, apiBase: `${base}/m` },
+			},
+			close: () => server.close(),
+		};
+	}
+
+	const until = async (check: () => boolean, timeoutMs = 10_000) => {
+		for (const started = Date.now(); !check(); ) {
+			if (Date.now() - started > timeoutMs) throw new Error("timed out");
+			await new Promise((r) => setTimeout(r, 20));
+		}
+	};
+
+	/** Signs in like the browser would: open the authorize page, follow it back to Piopio's loopback. */
+	async function connect(a: Ctx, connector: string) {
+		const { loginId } = await a.client.call("connectors.connect", { connector });
+		const events = () => a.client.notifications.filter((n) => n.method === "connectors.auth" && n.params.loginId === loginId).map((n) => n.params.event);
+		await until(() => events().some((e) => e.type === "auth_url"));
+		const page = await fetch(events().find((e) => e.type === "auth_url").url, { redirect: "manual" });
+		await fetch(page.headers.get("location")!);
+		await until(() => events().some((e) => e.type === "done" || e.type === "failed"));
+		return events().at(-1);
+	}
+
+	async function withApps() {
+		const apps = await fakeApps();
+		const a = await start(undefined, true, { connectorEndpoints: apps.endpoints });
+		await a.client.call("connectors.configure", { connector: "google-calendar", clientId: "g-client", clientSecret: "g-secret" });
+		await a.client.call("connectors.configure", { connector: "outlook", clientId: "m-client" });
+		return { a, apps };
+	}
+
+	test("signing in stores the account and its tokens in the Keychain; both calendars are read in one call", async () => {
+		const { a, apps } = await withApps();
+		expect(await connect(a, "google-calendar")).toEqual({ type: "done" });
+		expect(await connect(a, "outlook")).toEqual({ type: "done" });
+		expect(JSON.parse(a.client.secrets["connector.google-calendar.g123"]!)).toMatchObject({ access: expect.stringMatching(/^tok/), refresh: "refresh-1" });
+		expect(a.client.secrets["connector.google-calendar.clientSecret"]).toBe("g-secret");
+		expect(readFileSync(join(a.home, "connectors.json"), "utf8")).not.toContain("tok");
+		const { connectors } = await a.client.call("connectors.list", {});
+		expect(connectors.find((c: { id: string }) => c.id === "google-calendar")).toMatchObject({ ready: true, accounts: [{ id: "google-calendar:g123", label: "me@gmail.com" }] });
+		expect(connectors.find((c: { id: string }) => c.id === "outlook")).toMatchObject({ accounts: [{ label: "me@outlook.com" }], tools: expect.arrayContaining([{ name: "mail_send", label: "Send an email", access: "send", dontAsk: false }]) });
+
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: `call: calendar_events | {"from":"${apps.at(0)}","to":"${apps.at(24)}"}` } });
+		let snap: Snapshot = await a.client.call("sessions.open", { ref });
+		for (let i = 0; i < 100 && !(snap.items.some((x) => x.kind === "tool" && x.status === "done")); i++) {
+			await new Promise((r) => setTimeout(r, 100));
+			snap = await a.client.call("sessions.open", { ref });
+		}
+		const tool = snap.items.find((i) => i.kind === "tool") as { output: string };
+		expect(tool.output).toContain("Dentist");
+		expect(tool.output).toContain("Google Calendar (me@gmail.com)");
+		expect(tool.output).toContain("Team sync");
+		expect(tool.output).toContain("Outlook (me@outlook.com)");
+		apps.close();
+	}, 30_000);
+
+	test("a change asks first in the chat: allowed, it's made; declined, nothing changes", async () => {
+		const { a, apps } = await withApps();
+		await connect(a, "google-calendar");
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		const approvals = () => a.client.events.flatMap((n) => n.events).filter((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "approval").map((e) => (e as { item: { approvalId: string; status: string; title: string; source?: string } }).item);
+		const create = (title: string) => `call: calendar_create_event | {"title":"${title}","start":"${apps.at(16)}","end":"${apps.at(17)}"}`;
+
+		await a.client.call("sessions.submit", { ref, input: { text: create("Call Ana") } });
+		await until(() => approvals().some((x) => x.status === "pending"));
+		const pending = approvals().find((x) => x.status === "pending")!;
+		expect(pending).toMatchObject({ source: "connector", title: expect.stringContaining("Create “Call Ana”") });
+		expect(apps.calls.some((c) => c.method === "POST" && c.path.endsWith("/events"))).toBe(false);
+		await a.client.call("sessions.decide", { ref, approvalId: pending.approvalId, approve: true });
+		await until(() => apps.calls.some((c) => c.method === "POST" && c.path.endsWith("/events")));
+		expect(JSON.parse(apps.calls.find((c) => c.method === "POST" && c.path.endsWith("/events"))!.body)).toMatchObject({ summary: "Call Ana" });
+
+		for (let i = 0; i < 100 && ((await a.client.call("sessions.open", { ref })) as Snapshot).state.status !== "idle"; i++) await new Promise((r) => setTimeout(r, 100));
+		await a.client.call("sessions.submit", { ref, input: { text: create("Skip this") } });
+		await until(() => approvals().filter((x) => x.status === "pending" && !x.title.includes("Call Ana")).length > 0 || approvals().some((x) => x.title.includes("Skip this")));
+		const second = approvals().find((x) => x.title.includes("Skip this"))!;
+		await a.client.call("sessions.decide", { ref, approvalId: second.approvalId, approve: false });
+		let snap: Snapshot = await a.client.call("sessions.open", { ref });
+		for (let i = 0; i < 100 && !snap.items.some((x) => x.kind === "tool" && (x as { output?: string }).output?.includes("declined")); i++) {
+			await new Promise((r) => setTimeout(r, 100));
+			snap = await a.client.call("sessions.open", { ref });
+		}
+		expect(snap.items.some((x) => x.kind === "tool" && (x as { output?: string }).output?.includes("The user declined"))).toBe(true);
+		expect(apps.calls.filter((c) => c.method === "POST" && c.path.endsWith("/events")).length).toBe(1);
+		apps.close();
+	}, 30_000);
+
+	test("an expired token is refreshed and written back; disconnecting removes the account and its tokens", async () => {
+		const { a, apps } = await withApps();
+		await connect(a, "google-calendar");
+		const name = "connector.google-calendar.g123";
+		a.client.secrets[name] = JSON.stringify({ access: "tok-old", refresh: "refresh-1", expires: Date.now() - 1000 });
+		await a.client.call("secrets.changed", { name });
+		const hub = a.engine.connectors;
+		const [cal] = hub.calendars("chat");
+		await cal!.calendar.events({ from: apps.at(0), to: apps.at(24) });
+		expect(apps.calls.filter((c) => c.path.endsWith("/token")).length).toBe(2);
+		expect(JSON.parse(a.client.secrets[name]!).access).not.toBe("tok-old");
+		await a.client.call("connectors.disconnect", { accountId: "google-calendar:g123" });
+		expect(a.client.secrets[name]).toBeUndefined();
+		expect(hub.accounts()).toEqual([]);
+		apps.close();
+	}, 30_000);
+
+	test("free time skips busy events within working hours", async () => {
+		const { freeSlots } = await import("../src/connectors/tools.js");
+		const t = (h: number, m = 0) => new Date(2026, 9, 26, h, m).getTime();
+		const slots = freeSlots(new Date(t(0)), new Date(t(23, 59)), [[t(10), t(11)], [t(10, 30), t(12)], [t(15), t(15, 15)]], 30, "09:00", "18:00");
+		expect(slots).toEqual([[t(9), t(10)], [t(12), t(15)], [t(15, 15), t(18)]]);
+	});
+});

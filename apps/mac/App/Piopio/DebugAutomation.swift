@@ -36,6 +36,9 @@ enum DebugAutomation {
         }
         if let prompt = env["PIOPIO_DEMO_PROMPT"], engine.status == .ready {
             Task {
+                // With PIOPIO_DEMO_CONNECT_APPS, wait until those apps are connected.
+                let apps = (env["PIOPIO_DEMO_CONNECT_APPS"] ?? "").split(separator: ",").map(String.init)
+                for _ in 0..<60 where !apps.allSatisfy({ id in engine.connectors.first { $0.id == id }?.accounts.isEmpty == false }) { try? await Task.sleep(for: .milliseconds(200)) }
                 guard let ref = await engine.createThread() else { return }
                 try? await engine.refreshCatalog()
                 NotificationCenter.default.post(name: .selectThread, object: ref.id)
@@ -97,6 +100,19 @@ enum DebugAutomation {
         if let spec = env["PIOPIO_DEMO_ENDPOINT"] {
             let parts = spec.split(separator: "|", maxSplits: 1).map(String.init)
             if parts.count == 2 { Task { try? await engine.saveEndpoint(id: nil, name: parts[0], baseUrl: parts[1], key: nil) } }
+        }
+        // PIOPIO_DEMO_CONNECT_APPS=google-calendar,outlook: connect these apps (with PIOPIO_CONNECTOR_ENDPOINTS pointing at a
+        // fake server and PIOPIO_KEYCHAIN_SERVICE set, so nothing real is touched).
+        if let apps = env["PIOPIO_DEMO_CONNECT_APPS"] {
+            Task {
+                await engine.loadConnectors()
+                for id in apps.split(separator: ",").map(String.init) {
+                    guard let c = engine.connectors.first(where: { $0.id == id }) else { continue }
+                    await engine.connect(c)
+                    for _ in 0..<50 where engine.connectorLogin?.finished != true { try? await Task.sleep(for: .milliseconds(100)) }
+                    await engine.cancelConnectorLogin()
+                }
+            }
         }
         // PIOPIO_DEMO_SETTINGS=1: open Settings (snapshot it with PIOPIO_SNAPSHOT_WINDOW=key).
         if env["PIOPIO_DEMO_SETTINGS"] == "1" {

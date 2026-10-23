@@ -11,6 +11,9 @@ import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
 import { connectMethods, LoginFlows } from "./providers.js";
 import { detectLocalServers } from "./endpoints.js";
+import { ConnectorHub } from "./connectors/hub.js";
+import { connectorTools } from "./connectors/tools.js";
+import type { ConnectorEndpoints } from "./connectors/types.js";
 import type { Runtime } from "./runtimes/runtime.js";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { listDir, readProjectFile, searchFiles, writeProjectFile } from "./files.js";
@@ -54,6 +57,8 @@ export type EngineOptions = {
 	hooksPort?: number;
 	/** Let web_fetch read localhost (tests). */
 	allowPrivateFetch?: boolean;
+	/** Where connected apps sign in and call their APIs (tests point them at a fake server). */
+	connectorEndpoints?: ConnectorEndpoints;
 	log?: (line: string) => void;
 };
 
@@ -62,6 +67,7 @@ export class Engine {
 	readonly secrets = new SecretBroker();
 	private readonly logins: LoginFlows;
 	readonly hub: ModelHub;
+	readonly connectors: ConnectorHub;
 	readonly sessions: Sessions;
 	readonly projects: Projects;
 	readonly mcp: McpConfig;
@@ -87,6 +93,16 @@ export class Engine {
 		this.log = options.log ?? ((line) => process.stderr.write(`${line}\n`));
 		ensureDirs(options.paths);
 		this.hub = new ModelHub(this.secrets, { faux: options.faux ?? false, home: options.paths.home });
+		this.connectors = new ConnectorHub(this.secrets, {
+			home: options.paths.home,
+			...(options.connectorEndpoints ? { endpoints: options.connectorEndpoints } : {}),
+			emit: (loginId, connector, event) => {
+				for (const conn of this.authed) conn.notify("connectors.auth", { loginId, connector, event });
+			},
+		});
+		this.connectors.onChange = () => {
+			for (const conn of this.authed) conn.notify("connectors.changed", {});
+		};
 		this.hub.onProvidersChanged = () => {
 			for (const conn of this.authed) conn.notify("providers.changed", {});
 		};
@@ -107,6 +123,7 @@ export class Engine {
 			...(options.piAgentDir ? { piAgentDir: options.piAgentDir } : {}),
 			...(options.trashDir ? { trashDir: options.trashDir } : {}),
 		}, { allowPrivate: options.allowPrivateFetch ?? false });
+		this.sessions.connectors = this.connectors;
 		this.sessions.onChange((change) => {
 			for (const conn of this.authed) conn.notify("catalog.changed", change);
 		});
@@ -174,6 +191,38 @@ export class Engine {
 		// Agents: webhook triggers, then every agent's schedules (they run with the app closed).
 		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
 		void this.sessions.startAgents(this.log);
+	}
+
+	/** Settings › Connectors: each app, its accounts, its settings and what its tools may do. */
+	private async connectorInfos(): Promise<Result<"connectors.list">["connectors"]> {
+		const tools = connectorTools(this.connectors, "agent");
+		return Promise.all(
+			this.connectors.definitions.map(async (d) => {
+				const settings = this.connectors.settings(d.id);
+				const capabilities = new Set([...(d.calendar ? ["calendar"] : []), ...(d.mailbox ? ["mail"] : [])]);
+				const clientId = this.connectors.clientId(d.id);
+				const ready = Boolean(clientId) && (!d.oauth.needsSecret || (await this.connectors.hasClientSecret(d.id)));
+				return {
+					id: d.id,
+					name: d.name,
+					category: d.category,
+					description: d.description,
+					ready,
+					ownClient: Boolean(settings.clientId),
+					needsSecret: d.oauth.needsSecret,
+					setupHelp: d.setupHelp,
+					connecting: this.connectors.connecting(d.id),
+					chats: settings.chats,
+					accounts: this.connectors.accounts(d.id).map((a) => ({ id: a.id, label: a.label, addedAt: a.addedAt, ...(this.connectors.problem(a.id) ? { problem: this.connectors.problem(a.id)! } : {}) })),
+					tools: tools
+						.filter((t) => capabilities.has(t.capability))
+						.map((t) => {
+							const access = t.access({});
+							return { name: t.name, label: t.label, access, dontAsk: access === "write" && settings.dontAsk.includes(t.name) };
+						}),
+				};
+			}),
+		);
 	}
 
 	async stop(): Promise<void> {
@@ -797,6 +846,33 @@ export class Engine {
 				this.logins.cancel(p.loginId);
 				return {};
 			}
+			case "connectors.list":
+				return { connectors: await this.connectorInfos() } satisfies Result<"connectors.list">;
+			case "connectors.connect": {
+				const p = params as Params<"connectors.connect">;
+				try {
+					return { loginId: this.connectors.connect(p.connector) } satisfies Result<"connectors.connect">;
+				} catch (error) {
+					throw new EngineError("INVALID", (error as Error).message);
+				}
+			}
+			case "connectors.cancel": {
+				this.connectors.cancel((params as Params<"connectors.cancel">).loginId);
+				return {};
+			}
+			case "connectors.disconnect": {
+				await this.connectors.disconnect((params as Params<"connectors.disconnect">).accountId);
+				return {};
+			}
+			case "connectors.configure": {
+				const p = params as Params<"connectors.configure">;
+				await this.connectors.configure(p.connector, p);
+				return {};
+			}
+			case "sessions.decide": {
+				const p = params as Params<"sessions.decide">;
+				return { status: await this.sessions.decide(p.ref, p.approvalId, { approve: p.approve, ...(p.always ? { always: true } : {}), ...(p.reason ? { reason: p.reason } : {}) }) } satisfies Result<"sessions.decide">;
+			}
 			case "endpoints.check": {
 				const p = params as Params<"endpoints.check">;
 				const check = await this.hub.checkEndpoint(p.baseUrl, p.key, p.id);
@@ -831,6 +907,7 @@ export class Engine {
 }
 
 /** Small holder so the constructor can reference the stream before the connection exists. */
+export type { ConnectorEndpoints };
 class RpcConnectionFor {
 	constructor(readonly stream: import("node:net").Socket) {}
 }

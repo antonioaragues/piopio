@@ -6,7 +6,7 @@
  *   PIOPIO_ALLOW_ENV_SECRETS=1  let OPENROUTER_API_KEY from the environment answer secret requests
  *   PIOPIO_PI_SESSION_DIR / PIOPIO_PI_AGENT_DIR   override pi's folders (tests)
  */
-import { Engine } from "./server.js";
+import { Engine, type ConnectorEndpoints } from "./server.js";
 import { enginePaths } from "./paths.js";
 
 const engine = new Engine({
@@ -14,6 +14,8 @@ const engine = new Engine({
 	faux: process.env.PIOPIO_FAUX === "1",
 	...(process.env.PIOPIO_PI_SESSION_DIR ? { piSessionDir: process.env.PIOPIO_PI_SESSION_DIR } : {}),
 	...(process.env.PIOPIO_PI_AGENT_DIR ? { piAgentDir: process.env.PIOPIO_PI_AGENT_DIR } : {}),
+	// Dev and captures with the scripted model only: point connected apps at a fake server (JSON, see ConnectorEndpoints).
+	...(process.env.PIOPIO_FAUX === "1" && process.env.PIOPIO_CONNECTOR_ENDPOINTS ? { connectorEndpoints: JSON.parse(process.env.PIOPIO_CONNECTOR_ENDPOINTS) as ConnectorEndpoints } : {}),
 });
 
 let stopping = false;

@@ -148,6 +148,12 @@ public actor EngineClient {
                     }
                 } else if method == "providers.changed" {
                     providersContinuation.yield(.changed)
+                } else if method == "connectors.auth" {
+                    if let n = try? decoder.decode(NotificationEnvelope<ConnectorAuthNotification>.self, from: line) {
+                        providersContinuation.yield(.connectorAuth(n.params))
+                    }
+                } else if method == "connectors.changed" {
+                    providersContinuation.yield(.connectorsChanged)
                 } else if method == "projects.changed" {
                     if let n = try? decoder.decode(NotificationEnvelope<ProjectsChanged>.self, from: line) {
                         projectsContinuation.yield(n.params.projects)

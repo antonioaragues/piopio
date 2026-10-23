@@ -8,6 +8,8 @@
  * conversation as an outbound message. Tool calls that need the owner show an approval item until answered, and
  * changes show result cards with Undo (06 §4.2, §9).
  */
+import { durableConnectorsExtension } from "../connectors/extension.js";
+import type { ConnectorHub } from "../connectors/hub.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -24,6 +26,8 @@ import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 const ctx = BACKGROUND_CONTEXT;
 
 export type AgentOpenOptions = {
+	/** Connected apps: their tools, with changes going through the agent's approvals. */
+	connectors?: ConnectorHub;
 	ref: ContainerRef;
 	file: string;
 	hub: ModelHub;
@@ -69,14 +73,19 @@ export class AgentRuntime implements Runtime {
 		const registry = createRegistry();
 		const web = createWebExtension(options.hub, options.webOptions) as unknown as Extension;
 		const wantsWeb = () => options.definition().tools.builtin.some((t) => t === "web_search" || t === "web_fetch");
+		// Connected apps: changes ask through the agent's own approvals (durable), so the tool itself doesn't ask.
+		const hub = options.connectors;
+		const apps = hub ? (durableConnectorsExtension(hub, "agent", () => async () => ({ approved: true })) as unknown as Extension) : undefined;
+		const hasApps = () => Boolean(hub && (hub.calendars("agent").length || hub.mailboxes("agent").length));
+		const definition = () => withConnectorApprovals(options.definition(), hub);
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
 		let runtime: AgentRuntime | undefined;
 		const core = new AgentCore({
 			harness,
-			definition: options.definition,
+			definition,
 			instructions: options.instructions,
 			memory: options.memory,
-			extensions: () => (wantsWeb() ? [web] : []),
+			extensions: () => [...(wantsWeb() ? [web] : []), ...(apps && hasApps() ? [apps] : [])],
 			context: ctx,
 			...(options.now ? { now: options.now } : {}),
 			...(options.appTool ? { appTool: options.appTool } : {}),
@@ -94,7 +103,7 @@ export class AgentRuntime implements Runtime {
 			},
 			onStatus: () => options.onStatus?.(),
 		});
-		for (const e of [web, core.extension]) registry.install(e as never);
+		for (const e of [web, core.extension, ...(apps ? [apps] : [])]) registry.install(e as never);
 		runtime = new AgentRuntime(options, harness, core);
 		runtime.owner = await runtime.view(ownerOf(options.definition()));
 		await core.configureAll();
@@ -569,4 +578,13 @@ export class AgentView implements Runtime {
 
 function ownerOf(definition: AgentDefinition): string {
 	return definition.contacts.find((c) => c.role === "owner")?.id ?? "owner";
+}
+
+/** Connector writes, sends and deletes need the owner's OK in agents too (docs/spec/12 §1), except writes they said not to ask about. */
+function withConnectorApprovals(def: AgentDefinition, hub: ConnectorHub | undefined): AgentDefinition {
+	if (!hub || hub.accounts().length === 0) return def;
+	const asked = new Set(["calendar_create_event", "calendar_update_event", "calendar_delete_event", "mail_draft", "mail_send"]);
+	for (const c of hub.definitions) for (const tool of hub.settings(c.id).dontAsk) if (tool !== "calendar_delete_event" && tool !== "mail_send") asked.delete(tool);
+	const rules = [...new Set([...(def.policies?.requireApproval ?? []), ...asked])];
+	return { ...def, policies: { ...def.policies, requireApproval: rules } };
 }

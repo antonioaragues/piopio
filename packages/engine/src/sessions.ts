@@ -2,6 +2,7 @@
  * Session catalog + open runtimes. Phase 0 keeps the catalog in a JSON index;
  * it moves to catalog.db (SQLite + FTS) with the Phase 1 sidebar.
  */
+import type { ConnectorHub } from "./connectors/hub.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
@@ -924,6 +925,16 @@ export class Sessions {
 	}
 
 	/** Answers a pending prompt of a Build session. */
+	/** Connected apps (docs/spec/12-connectors), set by the engine. */
+	connectors?: ConnectorHub;
+
+	/** The user's answer to a connector approval in a chat. */
+	async decide(ref: ContainerRef, approvalId: string, decision: { approve: boolean; always?: boolean; reason?: string }) {
+		const runtime = await this.runtime(ref);
+		if (!(runtime instanceof ThreadRuntime)) throw new EngineError("INVALID", "Only chats ask this way.");
+		return runtime.decide(approvalId, decision);
+	}
+
 	async respond(ref: ContainerRef, promptId: string, response: PromptResponse): Promise<void> {
 		const runtime = await this.runtime(ref);
 		if (!(runtime instanceof BuildRuntime)) throw new EngineError("INVALID", "Only Build sessions ask for approval.");
@@ -1091,6 +1102,7 @@ export class Sessions {
 				onActivity: () => this.touch(entry.ref),
 				...(this.agentHost?.app ? { appTool: (call: Parameters<AppServices["tool"]>[0]) => this.agentHost!.app!.tool(call) } : {}),
 				peers: this.peerHost(),
+				...(this.connectors ? { connectors: this.connectors } : {}),
 				...(this.agentAskTimeoutMs ? { askTimeoutMs: this.agentAskTimeoutMs } : {}),
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {
@@ -1133,6 +1145,7 @@ export class Sessions {
 				web: entry.web ?? true,
 				webOptions: this.webOptions,
 				...this.chatExtras("thread"),
+				...(this.connectors ? { connectors: this.connectors } : {}),
 			});
 		}
 		const runtime = await BuildRuntime.open({
@@ -1161,6 +1174,7 @@ export class Sessions {
 			},
 			...(entry.parent ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress) }),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
+			...(this.connectors ? { connectors: this.connectors } : {}),
 		});
 		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {
 			entry.sessionFile = runtime.sessionFile;

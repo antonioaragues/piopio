@@ -9,7 +9,7 @@ struct SettingsView: View {
     @State private var section: Section = Section(demo: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Models", chat = "Chat", approvals = "Approvals", mcp = "MCP servers", extensions = "Extensions", engines = "This Mac & cloud"
+        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", approvals = "Approvals", mcp = "MCP servers", extensions = "Extensions", engines = "This Mac & cloud"
         var id: String { rawValue }
         init?(demo: String) {
             switch demo {
@@ -18,11 +18,12 @@ struct SettingsView: View {
             default: self.init(rawValue: demo)
             }
         }
-        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .chat, .approvals]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
+        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .connectors, .chat, .approvals]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
         var icon: (String, Color) {
             switch self {
             case .general: ("gearshape.fill", .gray)
             case .providers: ("key.fill", .blue)
+            case .connectors: ("app.connected.to.app.below.fill", .teal)
             case .chat: ("bubble.left.and.bubble.right.fill", .teal)
             case .extensions: ("shippingbox.fill", .indigo)
             case .approvals: ("checkmark.shield.fill", .orange)
@@ -69,6 +70,7 @@ struct SettingsView: View {
                     switch section {
                     case .general: GeneralPane()
                     case .providers: ProvidersPane(engine: engine)
+                    case .connectors: ConnectorsPane(engine: engine)
                     case .chat: ChatPane(engine: engine)
                     case .extensions: ExtensionsPane(engine: engine)
                     case .approvals: ApprovalsPane(engine: engine)

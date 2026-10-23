@@ -223,6 +223,8 @@ export const ApprovalItem = Type.Object({
 	expiresAt: Type.String(),
 	/** What "Always allow" would allow, in words. */
 	always: Type.String(),
+	/** "connector": a connected app's change in a chat (Allow / Deny, no editing; `sessions.decide`). Else an agent's. */
+	source: Type.Optional(Type.Literal("connector")),
 });
 /** What an agent's tool changed, with Undo while it can be undone (06-agents §4.2 RC1–RC2). */
 export const ResultItem = Type.Object({
@@ -580,6 +582,27 @@ export const ProviderAuthEvent = Type.Union([
 ]);
 export type ProviderAuthEvent = Static<typeof ProviderAuthEvent>;
 
+/** A connected app (docs/spec/12-connectors): what it is, its accounts and settings. */
+export const ConnectorInfo = Type.Object({
+	id: Type.String(),
+	name: Type.String(),
+	category: Type.String(),
+	description: Type.String(),
+	/** An OAuth client is set up (Piopio's own, or yours). */
+	ready: Type.Boolean(),
+	/** You set your own OAuth client (Settings shows its fields filled). */
+	ownClient: Type.Boolean(),
+	needsSecret: Type.Boolean(),
+	setupHelp: Type.String(),
+	connecting: Type.Boolean(),
+	/** Its tools are offered in chats, notebooks and Build (agents always get them). */
+	chats: Type.Boolean(),
+	accounts: Type.Array(Type.Object({ id: Type.String(), label: Type.String(), addedAt: Type.String(), problem: Type.Optional(Type.String()) })),
+	/** What it can do, and whether each asks first; `dontAsk` writes run without asking. */
+	tools: Type.Array(Type.Object({ name: Type.String(), label: Type.String(), access: literals("read", "write", "send", "destructive"), dontAsk: Type.Boolean() })),
+});
+export type ConnectorInfo = Static<typeof ConnectorInfo>;
+
 /** A folder added in Build (docs/spec/05-build BP1). */
 export const ProjectInfo = Type.Object({
 	id: Type.String(),
@@ -843,6 +866,34 @@ export const methods = {
 	"endpoints.detect": {
 		params: Type.Object({}),
 		result: Type.Object({ found: Type.Array(Type.Object({ name: Type.String(), baseUrl: Type.String(), models: Type.Number() })) }),
+	},
+	/** Connected apps (docs/spec/12-connectors). */
+	"connectors.list": {
+		params: Type.Object({}),
+		result: Type.Object({ connectors: Type.Array(ConnectorInfo) }),
+	},
+	/** Starts signing in to an app; steps arrive as `connectors.auth`. */
+	"connectors.connect": {
+		params: Type.Object({ connector: Type.String() }),
+		result: Type.Object({ loginId: Type.String() }),
+	},
+	"connectors.cancel": {
+		params: Type.Object({ loginId: Type.String() }),
+		result: Type.Object({}),
+	},
+	"connectors.disconnect": {
+		params: Type.Object({ accountId: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Use in chats, writes that don't ask, and your own OAuth client (the secret goes to the Keychain). */
+	"connectors.configure": {
+		params: Type.Object({ connector: Type.String(), chats: Type.Optional(Type.Boolean()), dontAsk: Type.Optional(Type.Array(Type.String())), clientId: Type.Optional(Type.String()), clientSecret: Type.Optional(Type.String()) }),
+		result: Type.Object({}),
+	},
+	/** Answers a connector approval in a chat, notebook topic or Build session. `always`: don't ask again for that write. */
+	"sessions.decide": {
+		params: Type.Object({ ref: ContainerRef, approvalId: Type.String(), approve: Type.Boolean(), always: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.String()) }),
+		result: Type.Object({ status: literals("pending", "approved", "denied", "expired", "cancelled") }),
 	},
 	/** Disconnects one provider; the others stay as they are. */
 	"providers.logout": {
@@ -1305,6 +1356,10 @@ export const notifications = {
 	/** The Inbox changed; `count` is what waits for you (badges). `approval` is set when an agent asks (notifications). */
 	/** A step of a provider sign-in started with `providers.login`. */
 	"providers.auth": Type.Object({ loginId: Type.String(), provider: Type.String(), event: ProviderAuthEvent }),
+	/** A step of signing in to an app started with `connectors.connect`. */
+	"connectors.auth": Type.Object({ loginId: Type.String(), connector: Type.String(), event: ProviderAuthEvent }),
+	/** Connected apps changed (accounts, settings, needs sign-in): list them again. */
+	"connectors.changed": Type.Object({}),
 	/** Providers or their models changed (connected, disconnected, needs attention): list them again. */
 	"providers.changed": Type.Object({}),
 	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),

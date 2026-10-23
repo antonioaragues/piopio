@@ -16,6 +16,10 @@ import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 import { attachChatMcp, type ChatMcp } from "../tools/mcp-chat.js";
 import { exportConversation, importInto, type Portable } from "./transfer.js";
+import { CONNECTORS_EXTENSION, durableConnectorsExtension, waitFor, type CallSite } from "../connectors/extension.js";
+import type { ConnectorHub } from "../connectors/hub.js";
+import type { Confirm } from "../connectors/tools.js";
+import type { ApprovalItem } from "@piopio/protocol";
 
 const ctx = BACKGROUND_CONTEXT;
 
@@ -42,7 +46,12 @@ export type ThreadOpenOptions = {
 	mcp?: ChatMcp;
 	/** Expands a `/command` (prompt templates, skills), or undefined. */
 	expand?: (text: string) => string | undefined;
+	/** Connected apps (docs/spec/12-connectors): their tools, asking here before a change. */
+	connectors?: ConnectorHub;
 };
+
+/** A connector change waiting for the user in this thread. */
+type PendingApproval = { item: ApprovalItem; resolve: (answer: { approved: boolean; always?: boolean; reason?: string }) => void };
 
 export class ThreadRuntime implements Runtime {
 	private readonly emitter = new Emitter();
@@ -77,8 +86,13 @@ export class ThreadRuntime implements Runtime {
 		registry.install(webExtension as never);
 		for (const e of options.extensions ?? []) registry.install(e as never);
 		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp) : undefined;
+		let runtime: ThreadRuntime | undefined;
+		const connectors = options.connectors ? (durableConnectorsExtension(options.connectors, "chat", (site) => runtime!.confirmFor(site)) as unknown as Extension) : undefined;
+		if (connectors) registry.install(connectors as never);
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
-		const runtime = new ThreadRuntime(options.ref, options.hub, harness, options.model, options.thinking, options.branches, options.onBranchState, options.web ?? true, webExtension);
+		runtime = new ThreadRuntime(options.ref, options.hub, harness, options.model, options.thinking, options.branches, options.onBranchState, options.web ?? true, webExtension);
+		runtime.connectors = options.connectors;
+		runtime.connectorsExtension = connectors;
 		runtime.detachMcp = detachMcp;
 		runtime.expand = options.expand;
 		const root = await harness.root(ctx, { agent: runtime.agent() } as Parameters<Harness["root"]>[1]);
@@ -96,14 +110,76 @@ export class ThreadRuntime implements Runtime {
 
 	/** The thread's settings, applied to whichever branch is shown (branches made earlier may differ). */
 	private async applySettings(conversation: Conversation): Promise<void> {
+		this.appsOn = this.hasApps();
+		const remove = [...(this.web ? [] : [this.webExtension]), ...(this.connectorsExtension && !this.appsOn ? [this.connectorsExtension] : [])];
 		await conversation.configure(
 			{
 				model: { provider: this.model.provider, modelId: this.model.id },
 				thinkingLevel: this.thinking ?? null,
-				extensions: this.web ? null : { remove: [this.webExtension] },
+				extensions: remove.length ? { remove } : null,
 			} as unknown as Parameters<Conversation["configure"]>[0],
 			ctx,
 		);
+	}
+
+	// MARK: Connected apps
+
+	connectors?: ConnectorHub;
+	connectorsExtension?: Extension;
+	/** Whether the connector tools were on when settings were last applied. */
+	private appsOn = false;
+	private readonly approvals = new Map<string, PendingApproval>();
+
+	private hasApps(): boolean {
+		return Boolean(this.connectors && (this.connectors.calendars("chat").length || this.connectors.mailboxes("chat").length));
+	}
+
+	/** Asks in this thread before a connector changes something: an approval card until answered or stopped. */
+	confirmFor(site: CallSite): Confirm {
+		return async (request) => {
+			const id = `conn_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+			const label = this.connectors?.definition(request.connector)?.name ?? request.connector;
+			const item: ApprovalItem = {
+				kind: "approval",
+				id: `approval:${id}`,
+				at: new Date().toISOString(),
+				approvalId: id,
+				tool: request.tool,
+				title: request.title,
+				args: request.args,
+				status: "pending",
+				expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+				always: request.canAllowAlways ? `Don't ask again for this in ${label}` : "",
+				source: "connector",
+			};
+			const decided = new Promise<{ approved: boolean; always?: boolean; reason?: string }>((resolve) => this.approvals.set(id, { item, resolve }));
+			this.builder.insert(item);
+			this.emitter.emit(this.builder.flush());
+			try {
+				return await waitFor(decided, site.context);
+			} catch (error) {
+				this.settle(id, "cancelled");
+				throw error;
+			}
+		};
+	}
+
+	private settle(id: string, status: ApprovalItem["status"], reason?: string): void {
+		const pending = this.approvals.get(id);
+		if (!pending) return;
+		this.approvals.delete(id);
+		pending.item.status = status;
+		if (reason) pending.item.reason = reason;
+		this.emitter.emit([{ type: "item.updated", item: structuredClone(pending.item) }]);
+	}
+
+	/** The user's answer to a connector approval (`sessions.decide`). */
+	async decide(approvalId: string, decision: { approve: boolean; always?: boolean; reason?: string }): Promise<ApprovalItem["status"]> {
+		const pending = this.approvals.get(approvalId);
+		if (!pending) throw new EngineError("NOT_FOUND", "That request was already answered or has gone.");
+		pending.resolve({ approved: decision.approve, ...(decision.always ? { always: true } : {}), ...(decision.reason ? { reason: decision.reason } : {}) });
+		this.settle(approvalId, decision.approve ? "approved" : "denied", decision.reason);
+		return decision.approve ? "approved" : "denied";
 	}
 
 	private stateSettings() {
@@ -184,6 +260,8 @@ export class ThreadRuntime implements Runtime {
 			if (model && !model.input.includes("image")) throw new EngineError("INVALID", `${model.name} can't read images. Pick a model with vision.`);
 		}
 		await this.hub.ensureCredential(this.model.provider);
+		// Apps connected or removed since the thread opened: offer their tools (or stop).
+		if (this.hasApps() !== this.appsOn) await this.applySettings(this.active);
 		try {
 			const submission = await this.active.submit(
 				{ type: "input", content: input.content, ...(input.entry ? { entry: input.entry } : {}), whenBusy: options.whenBusy, ...(options.requestId ? { requestId: options.requestId } : {}) } as Parameters<Conversation["submit"]>[0],

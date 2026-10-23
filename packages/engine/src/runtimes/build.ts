@@ -1,4 +1,6 @@
 /** Build runtime: one pi-coding-agent SDK session, persisted as a pi CLI-compatible JSONL file. */
+import { codingConnectorsExtension } from "../connectors/extension.js";
+import type { ConnectorHub } from "../connectors/hub.js";
 import {
 	createAgentSession,
 	createCodemodeExtension,
@@ -28,6 +30,8 @@ import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 const CHECKPOINT_ENTRY = "piopio.checkpoint";
 
 export type BuildOpenOptions = {
+	/** Connected apps: their tools, asking through Build's approval prompt before a change. */
+	connectors?: ConnectorHub;
 	ref: ContainerRef;
 	hub: ModelHub;
 	cwd: string;
@@ -124,6 +128,14 @@ export class BuildRuntime implements Runtime {
 					},
 				}),
 				...(o.profile === "chat" ? [chatProfileExtension(o.hub, o.webOptions)] : []),
+				...(o.connectors
+					? [
+							codingConnectorsExtension(o.connectors, (callId, signal) => async (request) => {
+								const response = await broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId }, signal);
+								return { approved: response?.decision === "allow" || response?.decision === "always", ...(response?.decision === "always" && request.canAllowAlways ? { always: true } : {}), ...(response?.text ? { reason: response.text } : {}) };
+							}),
+						]
+					: []),
 				todosExtension(),
 				planExtension({
 					active: o.plan.active,

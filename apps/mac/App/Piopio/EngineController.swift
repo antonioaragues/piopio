@@ -25,6 +25,9 @@ final class EngineController {
     private(set) var providers: [ProviderInfo] = []
     /// The sign-in in progress (Settings › Models shows it as a sheet).
     var login: ProviderLogin?
+    /// Connected apps (docs/spec/12-connectors) and the app sign-in in progress.
+    private(set) var connectors: [ConnectorInfo] = []
+    var connectorLogin: ConnectorLogin?
     /// The engine has worked in this run (so a failure now is a crash, shown as a banner).
     private(set) var wasReady = false
     /// Latest session status per open thread (sidebar status dots).
@@ -79,6 +82,7 @@ final class EngineController {
             try await refreshCatalog()
             try await loadModels()
             await loadProviders()
+            await loadConnectors()
             status = .ready
             wasReady = true
         } catch {
@@ -226,6 +230,11 @@ final class EngineController {
                     try? await self.loadModels()
                 case .auth(let auth):
                     if self.login?.loginId == auth.loginId { self.login?.apply(auth.event) }
+                case .connectorsChanged:
+                    await self.loadConnectors()
+                case .connectorAuth(let auth):
+                    if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
+                    if auth.event.type == "done" { await self.loadConnectors() }
                 }
             }
         }
@@ -583,6 +592,11 @@ final class EngineController {
 
     func decide(_ agent: ContainerRef, approvalId: String, approve: Bool, args: JSONValue? = nil, always: Bool = false, reason: String? = nil) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        // A connected app's change in a chat (docs/spec/12-connectors): the chat answers it.
+        if agent.kind != .agent {
+            _ = try await client.call("sessions.decide", SessionDecideParams(ref: agent, approvalId: approvalId, approve: approve, always: always ? true : nil), as: JSONValue.self)
+            return
+        }
         let ref = ContainerRef(kind: .agent, id: agent.id)
         _ = try await client.call("agents.decide", AgentDecideParams(ref: ref, approvalId: approvalId, approve: approve, args: args, always: always ? true : nil, reason: reason), as: JSONValue.self)
         await loadInbox()
@@ -755,6 +769,41 @@ final class EngineController {
     func cancelLogin() async {
         if let id = login?.loginId, login?.finished == false { _ = try? await client?.call("providers.cancelLogin", LoginIdParams(loginId: id), as: Empty.self) }
         login = nil
+    }
+
+    // MARK: Connected apps
+
+    func loadConnectors() async {
+        guard let client, let list = try? await client.call("connectors.list", Empty(), as: ConnectorsListResult.self) else { return }
+        connectors = list.connectors
+    }
+
+    /// Starts signing in to an app; the browser opens, the sheet follows `connectorLogin`.
+    func connect(_ connector: ConnectorInfo) async {
+        guard let client else { return }
+        let state = ConnectorLogin(connector: connector)
+        connectorLogin = state
+        do {
+            state.loginId = try await client.call("connectors.connect", ConnectorParams(connector: connector.id), as: ProviderLoginResult.self).loginId
+        } catch {
+            state.apply(ProviderAuthEvent(type: "failed", message: (error as? EngineError)?.message ?? error.localizedDescription))
+        }
+    }
+
+    func cancelConnectorLogin() async {
+        if let id = connectorLogin?.loginId, connectorLogin?.finished == false { _ = try? await client?.call("connectors.cancel", LoginIdParams(loginId: id), as: Empty.self) }
+        connectorLogin = nil
+    }
+
+    func disconnect(account: ConnectorInfo.Account) async {
+        _ = try? await client?.call("connectors.disconnect", ConnectorAccountParams(accountId: account.id), as: Empty.self)
+        await loadConnectors()
+    }
+
+    func configure(_ params: ConnectorConfigureParams) async throws {
+        guard let client else { return }
+        _ = try await client.call("connectors.configure", params, as: Empty.self)
+        await loadConnectors()
     }
 
     // Custom endpoints (LiteLLM, Ollama, LM Studio…)

@@ -1201,6 +1201,10 @@
 						},
 						"always": {
 							"type": "string"
+						},
+						"source": {
+							"type": "string",
+							"const": "connector"
 						}
 					}
 				},
@@ -2907,6 +2911,10 @@
 										},
 										"always": {
 											"type": "string"
+										},
+										"source": {
+											"type": "string",
+											"const": "connector"
 										}
 									}
 								},
@@ -4356,6 +4364,10 @@
 										},
 										"always": {
 											"type": "string"
+										},
+										"source": {
+											"type": "string",
+											"const": "connector"
 										}
 									}
 								},
@@ -5785,6 +5797,10 @@
 										},
 										"always": {
 											"type": "string"
+										},
+										"source": {
+											"type": "string",
+											"const": "connector"
 										}
 									}
 								},
@@ -7549,6 +7565,10 @@
 													},
 													"always": {
 														"type": "string"
+													},
+													"source": {
+														"type": "string",
+														"const": "connector"
 													}
 												}
 											},
@@ -9294,6 +9314,10 @@
 									},
 									"always": {
 										"type": "string"
+									},
+									"source": {
+										"type": "string",
+										"const": "connector"
 									}
 								}
 							},
@@ -11363,6 +11387,10 @@
 													},
 													"always": {
 														"type": "string"
+													},
+													"source": {
+														"type": "string",
+														"const": "connector"
 													}
 												}
 											},
@@ -12812,6 +12840,10 @@
 													},
 													"always": {
 														"type": "string"
+													},
+													"source": {
+														"type": "string",
+														"const": "connector"
 													}
 												}
 											},
@@ -14241,6 +14273,10 @@
 													},
 													"always": {
 														"type": "string"
+													},
+													"source": {
+														"type": "string",
+														"const": "connector"
 													}
 												}
 											},
@@ -16005,6 +16041,10 @@
 																},
 																"always": {
 																	"type": "string"
+																},
+																"source": {
+																	"type": "string",
+																	"const": "connector"
 																}
 															}
 														},
@@ -18953,6 +18993,10 @@
 									},
 									"always": {
 										"type": "string"
+									},
+									"source": {
+										"type": "string",
+										"const": "connector"
 									}
 								}
 							},
@@ -20750,6 +20794,10 @@
 											},
 											"always": {
 												"type": "string"
+											},
+											"source": {
+												"type": "string",
+												"const": "connector"
 											}
 										}
 									},
@@ -22721,6 +22769,309 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"connectors.list.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"connectors.list.result": {
+			"type": "object",
+			"required": [
+				"connectors"
+			],
+			"properties": {
+				"connectors": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"category",
+							"description",
+							"ready",
+							"ownClient",
+							"needsSecret",
+							"setupHelp",
+							"connecting",
+							"chats",
+							"accounts",
+							"tools"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"category": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"ready": {
+								"type": "boolean"
+							},
+							"ownClient": {
+								"type": "boolean"
+							},
+							"needsSecret": {
+								"type": "boolean"
+							},
+							"setupHelp": {
+								"type": "string"
+							},
+							"connecting": {
+								"type": "boolean"
+							},
+							"chats": {
+								"type": "boolean"
+							},
+							"accounts": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"label",
+										"addedAt"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"label": {
+											"type": "string"
+										},
+										"addedAt": {
+											"type": "string"
+										},
+										"problem": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"tools": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"name",
+										"label",
+										"access",
+										"dontAsk"
+									],
+									"properties": {
+										"name": {
+											"type": "string"
+										},
+										"label": {
+											"type": "string"
+										},
+										"access": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "read"
+												},
+												{
+													"type": "string",
+													"const": "write"
+												},
+												{
+													"type": "string",
+													"const": "send"
+												},
+												{
+													"type": "string",
+													"const": "destructive"
+												}
+											]
+										},
+										"dontAsk": {
+											"type": "boolean"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"connectors.connect.params": {
+			"type": "object",
+			"required": [
+				"connector"
+			],
+			"properties": {
+				"connector": {
+					"type": "string"
+				}
+			}
+		},
+		"connectors.connect.result": {
+			"type": "object",
+			"required": [
+				"loginId"
+			],
+			"properties": {
+				"loginId": {
+					"type": "string"
+				}
+			}
+		},
+		"connectors.cancel.params": {
+			"type": "object",
+			"required": [
+				"loginId"
+			],
+			"properties": {
+				"loginId": {
+					"type": "string"
+				}
+			}
+		},
+		"connectors.cancel.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"connectors.disconnect.params": {
+			"type": "object",
+			"required": [
+				"accountId"
+			],
+			"properties": {
+				"accountId": {
+					"type": "string"
+				}
+			}
+		},
+		"connectors.disconnect.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"connectors.configure.params": {
+			"type": "object",
+			"required": [
+				"connector"
+			],
+			"properties": {
+				"connector": {
+					"type": "string"
+				},
+				"chats": {
+					"type": "boolean"
+				},
+				"dontAsk": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"clientId": {
+					"type": "string"
+				},
+				"clientSecret": {
+					"type": "string"
+				}
+			}
+		},
+		"connectors.configure.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.decide.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"approvalId",
+				"approve"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"approvalId": {
+					"type": "string"
+				},
+				"approve": {
+					"type": "boolean"
+				},
+				"always": {
+					"type": "boolean"
+				},
+				"reason": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.decide.result": {
+			"type": "object",
+			"required": [
+				"status"
+			],
+			"properties": {
+				"status": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "pending"
+						},
+						{
+							"type": "string",
+							"const": "approved"
+						},
+						{
+							"type": "string",
+							"const": "denied"
+						},
+						{
+							"type": "string",
+							"const": "expired"
+						},
+						{
+							"type": "string",
+							"const": "cancelled"
+						}
+					]
 				}
 			}
 		},
@@ -27987,6 +28338,10 @@
 									},
 									"always": {
 										"type": "string"
+									},
+									"source": {
+										"type": "string",
+										"const": "connector"
 									}
 								}
 							}

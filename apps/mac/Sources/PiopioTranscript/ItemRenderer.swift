@@ -93,7 +93,17 @@ nonisolated struct ItemRenderer: Sendable {
         m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: dot, .baselineOffset: 1]))
         m.append(NSAttributedString(string: state, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
         m.append(NSAttributedString(string: lineSeparator + a.title, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
-        if !compact {
+        if !compact, a.source == "connector" {
+            // A connected app's change in a chat (docs/spec/12-connectors): Deny / Allow, and "don't ask again" for plain writes.
+            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            m.append(pill("Deny", .decideApproval(approvalId: a.approvalId, approve: false), .secondary))
+            if !a.always.isEmpty {
+                m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
+                m.append(pill("Allow, don't ask again", .allowAlways(approvalId: a.approvalId), .secondary))
+            }
+            m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
+            m.append(pill("Allow", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
+        } else if !compact {
             m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
             m.append(pill("Deny", .decideApproval(approvalId: a.approvalId, approve: false), .secondary))
             m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
@@ -196,7 +206,20 @@ nonisolated struct ItemRenderer: Sendable {
         if searches > 0 { out.append(searches == 1 ? "searched the web" : "searched the web \(searches) times") }
         let pages = tools.filter { $0.tool == "web_fetch" }.count
         if pages > 0 { out.append("read \(pages) page\(pages == 1 ? "" : "s")") }
-        let known: Set<String> = ["read", "edit", "write", "bash", "web_search", "web_fetch"]
+        // Connected apps (docs/spec/12-connectors): what was done, in words.
+        let apps: [(Set<String>, String, String)] = [
+            (["calendar_events", "calendar_free_time"], "read your calendar", "reading your calendar"),
+            (["calendar_create_event", "calendar_update_event", "calendar_delete_event"], "changed your calendar", "changing your calendar"),
+            (["mail_search", "mail_read"], "read your mail", "reading your mail"),
+            (["mail_draft"], "wrote a draft", "writing a draft"),
+            (["mail_send"], "sent an email", "sending an email"),
+        ]
+        for (names, done, doing) in apps {
+            let calls = tools.filter { names.contains($0.tool) }
+            guard !calls.isEmpty else { continue }
+            out.append(calls.contains { $0.status == .done } ? done : calls.contains { $0.status == .running || $0.status == .pendingApproval } ? doing : done)
+        }
+        let known = Set(["read", "edit", "write", "bash", "web_search", "web_fetch"]).union(apps.flatMap { $0.0 })
         let others = tools.filter { !known.contains($0.tool) }.count
         if others > 0 { out.append(out.isEmpty ? "\(others) step\(others == 1 ? "" : "s")" : "\(others) more") }
         return out
@@ -531,6 +554,24 @@ nonisolated struct ItemRenderer: Sendable {
             return (failed ? "Suggested tidying" : "Tidied topics", t.args?["topic"]?.stringValue ?? t.args?["from"]?.stringValue ?? "")
         case "ask_user":
             return (running ? "Waiting for your answer" : "Asked you", t.args?["question"]?.stringValue ?? "")
+        case "calendar_events":
+            return (running ? "Reading your calendar" : failed ? "Couldn't read your calendar" : "Read your calendar", t.args?["query"]?.stringValue ?? "")
+        case "calendar_free_time":
+            return (running ? "Finding free time" : "Found free time", "")
+        case "calendar_create_event":
+            return (running ? "Creating an event" : failed ? "Didn't create the event" : "Created an event", t.args?["title"]?.stringValue ?? "")
+        case "calendar_update_event":
+            return (running ? "Changing an event" : failed ? "Didn't change the event" : "Changed an event", t.args?["title"]?.stringValue ?? "")
+        case "calendar_delete_event":
+            return (running ? "Deleting an event" : failed ? "Didn't delete the event" : "Deleted an event", "")
+        case "mail_search":
+            return (running ? "Searching your mail" : "Searched your mail", t.args?["query"]?.stringValue ?? "")
+        case "mail_read":
+            return (running ? "Reading an email" : "Read an email", "")
+        case "mail_draft":
+            return (running ? "Writing a draft" : failed ? "Didn't save the draft" : "Wrote a draft", t.args?["subject"]?.stringValue ?? "")
+        case "mail_send":
+            return (running ? "Sending an email" : failed ? "Didn't send the email" : "Sent an email", "")
         case "notify_user":
             return ("Notified you", t.args?["message"]?.stringValue ?? "")
         case "web_search":
