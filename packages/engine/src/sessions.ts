@@ -92,7 +92,7 @@ export class Sessions {
 	/** Each agent's last valid definition, as the runtime uses it. */
 	private definitions = new Map<string, { definition: AgentDefinition; instructions: string }>();
 	private skillsExtension?: Extension;
-	private aboutMeExtensions = new Map<"thread" | "space", Extension>();
+	private aboutMeExtensions = new Map<"thread" | "space" | "agent", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
 	/** How long ask_agent waits (tests shorten it). */
@@ -778,13 +778,26 @@ export class Sessions {
 		this.changed(entry);
 	}
 
-	private chatExtras(kind: "thread" | "space"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {
-		if (!this.chat) return {};
+	private aboutMeFor(kind: "thread" | "space" | "agent"): Extension | undefined {
+		if (!this.chat) return undefined;
 		let aboutMe = this.aboutMeExtensions.get(kind);
 		if (!aboutMe) {
 			aboutMe = aboutMeExtension(this.chat.aboutMe, this.chat.settings, kind) as unknown as Extension;
 			this.aboutMeExtensions.set(kind, aboutMe);
 		}
+		return aboutMe;
+	}
+
+	/** About me in an agent, when Settings › Chat shares it with agents. */
+	private agentExtras(): Extension[] {
+		const s = this.chat?.settings.get().aboutMe;
+		const aboutMe = s?.enabled && s.inAgents ? this.aboutMeFor("agent") : undefined;
+		return aboutMe ? [aboutMe] : [];
+	}
+
+	private chatExtras(kind: "thread" | "space"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {
+		if (!this.chat) return {};
+		const aboutMe = this.aboutMeFor(kind)!;
 		const resources = this.chat.resources;
 		this.skillsExtension ??= resources.extension() as unknown as Extension;
 		return { extensions: [aboutMe, this.skillsExtension], mcp: this.chat.mcp, expand: (text) => resources.expand(text) };
@@ -1103,6 +1116,7 @@ export class Sessions {
 				...(this.agentHost?.app ? { appTool: (call: Parameters<AppServices["tool"]>[0]) => this.agentHost!.app!.tool(call) } : {}),
 				peers: this.peerHost(),
 				...(this.connectors ? { connectors: this.connectors } : {}),
+				extraExtensions: () => this.agentExtras(),
 				...(this.agentAskTimeoutMs ? { askTimeoutMs: this.agentAskTimeoutMs } : {}),
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {

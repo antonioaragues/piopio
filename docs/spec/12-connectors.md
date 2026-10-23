@@ -46,8 +46,11 @@ What you can do at the end of C1, in any chat, notebook, Build session or agent:
 - Tokens in the Keychain (`connector.<app>.<account>`), refreshed automatically and written back; `connectors.json` keeps only the account list and settings.
 - Engine: `connectors/` (hub, Google Calendar, Outlook, tools, extensions), `connectors.*` methods, `sessions.decide`. Tests against a fake Google/Microsoft server: sign-in, tokens in the Keychain, both calendars in one read, approve and decline, token refresh, disconnect, free time.
 
+**Settings redesign (2026-10-23, `docs/design/settings`)**
+- Per capability, Runs / Asks first / Off (reading runs, changes ask, deleting is off by default; sending and deleting never run on their own); calendars on or off per account; the Add connector catalog and a connect step that sets permissions before signing in. Details in `docs/design/settings/IMPLEMENTATION.md`.
+
 **Not done yet**
-- **Piopio's own Google and Microsoft OAuth apps aren't registered** (`BUILT_IN_CLIENTS` is empty). Until they are, each app shows "Set up…" and needs your own client ID (plus a secret for Google). Registering them, and applying for Google's review, is the step that makes "Connect" work for everyone.
+- **Piopio's own Google and Microsoft OAuth apps aren't registered** (`BUILT_IN_CLIENTS` is empty). Until they are, the connect step says sign-in isn't available in this build; a small "Developer setup…" link (or the `PIOPIO_<APP>_CLIENT_ID` / `_CLIENT_SECRET` environment variables) takes a development client. Registering them, and applying for Google's review, is the step that makes "Connect" work for everyone.
 - Notebooks (topics) don't get the tools yet; chats, Build and agents do.
 - Not tried against real Google or Microsoft accounts.
 

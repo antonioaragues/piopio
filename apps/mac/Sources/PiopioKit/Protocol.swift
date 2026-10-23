@@ -634,7 +634,7 @@ public struct SpaceSuggestion: Codable, Sendable, Hashable {
 /// Engine-wide settings (Settings › Chat, Settings › MCP servers).
 public struct EngineSettings: Codable, Sendable, Hashable {
     public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var suggestSpaces: Bool; public var followUps: Bool? }
-    public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var provider: String }
+    public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var inAgents: Bool?; public var provider: String }
     public struct Memory: Codable, Sendable, Hashable { public var providers: [McpMemoryProvider] }
     public var chat: Chat
     public var aboutMe: AboutMe
@@ -666,12 +666,25 @@ public struct PiPackage: Codable, Sendable, Hashable, Identifiable {
     public struct Resource: Codable, Sendable, Hashable { public var path: String; public var enabled: Bool }
     public struct Resources: Codable, Sendable, Hashable { public var extensions, skills, prompts, themes: [Resource] }
     public var source: String
+    public var kind: String?
+    public var name, version, description, latest: String?
     public var installedPath: String?
     public var installed: Bool
     public var enabled: Bool
     public var off: [String]
     public var resources: Resources
     public var id: String { source }
+}
+/// What a package would add, before installing it.
+public struct PackagePreview: Decodable, Sendable, Hashable {
+    public var ok: Bool; public var kind: String
+    public var name, version, description, author, error: String?
+    public var extensions, skills, prompts, themes: [String]
+    public var contentsKnown: Bool
+}
+public struct PackageResourceParams: Encodable, Sendable {
+    public var source, kind, path: String; public var enabled: Bool
+    public init(source: String, kind: String, path: String, enabled: Bool) { self.source = source; self.kind = kind; self.path = path; self.enabled = enabled }
 }
 public struct PackagesResult: Decodable, Sendable { public var packages: [PiPackage] }
 public struct PackageParams: Encodable, Sendable { public var source: String?; public init(source: String?) { self.source = source } }
@@ -690,9 +703,9 @@ public struct SettingsPatch: Encodable, Sendable {
         public init(mcp: Bool? = nil, suggestSpaces: Bool? = nil, followUps: Bool? = nil) { self.mcp = mcp; self.suggestSpaces = suggestSpaces; self.followUps = followUps }
     }
     public struct AboutMe: Encodable, Sendable {
-        public var enabled, capture, inThreads, inSpaces: Bool?
+        public var enabled, capture, inThreads, inSpaces, inAgents: Bool?
         public var provider: String?
-        public init(enabled: Bool? = nil, capture: Bool? = nil, inThreads: Bool? = nil, inSpaces: Bool? = nil, provider: String? = nil) { self.enabled = enabled; self.capture = capture; self.inThreads = inThreads; self.inSpaces = inSpaces; self.provider = provider }
+        public init(enabled: Bool? = nil, capture: Bool? = nil, inThreads: Bool? = nil, inSpaces: Bool? = nil, inAgents: Bool? = nil, provider: String? = nil) { self.enabled = enabled; self.capture = capture; self.inThreads = inThreads; self.inSpaces = inSpaces; self.inAgents = inAgents; self.provider = provider }
     }
     public struct Memory: Encodable, Sendable { public var providers: [McpMemoryProvider]?; public init(providers: [McpMemoryProvider]?) { self.providers = providers } }
     public var chat: Chat?

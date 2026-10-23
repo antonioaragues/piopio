@@ -6,74 +6,312 @@ import SwiftUI
 // Settings › Extensions (docs/spec/07-shared-resources §6.1) and the memory providers of Settings › Chat (§6.2).
 // No Piopio plugin format: pi packages (shared with the pi CLI) and memory systems behind MCP servers.
 
-struct ExtensionsPane: View {
-    let engine: EngineController
-    @State private var packages: [PiPackage] = []
-    @State private var source = ""
-    @State private var working: String?
-    @State private var error: String?
+// Design handoff e1–e2 and the package page: the page lists installed packages with what each adds in plain words;
+// installing happens in a sheet that previews the package before anything runs.
 
-    var body: some View {
-        PaneTitle(title: "Extensions", subtitle: "pi packages: extensions for Build; skills and prompt templates for every mode. Shared with the pi CLI.")
-        HStack(spacing: 8) {
-            TextField("npm:@scope/name, git:github.com/user/repo or a folder", text: $source)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(install)
-            Button("Choose Folder…") { chooseFolder() }.buttonStyle(PillStyle(compact: true))
-            Button(working == "install" ? "Installing…" : "Install") { install() }
-                .buttonStyle(PillStyle(kind: .primary, compact: true))
-                .disabled(source.trimmingCharacters(in: .whitespaces).isEmpty || working != nil)
-        }
-        .padding(.bottom, 8)
-        if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.bottom, 8) }
-        HStack {
-            SectionLabel("Installed")
-            Spacer()
-            Button(working == "update" ? "Updating…" : "Update All") { act("update") { try await engine.spaceCall("packages.update", PackageParams(source: nil)) } }
-                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor).disabled(packages.isEmpty || working != nil)
-        }
-        .padding(.bottom, 6)
-        ListCard {
-            if packages.isEmpty {
-                Row(title: "None yet", last: true) {
-                    Text("Find packages at pi.dev/packages, or install with `pi install` in a terminal.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    Spacer()
-                }
-            }
-            ForEach(packages) { p in
-                Row(title: name(p), last: p.id == packages.last?.id) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(p.source).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1).truncationMode(.middle)
-                        HStack(spacing: 10) {
-                            kind(p, "extensions", "Extensions", p.resources.extensions.count)
-                            kind(p, "skills", "Skills", p.resources.skills.count)
-                            kind(p, "prompts", "Templates", p.resources.prompts.count)
-                            if !p.installed { Text("not installed").font(.system(size: 11)).foregroundStyle(Color.dsRed) }
-                        }
-                    }
-                    Spacer()
-                    Button { act("remove") { try await engine.spaceCall("packages.remove", PackageParams(source: p.source)) } } label: { Image(systemName: "trash") }
-                        .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Remove")
-                    Toggle("", isOn: Binding(get: { p.enabled }, set: { on in act("toggle") { try await engine.spaceCall("packages.setEnabled", PackageEnableParams(source: p.source, enabled: on)) } }))
-                        .toggleStyle(.switch).controlSize(.mini).labelsHidden()
-                }
-            }
-        }
-        Text("Extensions run in Build only, with your permissions. Skills and templates are text, so Threads, Notebooks and Agents use them too. Terminal-UI parts of an extension don't show in Piopio.")
-            .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).padding(.top, 8)
-            .task { await load() }
-    }
+private let galleryURL = URL(string: "https://pi.dev/packages")!
 
-    private func name(_ p: PiPackage) -> String {
+/// How a package reads in a list: its name, where it comes from, and what it adds.
+enum PackageText {
+    static func name(_ p: PiPackage) -> String {
+        if let name = p.name { return name }
         let s = p.source.replacingOccurrences(of: "npm:", with: "").replacingOccurrences(of: "git:", with: "")
         return URL(fileURLWithPath: s).lastPathComponent
     }
 
-    /// "Skills 2" as a checkbox: that kind of resource on or off.
-    @ViewBuilder private func kind(_ p: PiPackage, _ key: String, _ title: String, _ count: Int) -> some View {
-        if count > 0 || p.off.contains(key) {
-            Toggle("\(title) \(count)", isOn: Binding(get: { !p.off.contains(key) }, set: { on in act("toggle") { try await engine.spaceCall("packages.setEnabled", PackageEnableParams(source: p.source, enabled: on, kinds: [key])) } }))
-                .toggleStyle(.checkbox).font(.system(size: 11.5))
+    /// "npm · 1.4.0", "git · github.com/antonio/writing", "folder · ~/prompts".
+    static func origin(_ p: PiPackage) -> String {
+        switch p.kind ?? "npm" {
+        case "local": "folder · \((p.installedPath ?? p.source).replacingOccurrences(of: NSHomeDirectory(), with: "~"))"
+        case "git": "git · \(p.source.replacingOccurrences(of: "git:", with: "").replacingOccurrences(of: "https://", with: ""))"
+        default: ["npm", p.version].compactMap { $0 }.joined(separator: " · ")
+        }
+    }
+
+    /// "Extension · Build", "2 skills", "1 skill · everywhere", "4 templates · everywhere".
+    static func badges(extensions: Int, skills: Int, prompts: Int) -> [String] {
+        let everywhere = extensions == 0 ? " · everywhere" : ""
+        var out: [String] = []
+        if extensions > 0 { out.append(extensions == 1 ? "Extension · Build" : "\(extensions) extensions · Build") }
+        if skills > 0 { out.append("\(skills) skill\(skills == 1 ? "" : "s")\(everywhere)") }
+        if prompts > 0 { out.append("\(prompts) template\(prompts == 1 ? "" : "s")\(everywhere)") }
+        return out
+    }
+
+    /// A resource's name from its path: an extension's file (or folder for index.ts), a skill's folder, a template's file.
+    static func resource(_ path: String) -> String {
+        let url = URL(fileURLWithPath: path)
+        if url.lastPathComponent == "SKILL.md" || url.deletingPathExtension().lastPathComponent == "index" { return url.deletingLastPathComponent().lastPathComponent }
+        return url.deletingPathExtension().lastPathComponent
+    }
+
+    static func tile(extensions: Int, skills: Int) -> (String, Color) {
+        if extensions > 0 { return ("shippingbox.fill", .purple) }
+        if skills > 0 { return ("text.badge.star", .orange) }
+        return ("doc.on.doc.fill", .teal)
+    }
+}
+
+struct PackageTile: View {
+    let extensions: Int
+    let skills: Int
+    var size: CGFloat = 34
+    var body: some View {
+        let (symbol, color) = PackageText.tile(extensions: extensions, skills: skills)
+        Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+    }
+}
+
+// MARK: - e1 · Installed packages
+
+struct ExtensionsPane: View {
+    let engine: EngineController
+    @State private var packages: [PiPackage] = []
+    @State private var loaded = false
+    @State private var detail: String?
+    @State private var installing = false
+    @State private var working: String?
+    @State private var error: String?
+
+    private var updates: Int { packages.filter { $0.latest != nil }.count }
+
+    var body: some View {
+        Group {
+            if let id = detail, let p = packages.first(where: { $0.id == id }) {
+                PackageDetail(engine: engine, package: p, back: { detail = nil }, changed: { Task { await load() } })
+            } else if loaded, packages.isEmpty {
+                SettingsEmpty(title: "Add skills and commands", message: "pi packages add skills and templates you can use in any chat, and extensions for Build. Piopio shares them with the pi CLI.") {
+                    HStack(spacing: 10) {
+                        Button { NSWorkspace.shared.open(galleryURL) } label: { Label("Browse pi.dev", systemImage: "arrow.up.right") }.buttonStyle(PillStyle(kind: .toolbar))
+                        Button { installing = true } label: { Label("Install", systemImage: "plus").font(.system(size: 12.5, weight: .semibold)) }.buttonStyle(PillStyle(kind: .strong))
+                    }
+                }
+            } else {
+                page
+            }
+        }
+        .task {
+            await load()
+            if ProcessInfo.processInfo.environment["PIOPIO_DEMO_INSTALL_PACKAGE"] != nil { installing = true }
+            if let name = ProcessInfo.processInfo.environment["PIOPIO_DEMO_PACKAGE_DETAIL"] { detail = packages.first { PackageText.name($0).contains(name) }?.id }
+        }
+        .sheet(isPresented: $installing) {
+            InstallPackageSheet(engine: engine) {
+                installing = false
+                Task { await load() }
+            }
+        }
+    }
+
+    private var page: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "Extensions", summary: ["\(packages.count) package\(packages.count == 1 ? "" : "s")", updates > 0 ? "\(updates) update\(updates == 1 ? "" : "s")" : nil, "shared with the pi CLI"].compactMap { $0 }.joined(separator: " · ")) {
+                Button { NSWorkspace.shared.open(galleryURL) } label: { Label("Browse pi.dev", systemImage: "arrow.up.right").font(.system(size: 12.5)) }
+                    .buttonStyle(PillStyle(kind: .toolbar))
+                AddButton(title: "Install") { installing = true }
+            }
+            CardTitle(title: "Installed") {
+                Button(working == "update" ? "Updating…" : "Update all") { updateAll() }
+                    .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor).disabled(working != nil)
+            }
+            ListCard {
+                ForEach(Array(packages.enumerated()), id: \.element.id) { i, p in
+                    PackageRow(package: p, updating: working == p.source, update: { update(p) }) { detail = p.id }
+                    if i < packages.count - 1 { RowDivider() }
+                }
+            }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
+            VStack(alignment: .leading, spacing: 3) {
+                (Text("Extension ").fontWeight(.semibold) + Text("runs code in Build, with your permissions"))
+                (Text("Skills, templates ").fontWeight(.semibold) + Text("are text, usable everywhere"))
+            }
+            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 12)
+        }
+    }
+
+    private func update(_ p: PiPackage) {
+        working = p.source
+        Task {
+            do { try await engine.spaceCall("packages.update", PackageParams(source: p.source)) } catch { self.error = (error as? EngineError)?.message ?? String(describing: error) }
+            working = nil
+            await load()
+        }
+    }
+
+    private func updateAll() {
+        working = "update"
+        error = nil
+        Task {
+            do { try await engine.spaceCall("packages.update", PackageParams(source: nil)) } catch { self.error = (error as? EngineError)?.message ?? String(describing: error) }
+            working = nil
+            await load()
+        }
+    }
+
+    private func load() async {
+        packages = (try? await engine.client?.call("packages.list", Empty(), as: PackagesResult.self).packages) ?? []
+        loaded = engine.client != nil
+    }
+}
+
+private struct PackageRow: View {
+    let package: PiPackage
+    let updating: Bool
+    let update: () -> Void
+    let open: () -> Void
+
+    var body: some View {
+        let r = package.resources
+        Button(action: open) {
+            HStack(spacing: 12) {
+                PackageTile(extensions: r.extensions.count, skills: r.skills.count)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(PackageText.name(package)).font(.system(size: 14, weight: .semibold)).foregroundStyle(package.enabled ? Color.dsFg : Color.dsFg3)
+                        if !package.installed { Text("Not installed").font(.system(size: 11.5)).foregroundStyle(Color.dsRed) } else if !package.enabled { Text("Off").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
+                    }
+                    HStack(spacing: 6) {
+                        ForEach(PackageText.badges(extensions: r.extensions.count, skills: r.skills.count, prompts: r.prompts.count), id: \.self) { b in
+                            Text(b).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6).frame(height: 18).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 5))
+                        }
+                        Text(PackageText.origin(package)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle)
+                    }
+                }
+                Spacer(minLength: 12)
+                if let latest = package.latest {
+                    Button(action: update) {
+                        Text(updating ? "Updating…" : "Update to \(latest)").font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 9).frame(height: 22).background(Color.dsAccentSoft, in: Capsule())
+                    }
+                    .buttonStyle(.plain).disabled(updating)
+                }
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+            }
+            .padding(.horizontal, 14).frame(minHeight: 62)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(HoverRowStyle())
+    }
+}
+
+// MARK: - e2 · Install sheet
+
+struct InstallPackageSheet: View {
+    let engine: EngineController
+    let done: () -> Void
+    @State private var source = ProcessInfo.processInfo.environment["PIOPIO_DEMO_INSTALL_PACKAGE"] ?? ""
+    @State private var preview: PackagePreview?
+    @State private var checking = false
+    @State private var installing = false
+    @State private var error: String?
+    @FocusState private var focused: Bool
+
+    /// What pi installs: "npm:" for package names, "git:" for a host/owner/repo, folders as they are.
+    private var normalized: String {
+        let s = source.trimmingCharacters(in: .whitespaces)
+        if s.isEmpty || s.hasPrefix("npm:") || s.hasPrefix("git:") || s.hasPrefix("http") || s.hasPrefix("/") || s.hasPrefix("~") || s.hasPrefix(".") { return s }
+        if s.hasPrefix("github.com/") || s.hasPrefix("gitlab.com/") { return "git:\(s)" }
+        return "npm:\(s)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Install a package").font(.system(size: 17, weight: .bold))
+            Text("From npm, a git repository, or a folder on this Mac").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.top, 2)
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    TextField("npm:@scope/name, git:github.com/user/repo or a folder", text: $source)
+                        .textFieldStyle(.plain).font(.system(size: 12.5, design: .monospaced)).focused($focused)
+                    if checking { ProgressView().controlSize(.mini) }
+                    else if let preview { preview.ok ? AnyView(Label("Found", systemImage: "checkmark").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen)) : AnyView(EmptyView()) }
+                }
+                .padding(.horizontal, 10).frame(height: 32)
+                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(focused ? Color.dsAccentLine : Color.dsLine, lineWidth: focused ? 1.5 : 0.5))
+                .background(focused ? RoundedRectangle(cornerRadius: 11).fill(Color.dsAccentSoft).padding(-3) : nil)
+                Button("Choose Folder…") { chooseFolder() }.buttonStyle(PillStyle())
+            }
+            .padding(.top, 14)
+            if let preview, !preview.ok, let message = preview.error {
+                Text(message).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 6)
+            }
+            if let preview, preview.ok { previewCard(preview).padding(.top, 14) }
+            if let preview, preview.ok, !preview.extensions.isEmpty || !preview.contentsKnown {
+                Text("The extension runs with your user's permissions. Only install packages you trust.")
+                    .font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.horizontal, 12).padding(.vertical, 9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 8)).padding(.top, 12)
+            }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
+            HStack {
+                Text("Installs with pi, shared with the pi CLI").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                Spacer()
+                Button("Cancel", action: done).buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
+                Button(installing ? "Installing…" : "Install") { install() }
+                    .buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+                    .disabled(preview?.ok != true || installing)
+            }
+            .padding(.top, 18)
+        }
+        .padding(22)
+        .frame(width: 600)
+        .background(Color.dsWin)
+        .onAppear { focused = true }
+        .task(id: normalized) {
+            preview = nil
+            guard !normalized.isEmpty else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled, let client = engine.client else { return }
+            checking = true
+            preview = try? await client.call("packages.preview", PackageParams(source: normalized), as: PackagePreview.self)
+            checking = false
+        }
+    }
+
+    private func previewCard(_ p: PackagePreview) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                PackageTile(extensions: p.extensions.count, skills: p.skills.count, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(p.name ?? normalized).font(.system(size: 14, weight: .semibold))
+                        Text([p.version, p.author.map { "by \($0)" }].compactMap { $0 }.joined(separator: " · ")).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    }
+                    if let d = p.description { Text(d).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(2) }
+                }
+                Spacer()
+            }
+            .padding(14)
+            RowDivider(inset: 0)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("What it adds").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                if !p.contentsKnown {
+                    part(.dsFg3, "Contents", "shown after installing", "Can't read it before")
+                }
+                if !p.extensions.isEmpty { part(.dsAmber, p.extensions.count == 1 ? "Extension" : "\(p.extensions.count) extensions", p.extensions.joined(separator: ", "), "Build only · runs code") }
+                if !p.skills.isEmpty { part(.dsGreen, "\(p.skills.count) skill\(p.skills.count == 1 ? "" : "s")", p.skills.joined(separator: ", "), "Everywhere") }
+                if !p.prompts.isEmpty { part(.dsGreen, "\(p.prompts.count) template\(p.prompts.count == 1 ? "" : "s")", p.prompts.map { "/\($0)" }.joined(separator: ", "), "Everywhere") }
+                if !p.themes.isEmpty { part(.dsFg3.opacity(0.5), "Themes", p.themes.joined(separator: ", "), "Not shown in Piopio", muted: true) }
+                if !p.extensions.isEmpty { part(.dsFg3.opacity(0.5), "Terminal panels", nil, "Not shown in Piopio", muted: true) }
+                if p.contentsKnown, p.extensions.isEmpty, p.skills.isEmpty, p.prompts.isEmpty, p.themes.isEmpty {
+                    Text("Nothing pi can load was found in it.").font(.system(size: 12.5)).foregroundStyle(Color.dsAmber)
+                }
+            }
+            .padding(14)
+        }
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+    }
+
+    private func part(_ dot: Color, _ title: String, _ names: String?, _ where_: String, muted: Bool = false) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(dot).frame(width: 6, height: 6)
+            (Text(title).fontWeight(.semibold) + Text(names.map { ": \($0)" } ?? ""))
+                .font(.system(size: 12.5)).foregroundStyle(muted ? Color.dsFg3 : Color.dsFg).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 10)
+            Text(where_).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize()
         }
     }
 
@@ -86,87 +324,151 @@ struct ExtensionsPane: View {
     }
 
     private func install() {
-        let s = source.trimmingCharacters(in: .whitespaces)
-        guard !s.isEmpty else { return }
-        let alert = NSAlert()
-        alert.messageText = "Install \(s)?"
-        alert.informativeText = "A pi package can add extensions that run code with your permissions in Build sessions, and skills that tell the agent what to do. Install packages you trust; check the source first."
-        alert.addButton(withTitle: "Install")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        act("install") {
-            try await engine.spaceCall("packages.install", PackageParams(source: s))
-            source = ""
+        installing = true
+        error = nil
+        Task {
+            do {
+                try await engine.spaceCall("packages.install", PackageParams(source: normalized))
+                done()
+            } catch {
+                self.error = (error as? EngineError)?.message ?? String(describing: error)
+            }
+            installing = false
+        }
+    }
+}
+
+// MARK: - Package page
+
+private struct PackageDetail: View {
+    let engine: EngineController
+    let package: PiPackage
+    let back: () -> Void
+    let changed: () -> Void
+    @State private var working = false
+    @State private var removing = false
+    @State private var error: String?
+
+    var body: some View {
+        let r = package.resources
+        SettingsDetail(back: "Extensions", title: PackageText.name(package), goBack: back, footer: impact, remove: "Uninstall…", onRemove: { removing = true }) {
+            PackageTile(extensions: r.extensions.count, skills: r.skills.count, size: 48)
+        } status: {
+            if !package.installed {
+                StatusText(color: .dsRed, text: "Not installed · run Update to install it")
+            } else if let latest = package.latest {
+                StatusText(color: .dsAmber, text: "\(package.version ?? "") installed · \(latest) available")
+            } else {
+                StatusText(color: package.enabled ? .dsGreen : .dsFg3, text: [package.enabled ? "On" : "Off", package.kind == "local" ? "folder" : package.kind ?? "npm", package.version].compactMap { $0 }.joined(separator: " · "))
+            }
+        } actions: {
+            if package.latest != nil || package.kind == "git" || !package.installed {
+                Button(working ? "Updating…" : package.latest.map { "Update to \($0)" } ?? "Update") { update() }
+                    .buttonStyle(PillStyle(kind: package.latest != nil ? .primary : .secondary, compact: true)).disabled(working)
+            }
+        } content: {
+            if let description = package.description { Text(description).font(.system(size: 13)).foregroundStyle(Color.dsFg2) }
+            VStack(alignment: .leading, spacing: 0) {
+                CardTitle("Package")
+                ListCard {
+                    ToggleRow(title: "Turned on", subtitle: "Off: nothing of it loads, here or in the pi CLI", isOn: Binding(get: { package.enabled }, set: { on in
+                        act { try await engine.spaceCall("packages.setEnabled", PackageEnableParams(source: package.source, enabled: on)) }
+                    }))
+                    info("Source", package.source, mono: true)
+                    if let path = package.installedPath {
+                        HStack(spacing: 10) {
+                            Text("Installed in").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).frame(width: 110, alignment: .leading)
+                            Text(path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                            Spacer()
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+                                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+                        }
+                        .padding(.horizontal, 14).frame(minHeight: 40)
+                    }
+                }
+            }
+            section("Extensions", "extensions", r.extensions, where_: "Build only · runs code")
+            section("Skills", "skills", r.skills, where_: "Everywhere")
+            section("Templates", "prompts", r.prompts, where_: "Everywhere", slash: true)
+            section("Themes", "themes", r.themes, where_: "Not shown in Piopio")
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+        }
+        .alert("Uninstall \(PackageText.name(package))?", isPresented: $removing) {
+            Button("Uninstall", role: .destructive) {
+                act { try await engine.spaceCall("packages.remove", PackageParams(source: package.source)) }
+                back()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(impact) The pi CLI stops loading it too.")
         }
     }
 
-    private func act(_ what: String, _ work: @escaping () async throws -> Void) {
-        working = what
+    private var impact: String {
+        let r = package.resources
+        var parts: [String] = []
+        if !r.skills.isEmpty || !r.prompts.isEmpty { parts.append("its skills and templates leave every chat") }
+        if !r.extensions.isEmpty { parts.append("its extension leaves Build") }
+        return parts.isEmpty ? "Uninstalling removes it from Piopio and the pi CLI." : "Uninstalling: \(parts.joined(separator: "; "))."
+    }
+
+    @ViewBuilder private func section(_ title: String, _ kind: String, _ items: [PiPackage.Resource], where_: String, slash: Bool = false) -> some View {
+        if !items.isEmpty || package.off.contains(kind) {
+            let kindOn = !package.off.contains(kind)
+            VStack(alignment: .leading, spacing: 0) {
+                CardTitle(title: title, detail: where_) {
+                    Toggle("", isOn: Binding(get: { kindOn }, set: { on in
+                        act { try await engine.spaceCall("packages.setEnabled", PackageEnableParams(source: package.source, enabled: on, kinds: [kind])) }
+                    }))
+                    .toggleStyle(.switch).controlSize(.mini).labelsHidden().help("All of its \(title.lowercased())")
+                }
+                ListCard {
+                    if items.isEmpty { Text("Turned off").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading) }
+                    ForEach(Array(items.enumerated()), id: \.element.path) { i, item in
+                        HStack(spacing: 10) {
+                            Text((slash ? "/" : "") + PackageText.resource(item.path)).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(item.enabled && kindOn ? Color.dsFg : Color.dsFg3)
+                            Spacer()
+                            Toggle("", isOn: Binding(get: { item.enabled }, set: { on in
+                                act { try await engine.spaceCall("packages.setResource", PackageResourceParams(source: package.source, kind: kind, path: item.path, enabled: on)) }
+                            }))
+                            .toggleStyle(.switch).controlSize(.mini).labelsHidden().disabled(!kindOn)
+                        }
+                        .padding(.horizontal, 14).frame(minHeight: 38)
+                        if i < items.count - 1 { RowDivider(inset: 14) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func info(_ label: String, _ value: String, mono: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Text(label).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).frame(width: 110, alignment: .leading)
+                Text(value).font(.system(size: 12, design: mono ? .monospaced : .default)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                Spacer()
+            }
+            .padding(.horizontal, 14).frame(minHeight: 40)
+            RowDivider(inset: 14)
+        }
+    }
+
+    private func update() {
+        working = true
+        act { try await engine.spaceCall("packages.update", PackageParams(source: package.source)) }
+    }
+
+    private func act(_ work: @escaping () async throws -> Void) {
         error = nil
         Task {
             do { try await work() } catch { self.error = (error as? EngineError)?.message ?? String(describing: error) }
-            working = nil
-            await load()
+            working = false
+            changed()
         }
-    }
-
-    private func load() async {
-        packages = (try? await engine.client?.call("packages.list", Empty(), as: PackagesResult.self).packages) ?? []
     }
 }
 
 // MARK: Memory providers
-
-/// Where About me lives, and the MCP memory providers (07-shared §6.2).
-struct MemoryProvidersSection: View {
-    let engine: EngineController
-    @State private var editing: McpMemoryProvider?
-    @State private var trying: McpMemoryProvider?
-
-    private var providers: [McpMemoryProvider] { engine.settings?.memory.providers ?? [] }
-
-    var body: some View {
-        HStack {
-            SectionLabel("Memory providers")
-            Spacer()
-            Button("+ MCP memory") { editing = McpMemoryProvider(id: UUID().uuidString.lowercased(), name: "", tools: .init(recall: .init(tool: "", args: [:]))) }
-                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
-        }
-        .padding(.bottom, 6)
-        ListCard {
-            Row(title: "Built-in", last: providers.isEmpty) {
-                Text("On this Mac: facts and messages with their sources, keyword search and recency").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                Spacer()
-            }
-            ForEach(providers) { p in
-                Row(title: p.name, last: p.id == providers.last?.id) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(p.url ?? "MCP server “\(p.server ?? "")”").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1)
-                        if p.tools.list == nil { Text("Limited visibility: it can't list what it stores").font(.system(size: 11)).foregroundStyle(Color.dsAmber) }
-                    }
-                    Spacer()
-                    Button("Try…") { trying = p }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
-                    Button("Edit…") { editing = p }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
-                    Button { save(providers.filter { $0.id != p.id }) } label: { Image(systemName: "trash") }.buttonStyle(.plain).foregroundStyle(Color.dsFg3)
-                }
-            }
-        }
-        .sheet(item: $editing) { p in
-            McpMemoryEditor(engine: engine, provider: p) { saved in
-                save(providers.contains { $0.id == saved.id } ? providers.map { $0.id == saved.id ? saved : $0 } : providers + [saved])
-            }
-        }
-        .sheet(item: $trying) { p in MemoryTrySheet(engine: engine, provider: p) }
-    }
-
-    private func save(_ next: [McpMemoryProvider]) {
-        Task {
-            var patch = SettingsPatch(memory: .init(providers: next))
-            if let current = engine.settings?.aboutMe.provider, current != "builtin", !next.contains(where: { $0.id == current }) { patch.aboutMe = .init(provider: "builtin") }
-            await engine.updateSettings(patch)
-        }
-    }
-}
 
 /// An MCP memory provider: the server (or URL), then a tool and its arguments for each operation.
 struct McpMemoryEditor: View {

@@ -10,6 +10,7 @@ import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
 import { connectorTools } from "../src/connectors/tools.js";
 import { detectOtherApps } from "../src/mcp-probe.js";
+import { Packages } from "../src/packages.js";
 import { titleFrom } from "../src/sessions.js";
 import { TestClient } from "./client.js";
 
@@ -1315,8 +1316,10 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		mkdirSync(join(pkg, "prompts"));
 		writeFileSync(join(pkg, "prompts", "summarize.md"), "---\ndescription: Summarize something briefly\nargument-hint: <what> <words>\n---\nSummarize $1 in $2 words.\n");
 
+		expect(await a.client.call("packages.preview", { source: pkg })).toEqual({ ok: true, kind: "local", name: "demo-pi-package", version: "1.0.0", extensions: [], skills: ["greet"], prompts: ["summarize"], themes: [], contentsKnown: true });
 		await a.client.call("packages.install", { source: pkg });
 		const [installed] = (await a.client.call("packages.list", {})).packages;
+		expect(installed).toMatchObject({ kind: "local", name: "demo-pi-package", version: "1.0.0" });
 		// pi keeps local paths relative to its settings file; the listed source is the one to pass back.
 		expect(installed).toMatchObject({ source: expect.stringContaining(basename(pkg)), enabled: true, off: [] });
 		const source = installed!.source;
@@ -1341,6 +1344,12 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		snap = await idleWith(a, ref, (s) => s.state.status === "idle" && s.items.some((i) => i.kind === "tool" && i.status === "done"));
 		expect(snap.items.find((i) => i.kind === "tool")).toMatchObject({ tool: "read_skill", output: expect.stringContaining("Bon dia!") });
 
+		const skill = installed!.resources.skills[0]!.path;
+		await a.client.call("packages.setResource", { source, kind: "skills", path: skill, enabled: false });
+		expect((await a.client.call("packages.list", {})).packages[0]!.resources.skills[0]).toMatchObject({ enabled: false });
+		await a.client.call("packages.setResource", { source, kind: "skills", path: skill, enabled: true });
+		expect((await a.client.call("packages.list", {})).packages[0]!.resources.skills[0]).toMatchObject({ enabled: true });
+
 		await a.client.call("packages.setEnabled", { source, enabled: false });
 		expect((await a.client.call("packages.list", {})).packages[0]).toMatchObject({ enabled: false, off: ["extensions", "skills", "prompts", "themes"] });
 		// Only this package's commands go (the user's own skills, which pi also finds, stay).
@@ -1352,6 +1361,17 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		await a.client.call("packages.remove", { source });
 		expect((await a.client.call("packages.list", {})).packages).toEqual([]);
 	}, 60_000);
+
+	test("an npm package is previewed from the registry and its file list before installing", async () => {
+		const fake = (async (url: string) => {
+			if (url === "https://registry.npmjs.org/@mario%2Fpi-review/latest") return Response.json({ name: "@mario/pi-review", version: "1.5.0", description: "Code review commands", author: "mario <m@x.dev>" });
+			if (url.startsWith("https://data.jsdelivr.com/v1/packages/npm/@mario/pi-review@1.5.0")) return Response.json({ files: [{ name: "/package.json" }, { name: "/extensions/review.ts" }, { name: "/skills/security-review/SKILL.md" }, { name: "/skills/perf-review/SKILL.md" }] });
+			return new Response("no", { status: 404 });
+		}) as typeof fetch;
+		const packages = new Packages(mkdtempSync(join(tmpdir(), "piopio-agent-")), fake);
+		expect(await packages.preview("npm:@mario/pi-review")).toEqual({ ok: true, kind: "npm", name: "@mario/pi-review", version: "1.5.0", description: "Code review commands", author: "mario", extensions: ["review"], skills: ["security-review", "perf-review"], prompts: [], themes: [], contentsKnown: true });
+		expect(await packages.preview("npm:@nobody/nothing")).toMatchObject({ ok: false, error: "No package @nobody/nothing on npm." });
+	});
 
 	test("About me lives in the built-in provider: the old doc comes in, edits and Undo are grouped changes", async () => {
 		const home = mkdtempSync(join(tmpdir(), "piopio-test-"));

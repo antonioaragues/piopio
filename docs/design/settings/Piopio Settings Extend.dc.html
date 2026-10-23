@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+:root{--win:#fdfdfc;--glass:rgba(242,242,246,.78);--card:#fff;--chip:rgba(0,0,0,.045);--pill:rgba(255,255,255,.9);--fg:#1d1d1f;--fg2:#5b5b61;--fg3:#8e8e93;--line:rgba(0,0,0,.08);--inv:#1d1d1f;--invfg:#fff;--green:oklch(0.6 0.15 150);--amber:oklch(0.72 0.15 70);--red:oklch(0.6 0.19 25);--accent:#0a84ff;--accentSoft:color-mix(in srgb,var(--accent) 14%,transparent);--accentLine:color-mix(in srgb,var(--accent) 45%,transparent);--yolkSoft:oklch(0.97 0.04 92);--scrim:rgba(30,30,35,.28);--canvas:#e8e8eb;--mono:"SF Mono",ui-monospace,Menlo,monospace}
+body[data-theme="dark"]{--win:#1a1a1c;--glass:rgba(40,40,44,.85);--card:#242426;--chip:rgba(255,255,255,.08);--pill:rgba(74,74,78,.95);--fg:#f5f5f7;--fg2:#b8b8bd;--fg3:#8e8e93;--line:rgba(255,255,255,.12);--inv:#f5f5f7;--invfg:#1d1d1f;--accentSoft:color-mix(in srgb,var(--accent) 26%,transparent);--accentLine:color-mix(in srgb,var(--accent) 60%,transparent);--yolkSoft:oklch(0.3 0.05 92);--scrim:rgba(0,0,0,.5);--canvas:#0e0e10}
+body{margin:0;background:var(--canvas);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+</style>
+</helmet>
+
+<header style="padding:56px 80px 0;display:flex;flex-direction:column;gap:24px;max-width:1400px">
+  <div style="display:flex;align-items:center;gap:16px">
+    <img src="assets/chick.png" style="width:48px;height:48px;border-radius:12px">
+    <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:30px;font-weight:700;letter-spacing:-0.02em">Settings · Connectors, Chat, MCP, Extensions, This Mac</div><div style="font-size:15px;color:var(--fg2)">Same pattern as <a href="Piopio Settings Models.dc.html">Models</a>. Back to <a href="Piopio v2.dc.html">Piopio v2</a>.</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px">
+    <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;color:var(--fg3)">01 · Summary line</div><div style="font-size:13.5px;line-height:1.55;color:var(--fg2)">Under the title, one line of facts ("2 servers · 14 tools") instead of a paragraph explaining the feature.</div></div>
+    <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;color:var(--fg3)">02 · One add button</div><div style="font-size:13.5px;line-height:1.55;color:var(--fg2)">Top-right "+ Add …" in the same place on every page. Adding happens in a sheet that tests things before saving.</div></div>
+    <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;color:var(--fg3)">03 · Rows push a detail</div><div style="font-size:13.5px;line-height:1.55;color:var(--fg2)">List rows show status and a count, then ›. Edit, permissions and Remove live on the detail page.</div></div>
+    <div style="background:var(--card);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;color:var(--fg3)">04 · Footnotes go</div><div style="font-size:13.5px;line-height:1.55;color:var(--fg2)">The fine print ("codemode", "terminal-UI parts") moves next to the control it affects, or into the detail page.</div></div>
+  </div>
+</header>
+
+<section style="padding:64px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">1 · Connectors</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Same model as Models. The page lists only what's connected. <b>Adding</b> is a sheet with the catalog (c3), then a connect step where you choose permissions (c4). <b>Editing</b> is a detail page inside Settings (c2). This scales from 2 connectors to 40.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="c0" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">c0</span><span style="font-size:15px;font-weight:600">Nothing connected yet</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Settings Sidebar" active="connectors" hint-size="230px,100%"></dc-import>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px">
+          <div style="width:100%;max-width:500px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+            <img src="assets/chick.png" style="width:64px;height:64px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 6px var(--yolkSoft)">
+            <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Connect your apps</div>
+            <div style="font-size:14px;line-height:1.5;color:var(--fg2);max-width:420px">Connect once and any chat, notebook or agent can use it. Reading runs on its own; changes ask you first.</div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:8px;text-align:left;padding-top:8px">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line)">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.62 0.17 255);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center">▦</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">Google Calendar</span><span style="font-size:12px;color:var(--fg2)">Your day in every briefing</span></div>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Connect</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line)">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.55 0.17 250);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center">✉</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">Outlook</span><span style="font-size:12px;color:var(--fg2)">Calendar and mail</span></div>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Connect</span>
+              </div>
+            </div>
+            <span style="font-size:13px;color:var(--accent);padding-top:6px">Browse all connectors…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="c1" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">c1</span><span style="font-size:15px;font-weight:600">Connectors page</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Settings Sidebar" active="connectors" hint-size="230px,100%"></dc-import>
+        <div style="flex:1;padding:30px 36px;display:flex;flex-direction:column;gap:22px;min-width:0">
+          <div style="display:flex;align-items:flex-end;gap:12px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Connectors</div><div style="font-size:13.5px;color:var(--fg2)">2 connected · used by chats, notebooks and agents</div></div>
+            <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--inv);color:var(--invfg);font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px"><span style="font-size:15px;line-height:1">+</span>Add connector</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">Connected</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.62 0.17 255);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">▦</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">Google Calendar</span><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span></div><span style="font-size:12px;color:var(--fg3)">antonio@gmail.com · reads freely, asks before changes</span></div>
+                <span style="font-size:12px;color:var(--fg3)">Used by Daily briefing</span>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+              <div style="height:.5px;background:var(--line);margin-left:62px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.55 0.17 250);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">✉</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">Outlook</span><span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span></div><span style="font-size:12px;color:var(--amber)">Sign-in expired · <span style="color:var(--accent)">Sign in again</span></span></div>
+                <span style="font-size:12px;color:var(--fg3)">Not used yet</span>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <span style="font-size:12px;color:var(--fg3)">Reading runs on its own; anything that changes something asks you first. Change it per connector.</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="c2" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">c2</span><span style="font-size:15px;font-weight:600">Connector detail</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Settings Sidebar" active="connectors" hint-size="230px,100%"></dc-import>
+        <div style="flex:1;padding:24px 36px;display:flex;flex-direction:column;gap:18px;min-width:0">
+          <span style="font-size:13px;color:var(--accent)">‹ Connectors</span>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:48px;height:48px;border-radius:12px;background:oklch(0.62 0.17 255);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center">▦</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Google Calendar</span><span style="font-size:12.5px;color:var(--fg2);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>Connected as antonio@gmail.com · 3 calendars</span></div>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--chip);font-size:12px;display:flex;align-items:center">Switch account</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">What it can do</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Read events and find free time</span><span style="font-size:11.5px;color:var(--fg3)">list_events, free_busy</span></div><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>Runs <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Create and change events</span><span style="font-size:11.5px;color:var(--fg3)">create_event, update_event</span></div><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span>Asks first <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Delete events</span><span style="font-size:11.5px;color:var(--fg3)">delete_event</span></div><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--fg3)"></span>Off <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">Calendars</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px"><span style="width:10px;height:10px;border-radius:3px;background:oklch(0.62 0.17 255)"></span><span style="flex:1">Antonio</span><span style="width:30px;height:18px;border-radius:9px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff"></span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:36px"></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px"><span style="width:10px;height:10px;border-radius:3px;background:oklch(0.65 0.15 150)"></span><span style="flex:1">Familia</span><span style="width:30px;height:18px;border-radius:9px;background:var(--green);position:relative;display:block"><span style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff"></span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:36px"></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px"><span style="width:10px;height:10px;border-radius:3px;background:oklch(0.7 0.13 60)"></span><span style="flex:1;color:var(--fg2)">Festivos en España</span><span style="width:30px;height:18px;border-radius:9px;background:var(--chip);box-shadow:inset 0 0 0 .5px var(--line);position:relative;display:block"><span style="position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span></span></div>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:12px;padding-top:8px;border-top:.5px solid var(--line)">
+            <span style="flex:1;font-size:12px;color:var(--fg3)">Used by Daily briefing. Disconnecting removes calendar access from it.</span>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--chip);color:var(--red);font-size:12px;font-weight:500;display:flex;align-items:center">Disconnect…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="c3" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">c3</span><span style="font-size:15px;font-weight:600">Add connector sheet</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--scrim);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;justify-content:center;padding-top:28px;box-sizing:border-box">
+        <div style="width:800px;height:620px;border-radius:16px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 30px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:.5px solid var(--line)">
+            <span style="font-size:17px;font-weight:700">Add a connector</span>
+            <div style="flex:1;height:30px;border-radius:8px;background:var(--chip);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;color:var(--fg3)"><span>⌕</span>Search apps</div>
+            <span style="height:28px;padding:0 12px;border-radius:14px;background:var(--chip);font-size:12px;display:flex;align-items:center">Cancel</span>
+          </div>
+          <div style="flex:1;display:flex;min-height:0">
+            <div style="width:190px;padding:12px 8px;display:flex;flex-direction:column;gap:2px;font-size:13px;border-right:.5px solid var(--line)">
+              <span style="padding:6px 10px;border-radius:7px;background:var(--accentSoft);font-weight:600">All</span>
+              <span style="padding:6px 10px;display:flex;justify-content:space-between">Calendar &amp; mail<span style="color:var(--fg3)">3</span></span>
+              <span style="padding:6px 10px;display:flex;justify-content:space-between">Files &amp; docs<span style="color:var(--fg3)">2</span></span>
+              <span style="padding:6px 10px;display:flex;justify-content:space-between">Team chat<span style="color:var(--fg3)">1</span></span>
+              <span style="padding:6px 10px;display:flex;justify-content:space-between">Dev &amp; ops<span style="color:var(--fg3)">3</span></span>
+              <div style="flex:1"></div>
+              <div style="height:.5px;background:var(--line);margin:6px 4px"></div>
+              <span style="padding:7px 10px;border-radius:7px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:8px"><span style="width:18px;height:18px;border-radius:5px;background:var(--accentSoft);display:flex;align-items:center;justify-content:center;font-size:12px">⌁</span>Use an MCP server</span>
+            </div>
+            <div style="flex:1;padding:16px 18px;display:flex;flex-direction:column;gap:16px;min-width:0;overflow:hidden">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:11px;font-weight:600;color:var(--fg3)">Available</span>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.62 0.17 255);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">▦</div><span style="font-size:12px;color:var(--green);font-weight:600">✓ Connected</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Google Calendar</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Read your calendars, find free time, create events</span></div>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.55 0.17 250);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">✉</div><span style="font-size:12px;color:var(--green);font-weight:600">✓ Connected</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Outlook</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Calendar and mail: events, messages, drafts</span></div>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:11px;font-weight:600;color:var(--fg3)">Coming soon</span>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;opacity:.6">
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.6 0.19 25);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">M</div><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Soon</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Gmail</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Search, read and draft email</span></div>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.62 0.15 145);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">D</div><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Soon</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Google Drive</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Find and read your files</span></div>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.5 0.15 330);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">S</div><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Soon</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Slack</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Read channels, send messages</span></div>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.3 0 0);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">N</div><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Soon</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Notion</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Pages and databases</span></div>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.55 0.17 255);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">J</div><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Soon</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Jira</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Issues and sprints</span></div>
+                  </div>
+                  <div style="border-radius:12px;background:var(--card);box-shadow:0 0 0 .5px var(--line);padding:12px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><div style="width:32px;height:32px;border-radius:8px;background:oklch(0.25 0 0);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center">GH</div><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Soon</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">GitHub</span><span style="font-size:11.5px;line-height:1.4;color:var(--fg2)">Issues, PRs and repos</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="c4" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">c4</span><span style="font-size:15px;font-weight:600">Connect step</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--scrim);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;justify-content:center;padding-top:28px;box-sizing:border-box">
+        <div style="width:560px;align-self:flex-start;border-radius:16px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 30px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden">
+          <div style="padding:18px 20px 6px"><span style="font-size:13px;color:var(--accent)">‹ All connectors</span></div>
+          <div style="padding:8px 24px 22px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:44px;height:44px;border-radius:11px;background:oklch(0.62 0.17 255);color:#fff;font-size:19px;display:flex;align-items:center;justify-content:center">▦</div>
+              <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:19px;font-weight:700">Google Calendar</span><span style="font-size:12.5px;color:var(--fg2)">Read your calendars, find free time, create or change events</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:13px;font-weight:600">What it can do</span>
+              <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><span style="flex:1;font-size:13px">Read events and find free time</span><span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>Runs <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+                <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><span style="flex:1;font-size:13px">Create and change events</span><span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span>Asks first <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+                <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><span style="flex:1;font-size:13px">Delete events</span><span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--fg3)"></span>Off <span style="font-size:9px;color:var(--fg3)">⌄</span></span></div>
+              </div>
+              <span style="font-size:12px;color:var(--fg3)">Safe defaults. You can change these any time.</span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px">
+              <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--chip);font-size:12.5px;display:flex;align-items:center">Cancel</span>
+              <span style="height:30px;padding:0 16px;border-radius:15px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;display:flex;align-items:center">Sign in with Google…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:96px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">2 · Chat</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Today, side-by-side checkboxes and a toggle read as one setting, and "About me" is an empty text box with five controls around it. Now there are two grouped cards: Suggestions, and About me as a fact list (same as notebook memory) with its settings beneath.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="h1" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">h1</span><span style="font-size:15px;font-weight:600">Chat settings with About me</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Settings Sidebar" active="chat" hint-size="230px,100%"></dc-import>
+        <div style="flex:1;padding:30px 36px;display:flex;flex-direction:column;gap:20px;min-width:0">
+          <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Chat</div><div style="font-size:13.5px;color:var(--fg2)">Chats and notebooks</div></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">Suggestions</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Suggest follow-up messages</span><span style="font-size:11.5px;color:var(--fg3)">A few replies under each answer</span></div><span style="width:32px;height:19px;border-radius:10px;background:var(--green);position:relative;display:block;flex:none"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff"></span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Suggest moving a chat into a notebook</span><span style="font-size:11.5px;color:var(--fg3)">When a conversation grows into a subject</span></div><span style="width:32px;height:19px;border-radius:10px;background:var(--green);position:relative;display:block;flex:none"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff"></span></span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">About me <span style="font-weight:400;color:var(--fg3)">3 facts</span></span><span style="font-size:12px;color:var(--accent)">History</span></div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr) auto;gap:12px;padding:10px 16px;align-items:center"><span style="font-size:11px;font-weight:600;color:var(--fg3)">Name</span><span style="font-size:13px">Antonio</span><span style="font-size:11.5px;color:var(--fg3)">You</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr) auto;gap:12px;padding:10px 16px;align-items:center"><span style="font-size:11px;font-weight:600;color:var(--fg3)">Lives in</span><span style="font-size:13px">Bilbao</span><span style="font-size:11.5px;color:var(--fg3)">Learned · Daily briefing</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr) auto;gap:12px;padding:10px 16px;align-items:center"><span style="font-size:11px;font-weight:600;color:var(--fg3)">Prefers</span><span style="font-size:13px">Answers in Spanish, short and direct</span><span style="font-size:11.5px;color:var(--fg3)">You</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="padding:10px 16px;font-size:13px;color:var(--fg3)">+ Add something about you…</div>
+            </div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;font-size:13px"><span style="flex:1">Share with</span><div style="display:flex;padding:2px;border-radius:999px;background:var(--chip);font-size:12px"><span style="padding:3px 11px;border-radius:999px;background:var(--pill);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)">Chats &amp; notebooks</span><span style="padding:3px 11px;color:var(--fg2)">+ Agents</span><span style="padding:3px 11px;color:var(--fg2)">Nobody</span></div></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 16px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Learn from conversations</span><span style="font-size:11.5px;color:var(--fg3)">New facts show in the chat with Undo</span></div><span style="width:32px;height:19px;border-radius:10px;background:var(--green);position:relative;display:block;flex:none"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff"></span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;font-size:13px"><span style="flex:1">Stored in</span><span style="height:24px;padding:0 10px;border-radius:12px;background:var(--chip);font-size:12px;display:flex;align-items:center">Piopio ⌄</span></div>
+            </div>
+            <span style="font-size:11.5px;color:var(--fg3)">Never shared with Build sessions.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:96px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">3 · MCP servers</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">Mirrors Models: a connected list, "+ Add server" top right, and a sheet that tests the server and lists its tools before saving. The "In Chat" toggle moves to each server's detail, so it's clear which tools run where and whether they ask first.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="p0" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">p0</span><span style="font-size:15px;font-weight:600">No servers yet</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Settings Sidebar" active="mcp" hint-size="230px,100%"></dc-import>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px">
+          <div style="width:100%;max-width:500px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+            <img src="assets/chick.png" style="width:64px;height:64px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 6px var(--yolkSoft)">
+            <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em">Give the agent more tools</div>
+            <div style="font-size:14px;line-height:1.5;color:var(--fg2);max-width:420px">MCP servers add tools like a browser, a database or your company's APIs. Piopio shares them with the pi CLI.</div>
+            <span style="height:30px;padding:0 16px;border-radius:15px;background:var(--inv);color:var(--invfg);font-size:12.5px;font-weight:600;display:flex;align-items:center;margin-top:4px">+ Add server</span>
+            <div style="width:100%;display:flex;flex-direction:column;gap:6px;text-align:left;padding-top:14px">
+              <span style="font-size:11px;font-weight:600;color:var(--fg3)">Found in other apps</span>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--yolkSoft)">
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">3 servers in Claude Desktop</span><span style="font-size:12px;color:var(--fg2)">playwright, postgres, linear</span></div>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--card);font-size:12px;display:flex;align-items:center">Review &amp; import</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="p1" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">p1</span><span style="font-size:15px;font-weight:600">Servers list</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Settings Sidebar" active="mcp" hint-size="230px,100%"></dc-import>
+        <div style="flex:1;padding:30px 36px;display:flex;flex-direction:column;gap:22px;min-width:0">
+          <div style="display:flex;align-items:flex-end;gap:12px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">MCP servers</div><div style="font-size:13.5px;color:var(--fg2)">3 servers · 31 tools · shared with the pi CLI</div></div>
+            <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--inv);color:var(--invfg);font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px"><span style="font-size:15px;line-height:1">+</span>Add server</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">For all projects</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.6 0.14 150);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">PW</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">playwright</span><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span></div><span style="font-size:12px;color:var(--fg3)"><span style="font-family:var(--mono)">npx @playwright/mcp</span> · 21 tools</span></div>
+                <span style="height:20px;padding:0 8px;border-radius:10px;background:var(--chip);font-size:11px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Build + Chat</span>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+              <div style="height:.5px;background:var(--line);margin-left:62px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.55 0.15 280);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">LN</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">linear</span><span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span></div><span style="font-size:12px;color:var(--amber)">Sign-in expired · <span style="color:var(--accent)">Sign in again</span></span></div>
+                <span style="height:20px;padding:0 8px;border-radius:10px;background:var(--chip);font-size:11px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Build</span>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">In financial_ia only</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.55 0.1 240);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">PG</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">postgres</span><span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span></div><span style="font-size:12px;color:var(--fg3)"><span style="font-family:var(--mono)">.pi/mcp.json</span> · 6 tools · trusted project</span></div>
+                <span style="height:20px;padding:0 8px;border-radius:10px;background:var(--chip);font-size:11px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Build</span>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <span style="font-size:12px;color:var(--fg3)">Changes apply to sessions you start or reopen.</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="p2" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">p2</span><span style="font-size:15px;font-weight:600">Add server sheet</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--scrim);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;justify-content:center;padding-top:28px;box-sizing:border-box">
+        <div style="width:600px;align-self:flex-start;border-radius:16px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 30px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden">
+          <div style="padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:19px;font-weight:700">Add an MCP server</span><span style="font-size:12.5px;color:var(--fg2)">Run a command on this Mac, or connect to a URL</span></div>
+            <div style="display:flex;padding:2px;border-radius:999px;background:var(--chip);font-size:12px;align-self:flex-start"><span style="padding:4px 14px;border-radius:999px;background:var(--pill);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)">Command</span><span style="padding:4px 14px;color:var(--fg2)">URL</span><span style="padding:4px 14px;color:var(--fg2)">Paste JSON</span></div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:10px 14px;align-items:center;font-size:13px"><span style="color:var(--fg2)">Name</span><span>playwright</span></div>
+              <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:10px 14px;align-items:center;font-size:13px;background:var(--accentSoft)"><span style="color:var(--fg2)">Command</span><span style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-family:var(--mono);font-size:12.5px">npx @playwright/mcp@latest</span><span style="font-size:12px;color:var(--green);font-weight:600">● Started · 1.2 s</span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:10px 14px;align-items:center;font-size:13px"><span style="color:var(--fg2)">Available to</span><div style="display:flex;padding:2px;border-radius:999px;background:var(--chip);font-size:12px;justify-self:start"><span style="padding:3px 12px;border-radius:999px;background:var(--pill);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)">All projects</span><span style="padding:3px 12px;color:var(--fg2)">One project…</span></div></div>
+              <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:13px;color:var(--fg2)"><span style="font-size:10px">›</span>Environment variables <span style="color:var(--fg3);font-size:12px">secrets go to Keychain</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Found 21 tools</span><span style="font-size:12px;color:var(--fg3)">browser_navigate, browser_click, browser_snapshot +18</span></div>
+              <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Use in Build sessions</span><span style="font-size:11.5px;color:var(--fg3)">Follows your Approvals settings</span></div><span style="width:32px;height:19px;border-radius:10px;background:var(--green);position:relative;display:block;flex:none"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff"></span></span></div>
+                <div style="height:.5px;background:var(--line);margin-left:14px"></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 14px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Use in chats and notebooks</span><span style="font-size:11.5px;color:var(--amber)">Tools run there without asking</span></div><span style="width:32px;height:19px;border-radius:10px;background:var(--chip);box-shadow:inset 0 0 0 .5px var(--line);position:relative;display:block;flex:none"><span style="position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span></span></div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding-top:4px">
+              <span style="font-size:12px;color:var(--fg3);flex:1">Saved to ~/.pi/mcp.json</span>
+              <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--chip);font-size:12.5px;display:flex;align-items:center">Cancel</span>
+              <span style="height:30px;padding:0 16px;border-radius:15px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;display:flex;align-items:center">Add server</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:96px 80px 0;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">4 · Extensions</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">The install field leaves the page and becomes "+ Install" with a preview: what the package contains and where each part works, before anything runs. Installed packages say what they add (extension, skills, templates) in plain words.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="e1" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">e1</span><span style="font-size:15px;font-weight:600">Installed packages</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Settings Sidebar" active="extensions" hint-size="230px,100%"></dc-import>
+        <div style="flex:1;padding:30px 36px;display:flex;flex-direction:column;gap:22px;min-width:0">
+          <div style="display:flex;align-items:flex-end;gap:12px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Extensions</div><div style="font-size:13.5px;color:var(--fg2)">3 packages · 1 update · shared with the pi CLI</div></div>
+            <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--chip);font-size:12.5px;font-weight:500;display:flex;align-items:center">Browse pi.dev ↗</span>
+            <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--inv);color:var(--invfg);font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px"><span style="font-size:15px;line-height:1">+</span>Install</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">Installed</span><span style="font-size:12px;color:var(--accent)">Update all</span></div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.6 0.16 290);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">◆</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:14px;font-weight:600">@mario/pi-review</span><div style="display:flex;gap:4px;align-items:center"><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Extension · Build</span><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">2 skills</span><span style="font-size:11.5px;color:var(--fg3);margin-left:4px">npm · 1.4.0</span></div></div>
+                <span style="height:24px;padding:0 10px;border-radius:12px;background:var(--accentSoft);color:var(--accent);font-size:11.5px;font-weight:600;display:flex;align-items:center">Update to 1.5</span>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+              <div style="height:.5px;background:var(--line);margin-left:62px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.7 0.14 60);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">✎</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:14px;font-weight:600">writing-style</span><div style="display:flex;gap:4px;align-items:center"><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">1 skill · everywhere</span><span style="font-size:11.5px;color:var(--fg3);margin-left:4px">git · github.com/antonio/writing</span></div></div>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+              <div style="height:.5px;background:var(--line);margin-left:62px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:13px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.62 0.12 200);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">❏</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:14px;font-weight:600">my-prompts</span><div style="display:flex;gap:4px;align-items:center"><span style="height:18px;padding:0 7px;border-radius:9px;background:var(--chip);font-size:10.5px;font-weight:600;color:var(--fg2);display:flex;align-items:center">4 templates · everywhere</span><span style="font-size:11.5px;color:var(--fg3);margin-left:4px">folder · ~/prompts</span></div></div>
+                <span style="color:var(--fg3);font-size:13px;padding-left:6px">›</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:16px;font-size:12px;color:var(--fg3)"><span><b style="color:var(--fg2);font-weight:600">Extension</b> runs code in Build, with your permissions</span><span><b style="color:var(--fg2);font-weight:600">Skills, templates</b> are text, usable everywhere</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="e2" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">e2</span><span style="font-size:15px;font-weight:600">Install sheet with preview</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--scrim);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex;justify-content:center;padding-top:28px;box-sizing:border-box">
+        <div style="width:600px;align-self:flex-start;border-radius:16px;background:var(--win);box-shadow:0 0 0 .5px var(--line),0 30px 80px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden">
+          <div style="padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:19px;font-weight:700">Install a package</span><span style="font-size:12.5px;color:var(--fg2)">From npm, a git repository, or a folder on this Mac</span></div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1;height:36px;border-radius:9px;background:var(--card);box-shadow:0 0 0 1px var(--accentLine),0 0 0 4px var(--accentSoft);display:flex;align-items:center;padding:0 12px;gap:8px"><span style="flex:1;font-family:var(--mono);font-size:13px">npm:@mario/pi-review</span><span style="font-size:12px;color:var(--green);font-weight:600">✓ Found</span></div>
+              <span style="height:36px;padding:0 12px;border-radius:9px;background:var(--chip);font-size:12.5px;display:flex;align-items:center">Choose Folder…</span>
+            </div>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+                <div style="width:40px;height:40px;border-radius:10px;background:oklch(0.6 0.16 290);color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center">◆</div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:600">pi-review <span style="font-weight:400;color:var(--fg3);font-size:12.5px">1.5.0 · by mario</span></span><span style="font-size:12.5px;color:var(--fg2)">Code review commands and reviewer skills</span></div>
+              </div>
+              <div style="height:.5px;background:var(--line)"></div>
+              <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">
+                <span style="font-size:11px;font-weight:600;color:var(--fg3)">What it adds</span>
+                <div style="display:flex;align-items:center;gap:10px;font-size:13px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber)"></span><span style="flex:1"><b style="font-weight:600">Extension</b>: /review command, a diff viewer tool</span><span style="font-size:11.5px;color:var(--fg3)">Build only · runs code</span></div>
+                <div style="display:flex;align-items:center;gap:10px;font-size:13px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green)"></span><span style="flex:1"><b style="font-weight:600">2 skills</b>: security-review, perf-review</span><span style="font-size:11.5px;color:var(--fg3)">Everywhere</span></div>
+                <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--fg3)"><span style="width:8px;height:8px;border-radius:50%;background:var(--line)"></span><span style="flex:1">Terminal panel</span><span style="font-size:11.5px">Not shown in Piopio</span></div>
+              </div>
+            </div>
+            <div style="border-radius:10px;background:var(--chip);padding:10px 12px;font-size:12px;line-height:1.5;color:var(--fg2)">The extension runs with your user's permissions. Only install packages you trust.</div>
+            <div style="display:flex;align-items:center;gap:8px;padding-top:4px">
+              <span style="font-size:12px;color:var(--fg3);flex:1">Installs to ~/.pi/packages</span>
+              <span style="height:30px;padding:0 14px;border-radius:15px;background:var(--chip);font-size:12.5px;display:flex;align-items:center">Cancel</span>
+              <span style="height:30px;padding:0 16px;border-radius:15px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;display:flex;align-items:center">Install</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:96px 80px 120px;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">5 · This Mac &amp; cloud</div>
+    <div style="font-size:15px;color:var(--fg2);max-width:900px;line-height:1.5">The page title now matches the sidebar label ("Engines" is gone). Two rows in the same list format as Models: this Mac, with a status line and actions, and Cloudflare as Coming soon. The runtime details (Node, memory, data folder) fold under Details.</div>
+  </div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div id="g1" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="height:26px;padding:0 10px;border-radius:13px;background:var(--inv);color:var(--invfg);font-size:13px;font-weight:700;display:flex;align-items:center">g1</span><span style="font-size:15px;font-weight:600">Where it runs</span></div>
+      <div style="width:960px;height:720px;border-radius:14px;background:var(--win);box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 30px 80px rgba(20,20,40,.18);overflow:hidden;display:flex">
+        <dc-import name="Piopio Settings Sidebar" active="engines" hint-size="230px,100%"></dc-import>
+        <div style="flex:1;padding:30px 36px;display:flex;flex-direction:column;gap:22px;min-width:0">
+          <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">This Mac &amp; cloud</div><div style="font-size:13.5px;color:var(--fg2)">Where agents run. Everything stays in your own accounts.</div></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">This Mac</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+                <div style="width:34px;height:34px;border-radius:9px;background:#34c759;color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">▣</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">Local engine</span><span style="font-size:11.5px;color:var(--green);font-weight:600">● Running</span></div><span style="font-size:12px;color:var(--fg3)">1 session open · 1 chat · 104 MB</span></div>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">View logs</span>
+                <span style="height:26px;padding:0 12px;border-radius:13px;background:var(--chip);font-size:12px;display:flex;align-items:center">Restart</span>
+              </div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 16px"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px">Keep running when Piopio quits</span><span style="font-size:11.5px;color:var(--fg3)">Scheduled agents keep working while the app is closed</span></div><span style="width:32px;height:19px;border-radius:10px;background:var(--chip);box-shadow:inset 0 0 0 .5px var(--line);position:relative;display:block;flex:none"><span style="position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span></span></div>
+              <div style="height:.5px;background:var(--line);margin-left:16px"></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:11px 16px;font-size:13px;color:var(--fg2)"><span style="font-size:10px">⌄</span>Details</div>
+              <div style="padding:0 16px 12px 34px;display:grid;grid-template-columns:90px minmax(0,1fr);row-gap:6px;font-size:12.5px">
+                <span style="color:var(--fg3)">Runtime</span><span>Node 24.8.0</span>
+                <span style="color:var(--fg3)">Version</span><span>dev</span>
+                <span style="color:var(--fg3)">Data</span><span style="font-family:var(--mono);font-size:12px">~/Library/Application Support/Piopio <span style="font-family:-apple-system,sans-serif;color:var(--accent)">Show in Finder</span></span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-size:13px;font-weight:600">Cloud</span>
+            <div style="background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);display:flex;align-items:center;gap:12px;padding:14px 16px">
+              <div style="width:34px;height:34px;border-radius:9px;background:oklch(0.72 0.16 55);color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">☁︎</div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">Cloudflare</span><span style="font-size:12px;color:var(--fg3)">Runs agents 24/7 in your own account, even when your Mac sleeps</span></div>
+              <span style="height:22px;padding:0 9px;border-radius:11px;background:var(--chip);font-size:11px;font-weight:600;color:var(--fg2);display:flex;align-items:center">Coming soon</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;appearance&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;blue&quot;,&quot;beak&quot;,&quot;graphite&quot;],&quot;default&quot;:&quot;blue&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  apply() {
+    document.body.dataset.theme = this.props.appearance ?? 'light';
+    const acc = { blue: '#0a84ff', beak: 'oklch(0.66 0.17 45)', graphite: '#6e6e73' }[this.props.accent ?? 'blue'];
+    document.body.style.setProperty('--accent', acc);
+  }
+  componentDidMount() { this.apply(); }
+  componentDidUpdate() { this.apply(); }
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -207,10 +207,10 @@ function render(facts: readonly Fact[]): string {
 }
 
 /** The section and the capture tool, for Threads (`kind: "thread"`) and Spaces. */
-export function aboutMeExtension(store: AboutMe, settings: Settings, kind: "thread" | "space") {
+export function aboutMeExtension(store: AboutMe, settings: Settings, kind: "thread" | "space" | "agent") {
 	const applies = () => {
 		const s = settings.get().aboutMe;
-		return s.enabled && (kind === "thread" ? s.inThreads : s.inSpaces);
+		return s.enabled && (kind === "thread" ? s.inThreads : kind === "space" ? s.inSpaces : s.inAgents === true);
 	};
 	const remember = defineTool({
 		name: "remember_about_me",

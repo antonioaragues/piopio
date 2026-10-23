@@ -377,7 +377,10 @@ struct MemoryEditorSheet: View {
 
     // MARK: Facts
 
-    private var facts: [Fact] {
+    private var facts: [Fact] { Self.facts(in: text) }
+
+    /// The `- fact` lines of a memory doc, labelled by a short "Label:" prefix or their section (About me uses it too).
+    static func facts(in text: String) -> [Fact] {
         var section = "Notes"
         var out: [Fact] = []
         for (i, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {

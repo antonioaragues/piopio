@@ -553,6 +553,13 @@ export class Engine {
 				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
 			}
+			case "packages.preview":
+				return (await this.packages.preview((params as Params<"packages.preview">).source)) satisfies Result<"packages.preview">;
+			case "packages.setResource": {
+				const p = params as Params<"packages.setResource">;
+				await this.packages.setResource(p.source, p.kind, p.path, p.enabled);
+				return {};
+			}
 			case "packages.list":
 				return { packages: await this.packages.list() } satisfies Result<"packages.list">;
 			case "packages.install": {

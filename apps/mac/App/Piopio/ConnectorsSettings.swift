@@ -276,11 +276,8 @@ struct CapabilitiesCard: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(c.label).font(.system(size: 13))
-                        HStack(spacing: 0) {
-                            Text(c.tools.joined(separator: ", ")).font(.system(size: 11.5, design: .monospaced))
-                            if let note = c.note { Text(" · \(note)").font(.system(size: 11.5)) }
-                        }
-                        .foregroundStyle(Color.dsFg3).lineLimit(1)
+                        Text(c.tools.joined(separator: ", ")).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle)
+                        if let note = c.note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
                     }
                     Spacer()
                     PermissionMenu(permission: c.permission, choices: c.choices) { set(c, $0) }

@@ -442,6 +442,8 @@ export const EngineSettings = Type.Object({
 		capture: Type.Boolean(),
 		inThreads: Type.Boolean(),
 		inSpaces: Type.Boolean(),
+		/** Agents read it too (Settings › Chat, "Share with … + Agents"). */
+		inAgents: Type.Optional(Type.Boolean()),
 		/** Where About me lives: "builtin", or an MCP memory provider's id. */
 		provider: Type.String(),
 	}),
@@ -455,6 +457,13 @@ export type EngineSettings = Static<typeof EngineSettings>;
 /** A pi package (07-shared §6.1): what it brings, and what of it is on. */
 export const PiPackage = Type.Object({
 	source: Type.String(),
+	kind: literals("npm", "git", "local"),
+	/** From its package.json, once installed. */
+	name: Type.Optional(Type.String()),
+	version: Type.Optional(Type.String()),
+	description: Type.Optional(Type.String()),
+	/** A newer version on npm (unpinned npm packages). */
+	latest: Type.Optional(Type.String()),
 	installedPath: Type.Optional(Type.String()),
 	installed: Type.Boolean(),
 	/** Some of it is on. */
@@ -469,6 +478,24 @@ export const PiPackage = Type.Object({
 	}),
 });
 export type PiPackage = Static<typeof PiPackage>;
+
+/** What a package would add, before installing it (Settings › Extensions, Install sheet). */
+export const PackagePreview = Type.Object({
+	ok: Type.Boolean(),
+	kind: literals("npm", "git", "local"),
+	name: Type.Optional(Type.String()),
+	version: Type.Optional(Type.String()),
+	description: Type.Optional(Type.String()),
+	author: Type.Optional(Type.String()),
+	extensions: Type.Array(Type.String()),
+	skills: Type.Array(Type.String()),
+	prompts: Type.Array(Type.String()),
+	themes: Type.Array(Type.String()),
+	/** Whether the lists above are known (a git repository off GitHub isn't read before installing). */
+	contentsKnown: Type.Boolean(),
+	error: Type.Optional(Type.String()),
+});
+export type PackagePreview = Static<typeof PackagePreview>;
 
 /** An agent in the catalog (06-agents §12): enough for the sidebar and the header. */
 export const AgentInfo = Type.Object({
@@ -1271,6 +1298,12 @@ export const methods = {
 	"packages.install": { params: Type.Object({ source: Type.String() }), result: Type.Object({}) },
 	"packages.remove": { params: Type.Object({ source: Type.String() }), result: Type.Object({}) },
 	"packages.update": { params: Type.Object({ source: Type.Optional(Type.String()) }), result: Type.Object({}) },
+	"packages.preview": { params: Type.Object({ source: Type.String() }), result: PackagePreview },
+	/** One resource (by its path, as `packages.list` gives it) on or off. */
+	"packages.setResource": {
+		params: Type.Object({ source: Type.String(), kind: literals("extensions", "skills", "prompts", "themes"), path: Type.String(), enabled: Type.Boolean() }),
+		result: Type.Object({}),
+	},
 	"packages.setEnabled": {
 		params: Type.Object({ source: Type.String(), enabled: Type.Boolean(), kinds: Type.Optional(Type.Array(literals("extensions", "skills", "prompts", "themes"))) }),
 		result: Type.Object({}),

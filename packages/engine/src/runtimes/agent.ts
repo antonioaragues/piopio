@@ -28,6 +28,8 @@ const ctx = BACKGROUND_CONTEXT;
 export type AgentOpenOptions = {
 	/** Connected apps: their tools, with changes going through the agent's approvals. */
 	connectors?: ConnectorHub;
+	/** More extensions, asked for at each run (About me when it's shared with agents). */
+	extraExtensions?: () => Extension[];
 	ref: ContainerRef;
 	file: string;
 	hub: ModelHub;
@@ -85,7 +87,7 @@ export class AgentRuntime implements Runtime {
 			definition,
 			instructions: options.instructions,
 			memory: options.memory,
-			extensions: () => [...(wantsWeb() ? [web] : []), ...(apps && hasApps() ? [apps] : [])],
+			extensions: () => [...(wantsWeb() ? [web] : []), ...(apps && hasApps() ? [apps] : []), ...(options.extraExtensions?.() ?? [])],
 			context: ctx,
 			...(options.now ? { now: options.now } : {}),
 			...(options.appTool ? { appTool: options.appTool } : {}),

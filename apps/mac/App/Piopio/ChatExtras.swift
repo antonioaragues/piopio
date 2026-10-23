@@ -108,119 +108,289 @@ struct ThreadPicker: View {
 
 // MARK: Settings › Chat
 
+/// Settings › Chat (design handoff h1): suggestions, and About me as a list of facts (the notebook memory component)
+/// with who it's shared with, whether conversations add to it, and where it's stored.
 struct ChatPane: View {
     let engine: EngineController
     @State private var text = ""
-    @State private var saved = ""
     @State private var revisions: [MemoryRevision] = []
     @State private var limited = false
+    @State private var editing: Int?
+    @State private var draft = ""
+    @State private var adding = ""
+    @State private var hovered: Int?
+    @State private var showingHistory = false
+    @State private var editingProvider: McpMemoryProvider?
+    @State private var tryingProvider: McpMemoryProvider?
+    @State private var error: String?
+    @FocusState private var addFocused: Bool
+
+    enum Share: Hashable { case chats, agents, nobody }
 
     private var settings: EngineSettings? { engine.settings }
+    private var facts: [MemoryEditorSheet.Fact] { MemoryEditorSheet.facts(in: text) }
 
     var body: some View {
-        PaneTitle(title: "Chat", subtitle: "Threads and Notebooks: suggestions and what they know about you.")
-        ListCard {
-            Row(title: "Suggestions", last: true) {
-                Toggle("Suggest moving a thread into a Notebook when it fits one", isOn: binding(\.chat.suggestSpaces) { SettingsPatch(chat: .init(suggestSpaces: $0)) })
-                Toggle("Suggest a few next messages after each answer", isOn: Binding(get: { engine.settings?.chat.followUps ?? true }, set: { v in Task { await engine.updateSettings(SettingsPatch(chat: .init(followUps: v))) } }))
-                    .toggleStyle(.switch).controlSize(.small).font(.system(size: 13))
-                Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "Chat", summary: "Chats and notebooks")
+            CardTitle("Suggestions")
+            ListCard {
+                ToggleRow(title: "Suggest follow-up messages", subtitle: "A few replies under each answer", isOn: Binding(get: { settings?.chat.followUps ?? true }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(chat: .init(followUps: v))) }
+                }))
+                ToggleRow(title: "Suggest moving a chat into a notebook", subtitle: "When a conversation grows into a subject", last: true, isOn: Binding(get: { settings?.chat.suggestSpaces ?? true }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(chat: .init(suggestSpaces: v))) }
+                }))
             }
-        }
-        .padding(.bottom, 18)
-        HStack {
-            SectionLabel("About me")
-            Spacer()
-        }
-        .padding(.bottom, 6)
-        ListCard {
-            Row(title: "Use it") {
-                Toggle("Show it to the agents", isOn: binding(\.aboutMe.enabled) { SettingsPatch(aboutMe: .init(enabled: $0)) })
-                    .toggleStyle(.switch).controlSize(.small).font(.system(size: 13))
-                Spacer()
-            }
-            Row(title: "Where") {
-                Toggle("Threads", isOn: binding(\.aboutMe.inThreads) { SettingsPatch(aboutMe: .init(inThreads: $0)) }).toggleStyle(.checkbox)
-                Toggle("Notebooks", isOn: binding(\.aboutMe.inSpaces) { SettingsPatch(aboutMe: .init(inSpaces: $0)) }).toggleStyle(.checkbox)
-                Text("Never in Build").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                Spacer()
-            }
-            Row(title: "Stored in") {
-                Picker("", selection: Binding(get: { settings?.aboutMe.provider ?? "builtin" }, set: { id in Task { await engine.updateSettings(SettingsPatch(aboutMe: .init(provider: id))); await load() } })) {
-                    Text("Built-in").tag("builtin")
-                    ForEach(settings?.memory.providers ?? []) { Text($0.name).tag($0.id) }
+            .padding(.bottom, 22)
+
+            CardTitle(title: "About me", detail: limited ? nil : "\(facts.count) fact\(facts.count == 1 ? "" : "s")") {
+                if !revisions.isEmpty {
+                    Button("History") { showingHistory = true }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
                 }
-                .labelsHidden().fixedSize()
-                if limited { Text("This provider can't list what it stores; the agents recall from it.").font(.system(size: 12)).foregroundStyle(Color.dsAmber) }
-                Spacer()
             }
-            Row(title: "Learning", last: true) {
-                Toggle("Let the agents add facts they learn (each one shows in the conversation)", isOn: binding(\.aboutMe.capture) { SettingsPatch(aboutMe: .init(capture: $0)) })
-                    .toggleStyle(.switch).controlSize(.small).font(.system(size: 13))
-                Spacer()
-            }
-        }
-        .padding(.bottom, 12)
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .trailing, spacing: 8) {
-                TextEditor(text: $text)
-                    .font(.system(size: 12.5, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .frame(height: 200)
-                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                Button("Save") {
-                    run {
-                        try await engine.spaceCall("aboutMe.set", TextParams(text: text))
-                        await load()
-                    }
-                }
-                .buttonStyle(PillStyle(kind: .primary, compact: true))
-                .disabled(text == saved)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("History")
-                if revisions.isEmpty { Text("No changes yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                ForEach(revisions.prefix(8)) { r in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(r.summary).font(.system(size: 12)).lineLimit(2)
-                        HStack(spacing: 6) {
-                            Text("\(r.by.kind == "user" ? "You" : "An agent") · \(BuildSessionView.relative(r.at))").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-                            Button("Undo") {
-                                run {
-                                    try await engine.spaceCall("aboutMe.undo", RevisionIdParams(revisionId: r.id))
-                                    await load()
-                                }
-                            }
-                            .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.accentColor)
+            factList.padding(.bottom, 12)
+            ListCard {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Share with").font(.system(size: 13))
+                        Spacer()
+                        Picker("", selection: Binding(get: { share }, set: { setShare($0) })) {
+                            Text("Chats & notebooks").tag(Share.chats)
+                            Text("+ Agents").tag(Share.agents)
+                            Text("Nobody").tag(Share.nobody)
                         }
+                        .pickerStyle(.segmented).labelsHidden().fixedSize()
                     }
+                    .padding(.horizontal, 14).frame(minHeight: 46)
+                    RowDivider(inset: 14)
                 }
+                ToggleRow(title: "Learn from conversations", subtitle: "New facts show in the chat with Undo", isOn: Binding(get: { settings?.aboutMe.capture ?? false }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(aboutMe: .init(capture: v))) }
+                }))
+                HStack {
+                    Text("Stored in").font(.system(size: 13))
+                    Spacer()
+                    storedIn
+                }
+                .padding(.horizontal, 14).frame(minHeight: 46)
             }
-            .frame(width: 200, alignment: .leading)
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
+            FinePrint("Never shared with Build sessions.").padding(.top, 10)
         }
-        .padding(.bottom, 18)
-        MemoryProvidersSection(engine: engine)
         .task {
             await engine.loadSettings()
+            await load()
+            // Captures: PIOPIO_DEMO_ABOUT_ME seeds About me ("|" between lines) and shares it with chats.
+            if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_ABOUT_ME"], text.isEmpty {
+                setShare(.chats)
+                save(demo.replacingOccurrences(of: "|", with: "\n"))
+            }
+        }
+        .sheet(item: $tryingProvider) { p in MemoryTrySheet(engine: engine, provider: p) }
+        .sheet(isPresented: $showingHistory) { AboutMeHistorySheet(engine: engine, revisions: revisions) { Task { await load() } } }
+        .sheet(item: $editingProvider) { p in
+            McpMemoryEditor(engine: engine, provider: p) { saved in
+                let providers = settings?.memory.providers ?? []
+                let next = providers.contains { $0.id == saved.id } ? providers.map { $0.id == saved.id ? saved : $0 } : providers + [saved]
+                Task { await engine.updateSettings(SettingsPatch(memory: .init(providers: next))) }
+            }
+        }
+    }
+
+    // MARK: Facts
+
+    @ViewBuilder private var factList: some View {
+        ListCard {
+            if limited {
+                Text("This memory provider can't list what it stores. Chats and agents recall from it instead.")
+                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ForEach(Array(facts.enumerated()), id: \.element.line) { _, fact in
+                    factRow(fact)
+                    RowDivider(inset: 14)
+                }
+                HStack(spacing: 8) {
+                    Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                    TextField("Add something about you…", text: $adding).textFieldStyle(.plain).font(.system(size: 13)).focused($addFocused).onSubmit(add)
+                }
+                .padding(.horizontal, 14).frame(minHeight: 40)
+            }
+        }
+    }
+
+    private func factRow(_ fact: MemoryEditorSheet.Fact) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(fact.label).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3).frame(width: 80, alignment: .leading).lineLimit(1)
+            if editing == fact.line {
+                TextField("", text: $draft).textFieldStyle(.roundedBorder).font(.system(size: 13)).onSubmit { replace(fact, with: draft) }
+                Button("Save") { replace(fact, with: draft) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+                Button("Cancel") { editing = nil }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+            } else {
+                Text(fact.text).font(.system(size: 13)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if hovered == fact.line {
+                    Button("Edit") { draft = fact.raw; editing = fact.line }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                    Button("Forget") { forget(fact) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsRed)
+                } else {
+                    Text(source(fact)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 40)
+        .contentShape(Rectangle())
+        .onHover { hovered = $0 ? fact.line : (hovered == fact.line ? nil : hovered) }
+        .contextMenu {
+            Button("Edit") { draft = fact.raw; editing = fact.line }
+            Button("Forget", role: .destructive) { forget(fact) }
+        }
+    }
+
+    /// "You", or "Learned · 2 d ago" when a conversation added it.
+    private func source(_ fact: MemoryEditorSheet.Fact) -> String {
+        guard let r = revisions.first(where: { r in r.undone != true && r.added.contains { $0 == fact.raw || $0.contains(fact.text) } }) else { return "You" }
+        return r.by.kind == "user" ? "You" : "Learned · \(BuildSessionView.relative(r.at))"
+    }
+
+    private var lines: [String] { text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) }
+
+    private func replace(_ fact: MemoryEditorSheet.Fact, with value: String) {
+        let v = value.trimmingCharacters(in: .whitespaces)
+        editing = nil
+        guard !v.isEmpty, v != fact.raw else { return }
+        var l = lines
+        l[fact.line] = "- \(v)"
+        save(l.joined(separator: "\n"))
+    }
+
+    private func forget(_ fact: MemoryEditorSheet.Fact) {
+        var l = lines
+        l.remove(at: fact.line)
+        save(l.joined(separator: "\n"))
+    }
+
+    /// New facts go under Notes (a heading is added when the last section is another one).
+    private func add() {
+        let v = adding.trimmingCharacters(in: .whitespaces)
+        guard !v.isEmpty else { return }
+        adding = ""
+        let lastHeading = lines.last { $0.hasPrefix("## ") }
+        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if lastHeading != nil, lastHeading != "## Notes" { t += "\n\n## Notes" }
+        t += (t.isEmpty ? "" : "\n") + "- \(v)"
+        save(t)
+        addFocused = true
+    }
+
+    private func save(_ next: String) {
+        text = next
+        Task {
+            do { try await engine.spaceCall("aboutMe.set", TextParams(text: next)) } catch { self.error = (error as? EngineError)?.message ?? String(describing: error) }
             await load()
         }
     }
 
-    private func binding(_ path: KeyPath<EngineSettings, Bool>, patch: @escaping (Bool) -> SettingsPatch) -> Binding<Bool> {
-        Binding(get: { settings?[keyPath: path] ?? false }, set: { on in Task { await engine.updateSettings(patch(on)) } })
+    // MARK: Settings
+
+    private var share: Share {
+        guard let a = settings?.aboutMe, a.enabled else { return .nobody }
+        return a.inAgents == true ? .agents : .chats
+    }
+
+    private func setShare(_ value: Share) {
+        let patch: SettingsPatch.AboutMe = switch value {
+        case .nobody: .init(enabled: false)
+        case .chats: .init(enabled: true, inThreads: true, inSpaces: true, inAgents: false)
+        case .agents: .init(enabled: true, inThreads: true, inSpaces: true, inAgents: true)
+        }
+        Task { await engine.updateSettings(SettingsPatch(aboutMe: patch)) }
+    }
+
+    private var storedIn: some View {
+        let providers = settings?.memory.providers ?? []
+        let current = settings?.aboutMe.provider ?? "builtin"
+        return Menu {
+            Button { pick("builtin") } label: { if current == "builtin" { Label("Piopio", systemImage: "checkmark") } else { Text("Piopio") } }
+            ForEach(providers) { p in
+                Button { pick(p.id) } label: { if current == p.id { Label(p.name, systemImage: "checkmark") } else { Text(p.name) } }
+            }
+            Divider()
+            if let p = providers.first(where: { $0.id == current }) {
+                Button("Edit \(p.name)…") { editingProvider = p }
+                Button("Try \(p.name)…") { tryingProvider = p }
+                Button("Remove \(p.name)", role: .destructive) {
+                    Task { await engine.updateSettings(SettingsPatch(aboutMe: .init(provider: "builtin"), memory: .init(providers: providers.filter { $0.id != p.id })) ); await load() }
+                }
+            }
+            Button("Add MCP memory…") { editingProvider = McpMemoryProvider(id: UUID().uuidString.lowercased(), name: "", tools: .init(recall: .init(tool: "", args: [:]))) }
+        } label: {
+            Text(providers.first { $0.id == current }?.name ?? "Piopio").font(.system(size: 12.5, weight: .medium))
+        }
+        .menuStyle(.button).buttonStyle(ChipStyle()).fixedSize()
+    }
+
+    private func pick(_ id: String) {
+        Task {
+            await engine.updateSettings(SettingsPatch(aboutMe: .init(provider: id)))
+            await load()
+        }
     }
 
     private func load() async {
         guard let memory = await engine.aboutMe() else { return }
         text = memory.text
-        saved = memory.text
         revisions = memory.revisions
         limited = memory.limited ?? false
     }
 }
 
+/// About me's history (h1 "History"): each change, who made it, and Undo.
+private struct AboutMeHistorySheet: View {
+    let engine: EngineController
+    let revisions: [MemoryRevision]
+    let changed: () -> Void
+    @State private var undone: Set<String> = []
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("About me · history").font(.system(size: 17, weight: .bold))
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(revisions.prefix(100).enumerated()), id: \.element.id) { i, r in
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(r.summary).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                                Text("\(r.by.kind == "user" ? "You" : "Learned in a conversation") · \(BuildSessionView.relative(r.at))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                            }
+                            Spacer()
+                            if r.undone == true || undone.contains(r.id) {
+                                Text("Undone").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            } else {
+                                Button("Undo") {
+                                    Task {
+                                        try? await engine.spaceCall("aboutMe.undo", RevisionIdParams(revisionId: r.id))
+                                        undone.insert(r.id)
+                                        changed()
+                                    }
+                                }
+                                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        if i < min(revisions.count, 100) - 1 { RowDivider(inset: 14) }
+                    }
+                }
+                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            }
+            .frame(height: 360)
+            HStack { Spacer(); Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction) }
+        }
+        .padding(22)
+        .frame(width: 560)
+    }
+}
 
 /// Suggested next messages (docs/design v2): 28-tall outlined capsules; one click sends it.
 struct FollowUps: View {

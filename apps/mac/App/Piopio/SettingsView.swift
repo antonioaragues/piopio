@@ -255,259 +255,117 @@ private struct ApprovalsPane: View {
     }
 }
 
-// MARK: MCP servers (docs/design 4a)
+// MARK: This Mac & cloud
 
-/// Servers from pi's mcp.json files: global ones for every project, and each project's own (.pi/mcp.json).
-/// Build sessions connect to the enabled ones when they start.
-private struct McpPane: View {
-    let engine: EngineController
-    /// A server and, for project servers, the project whose .pi/mcp.json has it.
-    struct Entry: Identifiable {
-        let server: McpServerInfo
-        let project: ProjectInfo?
-        var id: String { "\(project?.id ?? "global"):\(server.name)" }
-    }
-    @State private var entries: [Entry] = []
-    @State private var errors: [String] = []
-    @State private var adding = false
-
-    var body: some View {
-        PaneTitle(title: "MCP servers", subtitle: "Tools from Model Context Protocol servers. Same files as the pi CLI.")
-        ListCard {
-            Row(title: "In Chat", last: true) {
-                Toggle("Also in Threads and Notebooks (all servers; Chat doesn't ask before a tool runs)", isOn: Binding(get: { engine.settings?.chat.mcp ?? false }, set: { on in Task { await engine.updateSettings(SettingsPatch(chat: .init(mcp: on))) } }))
-                    .toggleStyle(.switch).controlSize(.small).font(.system(size: 13))
-                Spacer()
-            }
-        }
-        .padding(.bottom, 18)
-        .task { await engine.loadSettings() }
-        HStack {
-            SectionLabel("Servers")
-            Spacer()
-            Button("+ Add server") { adding = true }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
-        }
-        .padding(.bottom, 6)
-        ListCard {
-            if entries.isEmpty {
-                Row(title: "None yet", last: true) {
-                    Text("Add one here, or with `pi mcp add` in a terminal.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    Spacer()
-                }
-            }
-            ForEach(entries) { entry in
-                let server = entry.server
-                Row(title: server.name, last: entry.id == entries.last?.id) {
-                    StatusDot(status: server.enabled ? .done : .idle, size: 6)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(server.url ?? ([server.command ?? ""] + (server.args ?? [])).joined(separator: " "))
-                            .font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1).truncationMode(.middle)
-                        if let description = server.description { Text(description).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1) }
-                    }
-                    Spacer()
-                    Text(entry.project.map { $0.name + (server.override == true ? " · override" : "") } ?? "All projects")
-                        .font(.system(size: 11)).padding(.horizontal, 8).frame(height: 20).background(Color.dsChip, in: Capsule()).foregroundStyle(Color.dsFg2)
-                    Toggle("", isOn: Binding(get: { server.enabled }, set: { on in Task { await setEnabled(entry, on) } }))
-                        .toggleStyle(.switch).controlSize(.mini).labelsHidden()
-                    Button { Task { await remove(entry) } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3) }
-                        .buttonStyle(.plain)
-                        .help("Remove from mcp.json")
-                }
-            }
-        }
-        ForEach(errors, id: \.self) { Text($0).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 6) }
-        Text("Changes apply to sessions you start or reopen. Tools reach the model through codemode by default; project servers load only in trusted projects.")
-            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10)
-            .task { await refresh() }
-            .sheet(isPresented: $adding) { AddMcpServerSheet(engine: engine) { Task { await refresh() } } }
-    }
-
-    private func refresh() async {
-        guard let client = engine.client else { return }
-        var all: [Entry] = []
-        var errs: [String] = []
-        if let global = try? await client.call("mcp.list", McpListParams(), as: McpListResult.self) {
-            all += global.servers.map { Entry(server: $0, project: nil) }
-            errs += global.errors
-        }
-        for project in engine.projects where project.missing != true {
-            if let result = try? await client.call("mcp.list", McpListParams(cwd: project.path), as: McpListResult.self) {
-                all += result.servers.filter { $0.scope == .project }.map { Entry(server: $0, project: project) }
-                errs += result.errors.filter { !errs.contains($0) }
-            }
-        }
-        entries = all
-        errors = errs
-    }
-
-    private func setEnabled(_ entry: Entry, _ on: Bool) async {
-        _ = try? await engine.client?.call("mcp.setEnabled", McpNameParams(scope: entry.server.scope, cwd: entry.project?.path, name: entry.server.name, enabled: on), as: Empty.self)
-        await refresh()
-    }
-
-    private func remove(_ entry: Entry) async {
-        _ = try? await engine.client?.call("mcp.remove", McpNameParams(scope: entry.server.scope, cwd: entry.project?.path, name: entry.server.name), as: Empty.self)
-        await refresh()
-    }
-}
-
-private struct AddMcpServerSheet: View {
-    let engine: EngineController
-    let added: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var remote = false
-    @State private var commandLine = ""
-    @State private var url = ""
-    @State private var description = ""
-    @State private var projectId = ""
-    @State private var error: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add MCP server").font(.system(size: 15, weight: .semibold))
-            TextField("Name (letters, digits, - and _)", text: $name).textFieldStyle(.roundedBorder)
-            Picker("", selection: $remote) {
-                Text("Command (stdio)").tag(false)
-                Text("URL (HTTP)").tag(true)
-            }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
-            if remote {
-                TextField("https://example.com/mcp", text: $url).textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
-            } else {
-                TextField("npx -y @modelcontextprotocol/server-filesystem .", text: $commandLine).textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
-            }
-            TextField("What it offers (optional, helps the model find its tools)", text: $description).textFieldStyle(.roundedBorder)
-            Picker("For", selection: $projectId) {
-                Text("All projects").tag("")
-                ForEach(engine.projects) { Text($0.name).tag($0.id) }
-            }
-            .fixedSize()
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
-                Button("Add") { Task { await add() } }.buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction)
-                    .disabled(name.isEmpty || (remote ? url.isEmpty : commandLine.isEmpty))
-            }
-        }
-        .padding(20)
-        .frame(width: 480)
-    }
-
-    private func add() async {
-        let words = Self.split(commandLine)
-        let project = engine.projects.first { $0.id == projectId }
-        let params = McpAddParams(scope: project == nil ? .global : .project, cwd: project?.path, name: name.trimmingCharacters(in: .whitespaces),
-                                  command: remote ? nil : words.first, args: remote ? nil : Array(words.dropFirst()), url: remote ? url : nil,
-                                  description: description.isEmpty ? nil : description)
-        do {
-            _ = try await engine.client?.call("mcp.add", params, as: Empty.self)
-            added()
-            dismiss()
-        } catch {
-            self.error = String(describing: error)
-        }
-    }
-
-    /// Splits a command line on spaces, keeping quoted parts together.
-    static func split(_ line: String) -> [String] {
-        var words: [String] = [], current = "", quote: Character?
-        for ch in line {
-            if let q = quote {
-                if ch == q { quote = nil } else { current.append(ch) }
-            } else if ch == "\"" || ch == "'" {
-                quote = ch
-            } else if ch == " " {
-                if !current.isEmpty { words.append(current); current = "" }
-            } else {
-                current.append(ch)
-            }
-        }
-        if !current.isEmpty { words.append(current) }
-        return words
-    }
-}
-
-// MARK: Engines
-
+/// Where agents run (design handoff g1): the local engine with its status and actions, keep running when Piopio quits,
+/// the runtime details under Details, and the cloud (Cloudflare) as coming soon.
 private struct EnginesPane: View {
     let engine: EngineController
     @State private var status: EngineStatusResult?
+    @State private var details = false
 
     var body: some View {
-        PaneTitle(title: "Engines", subtitle: "Where agent logic runs. Everything stays in your own accounts.")
-        HStack(alignment: .top, spacing: 12) {
-            CardTile {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("Local engine").font(.system(size: 14, weight: .semibold))
-                        Spacer()
-                        StatusDot(status: engine.status == .ready ? .done : .failed, size: 6)
-                        Text(engine.status == .ready ? "Running" : "Stopped").font(.system(size: 12)).foregroundStyle(engine.status == .ready ? Color.dsGreen : Color.dsRed)
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "This Mac & cloud", summary: "Where agents run. Everything stays in your own accounts.")
+            CardTitle("This Mac")
+            ListCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "cpu").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 34, height: 34).background(Color.green.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text("Local engine").font(.system(size: 14, weight: .semibold))
+                            state
+                        }
+                        Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                     }
-                    fact("Runtime", status?.runtime ?? "…")
-                    fact("Version", engine.engineVersion ?? "…")
-                    fact("Sessions", status.map { "\($0.openSessions) open · \(engine.threads.count) threads" } ?? "…")
-                    fact("Memory", status.map { "\(Int($0.memoryMB)) MB" } ?? "…")
-                    fact("Data", (status?.dataPath ?? engine.home.path).replacingOccurrences(of: NSHomeDirectory(), with: "~"), mono: true)
-                    Toggle(isOn: Binding(get: { engine.runsInBackground }, set: { on in Task { await engine.setRunsInBackground(on) } })) {
-                        Text("Keep running when Piopio quits").font(.system(size: 12.5))
+                    Spacer()
+                    Button("View logs") { engine.revealLogs() }.buttonStyle(PillStyle(compact: true))
+                    Button("Restart") { engine.restart() }.buttonStyle(PillStyle(kind: failed ? .primary : .secondary, compact: true))
+                        .disabled(engine.status == .starting)
+                }
+                .padding(.horizontal, 14).frame(minHeight: 62)
+                RowDivider(inset: 14)
+                ToggleRow(title: "Keep running when Piopio quits", subtitle: engine.canRunInBackground ? "Scheduled agents keep working while the app is closed" : "Available in release builds, which carry their own engine", isOn: Binding(get: { engine.runsInBackground }, set: { on in
+                    Task { await engine.setRunsInBackground(on) }
+                }))
+                .disabled(!engine.canRunInBackground)
+                VStack(alignment: .leading, spacing: 8) {
+                    Button { withAnimation(.easeOut(duration: 0.15)) { details.toggle() } } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).rotationEffect(.degrees(details ? 90 : 0))
+                            Text("Details").font(.system(size: 12.5))
+                        }
+                        .foregroundStyle(Color.dsFg2).contentShape(Rectangle())
                     }
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .disabled(!engine.canRunInBackground)
-                    .help(engine.canRunInBackground ? "Runs the engine as a login item, so it's ready at login and keeps working after you quit." : "Available in release builds, which carry their own engine.")
-                    Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                    HStack {
-                        Button("Restart") { engine.restart() }.buttonStyle(PillStyle(compact: true))
-                        Button("View logs") { engine.revealLogs() }.buttonStyle(PillStyle(compact: true))
+                    .buttonStyle(.plain)
+                    if details {
+                        fact("Runtime", status?.runtime ?? "…")
+                        fact("Version", engine.engineVersion ?? "…")
+                        fact("Running for", status.map { Self.uptime($0.uptimeMs) } ?? "…")
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text("Data").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).frame(width: 90, alignment: .leading)
+                            Text(dataPath.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: dataPath)]) }
+                                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+                        }
+                        .padding(.leading, 14)
                     }
                 }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            CardTile {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("Cloud · Cloudflare").font(.system(size: 14, weight: .semibold))
-                        Spacer()
-                        StatusDot(status: .idle, size: 6)
-                        Text("Not connected").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            CardTitle("Cloud").padding(.top, 22)
+            ListCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "cloud.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 34, height: 34).background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Cloudflare").font(.system(size: 14, weight: .semibold))
+                        Text("Runs agents 24/7 in your own account, even when your Mac sleeps").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                     }
-                    Text("Runs agents 24/7 in your own Cloudflare account: one Worker, one Durable Object per agent.")
-                        .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-                    Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                    HStack {
-                        Button("Connect…") {}.buttonStyle(PillStyle(compact: true)).disabled(true)
-                        Spacer()
-                        Text("Arrives with Agents").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    }
+                    Spacer()
+                    SettingsBadge("Coming soon")
                 }
+                .padding(.horizontal, 14).frame(minHeight: 62)
             }
         }
-        .task {
+        .task(id: engine.status) {
             status = try? await engine.client?.call("engine.status", Empty(), as: EngineStatusResult.self)
         }
     }
 
-    private func fact(_ label: String, _ value: String, mono: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(label).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).frame(width: 70, alignment: .leading)
-            Text(value).font(mono ? .system(size: 12, design: .monospaced) : .system(size: 12.5)).lineLimit(1).truncationMode(.middle)
+    private var failed: Bool { if case .failed = engine.status { true } else { false } }
+    private var dataPath: String { status?.dataPath ?? engine.home.path }
+
+    @ViewBuilder private var state: some View {
+        switch engine.status {
+        case .ready: StatusText(color: .dsGreen, text: "Running").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen)
+        case .starting: HStack(spacing: 5) { ProgressView().controlSize(.mini); Text("Starting…") }.font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+        case .failed: StatusText(color: .dsRed, text: "Stopped").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsRed)
         }
     }
-}
 
-/// The Add server form inside the Add connector sheet ("Use an MCP server"). Interim until the p2 redesign.
-struct AddMcpServerView: View {
-    let engine: EngineController
-    let back: () -> Void
-    let done: () -> Void
+    /// "1 session open · 3 chats · 104 MB", or why it stopped.
+    private var line: String {
+        if case .failed(let message) = engine.status { return "Exited unexpectedly · \(message)" }
+        guard let status else { return "…" }
+        let chats = engine.threads.count
+        return ["\(status.openSessions) session\(status.openSessions == 1 ? "" : "s") open", "\(chats) chat\(chats == 1 ? "" : "s")", "\(Int(status.memoryMB)) MB"].joined(separator: " · ")
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: back) { Label("All connectors", systemImage: "chevron.left").font(.system(size: 12.5)) }
-                .buttonStyle(.plain).foregroundStyle(Color.accentColor).padding(.horizontal, 20).padding(.top, 18)
-            AddMcpServerSheet(engine: engine, added: done)
+    static func uptime(_ ms: Double) -> String {
+        let minutes = Int(ms / 60_000)
+        if minutes < 60 { return "\(max(minutes, 1)) min" }
+        if minutes < 60 * 24 { return "\(minutes / 60) h \(minutes % 60) min" }
+        return "\(minutes / (60 * 24)) d"
+    }
+
+    private func fact(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).frame(width: 90, alignment: .leading)
+            Text(value).font(.system(size: 12.5)).lineLimit(1)
         }
+        .padding(.leading, 14)
     }
 }

@@ -26625,6 +26625,9 @@
 						"inSpaces": {
 							"type": "boolean"
 						},
+						"inAgents": {
+							"type": "boolean"
+						},
 						"provider": {
 							"type": "string"
 						}
@@ -26799,6 +26802,9 @@
 							"type": "boolean"
 						},
 						"inSpaces": {
+							"type": "boolean"
+						},
+						"inAgents": {
 							"type": "boolean"
 						},
 						"provider": {
@@ -26988,6 +26994,9 @@
 							"type": "boolean"
 						},
 						"inSpaces": {
+							"type": "boolean"
+						},
+						"inAgents": {
 							"type": "boolean"
 						},
 						"provider": {
@@ -27582,6 +27591,7 @@
 						"type": "object",
 						"required": [
 							"source",
+							"kind",
 							"installed",
 							"enabled",
 							"off",
@@ -27589,6 +27599,34 @@
 						],
 						"properties": {
 							"source": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "npm"
+									},
+									{
+										"type": "string",
+										"const": "git"
+									},
+									{
+										"type": "string",
+										"const": "local"
+									}
+								]
+							},
+							"name": {
+								"type": "string"
+							},
+							"version": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"latest": {
 								"type": "string"
 							},
 							"installedPath": {
@@ -27750,6 +27788,136 @@
 			}
 		},
 		"packages.update.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"packages.preview.params": {
+			"type": "object",
+			"required": [
+				"source"
+			],
+			"properties": {
+				"source": {
+					"type": "string"
+				}
+			}
+		},
+		"packages.preview.result": {
+			"type": "object",
+			"required": [
+				"ok",
+				"kind",
+				"extensions",
+				"skills",
+				"prompts",
+				"themes",
+				"contentsKnown"
+			],
+			"properties": {
+				"ok": {
+					"type": "boolean"
+				},
+				"kind": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "npm"
+						},
+						{
+							"type": "string",
+							"const": "git"
+						},
+						{
+							"type": "string",
+							"const": "local"
+						}
+					]
+				},
+				"name": {
+					"type": "string"
+				},
+				"version": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				},
+				"author": {
+					"type": "string"
+				},
+				"extensions": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"skills": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"prompts": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"themes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"contentsKnown": {
+					"type": "boolean"
+				},
+				"error": {
+					"type": "string"
+				}
+			}
+		},
+		"packages.setResource.params": {
+			"type": "object",
+			"required": [
+				"source",
+				"kind",
+				"path",
+				"enabled"
+			],
+			"properties": {
+				"source": {
+					"type": "string"
+				},
+				"kind": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "extensions"
+						},
+						{
+							"type": "string",
+							"const": "skills"
+						},
+						{
+							"type": "string",
+							"const": "prompts"
+						},
+						{
+							"type": "string",
+							"const": "themes"
+						}
+					]
+				},
+				"path": {
+					"type": "string"
+				},
+				"enabled": {
+					"type": "boolean"
+				}
+			}
+		},
+		"packages.setResource.result": {
 			"type": "object",
 			"properties": {}
 		},
