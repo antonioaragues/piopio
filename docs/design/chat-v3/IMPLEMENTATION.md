@@ -5,6 +5,8 @@ The handoff in this folder (13a and the pieces 14a–14f) is built across:
 - the app: `Composer.swift`, `BuildViews.swift`, `BuildReview.swift`, `BuildFiles.swift`, `ThreadView.swift`, `ThreadModel.swift`;
 - the engine: `timeline/steps.ts`, `runtimes/build.ts`, `sessions.ts`.
 
+A capture of a Build session with the faux model is in `screenshots/13a-build.png`. The pointer was over the second message, so its hover row shows too.
+
 ## Built
 
 | Piece | Built |

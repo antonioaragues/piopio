@@ -389,7 +389,7 @@ nonisolated struct ItemRenderer: Sendable {
         let natural = text.split(separator: "\n", omittingEmptySubsequences: false)
             .map { NSAttributedString(string: String($0), attributes: attrs).size().width }
             .max() ?? 0
-        let p = paragraph(spacing: 6 + CardLayoutFragment.bubblePadV, before: CardLayoutFragment.bubblePadV + 4, indent: 120, tail: -CardLayoutFragment.bubblePadH)
+        let p = paragraph(spacing: 2 + CardLayoutFragment.bubblePadV, before: CardLayoutFragment.bubblePadV + 4, indent: 120, tail: -CardLayoutFragment.bubblePadH)
         if !compact { p.lineHeightMultiple = 1.5 / 1.2 }
         let m = NSMutableAttributedString(attributedString: line(NSAttributedString(string: lines, attributes: attrs), p))
         let all = NSRange(location: 0, length: m.length)
@@ -661,7 +661,7 @@ nonisolated struct ItemRenderer: Sendable {
         actions.canRewind = build
         actions.branch = versions ? u.branch : nil
         actions.note = u.direct == true ? "direct" : nil
-        return actionsLine(actions, spacing: 10)
+        return actionsLine(actions, spacing: 2)
     }
 
     /// Under an answer (14a): Copy, Retry, Fork from here; the model and cost on the right.
