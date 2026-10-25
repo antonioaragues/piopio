@@ -123,6 +123,7 @@ struct ChatPane: View {
     @State private var editingProvider: McpMemoryProvider?
     @State private var tryingProvider: McpMemoryProvider?
     @State private var error: String?
+    @State private var status: MemoryStatus?
     @FocusState private var addFocused: Bool
 
     enum Share: Hashable { case chats, agents, nobody }
@@ -177,10 +178,12 @@ struct ChatPane: View {
             }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
             FinePrint("Never shared with Build sessions.").padding(.top, 10)
+            memorySearch.padding(.top, 22)
         }
         .task {
             await engine.loadSettings()
             await load()
+            status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self)
             // Captures: PIOPIO_DEMO_ABOUT_ME seeds About me ("|" between lines) and shares it with chats.
             if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_ABOUT_ME"], text.isEmpty {
                 setShare(.chats)
@@ -327,6 +330,52 @@ struct ChatPane: View {
             Text(providers.first { $0.id == current }?.name ?? "Piopio").font(.system(size: 12.5, weight: .medium))
         }
         .menuStyle(.button).buttonStyle(ChipStyle()).fixedSize()
+    }
+
+    // MARK: Memory search (docs/spec/14-memory M1)
+
+    private var memorySearch: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CardTitle("Memory search")
+            ListCard {
+                HStack(spacing: 12) {
+                    Image(systemName: status?.semantic == true ? "sparkle.magnifyingglass" : "text.magnifyingglass")
+                        .font(.system(size: 14)).foregroundStyle(status?.semantic == true ? Color.accentColor : Color.dsFg3).frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(status?.semantic == true ? "Finds by meaning and by words" : "Finds by words").font(.system(size: 13))
+                        Text(statusLine).font(.system(size: 11.5)).foregroundStyle(status?.reason == "failing" ? Color.dsAmber : Color.dsFg3).lineLimit(2)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 14).frame(minHeight: 54)
+                RowDivider(inset: 14)
+                ToggleRow(title: "Keep memory on this Mac", subtitle: "No text goes out to compute embeddings; search matches words only", last: true, isOn: Binding(get: { settings?.memory.localOnly ?? false }, set: { v in
+                    Task {
+                        await engine.updateSettings(SettingsPatch(memory: .init(localOnly: v)))
+                        status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self)
+                    }
+                }))
+            }
+            FinePrint("About me, agents' memory and notebook search use it. Embeddings cost well under a cent per 100 messages.").padding(.top, 2)
+        }
+    }
+
+    private var statusLine: String {
+        guard let s = status else { return "Checking…" }
+        let count = "\(s.indexed.formatted()) of \(s.records.formatted()) memories indexed"
+        if s.semantic { return [s.model.map(Self.modelName), s.via.map { "via \($0)" }, count].compactMap { $0 }.joined(separator: " · ") }
+        switch s.reason {
+        case "local_only": return "Memory stays on this Mac"
+        case "no_key": return "Connect OpenRouter or an OpenAI API key in Models to find by meaning"
+        default: return "Paused: \(s.error ?? "the embedding service didn't answer"). Trying again in a minute."
+        }
+    }
+
+    /// "openai/text-embedding-3-small@256" → "OpenAI small (256)".
+    private static func modelName(_ id: String) -> String {
+        if id.hasPrefix("openai/text-embedding-3-small") { return "OpenAI small embeddings" }
+        if id.hasPrefix("openai/text-embedding-3-large") { return "OpenAI large embeddings" }
+        return id
     }
 
     private func pick(_ id: String) {

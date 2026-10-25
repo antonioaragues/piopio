@@ -141,7 +141,12 @@ export class Engine {
 		this.projects = new Projects(options.paths.projectsIndex, agentDir);
 		this.mcp = new McpConfig(agentDir);
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
-		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings);
+		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings, async (provider) => {
+			const credential = await this.hub.credentials.read(provider).catch(() => undefined);
+			return credential?.type === "api_key" ? credential.key : undefined;
+		});
+		// Records written before semantic search (or while offline) get their vectors in the background.
+		setTimeout(() => this.memory.fill(), 15_000).unref();
 		this.aboutMe = new AboutMe(this.memory, this.settings, join(options.paths.home, "about-me.json"));
 		this.chatMcp = new ChatMcp(this.mcp, (name, server) => this.inChat(name, server));
 		this.packages = new Packages(agentDir);
@@ -717,6 +722,8 @@ export class Engine {
 				if (!p.server === !p.url) throw new EngineError("INVALID", "Give an MCP server's name or a URL.");
 				return { tools: await this.memory.tools(p) } satisfies Result<"memory.tools">;
 			}
+			case "memory.status":
+				return (await this.memory.status()) satisfies Result<"memory.status">;
 			case "memory.recall": {
 				const p = params as Params<"memory.recall">;
 				const hits = await this.memory.get(p.provider).recall([p.bank], p.query, { budgetTokens: 2000 });

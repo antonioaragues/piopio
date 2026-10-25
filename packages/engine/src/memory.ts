@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { McpMemoryProvider as McpMemoryConfig } from "@piopio/protocol";
-import { BuiltinMemory, pack, type MemoryHit, type MemoryKind, type MemoryProvider, type MemoryRecord, type RetainInput, type Sql } from "@piopio/runtime";
+import { BuiltinMemory, openAiEmbedder, pack, type Embedder, type MemoryHit, type MemoryKind, type MemoryProvider, type MemoryRecord, type RetainInput, type Sql } from "@piopio/runtime";
 import type { McpConfig } from "./mcp.js";
 import { EngineError } from "./models.js";
 import type { Settings } from "./settings.js";
@@ -25,21 +25,114 @@ export const HINDSIGHT_PRESET: Omit<McpMemoryConfig, "id" | "name"> = {
 	},
 };
 
+/** The default embedding model (docs/spec/14-memory §5.1): the same model through OpenRouter or the OpenAI API, so vectors match either way. */
+export const EMBEDDING_MODEL = { id: "openai/text-embedding-3-small@256", openrouter: "openai/text-embedding-3-small", openai: "text-embedding-3-small", dims: 256 };
+/** After a failure (no key, offline), recall stays keyword-only this long before trying again. */
+const EMBEDDINGS_RETRY_MS = 60_000;
+
 export class MemoryProviders {
 	readonly builtin: BuiltinMemory;
 	private readonly mcp = new Map<string, McpMemory>();
+	private embedder?: Embedder;
+	private pausedUntil = 0;
+	private lastError?: { reason: "no_key" | "failing"; message: string };
+	private via?: string;
+	private backfill?: Promise<void>;
 
 	constructor(
 		file: string,
 		private readonly mcpConfig: McpConfig,
 		private readonly settings: Settings,
+		/** A provider's API key (OpenRouter, OpenAI API), read per request so a new key applies at once. */
+		private readonly keyFor: (provider: string) => Promise<string | undefined> = async () => undefined,
 	) {
 		const db = new DatabaseSync(file);
 		const sql: Sql = { exec: (s) => db.exec(s), run: (s, ...p) => void db.prepare(s).run(...(p as never[])), all: (s, ...p) => db.prepare(s).all(...(p as never[])) as never };
-		this.builtin = new BuiltinMemory(sql, () => randomUUID());
+		this.builtin = new BuiltinMemory(sql, () => randomUUID(), undefined, () => this.currentEmbedder());
+		this.embedder = this.makeEmbedder();
 		settings.onChange((next, previous) => {
-			if (JSON.stringify(next.memory) !== JSON.stringify(previous.memory)) void this.reset();
+			if (JSON.stringify(next.memory) !== JSON.stringify(previous.memory)) {
+				this.embedder = this.makeEmbedder();
+				this.pausedUntil = 0;
+				void this.reset();
+				this.fill();
+			}
 		});
+	}
+
+	/** Semantic search, unless memory stays on this Mac or the last request failed a moment ago. */
+	private currentEmbedder(): Embedder | undefined {
+		return Date.now() < this.pausedUntil ? undefined : this.embedder;
+	}
+
+	/** The configured endpoint, else OpenRouter, else the OpenAI API key; a request without any key pauses semantic search. */
+	private makeEmbedder(): Embedder | undefined {
+		const memory = this.settings.get().memory;
+		if (memory.localOnly) return undefined;
+		const custom = memory.embeddings;
+		const inner = custom
+			? openAiEmbedder({ baseUrl: custom.baseUrl, model: custom.model, dims: custom.dims, id: `${custom.model}@${custom.dims}`, key: async () => (custom.provider ? this.keyFor(custom.provider) : undefined) })
+			: undefined;
+		const tracked: Embedder = {
+			model: inner?.model ?? EMBEDDING_MODEL.id,
+			dims: inner?.dims ?? EMBEDDING_MODEL.dims,
+			embed: async (texts) => {
+				try {
+					const out = inner ? await inner.embed(texts) : await this.embedDefault(texts);
+					this.lastError = undefined;
+					return out;
+				} catch (error) {
+					this.pausedUntil = Date.now() + EMBEDDINGS_RETRY_MS;
+					const message = error instanceof Error ? error.message : String(error);
+					this.lastError = { reason: message === "no_key" ? "no_key" : "failing", message };
+					throw error;
+				}
+			},
+		};
+		if (custom) this.via = custom.baseUrl;
+		return tracked;
+	}
+
+	private async embedDefault(texts: readonly string[]): Promise<Float32Array[]> {
+		const openrouter = await this.keyFor("openrouter");
+		if (openrouter) {
+			this.via = "OpenRouter";
+			return openAiEmbedder({ baseUrl: "https://openrouter.ai/api/v1", model: EMBEDDING_MODEL.openrouter, dims: EMBEDDING_MODEL.dims, id: EMBEDDING_MODEL.id, key: async () => openrouter }).embed(texts);
+		}
+		const openai = await this.keyFor("openai-api");
+		if (openai) {
+			this.via = "OpenAI API";
+			return openAiEmbedder({ baseUrl: "https://api.openai.com/v1", model: EMBEDDING_MODEL.openai, dims: EMBEDDING_MODEL.dims, id: EMBEDDING_MODEL.id, key: async () => openai }).embed(texts);
+		}
+		throw new Error("no_key");
+	}
+
+	/** Embeds, in the background, records that have no vector yet (written while offline, or before semantic search). */
+	fill(): void {
+		if (this.backfill || !this.currentEmbedder() || this.builtin.missingVectors() === 0) return;
+		this.backfill = (async () => {
+			try {
+				while (this.currentEmbedder() && (await this.builtin.reindex({ batch: 64, max: 64 })) > 0) await new Promise((r) => setTimeout(r, 200));
+			} catch {
+				// paused by the failure; the next fill() tries again
+			} finally {
+				this.backfill = undefined;
+			}
+		})();
+	}
+
+	/** For Settings: whether recall is semantic, with what, and how much is indexed. Checks the key when it hasn't been used yet. */
+	async status(): Promise<{ semantic: boolean; reason?: string; error?: string; model?: string; via?: string; records: number; indexed: number }> {
+		const memory = this.settings.get().memory;
+		if (!this.via && !memory.localOnly && !memory.embeddings) {
+			this.via = (await this.keyFor("openrouter")) ? "OpenRouter" : (await this.keyFor("openai-api")) ? "OpenAI API" : undefined;
+			if (!this.via) this.lastError = { reason: "no_key", message: "no_key" };
+		}
+		const counts = this.builtin.vectorStatus();
+		this.fill();
+		if (memory.localOnly) return { semantic: false, reason: "local_only", records: counts.records, indexed: 0 };
+		if (this.lastError) return { semantic: false, reason: this.lastError.reason, ...(this.lastError.reason === "failing" ? { error: this.lastError.message } : {}), model: this.embedder?.model, records: counts.records, indexed: counts.indexed };
+		return { semantic: true, ...(this.embedder ? { model: this.embedder.model } : {}), ...(this.via ? { via: this.via } : {}), records: counts.records, indexed: counts.indexed };
 	}
 
 	/** "builtin", or an MCP memory provider's id. */

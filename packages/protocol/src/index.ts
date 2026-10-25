@@ -455,6 +455,10 @@ export const EngineSettings = Type.Object({
 	memory: Type.Object({
 		/** MCP memory providers (07-shared §6.2). */
 		providers: Type.Array(McpMemoryProvider),
+		/** Keep memory on this Mac: no cloud embeddings, so recall stays keyword-only (docs/spec/14-memory §5.3). */
+		localOnly: Type.Optional(Type.Boolean()),
+		/** Another embedding endpoint than the default (OpenRouter, then the OpenAI API key): an OpenAI-compatible server. */
+		embeddings: Type.Optional(Type.Object({ baseUrl: Type.String(), model: Type.String(), dims: Type.Number(), provider: Type.Optional(Type.String()) })),
 	}),
 });
 export type EngineSettings = Static<typeof EngineSettings>;
@@ -1288,6 +1292,21 @@ export const methods = {
 	"memory.tools": {
 		params: Type.Object({ server: Type.Optional(Type.String()), url: Type.Optional(Type.String()) }),
 		result: Type.Object({ tools: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()) })) }),
+	},
+	/** The built-in provider's semantic search: on or why not, the embedding model and how much is indexed. */
+	"memory.status": {
+		params: Type.Object({}),
+		result: Type.Object({
+			semantic: Type.Boolean(),
+			/** Why semantic search is off: "local_only", "no_key", or "failing" (with `error`). */
+			reason: Type.Optional(Type.String()),
+			error: Type.Optional(Type.String()),
+			model: Type.Optional(Type.String()),
+			/** Who computes the embeddings: "OpenRouter", "OpenAI API", or a server's address. */
+			via: Type.Optional(Type.String()),
+			records: Type.Number(),
+			indexed: Type.Number(),
+		}),
 	},
 	/** Try a provider: what it recalls for a query in a bank. */
 	"memory.recall": {

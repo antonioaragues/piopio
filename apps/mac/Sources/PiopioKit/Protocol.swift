@@ -636,11 +636,23 @@ public struct SpaceSuggestion: Codable, Sendable, Hashable {
     public var reason: String
 }
 
+/// The built-in memory's semantic search (docs/spec/14-memory M1): on, or why not, and how much is indexed.
+public struct MemoryStatus: Decodable, Sendable, Equatable {
+    public var semantic: Bool
+    /// "local_only", "no_key" or "failing".
+    public var reason: String?
+    public var error: String?
+    public var model: String?
+    public var via: String?
+    public var records: Int
+    public var indexed: Int
+}
+
 /// Engine-wide settings (Settings › Chat, Settings › MCP servers).
 public struct EngineSettings: Codable, Sendable, Hashable {
     public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var suggestSpaces: Bool; public var followUps: Bool? }
     public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var inAgents: Bool?; public var provider: String }
-    public struct Memory: Codable, Sendable, Hashable { public var providers: [McpMemoryProvider] }
+    public struct Memory: Codable, Sendable, Hashable { public var providers: [McpMemoryProvider]; public var localOnly: Bool? }
     public var chat: Chat
     public var aboutMe: AboutMe
     public var memory: Memory
@@ -712,7 +724,11 @@ public struct SettingsPatch: Encodable, Sendable {
         public var provider: String?
         public init(enabled: Bool? = nil, capture: Bool? = nil, inThreads: Bool? = nil, inSpaces: Bool? = nil, inAgents: Bool? = nil, provider: String? = nil) { self.enabled = enabled; self.capture = capture; self.inThreads = inThreads; self.inSpaces = inSpaces; self.inAgents = inAgents; self.provider = provider }
     }
-    public struct Memory: Encodable, Sendable { public var providers: [McpMemoryProvider]?; public init(providers: [McpMemoryProvider]?) { self.providers = providers } }
+    public struct Memory: Encodable, Sendable {
+        public var providers: [McpMemoryProvider]?
+        public var localOnly: Bool?
+        public init(providers: [McpMemoryProvider]? = nil, localOnly: Bool? = nil) { self.providers = providers; self.localOnly = localOnly }
+    }
     public var chat: Chat?
     public var aboutMe: AboutMe?
     public var memory: Memory?

@@ -1440,6 +1440,45 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		expect(hits[0]!.text).toBe("Lives in Valencia");
 	});
 
+	test("semantic recall through an embeddings endpoint, with its status; Keep memory on this Mac turns it off (docs/spec/14 M1)", async () => {
+		const { createServer } = await import("node:http");
+		// A toy OpenAI-compatible endpoint: each word maps to a concept.
+		const concepts: Record<string, number> = { city: 0, live: 0, moving: 0, madrid: 1, dog: 2, puppy: 2 };
+		let requests = 0;
+		const server = createServer((req, res) => {
+			let body = "";
+			req.on("data", (c) => (body += c));
+			req.on("end", () => {
+				requests++;
+				const { input, dimensions } = JSON.parse(body) as { input: string[]; dimensions: number };
+				const data = input.map((t, index) => {
+					const v = Array.from({ length: dimensions }, () => 0.01);
+					for (const w of t.toLowerCase().match(/\p{L}+/gu) ?? []) if (concepts[w] !== undefined) v[concepts[w]!]! += 1;
+					return { index, embedding: v };
+				});
+				res.setHeader("content-type", "application/json");
+				res.end(JSON.stringify({ data }));
+			});
+		});
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+		const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`;
+		const a = await start();
+		expect(await a.client.call("memory.status", {})).toMatchObject({ semantic: false, reason: "no_key" });
+		await a.client.call("settings.set", { memory: { embeddings: { baseUrl: url, model: "toy", dims: 8 } } });
+		await a.client.call("memory.add", { provider: "builtin", bank: "alex", text: "Works at a bakery downtown." });
+		await a.client.call("memory.add", { provider: "builtin", bank: "alex", text: "We're moving to Madrid in April." });
+		await a.client.call("memory.add", { provider: "builtin", bank: "alex", text: "Got a puppy called Toffee." });
+		expect(await a.client.call("memory.status", {})).toMatchObject({ semantic: true, model: "toy@8", via: url, records: 3, indexed: 3 });
+		const city = (await a.client.call("memory.recall", { provider: "builtin", bank: "alex", query: "Which city?" })).hits;
+		expect(city[0]!.text).toContain("Madrid");
+		expect(requests).toBeGreaterThan(0);
+		await a.client.call("settings.set", { memory: { localOnly: true } });
+		expect(await a.client.call("memory.status", {})).toMatchObject({ semantic: false, reason: "local_only" });
+		expect((await a.client.call("memory.recall", { provider: "builtin", bank: "alex", query: "Which city?" })).hits).toEqual([]);
+		expect((await a.client.call("memory.recall", { provider: "builtin", bank: "alex", query: "bakery" })).hits[0]!.text).toContain("bakery");
+		server.close();
+	});
+
 	test("an MCP memory provider: tools listed, About me stored and recalled through it, limited without a list tool", async () => {
 		const a = await start();
 		const server = fileURLToPath(new URL("./fixtures/memory-mcp-server.mjs", import.meta.url));

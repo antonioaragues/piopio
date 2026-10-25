@@ -3,7 +3,12 @@
  * BM25) with a recency boost, pinning, and an event log for the history. No extraction: what is retained is stored
  * as it is (messages, or facts an agent or the user wrote). Runs on Node's SQLite locally and on a Durable Object's
  * SQLite in the cloud, through the small synchronous `Sql` adapter.
+ *
+ * With an embedder (docs/spec/14-memory, "Standard"), records also get a vector (int8, in `memory_vectors`) and
+ * recall is hybrid: the keyword and vector rankings are fused with reciprocal rank fusion, then recency and pins.
+ * A record whose embedding failed is stored anyway and embedded later by `reindex`.
  */
+import { quantize, VectorIndex, type Embedder } from "./embeddings.js";
 import { pack, type MemoryEvent, type MemoryHit, type MemoryKind, type MemoryProvider, type MemoryRecord, type RetainInput } from "./provider.js";
 
 /** Synchronous SQL, as `node:sqlite` and Durable Object storage both offer. */
@@ -17,16 +22,25 @@ type Row = { id: string; bank: string; text: string; kind: MemoryKind; created_b
 
 /** How much a record's age matters next to its text match (0: not at all). */
 const RECENCY_WEIGHT = 0.5;
+/** Reciprocal rank fusion's constant: rank 1 scores 1/61, rank 10 1/70 (the usual 60). */
+const RRF_K = 60;
+/** Below this cosine similarity a vector hit is noise, not a match (text-embedding-3-small puts unrelated text near 0.1–0.2). */
+const MIN_SIMILARITY = 0.3;
+/** How many vector hits join the fusion. */
+const VECTOR_HITS = 50;
 
 export class BuiltinMemory implements MemoryProvider {
 	readonly id = "builtin";
-	readonly capabilities = { retain: true, list: true, forget: true, update: true, reflect: false, history: true };
 	private seq = 0;
+	/** One index per bank and model, rebuilt after the bank changes. */
+	private readonly indexes = new Map<string, VectorIndex>();
 
 	constructor(
 		private readonly sql: Sql,
 		private readonly newId: () => string,
 		private readonly now: () => string = () => new Date().toISOString(),
+		/** The embedding model, when semantic recall is on (undefined: keyword recall only). */
+		private readonly embedder: () => Embedder | undefined = () => undefined,
 	) {
 		sql.exec(`
 			CREATE TABLE IF NOT EXISTS memory_records (
@@ -46,7 +60,15 @@ export class BuiltinMemory implements MemoryProvider {
 				text TEXT NOT NULL, tags TEXT, by TEXT NOT NULL, batch TEXT
 			);
 			CREATE INDEX IF NOT EXISTS memory_events_bank_at ON memory_events (bank, at);
+			CREATE TABLE IF NOT EXISTS memory_vectors (record_id TEXT PRIMARY KEY, bank TEXT NOT NULL, model TEXT NOT NULL, vector BLOB NOT NULL);
+			CREATE INDEX IF NOT EXISTS memory_vectors_bank ON memory_vectors (bank, model);
+			CREATE TRIGGER IF NOT EXISTS memory_vectors_ad AFTER DELETE ON memory_records BEGIN DELETE FROM memory_vectors WHERE record_id = old.id; END;
+			CREATE TRIGGER IF NOT EXISTS memory_vectors_au AFTER UPDATE OF text ON memory_records BEGIN DELETE FROM memory_vectors WHERE record_id = old.id; END;
 		`);
+	}
+
+	get capabilities() {
+		return { retain: true, list: true, forget: true, update: true, reflect: false, history: true, semantic: Boolean(this.embedder()) };
 	}
 
 	async retain(bank: string, input: RetainInput): Promise<MemoryRecord[]> {
@@ -68,32 +90,130 @@ export class BuiltinMemory implements MemoryProvider {
 			record.id, bank, text, record.kind, record.createdBy, record.at, input.source ? JSON.stringify(input.source) : null, input.tags?.length ? JSON.stringify(input.tags) : null, input.pinned ? 1 : 0,
 		);
 		this.event(bank, "added", record.id, text, record.createdBy, input.tags);
+		this.invalidate(bank);
+		await this.embedRecords([{ id: record.id, bank, text }]).catch(() => undefined);
 		return [record];
 	}
 
 	async recall(banks: readonly string[], query: string, options: { budgetTokens?: number; kinds?: MemoryKind[]; limit?: number } = {}): Promise<MemoryHit[]> {
-		// Prefix terms, so "live" finds "lives" (FTS5 has no stemming).
-		const terms = (query.normalize("NFKD").match(/[\p{L}\p{N}]{2,}/gu) ?? []).map((t) => `"${t.replaceAll('"', "")}"${t.length >= 3 ? "*" : ""}`);
-		if (!terms.length || !banks.length) return [];
-		const kinds = options.kinds?.length ? ` AND r.kind IN (${options.kinds.map(() => "?").join(", ")})` : "";
-		const rows = this.sql.all<Row>(
-			`SELECT r.*, bm25(memory_fts) AS rank FROM memory_fts JOIN memory_records r ON r.rowid = memory_fts.rowid
-			 WHERE memory_fts MATCH ? AND r.bank IN (${banks.map(() => "?").join(", ")})${kinds} ORDER BY rank LIMIT 200`,
-			terms.join(" OR "), ...banks, ...(options.kinds ?? []),
-		);
-		if (!rows.length) return [];
-		// bm25() is lower for better matches: turn it into a 0–1 match score, then add recency.
-		const ranks = rows.map((r) => -(r.rank ?? 0));
-		const best = Math.max(...ranks), worst = Math.min(...ranks);
-		const times = rows.map((r) => Date.parse(r.at));
+		if (!banks.length || !query.trim()) return [];
+		const keyword = this.keywordRows(banks, query, options.kinds);
+		const semantic = await this.semanticRanking(banks, query).catch(() => []);
+		if (!keyword.length && !semantic.length) return [];
+		// Reciprocal rank fusion of the two rankings; a record found by both adds up.
+		const fused = new Map<string, number>();
+		keyword.forEach((r, i) => fused.set(r.id, (fused.get(r.id) ?? 0) + 1 / (RRF_K + i + 1)));
+		semantic.forEach((h, i) => fused.set(h.id, (fused.get(h.id) ?? 0) + 1 / (RRF_K + i + 1)));
+		const rows = new Map(keyword.map((r) => [r.id, r]));
+		const missing = semantic.map((h) => h.id).filter((id) => !rows.has(id));
+		for (const r of this.rowsById(missing, options.kinds)) rows.set(r.id, r);
+		const found = [...rows.values()];
+		const best = Math.max(...found.map((r) => fused.get(r.id) ?? 0));
+		const times = found.map((r) => Date.parse(r.at));
 		const newest = Math.max(...times), oldest = Math.min(...times);
-		const hits = rows.map((r, i) => {
-			const match = best === worst ? 1 : (ranks[i]! - worst) / (best - worst);
+		const hits = found.map((r, i) => {
+			const match = (fused.get(r.id) ?? 0) / best;
 			const recency = newest === oldest ? 1 : (times[i]! - oldest) / (newest - oldest);
 			return { ...toRecord(r), score: match * (1 + RECENCY_WEIGHT * recency) + (r.pinned ? 0.5 : 0) };
 		});
 		hits.sort((a, b) => b.score - a.score);
 		return pack(hits.slice(0, options.limit ?? 40), options.budgetTokens ?? 1500);
+	}
+
+	/** FTS5 matches, best first. Prefix terms, so "live" finds "lives" (FTS5 has no stemming). */
+	private keywordRows(banks: readonly string[], query: string, kinds?: MemoryKind[]): Row[] {
+		const terms = (query.normalize("NFKD").match(/[\p{L}\p{N}]{2,}/gu) ?? []).map((t) => `"${t.replaceAll('"', "")}"${t.length >= 3 ? "*" : ""}`);
+		if (!terms.length) return [];
+		const kindFilter = kinds?.length ? ` AND r.kind IN (${kinds.map(() => "?").join(", ")})` : "";
+		return this.sql.all<Row>(
+			`SELECT r.*, bm25(memory_fts) AS rank FROM memory_fts JOIN memory_records r ON r.rowid = memory_fts.rowid
+			 WHERE memory_fts MATCH ? AND r.bank IN (${banks.map(() => "?").join(", ")})${kindFilter} ORDER BY rank LIMIT 200`,
+			terms.join(" OR "), ...banks, ...(kinds ?? []),
+		);
+	}
+
+	/** The records closest in meaning to `query`, best first, above the noise floor. Empty without an embedder. */
+	private async semanticRanking(banks: readonly string[], query: string): Promise<{ id: string; similarity: number }[]> {
+		const embedder = this.embedder();
+		if (!embedder) return [];
+		const [vector] = await embedder.embed([query]);
+		if (!vector) return [];
+		const q = quantize(vector);
+		const hits = banks.flatMap((bank) => this.index(bank, embedder).search(q, VECTOR_HITS));
+		return hits.filter((h) => h.similarity >= MIN_SIMILARITY).sort((a, b) => b.similarity - a.similarity).slice(0, VECTOR_HITS);
+	}
+
+	private index(bank: string, embedder: Embedder): VectorIndex {
+		const key = `${embedder.model}\u0000${bank}`;
+		let index = this.indexes.get(key);
+		if (!index) {
+			const rows = this.sql.all<{ record_id: string; vector: Uint8Array }>("SELECT record_id, vector FROM memory_vectors WHERE bank = ? AND model = ?", bank, embedder.model);
+			index = new VectorIndex(embedder.dims, rows.map((r) => ({ id: r.record_id, vector: r.vector })));
+			this.indexes.set(key, index);
+		}
+		return index;
+	}
+
+	private rowsById(ids: readonly string[], kinds?: MemoryKind[]): Row[] {
+		if (!ids.length) return [];
+		const kindFilter = kinds?.length ? ` AND kind IN (${kinds.map(() => "?").join(", ")})` : "";
+		return this.sql.all<Row>(`SELECT * FROM memory_records WHERE id IN (${ids.map(() => "?").join(", ")})${kindFilter}`, ...ids, ...(kinds ?? []));
+	}
+
+	/** Embeds and stores vectors for these records (one request). */
+	private async embedRecords(records: readonly { id: string; bank: string; text: string }[]): Promise<number> {
+		const embedder = this.embedder();
+		if (!embedder || !records.length) return 0;
+		const vectors = await embedder.embed(records.map((r) => r.text));
+		records.forEach((r, i) => {
+			const q = quantize(vectors[i]!);
+			this.sql.run("INSERT OR REPLACE INTO memory_vectors (record_id, bank, model, vector) VALUES (?, ?, ?, ?)", r.id, r.bank, embedder.model, new Uint8Array(q.buffer, q.byteOffset, q.byteLength));
+		});
+		for (const bank of new Set(records.map((r) => r.bank))) this.invalidate(bank);
+		return records.length;
+	}
+
+	/** Records with no vector from the current model: new ones whose embedding failed, or all after a model change. */
+	missingVectors(bank?: string): number {
+		const embedder = this.embedder();
+		if (!embedder) return 0;
+		const where = bank ? " AND r.bank = ?" : "";
+		const row = this.sql.all<{ n: number }>(
+			`SELECT COUNT(*) AS n FROM memory_records r LEFT JOIN memory_vectors v ON v.record_id = r.id AND v.model = ? WHERE v.record_id IS NULL${where}`,
+			embedder.model, ...(bank ? [bank] : []),
+		)[0];
+		return Number(row?.n ?? 0);
+	}
+
+	/** Embeds the records that have no vector from the current model, `batch` at a time. Returns how many it embedded. */
+	async reindex(options: { bank?: string; batch?: number; max?: number } = {}): Promise<number> {
+		const embedder = this.embedder();
+		if (!embedder) return 0;
+		const batch = options.batch ?? 64;
+		let done = 0;
+		for (;;) {
+			const where = options.bank ? " AND r.bank = ?" : "";
+			const rows = this.sql.all<{ id: string; bank: string; text: string }>(
+				`SELECT r.id, r.bank, r.text FROM memory_records r LEFT JOIN memory_vectors v ON v.record_id = r.id AND v.model = ? WHERE v.record_id IS NULL${where} ORDER BY r.rowid LIMIT ?`,
+				embedder.model, ...(options.bank ? [options.bank] : []), batch,
+			);
+			if (!rows.length) return done;
+			done += await this.embedRecords(rows);
+			if (options.max && done >= options.max) return done;
+		}
+	}
+
+	/** Vector counts for the status line: records, and how many have a vector from the current model. */
+	vectorStatus(): { records: number; indexed: number; model?: string } {
+		const records = Number(this.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM memory_records")[0]?.n ?? 0);
+		const model = this.embedder()?.model;
+		if (!model) return { records, indexed: 0 };
+		const indexed = Number(this.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM memory_vectors WHERE model = ?", model)[0]?.n ?? 0);
+		return { records, indexed, model };
+	}
+
+	private invalidate(bank: string): void {
+		for (const key of this.indexes.keys()) if (key.endsWith(`\u0000${bank}`) || key === bank) this.indexes.delete(key);
 	}
 
 	async list(bank: string, options: { cursor?: string; limit?: number; kinds?: MemoryKind[]; tag?: string } = {}): Promise<{ records: MemoryRecord[]; cursor?: string }> {
@@ -111,6 +231,7 @@ export class BuiltinMemory implements MemoryProvider {
 	async forget(bank: string, id: string, by: MemoryRecord["createdBy"] = "user"): Promise<void> {
 		const row = this.get(bank, id);
 		this.sql.run("DELETE FROM memory_records WHERE id = ? AND bank = ?", id, bank);
+		this.invalidate(bank);
 		this.event(bank, "removed", id, row.text, by, row.tags ? (JSON.parse(row.tags) as string[]) : undefined);
 	}
 
@@ -118,7 +239,9 @@ export class BuiltinMemory implements MemoryProvider {
 		const row = this.get(bank, id);
 		if (change.text !== undefined && change.text.trim() && change.text.trim() !== row.text) {
 			this.sql.run("UPDATE memory_records SET text = ? WHERE id = ?", change.text.trim(), id);
+			this.invalidate(bank);
 			this.event(bank, "updated", id, change.text.trim(), by);
+			await this.embedRecords([{ id, bank, text: change.text.trim() }]).catch(() => undefined);
 		}
 		if (change.pinned !== undefined) this.sql.run("UPDATE memory_records SET pinned = ? WHERE id = ?", change.pinned ? 1 : 0, id);
 		if (change.tags !== undefined) this.sql.run("UPDATE memory_records SET tags = ? WHERE id = ?", change.tags.length ? JSON.stringify(change.tags) : null, id);
@@ -143,6 +266,8 @@ export class BuiltinMemory implements MemoryProvider {
 		const like = `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 		this.sql.run("DELETE FROM memory_records WHERE bank LIKE ? ESCAPE '\\'", like);
 		this.sql.run("DELETE FROM memory_events WHERE bank LIKE ? ESCAPE '\\'", like);
+		this.sql.run("DELETE FROM memory_vectors WHERE bank LIKE ? ESCAPE '\\'", like);
+		this.indexes.clear();
 	}
 
 	/** Groups the events written until `end()` (one change in the editor, one tool call) into one batch. Nested batches join the outer one. */

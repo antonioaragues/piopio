@@ -26980,6 +26980,31 @@
 									}
 								}
 							}
+						},
+						"localOnly": {
+							"type": "boolean"
+						},
+						"embeddings": {
+							"type": "object",
+							"required": [
+								"baseUrl",
+								"model",
+								"dims"
+							],
+							"properties": {
+								"baseUrl": {
+									"type": "string"
+								},
+								"model": {
+									"type": "string"
+								},
+								"dims": {
+									"type": "number"
+								},
+								"provider": {
+									"type": "string"
+								}
+							}
 						}
 					}
 				}
@@ -27154,6 +27179,31 @@
 											}
 										}
 									}
+								}
+							}
+						},
+						"localOnly": {
+							"type": "boolean"
+						},
+						"embeddings": {
+							"type": "object",
+							"required": [
+								"baseUrl",
+								"model",
+								"dims"
+							],
+							"properties": {
+								"baseUrl": {
+									"type": "string"
+								},
+								"model": {
+									"type": "string"
+								},
+								"dims": {
+									"type": "number"
+								},
+								"provider": {
+									"type": "string"
 								}
 							}
 						}
@@ -27351,6 +27401,31 @@
 									}
 								}
 							}
+						},
+						"localOnly": {
+							"type": "boolean"
+						},
+						"embeddings": {
+							"type": "object",
+							"required": [
+								"baseUrl",
+								"model",
+								"dims"
+							],
+							"properties": {
+								"baseUrl": {
+									"type": "string"
+								},
+								"model": {
+									"type": "string"
+								},
+								"dims": {
+									"type": "number"
+								},
+								"provider": {
+									"type": "string"
+								}
+							}
 						}
 					}
 				}
@@ -27504,6 +27579,41 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"memory.status.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"memory.status.result": {
+			"type": "object",
+			"required": [
+				"semantic",
+				"records",
+				"indexed"
+			],
+			"properties": {
+				"semantic": {
+					"type": "boolean"
+				},
+				"reason": {
+					"type": "string"
+				},
+				"error": {
+					"type": "string"
+				},
+				"model": {
+					"type": "string"
+				},
+				"via": {
+					"type": "string"
+				},
+				"records": {
+					"type": "number"
+				},
+				"indexed": {
+					"type": "number"
 				}
 			}
 		},

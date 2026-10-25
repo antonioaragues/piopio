@@ -30,7 +30,17 @@ export type RetainInput = { content: string; kind?: MemoryKind; createdBy?: Memo
 export type MemoryEvent = { id: string; at: string; bank: string; action: "added" | "removed" | "updated"; recordId: string; text: string; tags?: string[]; by: MemoryRecord["createdBy"]; batch?: string };
 
 /** What a provider can do beyond recall; the app shows "limited visibility" without `list`. */
-export type MemoryCapabilities = { retain: boolean; list: boolean; forget: boolean; update: boolean; reflect: boolean; history: boolean };
+export type MemoryCapabilities = {
+	retain: boolean;
+	list: boolean;
+	forget: boolean;
+	update: boolean;
+	reflect: boolean;
+	history: boolean;
+	/** Recall finds meaning, not only words (docs/spec/14-memory, Standard). */
+	semantic?: boolean;
+};
+
 
 export interface MemoryProvider {
 	readonly id: string;
