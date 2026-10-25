@@ -300,8 +300,8 @@ Scope: Cloud Engine (02 §5), cloud setup wizard, deploy/rollback, Telegram, Wha
 ## Phase 6 — 1.0 polish
 GitHub PR/CI loop (G4–G8), worktrees UX, usage page, export everything, accessibility pass, Sparkle + Homebrew cask, docs site.
 
-## Onboarding and areas (spec for review, 2026-10-25)
-A new first-run welcome asks what Piopio is for you (Build, Chat, Agents, or several). Areas you don't use are hidden from the sidebar, Home, menus and the palette, and can be turned on and off in Settings › General. Hiding stops and deletes nothing. See [15-onboarding-and-areas](15-onboarding-and-areas.md); not scheduled until the questions in §7 are answered.
+## Onboarding and areas (spec reviewed, 2026-10-25)
+A new first-run welcome asks what Piopio is for you (Build, Chat, Agents, or several). Areas you don't use are hidden from the sidebar, Home, menus and the palette, and can be turned on and off in Settings › General. Hiding stops and deletes nothing. See [15-onboarding-and-areas](15-onboarding-and-areas.md); the decisions are in §7.
 
 ## Backlog from the v2 review (2026-10-22)
 Noted by the user after using the v2 redesign. Not scheduled into a phase yet.

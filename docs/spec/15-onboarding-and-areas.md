@@ -1,6 +1,6 @@
 # 15 · Onboarding and areas: choose what Piopio is for you
 
-Status: spec for review, 2026-10-25. Nothing is built yet. It changes the first-run welcome (docs/design v2, 12b) and
+Status: spec, reviewed 2026-10-25 (the decisions are in §7). Nothing is built yet. It changes the first-run welcome (docs/design v2, 12b) and
 adds a setting to General; the sidebar, Home, menus and the command palette follow it.
 
 **The idea:** Piopio has three areas: **Build** (code), **Chat** (chats and notebooks) and **Agents**. Not everyone
@@ -51,12 +51,12 @@ shows only items from the areas that are on.
 - **Settings:** every pane stays visible (you may want to set something up before turning its area on). Only the
   new Areas row (§4) is added.
 
-**Projects without Build:** with Build off and Chat on, the Projects section stays, as folders to chat about:
+**Projects without Build:** a project doesn't have to be a Build project. With Build off and Chat on, the Projects section stays, as folders to chat about:
 - its + reads "Add a folder to chat about";
 - a folder offers New chat;
 - Build-only actions are hidden: New Session, git, terminal and Run.
 
-With both Build and Chat off, Projects is hidden. (Q1)
+With both Build and Chat off, Projects is hidden.
 
 ## 3. The new welcome
 It shows on first run, whether or not a model is set up. People who already use Piopio don't see it again: they
@@ -70,8 +70,8 @@ window that fills the screen, with the chick talking, as today. **Skip setup** s
   - **Chat:** "Ask, draft and think things through. Notebooks keep personal projects together, with their own
     memory and files."
   - **Agents:** "Small assistants that keep going while you're away: briefings, reminders, messages."
-- **Shortcut:** an "All three" link ticks every card.
-- **Selection:** nothing is ticked at first (Q2), and Continue needs at least one card.
+- **Selection:** all three are ticked at first, so Continue works straight away. You untick what you don't want,
+  and Continue needs at least one card.
 
 **Step 2 · A model to think with**
 - **Already connected:** if a model provider is connected, this step is one line ("Connected to OpenRouter ✓") and
@@ -108,7 +108,7 @@ One short card per chosen area, in the order Build, Chat, Agents. Each card has 
   - **Build:** if a session is running, the row says it will finish ("1 session is still running; it will
     finish").
   - **Agents with agents that run:** a small sheet asks "3 agents run on this Mac (2 schedules, 1 cloud). Keep them
-    running, or pause them?" Keep running is the default (Q3). Pausing uses each agent's existing pause.
+    running, or pause them?" Keep running is the default. Pausing uses each agent's existing pause.
 - **Turning an area on:** its section comes back where it was, collapsed or not, with its pins.
 - **Run setup again** sits below the card.
 
@@ -139,11 +139,9 @@ One short card per chosen area, in the order Build, Chat, Agents. Each card has 
 - **Verified with:** Swift tests for the `Areas` model and the section mapping, plus app captures of each welcome
   step, a Chat-only sidebar and the Areas card.
 
-## 7. Questions for you
-- **Q1 · Projects without Build:** keep it as folders to chat about (proposed), or hide Projects whenever Build is
-  off?
-- **Q2 · First choice:** nothing ticked so you have to choose (proposed), or all three ticked so Continue works
-  straight away?
-- **Q3 · Turning Agents off:** keep agents running by default (proposed), or pause them by default?
-- **Q4 · Names in the welcome:** the product names (Build, Chat, Agents), or plain words (Code, Chat and notebooks,
-  Assistants)? The sidebar keeps its section names either way.
+## 7. Decisions (2026-10-25)
+- **Projects without Build:** projects don't have to be Build projects. With Build off and Chat on, Projects stays
+  as folders to chat about.
+- **First choice:** all three areas are ticked at first.
+- **Turning Agents off:** agents keep running by default; pausing is the other choice in the sheet.
+- **Names in the welcome:** Build, Chat and Agents, the same as the product.
