@@ -7,6 +7,26 @@ import PiopioKit
 ///   PIOPIO_QUIT_AFTER_SNAPSHOT=1  quit afterwards
 @MainActor
 enum DebugAutomation {
+    private static func seedMemory(_ engine: EngineController) async {
+        guard let client = engine.client else { return }
+        _ = try? await client.call("aboutMe.set", TextParams(text: "## Home\n- Lives in Madrid, in Chamberí\n- Partner: Sam, a sound engineer\n\n## Health\n- Allergic to cashews\n\n## Preferences\n- Prefers short answers"), as: Empty.self)
+        await engine.updateSettings(SettingsPatch(aboutMe: .init(enabled: true, capture: true, inThreads: true, inSpaces: true)))
+        guard let ref = try? await engine.createAgent(name: "Daily briefing", template: "daily-briefing", avatar: "☀️") else { return }
+        let owner = "\(ref.id)/owner"
+        let me = HomeView.firstName
+        let add = { (text: String, replaces: String?) async in
+            _ = try? await client.call("memory.add", MemoryAddParams(provider: "builtin", bank: owner, text: text, replaces: replaces), as: Empty.self)
+        }
+        await add("\(me) is a nurse at Hospital La Fe, on night shifts", nil)
+        await add("\(me) runs most mornings and is training for the Madrid half marathon on 27 September", nil)
+        await add("\(me) wants the briefing at 7:00, with the weather first", nil)
+        await add("\(me)'s sister Lucía gets married on 3 October in Seville", nil)
+        let list = try? await client.call("memory.list", MemoryListParams(provider: "builtin", bank: owner, kinds: ["fact"]), as: MemoryListResult.self)
+        if let nurse = list?.records.first(where: { $0.text.contains("La Fe") }) { await add("\(me) works in pediatrics at Hospital Gregorio Marañón, on day shifts (since June)", nurse.id) }
+        if let wedding = list?.records.first(where: { $0.text.contains("Lucía") }) { await add("Lucía's wedding moved to 7 November, same city", wedding.id) }
+        _ = try? await client.call("memory.add", MemoryAddParams(provider: "builtin", bank: "\(ref.id)/shared", text: "The family calendar is the shared one called Home"), as: Empty.self)
+    }
+
     static func run(engine: EngineController) {
         let env = ProcessInfo.processInfo.environment
         // PIOPIO_DEMO_APPEARANCE=dark|light: force the appearance (captures). PIOPIO_DEMO_MODE=build|chat|agents.
@@ -114,9 +134,12 @@ enum DebugAutomation {
                 }
             }
         }
+        // PIOPIO_DEMO_MEMORY_SEED=1: About me, and an agent with learned facts, one of them replaced (Settings › Memory).
+        let seeded: Task<Void, Never>? = env["PIOPIO_DEMO_MEMORY_SEED"] == "1" && engine.status == .ready ? Task { await seedMemory(engine) } : nil
         // PIOPIO_DEMO_SETTINGS=1: open Settings (snapshot it with PIOPIO_SNAPSHOT_WINDOW=key).
         if env["PIOPIO_DEMO_SETTINGS"] == "1" {
             Task {
+                await seeded?.value
                 try? await Task.sleep(for: .seconds(1))
                 ThreadModel.openSettings()
             }

@@ -1,7 +1,7 @@
 /** Local Engine: Engine Protocol over a Unix domain socket. */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { existsSync, unlinkSync, chmodSync } from "node:fs";
+import { existsSync, unlinkSync, chmodSync, statSync } from "node:fs";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
@@ -22,12 +22,12 @@ import { detectOtherApps, McpStatus, probe } from "./mcp-probe.js";
 import * as gitOps from "./git.js";
 import { Projects } from "./projects.js";
 import { Sessions } from "./sessions.js";
-import { AboutMe } from "./about-me.js";
+import { ABOUT_ME_BANK, AboutMe } from "./about-me.js";
 import { Settings } from "./settings.js";
 import { ChatMcp } from "./tools/mcp-chat.js";
 import { ChatResources } from "./tools/chat-resources.js";
 import { Packages } from "./packages.js";
-import { MemoryProviders } from "./memory.js";
+import { exportMemory, MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
 import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
 import { groupSteps, StepsView } from "./timeline/steps.js";
@@ -698,12 +698,16 @@ export class Engine {
 				const p = params as Params<"memory.list">;
 				const provider = this.memory.get(p.provider);
 				if (!provider.list || !provider.capabilities.list) return { records: [], limited: true } satisfies Result<"memory.list">;
-				const page = await provider.list(p.bank, { ...(p.cursor ? { cursor: p.cursor } : {}), ...(p.kinds ? { kinds: p.kinds as never } : {}) });
+				if (p.query?.trim()) {
+					const hits = await provider.recall([p.bank], p.query, { budgetTokens: 20_000, limit: 100, ...(p.kinds ? { kinds: p.kinds as never } : {}) });
+					return { records: hits.map(({ bank: _b, tags: _t, confidence: _c, score: _s, ...r }) => r), limited: false } satisfies Result<"memory.list">;
+				}
+				const page = await provider.list(p.bank, { ...(p.cursor ? { cursor: p.cursor } : {}), ...(p.kinds ? { kinds: p.kinds as never } : {}), ...(p.includeEnded ? { includeEnded: true } : {}) } as never);
 				return { records: page.records.map(({ bank: _b, tags: _t, confidence: _c, ...r }) => r), ...(page.cursor ? { cursor: page.cursor } : {}), limited: false } satisfies Result<"memory.list">;
 			}
 			case "memory.add": {
 				const p = params as Params<"memory.add">;
-				await this.memory.get(p.provider).retain(p.bank, { content: p.text, kind: "fact", createdBy: "user" });
+				await this.memory.get(p.provider).retain(p.bank, { content: p.text, kind: "fact", createdBy: "user", ...(p.replaces ? { replaces: p.replaces } : {}) });
 				return {};
 			}
 			case "memory.forget": {
@@ -727,6 +731,43 @@ export class Engine {
 			}
 			case "memory.status":
 				return (await this.memory.status()) satisfies Result<"memory.status">;
+			case "memory.banks": {
+				const owners = this.sessions.memoryOwners();
+				const labels = new Map(owners.agents.flatMap((a) => a.partitions.map((p) => [p.bank, { label: p.label, agent: a }] as const)));
+				const banks = this.memory.builtin.banks().map((b) => {
+					const owner = labels.get(b.bank);
+					const area = b.bank === ABOUT_ME_BANK ? "about-me" : owner ? "agent" : "other";
+					return {
+						...b,
+						label: b.bank === ABOUT_ME_BANK ? "About me" : (owner?.label ?? b.bank),
+						area,
+						...(owner ? { agent: { id: owner.agent.id, name: owner.agent.name, ...(owner.agent.avatar ? { avatar: owner.agent.avatar } : {}), learns: owner.agent.learns } } : {}),
+					};
+				});
+				const bytes = ["memory.db", "memory.db-wal"].reduce((n, f) => n + (existsSync(join(this.options.paths.home, f)) ? statSync(join(this.options.paths.home, f)).size : 0), 0);
+				return { banks, agents: owners.agents.map(({ partitions: _p, ...a }) => a), notebooks: owners.notebooks, bytes } satisfies Result<"memory.banks">;
+			}
+			case "memory.history": {
+				const p = params as Params<"memory.history">;
+				const provider = this.memory.get(p.provider);
+				const events = provider.history ? await provider.history(p.bank, { limit: p.limit ?? 200 }) : [];
+				return { events: events.map((e) => ({ id: e.id, at: e.at, action: e.action, recordId: e.recordId, text: e.text, by: e.by })) } satisfies Result<"memory.history">;
+			}
+			case "memory.export": {
+				const p = params as Params<"memory.export">;
+				return exportMemory(this.memory.builtin, p.folder, (bank) => (bank === ABOUT_ME_BANK ? "About me" : bank)) satisfies Result<"memory.export">;
+			}
+			case "memory.wipe": {
+				const p = params as Params<"memory.wipe">;
+				return { records: this.memory.builtin.wipe(p.bank === "*" ? undefined : p.bank) } satisfies Result<"memory.wipe">;
+			}
+			case "memory.reindex":
+				return { pending: this.memory.reindex() } satisfies Result<"memory.reindex">;
+			case "memory.setLearning": {
+				const p = params as Params<"memory.setLearning">;
+				await this.sessions.setLearning(p.ref, p.learn);
+				return {} satisfies Result<"memory.setLearning">;
+			}
 			case "memory.recall": {
 				const p = params as Params<"memory.recall">;
 				const hits = await this.memory.get(p.provider).recall([p.bank], p.query, { budgetTokens: 2000 });

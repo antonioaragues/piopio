@@ -685,6 +685,27 @@ export class Sessions {
 		return { provider: def.memory?.provider ?? "builtin", partitions };
 	}
 
+	/** Settings › Memory: the agents that use memory, their partitions' names, and whether they learn by themselves. */
+	memoryOwners(): { agents: { id: string; name: string; avatar?: string; learns: boolean; provider: string; partitions: { bank: string; label: string }[] }[]; notebooks: number } {
+		const agents = [...this.entries.values()]
+			.filter((e) => e.ref.kind === "agent")
+			.flatMap((e) => {
+				const def = this.agentDefinition(e.ref.id).definition;
+				if (!def.tools.builtin.includes("memory")) return [];
+				const { provider, partitions } = this.agentMemory(e.ref);
+				return [{ id: def.id, name: def.name, ...(def.avatar ? { avatar: def.avatar } : {}), learns: def.memory?.learn !== false, provider, partitions: partitions.map((p) => ({ bank: p.bank, label: p.label })) }];
+			});
+		return { agents, notebooks: [...this.entries.values()].filter((e) => e.ref.kind === "space").length };
+	}
+
+	/** Turns an agent's learned facts on or off (its definition's memory.learn), as a saved change in its history. */
+	async setLearning(ref: ContainerRef, learn: boolean): Promise<void> {
+		const { definition, instructions } = this.agentDefinition(ref.id);
+		const next = { ...definition, memory: { provider: definition.memory?.provider ?? "builtin", ...definition.memory, learn } };
+		const saved = await this.saveAgent(ref, next, instructions, learn ? "Learn facts from conversations" : "Stop learning facts from conversations");
+		if (!saved.saved) throw new EngineError("INVALID", saved.errors[0]?.message ?? "Couldn't save the agent.");
+	}
+
 	private validateAgent(definition: unknown, id: string): DefinitionError[] {
 		const knownAgents = [...this.entries.values()].filter((e) => e.ref.kind === "agent" && e.ref.id !== id).map((e) => e.ref.id);
 		return validate(definition, {

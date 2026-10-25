@@ -3,6 +3,8 @@
  * memory providers configured in Settings › Chat › Memory, each a memory system reached through its MCP server.
  */
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -119,6 +121,14 @@ export class MemoryProviders {
 				this.backfill = undefined;
 			}
 		})();
+	}
+
+	/** Embeds everything that has no vector from the current model, in the background. Returns how many wait. */
+	reindex(): number {
+		this.pausedUntil = 0;
+		const pending = this.builtin.missingVectors();
+		this.fill();
+		return pending;
 	}
 
 	/** For Settings: whether recall is semantic, with what, and how much is indexed. Checks the key when it hasn't been used yet. */
@@ -297,4 +307,29 @@ export function parseRecords(text: string, bank: string): MemoryRecord[] {
 		.map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim())
 		.filter(Boolean)
 		.map((line, i) => ({ id: String(i), bank, text: line, kind: "fact" as const, createdBy: "extraction" as const, at: "" }));
+}
+
+/**
+ * Settings › Memory › Export (docs/spec/14-memory §5.3): everything the built-in provider holds, replaced facts too,
+ * as memory.json (every field) and memory.md (one section per bank, readable).
+ */
+export function exportMemory(memory: BuiltinMemory, folder: string, label: (bank: string) => string): { files: string[]; records: number } {
+	mkdirSync(folder, { recursive: true });
+	const records = memory.dump();
+	const json = join(folder, "memory.json");
+	writeFileSync(json, `${JSON.stringify({ exportedAt: new Date().toISOString(), records }, null, "\t")}\n`);
+	const lines = [`# Piopio memory`, "", `Exported ${new Date().toISOString().slice(0, 10)} · ${records.length} records`, ""];
+	let bank = "";
+	for (const r of records) {
+		if (r.bank !== bank) {
+			bank = r.bank;
+			lines.push("", `## ${label(bank)}`, "");
+		}
+		const when = r.at.slice(0, 10);
+		const ended = r.endedAt ? ` (until ${r.endedAt.slice(0, 10)}${r.replacedBy ? ", replaced" : ""})` : "";
+		lines.push(`- ${when} · ${r.kind}${r.pinned ? " · pinned" : ""}: ${r.text.replace(/\n+/g, " ")}${ended}`);
+	}
+	const md = join(folder, "memory.md");
+	writeFileSync(md, `${lines.join("\n")}\n`);
+	return { files: [json, md], records: records.length };
 }

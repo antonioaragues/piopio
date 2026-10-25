@@ -35,7 +35,7 @@ Answer with JSON only: {"facts": ["…"]}`;
 
 const DECIDE = `You keep a memory of facts about a person up to date. For each new fact, compare it with the existing facts and choose one operation:
 - "add": new information.
-- "replace": it updates or contradicts an existing fact about the same thing (a new city, a new job, a new date, a changed preference). Give that fact's id. The old fact is kept as history.
+- "replace": it updates or contradicts an existing fact about the same thing, even when worded differently: where they live, where they work and their role, their diet, their pets, a date that moved, a preference that changed. A newer fact about the same thing always replaces the older one ("is a nurse at La Fe" → "works in pediatrics at Gregorio Marañón"; "has been vegetarian for six years" → "eats fish again, pescatarian"). Give that fact's id. The old fact is kept as history.
 - "none": already known (same meaning as an existing fact).
 Also, if the exchange says an existing fact stopped being true and no new fact replaces it, add {"op": "end", "id": "…"}.
 Answer with JSON only: {"ops": [{"fact": 0, "op": "add"}, {"fact": 1, "op": "replace", "id": "…"}, {"fact": 2, "op": "none"}, {"op": "end", "id": "…"}]}`;

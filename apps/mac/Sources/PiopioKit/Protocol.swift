@@ -617,16 +617,64 @@ public struct AgentMemoryResult: Decodable, Sendable {
     public var provider: String
     public var partitions: [Partition]
 }
-public struct MemoryListParams: Encodable, Sendable { public var provider, bank: String; public var cursor: String?; public init(provider: String, bank: String, cursor: String? = nil) { self.provider = provider; self.bank = bank; self.cursor = cursor } }
+public struct MemoryListParams: Encodable, Sendable {
+    public var provider, bank: String
+    public var cursor: String?
+    public var kinds: [String]?
+    /// Replaced and ended facts too (learned facts' history).
+    public var includeEnded: Bool?
+    /// Search instead of listing.
+    public var query: String?
+    public init(provider: String, bank: String, cursor: String? = nil, kinds: [String]? = nil, includeEnded: Bool? = nil, query: String? = nil) {
+        self.provider = provider; self.bank = bank; self.cursor = cursor; self.kinds = kinds; self.includeEnded = includeEnded; self.query = query
+    }
+}
 public struct MemoryRecordInfo: Decodable, Sendable, Hashable, Identifiable {
     public struct Source: Decodable, Sendable, Hashable { public var ref, itemId, title: String? }
     public var id, text, kind, createdBy, at: String
     public var pinned: Bool?
     public var source: Source?
+    /// Learned facts (docs/spec/14-memory M2): what it replaced, what replaced it, when it stopped being true.
+    public var replaces, replacedBy, endedAt: String?
 }
 public struct MemoryListResult: Decodable, Sendable { public var records: [MemoryRecordInfo]; public var cursor: String?; public var limited: Bool }
-public struct MemoryAddParams: Encodable, Sendable { public var provider, bank, text: String; public init(provider: String, bank: String, text: String) { self.provider = provider; self.bank = bank; self.text = text } }
-public struct MemoryIdParams: Encodable, Sendable { public var provider, bank, id: String; public var pinned: Bool?; public init(provider: String, bank: String, id: String, pinned: Bool? = nil) { self.provider = provider; self.bank = bank; self.id = id; self.pinned = pinned } }
+public struct MemoryAddParams: Encodable, Sendable {
+    public var provider, bank, text: String
+    public var replaces: String?
+    public init(provider: String, bank: String, text: String, replaces: String? = nil) { self.provider = provider; self.bank = bank; self.text = text; self.replaces = replaces }
+}
+public struct MemoryIdParams: Encodable, Sendable {
+    public var provider, bank, id: String
+    public var pinned: Bool?
+    public var text: String?
+    public init(provider: String, bank: String, id: String, pinned: Bool? = nil, text: String? = nil) { self.provider = provider; self.bank = bank; self.id = id; self.pinned = pinned; self.text = text }
+}
+
+/// Settings › Memory (docs/spec/14-memory M3): every bank of the built-in provider and whose it is.
+public struct MemoryBanksResult: Decodable, Sendable, Equatable {
+    public struct Agent: Decodable, Sendable, Hashable, Identifiable { public var id, name: String; public var avatar: String?; public var learns: Bool; public var provider: String? }
+    public struct Bank: Decodable, Sendable, Hashable, Identifiable {
+        public var bank, label, area: String
+        public var agent: Agent?
+        public var records, facts, messages, ended: Int
+        public var updatedAt: String?
+        public var id: String { bank }
+    }
+    public var banks: [Bank]
+    public var agents: [Agent]
+    public var notebooks: Int
+    public var bytes: Int
+}
+public struct MemoryHistoryParams: Encodable, Sendable { public var provider, bank: String; public init(provider: String = "builtin", bank: String) { self.provider = provider; self.bank = bank } }
+public struct MemoryHistoryResult: Decodable, Sendable {
+    public struct Event: Decodable, Sendable, Hashable, Identifiable { public var id, at, action, recordId, text, by: String }
+    public var events: [Event]
+}
+public struct MemoryExportParams: Encodable, Sendable { public var folder: String; public init(folder: String) { self.folder = folder } }
+public struct MemoryExportResult: Decodable, Sendable { public var files: [String]; public var records: Int }
+public struct MemoryWipeParams: Encodable, Sendable { public var bank: String; public init(bank: String) { self.bank = bank } }
+public struct MemoryCountResult: Decodable, Sendable { public var records: Int?; public var pending: Int? }
+public struct MemoryLearningParams: Encodable, Sendable { public var ref: ContainerRef; public var learn: Bool; public init(ref: ContainerRef, learn: Bool) { self.ref = ref; self.learn = learn } }
 
 public struct SpaceSuggestion: Codable, Sendable, Hashable {
     public var spaceId: String

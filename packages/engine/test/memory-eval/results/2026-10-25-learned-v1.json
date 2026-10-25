@@ -1,0 +1,888 @@
+{
+	"set": "memory-2000",
+	"messages": 2018,
+	"model": "anthropic/claude-haiku-5.5",
+	"at": "2026-10-25T21:25:32.658Z",
+	"engines": {
+		"learned": {
+			"found": 35,
+			"of": 36,
+			"right": 38,
+			"questions": 40,
+			"byType": {
+				"current": {
+					"n": 12,
+					"found": 11,
+					"right": 11
+				},
+				"past": {
+					"n": 6,
+					"found": 6,
+					"right": 6
+				},
+				"event": {
+					"n": 12,
+					"found": 12,
+					"right": 11
+				},
+				"stable": {
+					"n": 6,
+					"found": 6,
+					"right": 6
+				},
+				"unknown": {
+					"n": 4,
+					"found": 0,
+					"right": 4
+				}
+			},
+			"recallMsMedian": 603,
+			"writeSeconds": 899.7,
+			"learned": {
+				"added": 82,
+				"replaced": 28,
+				"ended": 1,
+				"days": 183
+			},
+			"facts": [
+				{
+					"text": "Alex has a dentist appointment on Thursday, 2026-10-01 at 17:00.",
+					"at": "2026-09-30T15:35:00.000Z"
+				},
+				{
+					"text": "Alex finished the Madrid half marathon in 1:58:41 (reported 2026-09-27).",
+					"at": "2026-09-27T16:32:00.000Z"
+				},
+				{
+					"text": "Alex has a reminder to call the bank on 2026-09-21 at 9:00.",
+					"at": "2026-09-20T15:31:00.000Z"
+				},
+				{
+					"text": "Alex has a reminder to water the plants on Friday, 2026-09-25.",
+					"at": "2026-09-20T15:31:00.000Z"
+				},
+				{
+					"text": "Alex keeps houseplants.",
+					"at": "2026-09-19T17:36:00.000Z"
+				},
+				{
+					"text": "Alex has been promoted to charge nurse on the pediatric ward (as of 2026-09-18).",
+					"at": "2026-09-18T16:40:00.000Z"
+				},
+				{
+					"text": "Alex asked to be reminded to water the plants on Friday, 2026-09-18.",
+					"at": "2026-09-16T13:53:00.000Z",
+					"endedAt": "2026-09-20T15:31:00.000Z"
+				},
+				{
+					"text": "Alex asked Kit to remind them to call the bank on 2026-09-12 at 9:00 AM.",
+					"at": "2026-09-11T16:39:00.000Z",
+					"endedAt": "2026-09-20T15:31:00.000Z"
+				},
+				{
+					"text": "Alex adopted a rescued greyhound named Pico (as of September 2026), so Alex now has two dogs, Toffee and Pico.",
+					"at": "2026-09-10T16:08:00.000Z"
+				},
+				{
+					"text": "Alex asked to be reminded to water the plants on Friday, 2026-09-04.",
+					"at": "2026-09-01T19:35:00.000Z"
+				},
+				{
+					"text": "Alex plans to start Portuguese lessons with a tutor named Inês on Tuesday evenings (from September 2026).",
+					"at": "2026-09-01T19:35:00.000Z"
+				},
+				{
+					"text": "Alex and Sam plan to rent a flat near Alfama in Lisbon after moving there in October 2026.",
+					"at": "2026-08-28T15:30:00.000Z"
+				},
+				{
+					"text": "Sam's company is transferring him to Lisbon starting October 2026.",
+					"at": "2026-08-28T15:30:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday 2026-09-03 at 17:00.",
+					"at": "2026-08-27T15:09:00.000Z",
+					"endedAt": "2026-09-30T15:35:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 2026-08-27, at 17:00.",
+					"at": "2026-08-25T14:05:00.000Z",
+					"endedAt": "2026-08-27T15:09:00.000Z"
+				},
+				{
+					"text": "Lucía sent Alex new invitations, which Alex described as lovely in design (August 2026).",
+					"at": "2026-08-24T18:17:00.000Z"
+				},
+				{
+					"text": "Alex is travelling to Asturias for a week starting around 2026-08-16, staying in Cangas de Onís.",
+					"at": "2026-08-16T15:23:00.000Z"
+				},
+				{
+					"text": "Sam lives with Alex and does the cooking in their household, as of 2026-08-09.",
+					"at": "2026-08-09T15:35:00.000Z"
+				},
+				{
+					"text": "Alex rents their home and had a boiler problem that they were raising with their landlord as of 2026-08-09.",
+					"at": "2026-08-09T15:35:00.000Z"
+				},
+				{
+					"text": "Alex's mum had knee surgery, which went well; as of 2026-08-05 she is walking with crutches.",
+					"at": "2026-08-05T16:00:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday 6 August 2026 at 17:00.",
+					"at": "2026-08-02T16:24:00.000Z",
+					"endedAt": "2026-08-25T14:05:00.000Z"
+				},
+				{
+					"text": "Alex has a colleague named Pablo who runs marathons, with a personal best of 3:12.",
+					"at": "2026-08-02T16:24:00.000Z"
+				},
+				{
+					"text": "Alex has a daily commute and wants podcast recommendations for it.",
+					"at": "2026-08-01T15:57:00.000Z"
+				},
+				{
+					"text": "Alex plans to give Sam a vintage film camera as a birthday gift (August 14, 2026).",
+					"at": "2026-07-30T16:37:00.000Z"
+				},
+				{
+					"text": "Sam's birthday is on August 14.",
+					"at": "2026-07-30T16:37:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 2026-07-30 at 17:00.",
+					"at": "2026-07-27T18:53:00.000Z",
+					"endedAt": "2026-08-02T16:24:00.000Z"
+				},
+				{
+					"text": "Alex has plants that need watering, with a reminder set for Friday, 2026-07-31.",
+					"at": "2026-07-26T19:25:00.000Z",
+					"endedAt": "2026-09-01T19:35:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 2026-07-23, at 17:00.",
+					"at": "2026-07-21T17:10:00.000Z",
+					"endedAt": "2026-07-27T18:53:00.000Z"
+				},
+				{
+					"text": "Alex has started eating fish again and is now pescatarian (since July 2026).",
+					"at": "2026-07-20T18:03:00.000Z"
+				},
+				{
+					"text": "Alex's doctor says Alex's iron is low (as of 2026-07-20).",
+					"at": "2026-07-20T18:03:00.000Z"
+				},
+				{
+					"text": "Alex wants to sleep better (as of July 2026).",
+					"at": "2026-07-16T17:08:00.000Z"
+				},
+				{
+					"text": "Alex considers the flat white at Hola Coffee in Lavapiés perfect.",
+					"at": "2026-07-14T18:30:00.000Z"
+				},
+				{
+					"text": "Alex's favourite café is Hola Coffee in Lavapiés.",
+					"at": "2026-07-14T18:30:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday 2026-07-16 at 17:00.",
+					"at": "2026-07-11T15:25:00.000Z",
+					"endedAt": "2026-07-21T17:10:00.000Z"
+				},
+				{
+					"text": "Alex's colleague is leaving Alex's team (as of July 2026).",
+					"at": "2026-07-10T14:36:00.000Z"
+				},
+				{
+					"text": "Alex works shifts at a hospital.",
+					"at": "2026-07-09T17:52:00.000Z"
+				},
+				{
+					"text": "Alex commutes to the hospital by e-bike (since July 2026).",
+					"at": "2026-07-09T17:52:00.000Z"
+				},
+				{
+					"text": "Alex bought an Orbea e-bike in July 2026.",
+					"at": "2026-07-09T17:52:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 9 July 2026, at 17:00.",
+					"at": "2026-07-06T16:12:00.000Z",
+					"endedAt": "2026-07-11T15:25:00.000Z"
+				},
+				{
+					"text": "Alex signed up for the Madrid half marathon on September 27, 2026.",
+					"at": "2026-07-05T14:09:00.000Z"
+				},
+				{
+					"text": "Alex's new landlord allows pets.",
+					"at": "2026-07-02T18:24:00.000Z"
+				},
+				{
+					"text": "Alex and their household adopted a puppy named Toffee, a beagle mix, around 2026-07-02.",
+					"at": "2026-07-02T18:24:00.000Z"
+				},
+				{
+					"text": "Alex finished reading Piranesi by 2026-06-30.",
+					"at": "2026-06-30T15:17:00.000Z"
+				},
+				{
+					"text": "Alex started reading The Overstory on 2026-06-30.",
+					"at": "2026-06-30T15:17:00.000Z"
+				},
+				{
+					"text": "Alex goes on long runs.",
+					"at": "2026-06-29T16:12:00.000Z"
+				},
+				{
+					"text": "Alex has back pain after work shifts (as of June 2026).",
+					"at": "2026-06-29T16:12:00.000Z"
+				},
+				{
+					"text": "Lucía's wedding moved from its original venue to a new date of November 7, 2026, in the same city, after the original venue flooded (as of June 25, 2026).",
+					"at": "2026-06-25T16:38:00.000Z"
+				},
+				{
+					"text": "Alex's washing machine has been leaking (as of 2026-06-22).",
+					"at": "2026-06-22T17:34:00.000Z"
+				},
+				{
+					"text": "Alex has a reminder set to call the bank on 2026-06-23 at 9:00 am.",
+					"at": "2026-06-22T17:34:00.000Z",
+					"endedAt": "2026-09-11T16:39:00.000Z"
+				},
+				{
+					"text": "Alex works on a team at work, and a colleague on that team is leaving around June 2026.",
+					"at": "2026-06-21T20:47:00.000Z",
+					"endedAt": "2026-07-10T14:36:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 2026-06-25 at 17:00.",
+					"at": "2026-06-18T16:23:00.000Z",
+					"endedAt": "2026-07-06T16:12:00.000Z"
+				},
+				{
+					"text": "Alex moved into a new flat in Chamberí around 2026-06-16.",
+					"at": "2026-06-16T16:26:00.000Z"
+				},
+				{
+					"text": "Alex runs and has asked about running on consecutive days (as of June 2026).",
+					"at": "2026-06-15T18:06:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, June 18, 2026 at 17:00, and Kit set a reminder for it.",
+					"at": "2026-06-11T18:14:00.000Z",
+					"endedAt": "2026-06-18T16:23:00.000Z"
+				},
+				{
+					"text": "Alex lives in Madrid.",
+					"at": "2026-06-08T17:56:00.000Z",
+					"endedAt": "2026-06-16T16:26:00.000Z"
+				},
+				{
+					"text": "Alex sold their Seat Ibiza to a neighbour for 2,800 euros (on 2026-06-08), so Alex no longer owns a car.",
+					"at": "2026-06-08T17:56:00.000Z"
+				},
+				{
+					"text": "As of June 2026, Alex is dealing with a boiler problem and has asked for help writing to their landlord about it.",
+					"at": "2026-06-07T16:33:00.000Z"
+				},
+				{
+					"text": "Alex works long shifts.",
+					"at": "2026-06-06T16:43:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 2026-06-11 at 17:00.",
+					"at": "2026-06-06T16:43:00.000Z",
+					"endedAt": "2026-06-11T18:14:00.000Z"
+				},
+				{
+					"text": "Alex plans a 30-minute easy run on 2026-06-04.",
+					"at": "2026-06-03T17:17:00.000Z"
+				},
+				{
+					"text": "Alex now works as a nurse in pediatrics at Hospital Gregorio Marañón, on day shifts only (since June 2026).",
+					"at": "2026-06-01T14:32:00.000Z",
+					"endedAt": "2026-06-06T16:43:00.000Z"
+				},
+				{
+					"text": "Alex has a team at work and recently received support from them during the week of May 31, 2026.",
+					"at": "2026-05-31T17:10:00.000Z"
+				},
+				{
+					"text": "Alex went to La Tastaolletes, a vegetarian restaurant in Valencia, for their birthday in 2025.",
+					"at": "2026-05-25T17:04:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday 28 May 2026 at 17:00.",
+					"at": "2026-05-25T17:04:00.000Z",
+					"endedAt": "2026-06-06T16:43:00.000Z"
+				},
+				{
+					"text": "Alex and Sam plan to move to Madrid on June 15, 2026.",
+					"at": "2026-05-20T14:23:00.000Z",
+					"endedAt": "2026-08-28T15:30:00.000Z"
+				},
+				{
+					"text": "Sam received a job offer in Madrid, and Alex and Sam signed for a flat there.",
+					"at": "2026-05-20T14:23:00.000Z",
+					"endedAt": "2026-08-28T15:30:00.000Z"
+				},
+				{
+					"text": "Alex often forgets their keys (as of 2026-05-17).",
+					"at": "2026-05-17T15:24:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 2026-05-21, at 17:00.",
+					"at": "2026-05-16T17:25:00.000Z",
+					"endedAt": "2026-05-25T17:04:00.000Z"
+				},
+				{
+					"text": "Alex has a daily commute and listens to podcasts during it.",
+					"at": "2026-05-15T17:32:00.000Z"
+				},
+				{
+					"text": "Sam's sister has two cats, Mochi and Pixel.",
+					"at": "2026-05-14T14:06:00.000Z"
+				},
+				{
+					"text": "Alex set a reminder to water the plants on Friday, 2026-05-15.",
+					"at": "2026-05-11T18:16:00.000Z",
+					"endedAt": "2026-07-26T19:25:00.000Z"
+				},
+				{
+					"text": "Alex ran a 10K in 52:30 on 2026-05-10, a personal best.",
+					"at": "2026-05-10T14:29:00.000Z"
+				},
+				{
+					"text": "Alex's friend Jorge moved to Bilbao for work (as of May 2026).",
+					"at": "2026-05-05T18:18:00.000Z"
+				},
+				{
+					"text": "Alex has tight calves.",
+					"at": "2026-05-05T18:18:00.000Z"
+				},
+				{
+					"text": "Alex started reading the novel Piranesi on 2026-05-02 and finds it strange and lovely.",
+					"at": "2026-05-03T13:20:00.000Z"
+				},
+				{
+					"text": "Alex has back pain after work shifts.",
+					"at": "2026-04-30T19:09:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 30 April 2026 at 17:00.",
+					"at": "2026-04-28T14:31:00.000Z",
+					"endedAt": "2026-05-16T17:25:00.000Z"
+				},
+				{
+					"text": "Alex is currently reading a book and found its latest chapter slow (as of 2026-04-27).",
+					"at": "2026-04-27T18:44:00.000Z",
+					"endedAt": "2026-05-03T13:20:00.000Z"
+				},
+				{
+					"text": "Alex rents their home and raised a boiler problem with their landlord around 2026-04-27.",
+					"at": "2026-04-27T18:44:00.000Z"
+				},
+				{
+					"text": "Alex has houseplants that they water.",
+					"at": "2026-04-27T18:44:00.000Z"
+				},
+				{
+					"text": "Alex owns a washing machine that started leaking in April 2026.",
+					"at": "2026-04-26T13:09:00.000Z"
+				},
+				{
+					"text": "Alex rents their home and has a landlord, and as of 2026-04-25 Alex has a boiler problem they plan to raise with the landlord.",
+					"at": "2026-04-25T15:50:00.000Z",
+					"endedAt": "2026-04-27T18:44:00.000Z"
+				},
+				{
+					"text": "Alex runs.",
+					"at": "2026-04-23T18:20:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday at 17:00, with the reminder set on 2026-04-23.",
+					"at": "2026-04-23T18:20:00.000Z",
+					"endedAt": "2026-04-28T14:31:00.000Z"
+				},
+				{
+					"text": "Marta is Alex's coworker and lives in Getafe, near Madrid.",
+					"at": "2026-04-22T15:41:00.000Z"
+				},
+				{
+					"text": "Alex drives an old Seat Ibiza that is 14 years old (as of 2026-04-20).",
+					"at": "2026-04-20T15:57:00.000Z",
+					"endedAt": "2026-06-08T17:56:00.000Z"
+				},
+				{
+					"text": "Alex has a daily commute.",
+					"at": "2026-04-19T18:23:00.000Z"
+				},
+				{
+					"text": "Alex wants to sleep better (as of 2026-04-17).",
+					"at": "2026-04-17T12:36:00.000Z"
+				},
+				{
+					"text": "Alex signed up for the Valencia 10K on May 10 (exchange dated 2026-04-15).",
+					"at": "2026-04-15T14:55:00.000Z"
+				},
+				{
+					"text": "A colleague on Alex's team is leaving the team (as of 2026-04-14), and Alex is looking for a farewell gift for them.",
+					"at": "2026-04-14T15:03:00.000Z"
+				},
+				{
+					"text": "Alex works shifts, as of April 2026.",
+					"at": "2026-04-14T15:03:00.000Z"
+				},
+				{
+					"text": "Alex has a cousin who lives in Lisbon.",
+					"at": "2026-04-14T15:03:00.000Z"
+				},
+				{
+					"text": "Alex lives in a flat.",
+					"at": "2026-04-12T17:40:00.000Z"
+				},
+				{
+					"text": "Alex's sister Lucía is getting married on October 3, 2026, in Seville.",
+					"at": "2026-04-12T17:40:00.000Z"
+				},
+				{
+					"text": "Alex has always wanted a dog but cannot get one while the landlord prohibits animals.",
+					"at": "2026-04-10T15:55:00.000Z"
+				},
+				{
+					"text": "Alex rents their home, and the landlord does not allow animals.",
+					"at": "2026-04-10T15:55:00.000Z",
+					"endedAt": "2026-07-02T18:24:00.000Z"
+				},
+				{
+					"text": "Alex asked for a reminder to water the plants on Friday 10 April 2026.",
+					"at": "2026-04-09T16:47:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday 16 April 2026 at 17:00.",
+					"at": "2026-04-09T16:47:00.000Z"
+				},
+				{
+					"text": "Alex's partner is Sam, who works as a sound engineer, mostly on theatre gigs.",
+					"at": "2026-04-09T16:47:00.000Z"
+				},
+				{
+					"text": "Alex is allergic to cashews, and the allergy is severe.",
+					"at": "2026-04-08T16:13:00.000Z"
+				},
+				{
+					"text": "Alex has been vegetarian for six years.",
+					"at": "2026-04-06T16:38:00.000Z"
+				},
+				{
+					"text": "A colleague of Alex is leaving Alex's team (as of 2026-04-05), and Alex is looking for a gift for them.",
+					"at": "2026-04-05T15:59:00.000Z"
+				},
+				{
+					"text": "Alex's boiler is broken and Alex is contacting the landlord about it (as of 2026-04-05).",
+					"at": "2026-04-05T15:59:00.000Z"
+				},
+				{
+					"text": "Alex has a dentist appointment on Thursday, 2026-04-09 at 17:00, and asked for a reminder.",
+					"at": "2026-04-05T15:59:00.000Z",
+					"endedAt": "2026-04-09T16:47:00.000Z"
+				},
+				{
+					"text": "As of 2026-04-04, Alex works night shifts four nights a week.",
+					"at": "2026-04-04T15:04:00.000Z"
+				},
+				{
+					"text": "Alex loves living near the Turia gardens.",
+					"at": "2026-04-03T17:39:00.000Z"
+				},
+				{
+					"text": "Alex lives in a small flat with Sam, about five minutes from the Turia gardens.",
+					"at": "2026-04-03T17:39:00.000Z"
+				},
+				{
+					"text": "Alex prefers short answers from the assistant because they read responses between shifts.",
+					"at": "2026-04-02T15:57:00.000Z"
+				},
+				{
+					"text": "Alex has lived in Valencia for nine years.",
+					"at": "2026-04-02T15:57:00.000Z"
+				},
+				{
+					"text": "Alex is a nurse at Hospital La Fe.",
+					"at": "2026-04-02T15:57:00.000Z"
+				}
+			],
+			"rows": [
+				{
+					"type": "current",
+					"q": "Which city does Alex call home at the moment?",
+					"found": true,
+					"answer": "Alex currently calls Madrid home, though a move to Lisbon is planned for October.",
+					"right": true,
+					"recallMs": 717,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Where is Alex headed after this place?",
+					"found": true,
+					"answer": "Alex is moving to Lisbon, renting near Alfama, from October, since Sam's company is transferring him there.",
+					"right": true,
+					"recallMs": 852,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which hospital employs Alex now?",
+					"found": true,
+					"answer": "Alex now works at Hospital Gregorio Marañón, having accepted that job in June 2026 after leaving Hospital La Fe.",
+					"right": true,
+					"recallMs": 864,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "What is Alex's job title these days?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 855,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex still work nights?",
+					"found": true,
+					"answer": "No, Alex switched to pediatrics at Hospital Gregorio Marañón on day shifts only, as of June 2026.",
+					"right": true,
+					"recallMs": 1034,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How many dogs live with Alex now?",
+					"found": true,
+					"answer": "Two dogs live with Alex now: Toffee and Pico.",
+					"right": true,
+					"recallMs": 622,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How would you describe Alex's diet now?",
+					"found": true,
+					"answer": "Alex is pescatarian now, having started eating fish again in July 2026 because their doctor said their iron was low.",
+					"right": true,
+					"recallMs": 568,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "When will Lucía get married?",
+					"found": true,
+					"answer": "Lucía's wedding is now on November 7, 2026, in Seville, after her original venue flooded and the date moved.",
+					"right": true,
+					"recallMs": 553,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How does Alex usually get to the hospital?",
+					"found": true,
+					"answer": "Alex usually gets to the hospital by e-bike, an Orbea, which has been the commute since July 2026.",
+					"right": true,
+					"recallMs": 562,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex own a car right now?",
+					"found": true,
+					"answer": "No. Alex sold their Seat Ibiza to a neighbour on 2026-06-08 and has no car in Madrid.",
+					"right": true,
+					"recallMs": 596,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which book is Alex reading at the end of the summer?",
+					"found": true,
+					"answer": "Alex was most recently reading *The Overstory*, which they started on 2026-06-30, though the later \"finished a chapter\" messages don't name a book.",
+					"right": true,
+					"recallMs": 563,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which language is Alex learning, and with whom?",
+					"found": true,
+					"answer": "Alex is learning Portuguese with a tutor named Inês, starting on Tuesday evenings.",
+					"right": true,
+					"recallMs": 553,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Where did Alex live before the move in June?",
+					"found": true,
+					"answer": "Alex lived in a small flat in Valencia, about five minutes from the Turia gardens, before moving to Chamberí in June.",
+					"right": true,
+					"recallMs": 502,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What ward did Alex switch to when changing hospitals?",
+					"found": true,
+					"answer": "Alex switched to pediatrics when moving to Hospital Gregorio Marañón.",
+					"right": true,
+					"recallMs": 617,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was the wedding date originally?",
+					"found": true,
+					"answer": "Lucía's wedding was originally set for October 3, 2026, in Seville.",
+					"right": true,
+					"recallMs": 652,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Which shifts was Alex working in April?",
+					"found": true,
+					"answer": "Alex was working night shifts, four nights a week, in April 2026.",
+					"right": true,
+					"recallMs": 583,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was Alex's diet before the doctor's advice?",
+					"found": true,
+					"answer": "Before the doctor's advice in July 2026, Alex was vegetarian, having been so for six years.",
+					"right": true,
+					"recallMs": 618,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Why couldn't Alex have a dog in the first flat?",
+					"found": true,
+					"answer": "Alex's first flat's landlord didn't allow animals.",
+					"right": true,
+					"recallMs": 595,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What did Alex cook for the housewarming?",
+					"found": true,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 649,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What was Alex's finishing time in the 10K?",
+					"found": true,
+					"answer": "Alex finished the 10K in 52:30 on May 10, 2026, a personal best.",
+					"right": true,
+					"recallMs": 603,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How long did the half marathon take Alex?",
+					"found": true,
+					"answer": "Alex finished the Madrid half marathon in 1:58:41.",
+					"right": true,
+					"recallMs": 614,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How much money did Alex get for the old car?",
+					"found": true,
+					"answer": "Alex sold the Seat Ibiza to a neighbour for 2,800 euros on 2026-06-08.",
+					"right": true,
+					"recallMs": 581,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What present did Alex want for Sam's birthday?",
+					"found": true,
+					"answer": "A vintage film camera.",
+					"right": true,
+					"recallMs": 563,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which region did Alex visit on holiday in August?",
+					"found": true,
+					"answer": "Alex visited Asturias in August 2026, staying in Cangas de Onís for a week.",
+					"right": true,
+					"recallMs": 829,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What operation did Alex's mother have?",
+					"found": true,
+					"answer": "Alex's mother had knee surgery.",
+					"right": true,
+					"recallMs": 526,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Why did the wedding move?",
+					"found": true,
+					"answer": "The wedding moved because Lucía's original venue flooded, so it was rescheduled to November 7, 2026, in the same city.",
+					"right": true,
+					"recallMs": 543,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What's the name of the second dog, and what kind of dog is it?",
+					"found": true,
+					"answer": "The second dog is Pico, a rescued greyhound.",
+					"right": true,
+					"recallMs": 879,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "When is Sam's birthday?",
+					"found": true,
+					"answer": "August 14.",
+					"right": true,
+					"recallMs": 509,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which neighbourhood did they move into in Madrid?",
+					"found": true,
+					"answer": "Alex moved into a flat in Chamberí, Madrid.",
+					"right": true,
+					"recallMs": 845,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Where will they rent in Lisbon?",
+					"found": true,
+					"answer": "Near Alfama.",
+					"right": true,
+					"recallMs": 1990,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Is there a nut Alex has to avoid?",
+					"found": true,
+					"answer": "Yes, cashews: Alex is severely allergic to them.",
+					"right": true,
+					"recallMs": 951,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What does Alex's partner do for a living?",
+					"found": true,
+					"answer": "Alex's partner Sam is a sound engineer, mostly on theatre gigs.",
+					"right": true,
+					"recallMs": 515,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "How does Alex like replies to be?",
+					"found": true,
+					"answer": "Alex prefers short answers because they read responses between shifts.",
+					"right": true,
+					"recallMs": 571,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What's the name of the beagle?",
+					"found": true,
+					"answer": "Toffee is the beagle mix.",
+					"right": true,
+					"recallMs": 560,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Where does Alex like to get coffee in the new city?",
+					"found": true,
+					"answer": "Alex's favourite café is Hola Coffee in Lavapiés, but my memory doesn't say whether that's in the new city.",
+					"right": true,
+					"recallMs": 736,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What brand is Alex's e-bike?",
+					"found": true,
+					"answer": "Alex's e-bike is an Orbea.",
+					"right": true,
+					"recallMs": 563,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is the name of Alex's brother?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 611,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "Which gym is Alex a member of?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 674,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is Alex's blood type?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 586,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What instrument does Sam play?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 559,
+					"hits": 40
+				}
+			]
+		}
+	},
+	"cost": {
+		"embeddings": 0.00059,
+		"embeddingTokens": 29394,
+		"answers": 0.0069,
+		"learning": 0.0577
+	}
+}

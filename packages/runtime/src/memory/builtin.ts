@@ -42,6 +42,8 @@ const RRF_K = 60;
 const MIN_SIMILARITY = 0.3;
 /** How many vector hits join the fusion. */
 const VECTOR_HITS = 50;
+/** Current facts (distilled, M2) count a little more than the raw messages they came from. */
+const FACT_WEIGHT = 1.3;
 
 export class BuiltinMemory implements MemoryProvider {
 	readonly id = "builtin";
@@ -135,7 +137,7 @@ export class BuiltinMemory implements MemoryProvider {
 		const times = found.map((r) => Date.parse(r.at));
 		const newest = Math.max(...times), oldest = Math.min(...times);
 		const hits = found.map((r, i) => {
-			const match = (fused.get(r.id) ?? 0) / best;
+			const match = ((fused.get(r.id) ?? 0) / best) * (r.kind === "fact" ? FACT_WEIGHT : 1);
 			const recency = newest === oldest ? 1 : (times[i]! - oldest) / (newest - oldest);
 			return { ...toRecord(r), score: match * (1 + RECENCY_WEIGHT * recency) + (r.pinned ? 0.5 : 0) };
 		});
@@ -303,6 +305,33 @@ export class BuiltinMemory implements MemoryProvider {
 
 	async standing(bank: string): Promise<MemoryRecord[]> {
 		return this.sql.all<Row>("SELECT * FROM memory_records WHERE bank = ? AND pinned = 1 AND ended_at IS NULL ORDER BY at", bank).map(toRecord);
+	}
+
+	/** Every bank with what it holds (Settings › Memory). */
+	banks(): { bank: string; records: number; facts: number; messages: number; ended: number; updatedAt: string }[] {
+		return this.sql
+			.all<{ bank: string; records: number; facts: number; messages: number; ended: number; updated: string }>(
+				`SELECT bank, COUNT(*) AS records, SUM(kind = 'fact' AND ended_at IS NULL) AS facts, SUM(kind = 'message') AS messages,
+				 SUM(ended_at IS NOT NULL) AS ended, MAX(at) AS updated FROM memory_records GROUP BY bank ORDER BY bank`,
+			)
+			.map((r) => ({ bank: r.bank, records: Number(r.records), facts: Number(r.facts ?? 0), messages: Number(r.messages ?? 0), ended: Number(r.ended ?? 0), updatedAt: r.updated }));
+	}
+
+	/** Every record of a bank (or of all of them), current or not, oldest first: the export. */
+	dump(bank?: string): MemoryRecord[] {
+		return this.sql.all<Row>(`SELECT * FROM memory_records${bank ? " WHERE bank = ?" : ""} ORDER BY bank, at, rowid`, ...(bank ? [bank] : [])).map(toRecord);
+	}
+
+	/** Deletes one bank (or every bank) with its history and vectors. */
+	wipe(bank?: string): number {
+		const where = bank ? " WHERE bank = ?" : "";
+		const params = bank ? [bank] : [];
+		const n = Number(this.sql.all<{ n: number }>(`SELECT COUNT(*) AS n FROM memory_records${where}`, ...params)[0]?.n ?? 0);
+		this.sql.run(`DELETE FROM memory_records${where}`, ...params);
+		this.sql.run(`DELETE FROM memory_events${where}`, ...params);
+		this.sql.run(`DELETE FROM memory_vectors${where}`, ...params);
+		this.indexes.clear();
+		return n;
 	}
 
 	/** Deletes every bank whose name starts with `prefix` (an agent being deleted), with their history. */

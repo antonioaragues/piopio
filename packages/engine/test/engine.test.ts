@@ -1597,6 +1597,45 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 		expect(existsSync(join(b.home, "trash", "coach"))).toBe(true);
 		expect((await b.client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner` })).records).toEqual([]);
 	}, 60_000);
+	test("Settings › Memory (docs/spec/14 M3): banks with owners, search, history, learning switch, export and wipe", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		await a.client.call("aboutMe.set", { text: "## Home\n- Lives in Valencia" });
+		await a.client.call("memory.add", { provider: "builtin", bank: `${ref.id}/owner`, text: "Antonio runs in the mornings" });
+		await a.client.call("memory.add", { provider: "builtin", bank: `${ref.id}/shared`, text: "The family car is a Seat" });
+		let banks = await a.client.call("memory.banks", {});
+		expect(banks.banks.map((b) => [b.label, b.area, b.facts, b.agent?.name])).toEqual([
+			["About me", "about-me", 1, undefined],
+			["Antonio", "agent", 1, "Helper"],
+			["Shared", "agent", 1, "Helper"],
+		]);
+		expect(banks.agents).toMatchObject([{ id: ref.id, name: "Helper", learns: true, provider: "builtin" }]);
+		expect(banks.bytes).toBeGreaterThan(0);
+
+		const found = (await a.client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner`, query: "morning run" })).records;
+		expect(found.map((r) => r.text)).toEqual(["Antonio runs in the mornings"]);
+		const history = (await a.client.call("memory.history", { provider: "builtin", bank: `${ref.id}/owner` })).events;
+		expect(history.map((e) => [e.action, e.text, e.by])).toEqual([["added", "Antonio runs in the mornings", "user"]]);
+
+		await a.client.call("memory.setLearning", { ref, learn: false });
+		expect((await a.client.call("memory.banks", {})).agents[0]!.learns).toBe(false);
+		expect((await a.client.call("agents.get", { ref })).history[0]!.message).toBe("Stop learning facts from conversations");
+
+		const folder = join(a.home, "export");
+		const exported = await a.client.call("memory.export", { folder });
+		expect(exported.records).toBe(3);
+		expect(readFileSync(join(folder, "memory.md"), "utf8")).toContain("## About me");
+		expect(JSON.parse(readFileSync(join(folder, "memory.json"), "utf8")).records).toHaveLength(3);
+
+		expect(await a.client.call("memory.wipe", { bank: `${ref.id}/shared` })).toEqual({ records: 1 });
+		banks = await a.client.call("memory.banks", {});
+		expect(banks.banks.map((b) => b.label).sort()).toEqual(["About me", "Antonio"]);
+		expect(await a.client.call("memory.reindex", {})).toEqual({ pending: 2 }); // no key in tests: they wait for embeddings
+		expect(await a.client.call("memory.wipe", { bank: "*" })).toEqual({ records: 2 });
+		expect((await a.client.call("memory.banks", {})).banks).toEqual([]);
+		await stop(a);
+	});
+
 	test("learned facts (docs/spec/14 M2): after a quiet moment the agent learns a fact, a later one replaces it, and Undo brings the old one back", async () => {
 		// A scripted utility model: extraction finds where Antonio lives; the decision replaces the old city.
 		const learn = async (system: string, prompt: string) => {

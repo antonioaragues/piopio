@@ -1,5 +1,7 @@
 # 14 · Memory (spike S8, 2026-10-24)
 
+**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 OpenRouter embeddings by default, with Keep memory on this Mac as the opt-out. Q1 and Q3 wait for M4 and M5.
+
 The question: how should Piopio's memory get better, where does a project like Hindsight fit, should memory have
 its own Settings section, and which kinds of memory belong in which part of the product (Chat, notebooks, agents,
 Build projects)? This spike reviews what we have, evaluates ten projects, measures one building block, and proposes
@@ -189,6 +191,54 @@ before Past chats (M4) starts indexing more of your data.
   isn't committed (`.pi/` or `AGENTS.local.md`, read only by Piopio)?
 - **Q4 · Embeddings in the cloud:** is sending text to OpenRouter's embedding models acceptable as the default, with
   "Keep memory on this Mac" as the opt-out?
+
+## 7. What's built (2026-10-25)
+
+**M1 · Hybrid recall**
+- **Vectors:** `BuiltinMemory` takes an embedder; every record gets an int8 vector in `memory_vectors`.
+- **Recall:** BM25 and vector rankings fused with reciprocal rank fusion (k = 60), with a 0.3 similarity floor, then recency, pins and a 1.3× weight for current facts.
+- **Where it runs:** the same code on the Mac and on a Durable Object (the cloud tests pass).
+- **The embedder:** `openai/text-embedding-3-small` at 256 dimensions through OpenRouter, else the OpenAI API key, else keyword-only. A failure pauses semantic search for a minute.
+- **Backfill:** records written offline or before M1 get their vectors in the background.
+- **Settings:** `memory.localOnly` (Keep memory on this Mac), `memory.embeddings` (another endpoint); `memory.status`.
+
+**M0 · Our own test set**
+- **The set:** 2,018 messages over six months, 40 questions: [packages/engine/test/memory-eval](../../packages/engine/test/memory-eval/README.md).
+- **Answers right:** keyword 25/40, hybrid 38/40, large embeddings 39/40, hybrid with learned facts 39/40.
+- **Cost:** embeddings $0.004 for the whole set; learning $0.06 for six months.
+- **Not run:** Hindsight (not installed; S6's numbers stand) and the on-device utility model.
+
+**M2 · Learned facts (agents)**
+- **When:** after a person's conversation is quiet for 90 s (or after 6 exchanges), the utility model extracts facts.
+- **How it decides:** each fact is compared with the closest current facts: add, replace, end or nothing.
+- **History:** replaced facts keep `replacedBy` and `endedAt`, and recall leaves them out.
+- **Visible:** each step writes a `piopio.learned` entry, shown as a memory card ("Learned", "Updated memory: … (was: …)") with Undo, which restores what it replaced.
+- **Per agent:** `memory.learn` (default on).
+- **About me** keeps `remember_about_me` with add and remove; automatic extraction there is not built.
+
+**M3 · Settings › Memory**
+- **The section:** after Chat ([screenshots](../design/memory/screenshots)).
+  - **What Piopio remembers:** About me (its editor moved here from Settings › Chat), each agent with facts and messages, notebooks.
+  - **Memory search:** M1's status and Keep memory on this Mac.
+  - **Learning:** Chats add to About me, and a switch per agent (`memory.setLearning`, saved in the definition's history).
+  - **Your data:** Export everything (memory.json and memory.md), Rebuild search index, and Erase one part or everything (with confirmation).
+- **Browse:** every bank in one window.
+  - Search by meaning or words.
+  - Facts / Messages / All, and Replaced with what replaced what.
+  - The history.
+  - Pin, correct (kept as a replacement), forget, and add.
+- **Protocol:** `memory.banks`, `memory.history`, `memory.export`, `memory.wipe`, `memory.reindex`, `memory.setLearning`; `memory.list` gained `query` and `includeEnded`; `memory.add` gained `replaces`.
+- **Not built yet:**
+  - the "what was recalled" line in each turn's inspector;
+  - per-area engines;
+  - "never remember" topics;
+  - local embeddings.
+
+**Follow-ups:**
+- a periodic tidy-up pass over an agent's facts (stale facts M0 found);
+- M4 (past chats, semantic `search_space`);
+- M5 (project lessons, after Q3);
+- M6 (Hindsight).
 
 ## Sources
 - Hindsight: [repository](https://github.com/vectorize-io/hindsight), [announcement](https://vectorize.io/blog/introducing-hindsight-agent-memory-that-works-like-human-memory), [paper](https://arxiv.org/abs/2512.12818); our [S6](../spikes/s6/README.md).

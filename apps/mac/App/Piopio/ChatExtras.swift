@@ -108,28 +108,10 @@ struct ThreadPicker: View {
 
 // MARK: Settings › Chat
 
-/// Settings › Chat (design handoff h1): suggestions, and About me as a list of facts (the notebook memory component)
-/// with who it's shared with, whether conversations add to it, and where it's stored.
+/// Settings › Chat (design handoff h1): suggestions. About me and memory moved to Settings › Memory (docs/spec/14 M3).
 struct ChatPane: View {
     let engine: EngineController
-    @State private var text = ""
-    @State private var revisions: [MemoryRevision] = []
-    @State private var limited = false
-    @State private var editing: Int?
-    @State private var draft = ""
-    @State private var adding = ""
-    @State private var hovered: Int?
-    @State private var showingHistory = false
-    @State private var editingProvider: McpMemoryProvider?
-    @State private var tryingProvider: McpMemoryProvider?
-    @State private var error: String?
-    @State private var status: MemoryStatus?
-    @FocusState private var addFocused: Bool
-
-    enum Share: Hashable { case chats, agents, nobody }
-
     private var settings: EngineSettings? { engine.settings }
-    private var facts: [MemoryEditorSheet.Fact] { MemoryEditorSheet.facts(in: text) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -144,8 +126,47 @@ struct ChatPane: View {
                 }))
             }
             .padding(.bottom, 22)
+            CardTitle("About me")
+            ListCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "brain.head.profile").font(.system(size: 14)).foregroundStyle(Color.dsFg3).frame(width: 20)
+                    Text("About me and memory search moved to Memory.").font(.system(size: 13))
+                    Spacer()
+                    Button("Open Memory") { NotificationCenter.default.post(name: .settingsSection, object: "Memory") }
+                        .buttonStyle(PillStyle(compact: true))
+                }
+                .padding(.horizontal, 14).frame(minHeight: 50)
+            }
+        }
+        .task { await engine.loadSettings() }
+    }
+}
 
-            CardTitle(title: "About me", detail: limited ? nil : "\(facts.count) fact\(facts.count == 1 ? "" : "s")") {
+/// About me (Settings › Memory): a list of facts (the notebook memory component) with who it's shared with,
+/// whether conversations add to it, and where it's stored.
+struct AboutMeEditor: View {
+    let engine: EngineController
+    @State private var text = ""
+    @State private var revisions: [MemoryRevision] = []
+    @State private var limited = false
+    @State private var editing: Int?
+    @State private var draft = ""
+    @State private var adding = ""
+    @State private var hovered: Int?
+    @State private var showingHistory = false
+    @State private var editingProvider: McpMemoryProvider?
+    @State private var tryingProvider: McpMemoryProvider?
+    @State private var error: String?
+    @FocusState private var addFocused: Bool
+
+    enum Share: Hashable { case chats, agents, nobody }
+
+    private var settings: EngineSettings? { engine.settings }
+    private var facts: [MemoryEditorSheet.Fact] { MemoryEditorSheet.facts(in: text) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            CardTitle(title: "Facts", detail: limited ? nil : "\(facts.count) fact\(facts.count == 1 ? "" : "s")") {
                 if !revisions.isEmpty {
                     Button("History") { showingHistory = true }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
                 }
@@ -178,12 +199,10 @@ struct ChatPane: View {
             }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
             FinePrint("Never shared with Build sessions.").padding(.top, 10)
-            memorySearch.padding(.top, 22)
         }
         .task {
             await engine.loadSettings()
             await load()
-            status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self)
             // Captures: PIOPIO_DEMO_ABOUT_ME seeds About me ("|" between lines) and shares it with chats.
             if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_ABOUT_ME"], text.isEmpty {
                 setShare(.chats)
@@ -332,52 +351,6 @@ struct ChatPane: View {
         .menuStyle(.button).buttonStyle(ChipStyle()).fixedSize()
     }
 
-    // MARK: Memory search (docs/spec/14-memory M1)
-
-    private var memorySearch: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CardTitle("Memory search")
-            ListCard {
-                HStack(spacing: 12) {
-                    Image(systemName: status?.semantic == true ? "sparkle.magnifyingglass" : "text.magnifyingglass")
-                        .font(.system(size: 14)).foregroundStyle(status?.semantic == true ? Color.accentColor : Color.dsFg3).frame(width: 20)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(status?.semantic == true ? "Finds by meaning and by words" : "Finds by words").font(.system(size: 13))
-                        Text(statusLine).font(.system(size: 11.5)).foregroundStyle(status?.reason == "failing" ? Color.dsAmber : Color.dsFg3).lineLimit(2)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 14).frame(minHeight: 54)
-                RowDivider(inset: 14)
-                ToggleRow(title: "Keep memory on this Mac", subtitle: "No text goes out to compute embeddings; search matches words only", last: true, isOn: Binding(get: { settings?.memory.localOnly ?? false }, set: { v in
-                    Task {
-                        await engine.updateSettings(SettingsPatch(memory: .init(localOnly: v)))
-                        status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self)
-                    }
-                }))
-            }
-            FinePrint("About me, agents' memory and notebook search use it. Embeddings cost well under a cent per 100 messages.").padding(.top, 2)
-        }
-    }
-
-    private var statusLine: String {
-        guard let s = status else { return "Checking…" }
-        let count = "\(s.indexed.formatted()) of \(s.records.formatted()) memories indexed"
-        if s.semantic { return [s.model.map(Self.modelName), s.via.map { "via \($0)" }, count].compactMap { $0 }.joined(separator: " · ") }
-        switch s.reason {
-        case "local_only": return "Memory stays on this Mac"
-        case "no_key": return "Connect OpenRouter or an OpenAI API key in Models to find by meaning"
-        default: return "Paused: \(s.error ?? "the embedding service didn't answer"). Trying again in a minute."
-        }
-    }
-
-    /// "openai/text-embedding-3-small@256" → "OpenAI small (256)".
-    private static func modelName(_ id: String) -> String {
-        if id.hasPrefix("openai/text-embedding-3-small") { return "OpenAI small embeddings" }
-        if id.hasPrefix("openai/text-embedding-3-large") { return "OpenAI large embeddings" }
-        return id
-    }
-
     private func pick(_ id: String) {
         Task {
             await engine.updateSettings(SettingsPatch(aboutMe: .init(provider: id)))
@@ -438,5 +411,60 @@ private struct AboutMeHistorySheet: View {
         }
         .padding(22)
         .frame(width: 560)
+    }
+}
+
+/// Memory search (docs/spec/14-memory M1): whether recall finds by meaning, with what, how much is indexed, and
+/// "Keep memory on this Mac".
+struct MemorySearchCard: View {
+    let engine: EngineController
+    /// Bumped by Rebuild index, so the counts refresh.
+    var tick = 0
+    @State private var status: MemoryStatus?
+    private var settings: EngineSettings? { engine.settings }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CardTitle("Memory search")
+            ListCard {
+                HStack(spacing: 12) {
+                    Image(systemName: status?.semantic == true ? "sparkle.magnifyingglass" : "text.magnifyingglass")
+                        .font(.system(size: 14)).foregroundStyle(status?.semantic == true ? Color.accentColor : Color.dsFg3).frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(status?.semantic == true ? "Finds by meaning and by words" : "Finds by words").font(.system(size: 13))
+                        Text(statusLine).font(.system(size: 11.5)).foregroundStyle(status?.reason == "failing" ? Color.dsAmber : Color.dsFg3).lineLimit(2)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 14).frame(minHeight: 54)
+                RowDivider(inset: 14)
+                ToggleRow(title: "Keep memory on this Mac", subtitle: "No text goes out to compute embeddings; search matches words only", last: true, isOn: Binding(get: { settings?.memory.localOnly ?? false }, set: { v in
+                    Task {
+                        await engine.updateSettings(SettingsPatch(memory: .init(localOnly: v)))
+                        status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self)
+                    }
+                }))
+            }
+            FinePrint("About me and agents' memory use it. Embeddings cost well under a cent per 100 messages.").padding(.top, 2)
+        }
+        .task(id: tick) { status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self) }
+    }
+
+    private var statusLine: String {
+        guard let s = status else { return "Checking…" }
+        let count = "\(s.indexed.formatted()) of \(s.records.formatted()) memories indexed"
+        if s.semantic { return [s.model.map(Self.modelName), s.via.map { "via \($0)" }, count].compactMap { $0 }.joined(separator: " · ") }
+        switch s.reason {
+        case "local_only": return "Memory stays on this Mac"
+        case "no_key": return "Connect OpenRouter or an OpenAI API key in Models to find by meaning"
+        default: return "Paused: \(s.error ?? "the embedding service didn't answer"). Trying again in a minute."
+        }
+    }
+
+    /// "openai/text-embedding-3-small@256" → "OpenAI small (256)".
+    private static func modelName(_ id: String) -> String {
+        if id.hasPrefix("openai/text-embedding-3-small") { return "OpenAI small embeddings" }
+        if id.hasPrefix("openai/text-embedding-3-large") { return "OpenAI large embeddings" }
+        return id
     }
 }

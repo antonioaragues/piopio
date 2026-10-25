@@ -35,6 +35,8 @@ facts that change several times, decoys that share words with the questions, and
 | **Basic** (keyword + recency, before M1) | 21/36 | **25/40** | 7/12 | 3/6 | 8/12 | 3/6 | 4/4 | 4 ms |
 | **Standard, small** (+ `text-embedding-3-small` at 256) | 34/36 | **38/40** | 11/12 | 5/6 | 12/12 | 6/6 | 4/4 | 645 ms |
 | **Standard, large** (+ `text-embedding-3-large` at 256) | 34/36 | **39/40** | 11/12 | 6/6 | 12/12 | 6/6 | 4/4 | 701 ms |
+| **Standard + learned facts** (small, M2, first prompt) | 35/36 | **38/40** | 11/12 | 6/6 | 11/12 | 6/6 | 4/4 | 603 ms |
+| **Standard + learned facts** (small, M2, tuned) | 35/36 | **39/40** | 11/12 | 6/6 | 12/12 | 6/6 | 4/4 | 595 ms |
 
 - **Hybrid recall is the gain.** It took 25/40 to 38/40. A keyword match misses paraphrases: "Which city does Alex call home" shares no word with "First night in the new flat in Chamberí".
 - **Small vs large:** the large model adds one right answer at six times the price. Small stays the default.
@@ -46,4 +48,12 @@ facts that change several times, decoys that share words with the questions, and
 
   Both are changes over time, which is what learned facts (M2) are for.
 
-Reports: [results/](results/).
+## Learned facts (M2)
+- **How it ran:** one learning step per day of conversation, the way agents batch a quiet conversation's exchanges. The utility model (`anthropic/claude-haiku-5.5`) extracted facts and decided add, replace, end or nothing against the closest known facts. Raw messages stay searchable next to the facts.
+- **What it learned:** 85 current facts and 38 replacements over six months, for **$0.06** of utility model in total (183 steps).
+- **The gain:** past questions went to 6/6 ("Where did Alex live before the move?"). The first prompt then lost an event; the tuned one (a clearer "a newer fact about the same thing replaces the older one", and current facts weighing 1.3× in recall) got everything else right.
+- **Still open:**
+  - **Some stale facts stay current:** the old hospital, "vegetarian for six years", night shifts. Each day's step sees only the closest facts, and the model sometimes keeps both. A periodic tidy-up of an agent's facts is the follow-up.
+  - **The promotion isn't recalled:** "What is Alex's job title these days?" still misses. The promotion fact exists, but 2,000 raw messages crowd it out of the 1,200-token budget.
+
+Reports: [results/](results/) (`-learned-v1` is the first prompt).

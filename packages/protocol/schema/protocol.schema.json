@@ -27582,6 +27582,296 @@
 				}
 			}
 		},
+		"memory.banks.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"memory.banks.result": {
+			"type": "object",
+			"required": [
+				"banks",
+				"agents",
+				"notebooks",
+				"bytes"
+			],
+			"properties": {
+				"banks": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"bank",
+							"label",
+							"area",
+							"records",
+							"facts",
+							"messages",
+							"ended"
+						],
+						"properties": {
+							"bank": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"area": {
+								"type": "string"
+							},
+							"agent": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"learns"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"avatar": {
+										"type": "string"
+									},
+									"learns": {
+										"type": "boolean"
+									}
+								}
+							},
+							"records": {
+								"type": "number"
+							},
+							"facts": {
+								"type": "number"
+							},
+							"messages": {
+								"type": "number"
+							},
+							"ended": {
+								"type": "number"
+							},
+							"updatedAt": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"agents": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"learns",
+							"provider"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"avatar": {
+								"type": "string"
+							},
+							"learns": {
+								"type": "boolean"
+							},
+							"provider": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"notebooks": {
+					"type": "number"
+				},
+				"bytes": {
+					"type": "number"
+				}
+			}
+		},
+		"memory.history.params": {
+			"type": "object",
+			"required": [
+				"provider",
+				"bank"
+			],
+			"properties": {
+				"provider": {
+					"type": "string"
+				},
+				"bank": {
+					"type": "string"
+				},
+				"limit": {
+					"type": "number"
+				}
+			}
+		},
+		"memory.history.result": {
+			"type": "object",
+			"required": [
+				"events"
+			],
+			"properties": {
+				"events": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"at",
+							"action",
+							"recordId",
+							"text",
+							"by"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"action": {
+								"type": "string"
+							},
+							"recordId": {
+								"type": "string"
+							},
+							"text": {
+								"type": "string"
+							},
+							"by": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"memory.export.params": {
+			"type": "object",
+			"required": [
+				"folder"
+			],
+			"properties": {
+				"folder": {
+					"type": "string"
+				}
+			}
+		},
+		"memory.export.result": {
+			"type": "object",
+			"required": [
+				"files",
+				"records"
+			],
+			"properties": {
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"records": {
+					"type": "number"
+				}
+			}
+		},
+		"memory.wipe.params": {
+			"type": "object",
+			"required": [
+				"bank"
+			],
+			"properties": {
+				"bank": {
+					"type": "string"
+				}
+			}
+		},
+		"memory.wipe.result": {
+			"type": "object",
+			"required": [
+				"records"
+			],
+			"properties": {
+				"records": {
+					"type": "number"
+				}
+			}
+		},
+		"memory.reindex.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"memory.reindex.result": {
+			"type": "object",
+			"required": [
+				"pending"
+			],
+			"properties": {
+				"pending": {
+					"type": "number"
+				}
+			}
+		},
+		"memory.setLearning.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"learn"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"learn": {
+					"type": "boolean"
+				}
+			}
+		},
+		"memory.setLearning.result": {
+			"type": "object",
+			"properties": {}
+		},
 		"memory.status.params": {
 			"type": "object",
 			"properties": {}
@@ -29692,6 +29982,12 @@
 					"items": {
 						"type": "string"
 					}
+				},
+				"includeEnded": {
+					"type": "boolean"
+				},
+				"query": {
+					"type": "string"
 				}
 			}
 		},
@@ -29745,6 +30041,15 @@
 										"type": "string"
 									}
 								}
+							},
+							"replaces": {
+								"type": "string"
+							},
+							"replacedBy": {
+								"type": "string"
+							},
+							"endedAt": {
+								"type": "string"
 							}
 						}
 					}
@@ -29772,6 +30077,9 @@
 					"type": "string"
 				},
 				"text": {
+					"type": "string"
+				},
+				"replaces": {
 					"type": "string"
 				}
 			}

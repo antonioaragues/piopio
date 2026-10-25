@@ -9,7 +9,7 @@ struct SettingsView: View {
     @State private var section: Section = Section(demo: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", approvals = "Approvals", mcp = "MCP servers", extensions = "Extensions", engines = "This Mac & cloud"
+        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", memory = "Memory", approvals = "Approvals", mcp = "MCP servers", extensions = "Extensions", engines = "This Mac & cloud"
         var id: String { rawValue }
         init?(demo: String) {
             switch demo {
@@ -18,13 +18,14 @@ struct SettingsView: View {
             default: self.init(rawValue: demo)
             }
         }
-        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .connectors, .chat, .approvals]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
+        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .connectors, .chat, .memory, .approvals]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
         var icon: (String, Color) {
             switch self {
             case .general: ("gearshape.fill", .gray)
             case .providers: ("key.fill", .blue)
             case .connectors: ("app.connected.to.app.below.fill", .teal)
             case .chat: ("bubble.left.and.bubble.right.fill", .teal)
+            case .memory: ("brain.head.profile", .pink)
             case .extensions: ("shippingbox.fill", .indigo)
             case .approvals: ("checkmark.shield.fill", .orange)
             case .mcp: ("puzzlepiece.extension.fill", .purple)
@@ -76,6 +77,7 @@ struct SettingsView: View {
                     case .providers: ModelsPane(engine: engine)
                     case .connectors: ConnectorsPane(engine: engine)
                     case .chat: ChatPane(engine: engine)
+                    case .memory: MemoryPane(engine: engine)
                     case .extensions: ExtensionsPane(engine: engine)
                     case .approvals: ApprovalsPane(engine: engine)
                     case .mcp: McpPane(engine: engine)
@@ -91,6 +93,9 @@ struct SettingsView: View {
         .background(Color.dsWin)
         .onAppear(perform: openRequested)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in openRequested() }
+        .onReceive(NotificationCenter.default.publisher(for: .settingsSection)) { note in
+            if let raw = note.object as? String, let s = Section(rawValue: raw) { section = s }
+        }
     }
 
     /// Home's areas tip opens Settings on General.
@@ -382,4 +387,9 @@ private struct EnginesPane: View {
         }
         .padding(.leading, 14)
     }
+}
+
+extension Notification.Name {
+    /// Object: a Settings section's name ("Memory"): Settings switches to it.
+    static let settingsSection = Notification.Name("piopio.settingsSection")
 }

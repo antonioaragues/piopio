@@ -1293,6 +1293,44 @@ export const methods = {
 		params: Type.Object({ server: Type.Optional(Type.String()), url: Type.Optional(Type.String()) }),
 		result: Type.Object({ tools: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()) })) }),
 	},
+	/** Settings › Memory: every bank of the built-in provider, what it holds, and whose it is. */
+	"memory.banks": {
+		params: Type.Object({}),
+		result: Type.Object({
+			banks: Type.Array(
+				Type.Object({
+					bank: Type.String(),
+					/** "About me", or the agent's partition: "Owner", "Shared", "María". */
+					label: Type.String(),
+					/** "about-me", "agent", or "other" (a bank whose agent was deleted). */
+					area: Type.String(),
+					agent: Type.Optional(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), learns: Type.Boolean() })),
+					records: Type.Number(),
+					facts: Type.Number(),
+					messages: Type.Number(),
+					ended: Type.Number(),
+					updatedAt: Type.Optional(Type.String()),
+				}),
+			),
+			/** Agents that use memory, with or without records yet (for the learning switches). */
+			agents: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), learns: Type.Boolean(), provider: Type.String() })),
+			notebooks: Type.Number(),
+			bytes: Type.Number(),
+		}),
+	},
+	/** A bank's changes, newest first. */
+	"memory.history": {
+		params: Type.Object({ provider: Type.String(), bank: Type.String(), limit: Type.Optional(Type.Number()) }),
+		result: Type.Object({ events: Type.Array(Type.Object({ id: Type.String(), at: Type.String(), action: Type.String(), recordId: Type.String(), text: Type.String(), by: Type.String() })) }),
+	},
+	/** Writes everything the built-in provider holds to `folder` as memory.json and memory.md. */
+	"memory.export": { params: Type.Object({ folder: Type.String() }), result: Type.Object({ files: Type.Array(Type.String()), records: Type.Number() }) },
+	/** Deletes one bank, or every bank with "*". */
+	"memory.wipe": { params: Type.Object({ bank: Type.String() }), result: Type.Object({ records: Type.Number() }) },
+	/** Embeds again what has no vector from the current model (in the background); how many records wait. */
+	"memory.reindex": { params: Type.Object({}), result: Type.Object({ pending: Type.Number() }) },
+	/** An agent learns facts by itself, or only stores what was said (its definition's memory.learn). */
+	"memory.setLearning": { params: Type.Object({ ref: ContainerRef, learn: Type.Boolean() }), result: Type.Object({}) },
 	/** The built-in provider's semantic search: on or why not, the embedding model and how much is indexed. */
 	"memory.status": {
 		params: Type.Object({}),
@@ -1480,14 +1518,37 @@ export const methods = {
 	},
 	/** A memory provider's records (the memory views). */
 	"memory.list": {
-		params: Type.Object({ provider: Type.String(), bank: Type.String(), cursor: Type.Optional(Type.String()), kinds: Type.Optional(Type.Array(Type.String())) }),
+		params: Type.Object({
+			provider: Type.String(),
+			bank: Type.String(),
+			cursor: Type.Optional(Type.String()),
+			kinds: Type.Optional(Type.Array(Type.String())),
+			/** Replaced and ended facts too (the history of learned facts, M2). */
+			includeEnded: Type.Optional(Type.Boolean()),
+			/** Search instead of listing: the best matches, current records only. */
+			query: Type.Optional(Type.String()),
+		}),
 		result: Type.Object({
-			records: Type.Array(Type.Object({ id: Type.String(), text: Type.String(), kind: Type.String(), createdBy: Type.String(), at: Type.String(), pinned: Type.Optional(Type.Boolean()), source: Type.Optional(Type.Object({ ref: Type.Optional(Type.String()), itemId: Type.Optional(Type.String()), title: Type.Optional(Type.String()) })) })),
+			records: Type.Array(
+				Type.Object({
+					id: Type.String(),
+					text: Type.String(),
+					kind: Type.String(),
+					createdBy: Type.String(),
+					at: Type.String(),
+					pinned: Type.Optional(Type.Boolean()),
+					source: Type.Optional(Type.Object({ ref: Type.Optional(Type.String()), itemId: Type.Optional(Type.String()), title: Type.Optional(Type.String()) })),
+					replaces: Type.Optional(Type.String()),
+					replacedBy: Type.Optional(Type.String()),
+					endedAt: Type.Optional(Type.String()),
+				}),
+			),
 			cursor: Type.Optional(Type.String()),
 			limited: Type.Boolean(),
 		}),
 	},
-	"memory.add": { params: Type.Object({ provider: Type.String(), bank: Type.String(), text: Type.String() }), result: Type.Object({}) },
+	/** A fact written by you; with `replaces`, it updates that fact and keeps it as history. */
+	"memory.add": { params: Type.Object({ provider: Type.String(), bank: Type.String(), text: Type.String(), replaces: Type.Optional(Type.String()) }), result: Type.Object({}) },
 	"memory.forget": { params: Type.Object({ provider: Type.String(), bank: Type.String(), id: Type.String() }), result: Type.Object({}) },
 	"memory.update": { params: Type.Object({ provider: Type.String(), bank: Type.String(), id: Type.String(), text: Type.Optional(Type.String()), pinned: Type.Optional(Type.Boolean()) }), result: Type.Object({}) },
 	/** Forgets a project. Its session files stay where pi keeps them. */
