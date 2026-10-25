@@ -72,7 +72,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     switch section {
-                    case .general: GeneralPane()
+                    case .general: GeneralPane(engine: engine)
                     case .providers: ModelsPane(engine: engine)
                     case .connectors: ConnectorsPane(engine: engine)
                     case .chat: ChatPane(engine: engine)
@@ -89,6 +89,15 @@ struct SettingsView: View {
         }
         .frame(width: 820, height: 560)
         .background(Color.dsWin)
+        .onAppear(perform: openRequested)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in openRequested() }
+    }
+
+    /// Home's areas tip opens Settings on General.
+    private func openRequested() {
+        guard let raw = UserDefaults.standard.string(forKey: "settingsSection"), let s = Section(rawValue: raw) else { return }
+        UserDefaults.standard.removeObject(forKey: "settingsSection")
+        section = s
     }
 }
 
@@ -134,11 +143,16 @@ struct Row<Trailing: View>: View {
 // MARK: General
 
 private struct GeneralPane: View {
+    let engine: EngineController
     @State private var tick = 0
     private let updater = AppUpdater.shared
 
     var body: some View {
-        PaneTitle(title: "General", subtitle: "Shortcuts, notifications and updates.")
+        PaneTitle(title: "General", subtitle: "Areas, shortcuts, notifications and updates.")
+        AreasCard(engine: engine) {
+            NSApp.keyWindow?.performClose(nil)
+            NotificationCenter.default.post(name: .runSetupAgain, object: nil)
+        }
         ListCard {
             Row(title: "Quick Chat") {
                 Picker("", selection: Binding(get: { QuickChatShortcut.current }, set: { value in

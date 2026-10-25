@@ -85,7 +85,8 @@ final class QuickChatController {
 
     func applyShortcut() {
         let shortcut = QuickChatShortcut.current
-        if let modifiers = shortcut.carbonModifiers { GlobalHotKey.shared.register(keyCode: UInt32(kVK_Space), modifiers: modifiers) } else { GlobalHotKey.shared.unregister() }
+        // Quick Chat belongs to Chat: no global shortcut while Chat is hidden (docs/spec/15).
+        if Areas.shared.contains(.chat), let modifiers = shortcut.carbonModifiers { GlobalHotKey.shared.register(keyCode: UInt32(kVK_Space), modifiers: modifiers) } else { GlobalHotKey.shared.unregister() }
     }
 
     func toggle() {

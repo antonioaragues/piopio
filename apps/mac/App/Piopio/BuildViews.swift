@@ -21,6 +21,29 @@ enum BuildActions {
         Task { await add(url, engine: engine, select: select) }
     }
 
+    /// With Build off (docs/spec/15): asks for a folder to chat about and starts a chat in it.
+    static func addFolderToChat(engine: EngineController, select: @escaping (String) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Add Folder"
+        panel.message = "Choose a folder to chat about. Chats can read its files; they don't run commands."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            guard let project = await engine.addProject(url, lens: .chat) else { return }
+            await chat(in: project, engine: engine, select: select)
+        }
+    }
+
+    /// A chat in a folder (the Folder lens, docs/spec/04-chat §2): reads files, no commands.
+    static func chat(in project: ProjectInfo, engine: EngineController, select: (String) -> Void) async {
+        if let ref = await engine.createBuildSession(in: project, profile: .chat) {
+            try? await engine.refreshCatalog()
+            select(ref.id)
+        }
+    }
+
     static func add(_ url: URL, engine: EngineController, select: (String) -> Void) async {
         guard let project = await engine.addProject(url, lens: .build) else { return }
         if let latest = engine.sessions(in: project).first {

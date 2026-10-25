@@ -16,6 +16,7 @@ struct MainSidebar: View {
     @State private var renaming: SessionSummary?
     @State private var newTitle = ""
     @FocusState private var searching: Bool
+    private var areas: AreaSet { Areas.shared.set }
 
     /// How many of each section show before "N more ›".
     private static let caps: [SidebarSection: Int] = [.projects: 4, .notebooks: 4, .agents: 4, .chats: 6]
@@ -38,10 +39,10 @@ struct MainSidebar: View {
                         navRow(.needsYou, "Needs you", symbol: "tray.full", badge: engine.needsYouCount)
                         Color.clear.frame(height: 8)
                         pinnedSection
-                        projectsSection
-                        notebooksSection
-                        agentsSection
-                        chatsSection
+                        if areas.showsProjects { projectsSection }
+                        if areas.showsNotebooks { notebooksSection }
+                        if areas.showsAgents { agentsSection }
+                        if areas.showsChats { chatsSection }
                     } else {
                         results
                     }
@@ -184,7 +185,8 @@ struct MainSidebar: View {
     }
 
     @ViewBuilder private var pinnedSection: some View {
-        let items = pinned.map(SidebarItem.init(raw:)).filter(exists)
+        // Pins from hidden areas are kept, and come back with their area.
+        let items = pinned.map(SidebarItem.init(raw:)).filter { exists($0) && areas.shows($0, engine: engine) }
         if !items.isEmpty {
             header(.pinned, total: items.count, shown: items.count, add: nil)
             if !collapsed.contains(SidebarSection.pinned.rawValue) {
@@ -231,9 +233,13 @@ struct MainSidebar: View {
         let cap = Self.caps[.projects]!
         let pinnedHere = Set(pinned)
         let shown = Array(projects.prefix(cap))
-        header(.projects, total: projects.count, shown: shown.count, add: { BuildActions.addProject(engine: engine) { item = .session($0) } }, addHelp: "Add a project folder (⌘O)")
+        if areas.contains(.build) {
+            header(.projects, total: projects.count, shown: shown.count, add: { BuildActions.addProject(engine: engine) { item = .session($0) } }, addHelp: "Add a project folder (⌘O)")
+        } else {
+            header(.projects, total: projects.count, shown: shown.count, add: { BuildActions.addFolderToChat(engine: engine) { item = .session($0) } }, addHelp: "Add a folder to chat about")
+        }
         if !collapsed.contains(SidebarSection.projects.rawValue) {
-            if projects.isEmpty { hint("Folders you add show up here") }
+            if projects.isEmpty { hint(areas.contains(.build) ? "Folders you add show up here" : "Folders to chat about") }
             ForEach(shown) { project in
                 if !pinnedHere.contains(SidebarItem.project(project.id).raw) { projectRow(project) }
                 projectSessions(project)
@@ -243,7 +249,7 @@ struct MainSidebar: View {
     }
 
     @ViewBuilder private func projectSessions(_ project: ProjectInfo) -> some View {
-        let all = engine.sessions(in: project).filter { $0.parent == nil }
+        let all = engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
         ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in sessionRow(s, indent: true) }
@@ -295,7 +301,8 @@ struct MainSidebar: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("New Session…") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
+            if areas.contains(.build) { Button("New Session…") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) } }
+            if areas.contains(.chat) { Button("New Chat in This Folder") { Task { await BuildActions.chat(in: project, engine: engine) { item = .session($0) } } } }
             pinButton(.project(project.id))
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)]) }
             Divider()
@@ -497,11 +504,11 @@ struct MainSidebar: View {
     @ViewBuilder private var results: some View {
         let q = query.lowercased()
         let match = { (s: String) in s.lowercased().contains(q) }
-        let projects = engine.projects.filter { match($0.name) }
-        let sessions = engine.buildSessions.filter { match($0.title) }
-        let notebooks = engine.spaces.filter { match($0.title) || $0.activeTopics.contains { match($0.title) } }
-        let agents = engine.agents.filter { match($0.title) }
-        let chats = engine.threads.filter { match($0.title) }
+        let projects = areas.showsProjects ? engine.projects.filter { match($0.name) } : []
+        let sessions = engine.buildSessions.filter { match($0.title) && areas.shows($0) }
+        let notebooks = areas.showsNotebooks ? engine.spaces.filter { match($0.title) || $0.activeTopics.contains { match($0.title) } } : []
+        let agents = areas.showsAgents ? engine.agents.filter { match($0.title) } : []
+        let chats = areas.showsChats ? engine.threads.filter { match($0.title) } : []
         if projects.isEmpty, sessions.isEmpty, notebooks.isEmpty, agents.isEmpty, chats.isEmpty {
             hint("Nothing matches “\(query)”")
         }
@@ -545,22 +552,35 @@ struct MainSidebar: View {
     }
 }
 
-/// The "+ New ⌄" capsule: a session (in which project), a chat, a notebook or an agent.
+/// The "+ New ⌄" capsule: a session (in which project), a chat, a notebook or an agent, for the areas that are on.
 struct NewMenu: View {
     let engine: EngineController
 
+    static func help(_ areas: AreaSet) -> String {
+        var kinds: [String] = []
+        if areas.contains(.build) { kinds.append("session") }
+        if areas.contains(.chat) { kinds += ["chat", "notebook"] }
+        if areas.contains(.agents) { kinds.append("agent") }
+        return "New " + ListFormatter.localizedString(byJoining: kinds).replacingOccurrences(of: " and ", with: " or ")
+    }
+
     var body: some View {
+        let areas = Areas.shared.set
         Menu {
-            Menu("New Session") {
-                ForEach(engine.projects) { project in
-                    Button(project.name) { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
+            if areas.contains(.build) {
+                Menu("New Session") {
+                    ForEach(engine.projects) { project in
+                        Button(project.name) { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
+                    }
+                    if !engine.projects.isEmpty { Divider() }
+                    Button("Open Folder…") { NotificationCenter.default.post(name: .openProject, object: nil) }
                 }
-                if !engine.projects.isEmpty { Divider() }
-                Button("Open Folder…") { NotificationCenter.default.post(name: .openProject, object: nil) }
             }
-            Button("New Chat") { NotificationCenter.default.post(name: .newChat, object: nil) }
-            Button("New Notebook") { NotificationCenter.default.post(name: .newSpace, object: nil) }
-            Button("New Agent") { NotificationCenter.default.post(name: .newAgent, object: nil) }
+            if areas.contains(.chat) {
+                Button("New Chat") { NotificationCenter.default.post(name: .newChat, object: nil) }
+                Button("New Notebook") { NotificationCenter.default.post(name: .newSpace, object: nil) }
+            }
+            if areas.contains(.agents) { Button("New Agent") { NotificationCenter.default.post(name: .newAgent, object: nil) } }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
@@ -571,7 +591,7 @@ struct NewMenu: View {
         .buttonStyle(ChipStyle())
         .menuIndicator(.visible)
         .fixedSize()
-        .help("New session, chat, notebook or agent")
+        .help(Self.help(areas))
     }
 }
 

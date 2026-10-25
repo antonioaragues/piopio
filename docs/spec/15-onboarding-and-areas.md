@@ -1,6 +1,6 @@
 # 15 · Onboarding and areas: choose what Piopio is for you
 
-Status: spec, reviewed 2026-10-25 (the decisions are in §7). Nothing is built yet. It changes the first-run welcome (docs/design v2, 12b) and
+Status: built 2026-10-25 (§8). The decisions are in §7. It changes the first-run welcome (docs/design v2, 12b) and
 adds a setting to General; the sidebar, Home, menus and the command palette follow it.
 
 **The idea:** Piopio has three areas: **Build** (code), **Chat** (chats and notebooks) and **Agents**. Not everyone
@@ -86,7 +86,7 @@ window that fills the screen, with the chick talking, as today. **Skip setup** s
 
 **Step 3 · Set up what you chose**
 One short card per chosen area, in the order Build, Chat, Agents. Each card has its own Skip.
-- **Build:** add a project folder (⌘O). It says whether the folder is a git repo and whether `gh` is signed in.
+- **Build:** add a project folder (drop it, Open Folder…, or one of the repos found in `~/Proyectos` and the like). It says whether the folder is a git repo and its branch.
 - **Chat:** a few lines about you for About me (optional, editable later in Settings › Chat), and the Quick Chat
   shortcut.
 - **Agents:**
@@ -145,3 +145,29 @@ One short card per chosen area, in the order Build, Chat, Agents. Each card has 
 - **First choice:** all three areas are ticked at first.
 - **Turning Agents off:** agents keep running by default; pausing is the other choice in the sheet.
 - **Names in the welcome:** Build, Chat and Agents, the same as the product.
+
+## 8. What's built (2026-10-25)
+- **Areas:** `AreaSet` and `WelcomeGate` in PiopioKit (4 tests), and the app's `Areas` model (`UserDefaults` `areas`, `welcomeVersion`, `areasTip`).
+- **What follows the areas:**
+  - the sidebar's sections, pins and search;
+  - Projects without Build: a "folder to chat about" +, New Chat in This Folder, and only chat sessions shown;
+  - the New menu, the File menu and ⌘N;
+  - the command palette;
+  - Home's Ask box (placeholder, targets, @-mentions), Running now, Coming up and Jump back in;
+  - the menu bar item and Quick Chat's global shortcut.
+- **Never hidden:** Needs you keeps everything and marks what comes from a hidden area ("Agents · hidden").
+- **Hidden-area bar:** an item opened from a link shows "Build is hidden · Show it in the sidebar".
+- **Settings › General › Areas:**
+  - a switch per area, with counts; the last area that's on is locked;
+  - a session still working is noted on Build;
+  - the Agents sheet: Keep running and hide (the default), or Pause them and hide;
+  - Run setup again.
+- **The welcome:** four steps with a progress bar, Back, Continue (↩) and Skip setup.
+  - **Model:** ChatGPT first when Build is picked, OpenRouter's key checked as you paste, local servers found on this Mac, Other providers…. Connecting moves on by itself.
+  - **Setup:** the three cards above; About me facts and the agent are saved when you continue.
+  - **Ready:** what was set up, and first steps for the chosen areas.
+- **Existing users** keep all three areas and see a tip on Home once (Choose… opens Settings › General).
+- **Captures:** [docs/design/onboarding/screenshots](../design/onboarding/screenshots) (`PIOPIO_DEMO_WELCOME=1`, `PIOPIO_DEMO_WELCOME_STEP`, `PIOPIO_DEMO_AREAS`).
+- **Not verified:**
+  - by hand: dropping a folder, the ChatGPT sign-in from the welcome, and the Agents sheet with real scheduled agents (no capture);
+  - the welcome on a Mac that has never run Piopio (the captures force it).

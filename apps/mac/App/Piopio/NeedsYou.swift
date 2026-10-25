@@ -14,6 +14,12 @@ struct NeedsYouEntry: Identifiable {
     var session: SessionSummary?
 
     var isApproval: Bool { kind == .approval || kind == .buildPrompt }
+
+    /// Never hidden (docs/spec/15): an item from a hidden area still shows, marked with its area.
+    @MainActor var hiddenArea: Area? {
+        let area: Area = session.map { $0.profile == .chat ? .chat : .build } ?? .agents
+        return Areas.shared.contains(area) ? nil : area
+    }
     var isMessage: Bool { kind == .message || kind == .runFailed || kind == .budget }
 }
 
@@ -156,7 +162,7 @@ struct NeedsYouCard: View {
         }
     }
 
-    private var agentName: String { entry.agent?.title ?? entry.inbox?.agentName ?? "Agent" }
+    private var agentName: String { (entry.agent?.title ?? entry.inbox?.agentName ?? "Agent") + (entry.hiddenArea != nil ? " (Agents · hidden)" : "") }
 
     private var title: String {
         switch entry.kind {

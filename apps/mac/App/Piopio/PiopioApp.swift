@@ -5,6 +5,7 @@ import SwiftUI
 struct PiopioApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var engine = EngineController()
+    @State private var areas = Areas.shared
 
     var body: some Scene {
         Window("Piopio", id: "main") {
@@ -30,14 +31,19 @@ struct PiopioApp: App {
                 CheckForUpdatesButton()
             }
             CommandGroup(replacing: .newItem) {
-                Button("New Thread / Session") { NotificationCenter.default.post(name: .newThread, object: nil) }
+                // Only the areas that are on (docs/spec/15).
+                Button(newTitle) { NotificationCenter.default.post(name: .newThread, object: nil) }
                     .keyboardShortcut("n")
-                Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: nil) }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Quick Chat") { QuickChatController.shared?.show() }
-                Divider()
-                Button("Open Folder…") { NotificationCenter.default.post(name: .openProject, object: nil) }
-                    .keyboardShortcut("o")
+                if areas.contains(.chat) {
+                    Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: nil) }
+                        .keyboardShortcut("n", modifiers: [.command, .shift])
+                    Button("Quick Chat") { QuickChatController.shared?.show() }
+                }
+                if areas.contains(.build) {
+                    Divider()
+                    Button("Open Folder…") { NotificationCenter.default.post(name: .openProject, object: nil) }
+                        .keyboardShortcut("o")
+                }
             }
             CommandGroup(after: .textEditing) {
                 Button("Command Palette") { NotificationCenter.default.post(name: .showPalette, object: false) }
@@ -47,8 +53,8 @@ struct PiopioApp: App {
             }
         }
 
-        // The Inbox in the menu bar (06-agents §12), once there are agents.
-        MenuBarExtra(isInserted: .constant(!engine.agents.isEmpty)) {
+        // The Inbox in the menu bar (06-agents §12), once there are agents, while Agents is on or something waits.
+        MenuBarExtra(isInserted: .constant((areas.contains(.agents) && !engine.agents.isEmpty) || engine.inboxCount > 0)) {
             InboxMenu(engine: engine)
         } label: {
             Image(systemName: engine.inboxCount > 0 ? "tray.full" : "tray")
@@ -62,11 +68,24 @@ struct PiopioApp: App {
     }
 }
 
+extension PiopioApp {
+    private var newTitle: String {
+        switch (areas.contains(.build), areas.contains(.chat)) {
+        case (true, true): "New Chat / Session"
+        case (true, false): "New Session"
+        case (false, true): "New Chat"
+        default: "New Agent"
+        }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor var engine: EngineController?
 
     /// Quick Chat keeps working with the main window closed.
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { QuickChatShortcut.current == .off }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        MainActor.assumeIsolated { QuickChatShortcut.current == .off || !Areas.shared.contains(.chat) }
+    }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         if !hasVisibleWindows { MainActor.assumeIsolated { WindowOpener.shared.showMain() } }

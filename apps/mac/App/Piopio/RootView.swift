@@ -31,6 +31,7 @@ struct RootView: View {
                 .padding(8)
             VStack(spacing: 0) {
                 if engine.isLost { EngineBanner(engine: engine) }
+                if let hidden = hiddenArea { HiddenAreaBar(area: hidden) }
                 content
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -47,8 +48,12 @@ struct RootView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in
-            // ⌘N follows the selection: a session in its project, otherwise a chat.
-            if case .session = item { newBuildSession() } else if case .project = item { newBuildSession() } else { newChat() }
+            // ⌘N follows the selection: a session in its project, otherwise a chat (in the areas that are on).
+            let areas = Areas.shared.set
+            let inProject: Bool = { if case .session = item { true } else if case .project = item { true } else { false } }()
+            if areas.contains(.build), inProject || !areas.contains(.chat) { newBuildSession() }
+            else if areas.contains(.chat) { newChat() }
+            else { showNewAgent = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newChat)) { _ in newChat() }
         .onReceive(NotificationCenter.default.publisher(for: .newBuildSession)) { note in
@@ -97,21 +102,29 @@ struct RootView: View {
             }
         }
         .onChange(of: engine.status) { _, status in
-            if status == .ready, engine.needsKey || ProcessInfo.processInfo.environment["PIOPIO_DEMO_WELCOME"] == "1" { showOnboarding = true }
+            guard status == .ready, !showOnboarding else { return }
+            // First run only (docs/spec/15): people who used Piopio before areas existed keep everything and get a tip.
+            let forced = ProcessInfo.processInfo.environment["PIOPIO_DEMO_WELCOME"] == "1"
+            switch WelcomeGate.decide(done: Areas.welcomeDone, hasHistory: hasHistory, forced: forced) {
+            case .show: showOnboarding = true
+            case .existingUser:
+                Areas.welcomeDone = true
+                Areas.shared.showsTip = true
+            case .done: break
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .runSetupAgain)) { _ in
+            WindowOpener.shared.showMain()
+            showOnboarding = true
         }
         .overlay {
             if showOnboarding {
-                WelcomeView(engine: engine) { step in
-                    showOnboarding = false
-                    switch step {
-                    case .build: itemRaw = SidebarItem.index(.projects).raw
-                    case .chat, nil: itemRaw = SidebarItem.home.raw
-                    case .briefing:
-                        Task {
-                            if let ref = try? await engine.createAgent(name: "Daily briefing", template: "daily-briefing", avatar: "☀️") { itemRaw = SidebarItem.agent(ref.id).raw }
-                        }
-                    }
+                WelcomeView(engine: engine) { target in
+                    Areas.welcomeDone = true
+                    withAnimation(.easeOut(duration: 0.25)) { showOnboarding = false }
+                    if let target { itemRaw = target.raw }
                 }
+                .transition(.opacity)
                 .ignoresSafeArea()
             }
         }
@@ -143,6 +156,10 @@ struct RootView: View {
             HomeView(engine: engine, item: itemBinding)
         case .needsYou:
             NeedsYouView(engine: engine, item: itemBinding)
+        case .index(.projects) where engine.projects.isEmpty && !Areas.shared.contains(.build):
+            HatchEmpty(title: "Chat about a folder", message: "Add a folder and ask about what's in it: notes, documents, a project. Chats read its files; they don't run commands.") {
+                Button("Add a Folder…") { BuildActions.addFolderToChat(engine: engine) { itemRaw = SidebarItem.session($0).raw } }.buttonStyle(PillStyle(kind: .primary))
+            }
         case .index(.projects) where engine.projects(in: .build).isEmpty:
             BuildFirstRun(engine: engine, item: itemBinding)
         case .index(.projects):
@@ -189,6 +206,17 @@ struct RootView: View {
                 missing
             }
         }
+    }
+
+    /// The open item's area when it's hidden (opened from a notification, a link or an automation).
+    private var hiddenArea: Area? {
+        guard engine.status == .ready, !Areas.shared.set.shows(item, engine: engine) else { return nil }
+        return Area(item: item, engine: engine)
+    }
+
+    /// Anything that says this Mac used Piopio before: a model, or something made.
+    private var hasHistory: Bool {
+        !engine.needsKey || !engine.projects.isEmpty || !engine.threads.isEmpty || !engine.spaces.isEmpty || !engine.agents.isEmpty
     }
 
     /// The item is gone (deleted elsewhere) or not in the catalog yet.
@@ -252,6 +280,8 @@ extension Notification.Name {
     static let openInbox = Notification.Name("piopio.openInbox")
     /// Object: a trace id between agents.
     static let openTrace = Notification.Name("piopio.openTrace")
+    /// Settings › General › Run setup again: the welcome, with the current areas ticked.
+    static let runSetupAgain = Notification.Name("piopio.runSetupAgain")
 }
 
 // MARK: Banner (8d: what happened → what's safe → one action)

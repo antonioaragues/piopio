@@ -153,7 +153,7 @@ struct CommandPalette: View {
             return rows.isEmpty ? [] : [Group(id: "Messages", rows: rows)]
         case .all:
             let actions = commands.filter { matches($0.title) }
-            let threads = engine.threads.filter { matches($0.title) }.prefix(q.isEmpty ? 6 : 10).map { t in
+            let threads = (Areas.shared.set.showsChats ? engine.threads : []).filter { matches($0.title) }.prefix(q.isEmpty ? 6 : 10).map { t in
                 Row(id: "t:\(t.ref.id)", icon: "bubble.left", title: t.title, trailing: "Thread") { openThread(t.ref.id, nil); close() }
             }
             let goTo = Array(threads) + (q.count >= 2 ? messageRows : [])
@@ -171,9 +171,23 @@ struct CommandPalette: View {
     }
 
     private var commands: [Row] {
-        var rows: [Row] = [
-            Row(id: "c:new", icon: "square.and.pencil", title: "New Thread", trailing: "⌘N") { newThread(); close() },
-            Row(id: "c:quick", icon: "bolt", title: "Quick Chat", trailing: QuickChatController.shortcutLabel) { QuickChatController.shared?.show(); close() },
+        // Only the areas that are on (docs/spec/15).
+        let areas = Areas.shared.set
+        var rows: [Row] = []
+        if areas.contains(.chat) {
+            rows += [
+                Row(id: "c:new", icon: "square.and.pencil", title: "New Chat", trailing: "⌘N") { newThread(); close() },
+                Row(id: "c:notebook", icon: "book.closed", title: "New Notebook", trailing: "⇧⌘N") { close(); NotificationCenter.default.post(name: .newSpace, object: nil) },
+                Row(id: "c:quick", icon: "bolt", title: "Quick Chat", trailing: QuickChatController.shortcutLabel) { QuickChatController.shared?.show(); close() },
+            ]
+        }
+        if areas.contains(.build) {
+            rows.append(Row(id: "c:folder", icon: "folder", title: "Open Folder…", trailing: "⌘O") { close(); NotificationCenter.default.post(name: .openProject, object: nil) })
+        }
+        if areas.contains(.agents) {
+            rows.append(Row(id: "c:agent", icon: "bird", title: "New Agent", trailing: nil) { close(); NotificationCenter.default.post(name: .newAgent, object: nil) })
+        }
+        rows += [
             Row(id: "c:search", icon: "text.magnifyingglass", title: "Search Messages", trailing: "⇧⌘F") { mode = .messages; query = "" },
             Row(id: "c:settings", icon: "gearshape", title: "Settings", trailing: "⌘,") { ThreadModel.openSettings(); close() },
         ]

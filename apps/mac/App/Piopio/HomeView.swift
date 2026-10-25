@@ -12,7 +12,8 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 greeting
-                AskBox(engine: engine, item: $item).padding(.top, 22)
+                if Areas.shared.showsTip { tip.padding(.top, 20) }
+                if askable { AskBox(engine: engine, item: $item).padding(.top, 22) }
                 HStack(alignment: .top, spacing: 20) {
                     needsYou.frame(maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: 18) {
@@ -30,6 +31,12 @@ struct HomeView: View {
             .frame(maxWidth: 820)
             .frame(maxWidth: .infinity)
         }
+    }
+
+    /// The Ask box needs somewhere to send: Chat, a project with Build on, or an agent with Agents on.
+    private var askable: Bool {
+        let areas = Areas.shared.set
+        return areas.contains(.chat) || (areas.contains(.build) && !engine.projects.isEmpty) || (areas.contains(.agents) && !engine.agents.isEmpty)
     }
 
     // MARK: Greeting
@@ -62,6 +69,32 @@ struct HomeView: View {
         parts.append(n == 0 ? "nothing needs you" : "\(n) thing\(n == 1 ? "" : "s") need\(n == 1 ? "s" : "") you")
         if let today = engine.usage?.todayUsd { parts.append("\(MainSidebar.money(today)) spent today") }
         return parts.joined(separator: " · ")
+    }
+
+    /// Once, for people who used Piopio before areas existed (docs/spec/15).
+    private var tip: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 4) {
+                ForEach(Area.allCases) { AreaTile(area: $0, size: 22) }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Use only part of Piopio?").font(.system(size: 13, weight: .semibold))
+                Text("Hide Build, Chat or Agents if you don't use them. Nothing is deleted.").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+            }
+            Spacer()
+            Button("Choose…") {
+                UserDefaults.standard.set("General", forKey: "settingsSection")
+                Areas.shared.showsTip = false
+                WindowOpener.shared.openSettings?()
+            }
+            .buttonStyle(PillStyle(kind: .strong, compact: true))
+            Button { withAnimation(.easeOut(duration: 0.2)) { Areas.shared.showsTip = false } } label: {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.dsFg3).frame(width: 20, height: 20).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).help("Dismiss")
+        }
+        .padding(.horizontal, 14).frame(minHeight: 56)
+        .background(Color.dsYolkSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: Cards
@@ -104,7 +137,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var running: some View {
-        let live = (engine.buildSessions + engine.threads).filter { engine.liveStatus[$0.ref.id] == .running }
+        let live = (engine.buildSessions + engine.threads).filter { engine.liveStatus[$0.ref.id] == .running && Areas.shared.set.shows($0) }
         VStack(alignment: .leading, spacing: 0) {
             cardTitle("Running now")
             VStack(spacing: 0) {
@@ -134,7 +167,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var comingUp: some View {
-        let next = engine.agents.filter { $0.agent?.status?.nextRun != nil }.sorted { ($0.agent?.status?.nextRun ?? "") < ($1.agent?.status?.nextRun ?? "") }
+        let next = (Areas.shared.contains(.agents) ? engine.agents : []).filter { $0.agent?.status?.nextRun != nil }.sorted { ($0.agent?.status?.nextRun ?? "") < ($1.agent?.status?.nextRun ?? "") }
         if !next.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 cardTitle("Coming up")
@@ -170,7 +203,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var jumpBack: some View {
-        let recent = Array((engine.spaces + engine.buildSessions.filter { $0.parent == nil } + engine.threads).sorted { $0.updatedAt > $1.updatedAt }.prefix(3))
+        let recent = Array((engine.spaces + engine.buildSessions.filter { $0.parent == nil } + engine.threads).filter { Areas.shared.set.shows($0) }.sorted { $0.updatedAt > $1.updatedAt }.prefix(3))
         if !recent.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 cardTitle("Jump back in")
@@ -246,8 +279,9 @@ private struct HomeNeedsRow: View {
     }
 
     private var source: String {
-        if let s = entry.session { return [s.title, engine.project(of: s)?.name].compactMap { $0 }.joined(separator: " · ") }
-        return entry.agent?.title ?? entry.inbox?.agentName ?? ""
+        let hidden = entry.hiddenArea.map { "\($0.title) · hidden" }
+        if let s = entry.session { return [s.title, engine.project(of: s)?.name, hidden].compactMap { $0 }.joined(separator: " · ") }
+        return [entry.agent?.title ?? entry.inbox?.agentName ?? "", hidden].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder private var actions: some View {
@@ -282,9 +316,28 @@ struct AskBox: View {
 
     enum Target: Hashable { case chat, project(String), agent(String) }
 
+    private var areas: AreaSet { Areas.shared.set }
+
+    /// "Ask anything, start a build session, or message an agent…", for the areas that are on.
+    private var placeholder: String {
+        var parts: [String] = []
+        if areas.contains(.chat) { parts.append("Ask anything") }
+        if areas.contains(.build) { parts.append(parts.isEmpty ? "Start a build session" : "start a build session") }
+        if areas.contains(.agents) { parts.append(parts.isEmpty ? "Message an agent" : "message an agent") }
+        return parts.count > 1 ? parts.dropLast().joined(separator: ", ") + ", or " + parts.last! + "…" : parts[0] + "…"
+    }
+
+    /// The first target the areas allow: a chat, a session in the first project, or the first agent.
+    private var defaultTarget: Target? {
+        if areas.contains(.chat) { return .chat }
+        if areas.contains(.build), let p = engine.projects.first { return .project(p.id) }
+        if areas.contains(.agents), let a = engine.agents.first { return .agent(a.ref.id) }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TextField("Ask anything, start a build session, or message an agent…", text: $text, axis: .vertical)
+            TextField(placeholder, text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .lineLimit(1...6)
@@ -292,13 +345,13 @@ struct AskBox: View {
                 .onSubmit(send)
             HStack(spacing: 8) {
                 Menu {
-                    Button("New chat") { target = .chat }
-                    if !engine.projects.isEmpty {
+                    if areas.contains(.chat) { Button("New chat") { target = .chat } }
+                    if areas.contains(.build), !engine.projects.isEmpty {
                         Section("Start a session in") {
                             ForEach(engine.projects) { p in Button(p.name) { target = .project(p.id) } }
                         }
                     }
-                    if !engine.agents.isEmpty {
+                    if areas.contains(.agents), !engine.agents.isEmpty {
                         Section("Message") {
                             ForEach(engine.agents, id: \.ref.id) { a in Button(a.title) { target = .agent(a.ref.id) } }
                         }
@@ -328,6 +381,8 @@ struct AskBox: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(focused ? Color.dsAccentLine : Color.dsLine, lineWidth: focused ? 1 : 0.5))
         .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
         .onChange(of: text) { _, t in mention(t) }
+        .onAppear { if target == .chat, let first = defaultTarget { target = first } }
+        .onChange(of: areas) { _, _ in if let first = defaultTarget { target = first } }
     }
 
     private var targetLabel: String {
@@ -344,8 +399,8 @@ struct AskBox: View {
     }
 
     private var hint: String {
-        let p = engine.projects.first?.name
-        let a = engine.agents.first?.title
+        let p = areas.contains(.build) ? engine.projects.first?.name : nil
+        let a = areas.contains(.agents) ? engine.agents.first?.title : nil
         return [p.map { "@\($0) starts a session" }, a.map { "@\($0) messages the agent" }].compactMap { $0 }.joined(separator: " · ")
     }
 
@@ -353,10 +408,10 @@ struct AskBox: View {
     private func mention(_ t: String) {
         guard t.hasPrefix("@"), let space = t.firstIndex(of: " ") else { return }
         let name = String(t[t.index(after: t.startIndex)..<space]).lowercased()
-        if let p = engine.projects.first(where: { $0.name.lowercased() == name }) {
+        if areas.contains(.build), let p = engine.projects.first(where: { $0.name.lowercased() == name }) {
             target = .project(p.id)
             text = String(t[t.index(after: space)...])
-        } else if let a = engine.agents.first(where: { $0.title.lowercased().replacingOccurrences(of: " ", with: "") == name.replacingOccurrences(of: " ", with: "") }) {
+        } else if areas.contains(.agents), let a = engine.agents.first(where: { $0.title.lowercased().replacingOccurrences(of: " ", with: "") == name.replacingOccurrences(of: " ", with: "") }) {
             target = .agent(a.ref.id)
             text = String(t[t.index(after: space)...])
         }
