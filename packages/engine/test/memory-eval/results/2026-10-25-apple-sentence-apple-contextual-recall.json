@@ -1,0 +1,808 @@
+{
+	"set": "memory-2000",
+	"messages": 2018,
+	"model": null,
+	"at": "2026-10-25T22:15:39.453Z",
+	"engines": {
+		"apple-sentence": {
+			"found": 14,
+			"of": 36,
+			"right": null,
+			"questions": 40,
+			"byType": {
+				"current": {
+					"n": 12,
+					"found": 4,
+					"right": 0
+				},
+				"past": {
+					"n": 6,
+					"found": 1,
+					"right": 0
+				},
+				"event": {
+					"n": 12,
+					"found": 6,
+					"right": 0
+				},
+				"stable": {
+					"n": 6,
+					"found": 3,
+					"right": 0
+				},
+				"unknown": {
+					"n": 4,
+					"found": 0,
+					"right": 0
+				}
+			},
+			"recallMsMedian": 60,
+			"writeSeconds": 7.1,
+			"rows": [
+				{
+					"type": "current",
+					"q": "Which city does Alex call home at the moment?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 104,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Where is Alex headed after this place?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 83,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which hospital employs Alex now?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 65,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "What is Alex's job title these days?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 48,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex still work nights?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 31,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How many dogs live with Alex now?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 95,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How would you describe Alex's diet now?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 77,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "When will Lucía get married?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 60,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How does Alex usually get to the hospital?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 43,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex own a car right now?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 25,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which book is Alex reading at the end of the summer?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 94,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which language is Alex learning, and with whom?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 75,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Where did Alex live before the move in June?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 58,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What ward did Alex switch to when changing hospitals?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 41,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was the wedding date originally?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 23,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Which shifts was Alex working in April?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 95,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was Alex's diet before the doctor's advice?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 78,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Why couldn't Alex have a dog in the first flat?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 61,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What did Alex cook for the housewarming?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 42,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What was Alex's finishing time in the 10K?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 25,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How long did the half marathon take Alex?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 94,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How much money did Alex get for the old car?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 77,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What present did Alex want for Sam's birthday?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 58,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which region did Alex visit on holiday in August?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 41,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What operation did Alex's mother have?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 23,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Why did the wedding move?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 89,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What's the name of the second dog, and what kind of dog is it?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 73,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "When is Sam's birthday?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 54,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which neighbourhood did they move into in Madrid?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 38,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Where will they rent in Lisbon?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 22,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Is there a nut Alex has to avoid?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 97,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What does Alex's partner do for a living?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 80,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "How does Alex like replies to be?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 62,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What's the name of the beagle?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 45,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Where does Alex like to get coffee in the new city?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 25,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What brand is Alex's e-bike?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 92,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is the name of Alex's brother?",
+					"found": null,
+					"answer": null,
+					"right": null,
+					"recallMs": 75,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "Which gym is Alex a member of?",
+					"found": null,
+					"answer": null,
+					"right": null,
+					"recallMs": 56,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is Alex's blood type?",
+					"found": null,
+					"answer": null,
+					"right": null,
+					"recallMs": 39,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What instrument does Sam play?",
+					"found": null,
+					"answer": null,
+					"right": null,
+					"recallMs": 22,
+					"hits": 40
+				}
+			]
+		},
+		"apple-contextual": {
+			"found": 20,
+			"of": 36,
+			"right": null,
+			"questions": 40,
+			"byType": {
+				"current": {
+					"n": 12,
+					"found": 7,
+					"right": 0
+				},
+				"past": {
+					"n": 6,
+					"found": 2,
+					"right": 0
+				},
+				"event": {
+					"n": 12,
+					"found": 8,
+					"right": 0
+				},
+				"stable": {
+					"n": 6,
+					"found": 3,
+					"right": 0
+				},
+				"unknown": {
+					"n": 4,
+					"found": 0,
+					"right": 0
+				}
+			},
+			"recallMsMedian": 205,
+			"writeSeconds": 17.4,
+			"rows": [
+				{
+					"type": "current",
+					"q": "Which city does Alex call home at the moment?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 346,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Where is Alex headed after this place?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 279,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which hospital employs Alex now?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 212,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "What is Alex's job title these days?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 142,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex still work nights?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 75,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How many dogs live with Alex now?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 348,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How would you describe Alex's diet now?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 278,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "When will Lucía get married?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 213,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How does Alex usually get to the hospital?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 147,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex own a car right now?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 77,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which book is Alex reading at the end of the summer?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 343,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which language is Alex learning, and with whom?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 274,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Where did Alex live before the move in June?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 205,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What ward did Alex switch to when changing hospitals?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 138,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was the wedding date originally?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 72,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Which shifts was Alex working in April?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 336,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was Alex's diet before the doctor's advice?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 269,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Why couldn't Alex have a dog in the first flat?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 204,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What did Alex cook for the housewarming?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 135,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What was Alex's finishing time in the 10K?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 71,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How long did the half marathon take Alex?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 337,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How much money did Alex get for the old car?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 271,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What present did Alex want for Sam's birthday?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 205,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which region did Alex visit on holiday in August?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 140,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What operation did Alex's mother have?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 73,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Why did the wedding move?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 335,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What's the name of the second dog, and what kind of dog is it?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 270,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "When is Sam's birthday?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 202,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which neighbourhood did they move into in Madrid?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 135,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Where will they rent in Lisbon?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 70,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Is there a nut Alex has to avoid?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 339,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What does Alex's partner do for a living?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 272,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "How does Alex like replies to be?",
+					"found": false,
+					"answer": null,
+					"right": null,
+					"recallMs": 203,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What's the name of the beagle?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 137,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Where does Alex like to get coffee in the new city?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 72,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What brand is Alex's e-bike?",
+					"found": true,
+					"answer": null,
+					"right": null,
+					"recallMs": 339,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is the name of Alex's brother?",
+					"found": null,
+					"answer": null,
+					"right": null,
+					"recallMs": 274,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "Which gym is Alex a member of?",
+					"found": null,
+					"answer": null,
+					"right": null,
+					"recallMs": 209,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is Alex's blood type?",
+					"found": null,
+					"answer": null,
+					"right": null,
+					"recallMs": 142,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What instrument does Sam play?",
+					"found": null,
+					"answer": null,
+					"right": null,
+					"recallMs": 74,
+					"hits": 40
+				}
+			]
+		}
+	},
+	"cost": {
+		"embeddings": 0,
+		"embeddingTokens": 0,
+		"answers": 0,
+		"learning": 0
+	}
+}

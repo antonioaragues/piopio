@@ -29,6 +29,12 @@ export const HINDSIGHT_PRESET: Omit<McpMemoryConfig, "id" | "name"> = {
 
 /** The default embedding model (docs/spec/14-memory §5.1): the same model through OpenRouter or the OpenAI API, so vectors match either way. */
 export const EMBEDDING_MODEL = { id: "openai/text-embedding-3-small@256", openrouter: "openai/text-embedding-3-small", openai: "text-embedding-3-small", dims: 256 };
+/** Search by meaning is opt-in (docs/spec/14 §7): on when set, or when a custom endpoint is configured. */
+function semanticOn(memory: { semantic?: boolean; localOnly?: boolean; embeddings?: unknown }): boolean {
+	if (memory.localOnly) return false;
+	return memory.semantic ?? Boolean(memory.embeddings);
+}
+
 /** After a failure (no key, offline), recall stays keyword-only this long before trying again. */
 const EMBEDDINGS_RETRY_MS = 60_000;
 
@@ -70,7 +76,7 @@ export class MemoryProviders {
 	/** The configured endpoint, else OpenRouter, else the OpenAI API key; a request without any key pauses semantic search. */
 	private makeEmbedder(): Embedder | undefined {
 		const memory = this.settings.get().memory;
-		if (memory.localOnly) return undefined;
+		if (!semanticOn(memory)) return undefined;
 		const custom = memory.embeddings;
 		const inner = custom
 			? openAiEmbedder({ baseUrl: custom.baseUrl, model: custom.model, dims: custom.dims, id: `${custom.model}@${custom.dims}`, key: async () => (custom.provider ? this.keyFor(custom.provider) : undefined) })
@@ -134,13 +140,13 @@ export class MemoryProviders {
 	/** For Settings: whether recall is semantic, with what, and how much is indexed. Checks the key when it hasn't been used yet. */
 	async status(): Promise<{ semantic: boolean; reason?: string; error?: string; model?: string; via?: string; records: number; indexed: number }> {
 		const memory = this.settings.get().memory;
-		if (!this.via && !memory.localOnly && !memory.embeddings) {
+		if (!this.via && semanticOn(memory) && !memory.embeddings) {
 			this.via = (await this.keyFor("openrouter")) ? "OpenRouter" : (await this.keyFor("openai-api")) ? "OpenAI API" : undefined;
 			if (!this.via) this.lastError = { reason: "no_key", message: "no_key" };
 		}
 		const counts = this.builtin.vectorStatus();
 		this.fill();
-		if (memory.localOnly) return { semantic: false, reason: "local_only", records: counts.records, indexed: 0 };
+		if (!semanticOn(memory)) return { semantic: false, reason: "off", records: counts.records, indexed: 0 };
 		if (this.lastError) return { semantic: false, reason: this.lastError.reason, ...(this.lastError.reason === "failing" ? { error: this.lastError.message } : {}), model: this.embedder?.model, records: counts.records, indexed: counts.indexed };
 		return { semantic: true, ...(this.embedder ? { model: this.embedder.model } : {}), ...(this.via ? { via: this.via } : {}), records: counts.records, indexed: counts.indexed };
 	}

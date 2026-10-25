@@ -10,7 +10,8 @@
 //   node scripts/memory-eval.mjs --recall-only            # no answers: retrieval only (embeddings still cost a little)
 //
 // Engines: basic (keyword + recency), small (+ text-embedding-3-small at 256), large (+ text-embedding-3-large at 256),
-// learned (small + facts learned from each day's exchanges by the utility model, M2; about $1 and 20 minutes).
+// learned (small + facts learned from each day's exchanges by the utility model, M2; about $0.07 and 20 minutes),
+// apple-sentence and apple-contextual (Apple's on-device embeddings; PIOPIO_NL_EMBED=<helper>, free, nothing leaves the Mac).
 // Costs real money with OpenRouter (about $0.05 without learned). Build first: corepack pnpm -r build
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -69,11 +70,34 @@ async function utility(system, prompt) {
 	return body.choices?.[0]?.message?.content ?? "";
 }
 
+/** Apple's on-device embeddings (NaturalLanguage), through a small helper binary: PIOPIO_NL_EMBED=<path to it>. */
+function appleEmbedder(mode) {
+	const bin = process.env.PIOPIO_NL_EMBED;
+	if (!bin) throw new Error("Set PIOPIO_NL_EMBED to the embed helper (see the S9 notes).");
+	let dims = 0;
+	return {
+		model: `apple-${mode}`,
+		get dims() {
+			return dims;
+		},
+		async embed(texts) {
+			const out = JSON.parse(execFileSync(bin, [mode], { input: JSON.stringify(texts), maxBuffer: 1 << 30 }).toString());
+			dims = out[0]?.length ?? dims;
+			return out.map((v) => Float32Array.from(v));
+		},
+	};
+}
+
 async function build(engine) {
 	const db = new DatabaseSync(":memory:");
 	const sql = { exec: (s) => db.exec(s), run: (s, ...p) => void db.prepare(s).run(...p), all: (s, ...p) => db.prepare(s).all(...p) };
 	const spec = EMBEDDERS[engine];
-	const embedder = spec ? openAiEmbedder({ baseUrl: "https://openrouter.ai/api/v1", model: spec.model, dims: spec.dims, key: async () => key, fetch: countingFetch("embeddings") }) : undefined;
+	const embedder = engine.startsWith("apple-")
+		? appleEmbedder(engine.slice(6))
+		: spec
+			? openAiEmbedder({ baseUrl: "https://openrouter.ai/api/v1", model: spec.model, dims: spec.dims, key: async () => key, fetch: countingFetch("embeddings") })
+			: undefined;
+	if (embedder?.model.startsWith("apple-")) await embedder.embed(["warm up"]); // learns its dimension
 	// Write first, embed after in batches (what the engine's backfill does), so the run doesn't make 2,000 requests.
 	let embedding = false;
 	let n = 0;

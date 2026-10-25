@@ -455,7 +455,12 @@ export const EngineSettings = Type.Object({
 	memory: Type.Object({
 		/** MCP memory providers (07-shared §6.2). */
 		providers: Type.Array(McpMemoryProvider),
-		/** Keep memory on this Mac: no cloud embeddings, so recall stays keyword-only (docs/spec/14-memory §5.3). */
+		/**
+		 * Search memory by meaning (docs/spec/14-memory M1): memories are embedded through OpenRouter (or the OpenAI API
+		 * key). Off by default: search matches words and nothing leaves the Mac. Unset with `embeddings`: on.
+		 */
+		semantic: Type.Optional(Type.Boolean()),
+		/** Older name for `semantic: false` (read, no longer written). */
 		localOnly: Type.Optional(Type.Boolean()),
 		/** Another embedding endpoint than the default (OpenRouter, then the OpenAI API key): an OpenAI-compatible server. */
 		embeddings: Type.Optional(Type.Object({ baseUrl: Type.String(), model: Type.String(), dims: Type.Number(), provider: Type.Optional(Type.String()) })),
@@ -1336,7 +1341,7 @@ export const methods = {
 		params: Type.Object({}),
 		result: Type.Object({
 			semantic: Type.Boolean(),
-			/** Why semantic search is off: "local_only", "no_key", or "failing" (with `error`). */
+			/** Why semantic search is off: "off" (words only, the default), "no_key", or "failing" (with `error`). */
 			reason: Type.Optional(Type.String()),
 			error: Type.Optional(Type.String()),
 			model: Type.Optional(Type.String()),

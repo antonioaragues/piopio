@@ -12,6 +12,8 @@ struct FileBrowser: View {
     let engine: EngineController
     let cwd: String
     @Binding var selected: String?
+    /// Mentions a file in the session's composer ("@path").
+    var mention: ((String) -> Void)?
     @State private var children: [String: [DirEntry]] = [:]
     @State private var expanded: Set<String> = []
 
@@ -68,10 +70,36 @@ struct FileBrowser: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .contextMenu { menu(entry) }
             if entry.kind == .folder, expanded.contains(entry.path) {
                 rows(dir: entry.path, depth: depth + 1)
             }
         })
+    }
+
+    /// Right-click on a file or folder: open it, find it, copy its path, mention it in the chat.
+    @ViewBuilder private func menu(_ entry: DirEntry) -> some View {
+        let url = URL(fileURLWithPath: cwd).appending(path: entry.path)
+        if entry.kind != .folder {
+            Button("Preview") { selected = entry.path }
+            if let editor = Editor.preferred { Button("Open in \(editor.name)") { editor.open(url.path) } }
+            Button("Open with Default App") { NSWorkspace.shared.open(url) }
+        } else if let editor = Editor.preferred {
+            Button("Open Folder in \(editor.name)") { editor.open(url.path) }
+        }
+        Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        Divider()
+        Button("Copy Path") { copy(url.path) }
+        Button("Copy Relative Path") { copy(entry.path) }
+        if let mention {
+            Divider()
+            Button("Mention in Chat") { mention(entry.path) }
+        }
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     private func icon(_ entry: DirEntry) -> String {
@@ -91,7 +119,6 @@ struct FilePreview: View {
     let engine: EngineController
     let cwd: String
     let path: String
-    let session: ThreadModel
     let close: () -> Void
 
     private var url: URL { URL(fileURLWithPath: cwd).appending(path: path) }
@@ -102,12 +129,13 @@ struct FilePreview: View {
             HStack(spacing: 8) {
                 Text(url.lastPathComponent).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
                 Spacer()
-                Button("Ask about this") { session.draft = "@\(path) " }.buttonStyle(PillStyle(compact: true)).help("Mentions the file in the composer")
                 if let editor = Editor.preferred {
                     Button("Open in \(editor.name)") { editor.open(url.path) }.buttonStyle(PillStyle(compact: true))
                 } else {
                     Button("Open") { NSWorkspace.shared.open(url) }.buttonStyle(PillStyle(compact: true))
                 }
+                Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: { Image(systemName: "folder").font(.system(size: 11)) }
+                    .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Reveal in Finder")
                 Button { close() } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
                     .buttonStyle(.plain).foregroundStyle(Color.dsFg3)
             }

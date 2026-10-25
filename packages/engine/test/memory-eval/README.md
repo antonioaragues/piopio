@@ -37,8 +37,11 @@ facts that change several times, decoys that share words with the questions, and
 | **Standard, large** (+ `text-embedding-3-large` at 256) | 34/36 | **39/40** | 11/12 | 6/6 | 12/12 | 6/6 | 4/4 | 701 ms |
 | **Standard + learned facts** (small, M2, first prompt) | 35/36 | **38/40** | 11/12 | 6/6 | 11/12 | 6/6 | 4/4 | 603 ms |
 | **Standard + learned facts** (small, M2, tuned) | 35/36 | **39/40** | 11/12 | 6/6 | 12/12 | 6/6 | 4/4 | 595 ms |
+| Apple on-device, sentence embedding | 14/36 | — | 4/12 | 1/6 | 6/12 | 3/6 | — | 60 ms |
+| Apple on-device, contextual embedding (mean-pooled) | 20/36 | — | 7/12 | 2/6 | 8/12 | 3/6 | — | 205 ms |
 
 - **Hybrid recall is the gain.** It took 25/40 to 38/40. A keyword match misses paraphrases: "Which city does Alex call home" shares no word with "First night in the new flat in Chamberí".
+- **Apple's on-device embeddings** (NaturalLanguage, no download) did worse than keyword search alone, so Piopio doesn't offer them. Run them with `PIOPIO_NL_EMBED=<helper>`; the helper is a 30-line Swift program over `NLEmbedding.sentenceEmbedding` and `NLContextualEmbedding`.
 - **Small vs large:** the large model adds one right answer at six times the price. Small stays the default.
 - **Where the time goes:** nearly all of the ~650 ms is the round trip to OpenRouter to embed the question. The vector scan of 2,018 records takes about 1 ms.
 - **Cost:** embedding the whole set is $0.0036 (47k tokens). The 120 answers cost $0.021.

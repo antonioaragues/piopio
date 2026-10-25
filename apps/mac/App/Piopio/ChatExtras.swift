@@ -414,57 +414,87 @@ private struct AboutMeHistorySheet: View {
     }
 }
 
-/// Memory search (docs/spec/14-memory M1): whether recall finds by meaning, with what, how much is indexed, and
-/// "Keep memory on this Mac".
+/// How memory is searched (docs/spec/14-memory M1, §7): by words on this Mac (the default), or by meaning through
+/// OpenRouter, each explained with the same example and what it costs.
 struct MemorySearchCard: View {
     let engine: EngineController
     /// Bumped by Rebuild index, so the counts refresh.
     var tick = 0
     @State private var status: MemoryStatus?
     private var settings: EngineSettings? { engine.settings }
+    private var byMeaning: Bool { settings?.memory.searchesByMeaning ?? false }
+    /// OpenRouter or an OpenAI API key is connected.
+    private var canUseMeaning: Bool { engine.hasKey || engine.providers.contains { ($0.id == "openrouter" || $0.id == "openai-api") && $0.isConnected } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CardTitle("Memory search")
+        VStack(alignment: .leading, spacing: 0) {
+            CardTitle("How memory is searched")
             ListCard {
-                HStack(spacing: 12) {
-                    Image(systemName: status?.semantic == true ? "sparkle.magnifyingglass" : "text.magnifyingglass")
-                        .font(.system(size: 14)).foregroundStyle(status?.semantic == true ? Color.accentColor : Color.dsFg3).frame(width: 20)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(status?.semantic == true ? "Finds by meaning and by words" : "Finds by words").font(.system(size: 13))
-                        Text(statusLine).font(.system(size: 11.5)).foregroundStyle(status?.reason == "failing" ? Color.dsAmber : Color.dsFg3).lineLimit(2)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 14).frame(minHeight: 54)
-                RowDivider(inset: 14)
-                ToggleRow(title: "Keep memory on this Mac", subtitle: "No text goes out to compute embeddings; search matches words only", last: true, isOn: Binding(get: { settings?.memory.localOnly ?? false }, set: { v in
-                    Task {
-                        await engine.updateSettings(SettingsPatch(memory: .init(localOnly: v)))
-                        status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self)
-                    }
-                }))
+                option(meaning: false, title: "By words", badge: "On this Mac",
+                       text: "Finds memories that use the words of the question. Asking where you live finds “I live in Madrid”, but not “First night in the new flat in Chamberí”. Nothing leaves your Mac.")
+                RowDivider(inset: 44)
+                option(meaning: true, title: "By meaning", badge: "OpenRouter",
+                       text: "Also finds memories that say the same thing in other words, like the Chamberí message. Each memory's text is sent once to OpenRouter, which turns it into numbers that capture what it means (an “embedding”); those stay on this Mac. About $0.002 per 1,000 messages.")
             }
-            FinePrint("About me and agents' memory use it. Embeddings cost well under a cent per 100 messages.").padding(.top, 2)
+            FinePrint("For About me and agents' memory. In Piopio's own test of 40 questions over six months of messages, right answers went from 25 by words to 38 by meaning. Turning it off goes back to words; nothing is lost.")
+                .padding(.top, 8)
         }
-        .task(id: tick) { status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self) }
+        .task(id: tick) { await refresh() }
     }
 
-    private var statusLine: String {
-        guard let s = status else { return "Checking…" }
-        let count = "\(s.indexed.formatted()) of \(s.records.formatted()) memories indexed"
-        if s.semantic { return [s.model.map(Self.modelName), s.via.map { "via \($0)" }, count].compactMap { $0 }.joined(separator: " · ") }
+    private func option(meaning: Bool, title: String, badge: String, text: String) -> some View {
+        let selected = byMeaning == meaning
+        let unavailable = meaning && !canUseMeaning && !selected
+        return Button { choose(meaning) } label: {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle().strokeBorder(selected ? Color.accentColor : Color.dsFg3.opacity(0.5), lineWidth: selected ? 5 : 1.2)
+                }
+                .frame(width: 16, height: 16).padding(.top, 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(title).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(unavailable ? Color.dsFg3 : Color.dsFg)
+                        SettingsBadge(badge, tint: meaning ? nil : .green)
+                    }
+                    Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+                    if unavailable {
+                        Text("Connect OpenRouter (or an OpenAI API key) in Models first.").font(.system(size: 11.5)).foregroundStyle(Color.dsAmber)
+                    } else if selected, meaning, let line = statusLine {
+                        Text(line).font(.system(size: 11.5)).foregroundStyle(status?.reason == "failing" || status?.reason == "no_key" ? Color.dsAmber : Color.dsFg3)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(unavailable)
+    }
+
+    private func choose(_ meaning: Bool) {
+        guard meaning != byMeaning else { return }
+        Task {
+            await engine.updateSettings(SettingsPatch(memory: .init(semantic: meaning, localOnly: false)))
+            await refresh()
+        }
+    }
+
+    private func refresh() async {
+        status = try? await engine.client?.call("memory.status", Empty(), as: MemoryStatus.self)
+    }
+
+    /// "1,203 of 1,240 memories indexed · OpenAI small embeddings", or why it's paused.
+    private var statusLine: String? {
+        guard let s = status else { return nil }
+        if s.semantic {
+            let count = s.indexed < s.records ? "\(s.indexed.formatted()) of \(s.records.formatted()) memories indexed, the rest in the background" : "\(s.records.formatted()) memories indexed"
+            return [count, s.via.map { "via \($0)" }].compactMap { $0 }.joined(separator: " · ")
+        }
         switch s.reason {
-        case "local_only": return "Memory stays on this Mac"
-        case "no_key": return "Connect OpenRouter or an OpenAI API key in Models to find by meaning"
-        default: return "Paused: \(s.error ?? "the embedding service didn't answer"). Trying again in a minute."
+        case "no_key": return "Needs an OpenRouter or OpenAI API key (Models). Searching by words until then."
+        case "failing": return "Paused: \(s.error ?? "OpenRouter didn't answer"). Searching by words; trying again in a minute."
+        default: return nil
         }
-    }
-
-    /// "openai/text-embedding-3-small@256" → "OpenAI small (256)".
-    private static func modelName(_ id: String) -> String {
-        if id.hasPrefix("openai/text-embedding-3-small") { return "OpenAI small embeddings" }
-        if id.hasPrefix("openai/text-embedding-3-large") { return "OpenAI large embeddings" }
-        return id
     }
 }

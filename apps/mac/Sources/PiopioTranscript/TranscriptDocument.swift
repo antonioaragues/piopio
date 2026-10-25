@@ -656,7 +656,12 @@ private final class HoverTracker: NSResponder {
 
 /// Markdown rendered in the transcript's style, for other views (the Chat lens file preview).
 public enum MarkdownRendering {
+    /// Files are hard-wrapped: lines of one paragraph join with a space, as Markdown reads them.
     public static func attributed(_ markdown: String) -> NSAttributedString {
-        ItemRenderer().render(MarkdownStream(text: markdown).blocks)
+        let blocks = MarkdownStream(text: markdown).blocks.map { block -> MarkdownBlock in
+            if case .paragraph(let text) = block { return .paragraph(text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")) }
+            return block
+        }
+        return ItemRenderer().render(blocks)
     }
 }

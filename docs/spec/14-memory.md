@@ -1,6 +1,6 @@
 # 14 · Memory (spike S8, 2026-10-24)
 
-**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 OpenRouter embeddings by default, with Keep memory on this Mac as the opt-out. Q1 and Q3 wait for M4 and M5.
+**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 revised after use (2026-10-25): **search by words on this Mac is the default**, and search by meaning through OpenRouter is an explained opt-in in Settings › Memory. Q1 and Q3 wait for M4 and M5.
 
 The question: how should Piopio's memory get better, where does a project like Hindsight fit, should memory have
 its own Settings section, and which kinds of memory belong in which part of the product (Chat, notebooks, agents,
@@ -199,8 +199,10 @@ before Past chats (M4) starts indexing more of your data.
 - **Recall:** BM25 and vector rankings fused with reciprocal rank fusion (k = 60), with a 0.3 similarity floor, then recency, pins and a 1.3× weight for current facts.
 - **Where it runs:** the same code on the Mac and on a Durable Object (the cloud tests pass).
 - **The embedder:** `openai/text-embedding-3-small` at 256 dimensions through OpenRouter, else the OpenAI API key, else keyword-only. A failure pauses semantic search for a minute.
+- **Off by default** (`memory.semantic`, revised Q4): by words, nothing leaves the Mac. Settings › Memory › How memory is searched explains both choices with one example, what's sent and the cost.
+- **Apple's on-device embeddings were measured and rejected:** on M0, NaturalLanguage's sentence embedding put the answer in recall for 14/36 questions and the contextual one for 20/36. Keyword search alone gets 21/36, and OpenRouter's small model 34/36. A downloaded local model (for example through Ollama) is the way to meaning on the Mac, later.
 - **Backfill:** records written offline or before M1 get their vectors in the background.
-- **Settings:** `memory.localOnly` (Keep memory on this Mac), `memory.embeddings` (another endpoint); `memory.status`.
+- **Settings:** `memory.semantic` (search by meaning), `memory.embeddings` (another endpoint); `memory.status`. `memory.localOnly` is still read, as off.
 
 **M0 · Our own test set**
 - **The set:** 2,018 messages over six months, 40 questions: [packages/engine/test/memory-eval](../../packages/engine/test/memory-eval/README.md).
@@ -219,7 +221,7 @@ before Past chats (M4) starts indexing more of your data.
 **M3 · Settings › Memory**
 - **The section:** after Chat ([screenshots](../design/memory/screenshots)).
   - **What Piopio remembers:** About me (its editor moved here from Settings › Chat), each agent with facts and messages, notebooks.
-  - **Memory search:** M1's status and Keep memory on this Mac.
+  - **How memory is searched:** By words (on this Mac, default) or By meaning (OpenRouter), with the index status.
   - **Learning:** Chats add to About me, and a switch per agent (`memory.setLearning`, saved in the definition's history).
   - **Your data:** Export everything (memory.json and memory.md), Rebuild search index, and Erase one part or everything (with confirmation).
 - **Browse:** every bank in one window.

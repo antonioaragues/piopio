@@ -1440,7 +1440,7 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		expect(hits[0]!.text).toBe("Lives in Valencia");
 	});
 
-	test("semantic recall through an embeddings endpoint, with its status; Keep memory on this Mac turns it off (docs/spec/14 M1)", async () => {
+	test("search by meaning is off by default; on, it recalls through an embeddings endpoint and reports its status (docs/spec/14 M1)", async () => {
 		const { createServer } = await import("node:http");
 		// A toy OpenAI-compatible endpoint: each word maps to a concept.
 		const concepts: Record<string, number> = { city: 0, live: 0, moving: 0, madrid: 1, dog: 2, puppy: 2 };
@@ -1463,6 +1463,9 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
 		const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`;
 		const a = await start();
+		// Off by default: words only, nothing leaves the Mac.
+		expect(await a.client.call("memory.status", {})).toMatchObject({ semantic: false, reason: "off" });
+		await a.client.call("settings.set", { memory: { semantic: true } });
 		expect(await a.client.call("memory.status", {})).toMatchObject({ semantic: false, reason: "no_key" });
 		await a.client.call("settings.set", { memory: { embeddings: { baseUrl: url, model: "toy", dims: 8 } } });
 		await a.client.call("memory.add", { provider: "builtin", bank: "alex", text: "Works at a bakery downtown." });
@@ -1472,8 +1475,8 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		const city = (await a.client.call("memory.recall", { provider: "builtin", bank: "alex", query: "Which city?" })).hits;
 		expect(city[0]!.text).toContain("Madrid");
 		expect(requests).toBeGreaterThan(0);
-		await a.client.call("settings.set", { memory: { localOnly: true } });
-		expect(await a.client.call("memory.status", {})).toMatchObject({ semantic: false, reason: "local_only" });
+		await a.client.call("settings.set", { memory: { semantic: false } });
+		expect(await a.client.call("memory.status", {})).toMatchObject({ semantic: false, reason: "off" });
 		expect((await a.client.call("memory.recall", { provider: "builtin", bank: "alex", query: "Which city?" })).hits).toEqual([]);
 		expect((await a.client.call("memory.recall", { provider: "builtin", bank: "alex", query: "bakery" })).hits[0]!.text).toContain("bakery");
 		server.close();
@@ -1630,7 +1633,7 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 		expect(await a.client.call("memory.wipe", { bank: `${ref.id}/shared` })).toEqual({ records: 1 });
 		banks = await a.client.call("memory.banks", {});
 		expect(banks.banks.map((b) => b.label).sort()).toEqual(["About me", "Antonio"]);
-		expect(await a.client.call("memory.reindex", {})).toEqual({ pending: 2 }); // no key in tests: they wait for embeddings
+		expect(await a.client.call("memory.reindex", {})).toEqual({ pending: 0 }); // words only by default: nothing to embed
 		expect(await a.client.call("memory.wipe", { bank: "*" })).toEqual({ records: 2 });
 		expect((await a.client.call("memory.banks", {})).banks).toEqual([]);
 		await stop(a);

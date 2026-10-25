@@ -179,8 +179,8 @@ struct MemoryPane: View {
                 Button("Export…", action: export).buttonStyle(PillStyle(compact: true)).disabled(all.isEmpty)
             }
             RowDivider(inset: 14)
-            dataRow("Rebuild search index", "Embeds again whatever has no vector from the current model") {
-                Button("Rebuild", action: reindex).buttonStyle(PillStyle(compact: true)).disabled(all.isEmpty)
+            dataRow("Rebuild search index", settings?.memory.searchesByMeaning == true ? "Computes the meaning again for memories that miss it" : "Only for searching by meaning") {
+                Button("Rebuild", action: reindex).buttonStyle(PillStyle(compact: true)).disabled(all.isEmpty || settings?.memory.searchesByMeaning != true)
             }
             RowDivider(inset: 14)
             dataRow("Erase memory", "One part, or everything. About me's history goes with it.", last: true) {

@@ -66,6 +66,9 @@ struct BuildSessionView: View {
     @State private var showInspector = false
     @AppStorage("inspectorTab") private var inspectorTab = ChatInspectorTab.changes
     @State private var previewing: String?
+    /// The file preview's width, dragged from its left edge (kept across sessions).
+    @AppStorage("previewWidth") private var previewWidth: Double = 440
+    @State private var dragStartWidth: Double?
     @State private var reviewing = false
     @State private var reviewFile: String?
     @State private var git: GitModel?
@@ -106,10 +109,11 @@ struct BuildSessionView: View {
                 }
             }
             if !reviewing, let path = previewing, let cwd = summary.cwd {
-                FilePreview(engine: engine, cwd: cwd, path: path, session: session) { previewing = nil }
-                    .frame(width: 440)
+                FilePreview(engine: engine, cwd: cwd, path: path) { previewing = nil }
+                    .frame(width: previewWidth)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.panel))
                     .overlay(RoundedRectangle(cornerRadius: DS.Radius.panel).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                    .overlay(alignment: .leading) { resizeHandle }
                     .padding(.vertical, 8)
             }
             if showInspector && !reviewing {
@@ -124,7 +128,10 @@ struct BuildSessionView: View {
                         .padding(.top, 12)
                     }
                     if inspectorTab == .files, let cwd = summary.cwd {
-                        FileBrowser(engine: engine, cwd: cwd, selected: $previewing)
+                        FileBrowser(engine: engine, cwd: cwd, selected: $previewing, mention: { path in
+                            let current = session.draft ?? ""
+                            session.draft = current + (current.isEmpty || current.hasSuffix(" ") ? "" : " ") + "@\(path) "
+                        })
                     } else {
                         BuildInspector(session: session, commit: !chatLens && git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil) { file in
                             reviewFile = file
@@ -179,6 +186,26 @@ struct BuildSessionView: View {
         .sheet(item: Binding(get: { session.editingPlan }, set: { session.editingPlan = $0 })) { prompt in
             PlanEditorSheet(session: session, prompt: prompt)
         }
+    }
+
+    /// The preview's left edge: drag to resize (280–900 pt), double-click for the default width.
+    private var resizeHandle: some View {
+        Color.clear
+            .frame(width: 8)
+            .contentShape(Rectangle())
+            .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { value in
+                        let start = dragStartWidth ?? previewWidth
+                        dragStartWidth = start
+                        previewWidth = min(900, max(280, start - value.translation.width))
+                    }
+                    .onEnded { _ in dragStartWidth = nil }
+            )
+            .onTapGesture(count: 2) { withAnimation(.easeOut(duration: 0.15)) { previewWidth = 440 } }
+            .offset(x: -4)
+            .help("Drag to resize")
     }
 
     private var conversation: some View {

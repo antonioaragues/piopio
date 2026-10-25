@@ -25,13 +25,13 @@ struct MainSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Spacer()
+            // The traffic lights' row, then search and New side by side.
+            Color.clear.frame(height: 34)
+            HStack(spacing: 6) {
+                search
                 NewMenu(engine: engine)
             }
             .padding(.horizontal, 12)
-            .frame(height: 38)
-            search
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     if query.isEmpty {
@@ -86,7 +86,6 @@ struct MainSidebar: View {
         .padding(.horizontal, 10)
         .frame(height: 28)
         .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-        .padding(.horizontal, 12)
     }
 
     private var footer: some View {
@@ -582,14 +581,14 @@ struct NewMenu: View {
             }
             if areas.contains(.agents) { Button("New Agent") { NotificationCenter.default.post(name: .newAgent, object: nil) } }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
-                Text("New").font(.system(size: 12, weight: .semibold))
-            }
+            Image(systemName: "square.and.pencil").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
+                .frame(width: 28, height: 28)
+                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+                .contentShape(Rectangle())
         }
         .menuStyle(.button)
-        .buttonStyle(ChipStyle())
-        .menuIndicator(.visible)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .fixedSize()
         .help(Self.help(areas))
     }

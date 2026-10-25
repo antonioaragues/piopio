@@ -713,7 +713,8 @@ nonisolated struct ItemRenderer: Sendable {
             let size: CGFloat = level == 1 ? 19 : level == 2 ? 17 : 15
             return line(chips(Inline.ns(text, font: .systemFont(ofSize: size, weight: .semibold), color: DS.fg)), paragraph(spacing: 6, before: 8))
         case .paragraph(let text):
-            return line(chips(Inline.ns(text, font: body, color: DS.fg)), paragraph(spacing: compact ? 10 : 12))
+            // A single line break inside a paragraph stays a line break, not a new paragraph with its spacing.
+            return line(chips(Inline.ns(text.replacingOccurrences(of: "\n", with: lineSeparator), font: body, color: DS.fg)), paragraph(spacing: compact ? 10 : 12))
         case .quote(let text):
             let p = paragraph(spacing: 12, indent: 14)
             return card(Inline.ns(text.replacingOccurrences(of: "\n", with: lineSeparator), font: body, color: DS.fg2), .quote, paragraphStyle: p)

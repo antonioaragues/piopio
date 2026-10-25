@@ -700,7 +700,13 @@ public struct MemoryStatus: Decodable, Sendable, Equatable {
 public struct EngineSettings: Codable, Sendable, Hashable {
     public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var suggestSpaces: Bool; public var followUps: Bool? }
     public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var inAgents: Bool?; public var provider: String }
-    public struct Memory: Codable, Sendable, Hashable { public var providers: [McpMemoryProvider]; public var localOnly: Bool? }
+    public struct Memory: Codable, Sendable, Hashable {
+        public var providers: [McpMemoryProvider]
+        /// Search by meaning through OpenRouter (off: by words, on this Mac).
+        public var semantic: Bool?
+        public var localOnly: Bool?
+        public var searchesByMeaning: Bool { localOnly != true && (semantic ?? false) }
+    }
     public var chat: Chat
     public var aboutMe: AboutMe
     public var memory: Memory
@@ -774,8 +780,9 @@ public struct SettingsPatch: Encodable, Sendable {
     }
     public struct Memory: Encodable, Sendable {
         public var providers: [McpMemoryProvider]?
+        public var semantic: Bool?
         public var localOnly: Bool?
-        public init(providers: [McpMemoryProvider]? = nil, localOnly: Bool? = nil) { self.providers = providers; self.localOnly = localOnly }
+        public init(providers: [McpMemoryProvider]? = nil, semantic: Bool? = nil, localOnly: Bool? = nil) { self.providers = providers; self.semantic = semantic; self.localOnly = localOnly }
     }
     public var chat: Chat?
     public var aboutMe: AboutMe?

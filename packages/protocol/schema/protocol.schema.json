@@ -26981,6 +26981,9 @@
 								}
 							}
 						},
+						"semantic": {
+							"type": "boolean"
+						},
 						"localOnly": {
 							"type": "boolean"
 						},
@@ -27181,6 +27184,9 @@
 									}
 								}
 							}
+						},
+						"semantic": {
+							"type": "boolean"
 						},
 						"localOnly": {
 							"type": "boolean"
@@ -27401,6 +27407,9 @@
 									}
 								}
 							}
+						},
+						"semantic": {
+							"type": "boolean"
 						},
 						"localOnly": {
 							"type": "boolean"
