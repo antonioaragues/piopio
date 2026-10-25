@@ -1,0 +1,1204 @@
+{
+	"set": "memory-2000",
+	"messages": 2018,
+	"model": "anthropic/claude-haiku-5.5",
+	"at": "2026-10-25T21:19:46.383Z",
+	"engines": {
+		"basic": {
+			"found": 21,
+			"of": 36,
+			"right": 25,
+			"questions": 40,
+			"byType": {
+				"current": {
+					"n": 12,
+					"found": 7,
+					"right": 7
+				},
+				"past": {
+					"n": 6,
+					"found": 3,
+					"right": 3
+				},
+				"event": {
+					"n": 12,
+					"found": 8,
+					"right": 8
+				},
+				"stable": {
+					"n": 6,
+					"found": 3,
+					"right": 3
+				},
+				"unknown": {
+					"n": 4,
+					"found": 0,
+					"right": 4
+				}
+			},
+			"recallMsMedian": 4,
+			"writeSeconds": 0.1,
+			"rows": [
+				{
+					"type": "current",
+					"q": "Which city does Alex call home at the moment?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 9,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Where is Alex headed after this place?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 32,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which hospital employs Alex now?",
+					"found": true,
+					"answer": "Alex now works at Hospital Gregorio Marañón, in pediatrics.",
+					"right": true,
+					"recallMs": 31,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "What is Alex's job title these days?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 30,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex still work nights?",
+					"found": true,
+					"answer": "No, Alex switched to day shifts in pediatrics at Hospital Gregorio Marañón, as of June 2026.",
+					"right": true,
+					"recallMs": 30,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How many dogs live with Alex now?",
+					"found": true,
+					"answer": "Two: Toffee and Pico, the rescued greyhound.",
+					"right": true,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How would you describe Alex's diet now?",
+					"found": true,
+					"answer": "Alex is pescatarian now, having restarted eating fish in July 2026 on their doctor's advice for low iron.",
+					"right": true,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "When will Lucía get married?",
+					"found": true,
+					"answer": "Lucía's wedding has moved to November 7th in Seville, after her venue flooded.",
+					"right": true,
+					"recallMs": 2,
+					"hits": 37
+				},
+				{
+					"type": "current",
+					"q": "How does Alex usually get to the hospital?",
+					"found": true,
+					"answer": "Alex said in July 2026 they'd commute to the hospital on their new Orbea e-bike.",
+					"right": true,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex own a car right now?",
+					"found": true,
+					"answer": "No, Alex sold the Ibiza in June 2026 and has no car in Madrid.",
+					"right": true,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which book is Alex reading at the end of the summer?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which language is Alex learning, and with whom?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Where did Alex live before the move in June?",
+					"found": true,
+					"answer": "Alex lived in Valencia for nine years before moving to Madrid in June.",
+					"right": true,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What ward did Alex switch to when changing hospitals?",
+					"found": true,
+					"answer": "I don't know. My memory doesn't mention Alex changing hospitals; it only says Alex was promoted to charge nurse on the pediatric ward on 2026-09-18.",
+					"right": true,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was the wedding date originally?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 3,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Which shifts was Alex working in April?",
+					"found": true,
+					"answer": "In April, Alex was working night shifts, four nights a week.",
+					"right": true,
+					"recallMs": 2,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was Alex's diet before the doctor's advice?",
+					"found": false,
+					"answer": "I don't know; my memory doesn't state Alex's diet before the doctor's advice, only that on 2026-07-20 they said they'd \"started eating fish again\" and now consider themselves pescatarian.",
+					"right": false,
+					"recallMs": 6,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Why couldn't Alex have a dog in the first flat?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What did Alex cook for the housewarming?",
+					"found": true,
+					"answer": "According to my notes, Alex was making a big mushroom paella for twelve people for a housewarming on June 21, 2026.",
+					"right": true,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What was Alex's finishing time in the 10K?",
+					"found": true,
+					"answer": "Alex finished the 10K in 52:30 on May 10, 2026, a personal best.",
+					"right": true,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How long did the half marathon take Alex?",
+					"found": true,
+					"answer": "Alex finished the Madrid half marathon in 1:58:41.",
+					"right": true,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How much money did Alex get for the old car?",
+					"found": true,
+					"answer": "Alex sold the Ibiza to the neighbour for 2,800 euros.",
+					"right": true,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What present did Alex want for Sam's birthday?",
+					"found": true,
+					"answer": "Alex wanted to give Sam a vintage film camera for his August 14 birthday.",
+					"right": true,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which region did Alex visit on holiday in August?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What operation did Alex's mother have?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 3,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Why did the wedding move?",
+					"found": true,
+					"answer": "The wedding moved because Lucía's venue flooded, so it was rescheduled to November 7th in the same city.",
+					"right": true,
+					"recallMs": 3,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What's the name of the second dog, and what kind of dog is it?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "When is Sam's birthday?",
+					"found": true,
+					"answer": "August 14.",
+					"right": true,
+					"recallMs": 2,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which neighbourhood did they move into in Madrid?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 2,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Where will they rent in Lisbon?",
+					"found": true,
+					"answer": "Alex's memory says they'll rent near Alfama, in Lisbon.",
+					"right": true,
+					"recallMs": 1,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Is there a nut Alex has to avoid?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 3,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What does Alex's partner do for a living?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 3,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "How does Alex like replies to be?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What's the name of the beagle?",
+					"found": true,
+					"answer": "Toffee.",
+					"right": true,
+					"recallMs": 2,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Where does Alex like to get coffee in the new city?",
+					"found": true,
+					"answer": "Alex likes Hola Coffee in Lavapiés, where the flat white is their favourite.",
+					"right": true,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What brand is Alex's e-bike?",
+					"found": true,
+					"answer": "Alex's e-bike is an Orbea.",
+					"right": true,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is the name of Alex's brother?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 4,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "Which gym is Alex a member of?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is Alex's blood type?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 5,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What instrument does Sam play?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 2,
+					"hits": 40
+				}
+			]
+		},
+		"small": {
+			"found": 34,
+			"of": 36,
+			"right": 38,
+			"questions": 40,
+			"byType": {
+				"current": {
+					"n": 12,
+					"found": 11,
+					"right": 11
+				},
+				"past": {
+					"n": 6,
+					"found": 5,
+					"right": 5
+				},
+				"event": {
+					"n": 12,
+					"found": 12,
+					"right": 12
+				},
+				"stable": {
+					"n": 6,
+					"found": 6,
+					"right": 6
+				},
+				"unknown": {
+					"n": 4,
+					"found": 0,
+					"right": 4
+				}
+			},
+			"recallMsMedian": 645,
+			"writeSeconds": 29.2,
+			"rows": [
+				{
+					"type": "current",
+					"q": "Which city does Alex call home at the moment?",
+					"found": true,
+					"answer": "Alex's home is currently Madrid, though the move to Lisbon is planned to start in October.",
+					"right": true,
+					"recallMs": 722,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Where is Alex headed after this place?",
+					"found": true,
+					"answer": "Alex is moving to Lisbon in October, renting near Alfama, because Sam's company is transferring him there.",
+					"right": true,
+					"recallMs": 1975,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which hospital employs Alex now?",
+					"found": true,
+					"answer": "Alex now works at Hospital Gregorio Marañón, where they accepted a pediatric nursing job in June 2026.",
+					"right": true,
+					"recallMs": 999,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "What is Alex's job title these days?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 1174,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex still work nights?",
+					"found": true,
+					"answer": "No, Alex switched to day shifts only when they accepted a pediatrics nursing job at Hospital Gregorio Marañón on June 1, 2026.",
+					"right": true,
+					"recallMs": 1029,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How many dogs live with Alex now?",
+					"found": true,
+					"answer": "Alex now has two dogs: Toffee, a beagle mix, and Pico, a rescued greyhound.",
+					"right": true,
+					"recallMs": 677,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How would you describe Alex's diet now?",
+					"found": true,
+					"answer": "Alex is pescatarian: vegetarian until July 2026, when low iron led them to start eating fish again.",
+					"right": true,
+					"recallMs": 616,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "When will Lucía get married?",
+					"found": true,
+					"answer": "Lucía's wedding is on November 7th, 2026, in Seville, after the venue flood moved it from October 3rd.",
+					"right": true,
+					"recallMs": 603,
+					"hits": 37
+				},
+				{
+					"type": "current",
+					"q": "How does Alex usually get to the hospital?",
+					"found": true,
+					"answer": "Alex plans to commute to the hospital by e-bike, an Orbea bought in July 2026.",
+					"right": true,
+					"recallMs": 610,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex own a car right now?",
+					"found": true,
+					"answer": "No, Alex sold the Ibiza in June 2026 and has no car in Madrid.",
+					"right": true,
+					"recallMs": 733,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which book is Alex reading at the end of the summer?",
+					"found": true,
+					"answer": "I don't know for certain; the latest book I have is *The Overstory*, which Alex started on June 30, and my memory doesn't name a later one.",
+					"right": true,
+					"recallMs": 631,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which language is Alex learning, and with whom?",
+					"found": true,
+					"answer": "Alex is learning Portuguese with a tutor named Inês, on Tuesday evenings.",
+					"right": true,
+					"recallMs": 708,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Where did Alex live before the move in June?",
+					"found": true,
+					"answer": "Alex lived in Valencia for nine years before the June move to Madrid.",
+					"right": true,
+					"recallMs": 618,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What ward did Alex switch to when changing hospitals?",
+					"found": true,
+					"answer": "Alex switched to pediatrics when moving to Hospital Gregorio Marañón, and was later promoted to charge nurse on the pediatric ward.",
+					"right": true,
+					"recallMs": 664,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was the wedding date originally?",
+					"found": true,
+					"answer": "Lucía's wedding was originally set for October 3rd in Seville, before it moved to November 7th.",
+					"right": true,
+					"recallMs": 570,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Which shifts was Alex working in April?",
+					"found": true,
+					"answer": "In April, Alex was working night shifts, four nights a week.",
+					"right": true,
+					"recallMs": 604,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was Alex's diet before the doctor's advice?",
+					"found": false,
+					"answer": "I don't know. My notes only say that on 2026-07-20 Alex started eating fish again after a doctor said their iron was low, and now considers themselves pescatarian.",
+					"right": false,
+					"recallMs": 608,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Why couldn't Alex have a dog in the first flat?",
+					"found": true,
+					"answer": "The landlord didn't allow animals, which Alex found sad because they had always wanted a dog.",
+					"right": true,
+					"recallMs": 970,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What did Alex cook for the housewarming?",
+					"found": true,
+					"answer": "I don't know. My memory only notes that Alex was making a big mushroom paella for twelve people at a housewarming on 2026-06-21, not whether it was actually cooked or served.",
+					"right": true,
+					"recallMs": 642,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What was Alex's finishing time in the 10K?",
+					"found": true,
+					"answer": "Alex finished the Valencia 10K on May 10, 2026, in 52:30.",
+					"right": true,
+					"recallMs": 628,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How long did the half marathon take Alex?",
+					"found": true,
+					"answer": "Alex finished the Madrid half marathon in 1:58:41.",
+					"right": true,
+					"recallMs": 662,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How much money did Alex get for the old car?",
+					"found": true,
+					"answer": "Alex sold the old Seat Ibiza to a neighbour for 2,800 euros.",
+					"right": true,
+					"recallMs": 621,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What present did Alex want for Sam's birthday?",
+					"found": true,
+					"answer": "A vintage film camera.",
+					"right": true,
+					"recallMs": 617,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which region did Alex visit on holiday in August?",
+					"found": true,
+					"answer": "Alex went on holiday to Asturias in August, staying in Cangas de Onís.",
+					"right": true,
+					"recallMs": 704,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What operation did Alex's mother have?",
+					"found": true,
+					"answer": "Alex's mum had knee surgery, which went well.",
+					"right": true,
+					"recallMs": 634,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Why did the wedding move?",
+					"found": true,
+					"answer": "The wedding moved to November 7th because Lucía's venue flooded.",
+					"right": true,
+					"recallMs": 1368,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What's the name of the second dog, and what kind of dog is it?",
+					"found": true,
+					"answer": "The second dog is Pico, a rescued greyhound.",
+					"right": true,
+					"recallMs": 587,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "When is Sam's birthday?",
+					"found": true,
+					"answer": "August 14.",
+					"right": true,
+					"recallMs": 830,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which neighbourhood did they move into in Madrid?",
+					"found": true,
+					"answer": "Chamberí.",
+					"right": true,
+					"recallMs": 609,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Where will they rent in Lisbon?",
+					"found": true,
+					"answer": "They plan to rent near Alfama, according to Alex's August 28 note.",
+					"right": true,
+					"recallMs": 628,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Is there a nut Alex has to avoid?",
+					"found": true,
+					"answer": "Yes, Alex is allergic to cashews, and it's a serious one (\"badly,\" per a note from 2026-04-08).",
+					"right": true,
+					"recallMs": 660,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What does Alex's partner do for a living?",
+					"found": true,
+					"answer": "Alex's partner Sam works as a sound engineer, mostly on theatre gigs.",
+					"right": true,
+					"recallMs": 633,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "How does Alex like replies to be?",
+					"found": true,
+					"answer": "Alex likes short replies, since they read them between shifts.",
+					"right": true,
+					"recallMs": 724,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What's the name of the beagle?",
+					"found": true,
+					"answer": "The beagle mix is named Toffee.",
+					"right": true,
+					"recallMs": 597,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Where does Alex like to get coffee in the new city?",
+					"found": true,
+					"answer": "Alex likes Hola Coffee in Lavapiés, where the flat white is perfect.",
+					"right": true,
+					"recallMs": 1011,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What brand is Alex's e-bike?",
+					"found": true,
+					"answer": "Alex's e-bike is an Orbea.",
+					"right": true,
+					"recallMs": 630,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is the name of Alex's brother?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 646,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "Which gym is Alex a member of?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 645,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is Alex's blood type?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 649,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What instrument does Sam play?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 567,
+					"hits": 40
+				}
+			]
+		},
+		"large": {
+			"found": 34,
+			"of": 36,
+			"right": 39,
+			"questions": 40,
+			"byType": {
+				"current": {
+					"n": 12,
+					"found": 11,
+					"right": 11
+				},
+				"past": {
+					"n": 6,
+					"found": 5,
+					"right": 6
+				},
+				"event": {
+					"n": 12,
+					"found": 12,
+					"right": 12
+				},
+				"stable": {
+					"n": 6,
+					"found": 6,
+					"right": 6
+				},
+				"unknown": {
+					"n": 4,
+					"found": 0,
+					"right": 4
+				}
+			},
+			"recallMsMedian": 701,
+			"writeSeconds": 32.5,
+			"rows": [
+				{
+					"type": "current",
+					"q": "Which city does Alex call home at the moment?",
+					"found": true,
+					"answer": "Alex currently calls Madrid home, in a flat in Chamberí, though a move to Lisbon is planned from October.",
+					"right": true,
+					"recallMs": 715,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Where is Alex headed after this place?",
+					"found": false,
+					"answer": "I don't know.",
+					"right": false,
+					"recallMs": 2198,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which hospital employs Alex now?",
+					"found": true,
+					"answer": "Alex works at Hospital Gregorio Marañón, having accepted that job in June 2026.",
+					"right": true,
+					"recallMs": 920,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "What is Alex's job title these days?",
+					"found": true,
+					"answer": "Alex's job title is charge nurse on the pediatric ward, per the most recent memory from 2026-09-18.",
+					"right": true,
+					"recallMs": 909,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex still work nights?",
+					"found": true,
+					"answer": "No, Alex switched to day shifts only when they moved to pediatrics at Hospital Gregorio Marañón in June 2026.",
+					"right": true,
+					"recallMs": 861,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How many dogs live with Alex now?",
+					"found": true,
+					"answer": "Two: Toffee, a beagle mix, and Pico, a rescued greyhound.",
+					"right": true,
+					"recallMs": 1591,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How would you describe Alex's diet now?",
+					"found": true,
+					"answer": "Alex is pescatarian now, having started eating fish again on their doctor's advice for low iron.",
+					"right": true,
+					"recallMs": 1071,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "When will Lucía get married?",
+					"found": true,
+					"answer": "Lucía's wedding was moved to November 7th, in Seville.",
+					"right": true,
+					"recallMs": 631,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "How does Alex usually get to the hospital?",
+					"found": true,
+					"answer": "Alex plans to commute to the hospital by e-bike, an Orbea, according to a July 2026 message.",
+					"right": true,
+					"recallMs": 681,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Does Alex own a car right now?",
+					"found": true,
+					"answer": "No, Alex sold the Ibiza to a neighbour in June 2026 and has no car in Madrid.",
+					"right": true,
+					"recallMs": 669,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which book is Alex reading at the end of the summer?",
+					"found": true,
+					"answer": "Alex was reading *The Overstory* at the end of summer, since it's the most recent book named in my notes (started June 30) and I have no record of finishing it.",
+					"right": true,
+					"recallMs": 717,
+					"hits": 40
+				},
+				{
+					"type": "current",
+					"q": "Which language is Alex learning, and with whom?",
+					"found": true,
+					"answer": "Alex is learning Portuguese with a tutor named Inês, on Tuesday evenings.",
+					"right": true,
+					"recallMs": 590,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Where did Alex live before the move in June?",
+					"found": true,
+					"answer": "Alex lived in Valencia for nine years before the June move to Madrid.",
+					"right": true,
+					"recallMs": 767,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What ward did Alex switch to when changing hospitals?",
+					"found": true,
+					"answer": "Alex switched to the pediatric ward at Hospital Gregorio Marañón.",
+					"right": true,
+					"recallMs": 643,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was the wedding date originally?",
+					"found": true,
+					"answer": "Lucía's wedding was originally set for October 3rd in Seville, before the venue flooded and it moved to November 7th.",
+					"right": true,
+					"recallMs": 663,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Which shifts was Alex working in April?",
+					"found": true,
+					"answer": "Alex was on night shifts, four nights a week, as of April 4.",
+					"right": true,
+					"recallMs": 636,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "What was Alex's diet before the doctor's advice?",
+					"found": false,
+					"answer": "Alex was likely vegetarian before the doctor's advice, since they said they had \"started eating fish again\" and are now pescatarian, though my memory doesn't state that outright.",
+					"right": true,
+					"recallMs": 712,
+					"hits": 40
+				},
+				{
+					"type": "past",
+					"q": "Why couldn't Alex have a dog in the first flat?",
+					"found": true,
+					"answer": "The landlord of that first flat didn't allow animals.",
+					"right": true,
+					"recallMs": 679,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What did Alex cook for the housewarming?",
+					"found": true,
+					"answer": "Your notes only say Alex planned a big mushroom paella for twelve people for a housewarming on 2026-06-21, not what was actually cooked.",
+					"right": true,
+					"recallMs": 701,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What was Alex's finishing time in the 10K?",
+					"found": true,
+					"answer": "Alex finished the 10K in 52:30 on May 10, 2026.",
+					"right": true,
+					"recallMs": 683,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How long did the half marathon take Alex?",
+					"found": true,
+					"answer": "Alex finished the Madrid half marathon in 1:58:41.",
+					"right": true,
+					"recallMs": 711,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "How much money did Alex get for the old car?",
+					"found": true,
+					"answer": "Alex sold the old Seat Ibiza to a neighbour for 2,800 euros.",
+					"right": true,
+					"recallMs": 636,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What present did Alex want for Sam's birthday?",
+					"found": true,
+					"answer": "A vintage film camera.",
+					"right": true,
+					"recallMs": 837,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which region did Alex visit on holiday in August?",
+					"found": true,
+					"answer": "Alex went to Asturias in August, staying in Cangas de Onís.",
+					"right": true,
+					"recallMs": 650,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What operation did Alex's mother have?",
+					"found": true,
+					"answer": "Alex's mother had knee surgery, which went well, according to the 2026-08-05 note.",
+					"right": true,
+					"recallMs": 975,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Why did the wedding move?",
+					"found": true,
+					"answer": "Lucía's venue flooded, so the wedding moved to November 7th in the same city.",
+					"right": true,
+					"recallMs": 641,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "What's the name of the second dog, and what kind of dog is it?",
+					"found": true,
+					"answer": "The second dog is Pico, a rescued greyhound.",
+					"right": true,
+					"recallMs": 705,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "When is Sam's birthday?",
+					"found": true,
+					"answer": "August 14.",
+					"right": true,
+					"recallMs": 672,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Which neighbourhood did they move into in Madrid?",
+					"found": true,
+					"answer": "Alex and Sam moved into a flat in Chamberí in Madrid.",
+					"right": true,
+					"recallMs": 648,
+					"hits": 40
+				},
+				{
+					"type": "event",
+					"q": "Where will they rent in Lisbon?",
+					"found": true,
+					"answer": "They plan to rent near Alfama in Lisbon, according to Alex's August 28 message.",
+					"right": true,
+					"recallMs": 743,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Is there a nut Alex has to avoid?",
+					"found": true,
+					"answer": "Yes, cashews: Alex is allergic to them, and badly.",
+					"right": true,
+					"recallMs": 718,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What does Alex's partner do for a living?",
+					"found": true,
+					"answer": "Alex's partner Sam works as a sound engineer, mostly on theatre gigs.",
+					"right": true,
+					"recallMs": 617,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "How does Alex like replies to be?",
+					"found": true,
+					"answer": "Alex wants short replies, since they read them between shifts.",
+					"right": true,
+					"recallMs": 671,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What's the name of the beagle?",
+					"found": true,
+					"answer": "Toffee.",
+					"right": true,
+					"recallMs": 700,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "Where does Alex like to get coffee in the new city?",
+					"found": true,
+					"answer": "Alex likes Hola Coffee in Lavapiés, where the flat white is their favorite.",
+					"right": true,
+					"recallMs": 707,
+					"hits": 40
+				},
+				{
+					"type": "stable",
+					"q": "What brand is Alex's e-bike?",
+					"found": true,
+					"answer": "Alex's e-bike is an Orbea.",
+					"right": true,
+					"recallMs": 843,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is the name of Alex's brother?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 624,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "Which gym is Alex a member of?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 629,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What is Alex's blood type?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 852,
+					"hits": 40
+				},
+				{
+					"type": "unknown",
+					"q": "What instrument does Sam play?",
+					"found": null,
+					"answer": "I don't know.",
+					"right": true,
+					"recallMs": 617,
+					"hits": 40
+				}
+			]
+		}
+	},
+	"cost": {
+		"embeddings": 0.00356,
+		"embeddingTokens": 47490,
+		"answers": 0.0209
+	}
+}

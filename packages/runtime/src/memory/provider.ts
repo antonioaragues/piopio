@@ -21,13 +21,28 @@ export type MemoryRecord = {
 	pinned?: boolean;
 	/** The provider's own confidence (Hindsight opinions), 0–1. */
 	confidence?: number;
+	/** Learned facts (docs/spec/14-memory §5.4): when it became true, what it replaced, and when it stopped being true. */
+	validFrom?: string;
+	replaces?: string;
+	replacedBy?: string;
+	endedAt?: string;
 };
 
 export type MemoryHit = MemoryRecord & { score: number };
 
-export type RetainInput = { content: string; kind?: MemoryKind; createdBy?: MemoryRecord["createdBy"]; source?: MemorySource; at?: string; tags?: string[]; pinned?: boolean };
+export type RetainInput = {
+	content: string;
+	kind?: MemoryKind;
+	createdBy?: MemoryRecord["createdBy"];
+	source?: MemorySource;
+	at?: string;
+	tags?: string[];
+	pinned?: boolean;
+	/** A fact that updates this one: it's kept, marked as replaced, and no longer recalled. */
+	replaces?: string;
+};
 
-export type MemoryEvent = { id: string; at: string; bank: string; action: "added" | "removed" | "updated"; recordId: string; text: string; tags?: string[]; by: MemoryRecord["createdBy"]; batch?: string };
+export type MemoryEvent = { id: string; at: string; bank: string; action: "added" | "removed" | "updated" | "replaced" | "ended" | "restored"; recordId: string; text: string; tags?: string[]; by: MemoryRecord["createdBy"]; batch?: string };
 
 /** What a provider can do beyond recall; the app shows "limited visibility" without `list`. */
 export type MemoryCapabilities = {
@@ -39,6 +54,8 @@ export type MemoryCapabilities = {
 	history: boolean;
 	/** Recall finds meaning, not only words (docs/spec/14-memory, Standard). */
 	semantic?: boolean;
+	/** Facts can be replaced and ended, keeping their history (learned facts, M2). */
+	learns?: boolean;
 };
 
 
@@ -54,6 +71,10 @@ export interface MemoryProvider {
 	/** Every record, newest first: the memory view. */
 	list?(bank: string, options?: { cursor?: string; limit?: number; kinds?: MemoryKind[]; tag?: string }): Promise<{ records: MemoryRecord[]; cursor?: string }>;
 	forget?(bank: string, id: string, by?: MemoryRecord["createdBy"]): Promise<void>;
+	/** A fact stopped being true (kept for the history, no longer recalled). */
+	end?(bank: string, id: string, at: string, by?: MemoryRecord["createdBy"]): Promise<void>;
+	/** Undoes `end`, or a replacement: the fact is current again. */
+	restore?(bank: string, id: string, by?: MemoryRecord["createdBy"]): Promise<void>;
 	update?(bank: string, id: string, change: { text?: string; pinned?: boolean; tags?: string[] }, by?: MemoryRecord["createdBy"]): Promise<MemoryRecord>;
 	/** Changes, newest first, grouped by `batch` when one write changed several records. */
 	history?(bank: string, options?: { limit?: number }): Promise<MemoryEvent[]>;

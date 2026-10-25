@@ -22,7 +22,7 @@ import { aboutMeExtension, type AboutMe } from "./about-me.js";
 import type { Settings } from "./settings.js";
 import type { ChatMcp } from "./tools/mcp-chat.js";
 import type { ChatResources } from "./tools/chat-resources.js";
-import { AgentRuntime } from "./runtimes/agent.js";
+import { AgentRuntime, type AgentOpenOptions } from "./runtimes/agent.js";
 import type { AgentFiles } from "./agent-files.js";
 import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
@@ -97,6 +97,8 @@ export class Sessions {
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
 	/** How long ask_agent waits (tests shorten it). */
 	agentAskTimeoutMs?: number;
+	/** Tests: a scripted utility model for learned facts, a short quiet time, and a hook when learning ends. */
+	agentLearn?: Pick<AgentOpenOptions, "learn" | "learnQuietMs" | "onLearned">;
 	/** The Inbox changed (badges), with the approval an agent just asked for (notifications). */
 	onInbox?: (change: { count: number; approval?: { agent: ContainerRef; agentName: string; approvalId: string; title: string } }) => void;
 
@@ -1131,6 +1133,7 @@ export class Sessions {
 				...(this.connectors ? { connectors: this.connectors } : {}),
 				extraExtensions: () => this.agentExtras(),
 				...(this.agentAskTimeoutMs ? { askTimeoutMs: this.agentAskTimeoutMs } : {}),
+				...(this.agentLearn ? this.agentLearn : {}),
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {
 					if (approval.status === "pending") this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });

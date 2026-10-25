@@ -1597,6 +1597,56 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 		expect(existsSync(join(b.home, "trash", "coach"))).toBe(true);
 		expect((await b.client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner` })).records).toEqual([]);
 	}, 60_000);
+	test("learned facts (docs/spec/14 M2): after a quiet moment the agent learns a fact, a later one replaces it, and Undo brings the old one back", async () => {
+		// A scripted utility model: extraction finds where Antonio lives; the decision replaces the old city.
+		const learn = async (system: string, prompt: string) => {
+			if (system.startsWith("You maintain")) {
+				const city = /Valencia|Madrid/.exec(prompt.split("Exchange:")[1] ?? "")?.[0];
+				return JSON.stringify({ facts: city ? [`Antonio lives in ${city}`] : [] });
+			}
+			const old = /^(\S+): Antonio lives in Valencia/m.exec(prompt)?.[1];
+			return JSON.stringify({ ops: [old ? { fact: 0, op: "replace", id: old } : { fact: 0, op: "add" }] });
+		};
+		let learned = 0;
+		const a = await start(undefined, true, { agentLearn: { learn, learnQuietMs: 200, onLearned: () => void learned++ } });
+		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		await a.client.call("sessions.subscribe", { ref });
+		const bank = `${ref.id}/owner`;
+		const facts = async () => (await a.client.call("memory.list", { provider: "builtin", bank })).records.filter((r) => r.kind === "fact").map((r) => r.text);
+		const waitLearned = async (n: number) => {
+			for (let i = 0; i < 100 && learned < n; i++) await new Promise((r) => setTimeout(r, 50));
+			expect(learned).toBe(n);
+		};
+
+		await a.client.call("sessions.submit", { ref, input: { text: "I live in Valencia, near the old town." } });
+		await until(a, ref, idleAfter(1));
+		await waitLearned(1);
+		expect(await facts()).toEqual(["Antonio lives in Valencia"]);
+		let chat = await until(a, ref, (s) => s.items.some((i) => i.kind === "result"));
+		const first = chat.items.find((i) => i.kind === "result")!;
+		expect(first.kind === "result" && first.card).toEqual({ kind: "memory", title: "Learned", detail: "Antonio lives in Valencia" });
+
+		await a.client.call("sessions.submit", { ref, input: { text: "We moved to Madrid last week." } });
+		await until(a, ref, idleAfter(2));
+		await waitLearned(2);
+		expect(await facts()).toEqual(["Antonio lives in Madrid"]);
+		chat = await until(a, ref, (s) => s.items.filter((i) => i.kind === "result").length === 2);
+		const second = chat.items.filter((i) => i.kind === "result")[1]!;
+		expect(second.kind === "result" && second.card).toEqual({ kind: "memory", title: "Updated memory", detail: "Antonio lives in Madrid (was: Antonio lives in Valencia)" });
+		// The old fact is kept as history: ended, with what replaced it.
+		const all = (await a.client.call("memory.list", { provider: "builtin", bank })).records;
+		expect(all.some((r) => r.text === "Antonio lives in Valencia")).toBe(false);
+
+		await a.client.call("agents.undo", { ref, undoId: second.kind === "result" ? second.undo!.id : "" });
+		expect(await facts()).toEqual(["Antonio lives in Valencia"]);
+		chat = await until(a, ref, (s) => s.items.filter((i) => i.kind === "result")[1]?.kind === "result" && (s.items.filter((i) => i.kind === "result")[1] as { undo?: { status: string } }).undo?.status === "undone");
+		// A restart keeps the cards.
+		await stop(a);
+		const b = await start(a.home, true, { agentLearn: { learn, learnQuietMs: 200 } });
+		const reopened: Snapshot = await b.client.call("sessions.open", { ref });
+		expect(reopened.items.filter((i) => i.kind === "result").map((i) => i.kind === "result" && i.card.title)).toEqual(["Learned", "Updated memory"]);
+		await stop(b);
+	}, 30_000);
 });
 
 describe("Agents: proactivity (milestone 4.3)", () => {

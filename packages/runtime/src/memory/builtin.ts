@@ -18,7 +18,21 @@ export interface Sql {
 	all<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T[];
 }
 
-type Row = { id: string; bank: string; text: string; kind: MemoryKind; created_by: MemoryRecord["createdBy"]; at: string; source: string | null; tags: string | null; pinned: number; rank?: number };
+type Row = {
+	id: string;
+	bank: string;
+	text: string;
+	kind: MemoryKind;
+	created_by: MemoryRecord["createdBy"];
+	at: string;
+	source: string | null;
+	tags: string | null;
+	pinned: number;
+	replaces?: string | null;
+	replaced_by?: string | null;
+	ended_at?: string | null;
+	rank?: number;
+};
 
 /** How much a record's age matters next to its text match (0: not at all). */
 const RECENCY_WEIGHT = 0.5;
@@ -65,10 +79,13 @@ export class BuiltinMemory implements MemoryProvider {
 			CREATE TRIGGER IF NOT EXISTS memory_vectors_ad AFTER DELETE ON memory_records BEGIN DELETE FROM memory_vectors WHERE record_id = old.id; END;
 			CREATE TRIGGER IF NOT EXISTS memory_vectors_au AFTER UPDATE OF text ON memory_records BEGIN DELETE FROM memory_vectors WHERE record_id = old.id; END;
 		`);
+		// Learned facts (M2): what a fact replaced, what replaced it, and when it stopped being true. Added to older files.
+		const columns = new Set(sql.all<{ name: string }>("PRAGMA table_info(memory_records)").map((c) => c.name));
+		for (const c of ["replaces", "replaced_by", "ended_at"]) if (!columns.has(c)) sql.exec(`ALTER TABLE memory_records ADD COLUMN ${c} TEXT`);
 	}
 
 	get capabilities() {
-		return { retain: true, list: true, forget: true, update: true, reflect: false, history: true, semantic: Boolean(this.embedder()) };
+		return { retain: true, list: true, forget: true, update: true, reflect: false, history: true, semantic: Boolean(this.embedder()), learns: true };
 	}
 
 	async retain(bank: string, input: RetainInput): Promise<MemoryRecord[]> {
@@ -84,12 +101,18 @@ export class BuiltinMemory implements MemoryProvider {
 			...(input.source ? { source: input.source } : {}),
 			...(input.tags?.length ? { tags: input.tags } : {}),
 			...(input.pinned ? { pinned: true } : {}),
+			...(input.replaces ? { replaces: input.replaces } : {}),
 		};
 		this.sql.run(
-			"INSERT INTO memory_records (id, bank, text, kind, created_by, at, source, tags, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			record.id, bank, text, record.kind, record.createdBy, record.at, input.source ? JSON.stringify(input.source) : null, input.tags?.length ? JSON.stringify(input.tags) : null, input.pinned ? 1 : 0,
+			"INSERT INTO memory_records (id, bank, text, kind, created_by, at, source, tags, pinned, replaces) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			record.id, bank, text, record.kind, record.createdBy, record.at, input.source ? JSON.stringify(input.source) : null, input.tags?.length ? JSON.stringify(input.tags) : null, input.pinned ? 1 : 0, input.replaces ?? null,
 		);
 		this.event(bank, "added", record.id, text, record.createdBy, input.tags);
+		if (input.replaces) {
+			const old = this.get(bank, input.replaces);
+			this.sql.run("UPDATE memory_records SET replaced_by = ?, ended_at = ? WHERE id = ?", record.id, record.at, old.id);
+			this.event(bank, "replaced", old.id, old.text, record.createdBy);
+		}
 		this.invalidate(bank);
 		await this.embedRecords([{ id: record.id, bank, text }]).catch(() => undefined);
 		return [record];
@@ -127,7 +150,7 @@ export class BuiltinMemory implements MemoryProvider {
 		const kindFilter = kinds?.length ? ` AND r.kind IN (${kinds.map(() => "?").join(", ")})` : "";
 		return this.sql.all<Row>(
 			`SELECT r.*, bm25(memory_fts) AS rank FROM memory_fts JOIN memory_records r ON r.rowid = memory_fts.rowid
-			 WHERE memory_fts MATCH ? AND r.bank IN (${banks.map(() => "?").join(", ")})${kindFilter} ORDER BY rank LIMIT 200`,
+			 WHERE memory_fts MATCH ? AND r.bank IN (${banks.map(() => "?").join(", ")}) AND r.ended_at IS NULL${kindFilter} ORDER BY rank LIMIT 200`,
 			terms.join(" OR "), ...banks, ...(kinds ?? []),
 		);
 	}
@@ -157,7 +180,7 @@ export class BuiltinMemory implements MemoryProvider {
 	private rowsById(ids: readonly string[], kinds?: MemoryKind[]): Row[] {
 		if (!ids.length) return [];
 		const kindFilter = kinds?.length ? ` AND kind IN (${kinds.map(() => "?").join(", ")})` : "";
-		return this.sql.all<Row>(`SELECT * FROM memory_records WHERE id IN (${ids.map(() => "?").join(", ")})${kindFilter}`, ...ids, ...(kinds ?? []));
+		return this.sql.all<Row>(`SELECT * FROM memory_records WHERE id IN (${ids.map(() => "?").join(", ")}) AND ended_at IS NULL${kindFilter}`, ...ids, ...(kinds ?? []));
 	}
 
 	/** Embeds and stores vectors for these records (one request). */
@@ -216,13 +239,14 @@ export class BuiltinMemory implements MemoryProvider {
 		for (const key of this.indexes.keys()) if (key.endsWith(`\u0000${bank}`) || key === bank) this.indexes.delete(key);
 	}
 
-	async list(bank: string, options: { cursor?: string; limit?: number; kinds?: MemoryKind[]; tag?: string } = {}): Promise<{ records: MemoryRecord[]; cursor?: string }> {
+	async list(bank: string, options: { cursor?: string; limit?: number; kinds?: MemoryKind[]; tag?: string; includeEnded?: boolean } = {}): Promise<{ records: MemoryRecord[]; cursor?: string }> {
 		const limit = options.limit ?? 100;
 		const offset = Number(options.cursor ?? 0);
 		const kinds = options.kinds?.length ? ` AND kind IN (${options.kinds.map(() => "?").join(", ")})` : "";
 		const tag = options.tag ? " AND EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)" : "";
+		const ended = options.includeEnded ? "" : " AND ended_at IS NULL";
 		const rows = this.sql.all<Row>(
-			`SELECT * FROM memory_records WHERE bank = ?${kinds}${tag} ORDER BY at DESC, rowid DESC LIMIT ? OFFSET ?`,
+			`SELECT * FROM memory_records WHERE bank = ?${kinds}${tag}${ended} ORDER BY at DESC, rowid DESC LIMIT ? OFFSET ?`,
 			bank, ...(options.kinds ?? []), ...(options.tag ? [options.tag] : []), limit + 1, offset,
 		);
 		return { records: rows.slice(0, limit).map(toRecord), ...(rows.length > limit ? { cursor: String(offset + limit) } : {}) };
@@ -233,6 +257,26 @@ export class BuiltinMemory implements MemoryProvider {
 		this.sql.run("DELETE FROM memory_records WHERE id = ? AND bank = ?", id, bank);
 		this.invalidate(bank);
 		this.event(bank, "removed", id, row.text, by, row.tags ? (JSON.parse(row.tags) as string[]) : undefined);
+	}
+
+	async end(bank: string, id: string, at: string, by: MemoryRecord["createdBy"] = "extraction"): Promise<void> {
+		const row = this.get(bank, id);
+		this.sql.run("UPDATE memory_records SET ended_at = ? WHERE id = ?", at, id);
+		this.invalidate(bank);
+		this.event(bank, "ended", id, row.text, by);
+	}
+
+	async restore(bank: string, id: string, by: MemoryRecord["createdBy"] = "user"): Promise<void> {
+		const row = this.get(bank, id);
+		this.sql.run("UPDATE memory_records SET ended_at = NULL, replaced_by = NULL WHERE id = ?", id);
+		this.invalidate(bank);
+		this.event(bank, "restored", id, row.text, by);
+	}
+
+	/** One record, current or not. */
+	async record(bank: string, id: string): Promise<MemoryRecord | undefined> {
+		const row = this.sql.all<Row>("SELECT * FROM memory_records WHERE id = ? AND bank = ?", id, bank)[0];
+		return row ? toRecord(row) : undefined;
 	}
 
 	async update(bank: string, id: string, change: { text?: string; pinned?: boolean; tags?: string[] }, by: MemoryRecord["createdBy"] = "user"): Promise<MemoryRecord> {
@@ -258,7 +302,7 @@ export class BuiltinMemory implements MemoryProvider {
 	}
 
 	async standing(bank: string): Promise<MemoryRecord[]> {
-		return this.sql.all<Row>("SELECT * FROM memory_records WHERE bank = ? AND pinned = 1 ORDER BY at", bank).map(toRecord);
+		return this.sql.all<Row>("SELECT * FROM memory_records WHERE bank = ? AND pinned = 1 AND ended_at IS NULL ORDER BY at", bank).map(toRecord);
 	}
 
 	/** Deletes every bank whose name starts with `prefix` (an agent being deleted), with their history. */
@@ -304,5 +348,8 @@ function toRecord(r: Row): MemoryRecord {
 		...(r.source ? { source: JSON.parse(r.source) as MemoryRecord["source"] } : {}),
 		...(r.tags ? { tags: JSON.parse(r.tags) as string[] } : {}),
 		...(r.pinned ? { pinned: true } : {}),
+		...(r.replaces ? { replaces: r.replaces } : {}),
+		...(r.replaced_by ? { replacedBy: r.replaced_by } : {}),
+		...(r.ended_at ? { endedAt: r.ended_at } : {}),
 	};
 }

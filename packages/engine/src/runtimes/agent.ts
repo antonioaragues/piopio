@@ -14,7 +14,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
-import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, type Envelope, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
+import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder } from "../timeline/builder.js";
@@ -50,6 +50,10 @@ export type AgentOpenOptions = {
 	/** The other agents (06 §7). */
 	peers?: AgentCoreOptions["peers"];
 	askTimeoutMs?: number;
+	/** Tests: the utility model for learned facts (default: the engine's), and how quiet a conversation must be. */
+	learn?: AgentCoreOptions["learn"];
+	learnQuietMs?: number;
+	onLearned?: AgentCoreOptions["onLearned"];
 };
 
 type RawEntry = { id: string | number; kind: string; data?: unknown; model?: { timestamp?: number }[] };
@@ -93,6 +97,10 @@ export class AgentRuntime implements Runtime {
 			...(options.appTool ? { appTool: options.appTool } : {}),
 			...(options.peers ? { peers: options.peers } : {}),
 			...(options.askTimeoutMs ? { askTimeoutMs: options.askTimeoutMs } : {}),
+			// Learned facts (docs/spec/14-memory M2) on the utility model, after a conversation goes quiet.
+			learn: options.learn ?? ((system, prompt) => options.hub.utility(system, prompt)),
+			...(options.learnQuietMs ? { learnQuietMs: options.learnQuietMs } : {}),
+			...(options.onLearned ? { onLearned: options.onLearned } : {}),
 			onPeerLog: () => options.onActivity?.(),
 			onRun: () => options.onActivity?.(),
 			onOutbound: () => options.onActivity?.(),
@@ -302,6 +310,8 @@ export class AgentView implements Runtime {
 	private readonly approvals = new Map<string, Approval>();
 	private readonly cards = new Map<string, { card: ResultCard; undo?: string }>();
 	private readonly undos = new Map<string, UndoRecord>();
+	/** What the agent learned after quiet moments (entry id → the changes and their undo), shown as memory cards. */
+	private readonly learned = new Map<string, { changes: { action: string; text: string }[]; undo?: string; at: string }>();
 	/** Tool call id → its arguments, from the assistant's messages (for calls blocked before they ran). */
 	private readonly calls = new Map<string, unknown>();
 	readonly contactId?: string;
@@ -402,6 +412,8 @@ export class AgentView implements Runtime {
 		this.undos.set(undo.id, undo);
 		const callId = [...this.cards].find(([, c]) => c.undo === undo.id)?.[0];
 		if (callId) this.emit([{ type: "item.updated", item: { kind: "system", id: "touch", at: undo.at, level: "info", text: "" } }]);
+		const learnedId = [...this.learned].find(([, l]) => l.undo === undo.id)?.[0];
+		if (learnedId) this.emit([{ type: "item.updated", item: this.learnedItem(learnedId) }]);
 	}
 
 	private approvalItem(a: Approval): ApprovalItem {
@@ -466,11 +478,24 @@ export class AgentView implements Runtime {
 			this.outbound.set(id, data);
 			// The model reads it as a note; it arrives as a user message, or (as a write) only as an entry.
 			this.builder.user(id, data.text, entry.model?.[0]?.timestamp);
+		} else if (entry.kind === LEARN_ENTRY) {
+			const data = entry.data as { changes: { action: string; text: string }[]; undo?: string; at: string };
+			this.learned.set(id, data);
+			this.builder.insert(this.learnedItem(id), live ? undefined : this.builder.firstAfter(data.at), live);
 		} else if (entry.kind === NOTICE_ENTRY) {
 			const data = entry.data as { text: string; at: string };
 			const item: TimelineItem = { kind: "system", id: `notice:${id}`, at: data.at, level: "info", text: data.text };
 			this.builder.insert(item, live ? undefined : this.builder.firstAfter(data.at), live);
 		}
+	}
+
+	/** A learning step as a memory card: one fact, or "Learned 3 facts" with each on its own line; Undo takes all back. */
+	private learnedItem(id: string): ResultItem {
+		const l = this.learned.get(id)!;
+		const replaced = l.changes.some((c) => c.action !== "added");
+		const title = l.changes.length === 1 ? (replaced ? "Updated memory" : "Learned") : `Learned ${l.changes.length} facts`;
+		const card: ResultCard = { kind: "memory", title, detail: l.changes.map((c) => c.text).join("\n") };
+		return this.resultItem(`learned:${id}`, l.at, { card, ...(l.undo ? { undo: l.undo } : {}) });
 	}
 
 	/** The builder's items as the client sees them: outbound notes become the agent's messages. */
@@ -481,6 +506,7 @@ export class AgentView implements Runtime {
 			const msg = item.kind === "user" ? this.agentMsgs.get(item.id) : undefined;
 			if (msg) return { kind: "agent_msg", id: item.id, at: item.at, fromAgent: msg.from, toAgent: msg.to, text: msg.text, direction: "in", mode: msg.late ? "reply" : msg.mode, traceId: msg.traceId };
 			if (item.kind === "tool" && (item.tool === "ask_agent" || item.tool === "tell_agent")) return this.agentCall(item);
+			if (item.kind === "result" && item.callId.startsWith("learned:")) return this.learnedItem(item.callId.slice("learned:".length));
 			const approval = item.kind === "approval" ? this.approvals.get(item.approvalId) : undefined;
 			return approval ? this.approvalItem(approval) : item;
 		});

@@ -54,6 +54,8 @@ export type EngineOptions = {
 	agentsDir?: string;
 	/** How long ask_agent waits for another agent (tests); default 10 minutes. */
 	agentAskTimeoutMs?: number;
+	/** Tests: learned facts with a scripted utility model (docs/spec/14-memory M2). */
+	agentLearn?: Sessions["agentLearn"];
 	/** The webhook triggers' port (0: any free one, tests); default PIOPIO_HOOKS_PORT or 47615. */
 	hooksPort?: number;
 	/** Let web_fetch read localhost (tests). */
@@ -155,6 +157,7 @@ export class Engine {
 		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp, resources: this.chatResources };
 		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory, app: this.app };
 		if (options.agentAskTimeoutMs) this.sessions.agentAskTimeoutMs = options.agentAskTimeoutMs;
+		if (options.agentLearn) this.sessions.agentLearn = options.agentLearn;
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp || JSON.stringify(next.chat.mcpServers) !== JSON.stringify(previous.chat.mcpServers)) void this.chatMcp.reset();

@@ -92,7 +92,7 @@ export const AgentDefinition = Type.Object({
 	/** Partitions other agents may read (AA6), e.g. `{ "agt_x": ["shared"] }`. */
 	shareMemory: Type.Optional(Type.Record(Type.String(), Type.Array(Type.String()))),
 	/** Where long-term memory lives: "builtin" (default) or an MCP memory provider's id (07-shared §6.2). */
-	memory: Type.Optional(Type.Object({ provider: Type.String() })),
+	memory: Type.Optional(Type.Object({ provider: Type.String(), learn: Type.Optional(Type.Boolean({ description: "Learn facts from conversations by itself (docs/spec/14 M2); default on" })) })),
 });
 export type AgentDefinition = Static<typeof AgentDefinition>;
 

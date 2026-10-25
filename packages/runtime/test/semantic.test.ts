@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, test } from "vitest";
-import { BuiltinMemory, openAiEmbedder, quantize, VectorIndex, type Embedder, type Sql } from "../src/index.js";
+import { BuiltinMemory, describeChange, learnFacts, openAiEmbedder, quantize, unlearn, VectorIndex, type Embedder, type Sql } from "../src/index.js";
 
 /**
  * A toy embedding model: each word maps to a concept, and a text's vector counts its concepts. Enough to tell
@@ -111,5 +111,45 @@ describe("semantic recall (docs/spec/14-memory, M1)", () => {
 		expect([...a!]).toEqual([1, 0]);
 		expect([...b!]).toEqual([0, 1]);
 		expect(e.model).toBe("openai/text-embedding-3-small@2");
+	});
+});
+
+describe("learned facts (docs/spec/14-memory, M2)", () => {
+	test("add, replace with history, end, nothing; Undo restores; ended facts aren't recalled", async () => {
+		const { m } = memory(() => toyEmbedder());
+		const script: string[] = [];
+		const complete = async (system: string, prompt: string) => {
+			script.push(system.startsWith("You maintain") ? "extract" : "decide");
+			if (system.startsWith("You maintain")) {
+				if (prompt.includes("Valencia")) return '```json\n{"facts": ["Alex lives in Valencia", "Alex is vegetarian"]}\n```';
+				if (prompt.includes("Madrid")) return '{"facts": ["Alex lives in Madrid", "Alex is vegetarian"]}';
+				if (prompt.includes("stopped")) return '{"facts": ["Alex stopped being vegetarian"]}';
+				return '{"facts": []}';
+			}
+			const id = (text: string) => new RegExp(`^(\\S+): ${text}`, "m").exec(prompt)?.[1];
+			if (prompt.includes("moved to Madrid")) return JSON.stringify({ ops: [{ fact: 0, op: "replace", id: id("Alex lives in Valencia") }, { fact: 1, op: "none" }] });
+			return JSON.stringify({ ops: [{ op: "end", id: id("Alex is vegetarian") }, { fact: 0, op: "none" }] });
+		};
+		const added = await learnFacts(m, "alex", { exchange: "Alex: I live in Valencia and I'm vegetarian.", at: "2026-04-02T10:00:00Z", about: "Alex" }, complete);
+		expect(added.map((c) => c.action)).toEqual(["added", "added"]);
+		expect(script).toEqual(["extract"]); // nothing known yet: no decision step
+
+		const replaced = await learnFacts(m, "alex", { exchange: "Alex: We moved to Madrid.", at: "2026-06-16T10:00:00Z", about: "Alex" }, complete);
+		expect(replaced.map((c) => [c.action, describeChange(c)])).toEqual([["replaced", "Alex lives in Madrid (was: Alex lives in Valencia)"]]);
+		expect((await m.list("alex")).records.map((r) => r.text).sort()).toEqual(["Alex is vegetarian", "Alex lives in Madrid"]);
+		const history = (await m.list("alex", { includeEnded: true })).records.find((r) => r.text === "Alex lives in Valencia")!;
+		expect(history).toMatchObject({ endedAt: "2026-06-16T10:00:00Z", replacedBy: replaced[0]!.action === "replaced" ? replaced[0]!.record.id : "" });
+		expect((await m.recall(["alex"], "Which city?")).map((h) => h.text)).toEqual(["Alex lives in Madrid"]);
+
+		const ended = await learnFacts(m, "alex", { exchange: "Alex: I stopped being vegetarian, I eat fish now.", at: "2026-07-20T10:00:00Z", about: "Alex" }, complete);
+		expect(ended.map((c) => c.action)).toEqual(["ended"]);
+		expect((await m.list("alex")).records.map((r) => r.text)).toEqual(["Alex lives in Madrid"]);
+
+		// Undo the replacement: Valencia is current again, Madrid is gone.
+		await unlearn(m, "alex", [{ action: "replaced", id: replaced[0]!.action === "replaced" ? replaced[0]!.record.id : "", oldId: history.id }]);
+		expect((await m.list("alex")).records.map((r) => r.text)).toEqual(["Alex lives in Valencia"]);
+		expect((await m.history("alex")).map((e) => e.action).slice(0, 3)).toEqual(["restored", "removed", "ended"]);
+		// A model that answers nonsense learns nothing.
+		expect(await learnFacts(m, "alex", { exchange: "Alex: hi", at: "2026-08-01T10:00:00Z", about: "Alex" }, async () => "sorry")).toEqual([]);
 	});
 });

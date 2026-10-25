@@ -12,6 +12,7 @@ import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
 import { OUT_ENTRY, Proactivity, type ProactiveState, type Reminder, type RunRecord } from "./proactive.js";
 import { Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
+import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange } from "../memory/learn.js";
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
 import { Peers, type Directory, type Envelope, type PeerState } from "./peers.js";
 
@@ -70,7 +71,18 @@ export type AgentCoreOptions = {
 	/** How long ask_agent waits (default 10 minutes). */
 	askTimeoutMs?: number;
 	onPeerLog?: () => void;
+	/** The utility model, for learned facts (docs/spec/14-memory M2). Absent: the agent only stores what was said. */
+	learn?: Complete;
+	/** How long a conversation stays quiet before what was said is learned from (default 90 s; tests shorten it). */
+	learnQuietMs?: number;
+	/** Facts were learned, or a learning step failed (tests wait for it). */
+	onLearned?: (bank: string, changes: LearnedChange[]) => void;
 };
+
+/** An entry in a person's conversation: what the agent learned after a quiet moment, with Undo (M2). */
+export const LEARN_ENTRY = "piopio.learned";
+/** Learn after this many exchanges even if the conversation isn't quiet yet. */
+const LEARN_BATCH = 6;
 
 export class AgentCore {
 	readonly extension: Extension;
@@ -208,6 +220,8 @@ export class AgentCore {
 			case "memory.restore":
 				await this.options.memory().retain(String(d.bank), { content: String(d.text), kind: (d.kind as MemoryRecord["kind"]) ?? "fact", createdBy: "user" });
 				return;
+			case "memory.unlearn":
+				return unlearn(this.options.memory(), String(d.bank), d.changes as never);
 			case "app.tool": {
 				let result: AppToolResult;
 				try {
@@ -399,6 +413,51 @@ export class AgentCore {
 		const at = (this.options.now?.() ?? new Date()).toISOString();
 		await provider.retain(bank, { content: `${contact.name}: ${said}`, kind: "message", createdBy: "user", at, source: { ...source, title: contact.name } });
 		if (answer.trim()) await provider.retain(bank, { content: `${this.def.name}: ${answer}`, kind: "message", createdBy: "agent", at, source: { ...source, title: this.def.name } });
+		this.queueLearning(contact, bank, `${contact.name}: ${said}${answer.trim() ? `\n${this.def.name}: ${answer}` : ""}`, at);
+	}
+
+	// MARK: Learned facts (docs/spec/14-memory M2)
+
+	private readonly learning = new Map<string, { contact: { id: string; name: string }; exchanges: string[]; at: string; timer?: ReturnType<typeof setTimeout> }>();
+	private learnChain = new Map<string, Promise<void>>();
+
+	/** Learns once the conversation is quiet, or after a few exchanges: one cheap model step for several turns. */
+	private queueLearning(contact: { id: string; name: string }, bank: string, exchange: string, at: string): void {
+		const provider = this.options.memory();
+		if (!this.options.learn || this.def.memory?.learn === false || !provider.capabilities.learns) return;
+		const pending = this.learning.get(bank) ?? { contact, exchanges: [], at };
+		pending.exchanges.push(exchange);
+		pending.at = at;
+		if (pending.timer) clearTimeout(pending.timer);
+		this.learning.set(bank, pending);
+		if (pending.exchanges.length >= LEARN_BATCH) void this.flushLearning(bank);
+		else pending.timer = setTimeout(() => void this.flushLearning(bank), this.options.learnQuietMs ?? 90_000);
+	}
+
+	/** Learns from what's queued for `bank` now (one at a time per bank). */
+	flushLearning(bank?: string): Promise<void> {
+		if (!bank) return Promise.all([...this.learning.keys()].map((b) => this.flushLearning(b))).then(() => undefined);
+		const pending = this.learning.get(bank);
+		if (!pending) return this.learnChain.get(bank) ?? Promise.resolve();
+		this.learning.delete(bank);
+		if (pending.timer) clearTimeout(pending.timer);
+		const step = (this.learnChain.get(bank) ?? Promise.resolve()).then(() => this.learnNow(bank, pending)).catch(() => this.options.onLearned?.(bank, []));
+		this.learnChain.set(bank, step);
+		return step;
+	}
+
+	private async learnNow(bank: string, pending: { contact: { id: string; name: string }; exchanges: string[]; at: string }): Promise<void> {
+		const provider = this.options.memory();
+		const changes = await learnFacts(provider, bank, { exchange: pending.exchanges.join("\n"), at: pending.at, about: pending.contact.name, source: { ref: `person:${pending.contact.id}`, title: pending.contact.name } }, this.options.learn!);
+		if (changes.length) {
+			const conversation = await this.conversation(pending.contact.id).catch(() => undefined);
+			if (!conversation) return;
+			const summary = changes.length === 1 ? `learning “${describeChange(changes[0]!).slice(0, 60)}”` : `learning ${changes.length} facts`;
+			const undo = await this.safety.recordUndo("memory.unlearn", { bank, changes: changes.map(undoOf) }, summary, conversation.id);
+			const data = { changes: changes.map((c) => ({ action: c.action, text: describeChange(c) })), undo, at: pending.at };
+			await conversation.submit({ type: "write", entry: { kind: LEARN_ENTRY, data } } as never, this.options.context);
+		}
+		this.options.onLearned?.(bank, changes);
 	}
 
 	private get usesMemory(): boolean {
@@ -513,5 +572,17 @@ export class AgentCore {
 				}),
 			],
 		}) as unknown as Extension;
+	}
+}
+
+/** What Undo needs to take a learned change back. */
+function undoOf(c: LearnedChange): { action: LearnedChange["action"]; id?: string; oldId?: string } {
+	switch (c.action) {
+		case "added":
+			return { action: c.action, id: c.record.id };
+		case "replaced":
+			return { action: c.action, id: c.record.id, oldId: c.old.id };
+		case "ended":
+			return { action: c.action, oldId: c.old.id };
 	}
 }
