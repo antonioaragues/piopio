@@ -291,6 +291,7 @@ The first week-long acceptance run can start after 4.4 (two agents, schedules, a
 ## Phase 5 — Agents (cloud) + channels
 Scope: Cloud Engine (02 §5), cloud setup wizard, deploy/rollback, Telegram, WhatsApp (Cloud API + template), approvals over channels, cloud cost ledger sync, live view.
 **Acceptance:** two agents live 24/7 with the Mac off. Telegram + WhatsApp both work. Owner approvals via Telegram buttons work. Agent-to-agent works in the cloud.
+**Spike S7 done (2026-10-25): go.** Piopio's agent runtime runs in a Durable Object. The agent wakes itself for schedules and rests between wakes. See [packages/cloud](../../packages/cloud/README.md).
 **Plan (2026-10-24):** [13-cloud-engine.md](13-cloud-engine.md): spike S7 (an agent in a Durable Object), then 5.1 Cloud Engine core, 5.2 set up and deploy from the app, 5.3 Telegram, 5.4 agents together in the cloud, 5.5 WhatsApp (EU first; Meta's AI-assistant policy and per-message pricing noted there).
 
 ## Phase 6 — 1.0 polish

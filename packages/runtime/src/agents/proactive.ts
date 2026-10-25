@@ -324,6 +324,31 @@ export class Proactivity {
 		return { runs: [...(state.runs ?? [])].reverse(), outbox: state.outbox ?? [], upcoming };
 	}
 
+	/**
+	 * When the agent next needs to be awake: its next schedule, heartbeat or reminder, or a held message's release.
+	 * A task's own checkpoint wins when it has one; otherwise it's computed from the definition and the reminders,
+	 * because a task just started may not have run yet. A host that sleeps between wakes (a Durable Object) sets its
+	 * alarm from this.
+	 */
+	async nextWake(): Promise<number | undefined> {
+		const state = await this.host.read();
+		const now = this.host.now();
+		const live = new Map<string, number>();
+		for (const t of await this.liveTasks("piopio.schedule")) {
+			const cp = (t.state as { checkpoint?: ScheduleState }).checkpoint;
+			const at = cp?.phase === "wait" ? cp.next : cp?.at;
+			if (at) live.set((t.input as ScheduleInput).key, at);
+		}
+		const keys = [...(this.def.schedules ?? []).map((s) => `def:${s.id}`), ...(this.def.heartbeat ? ["heartbeat"] : []), ...(state.reminders ?? []).map((r) => `rem:${r.id}`)];
+		const times: number[] = [];
+		for (const key of keys) {
+			const at = live.get(key) ?? (await this.spec(key))?.next(now);
+			if (at !== undefined) times.push(at);
+		}
+		for (const o of state.outbox ?? []) times.push(o.notBefore);
+		return times.length ? Math.min(...times) : undefined;
+	}
+
 	/** The run a conversation belongs to. */
 	async runOf(conversationId: ConversationId | string): Promise<RunRecord | undefined> {
 		return ((await this.host.read()).runs ?? []).find((r) => r.conversationId === String(conversationId));

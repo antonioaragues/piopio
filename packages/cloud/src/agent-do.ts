@@ -15,6 +15,7 @@ import { Lifecycle } from "agents/lifecycle";
 import { WebSockets } from "agents/websockets";
 import { DurableObject } from "cloudflare:workers";
 import { Value } from "typebox/value";
+import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js";
 import type { Env } from "./env.js";
 import { createCloudModels, defaultModel } from "./models.js";
 import { TimelineBuilder } from "./timeline/builder.js";
@@ -71,10 +72,57 @@ export class AgentDO extends DurableObject<Env> {
 	private readonly startedAt = Date.now();
 	private readonly views = new Map<string, Promise<SessionView>>();
 
+	/** The agent (spike S7): its definition, and AgentCore on the harness pi opens with. */
+	private agentDef?: StoredAgent;
+	private host?: AgentHost;
+	private hostReady?: Promise<AgentHost>;
+
 	readonly harness = new PiHarness({
-		harness: async ({ storage, context }) => Harness.open(storage, { models: await createCloudModels(this.env), registry: createRegistry() }, context),
+		harness: async ({ storage, context }) => {
+			const registry = createRegistry();
+			const pi = await Harness.open(storage, { models: await createCloudModels(this.env), registry }, context);
+			const model = defaultModel(this.env);
+			this.agentDef = (await this.ctx.storage.get<StoredAgent>(AGENT_KEY)) ?? defaultAgent(this.agentId, `${model.provider}:${model.id}`);
+			const host = new AgentHost(pi, () => this.agentDef!, this.ctx.storage, context, () => void this.wake.rearm().catch(() => undefined));
+			registry.install(host.core.extension);
+			await host.core.configureAll();
+			this.host = host;
+			return pi;
+		},
 		defaults: { model: defaultModel(this.env) },
 	});
+
+	/** Wakes the object for the agent's schedules, reminders and held messages, and lets it rest in between. */
+	readonly wake = new AgentWake({
+		agent: () => this.agent(),
+		open: () => this.host !== undefined,
+		busy: async () => {
+			for (const connection of this.webSockets.getConnections<ConnState>()) if (connection.state?.subs?.length) return true;
+			const people = Object.values(await this.host!.core.people());
+			for (const id of [ROOT_SESSION, ...people]) if (await this.harness.session(id).busy()) return true;
+			return false;
+		},
+		rest: async () => {
+			this.hostReady = undefined;
+			this.host = undefined;
+			for (const view of this.views.values()) await (await view.catch(() => undefined))?.close();
+			this.views.clear();
+			await this.harness.dispose();
+			// The last few rests (spike S7 tests read them).
+			await this.ctx.storage.put(RESTS_KEY, [...((await this.ctx.storage.get<number[]>(RESTS_KEY)) ?? []), Date.now()].slice(-10));
+		},
+	}, this.env.PIOPIO_TEST_WAKE_MS ? { settleMs: Number(this.env.PIOPIO_TEST_WAKE_MS), restThresholdMs: 2 * Number(this.env.PIOPIO_TEST_WAKE_MS) } : undefined);
+
+	/** The agent, once pi is open and its tasks have started (after any wake). */
+	async agent(): Promise<AgentHost> {
+		this.hostReady ??= (async () => {
+			await this.harness.session().busy(); // opens pi (and the agent, in the factory above)
+			await this.host!.core.start();
+			return this.host!;
+		})();
+		this.hostReady.catch(() => (this.hostReady = undefined));
+		return this.hostReady;
+	}
 
 	readonly webSockets = new WebSockets({
 		// Our own protocol on the socket: no Agents SDK identity/state frames.
@@ -85,7 +133,7 @@ export class AgentDO extends DurableObject<Env> {
 		},
 	});
 
-	readonly lifecycle = Lifecycle.install(this).use(this.harness).use(this.webSockets);
+	readonly lifecycle = Lifecycle.install(this).use(this.harness).use(this.webSockets).use(this.wake);
 
 	private get agentId(): string {
 		return this.lifecycle.name;
@@ -93,6 +141,8 @@ export class AgentDO extends DurableObject<Env> {
 
 	/** Runs on every cold start and every wake from hibernation, after pi has opened. */
 	async onStart(): Promise<void> {
+		await this.agent();
+		await this.wake.rearm();
 		for (const connection of this.webSockets.getConnections<ConnState>()) {
 			const subs = connection.state?.subs ?? [];
 			const live: Subscription[] = [];
@@ -120,6 +170,7 @@ export class AgentDO extends DurableObject<Env> {
 	async onRequest(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 		if (this.env.PIOPIO_TEST_HOOKS) {
+			if (url.pathname.startsWith("/__test/agent")) return this.agentTestRoute(url, request);
 			if (url.pathname === "/__test/status") {
 				return Response.json({
 					instanceId: this.instanceId,
@@ -131,6 +182,55 @@ export class AgentDO extends DurableObject<Env> {
 			}
 		}
 		return new Response("Not found", { status: 404 });
+	}
+
+	/**
+	 * Test routes for the agent (spike S7): `say` runs a person's turn the way the engine does (memory recalled
+	 * before, retained after); `remind` adds a reminder; `overview` shows runs, upcoming fires and the wake alarm;
+	 * `recall` searches memory.
+	 */
+	private async agentTestRoute(url: URL, request: Request): Promise<Response> {
+		const host = await this.agent();
+		const core = host.core;
+		const body = request.method === "POST" ? ((await request.json()) as Record<string, unknown>) : {};
+		switch (url.pathname) {
+			case "/__test/agent/say": {
+				const contact = String(body.contact ?? "owner");
+				const text = String(body.text ?? "");
+				const conversation = await core.conversation(contact);
+				await core.beforeTurn(contact, conversation.id, text);
+				const session = String(conversation.id);
+				const receipt = await this.harness.submit(text, { session });
+				if (body.wait === false) return Response.json({ session, operationId: receipt.operationId });
+				const result = await this.harness.wait(receipt.operationId, { session });
+				await core.afterTurn(contact, text, result.text ?? "", { ref: `agent:${this.agentId}` });
+				await this.wake.rearm();
+				return Response.json({ ...result, session });
+			}
+			case "/__test/agent/wait": {
+				const result = await this.harness.wait(String(body.operationId), { session: String(body.session) });
+				return Response.json(result);
+			}
+			case "/__test/agent/remind": {
+				const at = Date.now() + Number(body.inMs ?? 2000);
+				await core.proactive.restoreReminder({ id: `r${at.toString(36)}`, prompt: String(body.prompt ?? "Remind me"), at, createdAt: new Date().toISOString(), by: "owner" });
+				return Response.json({ at, wake: await this.wake.rearm() });
+			}
+			case "/__test/agent/overview":
+				return Response.json({ ...(await core.proactive.overview()), alarm: await this.ctx.storage.getAlarm(), nextWake: await host.nextWake(), instanceId: this.instanceId, rests: (await this.ctx.storage.get<number[]>(RESTS_KEY)) ?? [] });
+			case "/__test/agent/list": {
+				const bank = `${this.agentId}/${url.searchParams.get("partition") ?? "owner"}`;
+				const fts = this.ctx.storage.sql.exec("SELECT count(*) AS n FROM memory_fts").toArray()[0];
+				const triggers = this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE type = 'trigger'").toArray();
+				return Response.json({ records: (await host.memory.list(bank, { limit: 50 })).records, fts, triggers });
+			}
+			case "/__test/agent/recall": {
+				const hits = await host.memory.recall([`${this.agentId}/owner`], url.searchParams.get("q") ?? "", { budgetTokens: 400 });
+				return Response.json({ hits });
+			}
+			default:
+				return new Response("Not found", { status: 404 });
+		}
 	}
 
 	// ── Engine Protocol over the socket ───────────────────────────────────
@@ -275,6 +375,8 @@ export class AgentDO extends DurableObject<Env> {
 }
 
 const LAST_ALARM_KEY = "piopio:lastAlarmAt";
+const AGENT_KEY = "piopio:agent";
+const RESTS_KEY = "piopio:rests";
 
 const SUPPORTED = new Set<string>(["engine.hello", "engine.status", "sessions.subscribe", "sessions.unsubscribe", "sessions.submit", "sessions.abort"]);
 

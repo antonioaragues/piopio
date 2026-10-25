@@ -49,6 +49,17 @@ approves from Telegram buttons; agent-to-agent works in the cloud.
   - the bundle size, and what needs `nodejs_compat`.
 - **Exit:** a written go/no-go with the gaps.
 
+**S7 result (2026-10-25): go.** `AgentCore` runs in the AgentDO on PiHarness's pi. Verified:
+- memory on the object's SQLite;
+- a turn interrupted by eviction finishes;
+- a reminder fires from the agent's own alarm after the object rested and was evicted.
+
+Two things the platform didn't give us:
+- **The wake:** a Lifecycle job at `Proactivity.nextWake()`.
+- **Rest:** a sleeping task's timer pins the object, so pi is closed between wakes.
+
+Details and gaps: [packages/cloud/README.md](../../packages/cloud/README.md).
+
 **5.1 · Cloud Engine core**
 - **Worker routes:**
   - `GET /v1/ws`: the Engine Protocol over a hibernatable WebSocket, behind the owner token;
