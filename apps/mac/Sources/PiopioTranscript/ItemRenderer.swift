@@ -743,7 +743,7 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .code(let language, let code, _):
             // A table drawn with spaces (a model's comparison in a code block) reads better as a table.
-            if language == nil || ["text", "txt", "plaintext", "markdown", "md"].contains(language!.lowercased()), let table = TableContent.spaced(code) {
+            if !compact, language == nil || ["text", "txt", "plaintext", "markdown", "md"].contains(language!.lowercased()), let table = TableContent.spaced(code) {
                 return attachmentParagraph(TableAttachment(table: table))
             }
             let m = NSMutableAttributedString()

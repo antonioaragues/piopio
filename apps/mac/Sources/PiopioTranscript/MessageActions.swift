@@ -35,6 +35,8 @@ public final class MessageActions: @unchecked Sendable {
     var readBy: String?
     var visible = false
     var copied = false
+    /// Remember this was used on this answer (the button shows a check).
+    var remembered = false
     @ObservationIgnored weak var document: TranscriptDocument?
 
     init(itemId: String, role: Role, text: String) {
@@ -117,7 +119,7 @@ struct ActionsRow: View {
     @ViewBuilder private var buttons: some View {
         if let note = actions.note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).padding(.trailing, 6) }
         if let b = actions.branch, actions.role == .user { branchSwitcher(b) }
-        IconButton(symbol: actions.copied ? "checkmark" : "doc.on.doc", help: "Copy") { copy() }
+        if actions.role == .answer { CopyMenu(actions: actions) } else { IconButton(symbol: actions.copied ? "checkmark" : "doc.on.doc", help: "Copy") { copy() } }
         if actions.role == .user {
             if actions.canEdit { IconButton(symbol: "pencil", help: actions.canRewind ? "Edit: rewinds the chat to here and puts your message in the composer" : "Edit and resend (keeps this version)") { act(.edit(itemId: actions.itemId)) } }
             if actions.canRewind {
@@ -133,6 +135,7 @@ struct ActionsRow: View {
                 }
             }
         } else {
+            if let destination = actions.document?.rememberDestination { RememberButton(actions: actions, destination: destination) }
             if actions.canRetry { IconButton(symbol: "arrow.clockwise", help: "Retry") { act(.regenerate(itemId: actions.itemId)) } }
             if actions.canFork { IconButton(symbol: "arrow.triangle.branch", help: "Fork from here") { act(.fork(itemId: actions.itemId)) } }
         }
@@ -203,6 +206,100 @@ struct ReadMark: View {
         .font(.system(size: 9, weight: .semibold))
         .foregroundStyle(Color(nsColor: read ? DS.fg2 : DS.fg3))
         .frame(width: read ? 15 : 11, alignment: .leading)
+    }
+}
+
+/// Copy: a click copies Markdown, as always; the arrow beside it offers plain text and rich text too.
+struct CopyMenu: View {
+    let actions: MessageActions
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button { copy(.markdown) } label: {
+                Image(systemName: actions.copied ? "checkmark" : "doc.on.doc").font(.system(size: 11.5)).foregroundStyle(Color(nsColor: hovering ? DS.fg2 : DS.fg3))
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 22, height: 22).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Copy (Markdown)")
+            Menu {
+                ForEach(CopyFormat.allCases, id: \.self) { format in
+                    Button("Copy as \(format.rawValue)") { copy(format) }
+                }
+            } label: {
+                Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold)).foregroundStyle(Color(nsColor: hovering ? DS.fg2 : DS.fg3))
+                    .frame(width: 12, height: 22).contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Copy as Markdown, plain text or rich text")
+        }
+        .padding(.trailing, 2)
+        .background(hovering ? Color(nsColor: DS.chip) : .clear, in: RoundedRectangle(cornerRadius: 5))
+        .onHover { hovering = $0 }
+    }
+
+    private func copy(_ format: CopyFormat) {
+        MainActor.assumeIsolated { format.copy(actions.text) }
+        withAnimation(.easeInOut(duration: 0.15)) { actions.copied = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            withAnimation(.easeInOut(duration: 0.15)) { actions.copied = false }
+        }
+    }
+}
+
+/// Remember this: a popover with the answer's first lines to edit, saved to memory with one click.
+struct RememberButton: View {
+    let actions: MessageActions
+    let destination: String
+    @State private var open = false
+    @State private var text = ""
+
+    var body: some View {
+        IconButton(symbol: actions.remembered ? "checkmark" : "brain", help: actions.remembered ? "Saved to \(destination)" : "Remember this…") {
+            text = Self.suggestion(actions.text)
+            open = true
+        }
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Remember this").font(.system(size: 13, weight: .semibold))
+                TextEditor(text: $text)
+                    .font(.system(size: 13))
+                    .scrollContentBackground(.hidden)
+                    .padding(6)
+                    .frame(width: 320, height: 96)
+                    .background(Color(nsColor: DS.chip), in: RoundedRectangle(cornerRadius: 8))
+                Text("Saves to \(destination). Edit it into one fact; you can change or forget it in Settings › Memory.")
+                    .font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).fixedSize(horizontal: false, vertical: true).frame(width: 320, alignment: .leading)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { open = false }.keyboardShortcut(.cancelAction)
+                    Button("Remember") {
+                        let fact = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        open = false
+                        guard !fact.isEmpty else { return }
+                        MainActor.assumeIsolated { actions.document?.handle(.remember(text: fact)) }
+                        withAnimation(.easeInOut(duration: 0.15)) { actions.remembered = true }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(14)
+        }
+    }
+
+    /// The answer's first paragraph as plain text, at most about 280 characters (cut at a sentence when it can).
+    static func suggestion(_ markdown: String) -> String {
+        let first = CopyFormat.plain(markdown).components(separatedBy: "\n\n").first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? ""
+        guard first.count > 280 else { return first }
+        let cut = String(first.prefix(280))
+        if let end = cut.range(of: ". ", options: .backwards) { return String(cut[..<end.lowerBound]) + "." }
+        return cut + "…"
     }
 }
 

@@ -243,3 +243,18 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     #expect(ItemRenderer.date("2026-10-27T11:56:00.123Z") != nil)
     #expect(ItemRenderer.date("") == nil)
 }
+
+@MainActor @Test func copyFormatsAndRememberSuggestion() {
+    let md = "## Plan\n\nUse **pi 1.4** and read [the notes](https://example.com).\n\n- one\n- `two`\n\n| a | b |\n|---|---|\n| 1 | 2 |"
+    #expect(CopyFormat.plain(md) == "Plan\n\nUse pi 1.4 and read the notes (https://example.com).\n\n• one\n• two\n\na\tb\n1\t2")
+    let rich = CopyFormat.rich(md)
+    #expect(rich.string.contains("Use pi 1.4"))
+    #expect(rich.rtf(from: NSRange(location: 0, length: rich.length), documentAttributes: [:]) != nil)
+    let long = "First sentence about Madrid. " + String(repeating: "More words here. ", count: 30)
+    #expect(RememberButton.suggestion(long).hasSuffix("."))
+    #expect(RememberButton.suggestion(long).count <= 281)
+    #expect(RememberButton.suggestion("Short answer.\n\nSecond paragraph.") == "Short answer.")
+    for action in [TranscriptAction.quote(text: "a > b & c"), .remember(text: "Lives in Madrid")] {
+        #expect(TranscriptAction(url: action.url) == action)
+    }
+}

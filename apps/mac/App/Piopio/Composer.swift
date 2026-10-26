@@ -55,7 +55,8 @@ struct Composer: View {
         }
         .onChange(of: thread.draft) { _, draft in
             guard let draft else { return }
-            text = draft
+            // Put above what you're writing (a quote from Select and ask, a mention, terminal output).
+            text = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? draft : draft + text
             thread.draft = nil
             focused = true
         }

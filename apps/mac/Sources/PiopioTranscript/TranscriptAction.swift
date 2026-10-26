@@ -37,6 +37,10 @@ public enum TranscriptAction: Equatable, Sendable {
     case allowAlways(approvalId: String)
     /// Answers a plan from its card: approve as is, edit it first, or send it back with a note.
     case plan(callId: String, answer: PlanAnswer)
+    /// Select and ask: the selected text goes to the composer as a quote, above what you're writing.
+    case quote(text: String)
+    /// Remember this: a fact to save to memory (About me in chats, the agent's memory of the person in agents).
+    case remember(text: String)
     public enum PlanAnswer: String, Sendable { case approve, edit, revise }
 
     static let scheme = "piopio-action"
@@ -67,6 +71,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case .openTrace(let id): c.host = "trace"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .allowAlways(let id): c.host = "allow-always"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .plan(let id, let answer): c.host = "plan"; c.queryItems = [URLQueryItem(name: "call", value: id), URLQueryItem(name: "answer", value: answer.rawValue)]
+        case .quote(let text): c.host = "quote"; c.queryItems = [URLQueryItem(name: "text", value: text)]
+        case .remember(let text): c.host = "remember"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         }
         return c.url!
     }
@@ -97,6 +103,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case "trace": guard let id = q("id") else { return nil }; self = .openTrace(traceId: id)
         case "allow-always": guard let id = q("id") else { return nil }; self = .allowAlways(approvalId: id)
         case "plan": guard let id = q("call"), let answer = q("answer").flatMap(PlanAnswer.init(rawValue:)) else { return nil }; self = .plan(callId: id, answer: answer)
+        case "quote": guard let text = q("text") else { return nil }; self = .quote(text: text)
+        case "remember": guard let text = q("text") else { return nil }; self = .remember(text: text)
         default: return nil
         }
     }

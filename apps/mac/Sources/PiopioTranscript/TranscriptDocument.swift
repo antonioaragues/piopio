@@ -1,5 +1,6 @@
 import AppKit
 import PiopioKit
+import SwiftUI
 
 /// A session's transcript as one windowed TextKit 2 document (docs/spikes/s2).
 ///
@@ -60,6 +61,10 @@ public final class TranscriptDocument {
         didSet { if oldValue != isFollowing { onFollowingChange?(isFollowing) } }
     }
     public var onFollowingChange: ((Bool) -> Void)?
+    /// Where Remember this saves ("About me", "Daily briefing's memory"); nil hides it (Quick Chat).
+    public var rememberDestination: String?
+    /// Select and ask: the bar over selected text (Ask about this, Remember, Copy).
+    private var selectionBar: NSHostingView<SelectionBar>?
 
     public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true, build: Bool = false, root: String? = nil) {
         renderer = ItemRenderer(compact: compact, versions: versions, build: build, root: root)
@@ -159,6 +164,22 @@ public final class TranscriptDocument {
         documentIDs = window.map(\.id)
         lengths = Dictionary(uniqueKeysWithValues: zip(documentIDs, built.1))
         for item in window { if case .assistant(let a) = item, a.status == .streaming { startStream(a) } }
+        // Captures: PIOPIO_DEMO_SELECT=<text> selects that text once the transcript is in, showing Select and ask.
+        if let wanted = ProcessInfo.processInfo.environment["PIOPIO_DEMO_SELECT"] {
+            Task { @MainActor [weak self] in
+                for _ in 0..<40 {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    guard let self else { return }
+                    let found = (self.storage.string as NSString).range(of: wanted, options: .backwards)
+                    // The answer's copy (the last one), once it has finished streaming in.
+                    if found.location != NSNotFound, found.location > self.storage.length / 2 {
+                        self.textView.setSelectedRange(found)
+                        self.selectionChanged()
+                        return
+                    }
+                }
+            }
+        }
         wireCards(in: NSRange(location: 0, length: storage.length))
         layoutBubbles(in: NSRange(location: 0, length: storage.length))
         refreshFooters()
@@ -659,6 +680,101 @@ public final class TranscriptDocument {
     }
 }
 
+// MARK: Select and ask
+
+extension TranscriptDocument {
+    /// Shows the bar above a selection of text (in answers or your messages), hides it when the selection goes.
+    func selectionChanged() {
+        let range = textView.selectedRange()
+        guard range.length > 1, NSMaxRange(range) <= storage.length, let window = textView.window else { return hideSelectionBar() }
+        let text = (storage.string as NSString).substring(with: range)
+            .replacingOccurrences(of: "\u{FFFC}", with: "")
+            .replacingOccurrences(of: lineSeparator, with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.contains(where: \.isLetter) else { return hideSelectionBar() }
+        let onScreen = textView.firstRect(forCharacterRange: range, actualRange: nil)
+        let rect = textView.convert(window.convertFromScreen(onScreen), from: nil)
+        let bar = SelectionBar(remember: rememberDestination, act: { [weak self] choice in self?.selectionAction(choice, text: text) })
+        let host = selectionBar ?? NSHostingView(rootView: bar)
+        host.rootView = bar
+        let size = host.fittingSize
+        // Above the selection's first line; below it when there's no room above.
+        let y = rect.minY - size.height - 6 >= textView.visibleRect.minY ? rect.minY - size.height - 6 : rect.maxY + 6
+        // Inside the reading column: from its left edge to its right edge.
+        let left = textView.textContainerInset.width
+        let right = left + (textView.textContainer?.size.width ?? textView.bounds.width - 2 * left)
+        let x = min(max(rect.minX, left), max(left, right - size.width))
+        host.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+        if host.superview == nil { textView.addSubview(host) }
+        selectionBar = host
+    }
+
+    func hideSelectionBar() {
+        selectionBar?.removeFromSuperview()
+        selectionBar = nil
+    }
+
+    private func selectionAction(_ choice: SelectionBar.Choice, text: String) {
+        switch choice {
+        case .ask: handle(.quote(text: text))
+        case .remember: handle(.remember(text: text))
+        case .copy:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
+        // A beat for the check mark, then the selection and the bar go.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(choice == .ask ? 0 : 700))
+            guard let self else { return }
+            self.textView.setSelectedRange(NSRange(location: self.textView.selectedRange().location, length: 0))
+            self.hideSelectionBar()
+        }
+    }
+}
+
+/// The small floating bar over selected text.
+struct SelectionBar: View {
+    enum Choice { case ask, remember, copy }
+    let remember: String?
+    let act: (Choice) -> Void
+    @State private var done: Choice?
+
+    var body: some View {
+        HStack(spacing: 2) {
+            item(.ask, "Ask about this", "text.bubble")
+            if let remember { item(.remember, done == .remember ? "Remembered" : "Remember", done == .remember ? "checkmark" : "brain", help: "Save it to \(remember)") }
+            item(.copy, done == .copy ? "Copied" : "Copy", done == .copy ? "checkmark" : "doc.on.doc")
+        }
+        .padding(3)
+        .background(Color(nsColor: DS.card), in: Capsule())
+        .overlay(Capsule().strokeBorder(Color(nsColor: DS.line), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .fixedSize()
+    }
+
+    private func item(_ choice: Choice, _ title: String, _ symbol: String, help: String? = nil) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.12)) { done = choice }
+            act(choice)
+        } label: {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color(nsColor: DS.fg))
+                .padding(.horizontal, 10).frame(height: 26)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(SelectionBarButtonStyle())
+        .help(help ?? title)
+    }
+}
+
+private struct SelectionBarButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color(nsColor: DS.chip) : .clear, in: Capsule())
+    }
+}
+
 extension ItemRenderer {
     func render(_ blocks: some Sequence<MarkdownBlock>) -> NSAttributedString {
         let out = NSMutableAttributedString()
@@ -670,6 +786,10 @@ extension ItemRenderer {
 @MainActor
 private final class LinkHandler: NSObject, NSTextViewDelegate {
     weak var document: TranscriptDocument?
+
+    func textViewDidChangeSelection(_ notification: Notification) {
+        document?.selectionChanged()
+    }
 
     func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))

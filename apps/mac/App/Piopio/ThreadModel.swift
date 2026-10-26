@@ -50,6 +50,7 @@ final class ThreadModel {
             Task { await self?.send(text) }
         }
         document.askNext.onDismiss = { [weak self] in self?.dismissAskNext() }
+        document.rememberDestination = compact ? nil : Self.rememberDestination(ref, engine: engine)
     }
 
     var isRunning: Bool { state?.status == .running }
@@ -172,6 +173,11 @@ final class ThreadModel {
             if case .assistant(let a) = document.item(id) { errorDetail = a.errorDetail ?? a.error }
         case .copy:
             break // handled by the document
+        case .quote(let text):
+            // Select and ask: the fragment as a Markdown quote, above what's already in the composer.
+            draft = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }.joined(separator: "\n") + "\n\n"
+        case .remember(let text):
+            Task { do { try await remember(text) } catch { report(error) } }
         case .restoreCheckpoint(let id):
             if case .checkpoint(let c) = document.item(id) { restoring = c }
         case .openSession(let id):
@@ -205,6 +211,26 @@ final class ThreadModel {
             case .edit: editingPlan = prompt
             case .revise: revisingPlan = prompt.id
             }
+        }
+    }
+
+    /// Where Remember this saves: About me in chats, notebooks and Build; in an agent, its memory of this person.
+    static func rememberDestination(_ ref: ContainerRef, engine: EngineController) -> String {
+        guard ref.kind == .agent else { return "About me" }
+        let name = engine.agents.first { $0.ref.id == ref.id }?.title ?? "the agent"
+        return "\(name)'s memory"
+    }
+
+    /// Remember this: one fact, written by you, in the bank the destination names.
+    private func remember(_ text: String) async throws {
+        guard let engine else { return }
+        if ref.kind == .agent {
+            let person = ref.conversationId?.hasPrefix("person:") == true ? String(ref.conversationId!.dropFirst(7)) : "owner"
+            let provider = (await engine.agentMemory(ref))?.provider ?? "builtin"
+            let bank = person == "owner" ? "\(ref.id)/owner" : "\(ref.id)/contacts/\(person)"
+            try await engine.spaceCall("memory.add", MemoryAddParams(provider: provider, bank: bank, text: text))
+        } else {
+            try await engine.spaceCall("memory.add", MemoryAddParams(provider: engine.settings?.aboutMe.provider ?? "builtin", bank: "about-me", text: text))
         }
     }
 
