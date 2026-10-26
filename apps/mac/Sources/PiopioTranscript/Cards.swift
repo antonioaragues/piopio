@@ -110,7 +110,7 @@ final class CardLayoutFragment: NSTextLayoutFragment {
         }
         drawPills(at: point, in: context)
         context.restoreGState()
-        super.draw(at: point, in: context)
+        drawText(super.draw, at: point, in: context)
     }
 
     /// Capsules behind runs tagged `.piopioPill` (in this paragraph's own coordinates).
@@ -170,6 +170,23 @@ final class CardLayoutFragment: NSTextLayoutFragment {
     }
 }
 
+/// Text drawn without macOS font smoothing ("stem darkening"), as browsers do with `-webkit-font-smoothing:
+/// antialiased`: the same SF Pro reads lighter and crisper (about 10% less ink measured against Claude's app).
+func drawText(_ draw: (CGPoint, CGContext) -> Void, at point: CGPoint, in context: CGContext) {
+    context.saveGState()
+    context.setAllowsFontSmoothing(false)
+    context.setShouldSmoothFonts(false)
+    draw(point, context)
+    context.restoreGState()
+}
+
+/// A plain paragraph: only its text, drawn without font smoothing.
+final class PlainLayoutFragment: NSTextLayoutFragment {
+    override func draw(at point: CGPoint, in context: CGContext) {
+        drawText(super.draw, at: point, in: context)
+    }
+}
+
 final class CardLayoutDelegate: NSObject, NSTextLayoutManagerDelegate {
     func textLayoutManager(_ textLayoutManager: NSTextLayoutManager, textLayoutFragmentFor location: NSTextLocation, in textElement: NSTextElement) -> NSTextLayoutFragment {
         let range = textElement.elementRange
@@ -190,7 +207,7 @@ final class CardLayoutDelegate: NSObject, NSTextLayoutManagerDelegate {
                 return f
             }
         }
-        return NSTextLayoutFragment(textElement: textElement, range: range)
+        return PlainLayoutFragment(textElement: textElement, range: range)
     }
 }
 

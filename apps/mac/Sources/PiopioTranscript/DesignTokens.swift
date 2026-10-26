@@ -39,7 +39,7 @@ public enum DS {
 
     // MARK: Type (SF Pro / SF Mono)
     public static let transcriptSize: CGFloat = 13.5
-    public static let transcriptLineHeight: CGFloat = 1.6
+    public static let transcriptLineHeight: CGFloat = 1.45
 
     // MARK: Radii
     public enum Radius {
