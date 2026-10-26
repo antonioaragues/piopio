@@ -230,3 +230,15 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     #expect(abs(t.widths(for: 600).reduce(0, +) - 600) < 1)
     #expect(t.height(width: 300) > t.height(width: 900))
 }
+
+@Test func messageTimesReadNaturally() {
+    let now = ISO8601DateFormatter().date(from: "2026-10-27T12:00:00Z")!
+    #expect(MessageTime.relative(now.addingTimeInterval(-20), now: now) == "now")
+    #expect(MessageTime.relative(now.addingTimeInterval(-180), now: now) == "3 min ago")
+    #expect(MessageTime.relative(now.addingTimeInterval(-2 * 3600), now: now) == "2 h ago")
+    #expect(MessageTime.relative(now.addingTimeInterval(-26 * 3600), now: now).hasPrefix("Yesterday, "))
+    let older = MessageTime.relative(now.addingTimeInterval(-10 * 86_400), now: now) // "17 Oct, …", "Oct 17, …" or "17 oct, …" by locale
+    #expect(older.contains("17") && older.contains(", "))
+    #expect(ItemRenderer.date("2026-10-27T11:56:00.123Z") != nil)
+    #expect(ItemRenderer.date("") == nil)
+}

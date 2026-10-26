@@ -663,6 +663,7 @@ nonisolated struct ItemRenderer: Sendable {
         actions.canRewind = build
         actions.branch = versions ? u.branch : nil
         actions.note = u.direct == true ? "direct" : nil
+        actions.at = Self.date(u.at)
         return actionsLine(actions, spacing: 2)
     }
 
@@ -670,6 +671,7 @@ nonisolated struct ItemRenderer: Sendable {
     func answerFooter(_ a: AssistantItem) -> NSAttributedString {
         guard !a.text.isEmpty else { return NSAttributedString() } // a step that only called tools
         let actions = MessageActions(itemId: a.id, role: .answer, text: a.text)
+        actions.at = Self.date(a.at)
         actions.canRetry = (versions || build) && a.outbound == nil
         actions.canFork = (versions || build) && a.outbound == nil
         // The model's name beside the buttons; what it cost and the tokens only in its tooltip.
@@ -680,6 +682,14 @@ nonisolated struct ItemRenderer: Sendable {
         if let u = a.usage { help.append("\(Int(u.inputTokens)) in · \(Int(u.outputTokens)) out · \(Int(u.cacheReadTokens)) cached tokens") }
         actions.metaHelp = help.joined(separator: "\n")
         return actionsLine(actions, spacing: 18)
+    }
+
+    /// An item's ISO time, with or without fractional seconds (nil when it has none).
+    static func date(_ iso: String) -> Date? {
+        guard !iso.isEmpty else { return nil }
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return precise.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
     }
 
     /// "anthropic/claude-haiku-5.5" → "Haiku 5.5"; other ids lose only their provider.

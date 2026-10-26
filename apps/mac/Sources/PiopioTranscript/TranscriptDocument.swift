@@ -415,7 +415,20 @@ public final class TranscriptDocument {
         var wanted = Set<String>()
         if let hoveredItem { wanted.insert(hoveredItem) }
         if let last = items.last(where: { if case .assistant(let a) = $0 { a.status != .streaming && !a.text.isEmpty } else { false } }) { wanted.insert(last.id) }
+        // Captures: PIOPIO_DEMO_SHOW_ROWS=1 shows every row, as if hovered.
+        if ProcessInfo.processInfo.environment["PIOPIO_DEMO_SHOW_ROWS"] == "1" { wanted = Set(actionRows.keys) }
         for (id, row) in actionRows where row.visible != wanted.contains(id) { row.visible = wanted.contains(id) }
+        // Your messages are read once an answer to them starts (the model that took them up, for the tooltip).
+        var readBy: String?
+        for item in items.reversed() {
+            switch item {
+            case .assistant(let a): readBy = a.model.map(ItemRenderer.modelName) ?? "the model"
+            case .user(let u):
+                if let row = actionRows[u.id], row.readBy != readBy { row.readBy = readBy }
+                readBy = nil
+            default: break
+            }
+        }
     }
 
     // MARK: Ask next

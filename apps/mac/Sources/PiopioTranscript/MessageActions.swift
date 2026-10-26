@@ -4,8 +4,9 @@ import PiopioKit
 import SwiftUI
 
 // Under each message (docs/design chat v3, 14a–14b): small icon buttons for answers (Copy, Retry, Fork from here) with
-// the model's name beside them (its cost and tokens in the tooltip) and, under your own messages, Copy, Edit and Rewind
-// to here. Only the turn's last answer has a row; the texts before it in the same turn don't. They're a SwiftUI row in
+// the model's name and when it answered ("3 min ago", the exact time on hover), and, under your own messages, when you
+// sent it with a sent/read mark (✓, then ✓✓ once the model takes it up), Copy, Edit and Rewind to here. Only the
+// turn's last answer has a row; the texts before it in the same turn don't. They're a SwiftUI row in
 // the text (an attachment), shown on hover and always on the latest answer. Rewind opens a popover that says what
 // goes back before doing it. "Ask next" suggestions sit at the end of the thread, after the last answer.
 
@@ -28,6 +29,10 @@ public final class MessageActions: @unchecked Sendable {
     /// "Haiku 5.5", with the full model, cost and tokens in its tooltip.
     var meta = ""
     var metaHelp: String?
+    /// When the message was sent or the answer written.
+    var at: Date?
+    /// Your messages: the model that took it up ("Haiku 5.5"); nil while it waits (sent, not read yet).
+    var readBy: String?
     var visible = false
     var copied = false
     @ObservationIgnored weak var document: TranscriptDocument?
@@ -77,14 +82,30 @@ struct ActionsRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            if actions.role == .user { Spacer(minLength: 0) }
+            if actions.role == .user {
+                Spacer(minLength: 0)
+                if actions.visible {
+                    HStack(spacing: 5) {
+                        ReadMark(read: actions.readBy != nil).help(actions.readBy.map { "Read by \($0)" } ?? "Sent")
+                        if let at = actions.at { MessageTime(date: at) }
+                        Text("·").foregroundStyle(Color(nsColor: DS.fg3))
+                    }
+                    .font(.system(size: 11.5))
+                    .padding(.trailing, 4)
+                    .transition(.opacity)
+                }
+            }
             if actions.visible || actions.copied { buttons.transition(.opacity) }
             if actions.role == .answer {
-                if actions.visible, !actions.meta.isEmpty {
-                    Text(actions.meta).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3))
-                        .padding(.leading, 6)
-                        .help(actions.metaHelp ?? "")
-                        .transition(.opacity)
+                if actions.visible {
+                    HStack(spacing: 5) {
+                        if !actions.meta.isEmpty { Text(actions.meta).foregroundStyle(Color(nsColor: DS.fg3)).help(actions.metaHelp ?? "") }
+                        if !actions.meta.isEmpty, actions.at != nil { Text("·").foregroundStyle(Color(nsColor: DS.fg3)) }
+                        if let at = actions.at { MessageTime(date: at) }
+                    }
+                    .font(.system(size: 11.5))
+                    .padding(.leading, 6)
+                    .transition(.opacity)
                 }
                 Spacer(minLength: 0)
             }
@@ -145,6 +166,46 @@ struct ActionsRow: View {
 }
 
 /// A 28×26 icon button that fills on hover (13 pt symbol, fg3).
+/// "now", "3 min ago", "2 h ago", "Yesterday, 23:56", "26 Oct, 23:56"; the exact date and time on hover. Updates
+/// itself every half minute.
+struct MessageTime: View {
+    let date: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            Text(Self.relative(date, now: context.date)).foregroundStyle(Color(nsColor: DS.fg3)).monospacedDigit()
+        }
+        .help(date.formatted(.dateTime.weekday(.wide).day().month(.wide).year().hour().minute()))
+    }
+
+    static func relative(_ date: Date, now: Date = .now) -> String {
+        let seconds = now.timeIntervalSince(date)
+        if seconds < 60 { return "now" }
+        if seconds < 3600 { return "\(Int(seconds / 60)) min ago" }
+        let calendar = Calendar.current
+        let time = date.formatted(date: .omitted, time: .shortened)
+        if calendar.isDate(date, inSameDayAs: now) { return seconds < 6 * 3600 ? "\(Int(seconds / 3600)) h ago" : time }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) { return "Yesterday, \(time)" }
+        let sameYear = calendar.isDate(date, equalTo: now, toGranularity: .year)
+        return "\(date.formatted(sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year())), \(time)"
+    }
+}
+
+/// ✓ sent, ✓✓ read (the model took it up), drawn from two checkmarks.
+struct ReadMark: View {
+    let read: Bool
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Image(systemName: "checkmark")
+            if read { Image(systemName: "checkmark").offset(x: 4.5) }
+        }
+        .font(.system(size: 9, weight: .semibold))
+        .foregroundStyle(Color(nsColor: read ? DS.fg2 : DS.fg3))
+        .frame(width: read ? 15 : 11, alignment: .leading)
+    }
+}
+
 struct IconButton: View {
     let symbol: String
     let help: String
