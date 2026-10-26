@@ -7,7 +7,7 @@ import SwiftUI
 // the model's name and when it answered ("3 min ago", the exact time on hover), and, under your own messages, when you
 // sent it with a sent/read mark (✓, then ✓✓ once the model takes it up), Copy, Edit and Rewind to here. Only the
 // turn's last answer has a row; the texts before it in the same turn don't. They're a SwiftUI row in
-// the text (an attachment), shown on hover and always on the latest answer. Rewind opens a popover that says what
+// the text (an attachment), shown on hover only. Rewind opens a popover that says what
 // goes back before doing it. "Ask next" suggestions sit at the end of the thread, after the last answer.
 
 /// The row under one message. Built with the item; the document shows or hides it and gives it somewhere to act.

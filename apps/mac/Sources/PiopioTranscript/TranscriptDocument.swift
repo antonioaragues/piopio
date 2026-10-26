@@ -34,7 +34,7 @@ public final class TranscriptDocument {
     private var scrollFrameObserver: NSObjectProtocol?
     private let hover = HoverTracker()
     private var hoveredItem: String?
-    /// The action row under each message, by item (shown on hover and for the latest answer).
+    /// The action row under each message, by item (shown on hover).
     private var actionRows: [String: MessageActions] = [:]
     private var columnWidth: CGFloat = 0
     private var laidOutWidth: CGFloat = 0
@@ -410,11 +410,10 @@ public final class TranscriptDocument {
         storage.endEditing()
     }
 
-    /// Action rows show for the hovered message and the latest answer.
+    /// Action rows show only for the hovered message (the latest answer too).
     private func refreshFooters() {
         var wanted = Set<String>()
         if let hoveredItem { wanted.insert(hoveredItem) }
-        if let last = items.last(where: { if case .assistant(let a) = $0 { a.status != .streaming && !a.text.isEmpty } else { false } }) { wanted.insert(last.id) }
         // Captures: PIOPIO_DEMO_SHOW_ROWS=1 shows every row, as if hovered.
         if ProcessInfo.processInfo.environment["PIOPIO_DEMO_SHOW_ROWS"] == "1" { wanted = Set(actionRows.keys) }
         for (id, row) in actionRows where row.visible != wanted.contains(id) { row.visible = wanted.contains(id) }

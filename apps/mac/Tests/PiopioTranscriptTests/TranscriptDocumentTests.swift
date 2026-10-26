@@ -136,9 +136,9 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     expectConsistent(doc)
 }
 
-@MainActor @Test func latestAnswerKeepsItsActionsAfterAResnapshot() async throws {
+@MainActor @Test func answersKeepTheirActionsAfterAResnapshotShownOnlyOnHover() async throws {
     let doc = await loaded([user("1", "first"), answer("2", "one")])
-    #expect(doc.actionRow("2")?.visible == true)
+    #expect(doc.actionRow("2")?.visible == false) // on hover only, the latest answer too
     #expect(doc.actionRow("2")?.canRetry == true)
     #expect(doc.actionRow("1")?.visible == false)
     // An edit: the engine resnapshots onto the new branch, then streams the new answer.
@@ -148,7 +148,8 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     doc.apply([.itemReplaced(oldId: "gen:1", item: answer("7", "Echo"))])
     for _ in 0..<100 where doc.documentIDs != ["5", "7"] { try await Task.sleep(for: .milliseconds(10)) }
     #expect(doc.documentIDs == ["5", "7"])
-    #expect(doc.actionRow("7")?.visible == true)
+    #expect(doc.actionRow("7")?.visible == false)
+    #expect(doc.actionRow("7")?.canRetry == true)
     expectConsistent(doc)
 }
 

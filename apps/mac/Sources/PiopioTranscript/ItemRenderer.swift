@@ -642,7 +642,7 @@ nonisolated struct ItemRenderer: Sendable {
         }
     }
 
-    // MARK: Footers (shown on hover, and for the latest answer)
+    // MARK: Footers (shown on hover)
 
     private var footerFont: NSFont { .systemFont(ofSize: 11.5, weight: .medium) }
 
