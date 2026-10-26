@@ -7,6 +7,14 @@ struct PiopioApp: App {
     @State private var engine = EngineController()
     @State private var areas = Areas.shared
 
+    init() {
+        // Text without macOS font smoothing everywhere (sidebar, composer, Settings), like Claude's app
+        // (-webkit-font-smoothing: antialiased): the same SF Pro reads lighter and crisper. AppKit reads this the
+        // first time it draws text, so it's registered before any window opens; the transcript also draws its
+        // paragraphs this way (Cards.swift drawText).
+        UserDefaults.standard.register(defaults: ["AppleFontSmoothing": 0])
+    }
+
     var body: some Scene {
         Window("Piopio", id: "main") {
             RootView(engine: engine)
