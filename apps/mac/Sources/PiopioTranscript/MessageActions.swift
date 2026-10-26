@@ -3,8 +3,9 @@ import Observation
 import PiopioKit
 import SwiftUI
 
-// Under each message (docs/design chat v3, 14a–14b): icon buttons for answers (Copy, Retry, Fork from here, then the
-// model and cost on the right) and, under your own messages, Copy, Edit and Rewind to here. They're a SwiftUI row in
+// Under each message (docs/design chat v3, 14a–14b): small icon buttons for answers (Copy, Retry, Fork from here) with
+// the model's name beside them (its cost and tokens in the tooltip) and, under your own messages, Copy, Edit and Rewind
+// to here. Only the turn's last answer has a row; the texts before it in the same turn don't. They're a SwiftUI row in
 // the text (an attachment), shown on hover and always on the latest answer. Rewind opens a popover that says what
 // goes back before doing it. "Ask next" suggestions sit at the end of the thread, after the last answer.
 
@@ -24,7 +25,7 @@ public final class MessageActions: @unchecked Sendable {
     var branch: BranchInfo?
     /// "direct" (a notebook topic message typed there).
     var note: String?
-    /// "Haiku 5.5 · $0.0002", with the full model and tokens in its tooltip.
+    /// "Haiku 5.5", with the full model, cost and tokens in its tooltip.
     var meta = ""
     var metaHelp: String?
     var visible = false
@@ -37,7 +38,7 @@ public final class MessageActions: @unchecked Sendable {
         self.text = text
     }
 
-    static let height: CGFloat = 30
+    static let height: CGFloat = 26
 }
 
 final class ActionsAttachment: NSTextAttachment, @unchecked Sendable {
@@ -75,14 +76,17 @@ struct ActionsRow: View {
     @State private var rewinding = false
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             if actions.role == .user { Spacer(minLength: 0) }
             if actions.visible || actions.copied { buttons.transition(.opacity) }
             if actions.role == .answer {
-                Spacer(minLength: 8)
                 if actions.visible, !actions.meta.isEmpty {
-                    Text(actions.meta).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).help(actions.metaHelp ?? "")
+                    Text(actions.meta).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3))
+                        .padding(.leading, 6)
+                        .help(actions.metaHelp ?? "")
+                        .transition(.opacity)
                 }
+                Spacer(minLength: 0)
             }
         }
         .frame(height: MessageActions.height)
@@ -149,10 +153,10 @@ struct IconButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(Color(nsColor: DS.fg3))
+            Image(systemName: symbol).font(.system(size: 11.5, weight: .regular)).foregroundStyle(Color(nsColor: hovering ? DS.fg2 : DS.fg3))
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: 28, height: 26)
-                .background(hovering ? Color(nsColor: DS.chip) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                .frame(width: 24, height: 22)
+                .background(hovering ? Color(nsColor: DS.chip) : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

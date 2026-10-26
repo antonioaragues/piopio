@@ -193,3 +193,40 @@ private func expectConsistent(_ doc: TranscriptDocument) {
         #expect(abs(doc.textView.textContainerInset.width - expected()) < 0.5, "inset \(doc.textView.textContainerInset.width) clip \(doc.scrollView.contentView.bounds.width) frame \(width)")
     }
 }
+
+@Test @MainActor func onlyTheTurnsLastTextHasAnActionRow() async {
+    let steps = answer("s1", "") // a step that only called tools
+    let items = [user("1", "research this"), answer("2", "Let me look around."), steps, answer("3", "Here's the synthesis."), user("4", "thanks"), answer("5", "You're welcome.")]
+    let doc = await loaded(items)
+    #expect(TranscriptDocument.midTurn(items) == ["2"])
+    #expect(doc.actionRow("2") == nil)
+    #expect(doc.actionRow("3") != nil)
+    #expect(doc.actionRow("5") != nil)
+    // The turn goes on: the text that was last loses its row, the new one gets it.
+    let more = answer("s2", "")
+    doc.apply([.itemAdded(more), .itemAdded(answer("6", "And one more thing."))])
+    #expect(TranscriptDocument.midTurn(items + [more, answer("6", "And one more thing.")]) == ["2", "5"])
+    #expect(doc.actionRow("5") == nil)
+    #expect(doc.actionRow("6") != nil)
+    expectConsistent(doc)
+}
+
+@Test func tablesDrawnWithSpacesBecomeTables() {
+    let code = """
+    Dimension          ESPHome                          Voice & Assist
+    **Value prop**     Own your hardware; no cloud      Own your voice; private, local
+    **Wedge**          YAML power + ESP32 ubiquity      Open hardware (VPE) + HA
+    **Moat**           Component ecosystem              Hardware platform
+    """
+    let table = TableContent.spaced(code)
+    #expect(table?.header == ["Dimension", "ESPHome", "Voice & Assist"])
+    #expect(table?.rows.count == 3)
+    #expect(table?.rows[0] == ["**Value prop**", "Own your hardware; no cloud", "Own your voice; private, local"])
+    // Code stays code.
+    #expect(TableContent.spaced("let a = 1\nlet b = 2\nprint(a + b)") == nil)
+    #expect(TableContent.spaced("one  two\nthree") == nil)
+    // Columns fill the width and wrap: a narrow table is taller than a wide one.
+    let t = table!
+    #expect(abs(t.widths(for: 600).reduce(0, +) - 600) < 1)
+    #expect(t.height(width: 300) > t.height(width: 900))
+}

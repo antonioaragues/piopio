@@ -13,7 +13,7 @@ public final class TranscriptDocument {
     public let scrollView: NSScrollView
     let textView: NSTextView
     private let layoutDelegate = CardLayoutDelegate()
-    private let renderer: ItemRenderer
+    private var renderer: ItemRenderer
     private let windowSize: Int
     private let pageSize: Int
 
@@ -139,6 +139,7 @@ public final class TranscriptDocument {
         streams = [:]
         prefetched = nil
         items = snapshot.items
+        renderer.midTurn = Self.midTurn(items)
         windowStart = max(0, items.count - windowSize)
         let window = Array(items[windowStart...])
         let renderer = self.renderer
@@ -230,8 +231,37 @@ public final class TranscriptDocument {
                 return
             }
         }
-        if !events.isEmpty { refreshFooters() }
+        if !events.isEmpty {
+            refreshMidTurn()
+            refreshFooters()
+        }
         if follow, !events.isEmpty { textView.scrollToEndOfDocument(nil) }
+    }
+
+    /// The texts in the middle of a turn: more text follows before your next message (a step's "Let me check…").
+    static func midTurn(_ items: [TimelineItem]) -> Set<String> {
+        var out = Set<String>()
+        var lastText: String?
+        for item in items {
+            switch item {
+            case .user: lastText = nil
+            case .assistant(let a) where !a.text.isEmpty:
+                if let previous = lastText { out.insert(previous) }
+                lastText = a.id
+            default: break
+            }
+        }
+        return out
+    }
+
+    /// When a turn goes on, its earlier text loses its action row (and the space it took).
+    private func refreshMidTurn() {
+        let next = Self.midTurn(items)
+        let changed = next.symmetricDifference(renderer.midTurn)
+        renderer.midTurn = next
+        for id in changed {
+            if let item = items.last(where: { $0.id == id }) { replace(item) }
+        }
     }
 
     private func apply(_ event: SessionEvent) {
@@ -331,6 +361,7 @@ public final class TranscriptDocument {
             new.toggledByReader = old.toggledByReader
             new.showAll = old.showAll
         }
+        actionRows[item.id] = nil // the new rendering brings its own row, or none (mid-turn)
         edit(range, with: text)
         lengths[item.id] = text.length
         if case .assistant(let a) = item, a.status == .streaming { startStream(a) }

@@ -17,6 +17,8 @@ nonisolated struct ItemRenderer: Sendable {
     var build = false
     /// The project folder: paths inside it show relative, as chips (the full path in their tooltip).
     var root: String?
+    /// Answers with more text after them in the same turn: no action row under them (only the turn's last text has one).
+    var midTurn: Set<String> = []
 
     /// Answers 15 / 1.6 (chat v3); Quick Chat keeps the compact 13.5.
     private var bodySize: CGFloat { compact ? DS.transcriptSize : 15 }
@@ -48,7 +50,7 @@ nonisolated struct ItemRenderer: Sendable {
             if let o = a.outbound { out.append(note(o.from.hasPrefix("run_") ? "Sent on its own, from an automatic run" : "Sent on its own", dot: DS.accent)) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
-            if a.status != .streaming, !compact { out.append(answerFooter(a)) }
+            if a.status != .streaming, !compact, !midTurn.contains(a.id) { out.append(answerFooter(a)) }
             return out
         case .tool(let t) where t.tool == "ask_user":
             return questionCard(t)
@@ -670,12 +672,11 @@ nonisolated struct ItemRenderer: Sendable {
         let actions = MessageActions(itemId: a.id, role: .answer, text: a.text)
         actions.canRetry = (versions || build) && a.outbound == nil
         actions.canFork = (versions || build) && a.outbound == nil
-        var meta: [String] = []
-        if let model = a.model { meta.append(Self.modelName(model)) }
-        if let u = a.usage, u.costUsd > 0 { meta.append(u.costUsd < 0.01 ? String(format: "$%.4f", u.costUsd) : String(format: "$%.2f", u.costUsd)) }
-        actions.meta = meta.joined(separator: " · ")
+        // The model's name beside the buttons; what it cost and the tokens only in its tooltip.
+        actions.meta = a.model.map(Self.modelName) ?? ""
         var help: [String] = []
         if let model = a.model { help.append(model) }
+        if let u = a.usage, u.costUsd > 0 { help.append(u.costUsd < 0.01 ? String(format: "$%.4f", u.costUsd) : String(format: "$%.2f", u.costUsd)) }
         if let u = a.usage { help.append("\(Int(u.inputTokens)) in · \(Int(u.outputTokens)) out · \(Int(u.cacheReadTokens)) cached tokens") }
         actions.metaHelp = help.joined(separator: "\n")
         return actionsLine(actions, spacing: 18)
@@ -731,6 +732,10 @@ nonisolated struct ItemRenderer: Sendable {
             }
             return out
         case .code(let language, let code, _):
+            // A table drawn with spaces (a model's comparison in a code block) reads better as a table.
+            if language == nil || ["text", "txt", "plaintext", "markdown", "md"].contains(language!.lowercased()), let table = TableContent.spaced(code) {
+                return attachmentParagraph(TableAttachment(table: table))
+            }
             let m = NSMutableAttributedString()
             if let language {
                 m.append(NSAttributedString(string: language + lineSeparator, attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: DS.fg3]))
@@ -742,11 +747,15 @@ nonisolated struct ItemRenderer: Sendable {
             }
             return card(m, .code, lineHeight: 1.25)
         case .table(let header, _, let rows):
-            let widths = header.indices.map { c in ([header] + rows).map { $0.indices.contains(c) ? $0[c].count : 0 }.max() ?? 0 }
-            func row(_ cells: [String]) -> String { cells.enumerated().map { $1.padding(toLength: widths[$0], withPad: " ", startingAt: 0) }.joined(separator: "   ") }
-            let text = NSMutableAttributedString(string: row(header), attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .medium), .foregroundColor: DS.fg3])
-            for r in rows { text.append(NSAttributedString(string: lineSeparator + row(r), attributes: [.font: mono, .foregroundColor: DS.fg])) }
-            return card(text, .table, lineHeight: 1.35)
+            if compact {
+                // Quick Chat's narrow panel keeps the plain, monospaced form.
+                let widths = header.indices.map { c in ([header] + rows).map { $0.indices.contains(c) ? $0[c].count : 0 }.max() ?? 0 }
+                func row(_ cells: [String]) -> String { cells.enumerated().map { $1.padding(toLength: widths[$0], withPad: " ", startingAt: 0) }.joined(separator: "   ") }
+                let text = NSMutableAttributedString(string: row(header), attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .medium), .foregroundColor: DS.fg3])
+                for r in rows { text.append(NSAttributedString(string: lineSeparator + row(r), attributes: [.font: mono, .foregroundColor: DS.fg])) }
+                return card(text, .table, lineHeight: 1.35)
+            }
+            return attachmentParagraph(TableAttachment(table: TableContent(header: header, rows: rows)))
         case .rule:
             return line(NSAttributedString(string: " ", attributes: [.font: small, .strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: DS.line]), paragraph())
         }

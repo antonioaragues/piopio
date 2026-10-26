@@ -23,6 +23,7 @@ import type { Settings } from "./settings.js";
 import type { ChatMcp } from "./tools/mcp-chat.js";
 import type { ChatResources } from "./tools/chat-resources.js";
 import { AgentRuntime, type AgentOpenOptions } from "./runtimes/agent.js";
+import { writingExtension } from "./tools/writing.js";
 import type { AgentFiles } from "./agent-files.js";
 import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
@@ -825,10 +826,14 @@ export class Sessions {
 	}
 
 	/** About me in an agent, when Settings › Chat shares it with agents. */
+	/** No em dashes, tables as Markdown tables (tools/writing.ts), in chats, notebooks and agents. */
+	private writing?: Extension;
+
 	private agentExtras(): Extension[] {
 		const s = this.chat?.settings.get().aboutMe;
 		const aboutMe = s?.enabled && s.inAgents ? this.aboutMeFor("agent") : undefined;
-		return aboutMe ? [aboutMe] : [];
+		this.writing ??= writingExtension() as unknown as Extension;
+		return aboutMe ? [aboutMe, this.writing] : [this.writing];
 	}
 
 	private chatExtras(kind: "thread" | "space"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {
@@ -836,7 +841,8 @@ export class Sessions {
 		const aboutMe = this.aboutMeFor(kind)!;
 		const resources = this.chat.resources;
 		this.skillsExtension ??= resources.extension() as unknown as Extension;
-		return { extensions: [aboutMe, this.skillsExtension], mcp: this.chat.mcp, expand: (text) => resources.expand(text) };
+		this.writing ??= writingExtension() as unknown as Extension;
+		return { extensions: [aboutMe, this.skillsExtension, this.writing], mcp: this.chat.mcp, expand: (text) => resources.expand(text) };
 	}
 
 	/** `/commands` of a Thread or Space: prompt templates and skills from pi's folder and packages. */
