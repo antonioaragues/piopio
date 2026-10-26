@@ -23,7 +23,7 @@ type AgentState = ProactiveState & SafetyState & PeerState & {
 	recalled: Record<string, string>;
 };
 
-export const AgentStateDoc = defineDoc<AgentState>({ kind: "piopio.agent-state", version: 1, scope: "session", initial: () => ({ people: {}, recalled: {} }) });
+export const AgentStateDoc = defineDoc<AgentState>({ kind: "piopio.agent-state", version: 1, scope: "session", initial: () => ({ people: {}, recalled: {} }), checkpointWhen: () => false });
 
 export type Partition = "owner" | "shared" | `contacts/${string}`;
 

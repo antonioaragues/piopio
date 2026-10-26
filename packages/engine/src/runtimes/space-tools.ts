@@ -29,7 +29,7 @@ export type Route = { decision: "route" | "create"; topicId: string; topicTitle:
 export type SpaceState = { topics: TopicRecord[]; hints: Hint[]; reroutes: Record<string, Route> };
 
 /** The Space's topics, routing hints and moved messages (`piopio.space`). */
-export const SpaceDoc = defineDoc<SpaceState>({ kind: "piopio.space", version: 1, scope: "session", initial: () => ({ topics: [], hints: [], reroutes: {} }) });
+export const SpaceDoc = defineDoc<SpaceState>({ kind: "piopio.space", version: 1, scope: "session", initial: () => ({ topics: [], hints: [], reroutes: {} }), checkpointWhen: () => false });
 
 /** Tools whose cards the views turn into routing and memory cards. */
 export const ROUTE_TOOLS = new Set(["route_to_topic", "create_topic"]);

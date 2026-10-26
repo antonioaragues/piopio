@@ -103,8 +103,8 @@ export class Proactivity {
 						if (computed === undefined) return runtime.commit(() => ({ status: "terminal", outcome: { status: "completed", result: null } }), context);
 						return runtime.commit(() => ({ status: "running", checkpoint: { phase: "wait", next: computed } }), context);
 					}
-					await runtime.sleep(next, context);
-					await runtime.commit(() => ({ status: "running", checkpoint: { phase: "fire", at: next } }), context);
+					// A durable sleep (pi-durable 1.4): no invocation held, survives restarts, resumes at "fire".
+					return runtime.sleepUntil(next, { phase: "fire", at: next }, context);
 				},
 				fire: async (task, runtime, context) => {
 					const at = task.state.checkpoint.at;
@@ -120,7 +120,7 @@ export class Proactivity {
 			abort: async (_task, runtime, context) => runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), context),
 		});
 
-		this.outboxTask = defineTask<Record<string, never>, { phase: "wait" }, null>({
+		this.outboxTask = defineTask<Record<string, never>, { phase: "wait" } | { phase: "flush" }, null>({
 			name: "piopio.outbox",
 			version: 1,
 			initial: () => ({ phase: "wait" }),
@@ -129,7 +129,9 @@ export class Proactivity {
 					const state = await self.host.read();
 					const pending = state.outbox ?? [];
 					if (!pending.length) return runtime.commit(() => ({ status: "terminal", outcome: { status: "completed", result: null } }), context);
-					await runtime.sleep(Math.min(...pending.map((o) => o.notBefore)), context);
+					return runtime.sleepUntil(Math.min(...pending.map((o) => o.notBefore)), { phase: "flush" }, context);
+				},
+				flush: async (_task, runtime, context) => {
 					await self.flush();
 					await runtime.commit(() => ({ status: "running", checkpoint: { phase: "wait" } }), context);
 				},
@@ -228,7 +230,7 @@ export class Proactivity {
 	private async liveTasks(kind: string) {
 		const { harness, context } = this.host;
 		const out = [];
-		for (const status of ["pending", "running", "waiting"] as const) {
+		for (const status of ["pending", "running", "waiting", "sleeping"] as const) {
 			out.push(...(await harness.commit(async (tx) => (await tx.scanTasks({ kind, status }, 500)).items, context)));
 		}
 		return out;

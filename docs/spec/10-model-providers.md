@@ -203,3 +203,15 @@ Built from the design handoff in [docs/design/models](../design/models/IMPLEMENT
 - https://pi.dev/docs/latest/rpc-commands
 - https://pi.dev/docs/latest/custom-provider
 - https://pi.dev/changelog/releases/0.80.8
+
+## 13. OpenRouter models newer than pi (2026-10-26)
+- **Why a model can be missing:** pi ships OpenRouter's models as a list fixed at its release (`pi-ai/providers/data/openrouter.json`), and its refresh only narrows that list to what your key may use. A model OpenRouter adds later never shows. Example: `deepseek/deepseek-v4.1-flash-1017` (released 17 October) wasn't in pi 1.3.0.
+- **The upgrade:** pi moved to 1.4.0, which lists it. The migration:
+  - durable sleeps (`sleepUntil`) for schedules and the outbox, with sleeping tasks counted as live;
+  - `checkpointWhen` on the three session documents;
+  - the Cloudflare Agents SDK moved to 0.30.1, so only one pi version is in the cloud bundle.
+- **No more waiting for pi:** `packages/engine/src/openrouter-live.ts` reads OpenRouter's public model list (cached six hours in `openrouter-models.json`). It adds the chat models with tool calling that pi's catalog lacks:
+  - **From OpenRouter:** prices, context and image input.
+  - **From the catalog:** reasoning levels and compatibility flags, taken from the model of the same maker with the closest id.
+  - **When:** the first model list waits for it, and Refresh in the picker forces it; otherwise a stale list updates in the background.
+- **Checked on 2026-10-26:** five models on top of pi 1.4.0 (`openai/gpt-6.1-terra`, `moonshotai/kimi-k3.1-pro`, `minimax/minimax-m3.1-flash`, …). A real request through pi's runtime to `minimax/minimax-m3.1-flash` answered.

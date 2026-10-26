@@ -10,7 +10,7 @@ export type Revision = { id: string; at: string; by: MemoryAuthor; summary: stri
 export type Proposal = { id: string; at: string; topicId: string; title: string; added: string[]; removed: string[]; reason: string; status: "pending" | "saved" | "dismissed"; revisionId?: string };
 export type MemoryState = { text: string; revisions: Revision[]; proposals: Record<string, Proposal> };
 
-export const MemoryDoc = defineDoc<MemoryState>({ kind: "piopio.space-memory", version: 1, scope: "session", initial: () => ({ text: "", revisions: [], proposals: {} }) });
+export const MemoryDoc = defineDoc<MemoryState>({ kind: "piopio.space-memory", version: 1, scope: "session", initial: () => ({ text: "", revisions: [], proposals: {} }), checkpointWhen: () => false });
 
 export const MAX_REVISIONS = 40;
 const MAX_MEMORY_CHARS = 20_000;

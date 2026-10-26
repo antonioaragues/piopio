@@ -7,13 +7,14 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Model, type Api } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Model, type Api, type Provider } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { ModelInfo, ModelRef, ProviderInfo } from "@piopio/protocol";
 import { credentialSecret, KeychainCredentialStore } from "./credentials.js";
 import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, type EndpointFormat, Endpoints, isEmbedding, isLocal } from "./endpoints.js";
 import { billingLabel, connectMethods, FEATURED, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, UTILITY_MODEL, verifyKey } from "./providers.js";
 import type { SecretBroker } from "./secrets.js";
+import { OpenRouterLive } from "./openrouter-live.js";
 
 export const DEFAULT_MODEL: ModelRef = { provider: "openrouter", id: "anthropic/claude-haiku-5.5" };
 
@@ -48,12 +49,40 @@ export class ModelHub {
 		this.starting ??= ModelRuntime.create({ credentials: this.credentials, modelsPath: null, refreshOnCreate: false }).then((rt) => {
 			const openai = rt.getProvider("openai");
 			if (openai?.auth.apiKey) rt.registerNativeProvider(openaiApiAlias(openai));
+			// OpenRouter models newer than pi's catalog, from the last list fetched (openrouter-live.ts).
+			const openrouter = rt.getProvider("openrouter");
+			if (openrouter && !this.faux) {
+				this.openrouterBase = openrouter;
+				this.live.recompute(openrouter.getModels());
+				rt.registerNativeProvider(this.live.wrap(openrouter));
+			}
 			if (this.faux) rt.registerNativeProvider(this.faux.provider);
 			for (const e of this.endpoints.list()) rt.registerProvider(e.id, endpointConfig(e) as never);
 			this.runtime = rt;
 			return rt;
 		});
 		return this.starting;
+	}
+
+	/** pi's own OpenRouter provider, before the live models were added to it. */
+	private openrouterBase?: Provider;
+	private liveCatalog?: OpenRouterLive;
+	private get live(): OpenRouterLive {
+		return (this.liveCatalog ??= new OpenRouterLive(this.options.home ? join(this.options.home, "openrouter-models.json") : undefined));
+	}
+
+	/**
+	 * Adds OpenRouter models that pi's catalog doesn't have yet. The first time, and when the app asks to refresh, it
+	 * waits for OpenRouter's list; otherwise a list older than six hours is fetched in the background.
+	 */
+	private async updateLive(rt: ModelRuntime, force: boolean): Promise<void> {
+		const base = this.openrouterBase;
+		if (!base) return;
+		const apply = (changed: boolean) => {
+			if (changed) rt.registerNativeProvider(this.live.wrap(base));
+		};
+		const update = this.live.update(base.getModels(), { force }).then(apply);
+		if (force || this.live.models.length === 0) await update;
 	}
 
 	/** The shared runtime (pi-ai `Models`). The engine awaits `ready()` before serving, so it's always there. */
@@ -91,6 +120,7 @@ export class ModelHub {
 		const rt = await this.ready();
 		const ids = await this.connected();
 		if (refresh && ids.has("openrouter")) await rt.refresh({ providers: ["openrouter"] }).catch(() => undefined);
+		if (ids.has("openrouter")) await this.updateLive(rt, refresh);
 		const out: ModelInfo[] = [];
 		if (this.faux) out.push(...rt.getModels("faux").map((m) => toInfo(m, "Faux", undefined)));
 		for (const id of ids) {
