@@ -48,7 +48,7 @@ nonisolated struct ItemRenderer: Sendable {
             if let speaker = a.speaker { out.append(speakerLine(speaker)) }
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: Self.thought(a.thinkingMs), detail: "", body: thinking))) }
-            if let o = a.outbound { out.append(note(o.from.hasPrefix("run_") ? "Sent on its own, from an automatic run" : "Sent on its own", dot: DS.accent)) }
+            if let o = a.outbound { out.append(note(o.from.hasPrefix("run_") ? "Sent on its own, from an automatic run" : "Sent on its own")) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
             if a.status != .streaming, !compact, !midTurn.contains(a.id) { out.append(answerFooter(a)) }
@@ -61,7 +61,7 @@ nonisolated struct ItemRenderer: Sendable {
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root)))
         case .system(let s):
             if s.level == .error { return errorCard(title: s.text, safe: "Nothing was lost.", actions: []) }
-            return note(s.text, dot: s.level == .warn ? DS.amber : DS.accent)
+            return note(s.text)
         case .compaction:
             return note("Context compacted: older messages were summarized", dot: DS.fg3)
         case .checkpoint:
@@ -124,8 +124,8 @@ nonisolated struct ItemRenderer: Sendable {
     /// How a debate ended (agreed, no agreement, stopped), what's still open, the final draft, and its actions.
     private func debateResult(_ d: DebateItem) -> NSAttributedString {
         let (mark, color): (String, NSColor) = switch d.status {
-        case .agreed?: ("✓", DS.green)
-        case .noAgreement?: ("≠", DS.amber)
+        case .agreed?: ("✓", DS.fg2)
+        case .noAgreement?: ("≠", DS.fg2)
         default: ("■", DS.fg3)
         }
         let m = NSMutableAttributedString(string: "\(mark)  ", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .bold), .foregroundColor: color])
@@ -166,24 +166,16 @@ nonisolated struct ItemRenderer: Sendable {
     /// Once answered, one line says how.
     private func approvalCard(_ a: ApprovalItem) -> NSAttributedString {
         let m = NSMutableAttributedString()
-        let (dot, state): (NSColor, String) = switch a.status {
-        case .pending: (DS.amber, "Needs your approval")
-        case .approved: (DS.green, a.editedArgs == nil ? "Approved" : "Approved with your changes")
-        case .denied: (DS.red, a.reason.map { "Declined: \($0)" } ?? "Declined")
-        case .expired: (DS.fg3, "No answer in 24 hours: not done")
-        case .cancelled: (DS.fg3, "Cancelled")
+        let state: String = switch a.status {
+        case .pending: ""
+        case .approved: a.editedArgs == nil ? "Allowed" : "Allowed with your changes"
+        case .denied: a.reason.map { "Denied (\($0))" } ?? "Denied"
+        case .expired: "No answer in 24 hours, not done"
+        case .cancelled: "Cancelled"
         }
-        if a.status != .pending {
-            m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5]))
-            m.append(NSAttributedString(string: "\(state) · \(a.title)", attributes: [.font: small, .foregroundColor: DS.fg2]))
-            let p = paragraph(spacing: 14, before: 6, indent: 12)
-            let out = NSMutableAttributedString(attributedString: line(m, p))
-            out.addAttribute(.piopioCard, value: CardStyle.note.rawValue, range: NSRange(location: 0, length: out.length))
-            return out
-        }
-        m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: dot, .baselineOffset: 1]))
-        m.append(NSAttributedString(string: state, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
-        m.append(NSAttributedString(string: lineSeparator + a.title, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
+        if a.status != .pending { return note("\(state) · \(a.title)") }
+        m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: DS.accent, .baselineOffset: 1.5]))
+        m.append(NSAttributedString(string: a.title.hasSuffix("?") ? a.title : a.title + "?", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
         if !compact, a.source == "connector" {
             // A connected app's change in a chat (docs/spec/12-connectors): Deny / Allow, and "don't ask again" for plain writes.
             m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
@@ -216,7 +208,7 @@ nonisolated struct ItemRenderer: Sendable {
             switch undo.status {
             case .available: m.append(NSAttributedString(string: "Undo", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: TranscriptAction.undoChange(undoId: undo.id).url, .toolTip: "Reverse this change (for 24 hours)"]))
             case .undone: m.append(NSAttributedString(string: "Undone", attributes: [.font: small, .foregroundColor: DS.fg3]))
-            case .failed: m.append(NSAttributedString(string: "Couldn't undo", attributes: [.font: small, .foregroundColor: DS.red]))
+            case .failed: m.append(NSAttributedString(string: "Couldn't undo", attributes: [.font: small, .foregroundColor: DS.fg3]))
             case .expired: break
             }
         }
@@ -237,8 +229,8 @@ nonisolated struct ItemRenderer: Sendable {
         }
         let (dot, state): (NSColor, String?) = switch m.status {
         case .waiting?: (DS.accent, "waiting…")
-        case .failed?: (DS.red, "not sent")
-        case .noReply?: (DS.amber, "no answer yet")
+        case .failed?: (DS.fg2, "not sent")
+        case .noReply?: (DS.fg3, "no answer yet")
         default: (DS.fg3, nil)
         }
         let out = NSMutableAttributedString(string: "⇄  ", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: dot])
@@ -251,7 +243,7 @@ nonisolated struct ItemRenderer: Sendable {
         out.append(NSAttributedString(string: lineSeparator + m.text, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
         if let reply = m.reply, !reply.isEmpty {
             let who = m.status == .failed ? "" : "\(m.toAgent.name): "
-            out.append(NSAttributedString(string: lineSeparator + who + reply, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: m.status == .failed ? DS.red : DS.fg]))
+            out.append(NSAttributedString(string: lineSeparator + who + reply, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: m.status == .failed ? DS.fg2 : DS.fg]))
         }
         return card(out, .link, lineHeight: 1.5)
     }
@@ -419,16 +411,16 @@ nonisolated struct ItemRenderer: Sendable {
         let (status, dot): (String, NSColor) = switch r.status {
         case .thinking: ("Thinking…", DS.accent)
         case .replying: ("Replying…", DS.accent)
-        case .replied: (r.message.isEmpty ? "Created" : "Replied", DS.green)
-        case .needsYou: ("Needs you", DS.amber)
-        case .failed: ("Failed", DS.red)
+        case .replied: (r.message.isEmpty ? "Created" : "Replied", DS.fg3)
+        case .needsYou: ("Needs you", DS.accent)
+        case .failed: ("Failed", DS.fg2)
         }
         let m = NSMutableAttributedString()
         m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5]))
         m.append(NSAttributedString(string: r.topicTitle, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
         let kind = r.decision == .create ? "new topic" : "sent here"
         m.append(NSAttributedString(string: "  ·  \(kind)  ·  ", attributes: [.font: small, .foregroundColor: DS.fg3, .toolTip: r.reason]))
-        m.append(NSAttributedString(string: status, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: r.status == .needsYou ? DS.amber : r.status == .failed ? DS.red : DS.fg3]))
+        m.append(NSAttributedString(string: status, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: r.status == .needsYou ? DS.accent : r.status == .failed ? DS.fg2 : DS.fg3]))
         if !compact, !r.topicId.isEmpty {
             let link: (String, TranscriptAction) -> NSAttributedString = { title, action in
                 NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: action.url])
@@ -488,35 +480,32 @@ nonisolated struct ItemRenderer: Sendable {
             let auth = a.errorKind == .auth
             var actions: [(String, TranscriptAction, PillStyle)] = []
             if auth {
-                actions = [("Open Settings", .openSettings, .primary), ("Retry now", .regenerate(itemId: a.id), .secondary)]
+                actions = [("Open Settings", .openSettings, .primary), ("Retry", .regenerate(itemId: a.id), .primary)]
             } else {
-                actions = [("Retry now", .regenerate(itemId: a.id), .primary), ("Use another model", .chooseModel, .secondary)]
+                actions = [("Retry", .regenerate(itemId: a.id), .primary), ("Use another model", .chooseModel, .primary)]
             }
             if a.errorDetail != nil { actions.append(("Details", .showErrorDetail(itemId: a.id), .secondary)) }
             let safe = auth ? "Your message is saved. Update the provider key, then retry." :
                 a.errorKind == .context ? "Nothing was lost. Start a new thread, or pick a model with a larger context." :
-                "Nothing was lost. Your message is saved."
+                "Nothing was changed."
             return errorCard(title: a.error ?? "The model request failed.", safe: safe, actions: actions)
         case .aborted:
-            return note("Stopped", dot: DS.fg3)
+            return note("Stopped")
         case .done, .streaming:
             return NSAttributedString()
         }
     }
 
+    /// An interruption (docs/design/grey 11h): what happened, then what's safe and the next steps as links, in grey.
     private func errorCard(title: String, safe: String, actions: [(String, TranscriptAction, PillStyle)]) -> NSAttributedString {
         let m = NSMutableAttributedString()
-        m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: DS.red, .baselineOffset: 1]))
-        m.append(NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
-        m.append(NSAttributedString(string: lineSeparator + safe, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
-        if !actions.isEmpty {
-            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-            for (i, (title, action, style)) in actions.enumerated() {
-                if i > 0 { m.append(NSAttributedString(string: "  ", attributes: [.font: small])) }
-                m.append(pill(title, action, style))
-            }
+        m.append(NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13.5), .foregroundColor: DS.fg]))
+        m.append(NSAttributedString(string: lineSeparator + safe, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
+        for (title, action, style) in actions {
+            m.append(NSAttributedString(string: " · ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
+            m.append(NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: style == .primary ? DS.accent : DS.fg2, .link: action.url]))
         }
-        return card(m, .errorCard, lineHeight: 1.75)
+        return card(m, .errorCard, lineHeight: 1.5)
     }
 
     /// A plan in the transcript (docs/spec/09 P1–P3): its details once the engine has them, else its arguments.
@@ -551,7 +540,7 @@ nonisolated struct ItemRenderer: Sendable {
     /// do; while it waits, the question card above the composer takes the answer.
     private func questionCard(_ t: ToolItem) -> NSAttributedString {
         let question = t.args?["question"]?.stringValue ?? ""
-        if t.status == .running || t.status == .pendingApproval { return note("Waiting for your answer: \(question)", dot: DS.amber) }
+        if t.status == .running || t.status == .pendingApproval { return note("Waiting for your answer: \(question)", dot: DS.accent) }
         let prefix = "The user answered: "
         let answer = t.details?["answer"]?.stringValue ?? t.output.flatMap { $0.hasPrefix(prefix) ? String($0.dropFirst(prefix.count)) : nil }
         let m = NSMutableAttributedString(string: "The agent asked", attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .semibold), .foregroundColor: DS.fg3])
@@ -565,10 +554,12 @@ nonisolated struct ItemRenderer: Sendable {
         return card(m, .link, lineHeight: 1.5)
     }
 
-    private func note(_ text: String, dot: NSColor) -> NSAttributedString {
-        let m = NSMutableAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5])
-        m.append(NSAttributedString(string: text, attributes: [.font: small, .foregroundColor: DS.fg2]))
-        let p = paragraph(spacing: 14, before: 6, indent: 12)
+    /// A grey line in the transcript (docs/design/grey 11h). Only something waiting on you gets the blue dot.
+    private func note(_ text: String, dot: NSColor? = nil) -> NSAttributedString {
+        let m = NSMutableAttributedString()
+        if let dot { m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: dot, .baselineOffset: 1.5])) }
+        m.append(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
+        let p = paragraph(spacing: 14, before: 6)
         let out = NSMutableAttributedString(attributedString: line(m, p))
         out.addAttribute(.piopioCard, value: CardStyle.note.rawValue, range: NSRange(location: 0, length: out.length))
         return out
@@ -731,7 +722,7 @@ nonisolated struct ItemRenderer: Sendable {
     func pill(_ title: String, _ action: TranscriptAction, _ style: PillStyle) -> NSAttributedString {
         NSAttributedString(string: "\u{2009}\u{2009}\u{2009}\(title)\u{2009}\u{2009}\u{2009}", attributes: [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-            .foregroundColor: style == .primary ? NSColor.white : DS.fg,
+            .foregroundColor: style == .primary ? DS.invfg : DS.fg2,
             .link: action.url,
             .piopioPill: style.rawValue,
         ])

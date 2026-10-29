@@ -10,6 +10,7 @@ struct ThreadView: View {
     let thread: ThreadModel
     let summary: SessionSummary
     @AppStorage("debate.panel") private var showPanel = true
+    @State private var showCosts = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -73,6 +74,8 @@ struct ThreadView: View {
                 Button("Export as Markdown…") { Task { await thread.export(.markdown) } }
                 Button("Export as HTML…") { Task { await thread.export(.html) } }
                 Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
+                Divider()
+                Button("Cost…") { showCosts = true }
             } label: {
                 Image(systemName: "ellipsis")
             }
@@ -80,7 +83,8 @@ struct ThreadView: View {
             .buttonStyle(IconButtonStyle())
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Copy or export this chat")
+            .help("Copy, export, or see what this chat cost")
+            .popover(isPresented: $showCosts, arrowEdge: .bottom) { CostDetails(engine: engine, thread: thread) }
         }
     }
 

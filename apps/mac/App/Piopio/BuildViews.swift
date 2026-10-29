@@ -498,84 +498,69 @@ struct PromptCard: View {
 
     /// Plans are read in the transcript (docs/spec/09 P1); above the composer, only a bar with the answers and ⌘↩.
     private var planBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Circle().fill(Color.dsAmber).frame(width: 7, height: 7)
-                Text("Plan ready").font(.system(size: 13, weight: .semibold))
-                Text("· " + prompt.title.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+                Text("Build this plan?").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
+                Text(prompt.title.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 Spacer(minLength: 8)
-                if !denying {
-                    Button("Keep planning…") { denying = true }.buttonStyle(PillStyle(compact: true))
-                    Button("Edit…") { session.editingPlan = prompt }.buttonStyle(PillStyle(compact: true))
+            }
+            if denying {
+                denyField(placeholder: "What should change in the plan?", send: "Send")
+            } else {
+                HStack(spacing: 14) {
+                    Button("Keep planning") { denying = true }.buttonStyle(PillStyle(compact: true))
+                    Button("Edit") { session.editingPlan = prompt }.buttonStyle(PillStyle(compact: true))
+                    Spacer()
                     Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Approve and build ⌘↩" : "Approve and build") }
                         .buttonStyle(PillStyle(kind: .primary, compact: true))
                         .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
                 }
             }
-            if denying {
-                HStack(spacing: 8) {
-                    TextField("What should change in the plan?", text: $text)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12.5))
-                        .focused($focused)
-                        .onSubmit { answer(PromptResponse(decision: .deny, text: note)) }
-                        .onAppear { focused = true }
-                    Button("Cancel") { denying = false; text = "" }.buttonStyle(PillStyle(compact: true))
-                    Button("Send") { answer(PromptResponse(decision: .deny, text: note)) }.buttonStyle(PillStyle(kind: .strong, compact: true))
-                }
-            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsAccentLine, lineWidth: 1))
+        .askCard()
         .onChange(of: session.revisingPlan) { _, id in
             if id == prompt.id { denying = true; session.revisingPlan = nil }
         }
     }
 
+    /// Approvals and questions (docs/design/grey 11c, 11d): a blue dot and the question, its context on the right,
+    /// what will happen, then the secondary actions as text and one black answer on the right.
     private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
-                Circle().fill(Color.dsAmber).frame(width: 7, height: 7)
-                Text(heading).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
-                Spacer()
-                if let tool = prompt.tool { Text(tool).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
-            }
-            if prompt.kind != .approval {
-                Text(prompt.title).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Circle().fill(Color.accentColor).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                Text(heading).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if let tool = prompt.tool { Text(tool).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
             }
             if let message = prompt.message {
-                Text(message).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+                Text(message).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
             }
             if let detail = prompt.detail, !detail.isEmpty {
                 ScrollView {
-                    Text(detail).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg).textSelection(.enabled)
+                    Text(detail).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Color.dsFg).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 90)
+                .frame(maxHeight: 120)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
             }
             if let reason = prompt.reason {
-                Text("Always asks: \(reason.prefix(1).lowercased() + reason.dropFirst())").font(.system(size: 12)).foregroundStyle(Color.dsAmber)
+                Text("Always asks: \(reason.prefix(1).lowercased() + reason.dropFirst())").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
             actions
         }
-        .padding(14)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsAccentLine, lineWidth: 1))
-        .background(RoundedRectangle(cornerRadius: DS.Radius.card + 4).fill(Color.dsAccentSoft).padding(-4))
+        .askCard()
     }
 
+    /// The title phrased as a question: "Run this command?", "Edit codec.ts?", or what the agent asks.
     private var heading: String {
         switch prompt.kind {
-        case .approval: prompt.title == "Run a command" || prompt.title.isEmpty ? "Approval needed" : "Approval needed · \(prompt.title.prefix(1).lowercased() + prompt.title.dropFirst())"
-        case .question: "The agent asks"
-        case .confirm, .select, .input: "An extension asks"
-        case .plan: "Plan ready"
+        case .approval:
+            if prompt.title == "Run a command" || prompt.title.isEmpty { return "Run this command?" }
+            return prompt.title.hasSuffix("?") ? prompt.title : prompt.title + "?"
+        case .question, .confirm, .select, .input: return prompt.title
+        case .plan: return "Build this plan?"
         }
     }
 
@@ -584,10 +569,10 @@ struct PromptCard: View {
         case .approval: approvalActions
         case .question, .select: choiceActions
         case .confirm:
-            HStack {
+            HStack(spacing: 14) {
+                Button("Cancel") { answer(PromptResponse(confirmed: false)) }.buttonStyle(PillStyle(compact: true))
                 Spacer()
-                Button("Cancel") { answer(PromptResponse(confirmed: false)) }.buttonStyle(PillStyle())
-                Button("Confirm") { answer(PromptResponse(confirmed: true)) }.buttonStyle(PillStyle(kind: .primary))
+                Button(primary ? "Confirm ⌘↩" : "Confirm") { answer(PromptResponse(confirmed: true)) }.buttonStyle(PillStyle(kind: .primary, compact: true))
                     .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
             }
         case .input: freeAnswer(placeholder: prompt.placeholder ?? "Your answer")
@@ -597,50 +582,63 @@ struct PromptCard: View {
 
     @ViewBuilder private var approvalActions: some View {
         if denying {
-            HStack(spacing: 8) {
-                TextField("Tell the agent why, or what to do instead (optional)", text: $text)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12.5))
-                    .focused($focused)
-                    .onSubmit { answer(PromptResponse(decision: .deny, text: note)) }
-                    .onAppear { focused = true }
-                Button("Cancel") { denying = false; text = "" }.buttonStyle(PillStyle())
-                Button("Deny") { answer(PromptResponse(decision: .deny, text: note)) }.buttonStyle(PillStyle(kind: .strong))
-            }
+            denyField(placeholder: "Tell the agent why, or what to do instead (optional)", send: "Deny")
         } else {
-            HStack(spacing: 8) {
-                Button("Deny") { denying = true }.buttonStyle(PillStyle())
-                Spacer()
+            HStack(spacing: 14) {
+                Button("Deny") { denying = true }.buttonStyle(PillStyle(compact: true))
                 if let rule = prompt.rule {
                     Button(Self.alwaysLabel(rule)) { answer(PromptResponse(decision: .always)) }
-                        .buttonStyle(PillStyle())
+                        .buttonStyle(PillStyle(compact: true))
                         .help("Adds a rule to this project (Settings › Approvals)")
                 }
-                Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Allow once ⌘↩" : "Allow once") }
-                    .buttonStyle(PillStyle(kind: .primary))
+                Spacer()
+                Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Allow ⌘↩" : "Allow") }
+                    .buttonStyle(PillStyle(kind: .primary, compact: true))
                     .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
             }
         }
     }
 
-    @ViewBuilder private var choiceActions: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let options = prompt.options, !options.isEmpty {
-                FlowRow(options) { option in
-                    Button(option) { answer(PromptResponse(choice: option)) }.buttonStyle(OptionStyle())
-                }
-            }
-            if prompt.kind == .question { freeAnswer(placeholder: prompt.options?.isEmpty == false ? "Or answer in your own words" : "Your answer") }
+    private func denyField(placeholder: String, send label: String) -> some View {
+        HStack(spacing: 10) {
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .focused($focused)
+                .onSubmit { answer(PromptResponse(decision: .deny, text: note)) }
+                .onAppear { focused = true }
+            Button("Cancel") { denying = false; text = "" }.buttonStyle(PillStyle(compact: true))
+            Button(label) { answer(PromptResponse(decision: .deny, text: note)) }.buttonStyle(PillStyle(kind: .primary, compact: true))
         }
     }
 
+    /// The options as numbered rows, then "Something else…" to answer in your own words.
+    @ViewBuilder private var choiceActions: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array((prompt.options ?? []).enumerated()), id: \.offset) { i, option in
+                Button { answer(PromptResponse(choice: option)) } label: { OptionRow(number: i + 1, text: option) }
+                    .buttonStyle(.plain)
+            }
+            if prompt.kind == .question {
+                HStack(spacing: 10) {
+                    if let count = prompt.options?.count, count > 0 { KeyBadge(text: "\(count + 1)") }
+                    TextField(prompt.options?.isEmpty == false ? "Something else…" : "Your answer", text: $text)
+                        .textFieldStyle(.plain).font(.system(size: 13.5)).onSubmit { send() }
+                    if note != nil { Button("Send") { send() }.buttonStyle(PillStyle(kind: .primary, compact: true)) }
+                }
+                .padding(.horizontal, 6).frame(minHeight: 34)
+            }
+        }
+        .padding(.horizontal, -6)
+    }
+
     private func freeAnswer(placeholder: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             TextField(placeholder, text: $text)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12.5))
+                .textFieldStyle(.plain)
+                .font(.system(size: 13.5))
                 .onSubmit { send() }
-            Button("Send") { send() }.buttonStyle(PillStyle(kind: .primary)).disabled(note == nil)
+            Button("Send") { send() }.buttonStyle(PillStyle(kind: .primary, compact: true)).disabled(note == nil)
         }
     }
 
@@ -660,28 +658,50 @@ struct PromptCard: View {
 
     static func alwaysLabel(_ rule: PendingPrompt.SuggestedRule) -> String {
         switch rule.kind {
-        case .command: "Always for \(rule.pattern)"
-        case .tool: "Always for \(rule.pattern)"
-        case .path: "Always in \(URL(fileURLWithPath: String(rule.pattern.dropLast(3))).lastPathComponent)"
+        case .command: "Always allow \(rule.pattern)"
+        case .tool: "Always allow \(rule.pattern)"
+        case .path: "Allow edits in \(URL(fileURLWithPath: String(rule.pattern.dropLast(3))).lastPathComponent)"
         }
     }
 }
 
-/// A question's answer: a capsule while it fits on one line; a long answer wraps inside a rounded box
-/// no wider than the card instead of running past it.
-private struct OptionStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(minHeight: 28)
-            .foregroundStyle(Color.dsFg)
-            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+/// A question's option: a key badge and the answer, a grey fill on hover.
+private struct OptionRow: View {
+    let number: Int
+    let text: String
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            KeyBadge(text: "\(number)")
+            Text(text).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6).padding(.vertical, 8)
+        .background(hovering ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+    }
+}
+
+/// An 18pt key badge: a number in a hairline square.
+struct KeyBadge: View {
+    let text: String
+    var body: some View {
+        Text(text).font(.system(size: 11)).foregroundStyle(Color.dsFg2)
+            .frame(width: 18, height: 18)
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.dsLine, lineWidth: 1))
+    }
+}
+
+extension View {
+    /// The card for things that need you (approvals, questions): field fill, a 0.5pt hairline, radius 12, 14×16.
+    func askCard() -> some View {
+        self
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
     }
 }
 

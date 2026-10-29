@@ -63,17 +63,16 @@ struct InitialTile: View {
     static func color(for name: String) -> Color { .dsFg3 }
 }
 
-/// Floating glass panel: sidebar, inspector, composer, popovers (radius 14, hairline edge, soft shadow).
+/// A floating surface (menus, the search box, suggestion lists): field fill, a hairline, a soft shadow, radius 12.
 struct GlassPanel: ViewModifier {
     var radius: CGFloat = DS.Radius.panel
     var material: Material = .regularMaterial
 
     func body(content: Content) -> some View {
         content
-            .background(material, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.dsGlassEdge, lineWidth: 0.5))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5).padding(-0.5))
-            .shadow(color: .black.opacity(0.08), radius: 15, y: 8)
+            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.10), radius: 14, y: 6)
     }
 }
 

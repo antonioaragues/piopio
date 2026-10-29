@@ -29,8 +29,8 @@ let lineSeparator = "\u{2028}"
 /// Draws card backgrounds and pills for the paragraphs that carry them.
 final class CardLayoutFragment: NSTextLayoutFragment {
     static let padding: CGFloat = 12
-    static let bubblePadH: CGFloat = 15
-    static let bubblePadV: CGFloat = 10
+    static let bubblePadH: CGFloat = 14
+    static let bubblePadV: CGFloat = 9
     var card: CardStyle = .pills
 
     private var lines: [NSTextLineFragment] { textLineFragments.filter { $0.characterRange.length > 0 } }
@@ -80,25 +80,23 @@ final class CardLayoutFragment: NSTextLayoutFragment {
         context.saveGState()
         switch card {
         case .code:
-            fill(context, rect, DS.chip, radius: DS.Radius.card)
-        case .table, .errorCard, .link:
+            fill(context, rect, DS.bubble, radius: DS.Radius.code)
+        case .table, .link:
+            stroke(context, rect, DS.line, radius: DS.Radius.card)
+        case .errorCard:
+            // docs/design/grey 11h: interruptions are grey lines in the transcript, not boxes.
+            break
+        case .approval:
+            // docs/design/grey 11c: field fill and a hairline, nothing louder.
             fill(context, rect, DS.card, radius: DS.Radius.card)
             stroke(context, rect, DS.line, radius: DS.Radius.card)
-        case .approval:
-            // docs/design 2a: a 1pt accent line with a 4pt soft halo.
-            fill(context, rect.insetBy(dx: -4, dy: -4), DS.accentSoft, radius: DS.Radius.card + 4)
-            fill(context, rect, DS.card, radius: DS.Radius.card)
-            stroke(context, rect, DS.accentLine, radius: DS.Radius.card)
         case .quote:
             context.setFillColor(DS.line.cgColor)
             context.fill(CGRect(x: rect.minX, y: rect.minY, width: 3, height: rect.height))
         case .user:
-            // 18/18/4/18: the corner by the sender is tighter.
-            context.addPath(bubblePath(rect))
-            context.setFillColor(DS.bubble.cgColor)
-            context.fillPath()
+            fill(context, rect, DS.bubble, radius: 12)
         case .note:
-            fill(context, rect, DS.chip, radius: rect.height / 2)
+            break
         case .pills:
             break
         case .divider:
@@ -126,8 +124,8 @@ final class CardLayoutFragment: NSTextLayoutFragment {
                 let b = line.typographicBounds
                 let rect = CGRect(x: b.minX + x0 - 2, y: b.minY + 1, width: x1 - x0 + 4, height: b.height - 2).offsetBy(dx: point.x, dy: point.y)
                 switch style {
-                case .primary: fill(context, rect, DS.accent, radius: rect.height / 2)
-                case .secondary: fill(context, rect, DS.chip, radius: rect.height / 2)
+                case .primary: fill(context, rect.insetBy(dx: 0, dy: -2), DS.inv, radius: 6)
+                case .secondary: break
                 case .file:
                     fill(context, rect, DS.card, radius: 8)
                     stroke(context, rect, DS.line, radius: 8)
@@ -147,26 +145,9 @@ final class CardLayoutFragment: NSTextLayoutFragment {
 
     private func stroke(_ c: CGContext, _ r: CGRect, _ color: NSColor, radius: CGFloat) {
         c.setStrokeColor(color.cgColor)
-        c.setLineWidth(1)
-        c.addPath(CGPath(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), cornerWidth: radius, cornerHeight: radius, transform: nil))
+        c.setLineWidth(0.5)
+        c.addPath(CGPath(roundedRect: r.insetBy(dx: 0.25, dy: 0.25), cornerWidth: radius, cornerHeight: radius, transform: nil))
         c.strokePath()
-    }
-
-    private func bubblePath(_ r: CGRect) -> CGPath {
-        let big: CGFloat = 18, small: CGFloat = 4
-        let p = CGMutablePath()
-        // TextKit's drawing context is flipped: minY is the top.
-        p.move(to: CGPoint(x: r.minX + big, y: r.minY))
-        p.addLine(to: CGPoint(x: r.maxX - big, y: r.minY))
-        p.addArc(tangent1End: CGPoint(x: r.maxX, y: r.minY), tangent2End: CGPoint(x: r.maxX, y: r.minY + big), radius: big)
-        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - small))
-        p.addArc(tangent1End: CGPoint(x: r.maxX, y: r.maxY), tangent2End: CGPoint(x: r.maxX - small, y: r.maxY), radius: small)
-        p.addLine(to: CGPoint(x: r.minX + big, y: r.maxY))
-        p.addArc(tangent1End: CGPoint(x: r.minX, y: r.maxY), tangent2End: CGPoint(x: r.minX, y: r.maxY - big), radius: big)
-        p.addLine(to: CGPoint(x: r.minX, y: r.minY + big))
-        p.addArc(tangent1End: CGPoint(x: r.minX, y: r.minY), tangent2End: CGPoint(x: r.minX + big, y: r.minY), radius: big)
-        p.closeSubpath()
-        return p
     }
 }
 
@@ -430,13 +411,13 @@ struct DisclosureCardView: View {
                     if card.working {
                         ProgressView().controlSize(.mini).scaleEffect(0.85).frame(width: 12)
                     } else if card.waiting {
-                        Circle().fill(Color(nsColor: DS.amber)).frame(width: 6, height: 6)
+                        Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6)
                     }
                     if card.parts.isEmpty {
-                        Text(card.title).foregroundStyle(Color(nsColor: card.waiting ? DS.amber : DS.fg3)).lineLimit(1).truncationMode(.tail)
+                        Text(card.title).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).truncationMode(.tail)
                     } else {
                         ForEach(Array(card.parts.enumerated()), id: \.offset) { i, part in
-                            Text(i == 0 ? part.text : ", " + part.text).foregroundStyle(Color(nsColor: part.warning ? DS.red : DS.fg3)).lineLimit(1).fixedSize()
+                            Text(i == 0 ? part.text : ", " + part.text).foregroundStyle(Color(nsColor: part.warning ? DS.fg2 : DS.fg3)).lineLimit(1).fixedSize()
                             if let chip = part.chip {
                                 Text(chip).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.fg2)).lineLimit(1).truncationMode(.middle)
                                     .padding(.horizontal, 5).frame(height: 20)
@@ -486,8 +467,8 @@ struct DisclosureCardView: View {
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Color(nsColor: DS.fg3))
                         .frame(width: 10)
-                    if card.failed { Circle().fill(Color(nsColor: DS.red)).frame(width: 6, height: 6) }
-                    if card.waiting { Circle().fill(Color(nsColor: DS.amber)).frame(width: 6, height: 6) }
+                    if card.failed { Circle().fill(Color(nsColor: DS.fg3)).frame(width: 6, height: 6) }
+                    if card.waiting { Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6) }
                     Text(card.title).font(.system(size: 12, weight: .medium)).foregroundStyle(Color(nsColor: DS.fg))
                     if !card.detail.isEmpty {
                         Text(card.detail)
@@ -500,7 +481,7 @@ struct DisclosureCardView: View {
                     if card.added > 0 { Text("+\(card.added)").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(nsColor: DS.green)).monospacedDigit() }
                     if card.removed > 0 { Text("−\(card.removed)").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(nsColor: DS.red)).monospacedDigit() }
                     if !card.trailing.isEmpty {
-                        Text(card.trailing).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: card.failed ? DS.red : card.waiting ? DS.amber : DS.fg3)).monospacedDigit()
+                        Text(card.trailing).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: card.failed ? DS.fg2 : DS.fg3)).monospacedDigit()
                     }
                     if let action = card.action {
                         Button(action.title) { card.onAction?(action.action) }
