@@ -9,7 +9,7 @@ struct SettingsView: View {
     @State private var section: Section = Section(demo: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", memory = "Memory", approvals = "Approvals", mcp = "MCP servers", extensions = "Extensions", engines = "This Mac & cloud"
+        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", memory = "Memory", approvals = "Approvals", mcp = "MCP servers", extensions = "Extensions", engines = "This Mac & cloud", data = "Backup & costs"
         var id: String { rawValue }
         init?(demo: String) {
             switch demo {
@@ -18,9 +18,10 @@ struct SettingsView: View {
             default: self.init(rawValue: demo)
             }
         }
-        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .connectors, .chat, .memory, .approvals]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
+        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .connectors, .chat, .memory, .approvals, .data]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
         var icon: (String, Color) {
             switch self {
+            case .data: ("externaldrive.fill", .blue)
             case .general: ("gearshape.fill", .gray)
             case .providers: ("key.fill", .blue)
             case .connectors: ("app.connected.to.app.below.fill", .teal)
@@ -73,6 +74,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     switch section {
+                    case .data: DataPane(engine: engine)
                     case .general: GeneralPane(engine: engine)
                     case .providers: ModelsPane(engine: engine)
                     case .connectors: ConnectorsPane(engine: engine)

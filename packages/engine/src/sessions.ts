@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFi
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, PromptResponse, SessionSummary, SpaceSuggestion, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ContainerRef, DebateConfig, ModelRef, PromptResponse, SessionSummary, SpaceSuggestion, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
@@ -30,15 +30,20 @@ import type { MemoryProviders } from "./memory.js";
 import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
+import { DebateRuntime, validateDebate, type DebateRecord } from "./runtimes/debate.js";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
+import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
+import { SdkEventMapper } from "./timeline/pi-sdk.js";
 import type { SessionEvent } from "@piopio/protocol";
 
 type CatalogEntry = SessionSummary & {
 	thinking?: string;
 	file?: string;
 	sessionFile?: string;
+	/** Original CLI file for recovered history; avoid importing a duplicate after restore. */
+	restoredFromSessionFile?: string;
 	/** The pi session file was seen on disk, so its disappearance means it was deleted. */
 	onDisk?: boolean;
 	branches?: BranchState;
@@ -61,6 +66,8 @@ type CatalogEntry = SessionSummary & {
 	/** Threads: Dismiss on a Space suggestion; and the exchanges a suggestion was already looked for at. */
 	suggestionDismissed?: boolean;
 	suggestChecked?: number[];
+	/** Debate threads (docs/spec/16-debate). */
+	debate?: DebateRecord;
 };
 
 /** At most this many subagents run at once per session (docs/spec/05-build §4). */
@@ -84,6 +91,9 @@ export class Sessions {
 	private open = new Map<string, Promise<Runtime>>();
 	private listeners = new Set<CatalogListener>();
 	readonly search: SearchIndex;
+	private searchReady = new Set<string>();
+	private searchLoads = new Map<string, Promise<void>>();
+	private indexedViews = new WeakSet<Runtime>();
 	readonly checkpoints: CheckpointStore;
 	policy: ApprovalPolicy = { projectFor: () => undefined, modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
 	/** Settings, About me and MCP for Threads and Spaces (set by the engine). */
@@ -133,6 +143,7 @@ export class Sessions {
 	}
 
 	private changed(entry: CatalogEntry): void {
+		this.searchReady.delete(entry.ref.id);
 		for (const l of this.listeners) l({ upserted: [summary(entry)], removed: [] });
 	}
 
@@ -158,31 +169,67 @@ export class Sessions {
 	}
 
 	/** Full-text search across sessions, with the catalog's titles and refs. */
-	find(query: string, limit = 30) {
-		return this.search.search(query, limit).flatMap((hit) => {
-			const entry = this.entries.get(hit.sessionId);
-			return entry ? [{ ref: entry.ref, title: entry.title, ...(hit.itemId ? { itemId: hit.itemId } : {}), kind: hit.kind, snippet: hit.snippet, at: hit.at }] : [];
-		});
+	async find(query: string, limit = 30, kind?: string) {
+		await this.backfillSearch();
+		return this.search.search(query, 5000).flatMap((hit) => {
+			const destination = this.search.destination(hit.sessionId);
+			const entry = destination ?? this.entries.get(hit.sessionId);
+			return entry && this.entries.has(entry.ref.id) && (!kind || entry.ref.kind === kind)
+				? [{ ref: entry.ref, title: entry.title, ...(hit.itemId ? { itemId: hit.itemId } : {}), kind: hit.kind, snippet: hit.snippet, at: hit.at }] : [];
+		}).slice(0, Math.min(100, Math.max(1, limit)));
 	}
 
-	/** Indexes threads that were never indexed (or with an older index version), one at a time. */
+	/** Index all active branches, including notebook topics and agent conversations. */
 	async backfillSearch(): Promise<number> {
 		let count = 0;
 		for (const entry of [...this.entries.values()]) {
-			if (entry.ref.kind !== "thread" || this.search.isIndexed(entry.ref.id) || !this.entries.has(entry.ref.id)) continue;
-			const wasOpen = this.open.has(entry.ref.id);
-			try {
-				const runtime = await this.runtime(entry.ref); // indexes on open
-				if (!wasOpen && this.open.get(entry.ref.id)) {
-					this.open.delete(entry.ref.id);
-					await runtime.close();
-				}
-				count++;
-			} catch {
-				// unreadable session: skip; it is retried on the next start
+			if (this.searchReady.has(entry.ref.id)) continue;
+			let pending = this.searchLoads.get(entry.ref.id);
+			if (!pending) {
+				pending = this.indexContainer(entry);
+				this.searchLoads.set(entry.ref.id, pending);
+				pending.finally(() => this.searchLoads.delete(entry.ref.id)).catch(() => {});
 			}
+			try { await pending; count++; } catch { /* Retry unreadable/missing files on the next search. */ }
 		}
 		return count;
+	}
+
+	private async indexContainer(entry: CatalogEntry): Promise<void> {
+		// Searching unopened Build history must not load project extensions or require a provider key.
+		if (entry.ref.kind === "build" && !this.open.has(entry.ref.id)) {
+			if (!entry.sessionFile || !existsSync(entry.sessionFile)) return;
+			const builder = new TimelineBuilder(entry.ref);
+			const messages = SessionManager.open(entry.sessionFile).buildSessionContext().messages as unknown as PiMessage[];
+			builder.reset(messages, index => SdkEventMapper.idOf(index), false);
+			this.search.setDestination(entry.ref.id, entry.ref, entry.title, entry.updatedAt);
+			this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, builder.snapshot().items);
+			this.searchReady.add(entry.ref.id);
+			return;
+		}
+		const wasOpen = this.open.has(entry.ref.id);
+		const runtime = await this.runtime(entry.ref);
+		const refs: { ref: ContainerRef; title: string }[] = [{ ref: entry.ref, title: entry.title }];
+		if (entry.ref.kind === "space") for (const topic of entry.topics ?? []) refs.push({ ref: { ...entry.ref, conversationId: topic.id }, title: `${entry.title} › ${topic.title}` });
+		if (entry.ref.kind === "agent") {
+			for (const person of await this.agentConversations(entry.ref)) if (person.started && person.role !== "owner") refs.push({ ref: { ...entry.ref, conversationId: person.conversationId }, title: `${entry.title} › ${person.name}` });
+			for (const run of (await this.agentRuns(entry.ref)).runs) refs.push({ ref: { ...entry.ref, conversationId: `run:${run.id}` }, title: `${entry.title} › Run ${run.id}` });
+		}
+		for (const { ref, title } of refs) {
+			const view = ref.conversationId ? await this.runtime(ref) : runtime;
+			const key = ref.conversationId ? `${ref.id}/${ref.conversationId}` : ref.id;
+			this.search.setDestination(key, ref, title, entry.updatedAt);
+			this.search.replaceSession(key, title, entry.updatedAt, view.snapshot().items);
+			if (!this.indexedViews.has(view)) {
+				this.indexedViews.add(view);
+				view.onEvents(events => this.index({ ...entry, ref: { ...ref, id: key }, title }, events));
+			}
+		}
+		if (!wasOpen && entry.ref.kind !== "agent") {
+			this.open.delete(entry.ref.id);
+			await runtime.close();
+		}
+		this.searchReady.add(entry.ref.id);
 	}
 
 	/** Keeps the search index in step with what the session shows. */
@@ -279,6 +326,7 @@ export class Sessions {
 			if (entry.agentFolder) this.agentHost?.files.trash(entry.agentFolder, this.piOverrides.trashDir);
 			this.definitions.delete(entry.ref.id);
 		}
+		this.search.deleteContainer(ref.id);
 		this.search.deleteSession(ref.id);
 		this.entries.delete(ref.id);
 		this.save();
@@ -291,8 +339,11 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build" | "space"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; profile?: "build" | "chat" }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build" | "space"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; profile?: "build" | "chat"; debate?: DebateConfig }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
+		if (params.debate && params.kind !== "thread") throw new EngineError("INVALID", "Only threads can be debates.");
+		if (params.debate) validateDebate(params.debate, this.hub);
+		const author = params.debate?.participants.find((p) => p.role === "author");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
 		const ref: ContainerRef = { kind: params.kind, id: newId(params.kind === "thread" ? "thr" : params.kind === "space" ? "spc" : "ses") };
 		// Build: a new branch in the project, or a worktree of its own (BP5) under <data>/worktrees/<project>/<session>.
@@ -312,15 +363,16 @@ export class Sessions {
 		const now = new Date().toISOString();
 		const entry: CatalogEntry = {
 			ref,
-			title: params.title?.trim() || (params.kind === "thread" ? "New thread" : params.kind === "space" ? "New Notebook" : "New session"),
+			title: params.title?.trim() || (params.debate ? titleFrom(params.debate.goal) : "") || (params.kind === "thread" ? "New thread" : params.kind === "space" ? "New Notebook" : "New session"),
 			createdAt: now,
 			updatedAt: now,
-			model: params.model ?? this.hub.defaultModel,
+			model: author?.model ?? params.model ?? this.hub.defaultModel,
 			...(cwd ? { cwd } : {}),
 			...(worktree ? { projectPath: params.cwd!, worktree } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.kind === "build" ? { approvalMode: params.approvalMode ?? this.policy.modeFor(params.cwd!), profile: params.profile ?? "build" } : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
+			...(params.debate ? { debate: { config: params.debate, status: "running" as const, maxRounds: params.debate.maxRounds, endings: [] } } : {}),
 			...(params.kind === "space" ? { file: join(this.paths.spacesDir, `${ref.id}.sqlite`), topics: [], space: { costUsd: 0, files: 0, memoryLines: 0, memory: true, autoTidy: false }, ...(params.instructions?.trim() ? { instructions: params.instructions.trim() } : {}) } : {}),
 		};
 		this.entries.set(ref.id, entry);
@@ -330,10 +382,27 @@ export class Sessions {
 	}
 
 	async runtime(ref: ContainerRef): Promise<Runtime> {
-		if (ref.kind === "space" && ref.conversationId) return (await this.space(ref)).view(ref.conversationId);
-		if (ref.kind === "agent" && ref.conversationId?.startsWith("run:")) return (await this.agent(ref)).runView(ref.conversationId.slice(4));
-		if (ref.kind === "agent" && ref.conversationId?.startsWith("agent:")) return (await this.agent(ref)).peerView(ref.conversationId.slice(6));
-		if (ref.kind === "agent" && ref.conversationId) return (await this.agent(ref)).view(ref.conversationId.replace(/^person:/, ""));
+		let view: Runtime | undefined;
+		if (ref.kind === "space" && ref.conversationId) view = await (await this.space(ref)).view(ref.conversationId);
+		else if (ref.kind === "agent" && ref.conversationId?.startsWith("run:")) view = await (await this.agent(ref)).runView(ref.conversationId.slice(4));
+		else if (ref.kind === "agent" && ref.conversationId?.startsWith("agent:")) view = await (await this.agent(ref)).peerView(ref.conversationId.slice(6));
+		else if (ref.kind === "agent" && ref.conversationId) view = await (await this.agent(ref)).view(ref.conversationId.replace(/^person:/, ""));
+		if (view) {
+			const entry = this.entry(ref);
+			const key = `${ref.id}/${ref.conversationId}`;
+			const title = this.search.destination(key)?.title ?? `${entry.title} › ${ref.conversationId}`;
+			this.search.setDestination(key, ref, title, entry.updatedAt);
+			if (!this.indexedViews.has(view)) {
+				this.indexedViews.add(view);
+				this.search.replaceSession(key, title, entry.updatedAt, view.snapshot().items);
+				view.onEvents(events => {
+					this.searchReady.delete(entry.ref.id);
+					this.index({ ...entry, title: this.search.destination(key)?.title ?? title, ref: { ...ref, id: key } }, events);
+				});
+			}
+			return view;
+		}
+
 		const entry = this.entry(ref);
 		let pending = this.open.get(ref.id);
 		if (!pending) {
@@ -912,6 +981,7 @@ export class Sessions {
 			.utility(
 				'Suggest what the user might say next to the assistant: three short replies in the user\'s language, each under 7 words, concrete to this exchange (a next step, a check, a question). Answer with a JSON array of three strings only.',
 				`User: ${asked.text.slice(0, 1500)}\n\nAssistant: ${text}`,
+				entry.ref.id,
 			)
 			.catch(() => undefined);
 		const list = reply ? (/\[[\s\S]*\]/.exec(reply)?.[0] ?? "") : "";
@@ -943,20 +1013,21 @@ export class Sessions {
 			.flatMap((i) => (i.kind === "user" ? [`User: ${i.text}`] : i.kind === "assistant" ? [`Assistant: ${i.parts.filter((p) => p.type === "text").map((p) => p.text).join("")}`] : []))
 			.join("\n\n")
 			.slice(0, 6000);
-		const suggestion = (await this.askUtility(text, spaces).catch(() => undefined)) ?? keywordMatch(text, spaces);
+		const suggestion = (await this.askUtility(text, spaces, entry.ref.id).catch(() => undefined)) ?? keywordMatch(text, spaces);
 		if (!suggestion || !this.entries.has(entry.ref.id) || entry.suggestionDismissed) return;
 		entry.suggestion = suggestion;
 		this.save();
 		this.changed(entry);
 	}
 
-	private async askUtility(text: string, spaces: CatalogEntry[]): Promise<SpaceSuggestion | undefined> {
+	private async askUtility(text: string, spaces: CatalogEntry[], scope: string): Promise<SpaceSuggestion | undefined> {
 		const index = spaces
 			.map((s) => `Notebook ${s.ref.id} “${s.title}”${s.instructions ? ` (${s.instructions.slice(0, 200)})` : ""}\n${(s.topics ?? []).filter((t) => !t.archived).map((t) => `  - topic ${t.id} “${t.title}”: ${t.brief ?? ""} ${t.summary ?? ""}`.trimEnd()).join("\n") || "  (no topics)"}`)
 			.join("\n");
 		const reply = await this.hub.utility(
 			'You decide whether a chat thread belongs in one of the user\'s Notebooks (long-running areas of their life or work, split into topics). Answer with JSON only: {"space": "<notebook id or null>", "topic": "<topic id or null>", "confidence": <0..1>, "reason": "<one short line>"}. Pick a topic only when the thread continues its subject. Use null when nothing fits well.',
 			`Notebooks:\n${index}\n\nThread:\n${text}`,
+			scope,
 		);
 		if (reply === undefined) return undefined;
 		const json = /\{[\s\S]*\}/.exec(reply)?.[0];
@@ -994,6 +1065,13 @@ export class Sessions {
 		const runtime = await this.runtime(ref);
 		if (!(runtime instanceof BuildRuntime)) throw new EngineError("INVALID", "Only Build sessions ask for approval.");
 		runtime.respond(promptId, response);
+	}
+
+	/** Debate threads: Keep going, or end the debate now. */
+	async debate(ref: ContainerRef): Promise<DebateRuntime> {
+		const runtime = await this.runtime(ref);
+		if (!(runtime instanceof DebateRuntime)) throw new EngineError("INVALID", "This thread isn't a debate.");
+		return runtime;
 	}
 
 	/** Called after a submit: bumps recency and auto-titles from the first input. */
@@ -1035,11 +1113,15 @@ export class Sessions {
 		} catch {
 			return;
 		}
-		const byFile = new Map([...this.entries.values()].filter((e) => e.sessionFile).map((e) => [e.sessionFile!, e]));
+		const byFile = new Map([...this.entries.values()].filter((e) => e.sessionFile).flatMap(e => [
+			[e.sessionFile!, e] as const,
+			...(e.restoredFromSessionFile ? [[e.restoredFromSessionFile, e] as const] : []),
+		]));
 		const upserted: CatalogEntry[] = [];
 		for (const info of infos) {
 			const modified = info.modified.toISOString();
 			const entry = byFile.get(info.path);
+			if (entry?.restoredFromSessionFile === info.path && entry.sessionFile !== info.path) continue;
 			if (entry) {
 				let changed = !entry.onDisk;
 				entry.onDisk = true;
@@ -1072,6 +1154,7 @@ export class Sessions {
 			this.search.deleteSession(e.ref.id);
 		}
 		if (!upserted.length && !removed.length) return;
+		for (const entry of upserted) this.searchReady.delete(entry.ref.id);
 		this.save();
 		const change = { upserted: upserted.map(summary), removed: removed.map((e) => e.ref) };
 		for (const l of this.listeners) l(change);
@@ -1127,6 +1210,7 @@ export class Sessions {
 		const runtime = await this.createRuntime(entry);
 		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
 		runtime.onEvents((events) => {
+			this.searchReady.delete(entry.ref.id);
 			this.index(entry, events);
 			// A rejected sign-in or key marks its provider "Needs attention" in Settings › Models (docs/spec/10 FR1).
 			for (const e of events) {
@@ -1135,8 +1219,8 @@ export class Sessions {
 				}
 			}
 			const idle = events.some((e) => e.type === "state" && e.state.status === "idle");
-			if (entry.ref.kind === "thread" && idle) void this.suggestSpace(entry, runtime);
-			if ((entry.ref.kind === "thread" || entry.ref.kind === "build") && idle) void this.suggestFollowUps(entry, runtime);
+			if (entry.ref.kind === "thread" && idle && !entry.debate) void this.suggestSpace(entry, runtime);
+			if ((entry.ref.kind === "thread" || entry.ref.kind === "build") && idle && !entry.debate) void this.suggestFollowUps(entry, runtime);
 		});
 		return runtime;
 	}
@@ -1185,6 +1269,24 @@ export class Sessions {
 					entry.stats = stats;
 					this.updateTopics(entry, topics);
 				},
+			});
+		}
+		if (entry.ref.kind === "thread" && entry.debate) {
+			return DebateRuntime.open({
+				ref: entry.ref,
+				file: entry.file!,
+				hub: this.hub,
+				record: entry.debate,
+				onRecord: (record) => {
+					const changed = record.status !== entry.debate?.status;
+					entry.debate = record;
+					if (record.config.participants.find((p) => p.role === "author")?.model) entry.model = record.config.participants.find((p) => p.role === "author")!.model;
+					this.save();
+					if (changed) this.changed(entry);
+				},
+				web: entry.web ?? true,
+				webOptions: this.webOptions,
+				...(this.chatExtras("thread").extensions ? { extensions: this.chatExtras("thread").extensions } : {}),
 			});
 		}
 		if (entry.ref.kind === "thread") {
@@ -1247,8 +1349,8 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, onDisk: _d, thinking: _t, readAt: _r, topicState: _ts, organizerModel: _o, memoryOff: _m, autoTidy: _a, stats: _st, suggestionDismissed: _sd, suggestChecked: _sc, ...rest }: CatalogEntry): SessionSummary {
-	return rest;
+function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, readAt: _r, topicState: _ts, organizerModel: _o, memoryOff: _m, autoTidy: _a, stats: _st, suggestionDismissed: _sd, suggestChecked: _sc, debate, ...rest }: CatalogEntry): SessionSummary {
+	return { ...rest, ...(debate ? { debate: { status: debate.status } } : {}) };
 }
 
 /** The suggestion needs this much confidence from the utility model. */

@@ -10,6 +10,7 @@ import { Engine, type ConnectorEndpoints } from "./server.js";
 import { enginePaths } from "./paths.js";
 
 const engine = new Engine({
+	onShutdown: () => void shutdown("backup or restore"),
 	paths: enginePaths(),
 	faux: process.env.PIOPIO_FAUX === "1",
 	...(process.env.PIOPIO_PI_SESSION_DIR ? { piSessionDir: process.env.PIOPIO_PI_SESSION_DIR } : {}),

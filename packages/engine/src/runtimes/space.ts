@@ -93,7 +93,7 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		const registry = createRegistry();
 		// The extensions read the runtime through `host`, which is set once it exists.
 		let host!: SpaceRuntime;
-		const web = createWebExtension(options.hub, options.webOptions) as unknown as Extension;
+		const web = createWebExtension(options.hub, { ...options.webOptions, scope: options.ref.id }) as unknown as Extension;
 		const organizer = organizerExtension(() => host) as unknown as Extension;
 		const topic = topicExtension(() => host) as unknown as Extension;
 		const shared = sharedExtension(() => host) as unknown as Extension;

@@ -20,6 +20,7 @@ Piopio is a native macOS app on top of the **pi** agent harnesses (`pi-coding-ag
 | [13-cloud-engine.md](13-cloud-engine.md) | Phase 5 plan: agents in the cloud (Cloudflare), Telegram and WhatsApp |
 | [14-memory.md](14-memory.md) | Memory spike S8: projects evaluated, semantic search and learned facts, Settings › Memory, milestones |
 | [15-onboarding-and-areas.md](15-onboarding-and-areas.md) | First-run welcome that asks what Piopio is for you; Build, Chat and Agents as areas you turn on and off |
+| [16-debate.md](16-debate.md) | Debate: two models work on one goal (author and reviewer, or two sides and a judge) until they agree; planned |
 
 Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release of a mode. "Later" means after it.
 

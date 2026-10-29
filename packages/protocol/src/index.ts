@@ -105,6 +105,62 @@ export const UserItem = Type.Object({
 /** Why a model request failed, so clients can offer the right fix. */
 export const ErrorKind = literals("auth", "credits", "model", "rate_limit", "provider", "network", "context", "other");
 export type ErrorKind = Static<typeof ErrorKind>;
+// ── Debate (docs/spec/16-debate) ────────────────────────────────────────────
+
+/** Who speaks in a debate: Review style has an author (writes the draft) and a reviewer (raises objections). */
+export const DebateRole = literals("author", "reviewer");
+export type DebateRole = Static<typeof DebateRole>;
+export const DebateParticipant = Type.Object({ role: DebateRole, model: ModelRef, thinking: Type.Optional(Type.String()) });
+export type DebateParticipant = Static<typeof DebateParticipant>;
+/** What a debate thread is started with (`sessions.create`). */
+export const DebateConfig = Type.Object({
+	style: Type.Literal("review"),
+	goal: Type.String(),
+	/** What a good result must have; quoted to the reviewer every turn. */
+	criteria: Type.Optional(Type.String()),
+	participants: Type.Array(DebateParticipant),
+	/** 2–12. */
+	maxRounds: Type.Number(),
+});
+export type DebateConfig = Static<typeof DebateConfig>;
+export const DebateStatus = literals("running", "agreed", "no_agreement", "stopped");
+export type DebateStatus = Static<typeof DebateStatus>;
+/** One version of the deliverable. */
+export const DebateDraft = Type.Object({ version: Type.Number(), round: Type.Number(), text: Type.String(), changes: Type.Array(Type.String()) });
+export type DebateDraft = Static<typeof DebateDraft>;
+/** A reviewer's objection and what happened to it, round by round. */
+export const DebateObjection = Type.Object({
+	id: Type.String(),
+	text: Type.String(),
+	severity: literals("blocking", "minor"),
+	status: literals("open", "resolved", "withdrawn"),
+	/** The round it was raised in. */
+	round: Type.Number(),
+	/** The author's latest reason for not acting on it. */
+	pushback: Type.Optional(Type.String()),
+	history: Type.Array(Type.Object({ round: Type.Number(), by: DebateRole, action: literals("raised", "addressed", "pushed_back", "resolved", "withdrawn", "reopened"), note: Type.Optional(Type.String()) })),
+});
+export type DebateObjection = Static<typeof DebateObjection>;
+/** Where a debate stands, for the draft and objections panel (SessionState.debate). */
+export const DebateState = Type.Object({
+	status: DebateStatus,
+	/** The round being worked on (or the last one). */
+	round: Type.Number(),
+	maxRounds: Type.Number(),
+	/** Whose turn it is while running. */
+	turn: Type.Optional(DebateRole),
+	goal: Type.String(),
+	criteria: Type.Optional(Type.String()),
+	participants: Type.Array(Type.Object({ role: DebateRole, label: Type.String(), model: ModelRef })),
+	drafts: Type.Array(DebateDraft),
+	objections: Type.Array(DebateObjection),
+	/** Why it ended, in a line. */
+	reason: Type.Optional(Type.String()),
+});
+export type DebateState = Static<typeof DebateState>;
+/** Which participant wrote an answer (debate threads). */
+export const Speaker = Type.Object({ role: DebateRole, label: Type.String() });
+
 export const AssistantItem = Type.Object({
 	kind: Type.Literal("assistant"),
 	id: Type.String(),
@@ -119,6 +175,8 @@ export const AssistantItem = Type.Object({
 	errorDetail: Type.Optional(Type.String()),
 	/** An agent's message sent on its own (send_message), and where from: a run id or a person's conversation. */
 	outbound: Type.Optional(Type.Object({ from: Type.String() })),
+	/** Debate threads: which participant wrote it. */
+	speaker: Type.Optional(Speaker),
 	/** How long it thought before answering or acting (measured live; absent for reloaded history). */
 	thinkingMs: Type.Optional(Type.Number()),
 });
@@ -255,7 +313,30 @@ export const AgentMsgItem = Type.Object({
 	/** Opens the trace view (`agents.trace`). */
 	traceId: Type.Optional(Type.String()),
 });
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem, ApprovalItem, ResultItem, AgentMsgItem]);
+/**
+ * A debate's progress in the transcript (docs/spec/16-debate §5): a round divider, what a turn did (a new draft and
+ * its changes, or the reviewer's objections), or the result.
+ */
+export const DebateItem = Type.Object({
+	kind: Type.Literal("debate"),
+	id: Type.String(),
+	at: Type.String(),
+	event: literals("round", "turn", "result"),
+	round: Type.Number(),
+	/** Turns: who. */
+	speaker: Type.Optional(Speaker),
+	/** "Round 2", "Draft v2 · 3 changes · 1 pushback", "Agreed after 2 rounds". */
+	title: Type.String(),
+	/** Turns: the changes, pushback or objections, one per line. Results: why it ended. */
+	lines: Type.Optional(Type.Array(Type.String())),
+	/** Results. */
+	status: Type.Optional(DebateStatus),
+	draft: Type.Optional(Type.String()),
+	open: Type.Optional(Type.Array(Type.Object({ text: Type.String(), severity: literals("blocking", "minor"), pushback: Type.Optional(Type.String()) }))),
+	costUsd: Type.Optional(Type.Number()),
+});
+export type DebateItem = Static<typeof DebateItem>;
+export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem, ApprovalItem, ResultItem, AgentMsgItem, DebateItem]);
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
@@ -353,6 +434,8 @@ export const SessionState = Type.Object({
 	planMode: Type.Optional(Type.Boolean()),
 	/** How full the model's context is (Build). `tokens` is null right after a compaction. */
 	context: Type.Optional(Type.Object({ tokens: Type.Union([Type.Number(), Type.Null()]), window: Type.Number() })),
+	/** Debate threads: the draft, the objections and where it stands. */
+	debate: Type.Optional(DebateState),
 });
 export type SessionState = Static<typeof SessionState>;
 
@@ -567,6 +650,8 @@ export const SessionSummary = Type.Object({
 	agent: Type.Optional(AgentInfo),
 	/** Threads and sessions: next messages the utility model suggests after the latest answer (until you write). */
 	followUps: Type.Optional(Type.Array(Type.String())),
+	/** Debate threads: where the debate stands (the sidebar's icon). */
+	debate: Type.Optional(Type.Object({ status: DebateStatus })),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -816,6 +901,8 @@ export const methods = {
 			model: Type.Optional(ModelRef),
 			thinking: Type.Optional(Type.String()),
 			title: Type.Optional(Type.String()),
+			/** Threads: start a debate between two models (docs/spec/16-debate). */
+			debate: Type.Optional(DebateConfig),
 		}),
 		result: Type.Object({ ref: ContainerRef }),
 	},
@@ -845,9 +932,19 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({}),
 	},
+	/** Debate threads: more rounds after it ended (default: as many as it was started with). */
+	"sessions.debate.continue": {
+		params: Type.Object({ ref: ContainerRef, rounds: Type.Optional(Type.Number()) }),
+		result: Type.Object({}),
+	},
+	/** Debate threads: end the debate now, keeping the latest draft (`sessions.abort` only stops the current turn). */
+	"sessions.debate.stop": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({}),
+	},
 	/** Re-asks from a user message with new text, as a new branch (threads). */
 	"sessions.edit": {
-		params: Type.Object({ ref: ContainerRef, itemId: Type.String(), text: Type.String() }),
+		params: Type.Object({ ref: ContainerRef, itemId: Type.String(), text: Type.String(), clientRequestId: Type.Optional(Type.String()) }),
 		result: Type.Object({}),
 	},
 	/** Asks again for a new answer: `itemId` is the answer, or the user message whose answer failed. */
@@ -892,12 +989,18 @@ export const methods = {
 	},
 	/** Full-text search over session titles and messages (active branches). Snippets mark matches with \u0002…\u0003. */
 	"catalog.search": {
-		params: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Number()) }),
+		params: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Number()), kind: Type.Optional(ContainerKind) }),
 		result: Type.Object({
 			results: Type.Array(Type.Object({ ref: ContainerRef, title: Type.String(), itemId: Type.Optional(Type.String()), kind: literals("title", "user", "assistant"), snippet: Type.String(), at: Type.String() })),
 		}),
 	},
-	/** What the model provider has billed, from its own account (OpenRouter's key endpoint; cached a minute). */
+	/** Gracefully stops the local process for offline backup/restore. */
+	"engine.shutdown": { params: Type.Object({}), result: Type.Object({}) },
+	"usage.extras": {
+		params: Type.Object({ ref: Type.Optional(ContainerRef) }),
+		result: Type.Object({ scope: Type.String(), knownUsd: Type.Number(), unknownCalls: Type.Number(), calls: Type.Number(), breakdown: Type.Array(Type.Object({ kind: Type.String(), calls: Type.Number(), knownUsd: Type.Number(), unknownCalls: Type.Number() })) }),
+	},
+	/** OpenRouter-key billing; includes other apps sharing that key. Cached a minute. */
 	"usage.summary": {
 		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({

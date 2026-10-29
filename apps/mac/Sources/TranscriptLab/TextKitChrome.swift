@@ -70,6 +70,8 @@ nonisolated struct TranscriptBuilder: Sendable {
             return NSAttributedString(string: "✓ \(r.card.title)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style()])
         case .agentMsg(let m):
             return NSAttributedString(string: "⇄ \(m.text)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style()])
+        case .debate(let d):
+            return NSAttributedString(string: "⚖︎ \(d.title)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style()])
         }
     }
 

@@ -265,7 +265,7 @@ public final class TranscriptDocument {
         var lastText: String?
         for item in items {
             switch item {
-            case .user: lastText = nil
+            case .user, .debate: lastText = nil // a debate turn's summary ends that turn
             case .assistant(let a) where !a.text.isEmpty:
                 if let previous = lastText { out.insert(previous) }
                 lastText = a.id

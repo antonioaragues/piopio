@@ -89,23 +89,24 @@ struct MainSidebar: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 7) {
-            Circle().fill(engineColor).frame(width: 6, height: 6)
-            Text("This Mac").foregroundStyle(Color.dsFg2)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 7) {
+                Circle().fill(engineColor).frame(width: 6, height: 6)
+                Text("This Mac").foregroundStyle(Color.dsFg2)
+                Spacer()
+                Button { WindowOpener.shared.openSettings?() } label: {
+                    Image(systemName: "gearshape").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                }
+                .buttonStyle(.plain).help("Settings (⌘,)").accessibilityLabel("Settings")
+            }
             if let today = engine.usage?.todayUsd {
-                Text("·").foregroundStyle(Color.dsFg3)
-                Text(Self.money(today) + " today").foregroundStyle(Color.dsFg3).help("Billed by your provider today")
+                Text(Self.money(today) + " · OpenRouter key today")
+                    .font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1).minimumScaleFactor(0.85)
+                    .help("OpenRouter spending for this API key, including other apps that share it. Other providers are not included.")
             }
-            Spacer()
-            Button { WindowOpener.shared.openSettings?() } label: {
-                Image(systemName: "gearshape").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            }
-            .buttonStyle(.plain)
-            .help("Settings (⌘,)")
         }
-        .font(.system(size: 12))
-        .padding(.horizontal, 14)
-        .frame(height: 40)
+        .font(.system(size: 12)).padding(.horizontal, 14).padding(.vertical, 8)
+        .frame(minHeight: 48)
     }
 
     private var engineColor: Color {
@@ -168,7 +169,7 @@ struct MainSidebar: View {
     }
 
     private func hint(_ text: String) -> some View {
-        Text(text).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 8).frame(height: 28, alignment: .leading)
+        Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 8).padding(.vertical, 5).frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func more(_ text: String, _ target: SidebarItem) -> some View {
@@ -238,7 +239,7 @@ struct MainSidebar: View {
             header(.projects, total: projects.count, shown: shown.count, add: { BuildActions.addFolderToChat(engine: engine) { item = .session($0) } }, addHelp: "Add a folder to chat about")
         }
         if !collapsed.contains(SidebarSection.projects.rawValue) {
-            if projects.isEmpty { hint(areas.contains(.build) ? "Folders you add show up here" : "Folders to chat about") }
+            if projects.isEmpty { hint(areas.contains(.build) ? "Folders on your Mac · code or chat about files" : "Folders to chat about") }
             ForEach(shown) { project in
                 if !pinnedHere.contains(SidebarItem.project(project.id).raw) { projectRow(project) }
                 projectSessions(project)
@@ -353,7 +354,7 @@ struct MainSidebar: View {
         let cap = Self.caps[.notebooks]!
         header(.notebooks, total: spaces.count, shown: min(cap, spaces.count), add: { NotificationCenter.default.post(name: .newSpace, object: nil) }, addHelp: "New notebook (⌘⇧N)")
         if !collapsed.contains(SidebarSection.notebooks.rawValue) {
-            if spaces.isEmpty { hint("Long-running subjects") }
+            if spaces.isEmpty { hint("Conversations organized into topics, with shared files and memory") }
             ForEach(spaces.prefix(cap), id: \.ref.id) { notebookRow($0) }
             if spaces.count > cap { more("\(spaces.count - cap) more", .index(.notebooks)) }
         }
@@ -476,6 +477,7 @@ struct MainSidebar: View {
             HStack(spacing: 8) {
                 Group {
                     if engine.liveStatus[thread.ref.id] == .running { SidebarDot(status: .running) }
+                    else if thread.debate != nil { Image(systemName: "person.2.fill").font(.system(size: 8.5)).foregroundStyle(Color.dsFg3).help("Debate") }
                     else { Circle().strokeBorder(Color.dsFg3.opacity(0.5), lineWidth: 1).frame(width: 7, height: 7) }
                 }
                 .frame(width: 14)
@@ -577,6 +579,7 @@ struct NewMenu: View {
             }
             if areas.contains(.chat) {
                 Button("New Chat") { NotificationCenter.default.post(name: .newChat, object: nil) }
+                Button("New Debate") { NotificationCenter.default.post(name: .newDebate, object: nil) }
                 Button("New Notebook") { NotificationCenter.default.post(name: .newSpace, object: nil) }
             }
             if areas.contains(.agents) { Button("New Agent") { NotificationCenter.default.post(name: .newAgent, object: nil) } }

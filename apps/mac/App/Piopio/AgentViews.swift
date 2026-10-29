@@ -187,20 +187,31 @@ struct AgentPage: View {
             }
             .padding(.horizontal, 28)
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
+            AgentAvailability(engine: engine, summary: summary, hasMacTools: !(def?.tools.apple ?? []).isEmpty)
             switch tab {
             case .chat:
-                HStack(spacing: 0) {
-                    chat
-                    AgentSideCard(engine: engine, summary: summary, def: def, runs: runs, tab: $tab)
-                        .frame(width: 300)
-                        .glassPanel()
-                        .padding([.top, .bottom, .trailing], 8)
+                GeometryReader { proxy in
+                    HStack(spacing: 0) {
+                        chat
+                        if proxy.size.width >= 850 {
+                            AgentSideCard(engine: engine, summary: summary, def: def, runs: runs, tab: $tab)
+                                .frame(width: 280).glassPanel().padding([.top, .bottom, .trailing], 8)
+                        }
+                    }
                 }
             case .activity: AgentRunsView(engine: engine, summary: summary)
             case .setup: AgentDefinitionView(engine: engine, summary: summary)
             }
         }
         .task(id: summary.updatedAt) { await load() }
+        .onAppear { openSearchTarget() }
+        .onChange(of: engine.searchTarget?.id) { _, _ in openSearchTarget() }
+    }
+
+    private func openSearchTarget() {
+        guard let target = engine.searchTarget, target.ref.kind == .agent, target.ref.id == summary.ref.id else { return }
+        conversation = target.ref.conversationId
+        tab = .chat
     }
 
     private func load() async {
@@ -211,7 +222,7 @@ struct AgentPage: View {
 
     @ViewBuilder private var chat: some View {
         let person = people.first { $0.conversationId == conversation }
-        if let conversation, person?.role == "agent" {
+        if let conversation, conversation.hasPrefix("run:") || person?.role == "agent" {
             AgentRunTranscript(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: conversation))
         } else if let conversation, let person, person.role != "owner" {
             AgentChat(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: conversation), simulated: person.name)
@@ -228,7 +239,7 @@ struct AgentPage: View {
                 HStack(spacing: 5) {
                     let paused = summary.agent?.status?.paused == true
                     Circle().fill(paused ? Color.dsFg3 : Color.dsGreen).frame(width: 6, height: 6)
-                    Text(statusLine).font(.system(size: 12)).foregroundStyle(paused ? Color.dsAmber : Color.dsFg3)
+                    Text(statusLine).accessibilityLabel(statusLine).font(.system(size: 12)).foregroundStyle(paused ? Color.dsAmber : Color.dsFg3)
                 }
             }
             Spacer()
@@ -255,9 +266,8 @@ struct AgentPage: View {
     /// "This Mac · every day 7:00", "This Mac · paused".
     private var statusLine: String {
         if summary.agent?.status?.paused == true { return "This Mac · paused" }
-        if let cron = def?.schedules?.first?.cron { return "This Mac · \(CronText.short(cron))" }
         if let next = summary.agent?.status?.nextRun { return "This Mac · next \(MainSidebar.when(next))" }
-        return "This Mac"
+        return "This Mac · no next run scheduled"
     }
 
     private var personPicker: some View {

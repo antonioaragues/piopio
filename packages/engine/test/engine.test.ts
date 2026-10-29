@@ -1088,6 +1088,9 @@ describe("Spaces (milestone 3.2)", () => {
 			["assistant", "Echo: Can we fit a dishwasher?"],
 		]);
 		expect(topic.items.find((i) => i.kind === "assistant")!.id).toBe(created!.replyItemId);
+		const search = await a.client.call("catalog.search", { query: "dishwasher", kind: "space" });
+		expect(search.results.some((hit: { ref: unknown; itemId?: string }) => JSON.stringify(hit.ref) === JSON.stringify(topicRef) && hit.itemId === created!.replyItemId)).toBe(true);
+
 		let [space] = (await a.client.call("sessions.list", { kind: "space" })).sessions;
 		expect(space).toMatchObject({ title: "Home renovation", instructions: "We're redoing the flat.", topics: [{ id: created!.topicId, title: "Kitchen layout", unread: true }] });
 		await a.client.call("spaces.markRead", { ref: topicRef });
@@ -1590,11 +1593,16 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 			["maria", "contact", true],
 		]);
 		expect(people[1]!.preview).toContain("Echo:");
+		const found = await a.client.call("catalog.search", { query: "vegetarian", kind: "agent" });
+		expect(found.results.some((hit: { ref: { conversationId?: string } }) => hit.ref.conversationId === "person:maria")).toBe(true);
+
 
 		await stop(a);
 		const b = await start(a.home);
 		const reopened: Snapshot = await b.client.call("sessions.open", { ref });
 		expect(reopened.items.map((i) => i.id)).toEqual(chat.items.map((i) => i.id));
+		expect((await b.client.call("catalog.search", { query: "vegetarian", kind: "agent" })).results.some((hit: { ref: { conversationId?: string } }) => hit.ref.conversationId === "person:maria")).toBe(true);
+
 		await b.client.call("sessions.delete", { ref });
 		expect(existsSync(folder)).toBe(false);
 		expect(existsSync(join(b.home, "trash", "coach"))).toBe(true);
@@ -2482,4 +2490,35 @@ describe("Settings › Models redesign (provider keys, visibility, custom endpoi
 		const { id: later } = await a.client.call("endpoints.save", { name: "Studio", baseUrl: "http://127.0.0.1:9/v1", force: true });
 		expect(((await a.client.call("providers.list", {})).providers as { id: string; status: string }[]).find((p) => p.id === later)).toMatchObject({ status: "needs_attention" });
 	});
+});
+
+
+test("input retries after an engine restart return the receipt without adding a second message", async () => {
+	const a = await start();
+	const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+	const sub = await a.client.call("sessions.subscribe", { ref });
+	const request = { ref, input: { text: "recover this message" }, clientRequestId: "retry-across-restart" };
+	const first = await a.client.call("sessions.submit", request);
+	await a.client.waitFor(settled(sub.subscriptionId));
+	await stop(a);
+	const b = await start(a.home);
+	expect(await b.client.call("sessions.submit", request)).toEqual(first);
+	const snapshot: Snapshot = await b.client.call("sessions.open", { ref });
+	expect(snapshot.items.filter(item => item.kind === "user")).toHaveLength(1);
+});
+
+test("Build history is searchable after restart without loading extensions or requiring a provider key", async () => {
+	const a = await start();
+	const folder = join(a.home, "project"); mkdirSync(folder);
+	await a.client.call("projects.add", { path: folder });
+	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+	const sub = await a.client.call("sessions.subscribe", { ref });
+	await a.client.call("sessions.submit", { ref, input: { text: "Build indexing sentinel" } });
+	await a.client.waitFor(settled(sub.subscriptionId));
+	await stop(a);
+	const b = await start(a.home, false);
+	await b.engine.backfill;
+	const results = await b.client.call("catalog.search", { query: "indexing sentinel", kind: "build" });
+	expect(results.results.some((hit: { ref: { id: string }; itemId?: string }) => hit.ref.id === ref.id && hit.itemId)).toBe(true);
+	expect(b.engine.sessions.openCount).toBe(0);
 });

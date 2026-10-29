@@ -77,7 +77,7 @@ export class AgentRuntime implements Runtime {
 	static async open(options: AgentOpenOptions): Promise<AgentRuntime> {
 		const storage = await openNodeSqliteStorage(options.file);
 		const registry = createRegistry();
-		const web = createWebExtension(options.hub, options.webOptions) as unknown as Extension;
+		const web = createWebExtension(options.hub, { ...options.webOptions, scope: options.ref.id }) as unknown as Extension;
 		const wantsWeb = () => options.definition().tools.builtin.some((t) => t === "web_search" || t === "web_fetch");
 		// Connected apps: changes ask through the agent's own approvals (durable), so the tool itself doesn't ask.
 		const hub = options.connectors;
@@ -98,7 +98,7 @@ export class AgentRuntime implements Runtime {
 			...(options.peers ? { peers: options.peers } : {}),
 			...(options.askTimeoutMs ? { askTimeoutMs: options.askTimeoutMs } : {}),
 			// Learned facts (docs/spec/14-memory M2) on the utility model, after a conversation goes quiet.
-			learn: options.learn ?? ((system, prompt) => options.hub.utility(system, prompt)),
+			learn: options.learn ?? ((system, prompt) => options.hub.utility(system, prompt, options.ref.id)),
 			...(options.learnQuietMs ? { learnQuietMs: options.learnQuietMs } : {}),
 			...(options.onLearned ? { onLearned: options.onLearned } : {}),
 			onPeerLog: () => options.onActivity?.(),

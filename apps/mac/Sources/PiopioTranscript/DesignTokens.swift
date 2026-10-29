@@ -12,7 +12,7 @@ public enum DS {
     public static let glassEdge = dynamic(NSColor.white.withAlphaComponent(0.85), NSColor.white.withAlphaComponent(0.13))
     public static let fg = dynamic(rgb(0x1D1D1F), rgb(0xF5F5F7))
     public static let fg2 = dynamic(rgb(0x5B5B61), rgb(0xB8B8BD))
-    public static let fg3 = rgb(0x8E8E93)
+    public static let fg3 = dynamic(rgb(0x6B6B70), rgb(0xB5B5BA))
     public static let line = dynamic(NSColor.black.withAlphaComponent(0.08), NSColor.white.withAlphaComponent(0.12))
     public static let inv = dynamic(rgb(0x1D1D1F), rgb(0xF5F5F7))
     public static let invfg = dynamic(.white, rgb(0x1D1D1F))
@@ -23,6 +23,10 @@ public enum DS {
     public static let red = rgb(0xD9493F)
     public static let addbg = dynamic(rgb(0xE3F4E6), rgb(0x1F3B28))
     public static let delbg = dynamic(rgb(0xFBE7E3), rgb(0x47231F))
+
+    // MARK: Debate speakers (docs/spec/16-debate): the author and the reviewer
+    public static let debateAuthor = dynamic(rgb(0x6E56CF), rgb(0xA08CF0))
+    public static let debateReviewer = dynamic(rgb(0x1A8F82), rgb(0x4CC7B6))
 
     // MARK: Brand (v2): the chick's yolk, only at brand moments (Home, empty states, onboarding, suggestions)
     public static let yolk = rgb(0xF7CE3E)

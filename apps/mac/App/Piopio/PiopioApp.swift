@@ -45,6 +45,8 @@ struct PiopioApp: App {
                 if areas.contains(.chat) {
                     Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: nil) }
                         .keyboardShortcut("n", modifiers: [.command, .shift])
+                    Button("New Debate…") { NotificationCenter.default.post(name: .newDebate, object: nil) }
+                        .keyboardShortcut("n", modifiers: [.command, .option])
                     Button("Quick Chat") { QuickChatController.shared?.show() }
                 }
                 if areas.contains(.build) {
@@ -92,7 +94,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Quick Chat keeps working with the main window closed.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        MainActor.assumeIsolated { QuickChatShortcut.current == .off || !Areas.shared.contains(.chat) }
+        MainActor.assumeIsolated {
+            if engine?.agents.isEmpty == false { return false }
+            return QuickChatShortcut.current == .off || !Areas.shared.contains(.chat)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
@@ -103,16 +108,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Quitting stops sessions that are working or waiting on you, unless the engine runs in the background.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         MainActor.assumeIsolated {
-            guard let engine, !engine.runsInBackground, ProcessInfo.processInfo.environment["PIOPIO_QUIT_AFTER_SNAPSHOT"] == nil else { return .terminateNow }
-            let busy = engine.busySessions
-            guard !busy.isEmpty else { return .terminateNow }
-            let alert = NSAlert()
-            let waiting = busy.contains { engine.liveStatus[$0.ref.id] == .waitingApproval }
-            alert.messageText = busy.count == 1 ? "“\(busy[0].title)” is still \(waiting ? "waiting for you" : "working")" : "\(busy.count) sessions are still working"
-            alert.informativeText = "Quitting stops them\(waiting ? " and cancels what they're waiting for" : ""). Your sessions are saved, and you can ask the agent to continue later. To keep sessions running after you quit, turn on Settings › Engines › Keep running when Piopio quits."
-            alert.addButton(withTitle: "Quit Anyway")
-            alert.addButton(withTitle: "Cancel")
-            return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+            guard let engine else { return .terminateNow }
+            if engine.isMaintaining {
+                let alert = NSAlert(); alert.messageText = "Piopio is saving or restoring data"
+                alert.informativeText = "Let this finish before quitting."; alert.runModal()
+                return .terminateCancel
+            }
+            if !engine.runsInBackground, ProcessInfo.processInfo.environment["PIOPIO_QUIT_AFTER_SNAPSHOT"] == nil {
+                let busy = engine.busySessions
+                if !busy.isEmpty {
+                    let alert = NSAlert()
+                    let waiting = busy.contains { engine.liveStatus[$0.ref.id] == .waitingApproval }
+                    alert.messageText = busy.count == 1 ? "“\(busy[0].title)” is still \(waiting ? "waiting for you" : "working")" : "\(busy.count) sessions are still working"
+                    alert.informativeText = "Quitting stops them\(waiting ? " and cancels what they're waiting for" : ""). Your sessions are saved. To continue after quit, turn on background mode in Settings › This Mac & cloud."
+                    alert.addButton(withTitle: "Quit Anyway"); alert.addButton(withTitle: "Cancel")
+                    if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
+                }
+            }
+            Task {
+                do { try await engine.flushDrafts(); sender.reply(toApplicationShouldTerminate: true) }
+                catch {
+                    let alert = NSAlert(); alert.messageText = "Your latest draft couldn't be saved"
+                    alert.informativeText = error.localizedDescription
+                    alert.addButton(withTitle: "Stay in Piopio"); alert.addButton(withTitle: "Quit Anyway")
+                    sender.reply(toApplicationShouldTerminate: alert.runModal() == .alertSecondButtonReturn)
+                }
+            }
+            return .terminateLater
         }
     }
 

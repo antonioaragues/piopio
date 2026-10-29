@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { buildInput, withText } from "../src/input.js";
 import { htmlToMarkdown } from "../src/tools/html.js";
-import { fetchPage, isPrivateAddress, parseSearchResponse } from "../src/tools/web.js";
+import { fetchPage, isPrivateHost, isPrivateAddress, parseSearchResponse } from "../src/tools/web.js";
 
 describe("htmlToMarkdown", () => {
 	test("keeps the main content as markdown and drops page chrome", () => {
@@ -36,7 +36,7 @@ test("parses OpenRouter web plugin citations", () => {
 });
 
 test("private and local addresses are recognized", () => {
-	for (const a of ["127.0.0.1", "10.1.2.3", "192.168.1.1", "172.20.0.1", "169.254.169.254", "100.64.0.1", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1"]) expect(isPrivateAddress(a), a).toBe(true);
+	for (const a of ["127.0.0.1", "10.1.2.3", "192.168.1.1", "172.20.0.1", "169.254.169.254", "100.64.0.1", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1", "198.18.0.1", "224.0.0.1", "255.255.255.255", "2001::1"]) expect(isPrivateAddress(a), a).toBe(true);
 	for (const a of ["8.8.8.8", "172.32.0.1", "2001:4860:4860::8888"]) expect(isPrivateAddress(a), a).toBe(false);
 });
 
@@ -71,4 +71,18 @@ test("provider keys are verified against OpenRouter's key endpoint", async () =>
 	expect(await verifyProviderKey("openrouter", "sk-or-v1-x", ok)).toEqual({ ok: true, label: "sk-or-v1-abc...", usageUsd: 18.4, limitUsd: null });
 	expect(await verifyProviderKey("openrouter", "nope", bad)).toEqual({ ok: false, message: "OpenRouter didn't accept this key." });
 	expect((await verifyProviderKey("openrouter", "  ", ok)).ok).toBe(false);
+});
+
+
+test("canonical IPv4-mapped IPv6 cannot bypass local network protection", async () => {
+	for (const url of ["http://[::ffff:127.0.0.1]/", "http://[::ffff:192.168.1.1]/", "http://[::ffff:7f00:1]/", "http://2130706433/", "http://0x7f000001/"]) {
+		expect(await isPrivateHost(new URL(url).hostname), url).toBe(true);
+		let called = false;
+		const result = await fetchPage(url, { allowPrivate: false, fetchImpl: (async () => { called = true; return new Response("bad"); }) as typeof fetch });
+		expect(result).toHaveProperty("error"); expect(called).toBe(false);
+	}
+	expect(isPrivateAddress("::ffff:808:808")).toBe(false);
+	expect(await isPrivateHost("does-not-exist.invalid")).toBe(true);
+	const redirect = (async () => new Response(null, { status: 302, headers: { location: "http://[::ffff:7f00:1]/" } })) as typeof fetch;
+	expect(await fetchPage("http://8.8.8.8/", { allowPrivate: false, fetchImpl: redirect })).toHaveProperty("error");
 });

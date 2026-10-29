@@ -7,6 +7,9 @@ import SwiftUI
 struct RootView: View {
     let engine: EngineController
     @AppStorage("sidebarItem") private var itemRaw = "home"
+    @AppStorage("sidebarWidth") private var sidebarWidth = 250.0
+    @State private var availableWidth = 1280.0
+    @State private var sidebarDragStart: Double?
     @State private var showNewAgent = false
     @State private var newSessionProject: ProjectInfo?
     @State private var showOnboarding = false
@@ -26,23 +29,35 @@ struct RootView: View {
     var body: some View {
         HStack(spacing: 0) {
             MainSidebar(engine: engine, item: itemBinding)
-                .frame(width: 268)
+                .frame(width: min(sidebarWidth, max(200, availableWidth * 0.28)))
                 .glassPanel()
+                .overlay(alignment: .trailing) {
+                    Rectangle().fill(Color.clear).frame(width: 7).contentShape(Rectangle())
+                        .gesture(DragGesture().onChanged { value in
+                            if sidebarDragStart == nil { sidebarDragStart = sidebarWidth }
+                            sidebarWidth = min(340, max(200, (sidebarDragStart ?? sidebarWidth) + value.translation.width))
+                        }.onEnded { _ in sidebarDragStart = nil })
+                        .accessibilityLabel("Sidebar width").accessibilityValue("\(Int(sidebarWidth)) points")
+                        .accessibilityAdjustableAction { direction in sidebarWidth = min(340, max(200, sidebarWidth + (direction == .increment ? 20 : -20))) }
+                        .help("Drag to resize the sidebar")
+                }
                 .padding(8)
             VStack(spacing: 0) {
                 if engine.isLost { EngineBanner(engine: engine) }
                 if let hidden = hiddenArea { HiddenAreaBar(area: hidden) }
-                content
+                if engine.isMaintaining { ProgressView("Saving or restoring Piopio data…").frame(maxWidth: .infinity, maxHeight: .infinity) }
+                else { content.id(engine.dataGeneration) }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.dsWin)
+        .onGeometryChange(for: Double.self) { $0.size.width } action: { availableWidth = $0 }
         .ignoresSafeArea(.container, edges: .top)
         .overlay(alignment: .top) {
             if let mode = palette, engine.status == .ready {
                 ZStack(alignment: .top) {
                     Color.black.opacity(0.08).ignoresSafeArea().onTapGesture { palette = nil }
-                    CommandPalette(engine: engine, thread: selectedThread, close: { palette = nil }, newThread: newChat, openThread: open(_:item:), mode: mode, query: paletteQuery)
+                    CommandPalette(engine: engine, thread: selectedThread, close: { palette = nil }, newThread: newChat, openThread: open(_:item:), openResult: openSearch, mode: mode, query: paletteQuery)
                         .padding(.top, 96)
                 }
             }
@@ -61,7 +76,12 @@ struct RootView: View {
             newSessionProject = engine.projects.first { $0.id == note.object as? String }
         }
         .sheet(item: $newSessionProject) { project in
-            NewSessionSheet(engine: engine, project: project, initialPrompt: newSessionPrompt) { itemRaw = SidebarItem.session($0.id).raw }
+            NewSessionSheet(engine: engine, project: project, initialPrompt: newSessionPrompt) { ref in
+                if DraftStore(home: engine.home).load("home")?.text.trimmingCharacters(in: .whitespacesAndNewlines) == newSessionPrompt.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    try? DraftStore(home: engine.home).save(ComposerDraft(), for: "home")
+                }
+                itemRaw = SidebarItem.session(ref.id).raw
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in
             if let url = note.object as? URL {
@@ -238,6 +258,17 @@ struct RootView: View {
         return engine.thread(summary.ref)
     }
 
+    private func openSearch(_ hit: SearchResult) {
+        engine.searchTarget = hit
+        switch hit.ref.kind {
+        case .thread: itemRaw = SidebarItem.chat(hit.ref.id).raw
+        case .build: itemRaw = SidebarItem.session(hit.ref.id).raw
+        case .space: itemRaw = SidebarItem.notebook(hit.ref.key).raw
+        case .agent: itemRaw = SidebarItem.agent(hit.ref.id).raw
+        }
+        if let found = hit.itemId { engine.thread(hit.ref).reveal(found) }
+    }
+
     private func open(_ threadId: String, item found: String?) {
         itemRaw = (engine.item(for: threadId) ?? .chat(threadId)).raw
         guard let found, let summary = engine.threads.first(where: { $0.ref.id == threadId }) else { return }
@@ -317,9 +348,14 @@ private struct SpaceAndAgentSheets: ViewModifier {
     @Binding var newSpaceThreads: [String]
     @Binding var editingInstructions: SessionSummary?
     @State private var trace: TraceTarget?
+    @State private var showNewDebate = false
 
     func body(content: Content) -> some View {
         content
+            .onReceive(NotificationCenter.default.publisher(for: .newDebate)) { _ in showNewDebate = true }
+            .sheet(isPresented: $showNewDebate) {
+                NewDebateSheet(engine: engine) { item = .chat($0.id) }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .openTrace)) { note in
                 if let id = note.object as? String { trace = TraceTarget(id: id) }
             }

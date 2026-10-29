@@ -118,6 +118,8 @@ final class TextKitRenderer: LabRenderer {
             out.append(NSAttributedString(string: "✓ \(r.card.title)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor]))
         case .agentMsg(let m):
             out.append(NSAttributedString(string: "⇄ \(m.text)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor]))
+        case .debate(let d):
+            out.append(NSAttributedString(string: "⚖︎ \(d.title)\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor]))
         }
         return out
     }

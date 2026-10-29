@@ -44,6 +44,8 @@ declare const PIOPIO_ENGINE_VERSION: string | undefined;
 export const ENGINE_VERSION = typeof PIOPIO_ENGINE_VERSION === "string" ? PIOPIO_ENGINE_VERSION : "dev";
 
 export type EngineOptions = {
+	/** Production process shutdown for offline backup/restore. */
+	onShutdown?: () => void;
 	paths: EnginePaths;
 	faux?: boolean;
 	piSessionDir?: string;
@@ -65,7 +67,10 @@ export type EngineOptions = {
 	log?: (line: string) => void;
 };
 
+import { InputReceipts } from "./requests.js";
+
 export class Engine {
+	private readonly inputReceipts: InputReceipts;
 	readonly id = randomUUID();
 	readonly secrets = new SecretBroker();
 	private readonly logins: LoginFlows;
@@ -96,6 +101,7 @@ export class Engine {
 	constructor(private readonly options: EngineOptions) {
 		this.log = options.log ?? ((line) => process.stderr.write(`${line}\n`));
 		ensureDirs(options.paths);
+		this.inputReceipts = new InputReceipts(join(options.paths.home, "requests.db"));
 		this.hub = new ModelHub(this.secrets, { faux: options.faux ?? false, home: options.paths.home });
 		this.connectors = new ConnectorHub(this.secrets, {
 			home: options.paths.home,
@@ -241,12 +247,15 @@ export class Engine {
 	}
 
 	async stop(): Promise<void> {
+		for (const conn of this.authed) conn.close();
 		await this.backfill;
 		for (const off of this.subscriptions.values()) off();
 		this.subscriptions.clear();
 		await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()));
 		await this.hooks.close();
 		await this.sessions.closeAll();
+		this.inputReceipts.close();
+		this.hub.extraCosts.close();
 		await this.chatMcp.close();
 		await this.memory.reset();
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
@@ -292,7 +301,12 @@ export class Engine {
 				return this.hello();
 			}
 			if (!authed) throw new EngineError("AUTH", "Call engine.hello first.");
-			return this.handle(method as MethodName, params, conn, owned);
+			const execute = () => this.handle(method as MethodName, params, conn, owned);
+			if (method === "sessions.submit" || method === "sessions.edit") {
+				const request = params as { clientRequestId?: string };
+				if (request.clientRequestId) return this.inputReceipts.run(request.clientRequestId, { method, params }, execute);
+			}
+			return execute();
 		});
 
 		conn.onClose(() => {
@@ -383,6 +397,11 @@ export class Engine {
 				owned.delete(p.subscriptionId);
 				return {};
 			}
+			case "engine.shutdown": {
+				if (!this.options.onShutdown) throw new EngineError("INVALID", "This engine cannot be shut down remotely.");
+				setTimeout(this.options.onShutdown, 100);
+				return {};
+			}
 			case "sessions.submit": {
 				const p = params as Params<"sessions.submit">;
 				const runtime = await this.sessions.runtime(p.ref);
@@ -398,6 +417,16 @@ export class Engine {
 			case "sessions.abort": {
 				const p = params as Params<"sessions.abort">;
 				await (await this.sessions.runtime(p.ref)).abort();
+				return {};
+			}
+			case "sessions.debate.continue": {
+				const p = params as Params<"sessions.debate.continue">;
+				await (await this.sessions.debate(p.ref)).continueDebate(p.rounds);
+				return {};
+			}
+			case "sessions.debate.stop": {
+				const p = params as Params<"sessions.debate.stop">;
+				await (await this.sessions.debate(p.ref)).stopDebate();
 				return {};
 			}
 			case "sessions.edit": {
@@ -670,6 +699,10 @@ export class Engine {
 				await (await this.sessions.agent(p.ref)).core.safety.setPaused(p.paused);
 				return {} satisfies Result<"agents.pause">;
 			}
+			case "usage.extras": {
+				const p = params as Params<"usage.extras">;
+				return this.hub.extraCosts.summary(p.ref?.id) satisfies Result<"usage.extras">;
+			}
 			case "usage.summary": {
 				const p = params as Params<"usage.summary">;
 				if (this.usageCache && !p.refresh && Date.now() - this.usageCache.at < 60_000) return this.usageCache.value;
@@ -905,7 +938,7 @@ export class Engine {
 			}
 			case "catalog.search": {
 				const p = params as Params<"catalog.search">;
-				return { results: this.sessions.find(p.query, p.limit ?? 30) } satisfies Result<"catalog.search">;
+				return { results: await this.sessions.find(p.query, p.limit ?? 30, p.kind) } satisfies Result<"catalog.search">;
 			}
 			case "models.verifyKey": {
 				const p = params as Params<"models.verifyKey">;

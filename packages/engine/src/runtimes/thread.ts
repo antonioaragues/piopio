@@ -82,7 +82,7 @@ export class ThreadRuntime implements Runtime {
 	static async open(options: ThreadOpenOptions): Promise<ThreadRuntime> {
 		const storage = await openNodeSqliteStorage(options.file);
 		const registry = createRegistry();
-		const webExtension = createWebExtension(options.hub, options.webOptions) as unknown as Extension;
+		const webExtension = createWebExtension(options.hub, { ...options.webOptions, scope: options.ref.id }) as unknown as Extension;
 		registry.install(webExtension as never);
 		for (const e of options.extensions ?? []) registry.install(e as never);
 		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp) : undefined;

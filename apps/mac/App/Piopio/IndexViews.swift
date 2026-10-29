@@ -27,6 +27,7 @@ struct ProjectsIndex: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Projects").font(.system(size: 26, weight: .bold)).tracking(-0.5)
                         Text(subtitle).font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                        Text("Folders on your Mac, with sessions for working in code or chatting about their files.").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                     }
                     Spacer()
                     Button("Open Folder… ⌘O") { BuildActions.addProject(engine: engine) { item = .session($0) } }

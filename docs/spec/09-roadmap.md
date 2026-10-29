@@ -1,5 +1,7 @@
 # 09 — Roadmap
 
+Current implementation and acceptance status: [../status.md](../status.md). The dated entries below are historical milestone notes.
+
 Solo developer, no deadline (X9). **Start with the easiest mode.** Each phase ends with something usable every day.
 
 ## Why Chat Threads first
@@ -302,6 +304,9 @@ GitHub PR/CI loop (G4–G8), worktrees UX, usage page, export everything, access
 
 ## Onboarding and areas (built 2026-10-25)
 A new first-run welcome asks what Piopio is for you (Build, Chat, Agents, or several). Areas you don't use are hidden from the sidebar, Home, menus and the palette, and can be turned on and off in Settings › General. Hiding stops and deletes nothing. See [15-onboarding-and-areas](15-onboarding-and-areas.md); the decisions are in §7 and what's built in §8.
+
+## Debate (2026-10-29)
+Two models work on one goal until they agree: an author writes a draft, a reviewer raises objections, and it ends with the agreed draft or a clear list of what's still disputed. A debate is a thread run by a new debate runtime, with one pi-durable conversation per model. Milestones DB1 (Review style, engine), DB2 (Review style, app), DB3 (Debate and Judged styles), then an agent recipe later. **DB1 and DB2 built 2026-10-29** (§9 of the spec); prompts not yet tuned with real models. See [16-debate](16-debate.md).
 
 ## Backlog from the v2 review (2026-10-22)
 Noted by the user after using the v2 redesign. Not scheduled into a phase yet.

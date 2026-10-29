@@ -59,6 +59,10 @@ export class TimelineBuilder {
 	private pending: SessionEvent[] = [];
 	private streaming?: { id: string; partByContentIndex: Map<number, number>; thinkingFrom: number | undefined; thinkingTo: number | undefined };
 	private state: SessionState = { status: "idle", queue: [], usage: emptyUsage() };
+	/** Adds fields to every answer as it's made (debates: who wrote it). */
+	decorate?: (item: AssistantItem) => void;
+	/** Tool calls that get no card (debates show their own turn summaries instead). */
+	readonly hiddenTools = new Set<string>();
 
 	constructor(readonly ref: ContainerRef) {}
 
@@ -96,7 +100,7 @@ export class TimelineBuilder {
 				this.push(this.assistantItem(id, a));
 				this.addUsage(a.usage);
 				for (const b of a.content) {
-					if (b.type !== "toolCall") continue;
+					if (b.type !== "toolCall" || this.hiddenTools.has(b.name)) continue;
 					const details = startDetails(b.name, b.arguments);
 					const t: ToolItem = { kind: "tool", id: `tool:${b.id}`, at: iso(a.timestamp), callId: b.id, tool: b.name, args: b.arguments, status: "interrupted", ...(details ? { details } : {}) };
 					tools.set(b.id, t);
@@ -140,6 +144,13 @@ export class TimelineBuilder {
 		return this.items;
 	}
 
+	/** Replaces the items (after rearranging them outside the event flow); usage and state stay. Emits nothing. */
+	setItems(items: TimelineItem[]): void {
+		this.items = items;
+		this.index.clear();
+		items.forEach((it, i) => this.index.set(it.id, i));
+	}
+
 	setState(patch: Partial<SessionState>): void {
 		this.state = { ...this.state, ...patch };
 		this.pending.push({ type: "state", state: structuredClone(this.state) });
@@ -168,6 +179,7 @@ export class TimelineBuilder {
 
 	assistantStart(id: string, model?: string): void {
 		const item: AssistantItem = { kind: "assistant", id, at: iso(), parts: [], status: "streaming", ...(model ? { model } : {}) };
+		this.decorate?.(item);
 		this.push(item);
 		this.streaming = { id, partByContentIndex: new Map(), thinkingFrom: undefined, thinkingTo: undefined };
 		this.pending.push({ type: "item.added", item: structuredClone(item) });
@@ -221,6 +233,7 @@ export class TimelineBuilder {
 	}
 
 	toolStart(callId: string, tool: string, args: unknown, parentCallId?: string): void {
+		if (this.hiddenTools.has(tool)) return;
 		const id = `tool:${callId}`;
 		const existing = this.get(id) as ToolItem | undefined;
 		if (existing) {
@@ -290,7 +303,7 @@ export class TimelineBuilder {
 
 	private assistantItem(id: string, m: Extract<PiMessage, { role: "assistant" }>): AssistantItem {
 		const usage = toUsage(m.usage);
-		return {
+		const item: AssistantItem = {
 			kind: "assistant",
 			id,
 			at: iso(m.timestamp),
@@ -300,6 +313,8 @@ export class TimelineBuilder {
 			...(usage ? { usage } : {}),
 			...(m.stopReason === "error" || m.errorMessage ? errorFields(m.errorMessage, m.provider) : {}),
 		};
+		this.decorate?.(item);
+		return item;
 	}
 
 	private addUsage(u: PiUsage | undefined): void {

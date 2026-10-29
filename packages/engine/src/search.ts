@@ -3,7 +3,7 @@
  * branch. SQLite FTS5 (Node's built-in SQLite) in `search.db`, kept current from session events.
  */
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import type { TimelineItem } from "@piopio/protocol";
+import type { ContainerRef, TimelineItem } from "@piopio/protocol";
 
 /** Bump to rebuild every session's rows (e.g. when indexed text changes shape). */
 export const INDEX_VERSION = 1;
@@ -24,10 +24,26 @@ export class SearchIndex {
 		this.db.exec(`
 			PRAGMA journal_mode = WAL;
 			CREATE VIRTUAL TABLE IF NOT EXISTS rows USING fts5(text, session_id UNINDEXED, item_id UNINDEXED, kind UNINDEXED, at UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
+			CREATE TABLE IF NOT EXISTS destinations (id TEXT PRIMARY KEY, ref TEXT NOT NULL, title TEXT NOT NULL, at TEXT NOT NULL);
 			CREATE TABLE IF NOT EXISTS indexed (session_id TEXT PRIMARY KEY, version INTEGER NOT NULL);
 		`);
 		this.insertRow = this.db.prepare("INSERT INTO rows (text, session_id, item_id, kind, at) VALUES (?, ?, ?, ?, ?)");
 		this.deleteItemRow = this.db.prepare("DELETE FROM rows WHERE session_id = ? AND item_id = ?");
+	}
+
+	setDestination(id: string, ref: ContainerRef, title: string, at: string): void {
+		this.db.prepare("INSERT OR REPLACE INTO destinations VALUES (?, ?, ?, ?)").run(id, JSON.stringify(ref), title, at);
+	}
+	destination(id: string): { ref: ContainerRef; title: string; at: string } | undefined {
+		const row = this.db.prepare("SELECT ref, title, at FROM destinations WHERE id = ?").get(id) as { ref: string; title: string; at: string } | undefined;
+		return row ? { ...row, ref: JSON.parse(row.ref) as ContainerRef } : undefined;
+	}
+	deleteContainer(id: string): void {
+		const rows = this.db.prepare("SELECT id, ref FROM destinations").all() as { id: string; ref: string }[];
+		for (const row of rows) if ((JSON.parse(row.ref) as ContainerRef).id === id) {
+			this.deleteSession(row.id);
+			this.db.prepare("DELETE FROM destinations WHERE id = ?").run(row.id);
+		}
 	}
 
 	isIndexed(sessionId: string): boolean {

@@ -13,9 +13,17 @@ struct CommandPalette: View {
     let newThread: () -> Void
     let openThread: (String, String?) -> Void // thread id, item to reveal
 
+    let openResult: (SearchResult) -> Void
+    @State private var searchScope: SearchScope = .all
+    enum SearchScope: String, CaseIterable {
+        case all = "Everything", build = "Build", chat = "Chats", notebooks = "Notebooks", agents = "Agents"
+        var kind: ContainerKind? { switch self { case .all: nil; case .build: .build; case .chat: .thread; case .notebooks: .space; case .agents: .agent } }
+    }
     @State var mode: Mode
     @State var query = ""
     @State private var selection = 0
+    @State private var searching = false
+    @State private var searchError: String?
     @State private var hits: [SearchResult] = []
     @State private var searchTask: Task<Void, Never>?
     @FocusState private var focused: Bool
@@ -55,6 +63,11 @@ struct CommandPalette: View {
                         if mode == .models { mode = .all; query = ""; return .handled }
                         close(); return .handled
                     }
+                if mode != .models {
+                    Picker("Search in", selection: $searchScope) {
+                        ForEach(SearchScope.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }.labelsHidden().frame(width: 125).accessibilityLabel("Search scope")
+                }
                 Text(scope).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
                     .padding(.horizontal, 7).padding(.vertical, 2)
                     .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.badge))
@@ -78,7 +91,7 @@ struct CommandPalette: View {
                             }
                         }
                         if flat.isEmpty {
-                            Text(query.isEmpty ? "Type to search" : "No matches")
+                            Text(searching ? "Searching conversations…" : query.count < 2 ? "Type at least two characters to search messages" : "No matches")
                                 .font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(14)
                         }
                     }
@@ -88,6 +101,7 @@ struct CommandPalette: View {
                 .onChange(of: selection) { _, s in proxy.scrollTo(s) }
             }
             .frame(height: min(400, listHeight))
+            if let searchError { Text(searchError).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(10) }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             HStack(spacing: 14) {
                 Text("↑↓ navigate"); Text("↩ run"); Text("esc close")
@@ -111,11 +125,12 @@ struct CommandPalette: View {
             scheduleSearch(q)
         }
         .onChange(of: mode) { _, _ in selection = 0 }
+        .onChange(of: searchScope) { _, _ in selection = 0; scheduleSearch(query) }
     }
 
     private var placeholder: String {
         switch mode {
-        case .all: "Search actions, threads and messages"
+        case .all: "Search projects, conversations and messages"
         case .messages: "Search messages"
         case .models: "Pick a model"
         }
@@ -153,18 +168,43 @@ struct CommandPalette: View {
             return rows.isEmpty ? [] : [Group(id: "Messages", rows: rows)]
         case .all:
             let actions = commands.filter { matches($0.title) }
-            let threads = (Areas.shared.set.showsChats ? engine.threads : []).filter { matches($0.title) }.prefix(q.isEmpty ? 6 : 10).map { t in
-                Row(id: "t:\(t.ref.id)", icon: "bubble.left", title: t.title, trailing: "Thread") { openThread(t.ref.id, nil); close() }
+            let areas = Areas.shared.set
+            var destinations: [Row] = []
+            func add(_ id: String, _ title: String, _ type: String, _ icon: String, _ kind: ContainerKind, _ run: @escaping () -> Void) {
+                guard matches(title), searchScope.kind == nil || searchScope.kind == kind else { return }
+                destinations.append(Row(id: id, icon: icon, title: title, trailing: type, run: { run(); close() }))
             }
-            let goTo = Array(threads) + (q.count >= 2 ? messageRows : [])
-            return [Group(id: "Actions", rows: actions), Group(id: "Go to", rows: goTo)].filter { !$0.rows.isEmpty }
+            if areas.showsProjects {
+                for p in engine.projects { add("p:\(p.id)", p.name, "Folder", "folder", .build) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.project(p.id).raw) } }
+            }
+            if areas.contains(.build) {
+                for s in engine.buildSessions { add("b:\(s.ref.id)", s.title, "Build", "chevron.left.forwardslash.chevron.right", .build) { openThread(s.ref.id, nil) } }
+            }
+            if areas.contains(.chat) {
+                for s in engine.threads { add("t:\(s.ref.id)", s.title, "Chat", "bubble.left", .thread) { openThread(s.ref.id, nil) } }
+                for s in engine.spaces {
+                    add("n:\(s.ref.id)", s.title, "Notebook", "book.closed", .space) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.notebook(s.ref.id).raw) }
+                    for topic in s.topics ?? [] { add("n:\(s.ref.id)/\(topic.id)", topic.title, s.title, "text.bubble", .space) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.notebook("\(s.ref.id)/\(topic.id)").raw) } }
+                }
+            }
+            if areas.contains(.agents) { for s in engine.agents { add("a:\(s.ref.id)", s.title, "Agent", "bird", .agent) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.agent(s.ref.id).raw) } } }
+            let goTo = Array(destinations.prefix(q.isEmpty ? 10 : 25))
+            return [Group(id: "Actions", rows: searchScope == .all ? actions : []), Group(id: "Go to", rows: goTo), Group(id: "Messages", rows: q.count >= 2 ? messageRows : [])].filter { !$0.rows.isEmpty }
+
         }
     }
 
     private var messageRows: [Row] {
-        hits.filter { $0.kind != .title }.map { hit in
-            Row(id: "s:\(hit.id)", icon: hit.kind == .user ? "person" : "sparkles", title: hit.title, detail: AttributedString(" · ") + highlighted(hit.snippet), trailing: hit.kind == .user ? "You" : "Answer") {
-                openThread(hit.ref.id, hit.itemId)
+        hits.filter { hit in
+            guard hit.kind != .title else { return false }
+            switch hit.ref.kind {
+            case .thread, .space: return Areas.shared.contains(.chat)
+            case .build: return Areas.shared.contains(.build)
+            case .agent: return Areas.shared.contains(.agents)
+            }
+        }.map { hit in
+            Row(id: "s:\(hit.id)", icon: hit.kind == .user ? "person" : "sparkles", title: hit.title, detail: AttributedString(" · ") + highlighted(hit.snippet), trailing: hit.ref.kind.rawValue.capitalized + (hit.kind == .user ? " · You" : " · Answer")) {
+                openResult(hit)
                 close()
             }
         }
@@ -178,6 +218,7 @@ struct CommandPalette: View {
             rows += [
                 Row(id: "c:new", icon: "square.and.pencil", title: "New Chat", trailing: "⌘N") { newThread(); close() },
                 Row(id: "c:notebook", icon: "book.closed", title: "New Notebook", trailing: "⇧⌘N") { close(); NotificationCenter.default.post(name: .newSpace, object: nil) },
+                Row(id: "c:debate", icon: "person.2.wave.2", title: "New Debate", trailing: "⌥⌘N") { close(); NotificationCenter.default.post(name: .newDebate, object: nil) },
                 Row(id: "c:quick", icon: "bolt", title: "Quick Chat", trailing: QuickChatController.shortcutLabel) { QuickChatController.shared?.show(); close() },
             ]
         }
@@ -238,15 +279,21 @@ struct CommandPalette: View {
 
     private func scheduleSearch(_ q: String) {
         searchTask?.cancel()
+        hits = []; searchError = nil; searching = false
         guard mode != .models, q.trimmingCharacters(in: .whitespaces).count >= 2, let client = engine.client else {
             hits = []
             return
         }
+        searching = true
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
-            let results = (try? await client.call("catalog.search", SearchParams(query: q, limit: 30), as: SearchResults.self).results) ?? []
-            if !Task.isCancelled { hits = results }
+            do {
+                let results = try await client.call("catalog.search", SearchParams(query: q, limit: 60, kind: searchScope.kind), as: SearchResults.self).results
+                if !Task.isCancelled { hits = results; searching = false }
+            } catch {
+                if !Task.isCancelled { searchError = "Couldn't search conversations. Check the engine connection and try again."; searching = false }
+            }
         }
     }
 

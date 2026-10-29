@@ -20,7 +20,7 @@ final class EngineController {
     private(set) var buildSessions: [SessionSummary] = []
     private(set) var models: [ModelInfo] = []
     private(set) var defaultModel: ModelRef?
-    private(set) var hasKey = Keychain.read(secretOpenRouter) != nil
+    private(set) var hasKey = ProcessInfo.processInfo.environment["PIOPIO_FAUX"] == "1" ? false : Keychain.read(secretOpenRouter) != nil
     /// Model providers and how each is connected (docs/spec/10-model-providers).
     private(set) var providers: [ProviderInfo] = []
     /// The sign-in in progress (Settings › Models shows it as a sheet).
@@ -32,20 +32,107 @@ final class EngineController {
     private(set) var wasReady = false
     /// Latest session status per open thread (sidebar status dots).
     var liveStatus: [String: SessionStatus] = [:]
-    var isLost: Bool { if case .failed = status { wasReady } else { false } }
+    var isLost: Bool { if case .failed = status { wasReady && !isMaintaining } else { false } }
     /// Scripted echo model instead of OpenRouter (`PIOPIO_FAUX=1`), for development.
     let faux = ProcessInfo.processInfo.environment["PIOPIO_FAUX"] == "1"
 
+    @ObservationIgnored private let scriptedSecrets = ScriptedSecrets()
     @ObservationIgnored private(set) var client: EngineClient?
     @ObservationIgnored private var process: Process?
     @ObservationIgnored private var openThreads: [String: ThreadModel] = [:]
     @ObservationIgnored private var handlers: [String: ([SessionEvent]) -> Void] = [:]
     @ObservationIgnored private var orphans: [String: [[SessionEvent]]] = [:]
 
+    var searchTarget: SearchResult?
+
     let home = EngineClient.defaultHome()
     private var socket: URL { home.appending(path: "engine.sock") }
 
     var needsKey: Bool { !faux && !hasKey && !providers.contains(where: \.isConnected) }
+
+    private(set) var isMaintaining = false
+    private(set) var dataGeneration = 0
+
+    /// The only backup/restore entry point: stop writers, perform a verified operation, then reconnect.
+    private func offlineData<T: Sendable>(_ operation: @escaping @Sendable (URL) throws -> T) async throws -> T {
+        guard !isMaintaining else { throw EngineError(code: "BUSY", message: "A data operation is already running.") }
+        try await flushDrafts()
+        isMaintaining = true
+        stopping = true
+        let background = runsInBackground
+        defer { isMaintaining = false }
+        do {
+            if let client {
+                _ = try await client.call("engine.shutdown", Empty(), as: Empty.self)
+            }
+            if background { try await Self.agent.unregister(); agentTick += 1 }
+            await client?.close(); client = nil
+            for _ in 0..<200 {
+                if !FileManager.default.fileExists(atPath: socket.path), process?.isRunning != true { break }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            guard !FileManager.default.fileExists(atPath: socket.path), process?.isRunning != true else {
+                throw EngineError(code: "BUSY", message: "The engine is still stopping. Your data has not been changed.")
+            }
+            try await Task.sleep(for: .milliseconds(150))
+            process = nil
+            handlers = [:]; orphans = [:]; openThreads = [:]; liveStatus = [:]
+            let folder = home
+            let result = try await Task.detached { try operation(folder) }.value
+            if background { try Self.agent.register(); agentTick += 1 }
+            stopping = false
+            dataGeneration += 1
+            await start()
+            return result
+        } catch {
+            if background, Self.agent.status == .notRegistered { try? Self.agent.register(); agentTick += 1 }
+            stopping = false
+            dataGeneration += 1
+            await start()
+            throw error
+        }
+    }
+
+    func createBackup(at target: URL) async throws {
+        var values = UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "app.piopio.Piopio") ?? [:]
+        values.removeValue(forKey: "customEnginePath")
+        let preferences = try PropertyListSerialization.data(fromPropertyList: values, format: .binary, options: 0)
+        try await offlineData { home in _ = try BackupArchive.create(home: home, at: target, preferences: preferences) }
+    }
+
+    /// Leaves the previous data folder alongside the restored one for recovery.
+    func restoreBackup(from archive: URL, restorePreferences: Bool = true) async throws -> URL {
+        _ = try await Task.detached { try BackupArchive.inspect(archive) }.value
+        let preferencesURL = archive.appending(path: "preferences.plist")
+        let preferences = FileManager.default.fileExists(atPath: preferencesURL.path) ? try Data(contentsOf: preferencesURL) : nil
+        let previous = try await offlineData { home in
+            let fm = FileManager.default
+            let stage = home.deletingLastPathComponent().appending(path: ".piopio-restore-\(UUID().uuidString)")
+            let previous = home.deletingLastPathComponent().appending(path: "Piopio-before-restore-\(UUID().uuidString)")
+            defer { try? fm.removeItem(at: stage) }
+            try BackupArchive.restore(archive, to: stage)
+            try fm.moveItem(at: home, to: previous)
+            do {
+                try fm.moveItem(at: stage, to: home)
+                try BackupArchive.rebase(home: home, from: stage)
+            } catch {
+                try? fm.removeItem(at: home)
+                try fm.moveItem(at: previous, to: home)
+                throw error
+            }
+            return previous
+        }
+        if restorePreferences, let preferences, var values = try PropertyListSerialization.propertyList(from: preferences, options: [], format: nil) as? [String: Any] {
+            values.removeValue(forKey: "customEnginePath")
+            values["sidebarItem"] = "home"
+            UserDefaults.standard.setPersistentDomain(values, forName: Bundle.main.bundleIdentifier ?? "app.piopio.Piopio")
+        }
+        return previous
+    }
+
+    func flushDrafts() async throws {
+        for thread in Array(openThreads.values) { try await thread.flushDraft() }
+    }
 
     // MARK: Lifecycle
 
@@ -165,30 +252,37 @@ final class EngineController {
         client = nil
         handlers = [:]
         orphans = [:]
-        for t in openThreads.values { t.close() }
+        let drafts = Array(openThreads.values)
+        for t in drafts { t.close() }
         openThreads = [:]
         if let p = process, !p.isRunning { process = nil }
-        Task { await start() }
+        Task {
+            for thread in drafts { try? await thread.flushDraft() }
+            await start()
+        }
     }
 
     /// Connects to a running engine. Returns nil when nothing is listening.
     private func connect() async throws -> HelloResult? {
         guard FileManager.default.fileExists(atPath: socket.path) else { return nil }
         let client = EngineClient(socketPath: socket.path)
+        let scripted = faux, temporarySecrets = scriptedSecrets
         await client.setReverseHandler { method, params in
             // Apple app tools for agents (06-agents §4.1), run with this app's permissions.
             if method == "app.tool" { return await AppleTools.shared.handle(params) }
             // Provider sign-ins and refreshed tokens (docs/spec/10 §10): the Keychain is the store.
             if method == "secrets.set", let name = params["name"]?.stringValue, let value = params["value"]?.stringValue {
-                try? Keychain.write(name, value: value)
+                if scripted { await temporarySecrets.set(name, value: value) } else { try? Keychain.write(name, value: value) }
                 return .object([:])
             }
             if method == "secrets.delete", let name = params["name"]?.stringValue {
-                Keychain.delete(name)
+                if scripted { await temporarySecrets.set(name, value: nil) } else { Keychain.delete(name) }
                 return .object([:])
             }
             guard method == "secrets.get", let name = params["name"]?.stringValue else { return .object(["value": .null]) }
-            return .object(["value": Keychain.read(name).map(JSONValue.string) ?? .null])
+            let value: String?
+            if scripted { value = await temporarySecrets.get(name) } else { value = Keychain.read(name) }
+            return .object(["value": value.map(JSONValue.string) ?? .null])
         }
         let hello: HelloResult
         do {
@@ -745,7 +839,7 @@ final class EngineController {
     func loadProviders() async {
         guard let client, let list = try? await client.call("providers.list", Empty(), as: ProvidersListResult.self) else { return }
         providers = list.providers
-        hasKey = Keychain.read(secretOpenRouter) != nil
+        if faux { hasKey = await scriptedSecrets.get(secretOpenRouter) != nil } else { hasKey = Keychain.read(secretOpenRouter) != nil }
     }
 
     /// Starts connecting a provider; the sign-in sheet follows `login`.
@@ -895,14 +989,22 @@ final class EngineController {
 
     func saveKey(_ key: String) async throws {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        try Keychain.write(secretOpenRouter, value: trimmed)
+        if faux { await scriptedSecrets.set(secretOpenRouter, value: trimmed) } else { try Keychain.write(secretOpenRouter, value: trimmed) }
         hasKey = true
         _ = try? await client?.call("secrets.changed", SecretChangedParams(name: secretOpenRouter), as: Empty.self)
     }
 
     func removeKey() async {
-        Keychain.delete(secretOpenRouter)
+        if faux { await scriptedSecrets.set(secretOpenRouter, value: nil) } else { Keychain.delete(secretOpenRouter) }
         hasKey = false
         _ = try? await client?.call("secrets.changed", SecretChangedParams(name: secretOpenRouter), as: Empty.self)
     }
+}
+
+
+/// Scripted UI checks never access or modify the user's Keychain.
+private actor ScriptedSecrets {
+    private var values: [String: String] = [:]
+    func get(_ name: String) -> String? { values[name] }
+    func set(_ name: String, value: String?) { values[name] = value }
 }

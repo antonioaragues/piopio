@@ -5,6 +5,9 @@
  */
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { request as httpRequest, type RequestOptions } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { Readable } from "node:stream";
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { ModelHub } from "../models.js";
@@ -20,6 +23,8 @@ export type WebOptions = {
 	/** Model that runs OpenRouter's web plugin (cheap and fast is fine: the results are what matter). */
 	searchModel?: string;
 	fetchImpl?: typeof fetch;
+	/** Root container whose search requests are billed. */
+	scope?: string;
 };
 
 export function createWebExtension(hub: ModelHub, options: WebOptions = {}) {
@@ -77,7 +82,9 @@ export async function runWebSearch(hub: ModelHub, args: { query: string; max_res
 	});
 	const body = await response.text();
 	if (!response.ok) return { text: `Web search failed (${response.status}): ${body.slice(0, 300)}`, isError: true };
-	const { summary, sources } = parseSearchResponse(JSON.parse(body));
+	const json = JSON.parse(body) as { usage?: { cost?: number } };
+	hub.extraCosts.record("web_search", options.searchModel ?? process.env.PIOPIO_SEARCH_MODEL ?? "deepseek/deepseek-v4.1-flash", json.usage?.cost, options.scope);
+	const { summary, sources } = parseSearchResponse(json);
 	return { text: formatSearch(args.query, summary, sources), details: { type: "web", results: sources } };
 }
 
@@ -125,7 +132,8 @@ export async function fetchPage(rawUrl: string, options: { allowPrivate: boolean
 	for (let hop = 0; hop <= 5; hop++) {
 		if (url.protocol !== "http:" && url.protocol !== "https:") return { error: "Only http and https pages can be read." };
 		if (!options.allowPrivate && (await isPrivateHost(url.hostname))) return { error: `Refusing to read ${url.hostname}: it is a local or private network address.` };
-		const response = await options.fetchImpl(url, { redirect: "manual", headers: { "user-agent": "Mozilla/5.0 (Macintosh) Piopio/0.1", accept: "text/html,text/plain,application/json;q=0.9,*/*;q=0.5" }, signal: AbortSignal.timeout(30_000) });
+		const fetchImpl = !options.allowPrivate && options.fetchImpl === fetch ? publicFetch : options.fetchImpl;
+		const response = await fetchImpl(url, { redirect: "manual", headers: { "user-agent": "Mozilla/5.0 (Macintosh) Piopio/0.1", accept: "text/html,text/plain,application/json;q=0.9,*/*;q=0.5" }, signal: AbortSignal.timeout(30_000) });
 		if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
 			url = new URL(response.headers.get("location")!, url);
 			continue;
@@ -162,15 +170,52 @@ export async function isPrivateHost(hostname: string): Promise<boolean> {
 	const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
 	if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return true;
 	const addresses = isIP(host) ? [host] : await lookup(host, { all: true }).then((r) => r.map((a) => a.address)).catch(() => []);
-	return addresses.some(isPrivateAddress);
+	return addresses.length === 0 || addresses.some(isPrivateAddress);
 }
 
 export function isPrivateAddress(address: string): boolean {
 	if (isIP(address) === 4) {
-		const [a, b] = address.split(".").map(Number) as [number, number];
-		return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+		const [a, b, c] = address.split(".").map(Number) as [number, number, number];
+		return a >= 224 || (a === 192 && (b === 0 || b === 2)) || (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) || (a === 203 && b === 0 && c === 113) || a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
 	}
-	const v6 = address.toLowerCase();
-	if (v6.startsWith("::ffff:")) return isPrivateAddress(v6.slice(7));
-	return v6 === "::1" || v6 === "::" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
+	if (isIP(address) !== 6) return true;
+	// URL canonicalization turns dotted IPv4 mappings into hexadecimal IPv6 groups.
+	const normalized = new URL(`http://[${address}]/`).hostname.slice(1, -1);
+	if (normalized.startsWith("::ffff:")) {
+		const tail = normalized.slice(7).split(":");
+		const value = parseInt(tail[0]!, 16) * 65536 + parseInt(tail[1]!, 16);
+		return isPrivateAddress([value >>> 24, (value >>> 16) & 255, (value >>> 8) & 255, value & 255].join("."));
+	}
+	// Accept global unicast only. This also excludes unspecified, link-local, multicast,
+	// unique-local, IPv4-compatible and transition ranges.
+	return !/^[23][0-9a-f]{3}:/.test(normalized) || normalized.startsWith("2001:db8:") || normalized.startsWith("2002:") || normalized.startsWith("2001:0:") || normalized.startsWith("2001::");
 }
+
+
+/** Resolve once and pin the checked address to the actual connection, retaining hostname/TLS checks.
+ * Redirects return to fetchPage and go through the same validation. No connection pool can reuse an
+ * unchecked DNS result. Tests can inject fetchImpl; production always uses this transport.
+ */
+const publicFetch: typeof fetch = async (input, init) => {
+	const url = new URL(String(input));
+	const host = url.hostname.replace(/^\[|\]$/g, "");
+	const addresses = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true });
+	if (!addresses.length || addresses.some(a => isPrivateAddress(a.address))) throw new Error("Refusing a local or private network address.");
+	const address = addresses[0]!;
+	return new Promise<Response>((resolve, reject) => {
+		const requestOptions: RequestOptions & { autoSelectFamily: boolean } = {
+			method: "GET", agent: false, autoSelectFamily: false,
+			headers: Object.fromEntries(new Headers(init?.headers)),
+			...(init?.signal ? { signal: init.signal } : {}),
+			lookup: (_hostname, _options, callback) => callback(null, address.address, address.family),
+		};
+		const request = (url.protocol === "https:" ? httpsRequest : httpRequest)(url, requestOptions, response => {
+			const headers = new Headers();
+			for (const [key, value] of Object.entries(response.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(", ") : value);
+			const status = response.statusCode ?? 502;
+			resolve(new Response([101, 204, 205, 304].includes(status) ? null : Readable.toWeb(response) as ReadableStream<Uint8Array>, { status, headers }));
+		});
+		request.on("error", reject);
+		request.end();
+	});
+};

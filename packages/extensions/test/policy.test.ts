@@ -79,3 +79,18 @@ test("plan mode's read-only commands", () => {
 	for (const ok of ["ls -la src", "git status && git diff", "rg TODO | head -20", "sed -n 1,40p a.ts", "git log --oneline -5", "cat a.txt | wc -l"]) expect(readOnlyCommand(ok), ok).toBe(true);
 	for (const no of ["rm -rf build", "echo hi > a.txt", "git commit -m x", "npm install", "sed -i s/a/b/ a.ts", "cat a | tee b", "ls $(rm x)", "git push"]) expect(readOnlyCommand(no), no).toBe(false);
 });
+
+
+test("shell evaluation never inherits a command prefix approval", () => {
+	const rules: Rule[] = [{ kind: "command", pattern: "echo" }];
+	for (const command of ["echo $(touch /tmp/x)", "echo `touch /tmp/x`", "echo ok > /tmp/x", "echo ok & touch x", "echo ok # ignored", "echo ${HOME}"]) {
+		expect(run("auto_edit", "bash", { command }, rules), command).toBe("ask");
+		expect(suggestCommandRule(command), command).toBeUndefined();
+	}
+	expect(run("auto_edit", "bash", { command: "echo 'hello world'" }, rules)).toBe("allow");
+});
+
+test("Plan mode refuses mutating arguments on otherwise readable programs", () => {
+	for (const command of ["find . -delete", "find . -exec touch x ;", "git branch -D example", "git branch new", "git remote add x https://example.com", "git diff --output=x", "sed -n 'w /tmp/x' README.md", "sort -o x y", "uniq input output", "rg --pre=sh x", "fd --exec touch x", "file -C", "date 10251200", "sed -n 1p -i x.txt", "fd -xsh", "tree -ooutput.html", "file -Cm magic"]) expect(readOnlyCommand(command), command).toBe(false);
+	for (const command of ["git branch", "git branch --list", "git remote -v", "sort a.txt", "date +%F", "find . -name '*.ts'", "rg 'a|b' src"]) expect(readOnlyCommand(command), command).toBe(true);
+});

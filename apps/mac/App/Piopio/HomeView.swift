@@ -14,13 +14,12 @@ struct HomeView: View {
                 greeting
                 if Areas.shared.showsTip { tip.padding(.top, 20) }
                 if askable { AskBox(engine: engine, item: $item).padding(.top, 22) }
-                HStack(alignment: .top, spacing: 20) {
-                    needsYou.frame(maxWidth: .infinity)
-                    VStack(alignment: .leading, spacing: 18) {
-                        running
-                        comingUp
-                    }
-                    .frame(width: 330)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 20) {
+                        needsYou.frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: 18) { running; comingUp }.frame(width: 300)
+                    }.frame(minWidth: 620)
+                    VStack(alignment: .leading, spacing: 18) { needsYou; running; comingUp }
                 }
                 .padding(.top, 30)
                 jumpBack.padding(.top, 30)
@@ -67,7 +66,7 @@ struct HomeView: View {
         var parts = [Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide))]
         let n = engine.needsYouCount
         parts.append(n == 0 ? "nothing needs you" : "\(n) thing\(n == 1 ? "" : "s") need\(n == 1 ? "s" : "") you")
-        if let today = engine.usage?.todayUsd { parts.append("\(MainSidebar.money(today)) spent today") }
+        if let today = engine.usage?.todayUsd { parts.append("\(MainSidebar.money(today)) on your OpenRouter key today") }
         return parts.joined(separator: " · ")
     }
 
@@ -309,7 +308,25 @@ struct AskBox: View {
     let engine: EngineController
     @Binding var item: SidebarItem
     @State private var text = ""
-    @State private var target: Target = .chat
+    @AppStorage("homeTarget") private var targetRaw = "chat"
+    @State private var pendingChat: ContainerRef?
+    @State private var sending = false
+    @State private var sendError: String?
+    private var target: Target {
+        get {
+            if targetRaw.hasPrefix("project:") { return .project(String(targetRaw.dropFirst(8))) }
+            if targetRaw.hasPrefix("agent:") { return .agent(String(targetRaw.dropFirst(6))) }
+            return .chat
+        }
+        nonmutating set {
+            switch newValue { case .chat: targetRaw = "chat"; case .project(let id): targetRaw = "project:" + id; case .agent(let id): targetRaw = "agent:" + id }
+            pendingChat = nil
+        }
+    }
+    private func saveHomeDraft() {
+        do { try DraftStore(home: engine.home).save(ComposerDraft(text: text, destination: pendingChat), for: "home") }
+        catch { sendError = "Couldn't save this draft: \(error.localizedDescription)" }
+    }
     @State private var showModels = false
     @State private var model: ModelRef?
     @FocusState private var focused: Bool
@@ -337,6 +354,7 @@ struct AskBox: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
             TextField(placeholder, text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
@@ -356,7 +374,7 @@ struct AskBox: View {
                             ForEach(engine.agents, id: \.ref.id) { a in Button(a.title) { target = .agent(a.ref.id) } }
                         }
                     }
-                } label: { Text(targetLabel) }
+                } label: { Label("Send to: \(targetLabel)", systemImage: "arrow.turn.up.right") }
                     .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.visible).fixedSize()
                 if target == .chat {
                     Button { showModels = true } label: { Text(modelLabel) }
@@ -366,13 +384,14 @@ struct AskBox: View {
                         }
                 }
                 Spacer()
-                Text(hint).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                EmptyView()
                 Button(action: send) {
                     Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.dsInvFg)
                         .frame(width: 28, height: 28).background(Color.dsInv, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("Send to \(targetLabel)")
                 .keyboardShortcut(.return, modifiers: .command)
             }
         }
@@ -380,8 +399,11 @@ struct AskBox: View {
         .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(focused ? Color.dsAccentLine : Color.dsLine, lineWidth: focused ? 1 : 0.5))
         .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
-        .onChange(of: text) { _, t in mention(t) }
-        .onAppear { if target == .chat, let first = defaultTarget { target = first } }
+        .onChange(of: text) { _, t in mention(t); saveHomeDraft() }
+         .onAppear {
+            if target == .chat, let first = defaultTarget, first != .chat { target = first }
+            if let saved = DraftStore(home: engine.home).load("home") { text = saved.text; pendingChat = saved.destination }
+        }
         .onChange(of: areas) { _, _ in if let first = defaultTarget { target = first } }
     }
 
@@ -419,31 +441,46 @@ struct AskBox: View {
 
     private func send() {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty else { return }
-        text = ""
+        guard !message.isEmpty, !sending else { return }
+        sendError = nil
         switch target {
         case .chat:
+            sending = true
             Task {
-                guard let ref = await engine.createThread(model: model) else { return }
-                try? await engine.refreshCatalog()
-                item = .chat(ref.id)
+                defer { sending = false }
+                let destination: ContainerRef?
+                if let pendingChat { destination = pendingChat } else { destination = await engine.createThread(model: model) }
+                guard let ref = destination else {
+                    sendError = "Couldn't start a chat. Your draft is saved; try again when the engine is connected."
+                    return
+                }
+                pendingChat = ref; saveHomeDraft()
                 let thread = engine.thread(ref)
                 await thread.open()
-                await thread.send(message)
+                if await thread.send(message) {
+                    text = ""; pendingChat = nil; saveHomeDraft()
+                    try? await engine.refreshCatalog()
+                    item = .chat(ref.id)
+                } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
             }
         case .project(let id):
-            guard let project = engine.projects.first(where: { $0.id == id }) else { return }
+            guard let project = engine.projects.first(where: { $0.id == id }) else { sendError = "Choose an available project folder."; return }
             NotificationCenter.default.post(name: .newBuildSession, object: project.id, userInfo: ["prompt": message])
         case .agent(let id):
-            item = .agent(id)
-            UserDefaults.standard.set("Chat", forKey: "agentTab")
+            sending = true
             Task {
+                defer { sending = false }
                 let thread = engine.thread(ContainerRef(kind: .agent, id: id))
                 await thread.open()
-                await thread.send(message)
+                if await thread.send(message) {
+                    text = ""; saveHomeDraft()
+                    UserDefaults.standard.set("Chat", forKey: "agentTab")
+                    item = .agent(id)
+                } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
             }
         }
     }
+
 }
 
 private extension View {

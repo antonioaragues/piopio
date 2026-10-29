@@ -13,6 +13,37 @@ final class ThreadModel {
     private(set) var error: String?
     private(set) var errorIsAuth = false
     var isFollowing = true
+    var composerText = "" { didSet { persistDraft() } }
+    var composerAttachments: [PendingAttachment] = [] { didSet { persistDraft() } }
+    private(set) var isSubmitting = false
+    @ObservationIgnored private let draftStore: DraftStore
+    @ObservationIgnored private let draftWriter: DraftWriter
+    @ObservationIgnored private var draftSaveTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingInput: ComposerDraft?
+    private var draftKey: String { "\(ref.kind.rawValue):\(ref.key)" }
+    private func currentDraft() -> ComposerDraft {
+        let same = pendingInput?.text.trimmingCharacters(in: .whitespacesAndNewlines) == composerText.trimmingCharacters(in: .whitespacesAndNewlines) && pendingInput?.attachments == composerAttachments.map(\.attachment) && pendingInput?.editItemId == editing?.itemId
+        return ComposerDraft(text: composerText, attachments: composerAttachments.map(\.attachment), requestId: same ? pendingInput!.requestId : UUID().uuidString, editItemId: editing?.itemId, steer: same ? pendingInput!.steer : false)
+    }
+    private func persistDraft() {
+        draftSaveTask?.cancel()
+        let input = currentDraft()
+        draftSaveTask = Task { [weak self, draftWriter, draftKey] in
+            do {
+                try await Task.sleep(for: .milliseconds(200))
+                try await draftWriter.save(input, for: draftKey)
+            } catch is CancellationError {} catch {
+                self?.error = "Couldn't save this draft: \(error.localizedDescription)"
+            }
+        }
+    }
+    func flushDraft() async throws {
+        draftSaveTask?.cancel()
+        try await draftWriter.save(currentDraft(), for: draftKey)
+        try await draftWriter.save(pendingInput ?? ComposerDraft(), for: draftKey + "/pending")
+    }
+    func retrySend() async { await send(composerText, attachments: composerAttachments.map(\.attachment), steer: pendingInput?.steer ?? false) }
+
     /// The message being edited in the composer (sending re-asks from it as a new version).
     private(set) var editing: (itemId: String, original: String)?
     /// Raw provider error shown by "Details".
@@ -34,10 +65,25 @@ final class ThreadModel {
 
     init(ref: ContainerRef, engine: EngineController, notifies: Bool = true, compact: Bool = false) {
         let root = ref.kind == .build ? engine.buildSessions.first { $0.ref.id == ref.id }?.cwd : nil
-        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread, build: ref.kind == .build, root: root)
+        // Debates have no versions to switch between: the moderator decides who answers next (docs/spec/16-debate).
+        let debate = ref.kind == .thread && engine.threads.first { $0.ref.id == ref.id }?.debate != nil
+        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread && !debate, build: ref.kind == .build, root: root)
+        draftStore = DraftStore(home: engine.home)
+        draftWriter = DraftWriter(store: draftStore)
         self.ref = ref
         self.engine = engine
         self.notifies = notifies
+        if let saved = draftStore.load(draftKey) {
+            composerText = saved.text
+            composerAttachments = saved.attachments.map { attachment in
+                let name: String
+                switch attachment { case .image(let n, _, _), .text(let n, _, _): name = n }
+                return PendingAttachment(name: name, attachment: attachment)
+            }
+            pendingInput = saved
+            if let id = saved.editItemId { editing = (id, saved.text) }
+        }
+        if let pending = draftStore.load(draftKey + "/pending") { pendingInput = pending }
         document.onFollowingChange = { [weak self] following in self?.isFollowing = following }
         document.onAction = { [weak self] action in self?.handle(action) }
         document.bottomInset = 150 // the floating composer sits over the bottom of the transcript
@@ -110,15 +156,43 @@ final class ThreadModel {
 
     /// Sends a message: a new version of the edited message when editing; otherwise a new message
     /// (queued after the current answer, or steering it with `steer`).
-    func send(_ text: String, attachments: [Attachment] = [], steer: Bool = false) async {
+    @discardableResult
+    func send(_ text: String, attachments: [Attachment] = [], steer: Bool = false) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        if let editing {
-            self.editing = nil
-            await call("sessions.edit", EditParams(ref: ref, itemId: editing.itemId, text: trimmed))
-        } else {
-            await call("sessions.submit", SubmitParams(ref: ref, text: trimmed, attachments: attachments, whenBusy: steer ? .steer : .followUp, clientRequestId: UUID().uuidString))
+        guard !trimmed.isEmpty, !isSubmitting else { return false }
+        // Direct entry points (Home, suggestions) get the same recovery as the composer.
+        if composerText.isEmpty {
+            composerText = text
+            composerAttachments = attachments.map { attachment in
+                let name: String
+                switch attachment { case .image(let n, _, _), .text(let n, _, _): name = n }
+                return PendingAttachment(name: name, attachment: attachment)
+            }
         }
+        let candidate = ComposerDraft(text: trimmed, attachments: attachments, editItemId: editing?.itemId, steer: steer)
+        let previous = pendingInput
+        let input = previous?.text.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed && previous?.attachments == attachments && previous?.editItemId == candidate.editItemId && previous?.steer == steer ? previous! : candidate
+        pendingInput = input
+        persistDraft()
+        isSubmitting = true
+        defer { isSubmitting = false }
+        do {
+            try await flushDraft()
+            guard let client = engine?.client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Piopio is reconnecting. Your message is saved; retry when connected.") }
+            if let itemId = input.editItemId {
+                _ = try await client.call("sessions.edit", EditParams(ref: ref, itemId: itemId, text: trimmed, clientRequestId: input.requestId), as: JSONValue.self)
+            } else {
+                _ = try await client.call("sessions.submit", SubmitParams(ref: ref, text: trimmed, attachments: attachments, whenBusy: steer ? .steer : .followUp, clientRequestId: input.requestId), as: SubmitResult.self)
+            }
+            pendingInput = nil
+            editing = nil
+            if composerText.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed && composerAttachments.map(\.attachment) == attachments {
+                composerText = ""; composerAttachments = []
+            }
+            error = nil; errorIsAuth = false
+            do { try await flushDraft() } catch { self.error = "Message sent, but the local draft couldn't be updated: \(error.localizedDescription)" }
+            return true
+        } catch { report(error); return false }
     }
 
     var webEnabled: Bool { state?.tools?.web ?? true }
@@ -178,6 +252,13 @@ final class ThreadModel {
             draft = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }.joined(separator: "\n") + "\n\n"
         case .remember(let text):
             Task { do { try await remember(text) } catch { report(error) } }
+        case .copyDraft(let id):
+            if case .debate(let d) = document.item(id), let draft = d.draft {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(draft, forType: .string)
+            }
+        case .continueDebate:
+            Task { await continueDebate() }
         case .restoreCheckpoint(let id):
             if case .checkpoint(let c) = document.item(id) { restoring = c }
         case .openSession(let id):
@@ -289,7 +370,7 @@ final class ThreadModel {
 
     /// Calls the engine for this thread; failures show above the composer.
     private func call(_ method: String, _ params: some Encodable & Sendable) async {
-        guard let client = engine?.client else { return }
+        guard let client = engine?.client else { report(EngineError(code: "ENGINE_UNAVAILABLE", message: "Piopio is reconnecting. Try again when connected.")); return }
         do {
             _ = try await client.call(method, params, as: JSONValue.self)
             error = nil
@@ -302,7 +383,7 @@ final class ThreadModel {
     private func report(_ error: Error) {
         if let e = error as? EngineError {
             errorIsAuth = e.code == "AUTH"
-            self.error = errorIsAuth ? "Add your OpenRouter key in Settings to start chatting." : e.message
+            self.error = errorIsAuth ? "Connect a model provider in Settings › Models to continue." : e.message
         } else {
             errorIsAuth = false
             self.error = error.localizedDescription
@@ -320,6 +401,15 @@ final class ThreadModel {
 
     func stop() async {
         _ = try? await engine?.client?.call("sessions.abort", RefParams(ref: ref), as: Empty.self)
+    }
+
+    /// Debates: where it stands (the panel), more rounds after it ended, or end it now.
+    var debate: DebateState? { state?.debate }
+    func continueDebate(rounds: Int? = nil) async {
+        do { _ = try await engine?.client?.call("sessions.debate.continue", DebateContinueParams(ref: ref, rounds: rounds), as: Empty.self) } catch { report(error) }
+    }
+    func stopDebate() async {
+        do { _ = try await engine?.client?.call("sessions.debate.stop", RefParams(ref: ref), as: Empty.self) } catch { report(error) }
     }
 
     func setModel(_ model: ModelRef) async {

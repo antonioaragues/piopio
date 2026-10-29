@@ -48,9 +48,13 @@ export function decide(mode: ApprovalMode, tool: string, input: Record<string, u
 		const danger = deniedCommand(command, cwd, home);
 		if (danger) return { action: "ask", reason: danger };
 		if (mode === "full_auto") return { action: "allow" };
-		const segments = commandSegments(command);
+		const parsed = parseCommands(command);
+		const segments = parsed ?? [];
 		const commandRules = rules.filter((r) => r.kind === "command");
-		if (mode === "auto_edit" && segments.length > 0 && segments.every((s) => commandRules.some((r) => s === r.pattern || s.startsWith(`${r.pattern} `)))) {
+		if (mode === "auto_edit" && segments.length > 0 && segments.every((words) => commandRules.some((r) => {
+			const prefix = parseCommands(r.pattern);
+			return prefix?.length === 1 && prefix[0]!.every((word, i) => words[i] === word);
+		}))) {
 			return { action: "allow" };
 		}
 		const rule = suggestCommandRule(command);
@@ -84,9 +88,9 @@ export function deniedCommand(command: string, cwd: string, home = homedir()): s
 
 /** The rule "Always allow" adds for a command: its program, plus the subcommand for runners. */
 export function suggestCommandRule(command: string): Rule | undefined {
-	const segments = commandSegments(command);
-	if (segments.length !== 1) return undefined; // compound commands are approved one at a time
-	const words = segments[0]!.split(/\s+/).filter((w) => !/^[A-Z_][A-Z0-9_]*=/.test(w)); // skip FOO=bar prefixes
+	const segments = parseCommands(command);
+	if (segments?.length !== 1) return undefined; // compound/complex commands are approved one at a time
+	const words = segments[0]!.filter((w) => !/^[A-Z_][A-Z0-9_]*=/.test(w)); // skip FOO=bar prefixes
 	const [program, sub] = words;
 	if (!program) return undefined;
 	const pattern = RUNNERS.has(program) && sub && !sub.startsWith("-") ? `${program} ${sub}` : program;
@@ -128,25 +132,64 @@ function expandHome(path: string, home: string): string {
 	return path === "~" ? home : path.startsWith("~/") ? `${home}${path.slice(1)}` : path;
 }
 
-/** Programs that only read (plan mode lets these run). Output redirection makes any of them a write. */
-const READ_ONLY = new Set(["ls", "cat", "head", "tail", "grep", "rg", "find", "fd", "wc", "pwd", "echo", "which", "tree", "du", "file", "stat", "less", "sort", "uniq", "cut", "jq", "diff", "basename", "dirname", "realpath", "date"]);
+/** Parse a deliberately small shell subset. Anything requiring shell evaluation asks again.
+ * Quoted literals and pipelines/boolean lists are supported; expansions, redirections, escapes,
+ * background jobs and compound shell syntax are not eligible for automatic approval.
+ */
+function parseCommands(command: string): string[][] | undefined {
+	if (/[$`<>\\(){}]/.test(command)) return undefined;
+	const commands: string[][] = [];
+	let words: string[] = [], word = "", started = false, quote = "";
+	const flush = () => { if (started) words.push(word); word = ""; started = false; };
+	for (let i = 0; i < command.length; i++) {
+		const ch = command[i]!;
+		if (quote) { if (ch === quote) quote = ""; else word += ch; continue; }
+		if (ch === "'" || ch === '"') { quote = ch; started = true; continue; }
+		if (ch === "#") return undefined;
+		if (ch === "&" || ch === "|" || ch === ";" || ch === "\n") {
+			if (ch === "&" && command[i + 1] !== "&") return undefined;
+			if ((ch === "&" || ch === "|") && command[i + 1] === ch) i++;
+			flush();
+			if (!words.length) return undefined;
+			commands.push(words); words = [];
+		} else if (/\s/.test(ch)) flush();
+		else { word += ch; started = true; }
+	}
+	if (quote) return undefined;
+	flush();
+	if (!words.length) return undefined;
+	commands.push(words);
+	return commands;
+}
+
+const READ_ONLY = new Set(["ls", "cat", "head", "tail", "grep", "rg", "find", "fd", "wc", "pwd", "echo", "which", "tree", "du", "stat", "cut", "jq", "diff", "basename", "dirname", "realpath"]);
 const READ_ONLY_SUB: Record<string, Set<string>> = {
-	git: new Set(["status", "log", "diff", "show", "branch", "blame", "ls-files", "rev-parse", "remote", "describe", "shortlog", "grep"]),
+	git: new Set(["status", "log", "diff", "show", "blame", "ls-files", "rev-parse", "describe", "shortlog", "grep"]),
 	npm: new Set(["ls", "view", "outdated", "--version"]),
 	pnpm: new Set(["ls", "list", "why", "outdated", "--version"]),
-	swift: new Set(["--version"]),
-	node: new Set(["--version"]),
+	swift: new Set(["--version"]), node: new Set(["--version"]),
 };
 
-/** True when every part of the command only reads (plan mode, docs/spec/05-build §4 piopio-plan). */
+/** A conservative argument-aware policy. Unknown forms are refused in Plan mode. */
 export function readOnlyCommand(command: string): boolean {
-	if (/[^<]>|>>|\btee\b|`|\$\(/.test(command)) return false;
-	const segments = commandSegments(command);
-	return segments.length > 0 && segments.every((segment) => {
-		const [program, sub] = segment.split(/\s+/);
+	const segments = parseCommands(command);
+	return Boolean(segments?.every(([program, ...args]) => {
 		if (!program) return false;
-		if (READ_ONLY_SUB[program]) return Boolean(sub && READ_ONLY_SUB[program]!.has(sub));
-		if (program === "sed") return /^sed\s+-n\b/.test(segment);
-		return READ_ONLY.has(program);
-	});
+		if (program === "git") {
+			if (args.some(a => /^(--output|--ext-diff|--textconv|--exec-path|--open-files-in-pager)(=|$)/.test(a))) return false;
+			if (args[0] === "branch") return args.slice(1).every(a => ["-a", "-r", "-v", "-vv", "--all", "--remotes", "--list", "--show-current"].includes(a));
+			if (args[0] === "remote") return args.slice(1).every(a => a === "-v" || a === "--verbose");
+		}
+		if (READ_ONLY_SUB[program]) return Boolean(args[0] && READ_ONLY_SUB[program]!.has(args[0]));
+		if (program === "sed") return args[0] === "-n" && Boolean(args[1] && /^(?:\d+|\$)(?:,(?:\d+|\$))?p$/.test(args[1])) && args.slice(2).every(a => !a.startsWith("-") || a === "-");
+		if (program === "sort") return !args.some(a => /^(-[^-]*o|--output)/.test(a));
+		if (program === "file") return !args.some(a => /^-[^-]*C/.test(a) || a.startsWith("--compile"));
+		if (program === "date") return args.every(a => a === "-u" || a === "--utc" || a.startsWith("+"));
+		if (!READ_ONLY.has(program)) return false;
+		if (program === "find" && args.some(a => /^-(delete|exec(dir)?|ok(dir)?|fprint0?|fprintf|fls)$/.test(a))) return false;
+		if (program === "fd" && args.some(a => /^(-[^-]*[xX]|--exec(?:-batch)?)/.test(a))) return false;
+		if (program === "rg" && args.some(a => /^(--pre|--hostname-bin)(=|$)/.test(a))) return false;
+		if ((program === "tree" || program === "diff") && args.some(a => /^-[^-]*o/.test(a) || a.startsWith("--out"))) return false;
+		return true;
+	}));
 }

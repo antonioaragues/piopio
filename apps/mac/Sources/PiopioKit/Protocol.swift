@@ -80,6 +80,73 @@ public struct UserItem: Codable, Sendable, Hashable {
 /// Why a model request failed.
 public enum ErrorKind: String, Codable, Sendable { case auth, credits, model, rateLimit = "rate_limit", provider, network, context, other }
 
+// MARK: Debate (docs/spec/16-debate)
+
+/// Who speaks in a debate: the author writes the draft, the reviewer raises objections.
+public enum DebateRole: String, Codable, Sendable { case author, reviewer }
+public enum DebateStatus: String, Codable, Sendable { case running, agreed, noAgreement = "no_agreement", stopped }
+/// Which participant wrote an answer.
+public struct Speaker: Codable, Sendable, Hashable {
+    public var role: DebateRole
+    public var label: String
+}
+/// What a debate thread is started with.
+public struct DebateConfig: Codable, Sendable, Hashable {
+    public struct Participant: Codable, Sendable, Hashable {
+        public var role: DebateRole; public var model: ModelRef; public var thinking: String?
+        public init(role: DebateRole, model: ModelRef, thinking: String? = nil) { self.role = role; self.model = model; self.thinking = thinking }
+    }
+    public var style = "review"
+    public var goal: String
+    public var criteria: String?
+    public var participants: [Participant]
+    public var maxRounds: Int
+    public init(goal: String, criteria: String?, participants: [Participant], maxRounds: Int) {
+        self.goal = goal; self.criteria = criteria; self.participants = participants; self.maxRounds = maxRounds
+    }
+}
+/// Where a debate stands: the draft and objections panel.
+public struct DebateState: Codable, Sendable, Hashable {
+    public struct Participant: Codable, Sendable, Hashable { public var role: DebateRole; public var label: String; public var model: ModelRef }
+    public struct Draft: Codable, Sendable, Hashable, Identifiable { public var version, round: Int; public var text: String; public var changes: [String]; public var id: Int { version } }
+    public struct Objection: Codable, Sendable, Hashable, Identifiable {
+        public enum Severity: String, Codable, Sendable { case blocking, minor }
+        public enum Status: String, Codable, Sendable { case open, resolved, withdrawn }
+        public struct Step: Codable, Sendable, Hashable { public var round: Int; public var by: DebateRole; public var action: String; public var note: String? }
+        public var id, text: String
+        public var severity: Severity
+        public var status: Status
+        public var round: Int
+        public var pushback: String?
+        public var history: [Step]
+    }
+    public var status: DebateStatus
+    public var round, maxRounds: Int
+    public var turn: DebateRole?
+    public var goal: String
+    public var criteria: String?
+    public var participants: [Participant]
+    public var drafts: [Draft]
+    public var objections: [Objection]
+    public var reason: String?
+    public func label(_ role: DebateRole) -> String { participants.first { $0.role == role }?.label ?? role.rawValue.capitalized }
+}
+/// A debate's progress in the transcript: a round divider, what a turn did, or the result.
+public struct DebateItem: Codable, Sendable, Hashable {
+    public enum Event: String, Codable, Sendable { case round, turn, result }
+    public struct Open: Codable, Sendable, Hashable { public var text: String; public var severity: DebateState.Objection.Severity; public var pushback: String? }
+    public var id, at: String
+    public var event: Event
+    public var round: Int
+    public var speaker: Speaker?
+    public var title: String
+    public var lines: [String]?
+    public var status: DebateStatus?
+    public var draft: String?
+    public var open: [Open]?
+    public var costUsd: Double?
+}
+
 public struct AssistantItem: Codable, Sendable, Hashable {
     public enum Status: String, Codable, Sendable { case streaming, done, error, aborted }
     public var id, at: String
@@ -93,6 +160,8 @@ public struct AssistantItem: Codable, Sendable, Hashable {
     /// An agent's message sent on its own (send_message), from a run (`run_…`) or a person's conversation.
     public struct Outbound: Codable, Sendable, Hashable { public var from: String; public init(from: String) { self.from = from } }
     public var outbound: Outbound?
+    /// Debate threads: which participant wrote it.
+    public var speaker: Speaker?
     /// How long it thought (measured live).
     public var thinkingMs: Double?
     public var text: String { parts.filter { $0.type == .text }.map(\.text).joined() }
@@ -317,6 +386,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case approval(ApprovalItem)
     case result(ResultItem)
     case agentMsg(AgentMsgItem)
+    case debate(DebateItem)
 
     private enum Key: String, CodingKey { case kind }
 
@@ -335,6 +405,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case "approval": self = .approval(try ApprovalItem(from: decoder))
         case "result": self = .result(try ResultItem(from: decoder))
         case "agent_msg": self = .agentMsg(try AgentMsgItem(from: decoder))
+        case "debate": self = .debate(try DebateItem(from: decoder))
         default: throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown item kind \(kind)"))
         }
     }
@@ -354,6 +425,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .approval(let v): try c.encode("approval", forKey: .kind); try v.encode(to: encoder)
         case .result(let v): try c.encode("result", forKey: .kind); try v.encode(to: encoder)
         case .agentMsg(let v): try c.encode("agent_msg", forKey: .kind); try v.encode(to: encoder)
+        case .debate(let v): try c.encode("debate", forKey: .kind); try v.encode(to: encoder)
         }
     }
 
@@ -371,6 +443,7 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .approval(let v): v.id
         case .result(let v): v.id
         case .agentMsg(let v): v.id
+        case .debate(let v): v.id
         }
     }
 }
@@ -401,6 +474,8 @@ public struct SessionState: Codable, Sendable, Hashable {
     /// Build: the agent's checklist, and plan mode.
     public var todos: [Todo]?
     public var planMode: Bool?
+    /// Debate threads: the draft, the objections and where it stands.
+    public var debate: DebateState?
     public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, tools: Tools? = nil, usage: Usage, context: Context? = nil) {
         self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.tools = tools; self.usage = usage; self.context = context
     }
@@ -479,6 +554,9 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var followUps: [String]?
     /// Agents.
     public var agent: AgentInfo?
+    /// Debate threads: where the debate stands.
+    public struct Debate: Codable, Sendable, Hashable { public var status: DebateStatus }
+    public var debate: Debate?
 }
 
 public struct AgentInfo: Codable, Sendable, Hashable {
@@ -899,8 +977,9 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var approvalMode: ApprovalMode?
     public var profile: SessionSummary.Profile?
     public var instructions: String?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, instructions: String? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode; self.profile = profile; self.instructions = instructions
+    public var debate: DebateConfig?
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, instructions: String? = nil, debate: DebateConfig? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode; self.profile = profile; self.instructions = instructions; self.debate = debate
     }
 }
 
@@ -1098,16 +1177,26 @@ public struct FinishParams: Encodable, Sendable {
 }
 public struct CreateSessionResult: Decodable, Sendable { public var ref: ContainerRef }
 public struct RefParams: Encodable, Sendable { public var ref: ContainerRef; public init(ref: ContainerRef) { self.ref = ref } }
+public struct DebateContinueParams: Encodable, Sendable { public var ref: ContainerRef; public var rounds: Int?; public init(ref: ContainerRef, rounds: Int? = nil) { self.ref = ref; self.rounds = rounds } }
 public struct SubscribeResult: Decodable, Sendable { public var subscriptionId: String; public var snapshot: Snapshot }
 public struct ListSessionsParams: Encodable, Sendable { public var kind: ContainerKind?; public init(kind: ContainerKind? = nil) { self.kind = kind } }
 public struct ListSessionsResult: Decodable, Sendable { public var sessions: [SessionSummary] }
 
 /// A file to send: images as base64 (prepared by the client), documents as extracted text.
-public enum Attachment: Encodable, Sendable, Hashable {
+public enum Attachment: Codable, Sendable, Hashable {
     case image(name: String, mimeType: String, data: String)
     case text(name: String, mimeType: String?, text: String)
 
     private enum Key: String, CodingKey { case kind, name, mimeType, data, text }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        let name = try c.decode(String.self, forKey: .name)
+        switch try c.decode(String.self, forKey: .kind) {
+        case "image": self = .image(name: name, mimeType: try c.decode(String.self, forKey: .mimeType), data: try c.decode(String.self, forKey: .data))
+        case "text": self = .text(name: name, mimeType: try c.decodeIfPresent(String.self, forKey: .mimeType), text: try c.decode(String.self, forKey: .text))
+        default: throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "Unknown attachment kind")
+        }
+    }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Key.self)
         switch self {
@@ -1445,8 +1534,8 @@ public struct CatalogChanged: Decodable, Sendable {
 // MARK: Milestone 1.2: branches and queue
 
 public struct EditParams: Encodable, Sendable {
-    public var ref: ContainerRef; public var itemId: String; public var text: String
-    public init(ref: ContainerRef, itemId: String, text: String) { self.ref = ref; self.itemId = itemId; self.text = text }
+    public var ref: ContainerRef; public var itemId: String; public var text: String; public var clientRequestId: String?
+    public init(ref: ContainerRef, itemId: String, text: String, clientRequestId: String? = nil) { self.ref = ref; self.itemId = itemId; self.text = text; self.clientRequestId = clientRequestId }
 }
 public struct ItemParams: Encodable, Sendable {
     public var ref: ContainerRef; public var itemId: String
@@ -1464,8 +1553,8 @@ public struct QueueRemoveParams: Encodable, Sendable {
 // MARK: Milestone 1.4: search
 
 public struct SearchParams: Encodable, Sendable {
-    public var query: String; public var limit: Int?
-    public init(query: String, limit: Int? = nil) { self.query = query; self.limit = limit }
+    public var query: String; public var limit: Int?; public var kind: ContainerKind?
+    public init(query: String, limit: Int? = nil, kind: ContainerKind? = nil) { self.query = query; self.limit = limit; self.kind = kind }
 }
 
 public struct SearchResult: Decodable, Sendable, Hashable, Identifiable {
@@ -1477,7 +1566,7 @@ public struct SearchResult: Decodable, Sendable, Hashable, Identifiable {
     /// Matches are wrapped in U+0002 … U+0003.
     public var snippet: String
     public var at: String
-    public var id: String { "\(ref.id)/\(itemId ?? "title")" }
+    public var id: String { "\(ref.kind.rawValue)/\(ref.key)/\(itemId ?? "title")" }
 }
 public struct SearchResults: Decodable, Sendable { public var results: [SearchResult] }
 
@@ -1492,4 +1581,17 @@ public struct VerifyKeyResult: Decodable, Sendable, Equatable {
 }
 public struct EngineStatusResult: Decodable, Sendable {
     public var uptimeMs: Double; public var openSessions: Int; public var subscriptions: Int; public var runtime: String; public var memoryMB: Double; public var dataPath: String
+}
+
+
+public struct ExtraCostParams: Encodable, Sendable {
+    public var ref: ContainerRef?
+    public init(ref: ContainerRef? = nil) { self.ref = ref }
+}
+public struct ExtraCostSummary: Decodable, Sendable {
+    public struct Breakdown: Decodable, Sendable, Identifiable {
+        public var kind: String; public var calls, unknownCalls: Int; public var knownUsd: Double
+        public var id: String { kind }
+    }
+    public var scope: String; public var knownUsd: Double; public var unknownCalls, calls: Int; public var breakdown: [Breakdown]
 }

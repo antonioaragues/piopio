@@ -29,6 +29,10 @@ enum DebugAutomation {
 
     static func run(engine: EngineController) {
         let env = ProcessInfo.processInfo.environment
+        if let path = env["PIOPIO_RECOVERY_REPORT"] {
+            Task { await DebugRecovery.run(engine, report: URL(fileURLWithPath: path)) }
+            return
+        }
         // PIOPIO_DEMO_APPEARANCE=dark|light: force the appearance (captures). PIOPIO_DEMO_MODE=build|chat|agents.
         if let appearance = env["PIOPIO_DEMO_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
@@ -53,6 +57,32 @@ enum DebugAutomation {
         }
         if let mode = env["PIOPIO_DEMO_MODE"].flatMap(AppMode.init(rawValue:)) {
             NotificationCenter.default.post(name: .setMode, object: mode)
+        }
+        // PIOPIO_DEMO_DEBATE=1: a debate the scripted model plays both sides of (an objection in round 1, agreed in
+        // round 2), with PIOPIO_DEMO_DEBATE_ROUNDS rounds at most (default 4; 1 ends without agreement).
+        // PIOPIO_DEMO_DEBATE=sheet: open the New Debate sheet instead.
+        if let debate = env["PIOPIO_DEMO_DEBATE"], engine.status == .ready {
+            Task {
+                if debate == "sheet" {
+                    try? await Task.sleep(for: .seconds(1))
+                    NotificationCenter.default.post(name: .newDebate, object: nil)
+                    return
+                }
+                guard let model = engine.preferredModel else { return }
+                let call = { (tool: String, args: [String: Any]) -> String in
+                    let json = (try? JSONSerialization.data(withJSONObject: args, options: [.sortedKeys])).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+                    return "call: \(tool) | \(json)"
+                }
+                let approve = call("debate_review", ["objections": [["id": "O1", "text": "Add a rollback plan: what happens if the first invoice run fails?", "severity": "blocking", "status": "resolved", "note": "The rollback section covers it"]], "approve": true])
+                let v2 = "## Billing migration plan\n\n1. Mirror customers and plans in Stripe (week 1).\n2. Run both systems in parallel for one billing cycle.\n3. Switch invoicing on the 1st.\n\n### Rollback\nIf the first Stripe invoice run fails, invoices go out from the old system the same day; Stripe stays read-only until fixed.\n\n\(approve)"
+                let revise = call("debate_submit", ["draft": v2, "changes": ["O1: added a rollback section", "Moved the switch to the 1st"]])
+                let object = call("debate_review", ["objections": [["text": "Add a rollback plan: what happens if the first invoice run fails?\n\(revise)", "severity": "blocking", "status": "open"], ["text": "Say who owns each step", "severity": "minor", "status": "open"]], "approve": false])
+                let v1 = "## Billing migration plan\n\n1. Mirror customers and plans in Stripe.\n2. Run both systems in parallel.\n3. Switch invoicing.\n\n\(object)"
+                let goal = call("debate_submit", ["draft": v1, "changes": [String]()])
+                let config = DebateConfig(goal: goal, criteria: "Covers rollback. Under a page.", participants: [.init(role: .author, model: model), .init(role: .reviewer, model: model)], maxRounds: Int(env["PIOPIO_DEMO_DEBATE_ROUNDS"] ?? "") ?? 4)
+                guard let ref = try? await engine.createDebate(config) else { return }
+                NotificationCenter.default.post(name: .selectItem, object: SidebarItem.chat(ref.id).raw)
+            }
         }
         if let prompt = env["PIOPIO_DEMO_PROMPT"], engine.status == .ready {
             Task {

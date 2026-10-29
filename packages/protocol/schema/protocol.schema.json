@@ -286,6 +286,30 @@
 								}
 							}
 						},
+						"speaker": {
+							"type": "object",
+							"required": [
+								"role",
+								"label"
+							],
+							"properties": {
+								"role": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "author"
+										},
+										{
+											"type": "string",
+											"const": "reviewer"
+										}
+									]
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						},
 						"thinkingMs": {
 							"type": "number"
 						}
@@ -1444,6 +1468,137 @@
 							"type": "string"
 						}
 					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"kind",
+						"id",
+						"at",
+						"event",
+						"round",
+						"title"
+					],
+					"properties": {
+						"kind": {
+							"type": "string",
+							"const": "debate"
+						},
+						"id": {
+							"type": "string"
+						},
+						"at": {
+							"type": "string"
+						},
+						"event": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "round"
+								},
+								{
+									"type": "string",
+									"const": "turn"
+								},
+								{
+									"type": "string",
+									"const": "result"
+								}
+							]
+						},
+						"round": {
+							"type": "number"
+						},
+						"speaker": {
+							"type": "object",
+							"required": [
+								"role",
+								"label"
+							],
+							"properties": {
+								"role": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "author"
+										},
+										{
+											"type": "string",
+											"const": "reviewer"
+										}
+									]
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						},
+						"title": {
+							"type": "string"
+						},
+						"lines": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"status": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "running"
+								},
+								{
+									"type": "string",
+									"const": "agreed"
+								},
+								{
+									"type": "string",
+									"const": "no_agreement"
+								},
+								{
+									"type": "string",
+									"const": "stopped"
+								}
+							]
+						},
+						"draft": {
+							"type": "string"
+						},
+						"open": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"text",
+									"severity"
+								],
+								"properties": {
+									"text": {
+										"type": "string"
+									},
+									"severity": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "blocking"
+											},
+											{
+												"type": "string",
+												"const": "minor"
+											}
+										]
+									},
+									"pushback": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"costUsd": {
+							"type": "number"
+						}
+					}
 				}
 			]
 		},
@@ -1741,6 +1896,254 @@
 							"type": "number"
 						}
 					}
+				},
+				"debate": {
+					"type": "object",
+					"required": [
+						"status",
+						"round",
+						"maxRounds",
+						"goal",
+						"participants",
+						"drafts",
+						"objections"
+					],
+					"properties": {
+						"status": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "running"
+								},
+								{
+									"type": "string",
+									"const": "agreed"
+								},
+								{
+									"type": "string",
+									"const": "no_agreement"
+								},
+								{
+									"type": "string",
+									"const": "stopped"
+								}
+							]
+						},
+						"round": {
+							"type": "number"
+						},
+						"maxRounds": {
+							"type": "number"
+						},
+						"turn": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "author"
+								},
+								{
+									"type": "string",
+									"const": "reviewer"
+								}
+							]
+						},
+						"goal": {
+							"type": "string"
+						},
+						"criteria": {
+							"type": "string"
+						},
+						"participants": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"role",
+									"label",
+									"model"
+								],
+								"properties": {
+									"role": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "author"
+											},
+											{
+												"type": "string",
+												"const": "reviewer"
+											}
+										]
+									},
+									"label": {
+										"type": "string"
+									},
+									"model": {
+										"type": "object",
+										"required": [
+											"provider",
+											"id"
+										],
+										"properties": {
+											"provider": {
+												"type": "string"
+											},
+											"id": {
+												"type": "string"
+											}
+										}
+									}
+								}
+							}
+						},
+						"drafts": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"version",
+									"round",
+									"text",
+									"changes"
+								],
+								"properties": {
+									"version": {
+										"type": "number"
+									},
+									"round": {
+										"type": "number"
+									},
+									"text": {
+										"type": "string"
+									},
+									"changes": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						},
+						"objections": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"text",
+									"severity",
+									"status",
+									"round",
+									"history"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"text": {
+										"type": "string"
+									},
+									"severity": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "blocking"
+											},
+											{
+												"type": "string",
+												"const": "minor"
+											}
+										]
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "open"
+											},
+											{
+												"type": "string",
+												"const": "resolved"
+											},
+											{
+												"type": "string",
+												"const": "withdrawn"
+											}
+										]
+									},
+									"round": {
+										"type": "number"
+									},
+									"pushback": {
+										"type": "string"
+									},
+									"history": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"round",
+												"by",
+												"action"
+											],
+											"properties": {
+												"round": {
+													"type": "number"
+												},
+												"by": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "author"
+														},
+														{
+															"type": "string",
+															"const": "reviewer"
+														}
+													]
+												},
+												"action": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "raised"
+														},
+														{
+															"type": "string",
+															"const": "addressed"
+														},
+														{
+															"type": "string",
+															"const": "pushed_back"
+														},
+														{
+															"type": "string",
+															"const": "resolved"
+														},
+														{
+															"type": "string",
+															"const": "withdrawn"
+														},
+														{
+															"type": "string",
+															"const": "reopened"
+														}
+													]
+												},
+												"note": {
+													"type": "string"
+												}
+											}
+										}
+									}
+								}
+							}
+						},
+						"reason": {
+							"type": "string"
+						}
+					}
 				}
 			}
 		},
@@ -2001,6 +2404,30 @@
 											],
 											"properties": {
 												"from": {
+													"type": "string"
+												}
+											}
+										},
+										"speaker": {
+											"type": "object",
+											"required": [
+												"role",
+												"label"
+											],
+											"properties": {
+												"role": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "author"
+														},
+														{
+															"type": "string",
+															"const": "reviewer"
+														}
+													]
+												},
+												"label": {
 													"type": "string"
 												}
 											}
@@ -3161,6 +3588,137 @@
 										},
 										"traceId": {
 											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"event",
+										"round",
+										"title"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "debate"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"event": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "round"
+												},
+												{
+													"type": "string",
+													"const": "turn"
+												},
+												{
+													"type": "string",
+													"const": "result"
+												}
+											]
+										},
+										"round": {
+											"type": "number"
+										},
+										"speaker": {
+											"type": "object",
+											"required": [
+												"role",
+												"label"
+											],
+											"properties": {
+												"role": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "author"
+														},
+														{
+															"type": "string",
+															"const": "reviewer"
+														}
+													]
+												},
+												"label": {
+													"type": "string"
+												}
+											}
+										},
+										"title": {
+											"type": "string"
+										},
+										"lines": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "running"
+												},
+												{
+													"type": "string",
+													"const": "agreed"
+												},
+												{
+													"type": "string",
+													"const": "no_agreement"
+												},
+												{
+													"type": "string",
+													"const": "stopped"
+												}
+											]
+										},
+										"draft": {
+											"type": "string"
+										},
+										"open": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"text",
+													"severity"
+												],
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"severity": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "blocking"
+															},
+															{
+																"type": "string",
+																"const": "minor"
+															}
+														]
+													},
+													"pushback": {
+														"type": "string"
+													}
+												}
+											}
+										},
+										"costUsd": {
+											"type": "number"
 										}
 									}
 								}
@@ -3467,6 +4025,30 @@
 												}
 											}
 										},
+										"speaker": {
+											"type": "object",
+											"required": [
+												"role",
+												"label"
+											],
+											"properties": {
+												"role": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "author"
+														},
+														{
+															"type": "string",
+															"const": "reviewer"
+														}
+													]
+												},
+												"label": {
+													"type": "string"
+												}
+											}
+										},
 										"thinkingMs": {
 											"type": "number"
 										}
@@ -4623,6 +5205,137 @@
 										},
 										"traceId": {
 											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"event",
+										"round",
+										"title"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "debate"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"event": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "round"
+												},
+												{
+													"type": "string",
+													"const": "turn"
+												},
+												{
+													"type": "string",
+													"const": "result"
+												}
+											]
+										},
+										"round": {
+											"type": "number"
+										},
+										"speaker": {
+											"type": "object",
+											"required": [
+												"role",
+												"label"
+											],
+											"properties": {
+												"role": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "author"
+														},
+														{
+															"type": "string",
+															"const": "reviewer"
+														}
+													]
+												},
+												"label": {
+													"type": "string"
+												}
+											}
+										},
+										"title": {
+											"type": "string"
+										},
+										"lines": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "running"
+												},
+												{
+													"type": "string",
+													"const": "agreed"
+												},
+												{
+													"type": "string",
+													"const": "no_agreement"
+												},
+												{
+													"type": "string",
+													"const": "stopped"
+												}
+											]
+										},
+										"draft": {
+											"type": "string"
+										},
+										"open": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"text",
+													"severity"
+												],
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"severity": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "blocking"
+															},
+															{
+																"type": "string",
+																"const": "minor"
+															}
+														]
+													},
+													"pushback": {
+														"type": "string"
+													}
+												}
+											}
+										},
+										"costUsd": {
+											"type": "number"
 										}
 									}
 								}
@@ -4909,6 +5622,30 @@
 												}
 											}
 										},
+										"speaker": {
+											"type": "object",
+											"required": [
+												"role",
+												"label"
+											],
+											"properties": {
+												"role": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "author"
+														},
+														{
+															"type": "string",
+															"const": "reviewer"
+														}
+													]
+												},
+												"label": {
+													"type": "string"
+												}
+											}
+										},
 										"thinkingMs": {
 											"type": "number"
 										}
@@ -6065,6 +6802,137 @@
 										},
 										"traceId": {
 											"type": "string"
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"kind",
+										"id",
+										"at",
+										"event",
+										"round",
+										"title"
+									],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"const": "debate"
+										},
+										"id": {
+											"type": "string"
+										},
+										"at": {
+											"type": "string"
+										},
+										"event": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "round"
+												},
+												{
+													"type": "string",
+													"const": "turn"
+												},
+												{
+													"type": "string",
+													"const": "result"
+												}
+											]
+										},
+										"round": {
+											"type": "number"
+										},
+										"speaker": {
+											"type": "object",
+											"required": [
+												"role",
+												"label"
+											],
+											"properties": {
+												"role": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "author"
+														},
+														{
+															"type": "string",
+															"const": "reviewer"
+														}
+													]
+												},
+												"label": {
+													"type": "string"
+												}
+											}
+										},
+										"title": {
+											"type": "string"
+										},
+										"lines": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "running"
+												},
+												{
+													"type": "string",
+													"const": "agreed"
+												},
+												{
+													"type": "string",
+													"const": "no_agreement"
+												},
+												{
+													"type": "string",
+													"const": "stopped"
+												}
+											]
+										},
+										"draft": {
+											"type": "string"
+										},
+										"open": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"text",
+													"severity"
+												],
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"severity": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "blocking"
+															},
+															{
+																"type": "string",
+																"const": "minor"
+															}
+														]
+													},
+													"pushback": {
+														"type": "string"
+													}
+												}
+											}
+										},
+										"costUsd": {
+											"type": "number"
 										}
 									}
 								}
@@ -6377,6 +7245,254 @@
 											"type": "number"
 										}
 									}
+								},
+								"debate": {
+									"type": "object",
+									"required": [
+										"status",
+										"round",
+										"maxRounds",
+										"goal",
+										"participants",
+										"drafts",
+										"objections"
+									],
+									"properties": {
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "running"
+												},
+												{
+													"type": "string",
+													"const": "agreed"
+												},
+												{
+													"type": "string",
+													"const": "no_agreement"
+												},
+												{
+													"type": "string",
+													"const": "stopped"
+												}
+											]
+										},
+										"round": {
+											"type": "number"
+										},
+										"maxRounds": {
+											"type": "number"
+										},
+										"turn": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "author"
+												},
+												{
+													"type": "string",
+													"const": "reviewer"
+												}
+											]
+										},
+										"goal": {
+											"type": "string"
+										},
+										"criteria": {
+											"type": "string"
+										},
+										"participants": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"role",
+													"label",
+													"model"
+												],
+												"properties": {
+													"role": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "author"
+															},
+															{
+																"type": "string",
+																"const": "reviewer"
+															}
+														]
+													},
+													"label": {
+														"type": "string"
+													},
+													"model": {
+														"type": "object",
+														"required": [
+															"provider",
+															"id"
+														],
+														"properties": {
+															"provider": {
+																"type": "string"
+															},
+															"id": {
+																"type": "string"
+															}
+														}
+													}
+												}
+											}
+										},
+										"drafts": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"version",
+													"round",
+													"text",
+													"changes"
+												],
+												"properties": {
+													"version": {
+														"type": "number"
+													},
+													"round": {
+														"type": "number"
+													},
+													"text": {
+														"type": "string"
+													},
+													"changes": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													}
+												}
+											}
+										},
+										"objections": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"id",
+													"text",
+													"severity",
+													"status",
+													"round",
+													"history"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"text": {
+														"type": "string"
+													},
+													"severity": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "blocking"
+															},
+															{
+																"type": "string",
+																"const": "minor"
+															}
+														]
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "open"
+															},
+															{
+																"type": "string",
+																"const": "resolved"
+															},
+															{
+																"type": "string",
+																"const": "withdrawn"
+															}
+														]
+													},
+													"round": {
+														"type": "number"
+													},
+													"pushback": {
+														"type": "string"
+													},
+													"history": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"round",
+																"by",
+																"action"
+															],
+															"properties": {
+																"round": {
+																	"type": "number"
+																},
+																"by": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "author"
+																		},
+																		{
+																			"type": "string",
+																			"const": "reviewer"
+																		}
+																	]
+																},
+																"action": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "raised"
+																		},
+																		{
+																			"type": "string",
+																			"const": "addressed"
+																		},
+																		{
+																			"type": "string",
+																			"const": "pushed_back"
+																		},
+																		{
+																			"type": "string",
+																			"const": "resolved"
+																		},
+																		{
+																			"type": "string",
+																			"const": "withdrawn"
+																		},
+																		{
+																			"type": "string",
+																			"const": "reopened"
+																		}
+																	]
+																},
+																"note": {
+																	"type": "string"
+																}
+															}
+														}
+													}
+												}
+											}
+										},
+										"reason": {
+											"type": "string"
+										}
+									}
 								}
 							}
 						}
@@ -6682,6 +7798,30 @@
 														],
 														"properties": {
 															"from": {
+																"type": "string"
+															}
+														}
+													},
+													"speaker": {
+														"type": "object",
+														"required": [
+															"role",
+															"label"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
 																"type": "string"
 															}
 														}
@@ -7844,6 +8984,137 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"event",
+													"round",
+													"title"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "debate"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"event": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "round"
+															},
+															{
+																"type": "string",
+																"const": "turn"
+															},
+															{
+																"type": "string",
+																"const": "result"
+															}
+														]
+													},
+													"round": {
+														"type": "number"
+													},
+													"speaker": {
+														"type": "object",
+														"required": [
+															"role",
+															"label"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
+																"type": "string"
+															}
+														}
+													},
+													"title": {
+														"type": "string"
+													},
+													"lines": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "agreed"
+															},
+															{
+																"type": "string",
+																"const": "no_agreement"
+															},
+															{
+																"type": "string",
+																"const": "stopped"
+															}
+														]
+													},
+													"draft": {
+														"type": "string"
+													},
+													"open": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"text",
+																"severity"
+															],
+															"properties": {
+																"text": {
+																	"type": "string"
+																},
+																"severity": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "blocking"
+																		},
+																		{
+																			"type": "string",
+																			"const": "minor"
+																		}
+																	]
+																},
+																"pushback": {
+																	"type": "string"
+																}
+															}
+														}
+													},
+													"costUsd": {
+														"type": "number"
+													}
+												}
 											}
 										]
 									}
@@ -8140,6 +9411,254 @@
 												},
 												"window": {
 													"type": "number"
+												}
+											}
+										},
+										"debate": {
+											"type": "object",
+											"required": [
+												"status",
+												"round",
+												"maxRounds",
+												"goal",
+												"participants",
+												"drafts",
+												"objections"
+											],
+											"properties": {
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "running"
+														},
+														{
+															"type": "string",
+															"const": "agreed"
+														},
+														{
+															"type": "string",
+															"const": "no_agreement"
+														},
+														{
+															"type": "string",
+															"const": "stopped"
+														}
+													]
+												},
+												"round": {
+													"type": "number"
+												},
+												"maxRounds": {
+													"type": "number"
+												},
+												"turn": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "author"
+														},
+														{
+															"type": "string",
+															"const": "reviewer"
+														}
+													]
+												},
+												"goal": {
+													"type": "string"
+												},
+												"criteria": {
+													"type": "string"
+												},
+												"participants": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"required": [
+															"role",
+															"label",
+															"model"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
+																"type": "string"
+															},
+															"model": {
+																"type": "object",
+																"required": [
+																	"provider",
+																	"id"
+																],
+																"properties": {
+																	"provider": {
+																		"type": "string"
+																	},
+																	"id": {
+																		"type": "string"
+																	}
+																}
+															}
+														}
+													}
+												},
+												"drafts": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"required": [
+															"version",
+															"round",
+															"text",
+															"changes"
+														],
+														"properties": {
+															"version": {
+																"type": "number"
+															},
+															"round": {
+																"type": "number"
+															},
+															"text": {
+																"type": "string"
+															},
+															"changes": {
+																"type": "array",
+																"items": {
+																	"type": "string"
+																}
+															}
+														}
+													}
+												},
+												"objections": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"required": [
+															"id",
+															"text",
+															"severity",
+															"status",
+															"round",
+															"history"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"text": {
+																"type": "string"
+															},
+															"severity": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "blocking"
+																	},
+																	{
+																		"type": "string",
+																		"const": "minor"
+																	}
+																]
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "open"
+																	},
+																	{
+																		"type": "string",
+																		"const": "resolved"
+																	},
+																	{
+																		"type": "string",
+																		"const": "withdrawn"
+																	}
+																]
+															},
+															"round": {
+																"type": "number"
+															},
+															"pushback": {
+																"type": "string"
+															},
+															"history": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"round",
+																		"by",
+																		"action"
+																	],
+																	"properties": {
+																		"round": {
+																			"type": "number"
+																		},
+																		"by": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "author"
+																				},
+																				{
+																					"type": "string",
+																					"const": "reviewer"
+																				}
+																			]
+																		},
+																		"action": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "raised"
+																				},
+																				{
+																					"type": "string",
+																					"const": "addressed"
+																				},
+																				{
+																					"type": "string",
+																					"const": "pushed_back"
+																				},
+																				{
+																					"type": "string",
+																					"const": "resolved"
+																				},
+																				{
+																					"type": "string",
+																					"const": "withdrawn"
+																				},
+																				{
+																					"type": "string",
+																					"const": "reopened"
+																				}
+																			]
+																		},
+																		"note": {
+																			"type": "string"
+																		}
+																	}
+																}
+															}
+														}
+													}
+												},
+												"reason": {
+													"type": "string"
 												}
 											}
 										}
@@ -8440,6 +9959,30 @@
 										],
 										"properties": {
 											"from": {
+												"type": "string"
+											}
+										}
+									},
+									"speaker": {
+										"type": "object",
+										"required": [
+											"role",
+											"label"
+										],
+										"properties": {
+											"role": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "author"
+													},
+													{
+														"type": "string",
+														"const": "reviewer"
+													}
+												]
+											},
+											"label": {
 												"type": "string"
 											}
 										}
@@ -9602,6 +11145,137 @@
 										"type": "string"
 									}
 								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"event",
+									"round",
+									"title"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "debate"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"event": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "round"
+											},
+											{
+												"type": "string",
+												"const": "turn"
+											},
+											{
+												"type": "string",
+												"const": "result"
+											}
+										]
+									},
+									"round": {
+										"type": "number"
+									},
+									"speaker": {
+										"type": "object",
+										"required": [
+											"role",
+											"label"
+										],
+										"properties": {
+											"role": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "author"
+													},
+													{
+														"type": "string",
+														"const": "reviewer"
+													}
+												]
+											},
+											"label": {
+												"type": "string"
+											}
+										}
+									},
+									"title": {
+										"type": "string"
+									},
+									"lines": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "running"
+											},
+											{
+												"type": "string",
+												"const": "agreed"
+											},
+											{
+												"type": "string",
+												"const": "no_agreement"
+											},
+											{
+												"type": "string",
+												"const": "stopped"
+											}
+										]
+									},
+									"draft": {
+										"type": "string"
+									},
+									"open": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"text",
+												"severity"
+											],
+											"properties": {
+												"text": {
+													"type": "string"
+												},
+												"severity": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "blocking"
+														},
+														{
+															"type": "string",
+															"const": "minor"
+														}
+													]
+												},
+												"pushback": {
+													"type": "string"
+												}
+											}
+										}
+									},
+									"costUsd": {
+										"type": "number"
+									}
+								}
 							}
 						]
 					}
@@ -9898,6 +11572,254 @@
 								},
 								"window": {
 									"type": "number"
+								}
+							}
+						},
+						"debate": {
+							"type": "object",
+							"required": [
+								"status",
+								"round",
+								"maxRounds",
+								"goal",
+								"participants",
+								"drafts",
+								"objections"
+							],
+							"properties": {
+								"status": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "running"
+										},
+										{
+											"type": "string",
+											"const": "agreed"
+										},
+										{
+											"type": "string",
+											"const": "no_agreement"
+										},
+										{
+											"type": "string",
+											"const": "stopped"
+										}
+									]
+								},
+								"round": {
+									"type": "number"
+								},
+								"maxRounds": {
+									"type": "number"
+								},
+								"turn": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "author"
+										},
+										{
+											"type": "string",
+											"const": "reviewer"
+										}
+									]
+								},
+								"goal": {
+									"type": "string"
+								},
+								"criteria": {
+									"type": "string"
+								},
+								"participants": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"role",
+											"label",
+											"model"
+										],
+										"properties": {
+											"role": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "author"
+													},
+													{
+														"type": "string",
+														"const": "reviewer"
+													}
+												]
+											},
+											"label": {
+												"type": "string"
+											},
+											"model": {
+												"type": "object",
+												"required": [
+													"provider",
+													"id"
+												],
+												"properties": {
+													"provider": {
+														"type": "string"
+													},
+													"id": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								},
+								"drafts": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"version",
+											"round",
+											"text",
+											"changes"
+										],
+										"properties": {
+											"version": {
+												"type": "number"
+											},
+											"round": {
+												"type": "number"
+											},
+											"text": {
+												"type": "string"
+											},
+											"changes": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											}
+										}
+									}
+								},
+								"objections": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"id",
+											"text",
+											"severity",
+											"status",
+											"round",
+											"history"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"text": {
+												"type": "string"
+											},
+											"severity": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "blocking"
+													},
+													{
+														"type": "string",
+														"const": "minor"
+													}
+												]
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "open"
+													},
+													{
+														"type": "string",
+														"const": "resolved"
+													},
+													{
+														"type": "string",
+														"const": "withdrawn"
+													}
+												]
+											},
+											"round": {
+												"type": "number"
+											},
+											"pushback": {
+												"type": "string"
+											},
+											"history": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"round",
+														"by",
+														"action"
+													],
+													"properties": {
+														"round": {
+															"type": "number"
+														},
+														"by": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "author"
+																},
+																{
+																	"type": "string",
+																	"const": "reviewer"
+																}
+															]
+														},
+														"action": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "raised"
+																},
+																{
+																	"type": "string",
+																	"const": "addressed"
+																},
+																{
+																	"type": "string",
+																	"const": "pushed_back"
+																},
+																{
+																	"type": "string",
+																	"const": "resolved"
+																},
+																{
+																	"type": "string",
+																	"const": "withdrawn"
+																},
+																{
+																	"type": "string",
+																	"const": "reopened"
+																}
+															]
+														},
+														"note": {
+															"type": "string"
+														}
+													}
+												}
+											}
+										}
+									}
+								},
+								"reason": {
+									"type": "string"
 								}
 							}
 						}
@@ -10246,6 +12168,34 @@
 					"items": {
 						"type": "string"
 					}
+				},
+				"debate": {
+					"type": "object",
+					"required": [
+						"status"
+					],
+					"properties": {
+						"status": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "running"
+								},
+								{
+									"type": "string",
+									"const": "agreed"
+								},
+								{
+									"type": "string",
+									"const": "no_agreement"
+								},
+								{
+									"type": "string",
+									"const": "stopped"
+								}
+							]
+						}
+					}
 				}
 			}
 		},
@@ -10522,6 +12472,30 @@
 														],
 														"properties": {
 															"from": {
+																"type": "string"
+															}
+														}
+													},
+													"speaker": {
+														"type": "object",
+														"required": [
+															"role",
+															"label"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
 																"type": "string"
 															}
 														}
@@ -11682,6 +13656,137 @@
 													},
 													"traceId": {
 														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"event",
+													"round",
+													"title"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "debate"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"event": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "round"
+															},
+															{
+																"type": "string",
+																"const": "turn"
+															},
+															{
+																"type": "string",
+																"const": "result"
+															}
+														]
+													},
+													"round": {
+														"type": "number"
+													},
+													"speaker": {
+														"type": "object",
+														"required": [
+															"role",
+															"label"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
+																"type": "string"
+															}
+														}
+													},
+													"title": {
+														"type": "string"
+													},
+													"lines": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "agreed"
+															},
+															{
+																"type": "string",
+																"const": "no_agreement"
+															},
+															{
+																"type": "string",
+																"const": "stopped"
+															}
+														]
+													},
+													"draft": {
+														"type": "string"
+													},
+													"open": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"text",
+																"severity"
+															],
+															"properties": {
+																"text": {
+																	"type": "string"
+																},
+																"severity": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "blocking"
+																		},
+																		{
+																			"type": "string",
+																			"const": "minor"
+																		}
+																	]
+																},
+																"pushback": {
+																	"type": "string"
+																}
+															}
+														}
+													},
+													"costUsd": {
+														"type": "number"
 													}
 												}
 											}
@@ -11988,6 +14093,30 @@
 															}
 														}
 													},
+													"speaker": {
+														"type": "object",
+														"required": [
+															"role",
+															"label"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
+																"type": "string"
+															}
+														}
+													},
 													"thinkingMs": {
 														"type": "number"
 													}
@@ -13144,6 +15273,137 @@
 													},
 													"traceId": {
 														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"event",
+													"round",
+													"title"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "debate"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"event": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "round"
+															},
+															{
+																"type": "string",
+																"const": "turn"
+															},
+															{
+																"type": "string",
+																"const": "result"
+															}
+														]
+													},
+													"round": {
+														"type": "number"
+													},
+													"speaker": {
+														"type": "object",
+														"required": [
+															"role",
+															"label"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
+																"type": "string"
+															}
+														}
+													},
+													"title": {
+														"type": "string"
+													},
+													"lines": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "agreed"
+															},
+															{
+																"type": "string",
+																"const": "no_agreement"
+															},
+															{
+																"type": "string",
+																"const": "stopped"
+															}
+														]
+													},
+													"draft": {
+														"type": "string"
+													},
+													"open": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"text",
+																"severity"
+															],
+															"properties": {
+																"text": {
+																	"type": "string"
+																},
+																"severity": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "blocking"
+																		},
+																		{
+																			"type": "string",
+																			"const": "minor"
+																		}
+																	]
+																},
+																"pushback": {
+																	"type": "string"
+																}
+															}
+														}
+													},
+													"costUsd": {
+														"type": "number"
 													}
 												}
 											}
@@ -13430,6 +15690,30 @@
 															}
 														}
 													},
+													"speaker": {
+														"type": "object",
+														"required": [
+															"role",
+															"label"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
+																"type": "string"
+															}
+														}
+													},
 													"thinkingMs": {
 														"type": "number"
 													}
@@ -14586,6 +16870,137 @@
 													},
 													"traceId": {
 														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"kind",
+													"id",
+													"at",
+													"event",
+													"round",
+													"title"
+												],
+												"properties": {
+													"kind": {
+														"type": "string",
+														"const": "debate"
+													},
+													"id": {
+														"type": "string"
+													},
+													"at": {
+														"type": "string"
+													},
+													"event": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "round"
+															},
+															{
+																"type": "string",
+																"const": "turn"
+															},
+															{
+																"type": "string",
+																"const": "result"
+															}
+														]
+													},
+													"round": {
+														"type": "number"
+													},
+													"speaker": {
+														"type": "object",
+														"required": [
+															"role",
+															"label"
+														],
+														"properties": {
+															"role": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"label": {
+																"type": "string"
+															}
+														}
+													},
+													"title": {
+														"type": "string"
+													},
+													"lines": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "agreed"
+															},
+															{
+																"type": "string",
+																"const": "no_agreement"
+															},
+															{
+																"type": "string",
+																"const": "stopped"
+															}
+														]
+													},
+													"draft": {
+														"type": "string"
+													},
+													"open": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"text",
+																"severity"
+															],
+															"properties": {
+																"text": {
+																	"type": "string"
+																},
+																"severity": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "blocking"
+																		},
+																		{
+																			"type": "string",
+																			"const": "minor"
+																		}
+																	]
+																},
+																"pushback": {
+																	"type": "string"
+																}
+															}
+														}
+													},
+													"costUsd": {
+														"type": "number"
 													}
 												}
 											}
@@ -14898,6 +17313,254 @@
 														"type": "number"
 													}
 												}
+											},
+											"debate": {
+												"type": "object",
+												"required": [
+													"status",
+													"round",
+													"maxRounds",
+													"goal",
+													"participants",
+													"drafts",
+													"objections"
+												],
+												"properties": {
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "agreed"
+															},
+															{
+																"type": "string",
+																"const": "no_agreement"
+															},
+															{
+																"type": "string",
+																"const": "stopped"
+															}
+														]
+													},
+													"round": {
+														"type": "number"
+													},
+													"maxRounds": {
+														"type": "number"
+													},
+													"turn": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "author"
+															},
+															{
+																"type": "string",
+																"const": "reviewer"
+															}
+														]
+													},
+													"goal": {
+														"type": "string"
+													},
+													"criteria": {
+														"type": "string"
+													},
+													"participants": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"role",
+																"label",
+																"model"
+															],
+															"properties": {
+																"role": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "author"
+																		},
+																		{
+																			"type": "string",
+																			"const": "reviewer"
+																		}
+																	]
+																},
+																"label": {
+																	"type": "string"
+																},
+																"model": {
+																	"type": "object",
+																	"required": [
+																		"provider",
+																		"id"
+																	],
+																	"properties": {
+																		"provider": {
+																			"type": "string"
+																		},
+																		"id": {
+																			"type": "string"
+																		}
+																	}
+																}
+															}
+														}
+													},
+													"drafts": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"version",
+																"round",
+																"text",
+																"changes"
+															],
+															"properties": {
+																"version": {
+																	"type": "number"
+																},
+																"round": {
+																	"type": "number"
+																},
+																"text": {
+																	"type": "string"
+																},
+																"changes": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																}
+															}
+														}
+													},
+													"objections": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"id",
+																"text",
+																"severity",
+																"status",
+																"round",
+																"history"
+															],
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"text": {
+																	"type": "string"
+																},
+																"severity": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "blocking"
+																		},
+																		{
+																			"type": "string",
+																			"const": "minor"
+																		}
+																	]
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "open"
+																		},
+																		{
+																			"type": "string",
+																			"const": "resolved"
+																		},
+																		{
+																			"type": "string",
+																			"const": "withdrawn"
+																		}
+																	]
+																},
+																"round": {
+																	"type": "number"
+																},
+																"pushback": {
+																	"type": "string"
+																},
+																"history": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"round",
+																			"by",
+																			"action"
+																		],
+																		"properties": {
+																			"round": {
+																				"type": "number"
+																			},
+																			"by": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "author"
+																					},
+																					{
+																						"type": "string",
+																						"const": "reviewer"
+																					}
+																				]
+																			},
+																			"action": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "raised"
+																					},
+																					{
+																						"type": "string",
+																						"const": "addressed"
+																					},
+																					{
+																						"type": "string",
+																						"const": "pushed_back"
+																					},
+																					{
+																						"type": "string",
+																						"const": "resolved"
+																					},
+																					{
+																						"type": "string",
+																						"const": "withdrawn"
+																					},
+																					{
+																						"type": "string",
+																						"const": "reopened"
+																					}
+																				]
+																			},
+																			"note": {
+																				"type": "string"
+																			}
+																		}
+																	}
+																}
+															}
+														}
+													},
+													"reason": {
+														"type": "string"
+													}
+												}
 											}
 										}
 									}
@@ -15203,6 +17866,30 @@
 																	],
 																	"properties": {
 																		"from": {
+																			"type": "string"
+																		}
+																	}
+																},
+																"speaker": {
+																	"type": "object",
+																	"required": [
+																		"role",
+																		"label"
+																	],
+																	"properties": {
+																		"role": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "author"
+																				},
+																				{
+																					"type": "string",
+																					"const": "reviewer"
+																				}
+																			]
+																		},
+																		"label": {
 																			"type": "string"
 																		}
 																	}
@@ -16365,6 +19052,137 @@
 																	"type": "string"
 																}
 															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"kind",
+																"id",
+																"at",
+																"event",
+																"round",
+																"title"
+															],
+															"properties": {
+																"kind": {
+																	"type": "string",
+																	"const": "debate"
+																},
+																"id": {
+																	"type": "string"
+																},
+																"at": {
+																	"type": "string"
+																},
+																"event": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "round"
+																		},
+																		{
+																			"type": "string",
+																			"const": "turn"
+																		},
+																		{
+																			"type": "string",
+																			"const": "result"
+																		}
+																	]
+																},
+																"round": {
+																	"type": "number"
+																},
+																"speaker": {
+																	"type": "object",
+																	"required": [
+																		"role",
+																		"label"
+																	],
+																	"properties": {
+																		"role": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "author"
+																				},
+																				{
+																					"type": "string",
+																					"const": "reviewer"
+																				}
+																			]
+																		},
+																		"label": {
+																			"type": "string"
+																		}
+																	}
+																},
+																"title": {
+																	"type": "string"
+																},
+																"lines": {
+																	"type": "array",
+																	"items": {
+																		"type": "string"
+																	}
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "running"
+																		},
+																		{
+																			"type": "string",
+																			"const": "agreed"
+																		},
+																		{
+																			"type": "string",
+																			"const": "no_agreement"
+																		},
+																		{
+																			"type": "string",
+																			"const": "stopped"
+																		}
+																	]
+																},
+																"draft": {
+																	"type": "string"
+																},
+																"open": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"text",
+																			"severity"
+																		],
+																		"properties": {
+																			"text": {
+																				"type": "string"
+																			},
+																			"severity": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "blocking"
+																					},
+																					{
+																						"type": "string",
+																						"const": "minor"
+																					}
+																				]
+																			},
+																			"pushback": {
+																				"type": "string"
+																			}
+																		}
+																	}
+																},
+																"costUsd": {
+																	"type": "number"
+																}
+															}
 														}
 													]
 												}
@@ -16661,6 +19479,254 @@
 															},
 															"window": {
 																"type": "number"
+															}
+														}
+													},
+													"debate": {
+														"type": "object",
+														"required": [
+															"status",
+															"round",
+															"maxRounds",
+															"goal",
+															"participants",
+															"drafts",
+															"objections"
+														],
+														"properties": {
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "running"
+																	},
+																	{
+																		"type": "string",
+																		"const": "agreed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "no_agreement"
+																	},
+																	{
+																		"type": "string",
+																		"const": "stopped"
+																	}
+																]
+															},
+															"round": {
+																"type": "number"
+															},
+															"maxRounds": {
+																"type": "number"
+															},
+															"turn": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "author"
+																	},
+																	{
+																		"type": "string",
+																		"const": "reviewer"
+																	}
+																]
+															},
+															"goal": {
+																"type": "string"
+															},
+															"criteria": {
+																"type": "string"
+															},
+															"participants": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"role",
+																		"label",
+																		"model"
+																	],
+																	"properties": {
+																		"role": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "author"
+																				},
+																				{
+																					"type": "string",
+																					"const": "reviewer"
+																				}
+																			]
+																		},
+																		"label": {
+																			"type": "string"
+																		},
+																		"model": {
+																			"type": "object",
+																			"required": [
+																				"provider",
+																				"id"
+																			],
+																			"properties": {
+																				"provider": {
+																					"type": "string"
+																				},
+																				"id": {
+																					"type": "string"
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															"drafts": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"version",
+																		"round",
+																		"text",
+																		"changes"
+																	],
+																	"properties": {
+																		"version": {
+																			"type": "number"
+																		},
+																		"round": {
+																			"type": "number"
+																		},
+																		"text": {
+																			"type": "string"
+																		},
+																		"changes": {
+																			"type": "array",
+																			"items": {
+																				"type": "string"
+																			}
+																		}
+																	}
+																}
+															},
+															"objections": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"text",
+																		"severity",
+																		"status",
+																		"round",
+																		"history"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"text": {
+																			"type": "string"
+																		},
+																		"severity": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "blocking"
+																				},
+																				{
+																					"type": "string",
+																					"const": "minor"
+																				}
+																			]
+																		},
+																		"status": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "open"
+																				},
+																				{
+																					"type": "string",
+																					"const": "resolved"
+																				},
+																				{
+																					"type": "string",
+																					"const": "withdrawn"
+																				}
+																			]
+																		},
+																		"round": {
+																			"type": "number"
+																		},
+																		"pushback": {
+																			"type": "string"
+																		},
+																		"history": {
+																			"type": "array",
+																			"items": {
+																				"type": "object",
+																				"required": [
+																					"round",
+																					"by",
+																					"action"
+																				],
+																				"properties": {
+																					"round": {
+																						"type": "number"
+																					},
+																					"by": {
+																						"anyOf": [
+																							{
+																								"type": "string",
+																								"const": "author"
+																							},
+																							{
+																								"type": "string",
+																								"const": "reviewer"
+																							}
+																						]
+																					},
+																					"action": {
+																						"anyOf": [
+																							{
+																								"type": "string",
+																								"const": "raised"
+																							},
+																							{
+																								"type": "string",
+																								"const": "addressed"
+																							},
+																							{
+																								"type": "string",
+																								"const": "pushed_back"
+																							},
+																							{
+																								"type": "string",
+																								"const": "resolved"
+																							},
+																							{
+																								"type": "string",
+																								"const": "withdrawn"
+																							},
+																							{
+																								"type": "string",
+																								"const": "reopened"
+																							}
+																						]
+																					},
+																					"note": {
+																						"type": "string"
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															"reason": {
+																"type": "string"
 															}
 														}
 													}
@@ -17097,6 +20163,34 @@
 								"type": "array",
 								"items": {
 									"type": "string"
+								}
+							},
+							"debate": {
+								"type": "object",
+								"required": [
+									"status"
+								],
+								"properties": {
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "running"
+											},
+											{
+												"type": "string",
+												"const": "agreed"
+											},
+											{
+												"type": "string",
+												"const": "no_agreement"
+											},
+											{
+												"type": "string",
+												"const": "stopped"
+											}
+										]
+									}
 								}
 							}
 						}
@@ -17647,6 +20741,34 @@
 								"items": {
 									"type": "string"
 								}
+							},
+							"debate": {
+								"type": "object",
+								"required": [
+									"status"
+								],
+								"properties": {
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "running"
+											},
+											{
+												"type": "string",
+												"const": "agreed"
+											},
+											{
+												"type": "string",
+												"const": "no_agreement"
+											},
+											{
+												"type": "string",
+												"const": "stopped"
+											}
+										]
+									}
+								}
 							}
 						}
 					}
@@ -17783,6 +20905,72 @@
 				},
 				"title": {
 					"type": "string"
+				},
+				"debate": {
+					"type": "object",
+					"required": [
+						"style",
+						"goal",
+						"participants",
+						"maxRounds"
+					],
+					"properties": {
+						"style": {
+							"type": "string",
+							"const": "review"
+						},
+						"goal": {
+							"type": "string"
+						},
+						"criteria": {
+							"type": "string"
+						},
+						"participants": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"role",
+									"model"
+								],
+								"properties": {
+									"role": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "author"
+											},
+											{
+												"type": "string",
+												"const": "reviewer"
+											}
+										]
+									},
+									"model": {
+										"type": "object",
+										"required": [
+											"provider",
+											"id"
+										],
+										"properties": {
+											"provider": {
+												"type": "string"
+											},
+											"id": {
+												"type": "string"
+											}
+										}
+									},
+									"thinking": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"maxRounds": {
+							"type": "number"
+						}
+					}
 				}
 			}
 		},
@@ -18164,6 +21352,30 @@
 										],
 										"properties": {
 											"from": {
+												"type": "string"
+											}
+										}
+									},
+									"speaker": {
+										"type": "object",
+										"required": [
+											"role",
+											"label"
+										],
+										"properties": {
+											"role": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "author"
+													},
+													{
+														"type": "string",
+														"const": "reviewer"
+													}
+												]
+											},
+											"label": {
 												"type": "string"
 											}
 										}
@@ -19326,6 +22538,137 @@
 										"type": "string"
 									}
 								}
+							},
+							{
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"at",
+									"event",
+									"round",
+									"title"
+								],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"const": "debate"
+									},
+									"id": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"event": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "round"
+											},
+											{
+												"type": "string",
+												"const": "turn"
+											},
+											{
+												"type": "string",
+												"const": "result"
+											}
+										]
+									},
+									"round": {
+										"type": "number"
+									},
+									"speaker": {
+										"type": "object",
+										"required": [
+											"role",
+											"label"
+										],
+										"properties": {
+											"role": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "author"
+													},
+													{
+														"type": "string",
+														"const": "reviewer"
+													}
+												]
+											},
+											"label": {
+												"type": "string"
+											}
+										}
+									},
+									"title": {
+										"type": "string"
+									},
+									"lines": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "running"
+											},
+											{
+												"type": "string",
+												"const": "agreed"
+											},
+											{
+												"type": "string",
+												"const": "no_agreement"
+											},
+											{
+												"type": "string",
+												"const": "stopped"
+											}
+										]
+									},
+									"draft": {
+										"type": "string"
+									},
+									"open": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"text",
+												"severity"
+											],
+											"properties": {
+												"text": {
+													"type": "string"
+												},
+												"severity": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "blocking"
+														},
+														{
+															"type": "string",
+															"const": "minor"
+														}
+													]
+												},
+												"pushback": {
+													"type": "string"
+												}
+											}
+										}
+									},
+									"costUsd": {
+										"type": "number"
+									}
+								}
 							}
 						]
 					}
@@ -19622,6 +22965,254 @@
 								},
 								"window": {
 									"type": "number"
+								}
+							}
+						},
+						"debate": {
+							"type": "object",
+							"required": [
+								"status",
+								"round",
+								"maxRounds",
+								"goal",
+								"participants",
+								"drafts",
+								"objections"
+							],
+							"properties": {
+								"status": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "running"
+										},
+										{
+											"type": "string",
+											"const": "agreed"
+										},
+										{
+											"type": "string",
+											"const": "no_agreement"
+										},
+										{
+											"type": "string",
+											"const": "stopped"
+										}
+									]
+								},
+								"round": {
+									"type": "number"
+								},
+								"maxRounds": {
+									"type": "number"
+								},
+								"turn": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "author"
+										},
+										{
+											"type": "string",
+											"const": "reviewer"
+										}
+									]
+								},
+								"goal": {
+									"type": "string"
+								},
+								"criteria": {
+									"type": "string"
+								},
+								"participants": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"role",
+											"label",
+											"model"
+										],
+										"properties": {
+											"role": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "author"
+													},
+													{
+														"type": "string",
+														"const": "reviewer"
+													}
+												]
+											},
+											"label": {
+												"type": "string"
+											},
+											"model": {
+												"type": "object",
+												"required": [
+													"provider",
+													"id"
+												],
+												"properties": {
+													"provider": {
+														"type": "string"
+													},
+													"id": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								},
+								"drafts": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"version",
+											"round",
+											"text",
+											"changes"
+										],
+										"properties": {
+											"version": {
+												"type": "number"
+											},
+											"round": {
+												"type": "number"
+											},
+											"text": {
+												"type": "string"
+											},
+											"changes": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											}
+										}
+									}
+								},
+								"objections": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"id",
+											"text",
+											"severity",
+											"status",
+											"round",
+											"history"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"text": {
+												"type": "string"
+											},
+											"severity": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "blocking"
+													},
+													{
+														"type": "string",
+														"const": "minor"
+													}
+												]
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "open"
+													},
+													{
+														"type": "string",
+														"const": "resolved"
+													},
+													{
+														"type": "string",
+														"const": "withdrawn"
+													}
+												]
+											},
+											"round": {
+												"type": "number"
+											},
+											"pushback": {
+												"type": "string"
+											},
+											"history": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"round",
+														"by",
+														"action"
+													],
+													"properties": {
+														"round": {
+															"type": "number"
+														},
+														"by": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "author"
+																},
+																{
+																	"type": "string",
+																	"const": "reviewer"
+																}
+															]
+														},
+														"action": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "raised"
+																},
+																{
+																	"type": "string",
+																	"const": "addressed"
+																},
+																{
+																	"type": "string",
+																	"const": "pushed_back"
+																},
+																{
+																	"type": "string",
+																	"const": "resolved"
+																},
+																{
+																	"type": "string",
+																	"const": "withdrawn"
+																},
+																{
+																	"type": "string",
+																	"const": "reopened"
+																}
+															]
+														},
+														"note": {
+															"type": "string"
+														}
+													}
+												}
+											}
+										}
+									}
+								},
+								"reason": {
+									"type": "string"
 								}
 							}
 						}
@@ -19974,6 +23565,30 @@
 												],
 												"properties": {
 													"from": {
+														"type": "string"
+													}
+												}
+											},
+											"speaker": {
+												"type": "object",
+												"required": [
+													"role",
+													"label"
+												],
+												"properties": {
+													"role": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "author"
+															},
+															{
+																"type": "string",
+																"const": "reviewer"
+															}
+														]
+													},
+													"label": {
 														"type": "string"
 													}
 												}
@@ -21136,6 +24751,137 @@
 												"type": "string"
 											}
 										}
+									},
+									{
+										"type": "object",
+										"required": [
+											"kind",
+											"id",
+											"at",
+											"event",
+											"round",
+											"title"
+										],
+										"properties": {
+											"kind": {
+												"type": "string",
+												"const": "debate"
+											},
+											"id": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string"
+											},
+											"event": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "round"
+													},
+													{
+														"type": "string",
+														"const": "turn"
+													},
+													{
+														"type": "string",
+														"const": "result"
+													}
+												]
+											},
+											"round": {
+												"type": "number"
+											},
+											"speaker": {
+												"type": "object",
+												"required": [
+													"role",
+													"label"
+												],
+												"properties": {
+													"role": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "author"
+															},
+															{
+																"type": "string",
+																"const": "reviewer"
+															}
+														]
+													},
+													"label": {
+														"type": "string"
+													}
+												}
+											},
+											"title": {
+												"type": "string"
+											},
+											"lines": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "running"
+													},
+													{
+														"type": "string",
+														"const": "agreed"
+													},
+													{
+														"type": "string",
+														"const": "no_agreement"
+													},
+													{
+														"type": "string",
+														"const": "stopped"
+													}
+												]
+											},
+											"draft": {
+												"type": "string"
+											},
+											"open": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"text",
+														"severity"
+													],
+													"properties": {
+														"text": {
+															"type": "string"
+														},
+														"severity": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "blocking"
+																},
+																{
+																	"type": "string",
+																	"const": "minor"
+																}
+															]
+														},
+														"pushback": {
+															"type": "string"
+														}
+													}
+												}
+											},
+											"costUsd": {
+												"type": "number"
+											}
+										}
 									}
 								]
 							}
@@ -21434,6 +25180,254 @@
 											"type": "number"
 										}
 									}
+								},
+								"debate": {
+									"type": "object",
+									"required": [
+										"status",
+										"round",
+										"maxRounds",
+										"goal",
+										"participants",
+										"drafts",
+										"objections"
+									],
+									"properties": {
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "running"
+												},
+												{
+													"type": "string",
+													"const": "agreed"
+												},
+												{
+													"type": "string",
+													"const": "no_agreement"
+												},
+												{
+													"type": "string",
+													"const": "stopped"
+												}
+											]
+										},
+										"round": {
+											"type": "number"
+										},
+										"maxRounds": {
+											"type": "number"
+										},
+										"turn": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "author"
+												},
+												{
+													"type": "string",
+													"const": "reviewer"
+												}
+											]
+										},
+										"goal": {
+											"type": "string"
+										},
+										"criteria": {
+											"type": "string"
+										},
+										"participants": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"role",
+													"label",
+													"model"
+												],
+												"properties": {
+													"role": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "author"
+															},
+															{
+																"type": "string",
+																"const": "reviewer"
+															}
+														]
+													},
+													"label": {
+														"type": "string"
+													},
+													"model": {
+														"type": "object",
+														"required": [
+															"provider",
+															"id"
+														],
+														"properties": {
+															"provider": {
+																"type": "string"
+															},
+															"id": {
+																"type": "string"
+															}
+														}
+													}
+												}
+											}
+										},
+										"drafts": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"version",
+													"round",
+													"text",
+													"changes"
+												],
+												"properties": {
+													"version": {
+														"type": "number"
+													},
+													"round": {
+														"type": "number"
+													},
+													"text": {
+														"type": "string"
+													},
+													"changes": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													}
+												}
+											}
+										},
+										"objections": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"id",
+													"text",
+													"severity",
+													"status",
+													"round",
+													"history"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"text": {
+														"type": "string"
+													},
+													"severity": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "blocking"
+															},
+															{
+																"type": "string",
+																"const": "minor"
+															}
+														]
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "open"
+															},
+															{
+																"type": "string",
+																"const": "resolved"
+															},
+															{
+																"type": "string",
+																"const": "withdrawn"
+															}
+														]
+													},
+													"round": {
+														"type": "number"
+													},
+													"pushback": {
+														"type": "string"
+													},
+													"history": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"round",
+																"by",
+																"action"
+															],
+															"properties": {
+																"round": {
+																	"type": "number"
+																},
+																"by": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "author"
+																		},
+																		{
+																			"type": "string",
+																			"const": "reviewer"
+																		}
+																	]
+																},
+																"action": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "raised"
+																		},
+																		{
+																			"type": "string",
+																			"const": "addressed"
+																		},
+																		{
+																			"type": "string",
+																			"const": "pushed_back"
+																		},
+																		{
+																			"type": "string",
+																			"const": "resolved"
+																		},
+																		{
+																			"type": "string",
+																			"const": "withdrawn"
+																		},
+																		{
+																			"type": "string",
+																			"const": "reopened"
+																		}
+																	]
+																},
+																"note": {
+																	"type": "string"
+																}
+															}
+														}
+													}
+												}
+											}
+										},
+										"reason": {
+											"type": "string"
+										}
+									}
 								}
 							}
 						}
@@ -21655,6 +25649,103 @@
 			"type": "object",
 			"properties": {}
 		},
+		"sessions.debate.continue.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"rounds": {
+					"type": "number"
+				}
+			}
+		},
+		"sessions.debate.continue.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"sessions.debate.stop.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.debate.stop.result": {
+			"type": "object",
+			"properties": {}
+		},
 		"sessions.edit.params": {
 			"type": "object",
 			"required": [
@@ -21702,6 +25793,9 @@
 					"type": "string"
 				},
 				"text": {
+					"type": "string"
+				},
+				"clientRequestId": {
 					"type": "string"
 				}
 			}
@@ -22275,6 +26369,26 @@
 				},
 				"limit": {
 					"type": "number"
+				},
+				"kind": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "build"
+						},
+						{
+							"type": "string",
+							"const": "thread"
+						},
+						{
+							"type": "string",
+							"const": "space"
+						},
+						{
+							"type": "string",
+							"const": "agent"
+						}
+					]
 				}
 			}
 		},
@@ -22358,6 +26472,104 @@
 							},
 							"at": {
 								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"engine.shutdown.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"engine.shutdown.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"usage.extras.params": {
+			"type": "object",
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"usage.extras.result": {
+			"type": "object",
+			"required": [
+				"scope",
+				"knownUsd",
+				"unknownCalls",
+				"calls",
+				"breakdown"
+			],
+			"properties": {
+				"scope": {
+					"type": "string"
+				},
+				"knownUsd": {
+					"type": "number"
+				},
+				"unknownCalls": {
+					"type": "number"
+				},
+				"calls": {
+					"type": "number"
+				},
+				"breakdown": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"kind",
+							"calls",
+							"knownUsd",
+							"unknownCalls"
+						],
+						"properties": {
+							"kind": {
+								"type": "string"
+							},
+							"calls": {
+								"type": "number"
+							},
+							"knownUsd": {
+								"type": "number"
+							},
+							"unknownCalls": {
+								"type": "number"
 							}
 						}
 					}

@@ -10,8 +10,9 @@ import UniformTypeIdentifiers
 struct Composer: View {
     let engine: EngineController
     let thread: ThreadModel
-    @State private var text = ""
-    @State private var attachments: [PendingAttachment] = []
+    @Binding private var text: String
+    @Binding private var attachments: [PendingAttachment]
+    @State private var showCosts = false
     @State private var attachError: String?
     @State private var dropTargeted = false
     @FocusState private var focused: Bool
@@ -19,6 +20,12 @@ struct Composer: View {
     @State private var suggestions: [Suggestion] = []
     @State private var highlighted = 0
     @State private var sessionCommands: [SessionCommand] = []
+
+    init(engine: EngineController, thread: ThreadModel) {
+        self.engine = engine; self.thread = thread
+        _text = Binding(get: { thread.composerText }, set: { thread.composerText = $0 })
+        _attachments = Binding(get: { thread.composerAttachments }, set: { thread.composerAttachments = $0 })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -31,7 +38,7 @@ struct Composer: View {
                         Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
                     }
                     .buttonStyle(.plain)
-                    .help("Remove from queue")
+                    .help("Remove from queue").accessibilityLabel("Remove queued message")
                 }
                 .padding(.horizontal, 16)
             }
@@ -42,6 +49,7 @@ struct Composer: View {
                 HStack {
                     Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed)
                     Spacer()
+                    if !text.isEmpty { Button("Retry") { Task { await thread.retrySend() } }.buttonStyle(PillStyle(compact: true)).disabled(thread.isSubmitting) }
                     if thread.errorIsAuth { Button("Open Settings") { ThreadModel.openSettings() }.buttonStyle(PillStyle(compact: true)) }
                 }
                 .padding(.horizontal, 16)
@@ -90,7 +98,7 @@ struct Composer: View {
                 if text.isEmpty {
                     Text(placeholder).foregroundStyle(Color.dsFg3).padding(.top, 1).padding(.leading, 5).allowsHitTesting(false)
                 }
-                TextEditor(text: $text)
+                TextEditor(text: $text).accessibilityLabel("Message")
                     .scrollContentBackground(.hidden)
                     .focused($focused)
                     .frame(minHeight: 22, maxHeight: 180)
@@ -144,6 +152,7 @@ struct Composer: View {
                         .buttonStyle(.plain)
                         .background(Color.dsChip, in: Circle())
                         .help(isBuild ? "Mention files or folders (or drop them here)" : "Attach images, PDFs, text files or a folder (or drop them here)")
+                        .accessibilityLabel(isBuild ? "Mention files or folders" : "Attach files or images")
                 }
                 if isBuild { EditModeChip(engine: engine, thread: thread) }
                 ModelChip(engine: engine, thread: thread)
@@ -155,9 +164,18 @@ struct Composer: View {
                     .buttonStyle(ChipStyle(active: thread.webEnabled))
                     .help(thread.webEnabled ? "Web search and page reading are on" : "Web search and page reading are off")
                 }
+                Button { showCosts = true } label: { Image(systemName: "dollarsign.circle") }
+                    .buttonStyle(.plain).foregroundStyle(Color.dsFg2).help("Conversation and additional request costs")
+                    .accessibilityLabel("View cost estimate")
+                    .popover(isPresented: $showCosts) { CostDetails(engine: engine, thread: thread) }
                 Spacer(minLength: 6)
                 if thread.isRunning {
-                    Text("⌥↩ steer · esc stop").font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    Menu {
+                        Button("Send after this answer") { send(steer: false) }.disabled(!canSend)
+                        Button("Interrupt with this message") { send(steer: true) }.disabled(!canSend)
+                        Button("Stop response") { stop() }
+                    } label: { Text("Send options") }.menuStyle(.borderlessButton).fixedSize()
+                        .accessibilityLabel("Response and queue controls")
                 }
                 if let context = thread.state?.context { ContextRing(context: context, compact: isBuild ? { Task { await thread.compact() } } : nil) }
                 let stopping = thread.isRunning && text.isEmpty
@@ -170,6 +188,7 @@ struct Composer: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend && !thread.isRunning)
+                .accessibilityLabel(stopping ? "Stop response" : thread.isRunning ? "Send after this answer" : "Send message")
                 .help(thread.isRunning ? (text.isEmpty ? "Stop (esc, ⌘.)" : "Queue after the current answer (↩) · Steer it now (⌥↩)") : "Send (↩)")
             }
         }
@@ -191,10 +210,14 @@ struct Composer: View {
     /// A Space's Main: @topic and /new, /main (04-chat S3).
     var isSpaceMain: Bool { thread.ref.kind == .space && thread.ref.conversationId == nil }
 
-    private var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var canSend: Bool { !thread.isSubmitting && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
+        if let debate = thread.debate {
+            if debate.status == .running { return "Tell both models something: they read it on their next turn" }
+            if !thread.isRunning { return "Ask \(debate.label(.author)) for changes or a follow-up" }
+        }
         if thread.isRunning { return "Queue a follow-up…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         if thread.ref.kind == .space, let space = engine.space(thread.ref.id) {
@@ -217,7 +240,7 @@ struct Composer: View {
                             Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.dsFg3)
                         }
                         .buttonStyle(.plain)
-                        .help("Remove")
+                        .help("Remove").accessibilityLabel("Remove attachment \(a.name)")
                     }
                     .padding(.horizontal, 8)
                     .frame(height: 30)
@@ -326,8 +349,6 @@ struct Composer: View {
             return
         }
         let files = attachments.map(\.attachment)
-        text = ""
-        attachments = []
         attachError = nil
         Task { await thread.send(message, attachments: files, steer: steer && thread.isRunning) }
     }

@@ -45,6 +45,7 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .assistant(let a):
             let out = NSMutableAttributedString()
+            if let speaker = a.speaker { out.append(speakerLine(speaker)) }
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: Self.thought(a.thinkingMs), detail: "", body: thinking))) }
             if let o = a.outbound { out.append(note(o.from.hasPrefix("run_") ? "Sent on its own, from an automatic run" : "Sent on its own", dot: DS.accent)) }
@@ -78,7 +79,87 @@ nonisolated struct ItemRenderer: Sendable {
             return resultCard(r)
         case .agentMsg(let m):
             return agentMessage(m)
+        case .debate(let d):
+            return debateItem(d)
         }
+    }
+
+    // MARK: Debate (docs/spec/16-debate §5)
+
+    static func speakerColor(_ role: DebateRole) -> NSColor { role == .author ? DS.debateAuthor : DS.debateReviewer }
+
+    /// Above a debate answer: who wrote it, in that side's color.
+    private func speakerLine(_ s: Speaker) -> NSAttributedString {
+        let m = NSMutableAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: Self.speakerColor(s.role), .baselineOffset: 1.5])
+        m.append(NSAttributedString(string: s.label, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: DS.fg]))
+        m.append(NSAttributedString(string: "  ·  \(s.role == .author ? "author" : "reviewer")", attributes: [.font: small, .foregroundColor: DS.fg3]))
+        return line(m, paragraph(spacing: 4, before: 6))
+    }
+
+    private func debateItem(_ d: DebateItem) -> NSAttributedString {
+        switch d.event {
+        case .round:
+            // A centered label between hairlines, like the checkpoint divider.
+            let p = paragraph(spacing: 12, before: 14)
+            p.alignment = .center
+            let label = NSAttributedString(string: d.title.uppercased(), attributes: [.font: NSFont.systemFont(ofSize: 10.5, weight: .semibold), .foregroundColor: DS.fg3, .kern: 0.8])
+            let out = NSMutableAttributedString(attributedString: line(label, p))
+            out.addAttribute(.piopioCard, value: CardStyle.divider.rawValue, range: NSRange(location: 0, length: out.length))
+            return out
+        case .turn:
+            // What the turn did, quietly: "● Draft v2 · 3 changes", then each change, pushback or objection.
+            let color = d.speaker.map { Self.speakerColor($0.role) } ?? DS.fg3
+            let m = NSMutableAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: color, .baselineOffset: 1.5])
+            if let s = d.speaker { m.append(NSAttributedString(string: "\(s.label)  ", attributes: [.font: small, .foregroundColor: DS.fg3])) }
+            m.append(NSAttributedString(string: d.title, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .semibold), .foregroundColor: DS.fg2]))
+            for text in d.lines ?? [] {
+                m.append(NSAttributedString(string: lineSeparator + "    " + text, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
+            }
+            return line(m, paragraph(spacing: 14, before: 2, indent: 0, head: 20))
+        case .result:
+            return debateResult(d)
+        }
+    }
+
+    /// How a debate ended (agreed, no agreement, stopped), what's still open, the final draft, and its actions.
+    private func debateResult(_ d: DebateItem) -> NSAttributedString {
+        let (mark, color): (String, NSColor) = switch d.status {
+        case .agreed?: ("✓", DS.green)
+        case .noAgreement?: ("≠", DS.amber)
+        default: ("■", DS.fg3)
+        }
+        let m = NSMutableAttributedString(string: "\(mark)  ", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .bold), .foregroundColor: color])
+        m.append(NSAttributedString(string: d.title, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
+        if let cost = d.costUsd, cost > 0 {
+            m.append(NSAttributedString(string: "  ·  " + (cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)), attributes: [.font: small, .foregroundColor: DS.fg3]))
+        }
+        for text in d.lines ?? [] {
+            m.append(NSAttributedString(string: lineSeparator + text, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
+        }
+        if let open = d.open, !open.isEmpty {
+            m.append(NSAttributedString(string: lineSeparator + "Still open:", attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: DS.fg2]))
+            for o in open {
+                m.append(NSAttributedString(string: lineSeparator + "•  \(o.text)" + (o.severity == .blocking ? "  (blocking)" : ""), attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg]))
+                if let pushback = o.pushback {
+                    m.append(NSAttributedString(string: lineSeparator + "    Author: \(pushback)", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg3]))
+                }
+            }
+        }
+        if !compact {
+            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            if d.draft != nil { m.append(pill("Copy draft", .copyDraft(itemId: d.id), d.status == .agreed ? .primary : .secondary)) }
+            if d.status != .agreed {
+                m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
+                m.append(pill("Keep going", .continueDebate, .primary))
+            }
+        }
+        let out = NSMutableAttributedString(attributedString: card(m, .approval, lineHeight: 1.5))
+        if let draft = d.draft {
+            // The deliverable itself, as the answer would show it.
+            out.append(line(NSAttributedString(string: d.status == .agreed ? "Final draft" : "Latest draft", attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .semibold), .foregroundColor: DS.fg3, .kern: 0.4]), paragraph(spacing: 6, before: 4)))
+            for block in MarkdownStream(text: draft).blocks { out.append(render(block)) }
+        }
+        return out
     }
 
     /// An agent asks before acting (06-agents §9 AS1, docs/design 2a): what it wants to do, Deny / Edit… / Approve.

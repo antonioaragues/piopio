@@ -22,6 +22,7 @@ struct WelcomeView: View {
         }
     }
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var step: Step = .areas
     @State private var forward = true
     /// All three ticked at first (§7); a rerun starts from what's on.
@@ -122,7 +123,7 @@ struct WelcomeView: View {
 
     private func go(_ s: Step) {
         forward = s.rawValue > step.rawValue
-        withAnimation(.easeOut(duration: 0.25)) { step = s }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { step = s }
     }
 
     private func next() {

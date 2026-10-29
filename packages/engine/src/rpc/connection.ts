@@ -54,7 +54,7 @@ export class RpcConnection {
 	}
 
 	close(): void {
-		this.stream.end();
+		this.stream.destroy();
 	}
 
 	private write(message: JsonRpcMessage): void {
