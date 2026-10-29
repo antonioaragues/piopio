@@ -662,9 +662,8 @@ struct SpaceView: View {
             conversation
             if showInspector {
                 SpaceInspector(engine: engine, space: space, selection: $selection, showMemory: $showMemory)
-                    .frame(width: 270)
-                    .glassPanel()
-                    .padding(8)
+                    .frame(width: 240)
+                    .sidePanel()
             }
         }
         .sheet(isPresented: $showMemory) { MemoryEditorSheet(engine: engine, space: space) }
@@ -698,43 +697,27 @@ struct SpaceView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(space.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
-            }
-            Spacer(minLength: 12)
+        PageHeader(space.title, subtitle: subtitle) {
             Button("Files") { showFiles = true }.buttonStyle(PillStyle(kind: .toolbar)).help("Documents every topic can read")
-            Button { withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() } } label: {
-                Image(systemName: "sidebar.right").font(.system(size: 12, weight: .medium)).foregroundStyle(showInspector ? Color.accentColor : Color.dsFg)
-                    .frame(width: 28, height: 28)
-                    .background(showInspector ? Color.dsAccentSoft : Color.dsPill, in: Circle())
-                    .overlay(Circle().strokeBorder(showInspector ? .clear : Color.dsLine, lineWidth: 0.5))
-            }
-            .buttonStyle(.plain)
-            .help(showInspector ? "Hide progress and memory" : "Show progress and memory")
+            Button { withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() } } label: { Image(systemName: "sidebar.right") }
+                .buttonStyle(IconButtonStyle(on: showInspector))
+                .help(showInspector ? "Hide topics and memory" : "Show topics and memory")
             Menu {
                 SpaceMenu(engine: engine, space: space, selection: $selection)
             } label: {
-                Image(systemName: "ellipsis").font(.system(size: 12, weight: .medium))
+                Image(systemName: "ellipsis")
             }
             .menuStyle(.button)
-            .buttonStyle(PillStyle(kind: .toolbar))
+            .buttonStyle(IconButtonStyle())
             .menuIndicator(.hidden)
             .fixedSize()
             .help("Rename, instructions, delete")
         }
-        .padding(.leading, 24)
-        .padding(.trailing, 16)
-        .frame(height: 60)
-        .contentShape(Rectangle())
-        .gesture(WindowDragGesture())
     }
 
     private var subtitle: String {
         var parts = ["Notebook"]
         if let info = space.space {
-            if info.costUsd > 0 { parts.append(info.costUsd < 0.01 ? String(format: "$%.4f", info.costUsd) : String(format: "$%.2f", info.costUsd)) }
             if info.files > 0 { parts.append(info.files == 1 ? "1 file" : "\(info.files) files") }
         }
         if thread.state?.status == .running { parts.append(topicId == nil ? "organizing…" : "answering…") }

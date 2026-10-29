@@ -2,20 +2,20 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The one sidebar (docs/design v2, 0a): Home, Needs you, then Pinned · Projects · Notebooks · Agents · Chats.
+/// The one sidebar (docs/design/grey 9a): a 52pt top bar (traffic lights, toggle, compose), Search ⌘K, Home and
+/// Needs you, then Pinned · Projects · Notebooks · Agents · Chats, and a footer with the cost today and Settings.
+/// Rows are plain: a 16pt outline glyph, the name, and status only as a blue dot (needs you) or a grey ring (running).
 /// Long lists show only what's live: a project's sessions that are running, waiting on you or touched in the last
 /// 3 days (the rest fold into "N earlier sessions"), and a few of each section ("N more ›" opens the full index).
-/// Section headers collapse; pins and collapsed sections persist. Search filters every row in place.
+/// Section headers collapse; pins and collapsed sections persist.
 struct MainSidebar: View {
     let engine: EngineController
     @Binding var item: SidebarItem
     @AppStorage("collapsedSections") private var collapsedRaw = ""
     @AppStorage("pinnedItems") private var pinnedRaw = ""
-    @State private var query = ""
     @State private var showingEarlier: Set<String> = []
     @State private var renaming: SessionSummary?
     @State private var newTitle = ""
-    @FocusState private var searching: Bool
     private var areas: AreaSet { Areas.shared.set }
 
     /// How many of each section show before "N more ›".
@@ -25,30 +25,29 @@ struct MainSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The traffic lights' row, then search and New side by side.
-            Color.clear.frame(height: 34)
-            HStack(spacing: 6) {
-                search
+            // The traffic lights' row: the toggle and compose on the right.
+            HStack(spacing: 2) {
+                Spacer()
+                SidebarToggle()
                 NewMenu(engine: engine)
             }
             .padding(.horizontal, 12)
+            .frame(height: Shell.barHeight)
+            .contentShape(Rectangle())
+            .gesture(WindowDragGesture())
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
-                    if query.isEmpty {
-                        navRow(.home, "Home", symbol: "house")
-                        navRow(.needsYou, "Needs you", symbol: "tray.full", badge: engine.needsYouCount)
-                        Color.clear.frame(height: 8)
-                        pinnedSection
-                        if areas.showsProjects { projectsSection }
-                        if areas.showsNotebooks { notebooksSection }
-                        if areas.showsAgents { agentsSection }
-                        if areas.showsChats { chatsSection }
-                    } else {
-                        results
-                    }
+                    searchRow
+                    navRow(.home, "Home", symbol: "house")
+                    navRow(.needsYou, "Needs you", symbol: "tray", count: engine.needsYouCount)
+                    pinnedSection
+                    if areas.showsProjects { projectsSection }
+                    if areas.showsNotebooks { notebooksSection }
+                    if areas.showsAgents { agentsSection }
+                    if areas.showsChats { chatsSection }
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 10)
+                .padding(.bottom, 10)
             }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             footer
@@ -65,55 +64,46 @@ struct MainSidebar: View {
 
     // MARK: Search and footer
 
-    private var search: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            TextField("Search", text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .focused($searching)
-                .onExitCommand { query = ""; searching = false }
-            if query.isEmpty {
-                Button { NotificationCenter.default.post(name: .showPalette, object: false) } label: {
-                    Text("⌘K").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-                }
-                .buttonStyle(.plain)
-                .help("Command palette")
-            } else {
-                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundStyle(Color.dsFg3) }.buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 28)
-        .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-    }
-
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 7) {
-                Circle().fill(engineColor).frame(width: 6, height: 6)
-                Text("This Mac").foregroundStyle(Color.dsFg2)
+    /// Search ⌘K: opens the search and command box (10b).
+    private var searchRow: some View {
+        Button { NotificationCenter.default.post(name: .showPalette, object: nil) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                Text("Search").font(.system(size: 13)).foregroundStyle(Color.dsFg)
                 Spacer()
-                Button { WindowOpener.shared.openSettings?() } label: {
-                    Image(systemName: "gearshape").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                }
-                .buttonStyle(.plain).help("Settings (⌘,)").accessibilityLabel("Settings")
+                Text("⌘K").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
             }
-            if let today = engine.usage?.todayUsd {
-                Text(Self.money(today) + " · OpenRouter key today")
-                    .font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1).minimumScaleFactor(0.85)
-                    .help("OpenRouter spending for this API key, including other apps that share it. Other providers are not included.")
-            }
+            .rowChrome(selected: false)
         }
-        .font(.system(size: 12)).padding(.horizontal, 14).padding(.vertical, 8)
-        .frame(minHeight: 48)
+        .buttonStyle(.plain)
+        .help("Search and commands (⌘K)")
     }
 
-    private var engineColor: Color {
+    /// Avatar, name, "This Mac · $0.91 today", and Settings.
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Text(String(HomeView.firstName.prefix(1)).uppercased())
+                .font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
+                .frame(width: 24, height: 24)
+                .background(Color.dsChip, in: Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(HomeView.firstName).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Text(footerLine).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    .help("OpenRouter spending today for this API key, including other apps that share it. Other providers are not included.")
+            }
+            Spacer(minLength: 4)
+            Button { WindowOpener.shared.openSettings?() } label: { Image(systemName: "gearshape") }
+                .buttonStyle(IconButtonStyle()).help("Settings (⌘,)").accessibilityLabel("Settings")
+        }
+        .padding(.leading, 16).padding(.trailing, 10)
+        .frame(height: Shell.barHeight)
+    }
+
+    private var footerLine: String {
         switch engine.status {
-        case .ready: .dsGreen
-        case .starting: .dsAmber
-        case .failed: .dsRed
+        case .starting: return "This Mac · starting…"
+        case .failed: return "This Mac · engine stopped"
+        case .ready: return "This Mac" + ((engine.usage?.todayUsd).map { " · \(Self.money($0)) today" } ?? "")
         }
     }
 
@@ -147,8 +137,8 @@ struct MainSidebar: View {
         HStack(spacing: 4) {
             Button { toggle(section) } label: {
                 HStack(spacing: 4) {
-                    SectionLabel(total > shown && !isCollapsed ? "\(section.title) · \(total)" : section.title)
-                    if isCollapsed { Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.dsFg3) }
+                    SectionLabel(section.title)
+                    if isCollapsed { Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3) }
                     Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
@@ -157,19 +147,16 @@ struct MainSidebar: View {
             .help(isCollapsed ? "Show \(section.title)" : "Hide \(section.title)")
             if let add {
                 Button(action: add) {
-                    Image(systemName: "plus").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.dsFg3).frame(width: 18, height: 18).contentShape(Rectangle())
+                    Image(systemName: "plus").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 20, height: 20).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help(addHelp)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 10)
-        .padding(.bottom, 3)
-    }
-
-    private func hint(_ text: String) -> some View {
-        Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(3).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 8).padding(.vertical, 5).frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .padding(.top, 16)
+        .padding(.bottom, 4)
     }
 
     private func more(_ text: String, _ target: SidebarItem) -> some View {
@@ -179,7 +166,7 @@ struct MainSidebar: View {
                 Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
             }
             .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-            .padding(.horizontal, 8).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            .padding(.leading, 36).padding(.trailing, 8).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -239,7 +226,6 @@ struct MainSidebar: View {
             header(.projects, total: projects.count, shown: shown.count, add: { BuildActions.addFolderToChat(engine: engine) { item = .session($0) } }, addHelp: "Add a folder to chat about")
         }
         if !collapsed.contains(SidebarSection.projects.rawValue) {
-            if projects.isEmpty { hint(areas.contains(.build) ? "Folders on your Mac · code or chat about files" : "Folders to chat about") }
             ForEach(shown) { project in
                 if !pinnedHere.contains(SidebarItem.project(project.id).raw) { projectRow(project) }
                 projectSessions(project)
@@ -259,7 +245,7 @@ struct MainSidebar: View {
             } label: {
                 Text(showAll ? "Hide earlier sessions" : "\(earlier.count) earlier session\(earlier.count == 1 ? "" : "s")")
                     .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-                    .padding(.leading, 26).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    .padding(.leading, 36).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -285,14 +271,13 @@ struct MainSidebar: View {
     private func projectRow(_ project: ProjectInfo) -> some View {
         let selected = item == .project(project.id)
         return Button { item = .project(project.id) } label: {
-            HStack(spacing: 8) {
-                InitialTile(name: project.name)
-                Text(project.name)
-                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
+            HStack(spacing: 10) {
+                RowGlyph(symbol: "folder")
+                Text(project.name).font(.system(size: 13))
                     .foregroundStyle(project.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
                 if project.missing == true {
-                    Text("missing").font(.system(size: 11)).foregroundStyle(Color.dsRed)
+                    Text("missing").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                 } else if let branch = project.branch {
                     Text(branch).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
@@ -317,14 +302,14 @@ struct MainSidebar: View {
         let selected = item == .session(s.ref.id)
         return Button { item = .session(s.ref.id) } label: {
             HStack(spacing: 8) {
-                SidebarDot(status: dotStatus(s)).frame(width: 14)
-                Text(s.title).font(.system(size: 13, weight: selected ? .semibold : .regular)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Text(s.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
                 if let worktree = s.worktree, worktree.finished == nil {
                     Image(systemName: "arrow.triangle.branch").font(.system(size: 9.5)).foregroundStyle(Color.dsFg3).help("Worktree on \(worktree.branch)")
                 }
+                SidebarDot(status: dotStatus(s))
             }
-            .rowChrome(selected: selected, leading: indent ? 22 : 8)
+            .rowChrome(selected: selected, leading: indent ? 36 : 8)
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -354,7 +339,6 @@ struct MainSidebar: View {
         let cap = Self.caps[.notebooks]!
         header(.notebooks, total: spaces.count, shown: min(cap, spaces.count), add: { NotificationCenter.default.post(name: .newSpace, object: nil) }, addHelp: "New notebook (⌘⇧N)")
         if !collapsed.contains(SidebarSection.notebooks.rawValue) {
-            if spaces.isEmpty { hint("Conversations organized into topics, with shared files and memory") }
             ForEach(spaces.prefix(cap), id: \.ref.id) { notebookRow($0) }
             if spaces.count > cap { more("\(spaces.count - cap) more", .index(.notebooks)) }
         }
@@ -365,11 +349,11 @@ struct MainSidebar: View {
         let unread = space.activeTopics.contains { $0.unread == true }
         let running = space.activeTopics.contains { $0.running == true }
         return Button { item = .notebook(space.ref.id) } label: {
-            HStack(spacing: 8) {
-                InitialTile(name: space.title)
-                Text(space.title).font(.system(size: 13, weight: selected ? .semibold : .medium)).foregroundStyle(Color.dsFg).lineLimit(1)
+            HStack(spacing: 10) {
+                RowGlyph(symbol: "book.closed")
+                Text(space.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
-                if running { SidebarDot(status: .running) } else if unread { Circle().fill(Color.accentColor).frame(width: 6, height: 6).help("New replies") }
+                if running { SidebarDot(status: .running) } else if unread { SidebarDot(status: .waiting).help("New replies") }
             }
             .rowChrome(selected: selected)
         }
@@ -393,7 +377,6 @@ struct MainSidebar: View {
         let cap = Self.caps[.agents]!
         header(.agents, total: agents.count, shown: min(cap, agents.count), add: { NotificationCenter.default.post(name: .newAgent, object: nil) }, addHelp: "New agent")
         if !collapsed.contains(SidebarSection.agents.rawValue) {
-            if agents.isEmpty { hint("Nothing hatched yet") }
             ForEach(agents.prefix(cap), id: \.ref.id) { agentRow($0) }
             if agents.count > cap { more("\(agents.count - cap) more", .index(.agents)) }
         }
@@ -403,23 +386,16 @@ struct MainSidebar: View {
         let selected = item == .agent(agent.ref.id)
         let status = agent.agent?.status
         return Button { item = .agent(agent.ref.id) } label: {
-            HStack(spacing: 8) {
-                ZStack(alignment: .bottomTrailing) {
-                    AgentAvatar(summary: agent, size: 26)
-                    Circle()
-                        .fill(engine.liveStatus[agent.ref.key] == .running ? Color.accentColor : status?.paused == true ? Color.dsFg3.opacity(0.6) : Color.dsGreen)
-                        .frame(width: 8, height: 8)
-                        .overlay(Circle().strokeBorder(Color(nsColor: .windowBackgroundColor), lineWidth: 2).padding(-2))
-                        .offset(x: 1, y: 1)
-                }
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(agent.title).font(.system(size: 13, weight: selected ? .semibold : .medium)).foregroundStyle(Color.dsFg).lineLimit(1)
-                    Text(Self.agentLine(agent)).font(.system(size: 11.5)).foregroundStyle(status?.paused == true ? Color.dsAmber : Color.dsFg3).lineLimit(1)
-                }
+            HStack(spacing: 10) {
+                RowGlyph(symbol: "smallcircle.circle")
+                Text(agent.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
-                if let inbox = status?.inbox, inbox > 0 { Circle().fill(Color.dsAmber).frame(width: 6, height: 6) }
+                if engine.liveStatus[agent.ref.key] == .running { SidebarDot(status: .running) }
+                else if let inbox = status?.inbox, inbox > 0 { SidebarDot(status: .waiting).help("Wrote to you") }
+                else if status?.paused == true { Text("Paused").font(.system(size: 11)).foregroundStyle(Color.dsFg3) }
             }
-            .rowChrome(selected: selected, height: 40)
+            .help(Self.agentLine(agent))
+            .rowChrome(selected: selected)
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -465,7 +441,6 @@ struct MainSidebar: View {
         let cap = Self.caps[.chats]!
         header(.chats, total: threads.count, shown: min(cap, threads.count), add: { NotificationCenter.default.post(name: .newChat, object: nil) }, addHelp: "New chat")
         if !collapsed.contains(SidebarSection.chats.rawValue) {
-            if threads.isEmpty { hint("Your conversations") }
             ForEach(threads.prefix(cap), id: \.ref.id) { chatRow($0) }
             if threads.count > cap { more("\(threads.count - cap) earlier", .index(.chats)) }
         }
@@ -474,15 +449,11 @@ struct MainSidebar: View {
     private func chatRow(_ thread: SessionSummary) -> some View {
         let selected = item == .chat(thread.ref.id)
         return Button { item = .chat(thread.ref.id) } label: {
-            HStack(spacing: 8) {
-                Group {
-                    if engine.liveStatus[thread.ref.id] == .running { SidebarDot(status: .running) }
-                    else if thread.debate != nil { Image(systemName: "person.2.fill").font(.system(size: 8.5)).foregroundStyle(Color.dsFg3).help("Debate") }
-                    else { Circle().strokeBorder(Color.dsFg3.opacity(0.5), lineWidth: 1).frame(width: 7, height: 7) }
-                }
-                .frame(width: 14)
-                Text(thread.title).font(.system(size: 13, weight: selected ? .semibold : .regular)).foregroundStyle(Color.dsFg).lineLimit(1)
+            HStack(spacing: 10) {
+                RowGlyph(symbol: thread.debate != nil ? "person.2" : "bubble.left").help(thread.debate != nil ? "Debate" : "")
+                Text(thread.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
+                if engine.liveStatus[thread.ref.id] == .running { SidebarDot(status: .running) }
             }
             .rowChrome(selected: selected)
         }
@@ -500,52 +471,16 @@ struct MainSidebar: View {
         }
     }
 
-    // MARK: Search results
-
-    @ViewBuilder private var results: some View {
-        let q = query.lowercased()
-        let match = { (s: String) in s.lowercased().contains(q) }
-        let projects = areas.showsProjects ? engine.projects.filter { match($0.name) } : []
-        let sessions = engine.buildSessions.filter { match($0.title) && areas.shows($0) }
-        let notebooks = areas.showsNotebooks ? engine.spaces.filter { match($0.title) || $0.activeTopics.contains { match($0.title) } } : []
-        let agents = areas.showsAgents ? engine.agents.filter { match($0.title) } : []
-        let chats = areas.showsChats ? engine.threads.filter { match($0.title) } : []
-        if projects.isEmpty, sessions.isEmpty, notebooks.isEmpty, agents.isEmpty, chats.isEmpty {
-            hint("Nothing matches “\(query)”")
-        }
-        if !projects.isEmpty || !sessions.isEmpty {
-            SectionLabel("Projects").padding(.horizontal, 8).padding(.top, 6)
-            ForEach(projects) { projectRow($0) }
-            ForEach(sessions, id: \.ref.id) { sessionRow($0, indent: true) }
-        }
-        if !notebooks.isEmpty {
-            SectionLabel("Notebooks").padding(.horizontal, 8).padding(.top, 10)
-            ForEach(notebooks, id: \.ref.id) { notebookRow($0) }
-        }
-        if !agents.isEmpty {
-            SectionLabel("Agents").padding(.horizontal, 8).padding(.top, 10)
-            ForEach(agents, id: \.ref.id) { agentRow($0) }
-        }
-        if !chats.isEmpty {
-            SectionLabel("Chats").padding(.horizontal, 8).padding(.top, 10)
-            ForEach(chats, id: \.ref.id) { chatRow($0) }
-        }
-    }
-
     // MARK: Home and Needs you
 
-    private func navRow(_ target: SidebarItem, _ title: String, symbol: String, badge: Int = 0) -> some View {
+    private func navRow(_ target: SidebarItem, _ title: String, symbol: String, count: Int = 0) -> some View {
         let selected = item == target
         return Button { item = target } label: {
-            HStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(selected ? Color.dsFg : Color.dsFg2).frame(width: 18)
-                Text(title).font(.system(size: 13, weight: selected ? .semibold : .regular)).foregroundStyle(Color.dsFg)
+            HStack(spacing: 10) {
+                RowGlyph(symbol: symbol)
+                Text(title).font(.system(size: 13)).foregroundStyle(Color.dsFg)
                 Spacer()
-                if badge > 0 {
-                    Text("\(badge)").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
-                        .background(Color.dsAmber, in: Capsule())
-                }
+                if count > 0 { Text("\(count)").font(.system(size: 12)).foregroundStyle(Color.dsFg2).monospacedDigit() }
             }
             .rowChrome(selected: selected)
         }
@@ -553,82 +488,97 @@ struct MainSidebar: View {
     }
 }
 
-/// The "+ New ⌄" capsule: a session (in which project), a chat, a notebook or an agent, for the areas that are on.
+/// A sidebar row's 16pt outline glyph in fg2.
+struct RowGlyph: View {
+    let symbol: String
+    var body: some View {
+        Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(Color.dsFg2).frame(width: 18)
+    }
+}
+
+/// Compose (docs/design/grey 10a): a short menu where each kind's subtitle says where it lives.
 struct NewMenu: View {
     let engine: EngineController
 
     static func help(_ areas: AreaSet) -> String {
         var kinds: [String] = []
+        if areas.contains(.chat) { kinds.append("chat") }
         if areas.contains(.build) { kinds.append("session") }
-        if areas.contains(.chat) { kinds += ["chat", "notebook"] }
+        if areas.contains(.chat) { kinds.append("notebook") }
         if areas.contains(.agents) { kinds.append("agent") }
-        return "New " + ListFormatter.localizedString(byJoining: kinds).replacingOccurrences(of: " and ", with: " or ")
+        return "New " + ListFormatter.localizedString(byJoining: kinds).replacingOccurrences(of: " and ", with: " or ") + " (⌘N)"
     }
 
     var body: some View {
         let areas = Areas.shared.set
         Menu {
+            if areas.contains(.chat) {
+                Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: { Text("Chat"); Text("Saved under Chats") }
+            }
             if areas.contains(.build) {
-                Menu("New Session") {
+                Menu {
                     ForEach(engine.projects) { project in
                         Button(project.name) { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
                     }
                     if !engine.projects.isEmpty { Divider() }
                     Button("Open Folder…") { NotificationCenter.default.post(name: .openProject, object: nil) }
-                }
+                } label: { Text("Session in a project"); Text("Pick a folder") }
             }
             if areas.contains(.chat) {
-                Button("New Chat") { NotificationCenter.default.post(name: .newChat, object: nil) }
-                Button("New Debate") { NotificationCenter.default.post(name: .newDebate, object: nil) }
-                Button("New Notebook") { NotificationCenter.default.post(name: .newSpace, object: nil) }
+                Button { NotificationCenter.default.post(name: .newSpace, object: nil) } label: { Text("Notebook"); Text("Topics and memory") }
+                Button { NotificationCenter.default.post(name: .newDebate, object: nil) } label: { Text("Debate"); Text("Two models work on it until they agree") }
             }
-            if areas.contains(.agents) { Button("New Agent") { NotificationCenter.default.post(name: .newAgent, object: nil) } }
+            if areas.contains(.agents) {
+                Button { NotificationCenter.default.post(name: .newAgent, object: nil) } label: { Text("Agent"); Text("Runs on its own") }
+            }
         } label: {
-            Image(systemName: "square.and.pencil").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
-                .frame(width: 28, height: 28)
-                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-                .contentShape(Rectangle())
+            Image(systemName: "square.and.pencil")
         }
         .menuStyle(.button)
-        .buttonStyle(.plain)
+        .buttonStyle(IconButtonStyle())
         .menuIndicator(.hidden)
         .fixedSize()
         .help(Self.help(areas))
+        .accessibilityLabel("New")
     }
 }
 
-/// The sidebar's 7-pt status dot (docs/design v2): accent with a ring = running, amber = needs you, green = done.
+/// The sidebar's status (docs/design/grey): a 6pt blue dot = needs you, a 10pt grey ring = running, nothing otherwise.
 struct SidebarDot: View {
     enum Status { case running, waiting, done, idle, failed }
     let status: Status
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 7, height: 7)
-            .overlay(Circle().strokeBorder(status == .running ? Color.accentColor.opacity(0.3) : .clear, lineWidth: 2).padding(-2))
-    }
-
-    private var color: Color {
         switch status {
-        case .running: .accentColor
-        case .waiting: .dsAmber
-        case .done: .dsGreen
-        case .failed: .dsRed
-        case .idle: .dsFg3.opacity(0.5)
+        case .running: RunningRing()
+        case .waiting: Circle().fill(Color.accentColor).frame(width: 6, height: 6).accessibilityLabel("Needs you")
+        case .failed: Circle().strokeBorder(Color.dsFg3, lineWidth: 1).frame(width: 7, height: 7).accessibilityLabel("Failed")
+        case .done, .idle: EmptyView()
         }
     }
 }
 
 private extension View {
-    /// A sidebar row: radius 8, accentSoft when selected.
-    func rowChrome(selected: Bool, leading: CGFloat = 8, height: CGFloat = 28) -> some View {
-        self
+    /// A sidebar row: radius 7, 6×8 padding, a grey fill when selected or under the pointer.
+    func rowChrome(selected: Bool, leading: CGFloat = 8, height: CGFloat = 29) -> some View {
+        modifier(RowChrome(selected: selected, leading: leading, height: height))
+    }
+}
+
+private struct RowChrome: ViewModifier {
+    let selected: Bool
+    let leading: CGFloat
+    let height: CGFloat
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
             .padding(.leading, leading)
             .padding(.trailing, 8)
             .frame(minHeight: height)
-            .background(selected ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+            .background(selected ? Color.dsChip : hovering ? Color.dsChip.opacity(0.5) : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
             .contentShape(Rectangle())
+            .onHover { hovering = $0 }
     }
 }
 

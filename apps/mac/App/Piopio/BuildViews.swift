@@ -140,8 +140,7 @@ struct BuildSessionView: View {
                     }
                 }
                 .frame(width: 280)
-                .glassPanel()
-                .padding(8)
+                .sidePanel()
             }
         }
         .task { await session.open() }
@@ -258,60 +257,36 @@ struct BuildSessionView: View {
         UserDefaults.standard.set(all, forKey: "inspectorOpen")
     }
 
-    /// Two controls (chat v3, 13a): Open ⌄ and the inspector. Git sits in the subtitle; its menu stays while there's a
-    /// branch. The session tree became Fork and Rewind on messages; the edit mode moved to the composer.
+    /// The toolbar (docs/design/grey 9a): the title (it opens the session tree) and "project · branch", then Git,
+    /// Open and the inspector as ghost buttons. Status and cost aren't here: status is in the sidebar, cost in the
+    /// inspector's footer.
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                subtitle.font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
-            }
-            // /tree: the whole session tree, from the title.
-            .popover(isPresented: Binding(get: { session.showTree }, set: { session.showTree = $0 }), arrowEdge: .bottom) {
-                SessionTreePopover(session: session)
-            }
-            Spacer(minLength: 12)
+        PageHeader {
+            Button { session.showTree = true } label: { PageTitle(name: summary.title, subtitle: subtitle) }
+                .buttonStyle(.plain)
+                .help("The session tree")
+                .popover(isPresented: Binding(get: { session.showTree }, set: { session.showTree = $0 }), arrowEdge: .bottom) {
+                    SessionTreePopover(session: session)
+                }
+        } actions: {
             if !chatLens, let git, git.status?.repo == true { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
             if let cwd = summary.cwd { OpenMenu(path: cwd) }
-            Button { toggleInspector() } label: {
-                Image(systemName: "sidebar.right").font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(showInspector ? Color.accentColor : Color.dsFg2)
-                    .frame(width: 30, height: 28)
-                    .background(showInspector ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: 7))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut("i", modifiers: [.command, .shift])
-            .help(showInspector ? "Hide the inspector (⌘⇧I)" : "Changes, files and turns (⌘⇧I)")
+            Button { toggleInspector() } label: { Image(systemName: "sidebar.right") }
+                .buttonStyle(IconButtonStyle(on: showInspector))
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .help(showInspector ? "Hide the inspector (⌘⇧I)" : "Changes, files and turns (⌘⇧I)")
         }
-        .padding(.leading, 24)
-        .padding(.trailing, 16)
-        .frame(height: 60)
-        .contentShape(Rectangle())
-        .gesture(WindowDragGesture())
         .background {
             Button("") { if !chatLens { showTerminal.toggle() } }.keyboardShortcut("`", modifiers: .control).hidden()
         }
     }
 
-    /// "smart-paste · no git · ● Done · $0.0015" (chat v3): the project, git, status and cost.
-    private var subtitle: Text {
+    /// "smart-paste · pi/engine-protocol", or "· no git".
+    private var subtitle: String {
         let name = project?.name ?? URL(fileURLWithPath: summary.cwd ?? "").lastPathComponent
         let branch = git?.status?.branch ?? summary.worktree?.branch ?? project?.branch
-        let gitText = branch.map { Text($0).font(.system(size: 11, design: .monospaced)) } ?? Text(git?.status?.repo == false ? "no git" : "")
-        let parts = [name]
-        let (state, color): (String, Color) = switch session.state?.status {
-        case .running?: ("Working", .accentColor)
-        case .waitingApproval?: ("Needs you", .dsAmber)
-        case .error?: ("Failed", .dsRed)
-        default: ("Done", .dsGreen)
-        }
-        var tail: [String] = []
-        if let usage = session.state?.usage, usage.costUsd > 0 {
-            tail.append(usage.costUsd < 0.01 ? String(format: "$%.4f", usage.costUsd) : String(format: "$%.2f", usage.costUsd))
-        }
-        let hasGit = branch != nil || git?.status?.repo == false
-        return Text(parts.joined(separator: " · ") + " · ") + (hasGit ? gitText + Text(" · ") : Text("")) + Text("● ").foregroundColor(color) + Text(state) + Text(tail.isEmpty ? "" : " · " + tail.joined(separator: " · "))
+        if let branch { return "\(name) · \(branch)" }
+        return git?.status?.repo == false ? "\(name) · no git" : name
     }
 
     static func relative(_ iso: String) -> String {

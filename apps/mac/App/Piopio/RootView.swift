@@ -2,12 +2,13 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The main window (docs/design v2): one floating glass sidebar (Home, Needs you, Projects, Notebooks, Agents,
-/// Chats), and the content for what it selects. There are no modes: the item's type decides the view.
+/// The main window (docs/design/grey 9a): a sidebar flush to the window edge (Search, Home, Needs you, Projects,
+/// Notebooks, Agents, Chats) that collapses, and the content for what it selects. The item's type decides the view.
 struct RootView: View {
     let engine: EngineController
     @AppStorage("sidebarItem") private var itemRaw = "home"
-    @AppStorage("sidebarWidth") private var sidebarWidth = 250.0
+    @AppStorage("sidebarWidth") private var sidebarWidth = 260.0
+    @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     @State private var availableWidth = 1280.0
     @State private var sidebarDragStart: Double?
     @State private var showNewAgent = false
@@ -28,9 +29,10 @@ struct RootView: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            if !sidebarCollapsed {
             MainSidebar(engine: engine, item: itemBinding)
                 .frame(width: min(sidebarWidth, max(200, availableWidth * 0.28)))
-                .glassPanel()
+                .sidePanel(.trailing, background: .dsSide)
                 .overlay(alignment: .trailing) {
                     Rectangle().fill(Color.clear).frame(width: 7).contentShape(Rectangle())
                         .gesture(DragGesture().onChanged { value in
@@ -41,7 +43,8 @@ struct RootView: View {
                         .accessibilityAdjustableAction { direction in sidebarWidth = min(340, max(200, sidebarWidth + (direction == .increment ? 20 : -20))) }
                         .help("Drag to resize the sidebar")
                 }
-                .padding(8)
+                .transition(.move(edge: .leading))
+            }
             VStack(spacing: 0) {
                 if engine.isLost { EngineBanner(engine: engine) }
                 if let hidden = hiddenArea { HiddenAreaBar(area: hidden) }
@@ -51,6 +54,12 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.dsWin)
+        .overlay(alignment: .topLeading) {
+            if sidebarCollapsed { SidebarToggle().frame(height: Shell.barHeight).padding(.leading, 78) }
+        }
+        .background { TrafficLightsPosition() }
+        .background { Button("") { toggleSidebar() }.keyboardShortcut("s", modifiers: [.control, .command]).hidden() }
+        .environment(\.sidebarControl, SidebarControl(collapsed: sidebarCollapsed, toggle: toggleSidebar))
         .onGeometryChange(for: Double.self) { $0.size.width } action: { availableWidth = $0 }
         .ignoresSafeArea(.container, edges: .top)
         .overlay(alignment: .top) {
@@ -273,6 +282,10 @@ struct RootView: View {
         itemRaw = (engine.item(for: threadId) ?? .chat(threadId)).raw
         guard let found, let summary = engine.threads.first(where: { $0.ref.id == threadId }) else { return }
         engine.thread(summary.ref).reveal(found)
+    }
+
+    private func toggleSidebar() {
+        withAnimation(.easeOut(duration: 0.18)) { sidebarCollapsed.toggle() }
     }
 
     /// ⌘N on a session or project: a new session in that project (or the first one).

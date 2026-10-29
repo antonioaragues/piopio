@@ -2,7 +2,7 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// A thread (docs/design 8a): 60pt header, centered transcript, floating glass composer.
+/// A thread (docs/design/grey 9a, 11a): the 52pt toolbar, the centered transcript, and the composer.
 struct ThreadView: View {
     /// PIOPIO_DEMO_FOLLOWUPS: suggestions separated by "||" when the engine has none (captures with the faux model).
     static let demoFollowUps = ProcessInfo.processInfo.environment["PIOPIO_DEMO_FOLLOWUPS"]?.components(separatedBy: "||")
@@ -65,12 +65,7 @@ struct ThreadView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
-            }
-            Spacer(minLength: 12)
+        PageHeader(summary.title, subtitle: subtitle) {
             if let debate = thread.debate { debateControls(debate) } else { moveMenu }
             Menu {
                 Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
@@ -79,19 +74,14 @@ struct ThreadView: View {
                 Button("Export as HTML…") { Task { await thread.export(.html) } }
                 Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
             } label: {
-                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "ellipsis")
             }
             .menuStyle(.button)
-            .buttonStyle(PillStyle(kind: .toolbar))
+            .buttonStyle(IconButtonStyle())
             .menuIndicator(.hidden)
             .fixedSize()
             .help("Copy or export this chat")
         }
-        .padding(.leading, 24)
-        .padding(.trailing, 16)
-        .frame(height: 60)
-        .contentShape(Rectangle())
-        .gesture(WindowDragGesture())
     }
 
     private var moveMenu: some View {
@@ -120,8 +110,8 @@ struct ThreadView: View {
             Button("Keep going") { Task { await thread.continueDebate() } }
                 .buttonStyle(PillStyle(kind: .toolbar)).help("Add as many rounds again as it started with")
         }
-        Button { showPanel.toggle() } label: { Image(systemName: "sidebar.right").font(.system(size: 12, weight: .semibold)) }
-            .buttonStyle(PillStyle(kind: .toolbar)).help(showPanel ? "Hide the draft" : "Show the draft and objections")
+        Button { showPanel.toggle() } label: { Image(systemName: "sidebar.right") }
+            .buttonStyle(IconButtonStyle(on: showPanel)).help(showPanel ? "Hide the draft" : "Show the draft and objections")
     }
 
     private var subtitle: String {
@@ -129,14 +119,11 @@ struct ThreadView: View {
         var parts = ["Chat", BuildSessionView.relative(summary.updatedAt)]
         let files = thread.attachmentCount
         if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
-        if let usage = thread.state?.usage, usage.costUsd > 0 {
-            parts.append(usage.costUsd < 0.01 ? String(format: "$%.4f", usage.costUsd) : String(format: "$%.2f", usage.costUsd))
-        }
         if thread.state?.status == .running { parts.append("answering…") }
         return parts.joined(separator: " · ")
     }
 
-    /// "Debate · Round 2 of 6 · GPT-5 reviewing… · $0.08".
+    /// "Debate · Round 2 of 6 · GPT-5 reviewing…".
     private func debateSubtitle(_ debate: DebateState) -> String {
         var parts = ["Debate"]
         switch debate.status {
@@ -148,9 +135,6 @@ struct ThreadView: View {
         case .stopped: parts.append("Stopped in round \(debate.round)")
         }
         if debate.status != .running, thread.state?.status == .running { parts.append("answering…") }
-        if let usage = thread.state?.usage, usage.costUsd > 0 {
-            parts.append(usage.costUsd < 0.01 ? String(format: "$%.4f", usage.costUsd) : String(format: "$%.2f", usage.costUsd))
-        }
         return parts.joined(separator: " · ")
     }
 }

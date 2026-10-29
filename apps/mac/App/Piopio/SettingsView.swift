@@ -68,8 +68,7 @@ struct SettingsView: View {
             .padding(.top, 14)
             .padding(.horizontal, 8)
             .frame(width: 200)
-            .glassPanel()
-            .padding(8)
+            .sidePanel(.trailing, background: .dsSide)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

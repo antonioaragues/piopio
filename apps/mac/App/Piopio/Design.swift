@@ -1,10 +1,13 @@
 import PiopioTranscript
 import SwiftUI
 
-// SwiftUI side of the design system (docs/design/README.md · 8e Components & tokens).
+// SwiftUI side of the design system (docs/design/grey: grey ink, one black action per view, hairlines, no decoration).
 
 extension Color {
     static let dsWin = Color(nsColor: DS.win)
+    static let dsSide = Color(nsColor: DS.side)
+    static let dsTrack = Color(nsColor: DS.track)
+    static let dsSeg = Color(nsColor: DS.seg)
     static let dsCard = Color(nsColor: DS.card)
     static let dsChip = Color(nsColor: DS.chip)
     static let dsBubble = Color(nsColor: DS.bubble)
@@ -43,24 +46,21 @@ struct Chick: View {
     }
 }
 
-/// A project's or notebook's tile: its initial on a color of its own (radius 5, docs/design v2 sidebar).
+/// A project's or notebook's mark in lists: a 16pt outline glyph in fg2 (no colored tiles in the grey design).
 struct InitialTile: View {
     let name: String
     var size: CGFloat = 18
+    var symbol = "folder"
 
     var body: some View {
-        Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
-            .font(.system(size: size * 0.56, weight: .bold))
-            .foregroundStyle(.white)
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.78))
+            .foregroundStyle(Color.dsFg2)
             .frame(width: size, height: size)
-            .background(Self.color(for: name), in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
     }
 
-    static let palette: [Color] = [.blue, .green, .orange, .pink, .purple, .teal, .indigo, .red, .mint, .brown]
-
-    static func color(for name: String) -> Color {
-        palette[Int(name.unicodeScalars.reduce(UInt32(7)) { ($0 &* 31) &+ $1.value } % UInt32(palette.count))]
-    }
+    /// Letter tiles in Settings are grey too.
+    static func color(for name: String) -> Color { .dsFg3 }
 }
 
 /// Floating glass panel: sidebar, inspector, composer, popovers (radius 14, hairline edge, soft shadow).
@@ -77,13 +77,32 @@ struct GlassPanel: ViewModifier {
     }
 }
 
+/// A side panel flush to the window edge (inspectors, info panels, Settings' list): no float, a 0.5pt hairline on
+/// the side that faces the content.
+struct SidePanel: ViewModifier {
+    var edge: HorizontalEdge = .leading
+    var background: Color = .dsWin
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(background)
+            .overlay(alignment: edge == .leading ? .leading : .trailing) { Rectangle().fill(Color.dsLine).frame(width: 0.5) }
+    }
+}
+
 extension View {
+    func sidePanel(_ edge: HorizontalEdge = .leading, background: Color = .dsWin) -> some View {
+        modifier(SidePanel(edge: edge, background: background))
+    }
+
     func glassPanel(radius: CGFloat = DS.Radius.panel, material: Material = .regularMaterial) -> some View {
         modifier(GlassPanel(radius: radius, material: material))
     }
 }
 
-/// Capsule buttons: toolbar pill (white, hairline), secondary chip, primary (accent), strong (inv).
+/// Buttons (docs/design/grey): one black action per view (`.primary` / `.strong`: inv, radius 8); everything else is
+/// plain text in fg2 (`.secondary`) or a ghost button that gets a grey fill on hover (`.toolbar`, radius 6).
 struct PillStyle: ButtonStyle {
     enum Kind { case toolbar, secondary, primary, strong }
     var kind: Kind = .secondary
@@ -99,50 +118,94 @@ private struct PillBody: View {
     let kind: PillStyle.Kind
     let compact: Bool
     @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
 
     var body: some View {
         configuration.label
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: compact ? 12.5 : 13, weight: solid ? .medium : .regular))
             .lineLimit(1)
             .fixedSize()
-            .padding(.horizontal, compact ? 9 : 12)
-            .frame(height: compact ? 24 : 28)
+            .padding(.horizontal, solid ? (compact ? 11 : 13) : (kind == .toolbar ? 7 : 4))
+            .frame(height: solid ? (compact ? 26 : 28) : (compact ? 24 : 28))
             .foregroundStyle(foreground)
-            .background(background, in: Capsule())
-            .overlay(Capsule().strokeBorder(kind == .toolbar ? Color.dsLine : .clear, lineWidth: 0.5))
-            .shadow(color: kind == .toolbar ? .black.opacity(0.05) : .clear, radius: 2, y: 1)
-            .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
-            .contentShape(Capsule())
+            .background(background, in: RoundedRectangle(cornerRadius: solid ? DS.Radius.button : DS.Radius.selector, style: .continuous))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
     }
+
+    private var solid: Bool { kind == .primary || kind == .strong }
 
     private var foreground: Color {
         switch kind {
-        case .primary: .white
-        case .strong: .dsInvFg
-        default: .dsFg
+        case .primary, .strong: .dsInvFg
+        case .toolbar: hovering ? .dsFg : .dsFg2
+        case .secondary: hovering ? .dsFg : .dsFg2
         }
     }
 
-    private var background: AnyShapeStyle {
+    private var background: Color {
         switch kind {
-        case .toolbar: AnyShapeStyle(Color.dsPill)
-        case .secondary: AnyShapeStyle(Color.dsChip)
-        case .primary: AnyShapeStyle(Color.accentColor)
-        case .strong: AnyShapeStyle(Color.dsInv)
+        case .primary, .strong: .dsInv
+        case .toolbar: hovering && isEnabled ? .dsChip : .clear
+        case .secondary: .clear
         }
     }
 }
 
-/// 11pt semibold tertiary label, sentence case (section headings).
+/// A plain-text selector (docs/design/grey principle 6): no chevron; a grey fill on hover, radius 6, 3×6 padding.
+struct SelectorStyle: ButtonStyle {
+    var active = false
+    func makeBody(configuration: Configuration) -> some View { SelectorBody(configuration: configuration, active: active) }
+}
+
+private struct SelectorBody: View {
+    let configuration: ButtonStyleConfiguration
+    let active: Bool
+    @State private var hovering = false
+    var body: some View {
+        configuration.label
+            .lineLimit(1)
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(hovering || active || configuration.isPressed ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous))
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+    }
+}
+
+/// A 28pt icon-only ghost button for toolbars (radius 6, grey fill on hover or while on).
+struct IconButtonStyle: ButtonStyle {
+    var on = false
+    var size: CGFloat = 28
+    func makeBody(configuration: Configuration) -> some View { IconButtonBody(configuration: configuration, on: on, size: size) }
+}
+
+private struct IconButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let on: Bool
+    let size: CGFloat
+    @State private var hovering = false
+    var body: some View {
+        configuration.label
+            .font(.system(size: 14))
+            .foregroundStyle(on || hovering ? Color.dsFg : Color.dsFg2)
+            .frame(width: size, height: size)
+            .background(on || hovering || configuration.isPressed ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous))
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+    }
+}
+
+/// 12pt tertiary label, sentence case (section headings).
 struct SectionLabel: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+        Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
     }
 }
 
-/// Status vocabulary: amber = waiting on you, accent ring = running, green = live/done, grey = idle, red = failed.
+/// Status (docs/design/grey): a 6pt blue dot = waiting on you, a 10pt grey ring = running; nothing else gets a color.
 struct StatusDot: View {
     enum Status { case waiting, running, done, idle, failed }
     let status: Status
@@ -151,19 +214,31 @@ struct StatusDot: View {
     var body: some View {
         switch status {
         case .running:
-            ProgressView().controlSize(.mini).frame(width: size + 3, height: size + 3)
-        default:
-            Circle().fill(color).frame(width: size, height: size)
+            RunningRing(size: size + 3)
+        case .waiting:
+            Circle().fill(Color.accentColor).frame(width: min(size, 6), height: min(size, 6))
+        case .failed:
+            Circle().strokeBorder(Color.dsFg3, lineWidth: 1).frame(width: size, height: size)
+        case .done, .idle:
+            Color.clear.frame(width: size, height: size)
         }
     }
+}
 
-    private var color: Color {
-        switch status {
-        case .waiting: .dsAmber
-        case .done: .dsGreen
-        case .failed: .dsRed
-        case .idle, .running: .dsFg3.opacity(0.5)
-        }
+/// The running mark: a 10pt grey ring with a turning gap.
+struct RunningRing: View {
+    var size: CGFloat = 10
+    @State private var turning = false
+
+    var body: some View {
+        Circle()
+            .trim(from: 0.12, to: 1)
+            .stroke(Color.dsFg3, style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+            .frame(width: size - 1.4, height: size - 1.4)
+            .rotationEffect(.degrees(turning ? 360 : 0))
+            .frame(width: size, height: size)
+            .onAppear { withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { turning = true } }
+            .accessibilityLabel("Running")
     }
 }
 
@@ -184,8 +259,8 @@ struct EmptyState<Actions: View>: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Text(label.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.5).foregroundStyle(Color.dsFg3)
-            Text(title).font(.system(size: 18, weight: .bold)).foregroundStyle(Color.dsFg)
+            Text(label).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            Text(title).font(.system(size: 20, weight: .bold)).foregroundStyle(Color.dsFg)
             Text(message).font(.system(size: 13)).foregroundStyle(Color.dsFg2).multilineTextAlignment(.center).frame(maxWidth: 360)
             actions.padding(.top, 12)
         }
@@ -194,14 +269,13 @@ struct EmptyState<Actions: View>: View {
     }
 }
 
-/// A card tile used in empty states and settings (card + hairline, radius 12).
+/// A hairline box (radius 12) for the few things that need one.
 struct CardTile<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         content
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
     }
 }

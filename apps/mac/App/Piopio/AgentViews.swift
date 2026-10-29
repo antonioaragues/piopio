@@ -195,7 +195,7 @@ struct AgentPage: View {
                         chat
                         if proxy.size.width >= 850 {
                             AgentSideCard(engine: engine, summary: summary, def: def, runs: runs, tab: $tab)
-                                .frame(width: 280).glassPanel().padding([.top, .bottom, .trailing], 8)
+                                .frame(width: 300).sidePanel()
                         }
                     }
                 }

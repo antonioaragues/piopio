@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;
+--canvas:#e9e8e4;--win:#fcfcfb;--side:#f4f4f2;--fg:#1f1f1e;--fg2:#6b6b67;--fg3:#9b9b96;--line:rgba(0,0,0,.08);--sel:rgba(0,0,0,.06);--bubble:#f0f0ed;--field:#ffffff;--track:rgba(0,0,0,.05);--seg:#ffffff;--inv:#1f1f1e;--invfg:#fff;--accent:#2f6fde;--add:#3a8a55;--del:#c2493f;--shadow:0 0 0 .5px rgba(0,0,0,.2),0 24px 70px rgba(0,0,0,.16);
+background:var(--canvas);color:var(--fg)}
+body[data-theme="dark"]{--canvas:#0f0f0e;--win:#1e1e1d;--side:#191918;--fg:#ececea;--fg2:#a6a6a1;--fg3:#77776f;--line:rgba(255,255,255,.09);--sel:rgba(255,255,255,.07);--bubble:#2b2b29;--field:#252524;--track:rgba(255,255,255,.06);--seg:#3a3a38;--inv:#ececea;--invfg:#1e1e1d;--accent:#6ea0ff;--add:#6cc28a;--del:#ef7d72;--shadow:0 0 0 .5px rgba(255,255,255,.14),0 24px 70px rgba(0,0,0,.6)}
+a{color:var(--accent)}a:hover{opacity:.8}
+</style>
+</helmet>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:860px">
+<div style="font-size:13px;color:var(--fg2)">Piopio v2 · Turn 14 · <a href="#14a">14a</a> Home · <a href="#14b">14b</a> Needs you</div>
+<div style="font-size:38px;font-weight:700;letter-spacing:-.025em">Home and Needs you</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:15px;color:var(--fg2);line-height:1.55;max-width:760px">
+<div>Home is a place to start, plus a short look at what's going on. Needs you is the list of decisions and replies waiting on you, and each one can be resolved right there.</div>
+<div>What I removed: boxes around each section, the "Use only part of Piopio" banner (it moves to Settings), the cost in the greeting (it's already in the sidebar footer), "Read" buttons, empty sections ("Nothing is running"), colored dots and the mascot.</div>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<div id="14a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">14a</div><div style="font-size:20px;font-weight:600">Home</div></div>
+<div style="width:1240px;height:780px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px">
+<div style="width:240px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div><div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)"><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"></path><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"></path></svg></div></div></div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;background:var(--sel)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M2.5 7L8 2.5 13.5 7v6.5h-11z"></path></svg>Home</div>
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M2 9l2-6h8l2 6v4H2z"></path><path d="M2 9h3.5l1 1.5h3l1-1.5H14"></path></svg>Needs you<span style="margin-left:auto;font-size:12px;color:var(--fg2)">2</span></div>
+<sc-for list="{{ sideH }}" as="r" hint-placeholder-count="10">
+<sc-if value="{{ r.h }}" hint-placeholder-val="{{ false }}"><div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">{{ r.name }}<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div></sc-if>
+<sc-if value="{{ r.row }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:6px 8px 6px {{ r.pad }};border-radius:7px;background:{{ r.bg }}">
+<sc-if value="{{ r.folder }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"></path></svg></sc-if>
+<sc-if value="{{ r.nb }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M3 2.5h8.5a1 1 0 0 1 1 1v10H4a1 1 0 0 1-1-1z"></path><path d="M3 11.5h9.5"></path></svg></sc-if>
+<sc-if value="{{ r.agent }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><circle cx="8" cy="8" r="5.5"></circle><circle cx="8" cy="8" r="1.6"></circle></svg></sc-if>
+<sc-if value="{{ r.chat }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"></path></svg></sc-if>
+<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">{{ r.meta }}</span><sc-if value="{{ r.dot }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></sc-if></div></sc-if>
+</sc-for>
+</div>
+<div style="margin-top:auto;height:52px;flex-shrink:0;border-top:.5px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 12px 0 16px"><div style="width:24px;height:24px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--fg2)">A</div><div style="display:flex;flex-direction:column;gap:1px"><span>Antonio</span><span style="font-size:11px;color:var(--fg3)">This Mac · $5.99 today</span></div><div style="margin-left:auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2"></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg></div></div>
+</div>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:640px;padding:72px 40px 0;display:flex;flex-direction:column">
+<div style="font-size:28px;font-weight:700;letter-spacing:-.02em">Good evening, Antonio</div>
+<div style="font-size:14px;color:var(--fg3);padding-top:4px">Thursday, 29 October</div>
+<div style="margin-top:24px;border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:14px 16px 10px;display:flex;flex-direction:column;gap:12px">
+<div style="color:var(--fg3);font-size:14.5px">Ask anything, start a session, or message an agent…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><span style="padding:3px 6px;margin:-3px -6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">New chat</span><span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Haiku 4.5</span><div style="width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+<div style="display:flex;align-items:baseline;padding:40px 0 6px"><span style="font-size:12px;color:var(--fg3)">Needs you</span><span style="margin-left:auto;font-size:12.5px;color:var(--fg2)">See all</span></div>
+<sc-for list="{{ homeNeeds }}" as="it" hint-placeholder-count="2">
+<div style="display:flex;align-items:baseline;gap:12px;padding:10px 8px;margin:0 -8px;border-radius:7px;font-size:13.5px" style-hover="background:var(--sel)"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;transform:translateY(-2px)"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.title }}</span><span style="font-size:12.5px;color:var(--fg3);flex-shrink:0">{{ it.from }}</span></div>
+</sc-for>
+<div style="font-size:12px;color:var(--fg3);padding:32px 0 6px">Coming up</div>
+<div style="display:flex;align-items:baseline;gap:12px;padding:10px 0;font-size:13.5px"><span style="flex:1">Daily briefing</span><span style="font-size:12.5px;color:var(--fg3)">Tomorrow at 8:00</span></div>
+<div style="font-size:12px;color:var(--fg3);padding:32px 0 6px">Recent</div>
+<sc-for list="{{ homeRecent }}" as="rc" hint-placeholder-count="3">
+<div style="display:flex;align-items:baseline;gap:12px;padding:10px 8px;margin:0 -8px;border-radius:7px;font-size:13.5px" style-hover="background:var(--sel)"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ rc.name }}</span><span style="font-size:12.5px;color:var(--fg3);flex-shrink:0">{{ rc.meta }}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="max-width:1240px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The greeting and the date, then the composer. "New chat" picks where the message goes (a project, a notebook, an agent). Below that, three short lists as plain rows: Needs you (with a link to the full list), Coming up and Recent. A section with nothing in it isn't shown, which is why "Running now" doesn't appear here. Each row opens its item.</div>
+</div>
+
+<div id="14b" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">14b</div><div style="font-size:20px;font-weight:600">Needs you</div></div>
+<div style="width:1240px;height:780px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px">
+<div style="width:240px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div><div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)"><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"></path><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"></path></svg></div></div></div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M2.5 7L8 2.5 13.5 7v6.5h-11z"></path></svg>Home</div>
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;background:var(--sel)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M2 9l2-6h8l2 6v4H2z"></path><path d="M2 9h3.5l1 1.5h3l1-1.5H14"></path></svg>Needs you<span style="margin-left:auto;font-size:12px;color:var(--fg2)">2</span></div>
+<sc-for list="{{ sideH }}" as="r" hint-placeholder-count="10">
+<sc-if value="{{ r.h }}" hint-placeholder-val="{{ false }}"><div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">{{ r.name }}<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div></sc-if>
+<sc-if value="{{ r.row }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:6px 8px 6px {{ r.pad }};border-radius:7px;background:{{ r.bg }}">
+<sc-if value="{{ r.folder }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"></path></svg></sc-if>
+<sc-if value="{{ r.nb }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M3 2.5h8.5a1 1 0 0 1 1 1v10H4a1 1 0 0 1-1-1z"></path><path d="M3 11.5h9.5"></path></svg></sc-if>
+<sc-if value="{{ r.agent }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><circle cx="8" cy="8" r="5.5"></circle><circle cx="8" cy="8" r="1.6"></circle></svg></sc-if>
+<sc-if value="{{ r.chat }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"></path></svg></sc-if>
+<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">{{ r.meta }}</span><sc-if value="{{ r.dot }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></sc-if></div></sc-if>
+</sc-for>
+</div>
+<div style="margin-top:auto;height:52px;flex-shrink:0;border-top:.5px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 12px 0 16px"><div style="width:24px;height:24px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--fg2)">A</div><div style="display:flex;flex-direction:column;gap:1px"><span>Antonio</span><span style="font-size:11px;color:var(--fg3)">This Mac · $5.99 today</span></div><div style="margin-left:auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2"></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg></div></div>
+</div>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:640px;padding:72px 40px 0;display:flex;flex-direction:column">
+<div style="display:flex;align-items:baseline;gap:16px">
+<div style="font-size:28px;font-weight:700;letter-spacing:-.02em;flex-shrink:0;white-space:nowrap">Needs you</div>
+<div style="margin-left:auto;display:flex;gap:2px;font-size:12.5px;color:var(--fg2)">
+<span style="padding:3px 8px;border-radius:6px;background:var(--sel);color:var(--fg)">All</span>
+<span style="padding:3px 8px;border-radius:6px" style-hover="background:var(--sel)">Approvals</span>
+<span style="padding:3px 8px;border-radius:6px" style-hover="background:var(--sel)">Messages</span>
+<span style="padding:3px 8px;border-radius:6px" style-hover="background:var(--sel)">Problems</span>
+</div>
+</div>
+<div style="font-size:14px;color:var(--fg3);padding:4px 0 24px">2 things, newest first</div>
+<div style="border-top:.5px solid var(--line);padding:18px 0;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:10px;font-size:13px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translateY(-2px)"></span><span style="font-weight:600">Daily briefing</span><span style="color:var(--fg3)">didn't run · 11 hours ago</span></div>
+<div style="font-size:14px;line-height:1.55;padding-left:16px">OpenRouter isn't set up, so this morning's briefing couldn't be written. Nothing was lost.</div>
+<div style="display:flex;align-items:center;gap:16px;padding-left:16px;font-size:13px"><span style="padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Set up OpenRouter</span><span style="color:var(--fg2)">Run again</span><span style="color:var(--fg2)">Dismiss</span></div>
+</div>
+<div style="border-top:.5px solid var(--line);padding:18px 0;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:10px;font-size:13px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translateY(-2px)"></span><span style="font-weight:600">Daily briefing</span><span style="color:var(--fg3)">wrote to you · 6 days ago</span><span style="margin-left:auto;color:var(--fg2)">Open conversation</span></div>
+<div style="font-size:14px;line-height:1.55;padding-left:16px;display:flex;flex-direction:column;gap:6px">
+<div>Good morning, Antonio. Today's briefing is thin because I still don't have the basics. Tell me:</div>
+<div style="display:flex;flex-direction:column;gap:2px;color:var(--fg2)"><div>· Your calendar or tasks</div><div>· Which city you're in</div><div>· The news topics you follow</div></div>
+</div>
+<div style="margin-left:16px;border-radius:12px;background:var(--field);border:.5px solid var(--line);padding:9px 12px;display:flex;align-items:center;gap:10px"><span style="flex:1;color:var(--fg3);font-size:13.5px">Reply to Daily briefing…</span><span style="font-size:12px;color:var(--fg3)">↩</span></div>
+</div>
+<div style="border-top:.5px solid var(--line);padding:22px 0 0;font-size:13px;color:var(--fg3)">That's everything. You'll get a notification when something new comes in.</div>
+</div>
+</div>
+</div>
+<div style="max-width:1240px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">A single column with the same width as Home. Each item is a block between hairlines: who it's from and what happened in a grey line, the content in its own words (no quotes or raw markdown), and its actions. Only one black button: the one that fixes the problem. A message is answered in place, and the send button appears once you type. Approvals use the same card as in the conversation (<a href="#11c">11c</a>). Filters are hover text and include Problems for failed runs. The order is newest first.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:860px">
+<div style="font-size:13px;color:var(--fg2)">Piopio v2 · Turn 13 · Agents <a href="#13a">13a</a> <a href="#13b">13b</a> · Notebooks <a href="#13e">13e</a> <a href="#13f">13f</a></div>
+<div style="font-size:38px;font-weight:700;letter-spacing:-.025em">Agents and notebooks</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:15px;color:var(--fg2);line-height:1.55;max-width:760px">
+<div><b style="color:var(--fg)">Agents:</b> an agent is someone you message. One conversation, with no Chat / Activity / Setup tabs. Its automatic runs show up as its messages, and everything about it sits in an info panel, like a contact card. You create one by describing it.</div>
+<div><b style="color:var(--fg)">Notebooks:</b> one conversation with headings (<a href="#13e">13e</a>), and a single topic opened on its own (<a href="#13f">13f</a>).</div>
+<div style="color:var(--fg3)">In 13a, the (i) button opens and closes the info panel.</div>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<div id="13a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">13a</div><div style="font-size:20px;font-weight:600">Agent · one conversation + info</div></div>
+<div style="width:1240px;height:780px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px">
+<div style="width:240px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div><div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)"><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"></path><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"></path></svg></div></div></div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ sideA }}" as="r" hint-placeholder-count="10">
+<sc-if value="{{ r.h }}" hint-placeholder-val="{{ false }}"><div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">{{ r.name }}<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div></sc-if>
+<sc-if value="{{ r.row }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:6px 8px 6px {{ r.pad }};border-radius:7px;background:{{ r.bg }}">
+<sc-if value="{{ r.folder }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"></path></svg></sc-if>
+<sc-if value="{{ r.nb }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M3 2.5h8.5a1 1 0 0 1 1 1v10H4a1 1 0 0 1-1-1z"></path><path d="M3 11.5h9.5"></path></svg></sc-if>
+<sc-if value="{{ r.agent }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><circle cx="8" cy="8" r="5.5"></circle><circle cx="8" cy="8" r="1.6"></circle></svg></sc-if>
+<sc-if value="{{ r.chat }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"></path></svg></sc-if>
+<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">{{ r.meta }}</span><sc-if value="{{ r.dot }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></sc-if></div></sc-if>
+</sc-for>
+</div>
+<div style="margin-top:auto;height:52px;flex-shrink:0;border-top:.5px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 12px 0 16px"><div style="width:24px;height:24px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--fg2)">A</div><div style="display:flex;flex-direction:column;gap:1px"><span>Antonio</span><span style="font-size:11px;color:var(--fg3)">This Mac · $5.99 today</span></div><div style="margin-left:auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2"></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg></div></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 20px;gap:8px"><div style="font-weight:600;font-size:13.5px">Daily briefing</div><div style="font-size:12px;color:var(--fg3);margin-left:6px">Next run tomorrow at 8:00</div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:2px;color:var(--fg2)"><div style="height:28px;padding:0 8px;border-radius:6px;display:flex;align-items:center;font-size:12.5px" style-hover="background:var(--sel);color:var(--fg)">Run now</div><div onClick="{{ toggleAgentInfo }}" style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:default;background:{{ agentInfoBg }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"></circle><path d="M8 7.2v4M8 4.9v.2"></path></svg></div></div></div>
+<div style="flex:1;display:flex;min-height:0">
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:640px;padding:12px 36px 0;display:flex;flex-direction:column;gap:14px;font-size:14.5px;line-height:1.6">
+<div style="text-align:center;font-size:12px;color:var(--fg3)">Yesterday</div>
+<div style="font-size:12.5px;color:var(--fg3)">Morning briefing · 8:00</div>
+<div style="display:flex;flex-direction:column;gap:6px;margin-top:-8px">
+<div>Good morning, Antonio. A thin one today, because I still don't know much about you:</div>
+<div style="display:flex;flex-direction:column;gap:2px;padding-left:4px"><div>· Plans: nothing in your calendar yet.</div><div>· Weather: I don't know your city.</div><div>· News: tell me which topics you follow.</div></div>
+</div>
+<div style="text-align:center;font-size:12px;color:var(--fg3);margin-top:8px">Today</div>
+<div style="font-size:13px;color:var(--fg3)">Morning briefing didn't run at 8:00. OpenRouter isn't set up. <span style="color:var(--accent)">Set up</span> · <span style="color:var(--accent)">Run now</span></div>
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">I'm in Madrid. I follow AI and climbing.</div>
+<div>Got it. From tomorrow I'll include Madrid's weather and the AI and climbing news worth knowing.</div>
+<div style="font-size:13px;color:var(--fg3)">Remembered 2 things · <span style="color:var(--fg2)">undo</span></div>
+</div>
+</div>
+<div style="padding:12px 36px 18px;display:flex;justify-content:center">
+<div style="width:100%;max-width:568px;border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Message Daily briefing…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><div style="margin-left:auto;width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+</div>
+</div>
+<sc-if value="{{ agentInfo }}" hint-placeholder-val="{{ true }}">
+<div style="width:300px;height:100%;box-sizing:border-box;flex-shrink:0;border-left:.5px solid var(--line);display:flex;flex-direction:column;padding:8px 20px 0;overflow:hidden">
+<div style="display:flex;flex-direction:column;gap:3px;padding-bottom:18px"><div style="font-size:16px;font-weight:600">Daily briefing</div><div style="font-size:12.5px;color:var(--fg3)">A short morning summary of what's ahead</div></div>
+<div style="font-size:12px;color:var(--fg3);padding-bottom:6px;display:flex">Does<span style="margin-left:auto;color:var(--fg2)">Edit</span></div>
+<div style="font-size:13px;line-height:1.5;padding-bottom:18px">Every weekday morning, writes Antonio a short briefing: today's plans, what was left open, and the weather and news he follows.</div>
+<div style="font-size:12px;color:var(--fg3);padding-bottom:2px">When</div>
+<div style="display:flex;padding:7px 0 18px;font-size:13px">Weekdays at 8:00<span style="margin-left:auto;color:var(--fg2)">Change</span></div>
+<div style="font-size:12px;color:var(--fg3);padding-bottom:2px">Can</div>
+<sc-for list="{{ agentCan }}" as="cn" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;padding:6px 0;font-size:13px">{{ cn.name }}<div style="margin-left:auto;width:28px;height:16px;border-radius:999px;background:{{ cn.bg }};padding:2px;box-sizing:border-box;display:flex;justify-content:{{ cn.just }}"><div style="width:12px;height:12px;border-radius:50%;background:var(--win)"></div></div></div>
+</sc-for>
+<div style="font-size:12px;color:var(--fg3);padding:18px 0 2px">Reaches you in</div>
+<div style="display:flex;padding:6px 0;font-size:13px">Piopio<span style="margin-left:auto;color:var(--fg3)">On</span></div>
+<div style="display:flex;padding:6px 0;font-size:13px">Telegram<span style="margin-left:auto;color:var(--accent)">Connect</span></div>
+<div style="font-size:12px;color:var(--fg3);padding:18px 0 4px;display:flex">Remembers<span style="margin-left:auto;color:var(--fg2)">See all</span></div>
+<div style="font-size:13px;line-height:1.5;display:flex;flex-direction:column;gap:4px"><div>Lives in Madrid</div><div>Follows AI and climbing</div></div>
+<div style="margin-top:auto;padding:14px 0;border-top:.5px solid var(--line);display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--fg2)">
+<div style="display:flex">Haiku 4.5 · This Mac<span style="margin-left:auto;color:var(--fg3)">$0.003 this month</span></div>
+<div style="color:var(--fg3)">Runs while this Mac is awake. <span style="color:var(--accent)">Keep it always on</span></div>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+<div style="max-width:1240px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Automatic runs show as the agent's messages, labelled with their name and time in grey. A failed run is a grey line that says what to do. Everything that used to be in Setup is in the info panel, written as plain sentences and switches. The full instructions open from Edit.</div>
+</div>
+
+<div id="13b" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">13b</div><div style="font-size:20px;font-weight:600">New agent · describe it</div></div>
+<div style="width:760px;height:780px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;flex-direction:column;font-size:13px">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div><span style="font-weight:600;font-size:13.5px;margin-left:16px">New agent</span></div>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:600px;padding:20px 36px 0;display:flex;flex-direction:column;gap:14px;font-size:14.5px;line-height:1.6">
+<div style="color:var(--fg2)">What should it do? Say when it runs and how it should reach you.</div>
+<div style="align-self:flex-end;max-width:85%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">Cada mañana entre semana, mándame por Telegram un resumen corto: agenda, lo que quedó pendiente y el tiempo en Madrid.</div>
+<div>Así quedaría. Cámbiame lo que quieras antes de crearlo.</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--field);overflow:hidden;font-size:13px;line-height:1.45">
+<sc-for list="{{ newAgent }}" as="na" hint-placeholder-count="6">
+<div style="display:flex;gap:16px;padding:10px 16px;border-bottom:.5px solid var(--line)"><span style="width:96px;flex-shrink:0;color:var(--fg3)">{{ na.k }}</span><span style="flex:1">{{ na.v }}</span></div>
+</sc-for>
+<div style="display:flex;align-items:center;gap:16px;padding:12px 16px"><span style="color:var(--fg2)">Edit details</span><span style="margin-left:auto;padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Create agent</span></div>
+</div>
+</div>
+</div>
+<div style="padding:12px 36px 18px;display:flex;justify-content:center">
+<div style="width:100%;max-width:528px;border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Reply to change anything…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><div style="margin-left:auto;width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+</div>
+</div>
+<div style="max-width:760px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">No form up front. You describe the agent in one sentence and Piopio drafts it as a card you can correct by replying. Telegram is connected right after you create it.</div>
+</div>
+
+<div id="13e" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">13e</div><div style="font-size:20px;font-weight:600">Notebook · one conversation with headings</div></div>
+<div style="width:1240px;height:780px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px">
+<div style="width:240px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div><div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)"><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"></path><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"></path></svg></div></div></div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ sideD }}" as="r" hint-placeholder-count="10">
+<sc-if value="{{ r.h }}" hint-placeholder-val="{{ false }}"><div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">{{ r.name }}<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div></sc-if>
+<sc-if value="{{ r.row }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:6px 8px 6px {{ r.pad }};border-radius:7px;background:{{ r.bg }}">
+<sc-if value="{{ r.folder }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"></path></svg></sc-if>
+<sc-if value="{{ r.nb }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M3 2.5h8.5a1 1 0 0 1 1 1v10H4a1 1 0 0 1-1-1z"></path><path d="M3 11.5h9.5"></path></svg></sc-if>
+<sc-if value="{{ r.agent }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><circle cx="8" cy="8" r="5.5"></circle><circle cx="8" cy="8" r="1.6"></circle></svg></sc-if>
+<sc-if value="{{ r.chat }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"></path></svg></sc-if>
+<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">{{ r.meta }}</span><sc-if value="{{ r.dot }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></sc-if></div></sc-if>
+</sc-for>
+</div>
+<div style="margin-top:auto;height:52px;flex-shrink:0;border-top:.5px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 12px 0 16px"><div style="width:24px;height:24px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--fg2)">A</div><div style="display:flex;flex-direction:column;gap:1px"><span>Antonio</span><span style="font-size:11px;color:var(--fg3)">This Mac · $5.99 today</span></div><div style="margin-left:auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2"></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg></div></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 20px;gap:8px"><div style="font-weight:600;font-size:13.5px">Kitchen renovation</div></div>
+<div style="flex:1;display:flex;min-height:0">
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:640px;padding:8px 36px 0;display:flex;flex-direction:column;gap:14px;font-size:14.5px;line-height:1.6">
+<div style="display:flex;align-items:center;gap:12px;font-size:13px;font-weight:600"><span>Distribución de la cocina</span><div style="flex:1;height:.5px;background:var(--line)"></div></div>
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">¿En L o con isla? La ventana está en la pared larga.</div>
+<div>Con 12 m², una isla te quita circulación. Mejor una L con el fregadero bajo la ventana y una península corta como zona de desayuno.</div>
+<div style="display:flex;align-items:center;gap:12px;font-size:13px;font-weight:600;margin-top:10px"><span>Muebles de cocina</span><div style="flex:1;height:.5px;background:var(--line)"></div></div>
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">¿Qué material para los frentes, si quiero algo mate y fácil de limpiar?</div>
+<div style="font-size:13px;color:var(--fg3);margin-top:-6px;align-self:flex-end">New heading: Muebles de cocina · <span style="color:var(--fg2)">keep in Distribución</span></div>
+<div>Laminado mate antihuellas: aguanta bien, se limpia con un paño y entra holgado en el presupuesto. La laca mate queda mejor pero marca más.</div>
+</div>
+</div>
+<div style="padding:12px 36px 18px;display:flex;justify-content:center">
+<div style="width:100%;max-width:568px;border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Message Kitchen renovation…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Haiku 4.5</span><div style="width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+</div>
+</div>
+<div style="width:240px;height:100%;box-sizing:border-box;flex-shrink:0;border-left:.5px solid var(--line);padding:4px 20px 0;display:flex;flex-direction:column">
+<div style="font-size:12px;color:var(--fg3);padding-bottom:6px">Topics</div>
+<sc-for list="{{ nbContents }}" as="ct" hint-placeholder-count="3">
+<a href="#13f" style="display:flex;flex-direction:column;gap:1px;padding:7px 8px;margin:0 -8px;border-radius:7px;text-decoration:none;color:inherit" style-hover="background:var(--sel)"><span style="font-size:13px;color:{{ ct.color }};font-weight:{{ ct.weight }}">{{ ct.name }}</span><span style="font-size:12px;color:var(--fg3)">{{ ct.status }}</span></a>
+</sc-for>
+<div style="font-size:12px;color:var(--fg3);padding:22px 0 6px;display:flex">Remembers<span style="margin-left:auto">6</span></div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;line-height:1.45"><div>4 × 3 m, about 12 m²</div><div>Budget around 30.000 €</div><div>Window on the long wall</div></div>
+<div style="font-size:12px;color:var(--fg3);padding:22px 0 6px;display:flex">Files<span style="margin-left:auto;color:var(--fg2)">Add</span></div>
+<div style="font-size:12.5px;color:var(--fg3)">None yet</div>
+</div>
+</div>
+</div>
+</div>
+<div style="max-width:1240px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">No topics to manage. It's a single conversation, and the organizer adds a heading when the subject changes (you can undo it). Topics on the right lists every heading with its status, and clicking one opens it on its own (<a href="#13f">13f</a>). It's the simplest to use, but a long notebook means a lot of scrolling.</div>
+</div>
+
+<div id="13f" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">13f</div><div style="font-size:20px;font-weight:600">Notebook · one topic open</div></div>
+<div style="width:1240px;height:780px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px">
+<div style="width:240px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div><div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)"><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"></path><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"></path></svg></div></div></div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ sideD }}" as="r" hint-placeholder-count="10">
+<sc-if value="{{ r.h }}" hint-placeholder-val="{{ false }}"><div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">{{ r.name }}<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div></sc-if>
+<sc-if value="{{ r.row }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:6px 8px 6px {{ r.pad }};border-radius:7px;background:{{ r.bg }}">
+<sc-if value="{{ r.folder }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"></path></svg></sc-if>
+<sc-if value="{{ r.nb }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M3 2.5h8.5a1 1 0 0 1 1 1v10H4a1 1 0 0 1-1-1z"></path><path d="M3 11.5h9.5"></path></svg></sc-if>
+<sc-if value="{{ r.agent }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><circle cx="8" cy="8" r="5.5"></circle><circle cx="8" cy="8" r="1.6"></circle></svg></sc-if>
+<sc-if value="{{ r.chat }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2);flex-shrink:0"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"></path></svg></sc-if>
+<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span><span style="font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">{{ r.meta }}</span><sc-if value="{{ r.dot }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></sc-if></div></sc-if>
+</sc-for>
+</div>
+<div style="margin-top:auto;height:52px;flex-shrink:0;border-top:.5px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 12px 0 16px"><div style="width:24px;height:24px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--fg2)">A</div><div style="display:flex;flex-direction:column;gap:1px"><span>Antonio</span><span style="font-size:11px;color:var(--fg3)">This Mac · $5.99 today</span></div><div style="margin-left:auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2"></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg></div></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 20px;gap:8px"><a href="#13e" style="color:var(--fg2);text-decoration:none">Kitchen renovation</a><span style="color:var(--fg3)">/</span><span style="font-weight:600;font-size:13.5px">Muebles de cocina</span>
+<div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)"><a href="#13e" style="height:28px;padding:0 8px;border-radius:6px;display:flex;align-items:center;font-size:12.5px;color:var(--fg2);text-decoration:none" style-hover="background:var(--sel);color:var(--fg)">All topics</a></div></div>
+<div style="flex:1;display:flex;min-height:0">
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:640px;padding:8px 36px 0;display:flex;flex-direction:column;gap:14px;font-size:14.5px;line-height:1.6">
+<div style="border:.5px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;font-size:13.5px;line-height:1.5">
+<div style="display:flex;align-items:center"><span style="font-weight:600">Where it stands</span><span style="font-size:12.5px;color:var(--fg2);padding:3px 6px;margin:-3px -6px -3px auto;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Open</span></div>
+<sc-for list="{{ topicState }}" as="ts" hint-placeholder-count="3">
+<div style="display:flex;gap:14px"><span style="width:64px;flex-shrink:0;color:var(--fg3);font-size:12.5px">{{ ts.k }}</span><span style="flex:1;color:{{ ts.color }}">{{ ts.v }}</span></div>
+</sc-for>
+<div style="font-size:12px;color:var(--fg3)">Kept up to date by the organizer · <span style="color:var(--fg2)">edit</span></div>
+</div>
+<div style="text-align:center;font-size:12px;color:var(--fg3)">Yesterday</div>
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">¿Qué material para los frentes, si quiero algo mate y fácil de limpiar?</div>
+<div>Laminado mate antihuellas: aguanta bien, se limpia con un paño y entra holgado en el presupuesto. La laca mate queda mejor pero marca más.</div>
+<div style="text-align:center;font-size:12px;color:var(--fg3);margin-top:4px">Today</div>
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">Vale, laminado. ¿Tiradores o gola?</div>
+<div>Con la península que decidisteis en Distribución, la gola queda más limpia y no se engancha al pasar. Los tiradores son más baratos y fáciles de cambiar.</div>
+<div style="font-size:13px;color:var(--fg3)">Updated where it stands: frentes en laminado mate · <span style="color:var(--fg2)">undo</span></div>
+</div>
+</div>
+<div style="padding:12px 36px 18px;display:flex;justify-content:center">
+<div style="width:100%;max-width:568px;border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Message Muebles de cocina…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Haiku 4.5</span><div style="width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+</div>
+</div>
+<div style="width:240px;height:100%;box-sizing:border-box;flex-shrink:0;border-left:.5px solid var(--line);padding:4px 20px 0;display:flex;flex-direction:column">
+<div style="font-size:12px;color:var(--fg3);padding-bottom:6px">Topics</div>
+<sc-for list="{{ nbContentsF }}" as="ct" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:1px;padding:7px 8px;margin:0 -8px;border-radius:7px;background:{{ ct.bg }}" style-hover="background:var(--sel)"><span style="font-size:13px;color:{{ ct.color }};font-weight:{{ ct.weight }}">{{ ct.name }}</span><span style="font-size:12px;color:var(--fg3)">{{ ct.status }}</span></div>
+</sc-for>
+<a href="#13e" style="font-size:12.5px;color:var(--fg2);padding:10px 0 0;text-decoration:none">Show all together</a>
+</div>
+</div>
+</div>
+</div>
+<div style="max-width:1240px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Clicking a topic shows only its part of the conversation, with a breadcrumb back to the notebook. At the top, <b style="color:var(--fg)">Where it stands</b> is the topic's state: what's been decided, what's still open, and what it takes from other topics. The organizer keeps it current, says so with a grey line, and you can undo or edit it. Each topic has one of three states: Not started, Open or Decided. It shows under each name in the list, and you change it from the word at the top right of the block. Messages written here stay in the single conversation under this heading.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:860px">
+<div style="font-size:13px;color:var(--fg2)">Piopio v2 · Turn 12 · <a href="#12a">12a</a> Debate result · <a href="#12b">12b</a> A round · <a href="#12c">12c</a> Compare versions · <a href="#12d">12d</a> While debating</div>
+<div style="font-size:38px;font-weight:700;letter-spacing:-.025em">Debate mode</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:15px;color:var(--fg2);line-height:1.55;max-width:760px">
+<div>The output of a debate is one or more artifacts. They get their own pane, rendered properly, with versions. The conversation on the left only tells the story: who wrote, who objected, what changed, when they agreed.</div>
+<div>Each round is one grey line that opens into the reviewer's objections and how the writer answered each. Raw markdown never shows.</div>
+<div style="color:var(--fg3)">In 12a, click the artifact cards or tabs to switch documents, and v1–v4 to browse versions.</div>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<div id="12a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">12a</div><div style="font-size:20px;font-weight:600">Debate result · story left, artifact right</div></div>
+<div style="width:1440px;height:880px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;flex-direction:column;font-size:13px">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px;border-bottom:.5px solid var(--line)">
+<div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div>
+<div style="width:28px;height:28px;margin-left:8px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div>
+<span style="font-weight:600;font-size:13.5px;margin-left:8px">OHF exercise for the three projects</span>
+<span style="font-size:12px;color:var(--fg3);margin-left:6px">Debate · agreed in round 4</span>
+<div style="margin-left:auto;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.2"></circle><circle cx="8" cy="8" r="1.2"></circle><circle cx="12.5" cy="8" r="1.2"></circle></svg></div>
+</div>
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:600px;flex-shrink:0;display:flex;flex-direction:column;border-right:.5px solid var(--line)">
+<div style="flex:1;overflow:hidden;padding:24px 36px 0;display:flex;flex-direction:column;gap:16px;font-size:14.5px;line-height:1.6">
+<div style="align-self:flex-end;max-width:85%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">Quiero que resuelvas el ejercicio de OHF para los tres proyectos. Una propuesta de epic y un one-pager de estrategia.</div>
+<div style="display:flex;flex-direction:column;gap:2px;font-size:13px">
+<div style="color:var(--fg3);padding-bottom:6px">Opus 5.5 writes · DeepSeek V4.1 reviews · up to 12 rounds</div>
+<sc-for list="{{ rounds }}" as="rd" hint-placeholder-count="4">
+<div style="display:flex;gap:12px;padding:6px 0">
+<span style="width:20px;flex-shrink:0;color:var(--fg3);font-variant-numeric:tabular-nums">{{ rd.n }}</span>
+<span style="color:{{ rd.color }};flex:1">{{ rd.text }}</span>
+<span style="color:var(--fg3)">{{ rd.meta }}</span>
+<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--fg3);margin-top:5px"><path d="M6 4l4 4-4 4"></path></svg>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div>Both models agreed on v4. I wrote two documents; the one-pager reuses the segments from the proposal.</div>
+<sc-for list="{{ artCards }}" as="ac" hint-placeholder-count="2">
+<div onClick="{{ ac.go }}" style="display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;border:.5px solid var(--line);background:{{ ac.bg }};cursor:default;font-size:13px;line-height:1.4">
+<div style="width:30px;height:36px;border-radius:4px;border:.5px solid var(--line);background:var(--field);flex-shrink:0;display:flex;flex-direction:column;gap:3px;padding:7px 6px;box-sizing:border-box"><div style="height:2px;background:var(--fg3);width:70%"></div><div style="height:2px;background:var(--line)"></div><div style="height:2px;background:var(--line)"></div><div style="height:2px;background:var(--line);width:80%"></div></div>
+<div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0"><span style="font-weight:600">{{ ac.name }}</span><span style="font-size:12px;color:var(--fg3)">{{ ac.sub }}</span></div>
+<span style="font-size:12px;color:var(--fg2)">{{ ac.action }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="padding:12px 24px 18px">
+<div style="border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Ask for changes to {{ artName }}…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg>
+<span style="padding:3px 6px;margin:-3px -6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Debate</span>
+<span style="padding:3px 6px;margin:-3px -6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Web search on</span>
+<span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Opus 5.5 + DeepSeek V4.1</span>
+<div style="width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--field)">
+<div style="height:48px;flex-shrink:0;display:flex;align-items:center;padding:0 20px;gap:18px;border-bottom:.5px solid var(--line)">
+<sc-for list="{{ artTabs }}" as="at" hint-placeholder-count="2">
+<div onClick="{{ at.go }}" style="height:100%;display:flex;align-items:center;cursor:default;color:{{ at.color }};font-weight:{{ at.weight }};box-shadow:{{ at.line }}">{{ at.name }}</div>
+</sc-for>
+<div style="margin-left:auto;display:flex;align-items:center;gap:2px;font-size:12.5px;color:var(--fg2)">
+<sc-for list="{{ versions }}" as="vr" hint-placeholder-count="4">
+<div onClick="{{ vr.go }}" style="padding:3px 7px;border-radius:6px;cursor:default;background:{{ vr.bg }};color:{{ vr.color }}" style-hover="background:var(--sel)">{{ vr.name }}</div>
+</sc-for>
+<div style="width:.5px;height:16px;background:var(--line);margin:0 8px"></div>
+<div style="padding:3px 6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Changes</div>
+<div style="padding:3px 6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Copy</div>
+<div style="padding:3px 6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Export</div>
+</div>
+</div>
+<sc-if value="{{ oldVersion }}" hint-placeholder-val="{{ false }}">
+<div style="padding:9px 20px;border-bottom:.5px solid var(--line);font-size:12.5px;color:var(--fg2);display:flex;gap:6px;background:var(--win)"><span>Viewing {{ verName }}, written in round {{ verRound }}. The agreed version is v4.</span><span onClick="{{ toLatest }}" style="color:var(--accent);cursor:default">Show v4</span></div>
+</sc-if>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:660px;padding:36px 40px;display:flex;flex-direction:column;gap:14px;font-size:14.5px;line-height:1.65;color:var(--fg)">
+<sc-if value="{{ isProposal }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:26px;font-weight:700;letter-spacing:-.015em;line-height:1.25">Update impact preview</div><div style="font-size:13px;color:var(--fg3)">Epic proposal for ESPHome · {{ verName }} · 14 sources</div></div>
+<div style="font-size:17px;font-weight:600;margin-top:12px">Why now</div>
+<div>The 2026.10 release notes say <span style="color:var(--accent)">roughly 40% of ESPHome devices run on ESP8266</span>. Configs that can't use the native toolchain stay on PlatformIO, and that path is removed in 2027.4.0, six months away.</div>
+<div>Without this epic, owners find out when a compile fails, one device at a time.</div>
+<div style="font-size:17px;font-weight:600;margin-top:12px">Who it's for</div>
+<div style="display:grid;grid-template-columns:120px 1fr 1fr;font-size:13.5px;line-height:1.5">
+<sc-for list="{{ segRows }}" as="sg" hint-placeholder-count="4">
+<div style="padding:9px 12px 9px 0;border-top:.5px solid var(--line);font-weight:{{ sg.w }};color:{{ sg.c }}">{{ sg.a }}</div>
+<div style="padding:9px 12px 9px 0;border-top:.5px solid var(--line);font-weight:{{ sg.w }};color:{{ sg.c }}">{{ sg.b }}</div>
+<div style="padding:9px 0;border-top:.5px solid var(--line);font-weight:{{ sg.w }};color:{{ sg.c }}">{{ sg.d }}</div>
+</sc-for>
+</div>
+<div style="font-size:17px;font-weight:600;margin-top:12px">The experience</div>
+<div>Device Builder says “ESPHome 2027.2 is available” and shows an impact preview:</div>
+<div style="display:flex;flex-direction:column;gap:6px;padding-left:4px">
+<div>· <b>Ready (14 devices):</b> nothing in your config is affected.</div>
+<div>· <b>We can fix this for you (3):</b> a suggested edit you can review as a diff.</div>
+<div>· <b>Needs you (1):</b> a manual step, explained in plain words.</div>
+</div>
+</sc-if>
+<sc-if value="{{ isOnepager }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:26px;font-weight:700;letter-spacing:-.015em;line-height:1.25">From authors to owners</div><div style="font-size:13px;color:var(--fg3)">Strategy one-pager · {{ verName }} · 9 sources</div></div>
+<div>ESPHome was built for people who write YAML. Every approachability win brings in people who never will. The goal is to protect maintainer velocity by making breaking changes cheap for users, not to slow releases down.</div>
+<div style="font-size:17px;font-weight:600;margin-top:12px">Direction</div>
+<div style="display:grid;grid-template-columns:130px 1fr 1fr;font-size:13.5px;line-height:1.5">
+<sc-for list="{{ horizonRows }}" as="hz" hint-placeholder-count="4">
+<div style="padding:9px 12px 9px 0;border-top:.5px solid var(--line);font-weight:{{ hz.w }};color:{{ hz.c }}">{{ hz.a }}</div>
+<div style="padding:9px 12px 9px 0;border-top:.5px solid var(--line);font-weight:{{ hz.w }};color:{{ hz.c }}">{{ hz.b }}</div>
+<div style="padding:9px 0;border-top:.5px solid var(--line);font-weight:{{ hz.w }};color:{{ hz.c }}">{{ hz.d }}</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div style="max-width:1440px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The window splits the debate's story (left) from its output (right). Each artifact has a card in the transcript and a tab in the pane, and the pane always shows a rendered document. Versions sit in the pane header, along with Changes, Copy and Export. Follow-ups go to the artifact on screen, and the composer says which one.</div>
+</div>
+
+<div id="12b" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">12b</div><div style="font-size:20px;font-weight:600">A round, opened</div></div>
+<div style="width:600px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 36px;box-sizing:border-box;font-size:13px;display:flex;flex-direction:column;gap:2px">
+<div style="display:flex;gap:12px;padding:6px 0"><span style="width:20px;color:var(--fg3)">1</span><span style="flex:1;color:var(--fg2)">Opus wrote v1 of both documents</span><span style="color:var(--fg3)">14 sources</span></div>
+<div style="display:flex;gap:12px;padding:6px 0"><span style="width:20px;color:var(--fg3)">2</span><span style="flex:1;color:var(--fg)">DeepSeek raised 5 objections, Opus accepted 4</span><span style="color:var(--fg3)">→ v2</span><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--fg3);margin-top:3px;transform:rotate(90deg)"><path d="M6 4l4 4-4 4"></path></svg></div>
+<div style="margin:6px 0 10px 32px;border-left:1.5px solid var(--line);padding-left:16px;display:flex;flex-direction:column;gap:14px">
+<sc-for list="{{ objections }}" as="ob" hint-placeholder-count="5">
+<div style="display:flex;flex-direction:column;gap:3px;line-height:1.5">
+<div style="font-size:13.5px">{{ ob.text }}</div>
+<div style="font-size:12.5px;color:var(--fg3)"><span style="color:{{ ob.color }}">{{ ob.verdict }}</span> · {{ ob.reply }}</div>
+</div>
+</sc-for>
+<div style="font-size:12.5px;color:var(--accent)">See changes from v1 to v2</div>
+</div>
+<div style="display:flex;gap:12px;padding:6px 0"><span style="width:20px;color:var(--fg3)">3</span><span style="flex:1;color:var(--fg2)">DeepSeek raised 2 objections, Opus accepted both</span><span style="color:var(--fg3)">→ v3</span></div>
+<div style="display:flex;gap:12px;padding:6px 0"><span style="width:20px;color:var(--fg3)">4</span><span style="flex:1;color:var(--fg)">DeepSeek approved v4</span><span style="color:var(--fg3)">agreed</span></div>
+</div>
+<div style="max-width:600px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">An opened round lists the reviewer's objections in plain words. Under each one: whether the writer accepted it, and what it changed or why it said no. The link at the end opens that round's diff in the pane.</div>
+</div>
+
+<div id="12c" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">12c</div><div style="font-size:20px;font-weight:600">Changes · v3 → v4</div></div>
+<div style="width:680px;border-radius:12px;background:var(--field);box-shadow:var(--shadow);overflow:hidden;font-size:13px">
+<div style="height:48px;display:flex;align-items:center;padding:0 20px;gap:10px;border-bottom:.5px solid var(--line)"><span style="font-weight:600">Proposal</span><span style="color:var(--fg3)">Changes from v3 to v4 · round 4</span><span style="margin-left:auto;color:var(--fg2)">Done</span></div>
+<div style="padding:28px 40px;display:flex;flex-direction:column;gap:14px;font-size:14.5px;line-height:1.65">
+<div style="font-size:17px;font-weight:600">Why now</div>
+<div>Configs that can't use the native toolchain stay on PlatformIO, and that path is removed in <span style="text-decoration:line-through;color:var(--fg3)">early 2027</span> <span style="background:color-mix(in oklch,var(--add) 14%,transparent);border-radius:3px;padding:0 2px">2027.4.0, six months away</span>.</div>
+<div style="background:color-mix(in oklch,var(--add) 9%,transparent);border-radius:6px;padding:6px 10px;margin:0 -10px">Without this epic, owners find out when a compile fails, one device at a time.</div>
+<div style="font-size:12.5px;color:var(--fg3);border-left:1.5px solid var(--line);padding-left:12px;line-height:1.5">DeepSeek, round 4: “Give the removal a version number, not a season, and say what happens without the epic.” Accepted.</div>
+<div style="color:var(--fg3);font-size:13px">2 more changes below · ↓</div>
+</div>
+</div>
+<div style="max-width:680px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Changes show inline on the rendered document: removed text struck through in grey, added text with a faint green tint. Next to each change is the objection that caused it, so you can see why the text changed.</div>
+</div>
+
+<div id="12d" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">12d</div><div style="font-size:20px;font-weight:600">While debating</div></div>
+<div style="width:600px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 36px 20px;box-sizing:border-box;font-size:13px;display:flex;flex-direction:column;gap:2px">
+<div style="display:flex;gap:12px;padding:6px 0"><span style="width:20px;color:var(--fg3)">1</span><span style="flex:1;color:var(--fg2)">Opus wrote v1 of both documents</span><span style="color:var(--fg3)">14 sources</span></div>
+<div style="display:flex;gap:12px;padding:6px 0;align-items:center"><span style="width:20px;color:var(--fg3)">2</span><span style="flex:1;color:var(--fg)">DeepSeek is reviewing v1</span><span style="width:10px;height:10px;border-radius:50%;border:1.5px solid var(--fg3);border-right-color:transparent;box-sizing:border-box"></span></div>
+<div style="margin:2px 0 0 32px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--fg3)">
+<div>Searched the web 5 times, read 3 pages ›</div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:12px">Reading github.com/esphome/esphome/pull/18816</div>
+</div>
+<div style="margin-top:40px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg2);padding:0 4px"><span style="color:var(--fg3)">Next round</span>Este es el ejercicio: (pasted, 1.2k words)<span style="margin-left:auto;color:var(--fg3)">Edit</span></div>
+<div style="border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Add a note for the next round…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg>
+<span>Debate</span><span>Web search on</span>
+<span style="margin-left:auto">Round 2 of up to 12</span>
+<div style="width:28px;height:28px;border-radius:50%;background:var(--inv);display:flex;align-items:center;justify-content:center"><div style="width:9px;height:9px;border-radius:2px;background:var(--invfg)"></div></div>
+</div>
+</div>
+<div style="font-size:11.5px;color:var(--fg3);text-align:center">esc to stop after this round</div>
+</div>
+</div>
+<div style="max-width:600px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Sixteen search cards become one grey line. Steering in a debate means "a note for the next round", so that's what the composer says, and the queued note sits above the box. Actions the engine doesn't support yet, like removing a queued note, are simply left out, so no red errors.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:860px">
+<div style="font-size:13px;color:var(--fg2)">Piopio v2 · Turn 11 · <a href="#11a">11a</a> Anatomy · <a href="#11b">11b</a> Running · <a href="#11c">11c</a> Approvals · <a href="#11d">11d</a> Questions · <a href="#11e">11e</a> Composer · <a href="#11f">11f</a> Model · <a href="#11g">11g</a> Mode · <a href="#11h">11h</a> Interruptions</div>
+<div style="font-size:38px;font-weight:700;letter-spacing:-.025em">The conversation</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:15px;color:var(--fg2);line-height:1.55;max-width:760px">
+<div>The answer is the only thing at full ink. Process (thinking, tool calls, results) is grey, one line each, and opens on click.</div>
+<div>Anything that needs you is a white box with a hairline border and the blue dot, and it always has one black button reachable with ↩. Once you decide, it collapses into a grey line.</div>
+<div>The composer is a single box. Settings sit as plain text below the input, with no arrows: on hover they get a grey background like a button, and a click opens a small menu.</div>
+<div style="color:var(--fg3)">In 11a, click "Thought for 6s" and the tool line to expand them.</div>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<div id="11a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">11a</div><div style="font-size:20px;font-weight:600">Anatomy of a turn</div></div>
+<div style="width:720px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 40px 24px;box-sizing:border-box;font-size:14.5px;line-height:1.6;display:flex;flex-direction:column;gap:14px;color:var(--fg)">
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">Why does the stdio transport drop the first frame after reconnect?</div>
+<div onClick="{{ toggleThought }}" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--fg3);cursor:default;margin-top:4px">Thought for 6s<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="transform:{{ thoughtRot }}"><path d="M6 4l4 4-4 4"></path></svg></div>
+<sc-if value="{{ thoughtOpen }}" hint-placeholder-val="{{ false }}">
+<div style="border-left:1.5px solid var(--line);padding:2px 0 2px 14px;font-size:13.5px;color:var(--fg2);line-height:1.55;display:flex;flex-direction:column;gap:8px">
+<div>The reconnect path calls resume() before the read loop is attached, so the first frame can arrive with no listener.</div>
+<div>I should check whether onFrame is assigned in connect() or in start(), and confirm with the codec test.</div>
+</div>
+</sc-if>
+<div onClick="{{ toggleTools }}" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--fg3);cursor:default">Read 2 files, ran 1 command<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="transform:{{ toolsRot }}"><path d="M6 4l4 4-4 4"></path></svg></div>
+<sc-if value="{{ toolsOpen }}" hint-placeholder-val="{{ false }}">
+<div style="border-left:1.5px solid var(--line);padding:0 0 0 14px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--fg2)">
+<div style="display:flex;gap:10px"><span style="width:40px;color:var(--fg3)">Read</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">engine/transport/stdio.ts</span></div>
+<div style="display:flex;gap:10px"><span style="width:40px;color:var(--fg3)">Read</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">engine/codec.ts</span></div>
+<div style="display:flex;gap:10px"><span style="width:40px;color:var(--fg3)">Ran</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">pnpm vitest run codec</span><span style="margin-left:auto;color:var(--fg3)">passed · 1.4s</span></div>
+</div>
+</sc-if>
+<div>In <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:1px 5px;border-radius:4px;background:var(--bubble)">reconnect()</span>, <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:1px 5px;border-radius:4px;background:var(--bubble)">resume()</span> runs before the read loop is attached. If the engine answers quickly, the first frame arrives with nobody listening.</div>
+<div>Attach the listener first:</div>
+<div style="border-radius:10px;background:var(--bubble);overflow:hidden">
+<div style="display:flex;padding:7px 12px;font-size:12px;color:var(--fg3)">stdio.ts<span style="margin-left:auto;color:var(--fg2)">Copy</span></div>
+<div style="padding:0 12px 10px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.7;white-space:pre">private reconnect() {
+  this.attachReader()
+  this.resume()
+}</div>
+</div>
+<div>Do you want me to apply it and add a regression test?</div>
+<div style="display:flex;align-items:center;gap:14px;color:var(--fg3);margin-top:2px">
+<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="5" y="5" width="8.5" height="8.5" rx="1.5"></rect><path d="M3 10.5V3.5A1 1 0 0 1 4 2.5h6.5"></path></svg>
+<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5V5h-2.5"></path></svg>
+<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="4.5" cy="3.5" r="1.5"></circle><circle cx="4.5" cy="12.5" r="1.5"></circle><circle cx="11.5" cy="6" r="1.5"></circle><path d="M4.5 5v6M11.5 7.5c0 2-2 3-5.5 3.5"></path></svg>
+<span style="font-size:12px">Sonnet 4.5 · 10:42</span>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Reading order: your message, then the process in grey, then the answer. Below each answer are copy, retry and branch, plus model and time. Cost and tokens stay in the inspector.</div>
+</div>
+
+<div id="11b" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">11b</div><div style="font-size:20px;font-weight:600">While it's working</div></div>
+<div style="width:720px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 40px 20px;box-sizing:border-box;font-size:14.5px;line-height:1.6;display:flex;flex-direction:column;gap:14px">
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">Apply it and add a regression test.</div>
+<div style="font-size:13px;color:var(--fg3)">Edited <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--fg2)">stdio.ts</span> <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--add)">+3 −1</span>, added <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--fg2)">stdio.test.ts</span></div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg2)"><span style="width:10px;height:10px;border-radius:50%;border:1.5px solid var(--fg3);border-right-color:transparent;box-sizing:border-box"></span>Running <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">pnpm vitest run stdio</span><span style="margin-left:auto;color:var(--fg3)">8s</span></div>
+<div style="margin-left:18px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.6;color:var(--fg3)">✓ reconnect › attaches reader before resume<br>· reconnect › keeps first frame after fast reply</div>
+</div>
+<div style="margin-top:22px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg2);padding:0 4px"><span style="color:var(--fg3)">Queued</span>Then run the whole suite<span style="margin-left:auto;color:var(--fg3)">Edit · Remove</span></div>
+<div style="border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Add to the queue, or ⌥↩ to steer now…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg>
+<span style="padding:3px 6px;margin:-3px -6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Ask before edits</span><span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Sonnet 4.5 <span style="color:var(--fg3)">medium</span></span>
+<div style="width:28px;height:28px;border-radius:50%;background:var(--inv);display:flex;align-items:center;justify-content:center"><div style="width:9px;height:9px;border-radius:2px;background:var(--invfg)"></div></div>
+</div>
+</div>
+<div style="font-size:11.5px;color:var(--fg3);text-align:center">esc to stop</div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The step in progress shows a small spinner and its live output in grey; finished steps stay as one line. While it runs, the send button becomes stop. ↩ queues a message and ⌥↩ steers the current turn, and queued messages sit above the box.</div>
+</div>
+
+<div id="11c" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">11c</div><div style="font-size:20px;font-weight:600">Approvals</div></div>
+<div style="width:720px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 40px;box-sizing:border-box;font-size:13px;line-height:1.45;display:flex;flex-direction:column;gap:18px">
+<div style="font-size:12px;color:var(--fg3)">Command</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--field);padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span><span style="font-weight:600">Run this command?</span><span style="margin-left:auto;font-size:12px;color:var(--fg3)">in ~/code/piopio</span></div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--fg2)">pnpm vitest run</div>
+<div style="display:flex;align-items:center;gap:16px"><span style="color:var(--fg2)">Deny</span><span style="color:var(--fg2)">Always allow <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">pnpm vitest</span></span><span style="margin-left:auto;padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Allow ↩</span></div>
+</div>
+<div style="font-size:12px;color:var(--fg3)">File edit</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--field);overflow:hidden">
+<div style="padding:14px 16px 10px;display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span><span style="font-weight:600">Edit <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:500">engine/codec.ts</span>?</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12px"><span style="color:var(--add)">+2</span> <span style="color:var(--del)">−1</span></span></div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.75">
+<div style="padding:0 16px;background:color-mix(in oklch,var(--del) 8%,transparent);color:var(--fg2)">− const MAX = 1 &lt;&lt; 20</div>
+<div style="padding:0 16px;background:color-mix(in oklch,var(--add) 8%,transparent)">+ const MAX_FRAME = 1 &lt;&lt; 22</div>
+<div style="padding:0 16px;background:color-mix(in oklch,var(--add) 8%,transparent)">+ const MAX_BACKOFF = 30_000</div>
+</div>
+<div style="padding:10px 16px 14px;display:flex;align-items:center;gap:16px"><span style="color:var(--fg2)">Deny</span><span style="color:var(--fg2)">Allow edits for this session</span><span style="margin-left:auto;padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Allow ↩</span></div>
+</div>
+<div style="font-size:12px;color:var(--fg3)">MCP tool</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--field);padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span><span style="font-weight:600">Open a pull request on GitHub?</span><span style="margin-left:auto;font-size:12px;color:var(--fg3)">github · create_pull_request</span></div>
+<div style="display:grid;grid-template-columns:56px 1fr;gap:4px 12px;font-size:12.5px"><span style="color:var(--fg3)">Title</span><span>Fix first frame lost on reconnect</span><span style="color:var(--fg3)">Branch</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">pi/stdio-reconnect → main</span></div>
+<div style="display:flex;align-items:center;gap:16px"><span style="color:var(--fg2)">Deny</span><span style="color:var(--fg2)">Edit</span><span style="margin-left:auto;padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Allow ↩</span></div>
+</div>
+<div style="font-size:12px;color:var(--fg3)">After you decide</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--fg3)">
+<div>Allowed <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--fg2)">pnpm vitest run</span> · passed in 6.2s</div>
+<div>Denied <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--fg2)">git push --force</span> · the agent was told why</div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Every approval has the same structure: a title phrased as a question, what will happen, the secondary actions as plain text, and Allow ↩ in black. The middle option changes by type: always allow a command, allow edits for the session, or edit the arguments. Once you decide, it shrinks to a grey line.</div>
+</div>
+
+<div id="11d" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">11d</div><div style="font-size:20px;font-weight:600">When the agent asks</div></div>
+<div style="width:720px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 40px;box-sizing:border-box;font-size:14.5px;line-height:1.6;display:flex;flex-direction:column;gap:14px">
+<div>Before wiring Sparkle I need one decision.</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--field);padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px;font-size:13.5px;line-height:1.45">
+<div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span><span style="font-weight:600">Which channel should new installs get?</span><span style="margin-left:auto;font-size:12px;color:var(--fg3)">1 of 2</span></div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ qOptions }}" as="qo" hint-placeholder-count="3">
+<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 10px;margin:0 -10px;border-radius:8px;background:{{ qo.bg }}"><span style="width:18px;height:18px;border-radius:5px;border:.5px solid var(--line);font-size:11px;color:var(--fg2);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">{{ qo.key }}</span><div style="display:flex;flex-direction:column;gap:1px"><span style="font-weight:{{ qo.weight }}">{{ qo.name }}</span><span style="font-size:12.5px;color:var(--fg3)">{{ qo.sub }}</span></div></div>
+</sc-for>
+<div style="display:flex;align-items:center;gap:12px;padding:8px 10px;margin:0 -10px"><span style="width:18px;height:18px;border-radius:5px;border:.5px solid var(--line);font-size:11px;color:var(--fg2);display:flex;align-items:center;justify-content:center">4</span><span style="color:var(--fg3)">Something else…</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;font-size:13px"><span style="color:var(--fg2)">Skip</span><span style="color:var(--fg3);font-size:12px">1–4 to pick</span><span style="margin-left:auto;padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Next ↩</span></div>
+</div>
+<div style="font-size:12px;color:var(--fg3);margin-top:6px">After you answer</div>
+<div style="font-size:13px;color:var(--fg3)">You chose <span style="color:var(--fg2)">Stable</span> and <span style="color:var(--fg2)">Check daily</span> · change</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Questions look like approvals, with options instead of permissions. Options can be picked with the number keys, a short description says what each one implies, and "Something else" lets you type your own. Several questions run as steps (1 of 2).</div>
+</div>
+
+<div id="11e" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">11e</div><div style="font-size:20px;font-weight:600">Composer</div></div>
+<div style="width:720px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 40px;box-sizing:border-box;font-size:13px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:12px;color:var(--fg3)">Empty</div>
+<div style="border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Reply…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><span style="padding:3px 6px;margin:-3px -6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Ask before edits</span><span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Sonnet 4.5 <span style="color:var(--fg3)">medium</span></span><div style="width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+<div style="font-size:12px;color:var(--fg3);margin-top:12px">With attachments and a mention</div>
+<div style="border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;gap:8px">
+<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;border:.5px solid var(--line);border-radius:10px"><div style="display:flex;flex-direction:column"><span style="font-size:12.5px">quote-b.pdf</span><span style="font-size:11px;color:var(--fg3)">PDF · 2 pages</span></div><span style="color:var(--fg3);margin-left:4px">✕</span></div>
+<div style="width:46px;height:40px;border-radius:10px;border:.5px solid var(--line);background:repeating-linear-gradient(135deg,var(--sel) 0 5px,transparent 5px 10px)"></div>
+</div>
+<div style="font-size:14px;line-height:1.5">Compare this with quote A in <span style="background:var(--sel);border-radius:4px;padding:1px 4px">Kitchen renovation</span> and tell me which is better value</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Sonnet 4.5 <span style="color:var(--fg3)">medium</span></span><div style="width:28px;height:28px;border-radius:50%;background:var(--inv);display:flex;align-items:center;justify-content:center;color:var(--invfg)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+<div style="font-size:12px;color:var(--fg3);margin-top:12px">Typing /</div>
+<div style="position:relative;padding-top:178px">
+<div style="position:absolute;top:0;left:0;width:360px;border-radius:12px;background:var(--field);border:.5px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ slash }}" as="sl" hint-placeholder-count="4">
+<div style="display:flex;align-items:baseline;gap:10px;padding:7px 10px;border-radius:7px;background:{{ sl.bg }}"><span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;width:72px">{{ sl.cmd }}</span><span style="font-size:12.5px;color:var(--fg3)">{{ sl.sub }}</span></div>
+</sc-for>
+</div>
+<div style="border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="font-size:14px">/co<span style="display:inline-block;width:1.5px;height:16px;background:var(--accent);vertical-align:-3px"></span></div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><span style="padding:3px 6px;margin:-3px -6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Ask before edits</span><span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Sonnet 4.5 <span style="color:var(--fg3)">medium</span></span><div style="width:28px;height:28px;border-radius:50%;background:var(--inv);display:flex;align-items:center;justify-content:center;color:var(--invfg)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The + adds files, images and folders; you can also drop or paste them. @ mentions files, notebooks or chats, shown as a grey token. / opens commands. The mode picker only appears where it applies (Build sessions). The send button is grey until there's something to send.</div>
+</div>
+
+<div id="11f" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">11f</div><div style="font-size:20px;font-weight:600">Model picker</div></div>
+<div style="width:720px;height:560px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 40px;box-sizing:border-box;font-size:13px;position:relative">
+<div style="position:absolute;right:40px;bottom:112px;width:320px;border-radius:12px;background:var(--field);border:.5px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;display:flex;flex-direction:column;gap:1px">
+<div style="padding:6px 10px 8px;color:var(--fg3);border-bottom:.5px solid var(--line);margin-bottom:4px">Search models</div>
+<sc-for list="{{ models }}" as="md" hint-placeholder-count="5">
+<sc-if value="{{ md.header }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 10px 4px;font-size:12px;color:var(--fg3)">{{ md.name }}</div></sc-if>
+<sc-if value="{{ md.row }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;background:{{ md.bg }}"><div style="display:flex;flex-direction:column;gap:1px"><span>{{ md.name }}</span><span style="font-size:12px;color:var(--fg3)">{{ md.sub }}</span></div><span style="margin-left:auto;color:var(--fg2)">{{ md.check }}</span></div></sc-if>
+</sc-for>
+<div style="border-top:.5px solid var(--line);margin-top:4px;padding:10px 10px 6px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center"><span>Thinking</span><span style="margin-left:auto;font-size:12px;color:var(--fg3)">⌘T to cycle</span></div>
+<div style="display:flex;padding:2px;border-radius:8px;background:var(--track);font-size:12px">
+<div style="flex:1;text-align:center;padding:4px 0;color:var(--fg2)">Off</div><div style="flex:1;text-align:center;padding:4px 0;color:var(--fg2)">Low</div><div style="flex:1;text-align:center;padding:4px 0;border-radius:6px;background:var(--seg);box-shadow:0 0 0 .5px var(--line),0 1px 2px rgba(0,0,0,.06);font-weight:500">Medium</div><div style="flex:1;text-align:center;padding:4px 0;color:var(--fg2)">High</div>
+</div>
+</div>
+<div style="border-top:.5px solid var(--line);margin-top:4px;padding:8px 10px 4px;font-size:12.5px;color:var(--accent)">Manage providers</div>
+</div>
+<div style="position:absolute;left:40px;right:40px;bottom:28px;border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Reply…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><span style="padding:3px 6px;margin:-3px -6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Ask before edits</span><span style="margin-left:auto;padding:3px 6px;margin:-3px -6px -3px auto;border-radius:6px;background:var(--sel);color:var(--fg)">Sonnet 4.5 <span style="color:var(--fg3)">medium</span></span><div style="width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Models are grouped by provider, so adding a subscription later just adds a group. Each model gets one plain-language line instead of specs. Thinking is a segmented control in the same menu, because the two choices go together.</div>
+</div>
+
+<div id="11g" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">11g</div><div style="font-size:20px;font-weight:600">Mode picker · Build</div></div>
+<div style="width:720px;height:400px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 40px;box-sizing:border-box;font-size:13px;position:relative">
+<div style="position:absolute;left:40px;bottom:112px;width:300px;border-radius:12px;background:var(--field);border:.5px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ modes }}" as="mo" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;background:{{ mo.bg }}"><div style="display:flex;flex-direction:column;gap:1px"><span>{{ mo.name }}</span><span style="font-size:12px;color:var(--fg3)">{{ mo.sub }}</span></div><span style="margin-left:auto;color:var(--fg2)">{{ mo.check }}</span></div>
+</sc-for>
+<div style="border-top:.5px solid var(--line);margin-top:4px;padding:8px 10px 4px;font-size:12px;color:var(--fg3)">⇧⇥ to cycle</div>
+</div>
+<div style="position:absolute;left:40px;right:40px;bottom:28px;border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">Reply…</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg><span style="padding:3px 6px;margin:-3px -6px;border-radius:6px;background:var(--sel);color:var(--fg)">Ask before edits</span><span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Sonnet 4.5 <span style="color:var(--fg3)">medium</span></span><div style="width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg3)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div></div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Four modes, each described by what it lets the agent do, not by a technical name. It's the same menu style as the model picker.</div>
+</div>
+
+<div id="11h" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">11h</div><div style="font-size:20px;font-weight:600">Interruptions</div></div>
+<div style="width:720px;border-radius:12px;background:var(--win);box-shadow:var(--shadow);padding:28px 40px;box-sizing:border-box;font-size:14.5px;line-height:1.6;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:12px;color:var(--fg3)">You stopped it</div>
+<div style="color:var(--fg2)">I'm updating the reconnect test to cover the</div>
+<div style="font-size:13px;color:var(--fg3)">Stopped · <span style="color:var(--fg2)">continue</span></div>
+<div style="font-size:12px;color:var(--fg3);margin-top:14px">Provider error</div>
+<div style="font-size:13.5px;line-height:1.5;display:flex;flex-direction:column;gap:4px">
+<div>OpenRouter is overloaded and didn't answer.</div>
+<div style="font-size:13px;color:var(--fg3)">Nothing was changed. <span style="color:var(--accent)">Retry</span> · <span style="color:var(--accent)">Use Haiku 4.5</span> · <span style="color:var(--fg2)">Details</span></div>
+</div>
+<div style="font-size:12px;color:var(--fg3);margin-top:14px">Context almost full</div>
+<div style="font-size:13px;color:var(--fg3)">This session is at 92% of its context. Older turns will be summarized at 100%. <span style="color:var(--accent)">Compact now</span></div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">No red boxes. Each one says what happened, what is safe, and the next step as a link, in the transcript's own grey.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px 72px 0;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:860px">
+<div style="font-size:13px;color:var(--fg2)">Piopio v2 · Turn 10 · <a href="#10a">10a</a> New · <a href="#10b">10b</a> Search · <a href="#10c">10c</a> Needs you · <a href="#10d">10d</a> Diff review · <a href="#10e">10e</a> Settings · <a href="#10f">10f</a> Quick Chat</div>
+<div style="font-size:38px;font-weight:700;letter-spacing:-.025em">The rest, same rules</div>
+<div style="font-size:15px;color:var(--fg2);line-height:1.55;max-width:760px">Grey ink, hairlines, one black action per view, blue only for links, and the dot for "needs you". Floating surfaces (menus, Search, Quick Chat) share one style: white, 12pt radius, hairline, soft shadow.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:64px;align-items:flex-start">
+
+<div id="10a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">10a</div><div style="font-size:20px;font-weight:600">New · ⌘N</div></div>
+<div style="width:560px;height:420px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px;position:relative">
+<div style="width:260px;background:var(--side);border-right:.5px solid var(--line);height:100%">
+<div style="height:52px;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div>
+<div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)"><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div><div style="width:28px;height:28px;border-radius:6px;background:var(--sel);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"></path><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"></path></svg></div></div></div>
+</div>
+<div style="position:absolute;top:46px;left:170px;width:250px;border-radius:12px;background:var(--field);border:.5px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ newItems }}" as="ni" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;background:{{ ni.bg }}"><div style="display:flex;flex-direction:column;gap:1px"><span>{{ ni.name }}</span><span style="font-size:11.5px;color:var(--fg3)">{{ ni.sub }}</span></div><span style="margin-left:auto;font-size:11px;color:var(--fg3)">{{ ni.key }}</span></div>
+</sc-for>
+</div>
+</div>
+<div style="max-width:560px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">A short menu, with each kind's subtitle saying where it lives. The first item takes ⌘N again, so a double press opens a chat right away.</div>
+</div>
+
+<div id="10b" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">10b</div><div style="font-size:20px;font-weight:600">Search · ⌘K</div></div>
+<div style="width:640px;height:420px;border-radius:12px;background:var(--canvas);display:flex;justify-content:center;align-items:flex-start;padding-top:40px;box-sizing:border-box;font-size:13px">
+<div style="width:560px;border-radius:12px;background:var(--field);border:.5px solid var(--line);box-shadow:0 16px 40px rgba(0,0,0,.14);overflow:hidden">
+<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:.5px solid var(--line)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg3)"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5L14 14"></path></svg><span style="font-size:15px">transport</span><span style="width:1.5px;height:17px;background:var(--accent);margin-left:-8px"></span></div>
+<div style="padding:6px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ searchRows }}" as="sr" hint-placeholder-count="6">
+<sc-if value="{{ sr.header }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 10px 4px;font-size:12px;color:var(--fg3)">{{ sr.name }}</div></sc-if>
+<sc-if value="{{ sr.row }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;background:{{ sr.bg }}"><span>{{ sr.name }}</span><span style="font-size:12px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sr.sub }}</span><span style="margin-left:auto;font-size:11.5px;color:var(--fg3);flex-shrink:0">{{ sr.where }}</span></div></sc-if>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="max-width:640px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">Search and commands in one box. Results first, actions after. The right column says where each result lives, so no icons or colors are needed to tell them apart.</div>
+</div>
+
+<div id="10c" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">10c</div><div style="font-size:20px;font-weight:600">Needs you</div></div>
+<div style="width:1280px;height:720px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px">
+<div style="width:260px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div>
+<div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)"><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div><div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"></path><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"></path></svg></div></div></div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5L14 14"></path></svg>Search<span style="margin-left:auto;font-size:11px;color:var(--fg3)">⌘K</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;background:var(--sel)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M2 9l2-6h8l2 6v4H2z"></path><path d="M2 9h3.5l1 1.5h3l1-1.5H14"></path></svg>Needs you<span style="margin-left:auto;font-size:12px;color:var(--fg2)">3</span></div>
+</div>
+<div style="padding:16px 16px 6px;font-size:12px;color:var(--fg3)">Projects</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:12px;color:var(--fg2)"><span>piopio</span><span>cloud-engine</span></div>
+<div style="padding:18px 16px 6px;font-size:12px;color:var(--fg3)">Agents</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:12px;color:var(--fg2)"><span>Atlas</span><span>Ledger</span></div>
+</div>
+<div style="width:380px;flex-shrink:0;border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;display:flex;align-items:center;padding:0 20px;font-weight:600;font-size:13.5px">Needs you</div>
+<div style="padding:0 10px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ needs }}" as="nd" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:8px;background:{{ nd.bg }}">
+<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:600">{{ nd.title }}</span><span style="margin-left:auto;font-size:11.5px;color:var(--fg3)">{{ nd.time }}</span></div>
+<div style="font-size:12px;color:var(--fg3)">{{ nd.from }}</div>
+<div style="font-size:12.5px;color:var(--fg2);line-height:1.45">{{ nd.text }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 20px;gap:8px"><span style="font-weight:600;font-size:13.5px">Reply to Marta</span><span style="font-size:12px;color:var(--fg3);margin-left:6px">Atlas · WhatsApp</span><span style="margin-left:auto;font-size:12px;color:var(--accent)">Open conversation</span></div>
+<div style="flex:1;display:flex;justify-content:center;overflow:hidden">
+<div style="width:100%;max-width:560px;padding:16px 32px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5">
+<div style="align-self:flex-start;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px">Hi! Is Luis free Thursday afternoon for the photo session? Around 6 would be perfect.</div>
+<div style="font-size:13px;color:var(--fg3);margin-top:4px">Atlas checked your calendar: Thursday 17:30–20:00 is free</div>
+<div style="margin-top:14px;font-size:12px;color:var(--fg3)">Atlas wants to</div>
+<div style="border:.5px solid var(--line);border-radius:12px;background:var(--field);overflow:hidden;font-size:13.5px">
+<div style="padding:12px 14px;border-bottom:.5px solid var(--line);display:flex;flex-direction:column;gap:3px"><span style="font-size:12px;color:var(--fg3)">Reply on WhatsApp</span>Confirmed for Thursday at 18:00, see you then!</div>
+<div style="padding:12px 14px;display:flex;flex-direction:column;gap:3px"><span style="font-size:12px;color:var(--fg3)">Add to Google Calendar</span>Photo session with Marta · Thu 23 Oct, 18:00–19:30</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;margin-top:10px;font-size:13px"><span style="padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Approve</span><span style="color:var(--fg2)">Edit</span><span style="color:var(--fg2)">Reject</span><span style="margin-left:auto;font-size:12px;color:var(--fg3)">Always allow for Marta</span></div>
+</div>
+</div>
+</div>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">One list for everything waiting on you, from sessions and agents alike. The detail shows what came in, what the agent checked, and exactly what it would do. It's the same view whether the request comes from Build or from an agent.</div>
+</div>
+
+<div id="10d" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">10d</div><div style="font-size:20px;font-weight:600">Diff review · sidebar collapsed</div></div>
+<div style="width:1280px;height:720px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;flex-direction:column;font-size:13px">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px;border-bottom:.5px solid var(--line)">
+<div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div>
+<div style="width:28px;height:28px;margin-left:8px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div>
+<span style="color:var(--fg2);margin-left:8px">Wire engine protocol</span><span style="color:var(--fg3)">/</span><span style="font-weight:600">Changes</span>
+<div style="margin-left:auto;display:flex;align-items:center;gap:16px;font-size:12.5px"><span style="color:var(--fg2);padding:3px 6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Unified</span><span style="color:var(--fg2)">Restore checkpoint</span><span style="padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Commit 3 files</span></div>
+</div>
+<div style="flex:1;display:flex;min-height:0">
+<div style="width:260px;flex-shrink:0;border-right:.5px solid var(--line);padding:12px 8px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ diffFiles }}" as="f" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:7px;background:{{ f.bg }}"><div style="width:14px;height:14px;border-radius:4px;border:1.2px solid {{ f.border }};background:{{ f.fill }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:var(--invfg);font-size:9px">{{ f.tick }}</div><div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ f.name }}</span><span style="font-size:11px;color:var(--fg3)">{{ f.dir }}</span></div><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--add)">{{ f.add }}</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--del)">{{ f.del }}</span></div>
+</sc-for>
+</div>
+<div style="flex:1;overflow:hidden;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.8;padding:12px 0">
+<sc-for list="{{ diffLines }}" as="ln" hint-placeholder-count="16">
+<div style="display:flex;background:{{ ln.bg }}"><span style="width:52px;flex-shrink:0;text-align:right;padding-right:16px;color:var(--fg3)">{{ ln.n }}</span><span style="width:14px;color:{{ ln.signColor }}">{{ ln.sign }}</span><span style="white-space:pre">{{ ln.text }}</span></div>
+<sc-if value="{{ ln.comment }}" hint-placeholder-val="{{ false }}">
+<div style="margin:8px 24px 10px 82px;max-width:560px;border:.5px solid var(--line);border-radius:12px;background:var(--field);box-shadow:0 4px 14px rgba(0,0,0,.06);padding:10px 12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;line-height:1.5;display:flex;flex-direction:column;gap:8px">
+<div>Cap the backoff at 30s and add jitter.</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px"><span style="color:var(--fg3)">Sent as a follow-up with this line</span><span style="margin-left:auto;color:var(--fg2)">Cancel</span><span style="padding:4px 12px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Send ↩</span></div>
+</div>
+</sc-if>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="max-width:1280px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">With the sidebar collapsed, the window controls and the toggle share the toolbar, and a breadcrumb leads back to the session. Changed lines get only a faint tint. Commenting on a line sends it to the agent.</div>
+</div>
+
+<div id="10e" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">10e</div><div style="font-size:20px;font-weight:600">Settings</div></div>
+<div style="width:880px;height:620px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px">
+<div style="width:200px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;display:flex;align-items:center;padding:0 16px;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<sc-for list="{{ settingsNav }}" as="sn" hint-placeholder-count="7">
+<div style="padding:6px 10px;border-radius:7px;background:{{ sn.bg }};color:{{ sn.color }}">{{ sn.name }}</div>
+</sc-for>
+</div>
+</div>
+<div style="flex:1;overflow:hidden;padding:20px 36px;display:flex;flex-direction:column;gap:28px">
+<div style="font-size:20px;font-weight:700;letter-spacing:-.01em">Providers</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:baseline"><span style="font-weight:600">Models</span><span style="margin-left:auto;font-size:12.5px;color:var(--accent)">Add provider</span></div>
+<div style="border-top:.5px solid var(--line)">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:.5px solid var(--line)"><span style="width:120px">OpenRouter</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--fg2)">sk-or-v1-••••3f9a</span><span style="margin-left:auto;font-size:12.5px;color:var(--fg3)">$18.40 this month</span><span style="font-size:12.5px;color:var(--fg2)">Edit</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:.5px solid var(--line);color:var(--fg3)"><span style="width:120px">ChatGPT</span>Sign in with your subscription<span style="margin-left:auto;font-size:12.5px">Coming soon</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:.5px solid var(--line)"><span style="width:120px">Default model</span><span>Sonnet 4.5</span><span style="margin-left:auto;color:var(--fg3);font-size:12.5px">Quick Chat</span><span>Haiku 4.5</span></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:baseline"><span style="font-weight:600">Where agents run</span><span style="margin-left:auto;font-size:12.5px;color:var(--accent)">Add target</span></div>
+<div style="border-top:.5px solid var(--line)">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:.5px solid var(--line)"><span style="width:120px">This Mac</span><span style="color:var(--fg2)">2 sessions running</span><span style="margin-left:auto;font-size:12.5px;color:var(--fg2)">Keep running when closed</span><div style="width:30px;height:18px;border-radius:999px;background:var(--inv);padding:2px;box-sizing:border-box;display:flex;justify-content:flex-end"><div style="width:14px;height:14px;border-radius:50%;background:var(--win)"></div></div></div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:.5px solid var(--line)"><span style="width:120px">Cloudflare</span><span style="color:var(--fg2)">luis@… · Atlas, Ledger</span><span style="margin-left:auto;font-size:12.5px;color:var(--fg2)">Edit</span></div>
+</div>
+</div>
+<div style="font-size:12.5px;color:var(--fg3);line-height:1.5;max-width:520px">Keys are stored in your Keychain. Cloud agents receive them as secrets on their target, and you can revoke them at any time.</div>
+</div>
+</div>
+<div style="max-width:880px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">A separate Settings window with plain rows: label, value, one action. Providers and run targets are both lists, and adding another one is a link at the top of each list. Black is used here only for a switch that is on.</div>
+</div>
+
+<div id="10f" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">10f</div><div style="font-size:20px;font-weight:600">Quick Chat · ⌥Space</div></div>
+<div style="width:720px;height:360px;border-radius:12px;background:var(--canvas);display:flex;align-items:center;justify-content:center;font-size:13px">
+<div style="width:620px;border-radius:14px;background:var(--field);border:.5px solid var(--line);box-shadow:0 20px 50px rgba(0,0,0,.18);overflow:hidden">
+<div style="padding:16px 18px;font-size:16px;border-bottom:.5px solid var(--line)">What's the difference between actors and Sendable?</div>
+<div style="padding:14px 18px;font-size:14px;line-height:1.6;display:flex;flex-direction:column;gap:8px">
+<div><b>Sendable</b> marks a value as safe to pass between concurrency domains. An <b>actor</b> is a domain: it owns mutable state and serializes access to it.</div>
+<div style="color:var(--fg2)">You send Sendable values into actors; the actor itself is implicitly Sendable.<span style="display:inline-block;width:6px;height:14px;margin-left:3px;vertical-align:-2px;background:var(--fg3);border-radius:1px"></span></div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:10px 18px;border-top:.5px solid var(--line);font-size:12px;color:var(--fg2)"><span>Open in Piopio ⌘O</span><span>Copy</span><span style="margin-left:auto;color:var(--fg3)">Haiku 4.5 · esc to close</span></div>
+</div>
+</div>
+<div style="max-width:720px;font-size:14px;line-height:1.55;color:var(--fg2);text-wrap:pretty">The same surface as Search: question on top, answer below, two actions. Every quick chat is saved under Chats.</div>
+</div>
+
+</div>
+</section>
+<section style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:10px;max-width:860px">
+<div style="font-size:13px;color:var(--fg2)">Piopio v2 · Turn 9 · <a href="#9a">9a</a></div>
+<div style="font-size:38px;font-weight:700;letter-spacing:-.025em">Quieter</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:15px;color:var(--fg2);line-height:1.55;max-width:760px">
+<div>The sidebar runs edge to edge and the window controls sit on its top bar, so nothing overlaps.</div>
+<div>Ink is mostly grey. Black is for the primary action and blue only for links. The one remaining signal is a small dot for "needs you".</div>
+<div>Projects, notebooks and agents use outline icons instead of colored letter tiles. Tool activity is a single grey line instead of a card. The toolbar has icons instead of pills, and the inspector is a plain column.</div>
+<div>The compose icon on the top bar (⌘N) starts anything and asks what. Each section's + creates that kind directly.</div>
+<div style="color:var(--fg3)">Click Wire engine protocol, Kitchen renovation or Atlas in the sidebar to switch views. Appearance is in Tweaks.</div>
+</div>
+</div>
+
+<div id="9a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:12px"><div style="background:var(--inv);color:var(--invfg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:7px">9a</div><div style="font-size:20px;font-weight:600">Main window</div></div>
+<div style="width:1280px;height:820px;border-radius:12px;overflow:hidden;background:var(--win);box-shadow:var(--shadow);display:flex;font-size:13px;color:var(--fg)">
+
+<div style="width:260px;flex-shrink:0;background:var(--side);border-right:.5px solid var(--line);display:flex;flex-direction:column">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 16px;gap:8px">
+<div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div>
+<div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)">
+<div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M6 2.5v11"></path></svg></div>
+<div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"></path><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"></path></svg></div>
+</div>
+</div>
+<div style="padding:4px 8px;display:flex;flex-direction:column;gap:1px">
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5L14 14"></path></svg>Search<span style="margin-left:auto;font-size:11px;color:var(--fg3)">⌘K</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M2 9l2-6h8l2 6v4H2z"></path><path d="M2 9h3.5l1 1.5h3l1-1.5H14"></path></svg>Needs you<span style="margin-left:auto;font-size:12px;color:var(--fg2)">2</span></div>
+</div>
+<div style="flex:1;overflow:hidden;padding:0 8px;display:flex;flex-direction:column;gap:1px">
+<div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">Projects<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div>
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"></path></svg>piopio<span style="margin-left:auto;font-size:11px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace">main</span></div>
+<sc-for list="{{ sessions }}" as="s" hint-placeholder-count="3">
+<div onClick="{{ s.go }}" style="display:flex;align-items:center;gap:8px;padding:6px 8px 6px 34px;border-radius:7px;cursor:default;background:{{ s.bg }}"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.name }}</span>
+<sc-if value="{{ s.waiting }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0"></span></sc-if>
+<sc-if value="{{ s.running }}" hint-placeholder-val="{{ false }}"><span style="width:10px;height:10px;border-radius:50%;border:1.5px solid var(--fg3);border-right-color:transparent;box-sizing:border-box;flex-shrink:0"></span></sc-if>
+</div>
+</sc-for>
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"></path></svg>cloud-engine</div>
+<div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">Notebooks<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div>
+<sc-for list="{{ notebooks }}" as="n" hint-placeholder-count="2">
+<div onClick="{{ n.go }}" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;cursor:default;background:{{ n.bg }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M3 2.5h8.5a1 1 0 0 1 1 1v10H4a1 1 0 0 1-1-1z"></path><path d="M3 11.5h9.5"></path></svg>{{ n.name }}</div>
+</sc-for>
+<div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">Agents<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div>
+<sc-for list="{{ agentRows }}" as="g" hint-placeholder-count="2">
+<div onClick="{{ g.go }}" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;cursor:default;background:{{ g.bg }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><circle cx="8" cy="8" r="5.5"></circle><circle cx="8" cy="8" r="1.6"></circle></svg>{{ g.name }}<span style="margin-left:auto;font-size:11px;color:var(--fg3)">{{ g.meta }}</span>
+<sc-if value="{{ g.waiting }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></sc-if>
+</div>
+</sc-for>
+<div style="padding:16px 8px 6px;font-size:12px;color:var(--fg3);display:flex;align-items:center">Chats<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="margin-left:auto"><path d="M8 3v10M3 8h10"></path></svg></div>
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;color:var(--fg)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"></path></svg>CRDTs vs. OT, simply</div>
+<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;color:var(--fg)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--fg2)"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"></path></svg>Translate lease clause</div>
+</div>
+<div style="height:52px;flex-shrink:0;border-top:.5px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 12px 0 16px">
+<div style="width:24px;height:24px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--fg2)">A</div>
+<div style="display:flex;flex-direction:column;gap:1px"><span>Antonio</span><span style="font-size:11px;color:var(--fg3)">This Mac · $0.91 today</span></div>
+<div style="margin-left:auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2"></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg></div>
+</div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 12px 0 20px;gap:8px">
+<div style="font-weight:600;font-size:13.5px">{{ title }}</div>
+<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--fg3)"><path d="M4 6l4 4 4-4"></path></svg>
+<div style="font-size:12px;color:var(--fg3);margin-left:6px">{{ subtitle }}</div>
+<div style="margin-left:auto;display:flex;gap:2px;color:var(--fg2)">
+<sc-if value="{{ isBuild }}" hint-placeholder-val="{{ true }}"><div style="height:28px;padding:0 8px;border-radius:6px;display:flex;align-items:center;gap:6px;font-size:12px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 2.5h4.5V7M13.5 2.5L7 9M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"></path></svg>Open in Zed</div></sc-if>
+<div onClick="{{ toggleInspector }}" style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:default;background:{{ inspBtnBg }}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"></rect><path d="M10 2.5v11"></path></svg></div>
+</div>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+<sc-if value="{{ isBuild }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:700px;padding:20px 36px 0;display:flex;flex-direction:column;gap:18px;font-size:14.5px;line-height:1.6">
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">Implement the WebSocket transport for the Engine Protocol and add a test for reconnect with resume.</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--fg3)">Read 3 files, edited <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--fg2)">transport/ws.ts</span><span style="color:var(--add);font-family:ui-monospace,Menlo,monospace;font-size:12px">+64</span><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 4l4 4-4 4"></path></svg></div>
+<div>Added a <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:1px 5px;border-radius:4px;background:var(--bubble)">WebSocketTransport</span> next to the stdio one. It shares the frame codec, and resume picks up from the last acknowledged sequence number.</div>
+<div>Next I'd like to run the transport tests.</div>
+<div style="border:.5px solid var(--line);border-radius:14px;background:var(--field);padding:14px 16px;display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.4">
+<div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span><span style="font-weight:600">Run this command?</span></div>
+<div style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--fg2)">pnpm vitest run engine/transport</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:13px"><span style="color:var(--fg2)">Deny</span><span style="color:var(--fg2)">Always allow vitest</span><span style="margin-left:auto;padding:5px 14px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Allow ↩</span></div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isNotebook }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:700px;padding:20px 36px 0;display:flex;flex-direction:column;gap:18px;font-size:14.5px;line-height:1.6">
+<div style="align-self:flex-end;max-width:80%;background:var(--bubble);padding:9px 14px;border-radius:12px;line-height:1.5">The second quote came in at 14.2k for cabinets and counters. Is that within what we planned?</div>
+<div style="font-size:13px;color:var(--fg3)">Filed under Budget · <span style="color:var(--fg2)">change</span></div>
+<div>It's <b>1.7k over</b> the 12.5k you set for cabinets and counters. The kitchen total still has 2.1k of slack, because flooring came in low.</div>
+<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px 32px;font-size:13.5px;padding:4px 0">
+<span style="color:var(--fg3);font-size:12px">Line</span><span style="color:var(--fg3);font-size:12px;text-align:right">Planned</span><span style="color:var(--fg3);font-size:12px;text-align:right">Quoted</span>
+<span style="border-top:.5px solid var(--line);padding-top:8px">Cabinets &amp; counters</span><span style="border-top:.5px solid var(--line);padding-top:8px;text-align:right">12,500</span><span style="border-top:.5px solid var(--line);padding-top:8px;text-align:right;font-weight:600">14,200</span>
+<span style="border-top:.5px solid var(--line);padding-top:8px">Flooring</span><span style="border-top:.5px solid var(--line);padding-top:8px;text-align:right">6,000</span><span style="border-top:.5px solid var(--line);padding-top:8px;text-align:right">4,200</span>
+</div>
+<div style="font-size:13px;color:var(--fg3)">Remembered: quote B, 14.2k, valid until Nov 30 · <span style="color:var(--fg2)">undo</span></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAgent }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 20px;display:flex;gap:20px;font-size:13px;color:var(--fg2);border-bottom:.5px solid var(--line)">
+<div style="padding:8px 0;color:var(--fg);font-weight:600;box-shadow:inset 0 -1.5px 0 var(--fg)">Activity</div><div style="padding:8px 0">Conversations</div><div style="padding:8px 0">Memory</div><div style="padding:8px 0">Definition</div>
+</div>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center">
+<div style="width:100%;max-width:700px;padding:12px 36px 0;display:flex;flex-direction:column">
+<sc-for list="{{ runs }}" as="r" hint-placeholder-count="5">
+<div style="display:flex;gap:16px;padding:14px 0;border-bottom:.5px solid var(--line)">
+<div style="width:44px;flex-shrink:0;font-size:12px;color:var(--fg3);padding-top:2px">{{ r.time }}</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:600">{{ r.title }}</span><span style="font-size:12px;color:var(--fg3)">{{ r.kind }}</span>
+<sc-if value="{{ r.waiting }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span></sc-if></div>
+<div style="color:var(--fg2);line-height:1.5">{{ r.body }}</div>
+<sc-if value="{{ r.waiting }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:14px;align-items:center;margin-top:6px"><span style="padding:4px 12px;border-radius:8px;background:var(--inv);color:var(--invfg);font-weight:500">Approve</span><span style="color:var(--fg2)">Edit</span><span style="color:var(--fg2)">Reject</span></div></sc-if>
+</div>
+<div style="font-size:12px;color:var(--fg3);font-family:ui-monospace,Menlo,monospace;padding-top:2px">{{ r.cost }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="padding:12px 36px 18px;display:flex;justify-content:center">
+<div style="width:100%;max-width:628px;border-radius:16px;background:var(--field);border:.5px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.04);padding:12px 14px 10px;display:flex;flex-direction:column;gap:10px">
+<div style="color:var(--fg3);font-size:14px">{{ placeholder }}</div>
+<div style="display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--fg2)">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3v10M3 8h10"></path></svg>
+<sc-if value="{{ hasMode }}" hint-placeholder-val="{{ true }}"><span style="padding:3px 6px;margin:-3px -6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">{{ modeLabel }}</span></sc-if>
+<span style="margin-left:auto;padding:3px 6px;margin-right:-6px;border-radius:6px" style-hover="background:var(--sel);color:var(--fg)">Sonnet 4.5 <span style="color:var(--fg3)">medium</span></span>
+<div style="width:28px;height:28px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--fg2)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></div>
+</div>
+</div>
+</div>
+</div>
+
+<sc-if value="{{ showInsp }}" hint-placeholder-val="{{ true }}">
+<div style="width:280px;height:100%;box-sizing:border-box;flex-shrink:0;border-left:.5px solid var(--line);display:flex;flex-direction:column;padding:4px 0 0">
+<div style="margin:0 16px 14px;display:flex;padding:2px;border-radius:8px;background:var(--track);font-size:12px">
+<div style="flex:1;text-align:center;padding:4px 0;border-radius:6px;background:var(--seg);box-shadow:0 0 0 .5px var(--line),0 1px 2px rgba(0,0,0,.06);font-weight:500">{{ tab1 }}</div>
+<div style="flex:1;text-align:center;padding:4px 0;color:var(--fg2)">{{ tab2 }}</div>
+</div>
+
+<sc-if value="{{ isBuild }}" hint-placeholder-val="{{ true }}">
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ changes }}" as="c" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ c.name }}</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--add)">{{ c.add }}</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--del)">{{ c.del }}</span></div>
+</sc-for>
+<div style="padding:8px 0 0;display:flex;gap:16px;font-size:12.5px"><span style="color:var(--accent)">Review diff</span><span style="color:var(--fg2)">Commit…</span></div>
+</div>
+<div style="padding:22px 16px 6px;font-size:12px;color:var(--fg3)">Turns</div>
+<div style="padding:0 16px;display:flex;flex-direction:column">
+<sc-for list="{{ turns }}" as="t" hint-placeholder-count="3">
+<div style="display:flex;gap:10px;padding:6px 0;font-size:12.5px"><span style="color:var(--fg3);width:12px">{{ t.n }}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.text }}</span><span style="color:var(--fg3)">{{ t.meta }}</span></div>
+</sc-for>
+</div>
+<div style="margin-top:auto;padding:14px 16px;border-top:.5px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--fg2)">
+<div style="display:flex">Context<span style="margin-left:auto;color:var(--fg)">41k of 200k</span></div>
+<div style="height:3px;border-radius:2px;background:var(--track)"><div style="width:21%;height:100%;border-radius:2px;background:var(--fg2)"></div></div>
+<div style="display:flex">This session<span style="margin-left:auto;color:var(--fg)">$0.38</span></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isNotebook }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;flex-direction:column">
+<sc-for list="{{ topics }}" as="t" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:2px;padding:8px 10px;margin:0 -10px;border-radius:7px;background:{{ t.bg }}"><div style="display:flex;font-size:12.5px;font-weight:500">{{ t.name }}<span style="margin-left:auto;font-weight:400;color:var(--fg3);font-size:11.5px">{{ t.when }}</span></div><div style="font-size:12px;color:var(--fg2);line-height:1.4">{{ t.summary }}</div></div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAgent }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;flex-direction:column">
+<sc-for list="{{ channels }}" as="ch" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;padding:7px 0;font-size:12.5px">{{ ch.name }}<span style="margin-left:auto;color:var(--fg3);font-size:12px">{{ ch.sub }}</span></div>
+</sc-for>
+<div style="padding:4px 0 0;font-size:12.5px;color:var(--accent)">Add channel</div>
+</div>
+<div style="padding:22px 16px 6px;font-size:12px;color:var(--fg3)">Schedules</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;font-size:12.5px">
+<div style="display:flex;padding:6px 0">Morning brief<span style="margin-left:auto;color:var(--fg3)">Daily 8:00</span></div>
+<div style="display:flex;padding:6px 0">Inbox sweep<span style="margin-left:auto;color:var(--fg3)">Every 2h</span></div>
+</div>
+<div style="margin-top:auto;padding:14px 16px;border-top:.5px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--fg2)">
+<div style="display:flex">October<span style="margin-left:auto;color:var(--fg)">$2.31 of $10</span></div>
+<div style="height:3px;border-radius:2px;background:var(--track)"><div style="width:23%;height:100%;border-radius:2px;background:var(--fg2)"></div></div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;appearance&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Light&quot;,&quot;Dark&quot;],&quot;default&quot;:&quot;Light&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showInspector&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { view: 'build', insp: null };
+  apply() { document.body.dataset.theme = (this.props.appearance ?? 'Light') === 'Dark' ? 'dark' : 'light'; }
+  componentDidMount() { this.apply(); }
+  componentDidUpdate() { this.apply(); }
+  renderVals() {
+    const v = this.state.view;
+    const go = (view) => () => this.setState({ view });
+    const sel = (on) => on ? 'var(--sel)' : 'transparent';
+    const showInsp = this.state.insp ?? (this.props.showInspector ?? true);
+    const meta = {
+      build: ['Wire engine protocol', 'piopio · pi/engine-protocol', 'Reply…', 'Ask before edits', 'Changes', 'Files'],
+      notebook: ['Kitchen renovation', 'Budget', 'Message Kitchen renovation…', 'Topic: auto', 'Topics', 'Memory'],
+      agent: ['Atlas', 'Cloudflare · v14', 'Talk to Atlas…', '', 'Setup', 'Contacts']
+    }[v];
+    return {
+      isBuild: v === 'build', isNotebook: v === 'notebook', isAgent: v === 'agent',
+      title: meta[0], subtitle: meta[1], placeholder: meta[2], modeLabel: meta[3], hasMode: !!meta[3], tab1: meta[4], tab2: meta[5],
+      showInsp, inspBtnBg: showInsp ? 'var(--sel)' : 'transparent',
+      toggleInspector: () => this.setState({ insp: !showInsp }),
+      sessions: [
+        { name: 'Wire engine protocol', waiting: true, running: false, go: go('build'), bg: sel(v === 'build') },
+        { name: 'Transcript windowing', waiting: false, running: true, go: () => {}, bg: 'transparent' },
+        { name: 'Sparkle updates', waiting: false, running: false, go: () => {}, bg: 'transparent' }
+      ],
+      notebooks: [
+        { name: 'Kitchen renovation', go: go('notebook'), bg: sel(v === 'notebook') },
+        { name: 'Health', go: () => {}, bg: 'transparent' }
+      ],
+      agentRows: [
+        { name: 'Atlas', meta: '', waiting: true, go: go('agent'), bg: sel(v === 'agent') },
+        { name: 'Daily briefing', meta: '', waiting: false, go: () => {}, bg: 'transparent' }
+      ],
+      changes: [
+        { name: 'transport/ws.ts', add: '+64', del: '' },
+        { name: 'transport/index.ts', add: '+3', del: '−1' },
+        { name: 'codec.ts', add: '+9', del: '−11' },
+        { name: 'ws.test.ts', add: '+42', del: '' }
+      ],
+      turns: [
+        { n: '3', text: 'Implement the WebSocket transport…', meta: 'now' },
+        { n: '2', text: 'Read the protocol doc first', meta: '11m' },
+        { n: '1', text: 'What does the stdio transport do?', meta: '24m' }
+      ],
+      topics: [
+        { name: 'Budget', when: 'now', summary: '1.7k over on cabinets; 2.1k slack overall', bg: 'var(--sel)' },
+        { name: 'Contractors', when: '2d', summary: 'Two quotes in, waiting on a third', bg: 'transparent' },
+        { name: 'Permits', when: '1w', summary: 'Electrical permit filed Oct 9', bg: 'transparent' }
+      ],
+      runs: [
+        { time: '2m', title: 'Reply to Marta', kind: 'WhatsApp', body: 'Confirm Thursday 18:00 and add it to your calendar.', cost: '—', waiting: true },
+        { time: '41m', title: 'Asked Ledger', kind: 'Agent', body: 'October invoices: 3 unpaid, €1,240.', cost: '$0.02', waiting: false },
+        { time: '1h', title: 'Reminder set', kind: 'Telegram', body: 'Call the plumber at 14:30.', cost: '$0.01', waiting: false },
+        { time: '8:00', title: 'Morning brief', kind: 'Scheduled', body: '4 emails need replies, 2 PRs waiting on review, rain after 17:00.', cost: '$0.04', waiting: false }
+      ],
+      ...(() => {
+        const art = this.state.art ?? 'proposal';
+        const ver = this.state.ver ?? 4;
+        const names = { proposal: 'Proposal', onepager: 'One-pager' };
+        const pick = (a) => () => this.setState({ art: a });
+        return {
+          isProposal: art === 'proposal', isOnepager: art === 'onepager', artName: art === 'proposal' ? 'the proposal' : 'the one-pager',
+          verName: 'v' + ver, verRound: ver === 1 ? 1 : ver, oldVersion: ver !== 4, toLatest: () => this.setState({ ver: 4 }),
+          rounds: [
+            { n: '1', text: 'Opus wrote v1 of both documents', meta: '14 sources', color: 'var(--fg2)' },
+            { n: '2', text: 'DeepSeek raised 5 objections, Opus accepted 4', meta: '→ v2', color: 'var(--fg2)' },
+            { n: '3', text: 'DeepSeek raised 2 objections, Opus accepted both', meta: '→ v3', color: 'var(--fg2)' },
+            { n: '4', text: 'DeepSeek approved v4', meta: 'agreed', color: 'var(--fg)' }
+          ],
+          artCards: [
+            { name: 'Update impact preview', sub: 'Epic proposal · v4 · 2,140 words', go: pick('proposal'), bg: art === 'proposal' ? 'var(--sel)' : 'var(--field)', action: art === 'proposal' ? 'Showing' : 'Open' },
+            { name: 'From authors to owners', sub: 'Strategy one-pager · v4 · 610 words', go: pick('onepager'), bg: art === 'onepager' ? 'var(--sel)' : 'var(--field)', action: art === 'onepager' ? 'Showing' : 'Open' }
+          ],
+          artTabs: ['proposal', 'onepager'].map(a => ({ name: names[a], go: pick(a), color: a === art ? 'var(--fg)' : 'var(--fg2)', weight: a === art ? 600 : 400, line: a === art ? 'inset 0 -1.5px 0 var(--fg)' : 'none' })),
+          versions: [1, 2, 3, 4].map(n => ({ name: 'v' + n, go: () => this.setState({ ver: n }), bg: n === ver ? 'var(--sel)' : 'transparent', color: n === ver ? 'var(--fg)' : 'var(--fg2)' })),
+          segRows: [['Segment', 'Who they are', 'What they need', 1], ['Makers', 'Write YAML, run fleets of 20+ devices', 'Power, speed, no ceiling', 0], ['Newcomers', 'Starter Kit buyers, visual builder users', 'A first working device, then a path to learn', 0], ['Owners', 'Bought a vendor device running ESPHome', 'It keeps working; updates never break it', 0]]
+            .map(([a, b, d, h]) => ({ a, b, d, w: h ? 500 : 400, c: h ? 'var(--fg3)' : 'var(--fg)' })),
+          horizonRows: [['Horizon', 'Bet', 'What changes for people', 1], ['Now · 0–6 months', 'Close the onboarding loop', 'Starter Kit to a first working device', 0], ['Next · 6–12 months', 'Update impact preview', 'Breaking changes explained before install', 0], ['Later', 'Owners never see YAML', 'Vendors ship, ESPHome keeps it working', 0]]
+            .map(([a, b, d, h]) => ({ a, b, d, w: h ? 500 : 400, c: h ? 'var(--fg3)' : 'var(--fg)' })),
+          objections: [
+            ['The 40% ESP8266 figure needs a source.', 'Accepted', 'linked the 2026.10 release notes', 'var(--fg)'],
+            ['The 154k estimate double counts installs that share analytics.', 'Accepted', 'now stated as a lower bound of 60k devices', 'var(--fg)'],
+            ['Segments overlap: Makers can also be Owners.', 'Accepted', 'segments defined by need, not by person', 'var(--fg)'],
+            ['Cut the vendor packages section.', 'Rejected', "Opus: it's the part of the cliff we can't measure yet; kept as an open question", 'var(--fg2)'],
+            ['Timeline for W2 is vague.', 'Accepted', 'added the dry-run as the first milestone', 'var(--fg)']
+          ].map(([text, verdict, reply, color]) => ({ text, verdict, reply, color }))
+        };
+      })(),
+      ...(() => {
+        const S = (sel, nbOpen) => [
+          { h: 1, name: 'Projects' },
+          { row: 1, ic: 'folder', name: 'smart-paste' },
+          { row: 1, ic: 'folder', name: 'financial_ia', meta: 'main' },
+          { h: 1, name: 'Notebooks' },
+          { row: 1, ic: 'nb', name: 'Ejercicio de OpenHomeFoundation' },
+          { row: 1, ic: 'nb', name: 'Kitchen renovation', sel: sel === 'nb' },
+          ...(nbOpen ? [{ row: 1, name: 'Distribución de la cocina', pad: '34px', dot: 1 }, { row: 1, name: 'Muebles de cocina', pad: '34px' }, { row: 1, name: 'Colores y acabados', pad: '34px' }] : []),
+          { h: 1, name: 'Agents' },
+          { row: 1, ic: 'agent', name: 'Daily briefing', sel: sel === 'agent' },
+          { h: 1, name: 'Chats' },
+          { row: 1, ic: 'chat', name: 'Quiero que resuelvas el ejercicio…' },
+          { row: 1, ic: 'chat', name: 'hey' }
+        ].map(r => ({ h: !!r.h, row: !!r.row, name: r.name, pad: r.pad || '8px', bg: r.sel ? 'var(--sel)' : 'transparent',
+          folder: r.ic === 'folder', nb: r.ic === 'nb', agent: r.ic === 'agent', chat: r.ic === 'chat', meta: r.meta || '', dot: !!r.dot }));
+        const info = this.state.agentInfo ?? true;
+        return {
+          sideA: S('agent'), sideD: S('nb'), sideH: S(''),
+          homeNeeds: [
+            { title: "Daily briefing didn't run this morning", from: 'Daily briefing · 11h' },
+            { title: 'Good morning, Antonio. Today’s briefing is thin because I still don’t have the basics', from: 'Daily briefing · 6d' }
+          ],
+          homeRecent: [
+            { name: 'Kitchen renovation', meta: 'Notebook · 13 min ago' },
+            { name: 'Ejercicio de OpenHomeFoundation', meta: 'Notebook · 13 min ago' },
+            { name: 'Quiero que resuelvas el ejercicio…', meta: 'Chat · 11 hours ago' },
+            { name: 'Qué es este proyecto?', meta: 'financial_ia · yesterday' }
+          ],
+          agentInfo: info, agentInfoBg: info ? 'var(--sel)' : 'transparent',
+          toggleAgentInfo: () => this.setState({ agentInfo: !info }),
+          agentCan: [['Search the web', true], ['Remember things', true], ['Message you', true], ['Read your calendar', false]]
+            .map(([name, on]) => ({ name, bg: on ? 'var(--inv)' : 'var(--track)', just: on ? 'flex-end' : 'flex-start' })),
+          newAgent: [
+            { k: 'Name', v: 'Daily briefing' },
+            { k: 'Does', v: 'A short morning summary: your agenda, what was left open, and the weather in Madrid' },
+            { k: 'When', v: 'Weekdays at 8:00' },
+            { k: 'Can', v: 'Read your calendar, search the web, remember things' },
+            { k: 'Reaches you', v: 'Telegram' },
+            { k: 'Runs on', v: 'This Mac, while it is awake' }
+          ],
+          nbTopics: [
+            { n: '1', name: 'Distribución de la cocina', sub: 'U, L o isla; dónde van fregadero, placa y frigorífico' },
+            { n: '2', name: 'Muebles de cocina', sub: 'Tipos, materiales y electrodomésticos dentro de los 30.000 €' },
+            { n: '3', name: 'Colores y acabados', sub: 'Paleta para muebles, encimera, suelo y paredes' }
+          ],
+          nbTopicsD: [
+            { name: 'Distribución de la cocina', last: 'Mejor una L con el fregadero bajo la ventana y una península corta.', when: '2m', dot: true },
+            { name: 'Muebles de cocina', last: 'Laminado mate antihuellas: aguanta bien y entra en el presupuesto.', when: '1h', dot: false },
+            { name: 'Colores y acabados', last: 'Not started', when: '', dot: false }
+          ],
+          nbContents: [
+            { name: 'Distribución de la cocina', status: 'Decided · L con península', color: 'var(--fg2)', weight: 400 },
+            { name: 'Muebles de cocina', status: 'Open · tiradores o gola', color: 'var(--fg)', weight: 500 },
+            { name: 'Colores y acabados', status: 'Not started', color: 'var(--fg3)', weight: 400 }
+          ],
+          nbContentsF: [
+            { name: 'Distribución de la cocina', status: 'Decided · L con península', color: 'var(--fg2)', weight: 400, bg: 'transparent' },
+            { name: 'Muebles de cocina', status: 'Open · tiradores o gola', color: 'var(--fg)', weight: 600, bg: 'var(--sel)' },
+            { name: 'Colores y acabados', status: 'Not started', color: 'var(--fg3)', weight: 400, bg: 'transparent' }
+          ],
+          topicState: [
+            { k: 'Decided', v: 'Frentes en laminado mate antihuellas', color: 'var(--fg)' },
+            { k: 'Open', v: 'Tiradores o gola', color: 'var(--fg)' },
+            { k: 'Uses', v: 'L con península, from Distribución', color: 'var(--fg2)' }
+          ]
+        };
+      })(),
+      thoughtOpen: !!this.state.thought, toolsOpen: !!this.state.tools,
+      thoughtRot: this.state.thought ? 'rotate(90deg)' : 'none', toolsRot: this.state.tools ? 'rotate(90deg)' : 'none',
+      toggleThought: () => this.setState(s => ({ thought: !s.thought })),
+      toggleTools: () => this.setState(s => ({ tools: !s.tools })),
+      qOptions: [
+        ['1', 'Stable', 'Tested releases only. Recommended for most people.', true],
+        ['2', 'Beta', 'New features a week or two early.', false],
+        ['3', 'Ask on first launch', 'Adds one step to onboarding.', false]
+      ].map(([key, name, sub, s]) => ({ key, name, sub, bg: s ? 'var(--sel)' : 'transparent', weight: s ? 600 : 400 })),
+      slash: [
+        ['/compact', 'Summarize older turns to free context', true], ['/commit', 'Commit the session changes', false],
+        ['/review', 'Review the diff before committing', false], ['/plan', 'Write a plan before editing', false]
+      ].map(([cmd, sub, s]) => ({ cmd, sub, bg: s ? 'var(--sel)' : 'transparent' })),
+      models: [
+        { header: true, row: false, name: 'OpenRouter' },
+        { header: false, row: true, name: 'Sonnet 4.5', sub: 'Balanced · default', check: '✓', bg: 'var(--sel)' },
+        { header: false, row: true, name: 'Opus 4.5', sub: 'Most capable, slower', check: '', bg: 'transparent' },
+        { header: false, row: true, name: 'Haiku 4.5', sub: 'Fastest, for quick answers', check: '', bg: 'transparent' },
+        { header: false, row: true, name: 'GPT-5', sub: 'OpenAI', check: '', bg: 'transparent' }
+      ],
+      modes: [
+        ['Read only', "Looks around, can't change anything", false], ['Plan', 'Writes a plan for you to approve first', false],
+        ['Ask before edits', 'Asks before each change or command', true], ['Auto-edit', 'Edits files, still asks for commands', false]
+      ].map(([name, sub, s]) => ({ name, sub, check: s ? '✓' : '', bg: s ? 'var(--sel)' : 'transparent' })),
+      newItems: [
+        ['Chat', 'Saved under Chats', '⌘N', true], ['Session in a project…', 'Pick a folder', '⌘⇧N', false],
+        ['Notebook', 'Topics and memory', '', false], ['Agent', 'Runs on its own', '', false]
+      ].map(([name, sub, key, s]) => ({ name, sub, key, bg: s ? 'var(--sel)' : 'transparent' })),
+      searchRows: [
+        { header: true, row: false, name: 'Results' },
+        { header: false, row: true, name: 'Wire engine protocol', sub: '“…WebSocket transport…”', where: 'piopio', bg: 'var(--sel)' },
+        { header: false, row: true, name: 'transport/ws.ts', sub: 'engine/transport', where: 'piopio · file', bg: 'transparent' },
+        { header: false, row: true, name: 'Engine protocol notes', sub: '“stdio transport first…”', where: 'Notebook', bg: 'transparent' },
+        { header: true, row: false, name: 'Actions' },
+        { header: false, row: true, name: 'Run transport tests', sub: '', where: 'piopio', bg: 'transparent' },
+        { header: false, row: true, name: 'New session in piopio', sub: '', where: '⌘⇧N', bg: 'transparent' }
+      ],
+      needs: [
+        ['Reply to Marta', 'Atlas · WhatsApp', 'Confirm Thursday 18:00 and add it to your calendar.', '2m', true],
+        ['Run this command?', 'Wire engine protocol · piopio', 'pnpm vitest run engine/transport', '5m', false],
+        ['Payment reminder', 'Ledger · Email', 'Send a reminder to Estudio Norte for invoice #0412.', '25m', false]
+      ].map(([title, from, text, time, s]) => ({ title, from, text, time, bg: s ? 'var(--sel)' : 'transparent' })),
+      diffFiles: [
+        ['ws.ts', 'engine/transport', '+64', '', true, true], ['index.ts', 'engine/transport', '+3', '−1', true, false],
+        ['codec.ts', 'engine', '+9', '−11', true, false], ['ws.test.ts', 'engine/transport', '+42', '', false, false]
+      ].map(([name, dir, add, del, chk, s]) => ({ name, dir, add, del, bg: s ? 'var(--sel)' : 'transparent',
+        border: chk ? 'var(--inv)' : 'var(--fg3)', fill: chk ? 'var(--inv)' : 'transparent', tick: chk ? '✓' : '' })),
+      diffLines: [
+        "import { Transport } from './index'", "import { encode, decode } from '../codec'", "",
+        "export class WebSocketTransport implements Transport {", "  private ws?: WebSocket", "  private last\u0041ck = 0", "  private retry = 0", "",
+        "  connect() {", "    this.ws = new WebSocket(this.url)", "    this.ws.onclose = () => this.reconnect()", "  }", "",
+        "  private reconnect() {", "    const delay = 2 ** this.retry++ * 250", "    setTimeout(() => this.connect(), delay)", "  }"
+      ].map((text, i) => ({ n: i + 1, sign: '+', text: text || ' ', comment: i === 14, signColor: 'var(--add)',
+        bg: i === 14 ? 'color-mix(in oklch, var(--add) 16%, transparent)' : 'color-mix(in oklch, var(--add) 7%, transparent)' })),
+      settingsNav: ['General', 'Providers', 'MCP servers', 'Channels', 'Approvals', 'Budgets', 'Privacy']
+        .map(n => ({ name: n, bg: n === 'Providers' ? 'var(--sel)' : 'transparent', color: n === 'Providers' ? 'var(--fg)' : 'var(--fg2)' })),
+      channels: [
+        { name: 'In-app', sub: 'Always on' },
+        { name: 'Telegram', sub: '@atlas_piopio_bot' },
+        { name: 'WhatsApp', sub: '+34 ··· 410' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
