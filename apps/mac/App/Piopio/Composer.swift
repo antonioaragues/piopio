@@ -386,19 +386,29 @@ struct ContextRing: View {
 }
 
 /// Capsule chip inside the composer (model, thinking, tools). `active` = accent tint.
+/// A composer selector (docs/design/grey principle 6): plain 12.5 text in fg2, no chevron or capsule; a grey fill on
+/// hover (radius 6, 3×6). `active` means it's on (web search, a picked option): fg instead of fg2.
 struct ChipStyle: ButtonStyle {
     var active = false
-    func makeBody(configuration: Configuration) -> some View {
+    func makeBody(configuration: Configuration) -> some View { ChipBody(configuration: configuration, active: active) }
+}
+
+private struct ChipBody: View {
+    let configuration: ButtonStyleConfiguration
+    let active: Bool
+    @State private var hovering = false
+
+    var body: some View {
         configuration.label
-            .font(.system(size: 12))
+            .font(.system(size: 12.5))
             .lineLimit(1)
             .fixedSize()
-            .foregroundStyle(active ? Color.accentColor : Color.dsFg2)
-            .padding(.horizontal, 10)
+            .foregroundStyle(active || hovering ? Color.dsFg : Color.dsFg2)
+            .padding(.horizontal, 6)
             .frame(height: 24)
-            .background(active ? Color.dsAccentSoft : Color.dsChip, in: Capsule())
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .contentShape(Capsule())
+            .background(hovering || configuration.isPressed ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous))
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
     }
 }
 

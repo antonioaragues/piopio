@@ -2,8 +2,8 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// Home, the landing screen (docs/design v2, 1b): a greeting, one box to ask, start a session or message an agent,
-/// then what needs you, what's running, what's coming up, and where to jump back in.
+/// Home, the landing screen (docs/design/grey 14a): a greeting and the date, one box to ask, start a session or
+/// message an agent, then three short lists as plain rows: Needs you, Coming up and Recent. Empty lists are hidden.
 struct HomeView: View {
     let engine: EngineController
     @Binding var item: SidebarItem
@@ -12,22 +12,15 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 greeting
-                if Areas.shared.showsTip { tip.padding(.top, 20) }
-                if askable { AskBox(engine: engine, item: $item).padding(.top, 22) }
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 20) {
-                        needsYou.frame(maxWidth: .infinity)
-                        VStack(alignment: .leading, spacing: 18) { running; comingUp }.frame(width: 300)
-                    }.frame(minWidth: 620)
-                    VStack(alignment: .leading, spacing: 18) { needsYou; running; comingUp }
-                }
-                .padding(.top, 30)
-                jumpBack.padding(.top, 30)
+                if askable { AskBox(engine: engine, item: $item).padding(.top, 24) }
+                needsYou
+                comingUp
+                recent
             }
             .padding(.horizontal, 32)
-            .padding(.top, 56)
-            .padding(.bottom, 40)
-            .frame(maxWidth: 820)
+            .padding(.top, 72)
+            .padding(.bottom, 48)
+            .frame(maxWidth: 704)
             .frame(maxWidth: .infinity)
         }
     }
@@ -41,12 +34,9 @@ struct HomeView: View {
     // MARK: Greeting
 
     private var greeting: some View {
-        HStack(spacing: 16) {
-            Chick(size: 52, ring: 3)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(Self.salutation()), \(Self.firstName)").font(.system(size: 26, weight: .bold)).tracking(-0.5)
-                Text(dayLine).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2)
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(Self.salutation()), \(Self.firstName)").font(.system(size: 28, weight: .bold)).tracking(-0.6).foregroundStyle(Color.dsFg)
+            Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide))).font(.system(size: 13.5)).foregroundStyle(Color.dsFg3)
         }
     }
 
@@ -62,166 +52,47 @@ struct HomeView: View {
         NSFullUserName().split(separator: " ").first.map(String.init) ?? NSUserName()
     }
 
-    private var dayLine: String {
-        var parts = [Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide))]
-        let n = engine.needsYouCount
-        parts.append(n == 0 ? "nothing needs you" : "\(n) thing\(n == 1 ? "" : "s") need\(n == 1 ? "s" : "") you")
-        if let today = engine.usage?.todayUsd { parts.append("\(MainSidebar.money(today)) on your OpenRouter key today") }
-        return parts.joined(separator: " · ")
-    }
+    // MARK: Lists
 
-    /// Once, for people who used Piopio before areas existed (docs/spec/15).
-    private var tip: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 4) {
-                ForEach(Area.allCases) { AreaTile(area: $0, size: 22) }
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Use only part of Piopio?").font(.system(size: 13, weight: .semibold))
-                Text("Hide Build, Chat or Agents if you don't use them. Nothing is deleted.").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-            }
+    private func sectionTitle(_ title: String, see: (String, () -> Void)? = nil) -> some View {
+        HStack {
+            SectionLabel(title)
             Spacer()
-            Button("Choose…") {
-                UserDefaults.standard.set("General", forKey: "settingsSection")
-                Areas.shared.showsTip = false
-                WindowOpener.shared.openSettings?()
-            }
-            .buttonStyle(PillStyle(kind: .strong, compact: true))
-            Button { withAnimation(.easeOut(duration: 0.2)) { Areas.shared.showsTip = false } } label: {
-                Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.dsFg3).frame(width: 20, height: 20).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).help("Dismiss")
+            if let see { Button(see.0, action: see.1).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
         }
-        .padding(.horizontal, 14).frame(minHeight: 56)
-        .background(Color.dsYolkSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    // MARK: Cards
-
-    private func cardTitle(_ title: String, count: Int? = nil) -> some View {
-        HStack(spacing: 6) {
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
-            if let count, count > 0 { Text("\(count)").font(.system(size: 13)).foregroundStyle(Color.dsFg3) }
-        }
-        .padding(.bottom, 8)
+        .padding(.top, 36)
+        .padding(.bottom, 6)
     }
 
     @ViewBuilder private var needsYou: some View {
-        let entries = engine.needsYou
-        VStack(alignment: .leading, spacing: 0) {
-            cardTitle("Needs you", count: entries.count)
-            VStack(spacing: 0) {
-                ForEach(Array(entries.prefix(4).enumerated()), id: \.element.id) { i, entry in
-                    if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 30) }
-                    HomeNeedsRow(engine: engine, entry: entry, item: $item)
-                }
-                if entries.isEmpty {
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle").foregroundStyle(Color.dsGreen)
-                        Text("Nothing waits for you.").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-                        Spacer()
-                    }
-                    .padding(14)
-                }
-                if entries.count > 4 {
-                    Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                    Button { item = .needsYou } label: {
-                        Text("See all \(entries.count)").font(.system(size: 12.5)).foregroundStyle(Color.accentColor).frame(maxWidth: .infinity).frame(height: 34)
-                    }
-                    .buttonStyle(.plain)
+        let entries = Array(engine.needsYou.reversed())
+        if !entries.isEmpty {
+            sectionTitle("Needs you", see: ("See all", { item = .needsYou }))
+            ForEach(entries.prefix(4)) { entry in
+                HomeRow(title: NeedsYouText.title(entry, engine: engine), meta: NeedsYouText.source(entry, engine: engine) + " · " + Self.age(entry.at), dot: true) {
+                    if let s = entry.session { item = engine.item(for: s.ref.id) ?? .needsYou } else { item = .needsYou }
                 }
             }
-            .homeCard()
-        }
-    }
-
-    @ViewBuilder private var running: some View {
-        let live = (engine.buildSessions + engine.threads).filter { engine.liveStatus[$0.ref.id] == .running && Areas.shared.set.shows($0) }
-        VStack(alignment: .leading, spacing: 0) {
-            cardTitle("Running now")
-            VStack(spacing: 0) {
-                ForEach(Array(live.prefix(3).enumerated()), id: \.element.ref.id) { i, s in
-                    if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-                    Button { item = engine.item(for: s.ref.id) ?? .home } label: {
-                        HStack(spacing: 10) {
-                            ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 14)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(s.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                                Text(engine.project(of: s)?.name ?? "Chat").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                            }
-                            Spacer()
-                            Text(BuildSessionView.relative(s.updatedAt)).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                        }
-                        .padding(.horizontal, 14).frame(height: 54).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                if live.isEmpty {
-                    Text("Nothing is running.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                }
-            }
-            .homeCard()
         }
     }
 
     @ViewBuilder private var comingUp: some View {
-        let next = (Areas.shared.contains(.agents) ? engine.agents : []).filter { $0.agent?.status?.nextRun != nil }.sorted { ($0.agent?.status?.nextRun ?? "") < ($1.agent?.status?.nextRun ?? "") }
+        let next = (Areas.shared.contains(.agents) ? engine.agents : []).filter { $0.agent?.status?.nextRun != nil && $0.agent?.status?.paused != true }.sorted { ($0.agent?.status?.nextRun ?? "") < ($1.agent?.status?.nextRun ?? "") }
         if !next.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                cardTitle("Coming up")
-                VStack(spacing: 0) {
-                    ForEach(Array(next.prefix(3).enumerated()), id: \.element.ref.id) { i, agent in
-                        if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-                        HStack(spacing: 10) {
-                            AgentAvatar(summary: agent, size: 24)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(agent.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
-                                Text("\(MainSidebar.when(agent.agent?.status?.nextRun ?? "").capitalizedFirst) · this Mac").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                            }
-                            Spacer()
-                            Button("Run now") { runNow(agent) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                        }
-                        .padding(.horizontal, 14).frame(height: 54)
-                        .contentShape(Rectangle())
-                        .onTapGesture { item = .agent(agent.ref.id) }
-                    }
-                }
-                .homeCard()
+            sectionTitle("Coming up")
+            ForEach(next.prefix(3), id: \.ref.id) { agent in
+                HomeRow(title: agent.title, meta: Self.at(agent.agent?.status?.nextRun ?? "")) { item = .agent(agent.ref.id) }
             }
         }
     }
 
-    private func runNow(_ agent: SessionSummary) {
-        Task {
-            let upcoming = await engine.agentRuns(agent.ref)?.upcoming.first { $0.kind == "schedule" }
-            _ = try? await engine.agentRunNow(agent.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
-            UserDefaults.standard.set("Activity", forKey: "agentTab")
-            item = .agent(agent.ref.id)
-        }
-    }
-
-    @ViewBuilder private var jumpBack: some View {
-        let recent = Array((engine.spaces + engine.buildSessions.filter { $0.parent == nil } + engine.threads).filter { Areas.shared.set.shows($0) }.sorted { $0.updatedAt > $1.updatedAt }.prefix(3))
-        if !recent.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                cardTitle("Jump back in")
-                HStack(spacing: 12) {
-                    ForEach(recent, id: \.ref.id) { s in
-                        Button { item = engine.item(for: s.ref.id) ?? .home } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(kind(s)).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                                Text(s.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                                Text(meta(s)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+    @ViewBuilder private var recent: some View {
+        let all = (engine.spaces + engine.buildSessions.filter { $0.parent == nil } + engine.threads).filter { Areas.shared.set.shows($0) }
+        let items = Array(all.sorted { $0.updatedAt > $1.updatedAt }.prefix(4))
+        if !items.isEmpty {
+            sectionTitle("Recent")
+            ForEach(items, id: \.ref.id) { s in
+                HomeRow(title: s.title, meta: "\(kind(s)) · \(BuildSessionView.relative(s.updatedAt))") { item = engine.item(for: s.ref.id) ?? .home }
             }
         }
     }
@@ -229,77 +100,53 @@ struct HomeView: View {
     private func kind(_ s: SessionSummary) -> String {
         switch s.ref.kind {
         case .space: "Notebook"
-        case .build: "Session · \(engine.project(of: s)?.name ?? "")"
-        default: "Chat"
+        case .build: engine.project(of: s)?.name ?? "Session"
+        default: s.debate != nil ? "Debate" : "Chat"
         }
     }
 
-    private func meta(_ s: SessionSummary) -> String {
-        let when = BuildSessionView.relative(s.updatedAt)
-        if s.ref.kind == .space { return "\(s.activeTopics.count) topics · \(when)" }
-        return when
+    /// "11h", "6d", "now".
+    static func age(_ iso: String) -> String {
+        let seconds = Date().timeIntervalSince(MainSidebar.date(iso))
+        if seconds < 60 { return "now" }
+        if seconds < 3600 { return "\(Int(seconds / 60))m" }
+        if seconds < 86_400 { return "\(Int(seconds / 3600))h" }
+        return "\(Int(seconds / 86_400))d"
+    }
+
+    /// "Tomorrow at 8:00", "Today at 21:00", "Tue at 8:00".
+    static func at(_ iso: String) -> String {
+        let when = MainSidebar.when(iso)
+        guard let space = when.firstIndex(of: " ") else { return when.capitalizedFirst }
+        let day = when[..<space], time = when[when.index(after: space)...]
+        return time.contains(":") ? "\(day.capitalized) at \(time)" : when.capitalizedFirst
     }
 }
 
-/// A compact Needs you row for Home: a dot, the title, where it comes from, and one or two inline actions.
-private struct HomeNeedsRow: View {
-    let engine: EngineController
-    let entry: NeedsYouEntry
-    @Binding var item: SidebarItem
+/// A Home row: an optional blue dot, the title, and where it's from with when, in fg3 on the right.
+private struct HomeRow: View {
+    let title: String
+    let meta: String
+    var dot = false
+    let open: () -> Void
+    @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            Circle().fill(entry.isApproval ? Color.dsAmber : Color.accentColor).frame(width: 7, height: 7)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                Text(source).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+        Button(action: open) {
+            HStack(spacing: 10) {
+                if dot { Circle().fill(Color.accentColor).frame(width: 6, height: 6) }
+                Text(title).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Spacer(minLength: 16)
+                Text(meta).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
-            Spacer(minLength: 8)
-            actions
+            .frame(height: 36)
+            .padding(.horizontal, 8)
+            .background(hovering ? Color.dsChip.opacity(0.6) : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+            .padding(.horizontal, -8)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14)
-        .frame(minHeight: 56)
-    }
-
-    private var title: String {
-        switch entry.kind {
-        case .approval: entry.inbox?.approval?.title ?? "Approval"
-        case .message: entry.inbox?.body ?? "A message for you"
-        case .runFailed: "A run failed"
-        case .budget: entry.inbox?.title ?? "Budget"
-        case .buildPrompt: buildTitle
-        }
-    }
-
-    private var buildTitle: String {
-        guard let s = entry.session, let prompt = engine.thread(s.ref).prompts.first else { return "Waiting on you" }
-        if prompt.kind == .approval, let detail = prompt.detail, !detail.isEmpty, !detail.contains("\n") { return "Run \(detail)?" }
-        return prompt.title
-    }
-
-    private var source: String {
-        let hidden = entry.hiddenArea.map { "\($0.title) · hidden" }
-        if let s = entry.session { return [s.title, engine.project(of: s)?.name, hidden].compactMap { $0 }.joined(separator: " · ") }
-        return [entry.agent?.title ?? entry.inbox?.agentName ?? "", hidden].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    @ViewBuilder private var actions: some View {
-        switch entry.kind {
-        case .approval:
-            HStack(spacing: 6) {
-                Button("Deny") { decide(false) }.buttonStyle(PillStyle(compact: true))
-                Button("Allow") { decide(true) }.buttonStyle(PillStyle(kind: .primary, compact: true))
-            }
-        case .buildPrompt:
-            Button("Answer") { if let s = entry.session { item = .session(s.ref.id) } }.buttonStyle(PillStyle(compact: true))
-        default:
-            Button("Read") { item = .needsYou }.buttonStyle(PillStyle(compact: true))
-        }
-    }
-
-    private func decide(_ approve: Bool) {
-        guard let inbox = entry.inbox, let approval = inbox.approval else { return }
-        Task { try? await engine.decide(inbox.agent, approvalId: approval.approvalId, approve: approve) }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
@@ -339,7 +186,7 @@ struct AskBox: View {
     private var placeholder: String {
         var parts: [String] = []
         if areas.contains(.chat) { parts.append("Ask anything") }
-        if areas.contains(.build) { parts.append(parts.isEmpty ? "Start a build session" : "start a build session") }
+        if areas.contains(.build) { parts.append(parts.isEmpty ? "Start a session" : "start a session") }
         if areas.contains(.agents) { parts.append(parts.isEmpty ? "Message an agent" : "message an agent") }
         return parts.count > 1 ? parts.dropLast().joined(separator: ", ") + ", or " + parts.last! + "…" : parts[0] + "…"
     }
@@ -354,14 +201,14 @@ struct AskBox: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
-            TextField(placeholder, text: $text, axis: .vertical)
+            if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
+            TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3), axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .lineLimit(1...6)
                 .focused($focused)
                 .onSubmit(send)
-            HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 Menu {
                     if areas.contains(.chat) { Button("New chat") { target = .chat } }
                     if areas.contains(.build), !engine.projects.isEmpty {
@@ -374,8 +221,10 @@ struct AskBox: View {
                             ForEach(engine.agents, id: \.ref.id) { a in Button(a.title) { target = .agent(a.ref.id) } }
                         }
                     }
-                } label: { Label("Send to: \(targetLabel)", systemImage: "arrow.turn.up.right") }
-                    .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.visible).fixedSize()
+                } label: { Text(targetLabel) }
+                    .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
+                    .help("Where this goes: a new chat, a session in a project, or an agent")
+                Spacer()
                 if target == .chat {
                     Button { showModels = true } label: { Text(modelLabel) }
                         .buttonStyle(ChipStyle())
@@ -383,22 +232,15 @@ struct AskBox: View {
                             ModelPicker(engine: engine, selected: model ?? engine.preferredModel) { m in model = m; showModels = false }
                         }
                 }
-                Spacer()
-                EmptyView()
-                Button(action: send) {
-                    Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.dsInvFg)
-                        .frame(width: 28, height: 28).background(Color.dsInv, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityLabel("Send to \(targetLabel)")
-                .keyboardShortcut(.return, modifiers: .command)
+                SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: send)
+                    .accessibilityLabel("Send to \(targetLabel)")
+                    .keyboardShortcut(.return, modifiers: .command)
             }
+            .padding(.leading, -6)
         }
-        .padding(16)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(focused ? Color.dsAccentLine : Color.dsLine, lineWidth: focused ? 1 : 0.5))
-        .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .composerBox()
         .onChange(of: text) { _, t in mention(t); saveHomeDraft() }
          .onAppear {
             if target == .chat, let first = defaultTarget, first != .chat { target = first }
@@ -483,11 +325,32 @@ struct AskBox: View {
 
 }
 
-private extension View {
-    func homeCard() -> some View {
+extension View {
+    /// The composer's box (docs/design/grey): field fill, a 0.5pt hairline, radius 16, a faint shadow.
+    func composerBox() -> some View {
         self
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.04), radius: 5, y: 2)
+    }
+}
+
+/// The 28pt round send button: grey while there's nothing to send, black once there is.
+struct SendButton: View {
+    let enabled: Bool
+    var symbol = "arrow.up"
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(enabled ? Color.dsInvFg : Color.dsFg3)
+                .frame(width: 28, height: 28)
+                .background(enabled ? Color.dsInv : Color.dsChip, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 }
 
