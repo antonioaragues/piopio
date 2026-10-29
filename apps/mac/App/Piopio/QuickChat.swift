@@ -215,7 +215,6 @@ struct QuickChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                RoundedRectangle(cornerRadius: 5).fill(Color.accentColor).frame(width: 20, height: 20).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 4 }
                 ZStack(alignment: .topLeading) {
                     if model.text.isEmpty, let question = model.lastQuestion {
                         // The question stays in the header; typing asks a follow-up.

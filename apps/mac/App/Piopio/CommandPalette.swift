@@ -2,8 +2,8 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// ⌘K (docs/design 3b): one list of actions and destinations. Actions first, then "Go to"
-/// (threads and messages). Each row shows where it belongs on the right. ⇥ switches All / Messages.
+/// ⌘K (docs/design/grey 10b): search and commands in one box. Results first (places, then messages), actions after.
+/// The right column says where each result lives, so rows need no icons or colors. ⇥ switches All / Messages.
 struct CommandPalette: View {
     enum Mode { case all, messages, models }
 
@@ -64,13 +64,12 @@ struct CommandPalette: View {
                         close(); return .handled
                     }
                 if mode != .models {
-                    Picker("Search in", selection: $searchScope) {
-                        ForEach(SearchScope.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }.labelsHidden().frame(width: 125).accessibilityLabel("Search scope")
+                    Menu {
+                        ForEach(SearchScope.allCases, id: \.self) { s in Button(s.rawValue) { searchScope = s } }
+                    } label: { Text(mode == .messages ? "Messages in \(searchScope.rawValue.lowercased())" : searchScope.rawValue) }
+                        .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
+                        .accessibilityLabel("Search scope")
                 }
-                Text(scope).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.badge))
             }
             .padding(.horizontal, 16)
             .frame(height: 52)
@@ -81,7 +80,7 @@ struct CommandPalette: View {
                         let groups = self.groups
                         let flat = groups.flatMap(\.rows)
                         ForEach(groups) { group in
-                            Text(group.id).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                            Text(group.id).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                                 .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 4)
                             ForEach(group.rows) { row in
                                 let index = flat.firstIndex { $0.id == row.id } ?? 0
@@ -101,7 +100,7 @@ struct CommandPalette: View {
                 .onChange(of: selection) { _, s in proxy.scrollTo(s) }
             }
             .frame(height: min(400, listHeight))
-            if let searchError { Text(searchError).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(10) }
+            if let searchError { Text(searchError).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(10) }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             HStack(spacing: 14) {
                 Text("↑↓ navigate"); Text("↩ run"); Text("esc close")
@@ -114,8 +113,8 @@ struct CommandPalette: View {
             .frame(height: 32)
         }
         .frame(width: 560)
-        .glassPanel(radius: 16, material: .regularMaterial)
-        .shadow(color: .black.opacity(0.18), radius: 30, y: 12)
+        .glassPanel(radius: 12)
+        .shadow(color: .black.opacity(0.08), radius: 24, y: 10)
         .onAppear {
             focused = true
             scheduleSearch(query) // a query passed in (automation)
@@ -136,17 +135,9 @@ struct CommandPalette: View {
         }
     }
 
-    private var scope: String {
-        switch mode {
-        case .all: "All"
-        case .messages: "Messages"
-        case .models: "Models"
-        }
-    }
-
     private var listHeight: CGFloat {
         let g = groups
-        return CGFloat(g.flatMap(\.rows).count) * 40 + CGFloat(g.count) * 30 + 16
+        return CGFloat(g.flatMap(\.rows).count) * 33 + CGFloat(g.count) * 30 + 16
     }
 
     // MARK: Rows
@@ -189,7 +180,7 @@ struct CommandPalette: View {
             }
             if areas.contains(.agents) { for s in engine.agents { add("a:\(s.ref.id)", s.title, "Agent", "bird", .agent) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.agent(s.ref.id).raw) } } }
             let goTo = Array(destinations.prefix(q.isEmpty ? 10 : 25))
-            return [Group(id: "Actions", rows: searchScope == .all ? actions : []), Group(id: "Go to", rows: goTo), Group(id: "Messages", rows: q.count >= 2 ? messageRows : [])].filter { !$0.rows.isEmpty }
+            return [Group(id: "Results", rows: goTo + (q.count >= 2 ? messageRows : [])), Group(id: "Actions", rows: searchScope == .all ? actions : [])].filter { !$0.rows.isEmpty }
 
         }
     }
@@ -246,20 +237,16 @@ struct CommandPalette: View {
 
     private func rowView(_ row: Row, selected: Bool) -> some View {
         HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: DS.Radius.badge)
-                .fill(selected ? Color.white.opacity(0.22) : Color.dsChip)
-                .frame(width: 22, height: 22)
-                .overlay(Image(systemName: row.icon).font(.system(size: 10.5, weight: .medium)).foregroundStyle(selected ? .white : Color.dsFg2))
             Text(rowText(row, selected: selected)).lineLimit(1)
             Spacer(minLength: 8)
             if let trailing = row.trailing {
-                Text(selected && row.id.hasPrefix("c:") ? "↩" : trailing).font(.system(size: 11.5)).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.dsFg3)
+                Text(selected && row.id.hasPrefix("c:") ? "↩" : trailing).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
         }
-        .foregroundStyle(selected ? Color.white : Color.dsFg)
+        .foregroundStyle(Color.dsFg)
         .padding(.horizontal, 10)
-        .frame(height: 38)
-        .background(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: DS.Radius.row))
+        .frame(height: 32)
+        .background(selected ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
         .contentShape(Rectangle())
     }
 
@@ -305,7 +292,7 @@ struct CommandPalette: View {
         var title = bolded(row.title)
         title.font = title.font ?? .system(size: 13)
         var detail = row.detail ?? AttributedString()
-        detail.foregroundColor = selected ? .white.opacity(0.8) : .dsFg3
+        detail.foregroundColor = .dsFg3
         for run in detail.runs where run.font == nil { detail[run.range].font = .system(size: 12) }
         return title + detail
     }

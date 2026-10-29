@@ -68,15 +68,9 @@ struct ProviderTile: View {
         case "openai-api": "API"
         default: String(provider.name.split(separator: " ").compactMap(\.first).prefix(2)).uppercased()
         }
-        let hue = Double(provider.id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) % 360 }) / 360
-        let color: Color = switch provider.id {
-        case "openrouter": Color(red: 0.39, green: 0.40, blue: 0.95)
-        case "openai", "openai-api": Color(red: 0.06, green: 0.64, blue: 0.5)
-        default: Color(hue: hue, saturation: 0.55, brightness: 0.75)
-        }
-        Text(initials).font(.system(size: initials.count > 2 ? size * 0.28 : size * 0.36, weight: .bold, design: .rounded)).foregroundStyle(.white)
+        Text(initials).font(.system(size: initials.count > 2 ? size * 0.28 : size * 0.34, weight: .semibold)).foregroundStyle(Color.dsFg2)
             .frame(width: size, height: size)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
     }
 }
 
@@ -217,10 +211,9 @@ struct EndpointTile: View {
     var body: some View {
         let words = name.split(separator: " ").map { $0.filter { $0.isLetter || $0.isNumber } }.filter { !$0.isEmpty }
         let initials = (words.count > 1 ? String(words[0].prefix(1) + words[1].prefix(1)) : String(words.first?.prefix(2) ?? "?")).uppercased()
-        let hue = Double(name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) % 360 }) / 360
-        Text(initials).font(.system(size: size * 0.36, weight: .bold, design: .rounded))
-            .foregroundStyle(Color(hue: hue, saturation: 0.6, brightness: 0.45))
+        Text(initials).font(.system(size: size * 0.34, weight: .semibold))
+            .foregroundStyle(Color.dsFg2)
             .frame(width: size, height: size)
-            .background(Color(hue: hue, saturation: 0.3, brightness: 0.95), in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
     }
 }

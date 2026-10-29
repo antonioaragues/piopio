@@ -2,8 +2,7 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The shared empty-state pattern (docs/design v2, 11a–c): a 72pt chick in a yolk ring, a title, one sentence,
-/// then real starting points.
+/// The shared empty-state pattern (docs/design/grey): a title, one sentence, then real starting points. No mascot.
 struct HatchEmpty<Content: View>: View {
     let title: String
     let message: String
@@ -12,8 +11,7 @@ struct HatchEmpty<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                Chick(size: 72, ring: 6)
-                Text(title).font(.system(size: 22, weight: .bold)).padding(.top, 20)
+                Text(title).font(.system(size: 20, weight: .bold))
                 Text(message).font(.system(size: 14)).foregroundStyle(Color.dsFg2).multilineTextAlignment(.center)
                     .frame(maxWidth: 420).padding(.top, 6)
                 content.padding(.top, 24)

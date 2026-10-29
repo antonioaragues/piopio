@@ -90,9 +90,9 @@ struct LetterTile: View {
     var color: Color
     var size: CGFloat = 34
     var body: some View {
-        Text(text).font(.system(size: size * 0.33, weight: .bold, design: .rounded)).foregroundStyle(.white)
+        Text(text).font(.system(size: size * 0.33, weight: .semibold)).foregroundStyle(Color.dsFg2)
             .frame(width: size, height: size)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
     }
 
     /// "playwright" → "PW", "@mario/pi-review" → "PR".
@@ -194,7 +194,7 @@ struct StatusText: View {
     }
 }
 
-/// The empty state of a list page: the chick with its ring, a title, one sentence, then real starting points.
+/// The empty state of a list page: a title, one sentence, then real starting points.
 struct SettingsEmpty<Content: View>: View {
     let title: String
     let message: String
@@ -202,8 +202,7 @@ struct SettingsEmpty<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Chick(size: 64, ring: 6).padding(.top, 36)
-            Text(title).font(.system(size: 22, weight: .bold)).padding(.top, 18)
+            Text(title).font(.system(size: 20, weight: .bold)).padding(.top, 40)
             Text(message).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).multilineTextAlignment(.center).frame(maxWidth: 440).padding(.top, 6)
             VStack(spacing: 10) { content }.frame(maxWidth: 460).padding(.top, 22)
         }
@@ -211,7 +210,7 @@ struct SettingsEmpty<Content: View>: View {
     }
 }
 
-/// A yolkSoft card for something found on this Mac or in another app.
+/// Something found on this Mac or in another app, in a hairline box.
 struct FoundCard<Actions: View>: View {
     let title: String
     let detail: String
@@ -228,7 +227,7 @@ struct FoundCard<Actions: View>: View {
         }
         .padding(.horizontal, 14).frame(minHeight: 56)
         .frame(maxWidth: .infinity)
-        .background(Color.dsYolkSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
     }
 }
 
@@ -248,8 +247,8 @@ struct PermissionMenu: View {
 
     static func color(_ p: ConnectorPermission) -> Color {
         switch p {
-        case .runs: .dsGreen
-        case .ask: .dsAmber
+        case .runs: .dsFg2
+        case .ask: .dsFg3
         case .off: .dsFg3
         }
     }

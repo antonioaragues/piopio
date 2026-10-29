@@ -178,8 +178,7 @@ struct ModelsPane: View {
     // m0
     private var empty: some View {
         VStack(spacing: 0) {
-            Chick(size: 64, ring: 6).padding(.top, 36)
-            Text("Connect a model to get started").font(.system(size: 22, weight: .bold)).padding(.top, 18)
+            Text("Connect a model to get started").font(.system(size: 20, weight: .bold)).padding(.top, 40)
             Text("Piopio uses your own accounts. Pick one; you can add more later.").font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).padding(.top, 6)
             VStack(spacing: 10) {
                 optionRow(tile: "OR", color: Color(red: 0.39, green: 0.40, blue: 0.95), title: "OpenRouter", badge: "Recommended", line: "One key, 300+ models from every lab", action: "Connect", primary: true) {
@@ -210,12 +209,12 @@ struct ModelsPane: View {
 
     private func optionRow(tile: String, color: Color, title: String, badge: String?, line: String, action: String, primary: Bool, yolk: Bool = false, perform: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
-            Text(tile).font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                .frame(width: 34, height: 34).background(color.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            Text(tile).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2)
+                .frame(width: 34, height: 34).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(title).font(.system(size: 14, weight: .semibold))
-                    if let badge { Text(badge).font(.system(size: 11, weight: .semibold)).foregroundStyle(primary ? Color.accentColor : Color.dsFg3) }
+                    if let badge { Text(badge).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
                 }
                 Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
@@ -223,9 +222,8 @@ struct ModelsPane: View {
             Button(action, action: perform).buttonStyle(PillStyle(kind: primary ? .primary : .secondary, compact: true))
         }
         .padding(.horizontal, 14).frame(minHeight: 60)
-        .background(yolk ? Color.dsYolkSoft : Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(primary ? Color.dsAccentLine : Color.dsLine, lineWidth: primary ? 1 : 0.5))
-        .background(primary ? RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.dsAccentSoft).padding(-4) : nil)
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
     }
 }
 

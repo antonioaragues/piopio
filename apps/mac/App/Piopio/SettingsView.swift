@@ -40,23 +40,21 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(Array(Section.groups.enumerated()), id: \.offset) { _, group in
                     if let title = group.0 {
-                        Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
-                            .padding(.horizontal, 8).padding(.top, 14).padding(.bottom, 2)
+                        Text(title).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            .padding(.horizontal, 8).padding(.top, 16).padding(.bottom, 4)
                     }
                     ForEach(group.1) { s in
                     Button { section = s } label: {
                         HStack(spacing: 10) {
-                            RoundedRectangle(cornerRadius: 5).fill(s.icon.1.gradient).frame(width: 20, height: 20)
-                                .overlay(Image(systemName: s.icon.0).font(.system(size: 10, weight: .semibold)).foregroundStyle(.white))
-                            Text(s.rawValue).font(.system(size: 13))
+                            Text(s.rawValue).font(.system(size: 13)).foregroundStyle(section == s ? Color.dsFg : Color.dsFg2)
                             // Nothing to think with yet (design m0): an amber dot on Models.
                             if s == .providers, !engine.faux, !engine.providers.isEmpty, !engine.providers.contains(where: \.isConnected) {
-                                Circle().fill(Color.dsAmber).frame(width: 6, height: 6)
+                                Circle().fill(Color.accentColor).frame(width: 6, height: 6)
                             }
                             Spacer()
                         }
                         .padding(.horizontal, 8)
-                        .frame(height: 30)
+                        .frame(height: 29)
                         .background(section == s ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
                         .contentShape(Rectangle())
                     }
@@ -360,9 +358,9 @@ private struct EnginesPane: View {
 
     @ViewBuilder private var state: some View {
         switch engine.status {
-        case .ready: StatusText(color: .dsGreen, text: "Running").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen)
+        case .ready: StatusText(color: .dsFg3, text: "Running").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
         case .starting: HStack(spacing: 5) { ProgressView().controlSize(.mini); Text("Starting…") }.font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-        case .failed: StatusText(color: .dsRed, text: "Stopped").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsRed)
+        case .failed: StatusText(color: .dsFg, text: "Stopped").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg)
         }
     }
 

@@ -63,7 +63,7 @@ struct NewDebateSheet: View {
                 Spacer()
                 if let estimate { Text("about \(estimate) at most").font(.system(size: 12)).foregroundStyle(Color.dsFg3).help("A rough estimate for a one-page draft; it stops sooner when the reviewer approves.") }
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
@@ -258,8 +258,8 @@ struct DebatePanel: View {
     private var statusColor: Color {
         switch debate.status {
         case .running: Color(nsColor: debate.turn.map(ItemRendererColors.speaker) ?? DS.fg3)
-        case .agreed: .dsGreen
-        case .noAgreement: .dsAmber
+        case .agreed: .dsFg2
+        case .noAgreement: .dsFg2
         case .stopped: .dsFg3
         }
     }
@@ -363,10 +363,9 @@ struct DebatePanel: View {
                 Text(o.severity == .blocking ? "blocking" : "minor")
                     .font(.system(size: 10.5, weight: .medium))
                     .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(o.severity == .blocking && isOpen ? Color.dsAmber.opacity(0.18) : Color.dsChip, in: Capsule())
-                    .foregroundStyle(o.severity == .blocking && isOpen ? Color.dsAmber : Color.dsFg3)
+                    .foregroundStyle(o.severity == .blocking && isOpen ? Color.dsFg : Color.dsFg3)
                 Spacer()
-                Text(o.status.rawValue).font(.system(size: 11)).foregroundStyle(o.status == .resolved ? Color.dsGreen : Color.dsFg3)
+                Text(o.status.rawValue).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
             }
             Text(o.text).font(.system(size: 12.5)).foregroundStyle(isOpen ? Color.dsFg : Color.dsFg3).fixedSize(horizontal: false, vertical: true)
             if let pushback = o.pushback, isOpen {

@@ -33,8 +33,9 @@ public enum DS {
     public static let delbg = dynamic(rgb(0xFAEEEC), rgb(0x3A2624))
 
     // MARK: Debate speakers (docs/spec/16-debate): the author and the reviewer
-    public static let debateAuthor = dynamic(rgb(0x6E56CF), rgb(0xA08CF0))
-    public static let debateReviewer = dynamic(rgb(0x1A8F82), rgb(0x4CC7B6))
+    // Grey ink: the speakers are told apart by name, not color.
+    public static let debateAuthor = fg2
+    public static let debateReviewer = fg2
 
     // MARK: Brand: the grey design has no brand color; kept neutral for old call sites
     public static let yolk = fg3

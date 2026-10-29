@@ -99,7 +99,7 @@ struct BuildInspector: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: todo.status == .done ? "checkmark.circle.fill" : todo.status == .inProgress ? "circle.dotted.circle" : "circle")
                         .font(.system(size: 11))
-                        .foregroundStyle(todo.status == .done ? Color.dsGreen : todo.status == .inProgress ? Color.accentColor : Color.dsFg3)
+                        .foregroundStyle(todo.status == .inProgress ? Color.dsFg : Color.dsFg3)
                     Text(todo.text).font(.system(size: 12.5)).foregroundStyle(todo.status == .done ? Color.dsFg3 : Color.dsFg)
                         .strikethrough(todo.status == .done, color: Color.dsFg3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -145,10 +145,10 @@ struct BuildInspector: View {
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color.dsLine)
                         let fraction = min(1, (context.tokens ?? 0) / max(1, context.window))
-                        Capsule().fill(fraction > 0.85 ? Color.dsRed : fraction > 0.6 ? Color.dsAmber : Color.accentColor).frame(width: max(3, geo.size.width * fraction))
+                        Capsule().fill(Color.dsFg2).frame(width: max(3, geo.size.width * fraction))
                     }
                 }
-                .frame(height: 4)
+                .frame(height: 3)
             }
             HStack {
                 Text("This session").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
@@ -270,9 +270,9 @@ extension FileChange.Status {
 
     var color: Color {
         switch self {
-        case .added: .dsGreen
-        case .modified: .dsAmber
-        case .deleted: .dsRed
+        case .added: .dsFg3
+        case .modified: .dsFg3
+        case .deleted: .dsFg3
         }
     }
 
@@ -325,7 +325,7 @@ struct RestoreSheet: View {
             } else {
                 ProgressView().controlSize(.small)
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
@@ -384,15 +384,19 @@ struct DiffReview: View {
                         ForEach(files) { file in
                             Button { selected = file.path } label: {
                                 HStack(spacing: 6) {
-                                    Text(file.status.letter).font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(file.status.color).frame(width: 12)
-                                    Text(file.path).font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.head)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(URL(fileURLWithPath: file.path).lastPathComponent).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Color.dsFg).lineLimit(1)
+                                        let dir = URL(fileURLWithPath: file.path).deletingLastPathComponent().relativePath
+                                        if dir != "." && !dir.isEmpty { Text(dir).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.head) }
+                                    }
                                     Spacer(minLength: 4)
-                                    Text("+\(file.added)").foregroundStyle(Color.dsGreen)
-                                    Text("−\(file.removed)").foregroundStyle(Color.dsRed)
+                                    if file.added > 0 { Text("+\(file.added)").foregroundStyle(Color.dsGreen) }
+                                    if file.removed > 0 { Text("−\(file.removed)").foregroundStyle(Color.dsRed) }
                                 }
-                                .font(.system(size: 11).monospacedDigit())
+                                .font(.system(size: 11.5).monospacedDigit())
                                 .padding(.horizontal, 8)
-                                .frame(height: 26)
+                                .frame(minHeight: 40)
+                                .help(file.path)
                                 .background(selected == file.path ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
                                 .contentShape(Rectangle())
                             }
@@ -410,13 +414,9 @@ struct DiffReview: View {
                 HStack(spacing: 8) {
                     Text(selected ?? "").font(.system(size: 13, weight: .semibold, design: .monospaced)).lineLimit(1).truncationMode(.head)
                     Spacer()
-                    Picker("", selection: $split) {
-                        Text("Unified").tag(false)
-                        Text("Split").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
+                    Button(split ? "Split" : "Unified") { split.toggle() }
+                        .buttonStyle(ChipStyle())
+                        .help(split ? "Show one column" : "Show old and new side by side")
                     if let first = session.checkpoints.first {
                         Button("Restore checkpoint…") { session.restoring = since == .turn ? session.checkpoints.last ?? first : first }
                             .buttonStyle(PillStyle(kind: .toolbar))
@@ -424,7 +424,7 @@ struct DiffReview: View {
                     Button("Done") { close() }.buttonStyle(PillStyle(kind: .strong)).keyboardShortcut(.cancelAction)
                 }
                 .padding(.horizontal, 16)
-                .frame(height: 48)
+                .frame(height: Shell.barHeight)
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
                 GeometryReader { viewport in
                 ScrollView([.vertical, .horizontal]) {
@@ -502,20 +502,25 @@ struct DiffReview: View {
         .background(row.map { background($0.kind) } ?? Color.clear)
     }
 
-    /// Inline comment (BR3): sends a follow-up that quotes the line.
+    /// Inline comment (BR3, docs/design/grey 10d): a small box under the line; it sends a follow-up that quotes it.
     private var commentBox: some View {
-        HStack(spacing: 8) {
-            TextField("Ask the agent about this line, or request a change", text: $comment)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12.5))
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Ask about this line, or ask for a change", text: $comment)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
                 .onSubmit { sendComment() }
-            Button("Ask agent ↩") { sendComment() }.buttonStyle(PillStyle(kind: .primary)).disabled(comment.trimmingCharacters(in: .whitespaces).isEmpty)
-            Button("Cancel") { commentLine = nil }.buttonStyle(PillStyle())
+            HStack(spacing: 12) {
+                Text("Sent as a follow-up with this line").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                Spacer()
+                Button("Cancel") { commentLine = nil }.buttonStyle(PillStyle(compact: true))
+                Button("Send ↩") { sendComment() }.buttonStyle(PillStyle(kind: .primary, compact: true)).disabled(comment.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
         }
-        .padding(.leading, 110)
-        .padding(.trailing, 16)
+        .font(.system(size: 13))
+        .askCard()
+        .frame(maxWidth: 560, alignment: .leading)
+        .padding(.leading, 88)
         .padding(.vertical, 8)
-        .background(Color.dsAccentSoft)
     }
 
     private func sendComment() {
