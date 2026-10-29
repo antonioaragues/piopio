@@ -1,5 +1,7 @@
 # Handoff: Piopio for macOS
 
+> **The current visual direction is [`grey/`](grey/README.md)** (grey ink, hairlines, one black action per view). What the app implements is in [`grey/IMPLEMENTATION.md`](grey/IMPLEMENTATION.md). v2 below still describes product behavior.
+>
 > **v2 supersedes the shell described here.** The current design is in [`v2/`](v2/README.md): one sidebar instead of the Build · Chat · Agents switcher, Home and Needs you, Notebooks, the agent page, Settings › Models and the empty states. What is implemented is listed in [`v2/IMPLEMENTATION.md`](v2/IMPLEMENTATION.md). The screens below still describe the parts v2 doesn't redraw (Build review, terminal, PRs, cloud targets, channels).
 
 ## Overview
