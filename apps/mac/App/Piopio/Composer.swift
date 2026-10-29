@@ -208,8 +208,8 @@ struct Composer: View {
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         if thread.ref.kind == .space, let space = engine.space(thread.ref.id) {
-            if let id = thread.ref.conversationId { return "Message \(space.topics?.first { $0.id == id }?.title ?? "this topic") directly" }
-            return "Message \(space.title): the organizer picks the topic (@topic to choose)"
+            if let id = thread.ref.conversationId { return "Message \(space.topics?.first { $0.id == id }?.title ?? "this topic")…" }
+            return "Message \(space.title)…"
         }
         if thread.document.lastItem != nil { return "Reply…" }
         if isBuild, engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.profile == .chat { return "Ask about these files, @mention one, or search the web…" }

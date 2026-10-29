@@ -154,47 +154,35 @@ struct NewAgentSheet: View {
 
 // MARK: Agent page
 
+/// An agent (docs/design/grey 13a): one conversation, and an info panel like a contact card (what it does, when, what
+/// it can do, where it reaches you, what it remembers, what it costs). Its runs and full setup open from the panel in
+/// place of the conversation, with a breadcrumb back.
 struct AgentPage: View {
     let engine: EngineController
     let summary: SessionSummary
     @Binding var selection: String?
     @AppStorage("agentTab") private var tab: Tab = .chat
-    /// Whose conversation the Chat tab shows: the owner's (nil), a contact's (`person:<id>`), another agent's (`agent:<id>`).
+    @AppStorage("agentInfo") private var showInfo = true
+    /// Whose conversation shows: the owner's (nil), a contact's (`person:<id>`), another agent's (`agent:<id>`).
     @State private var conversation: String?
     @State private var people: [AgentPerson] = []
     @State private var runs: AgentRunsResult?
     @State private var def: AgentDef?
+    @State private var instructions = ""
 
-    /// docs/design v2 (7c): Chat · Activity · Setup. Conversations moved into the "with …" picker, Runs became
-    /// Activity, Memory moved into Setup.
+    /// What the main area shows: the conversation, or the runs or the setup opened from the info panel.
     enum Tab: String, CaseIterable { case chat = "Chat", activity = "Activity", setup = "Setup" }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            HStack(spacing: 20) {
-                ForEach(Tab.allCases, id: \.self) { t in
-                    Button { tab = t } label: {
-                        VStack(spacing: 6) {
-                            Text(t.rawValue).font(.system(size: 13, weight: tab == t ? .semibold : .regular)).foregroundStyle(tab == t ? Color.dsFg : Color.dsFg2)
-                            Rectangle().fill(tab == t ? Color.accentColor : .clear).frame(height: 2)
-                        }
-                        .fixedSize()
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 28)
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            AgentAvailability(engine: engine, summary: summary, hasMacTools: !(def?.tools.apple ?? []).isEmpty)
             switch tab {
             case .chat:
                 GeometryReader { proxy in
                     HStack(spacing: 0) {
                         chat
-                        if proxy.size.width >= 850 {
-                            AgentSideCard(engine: engine, summary: summary, def: def, runs: runs, tab: $tab)
+                        if showInfo && proxy.size.width >= 760 {
+                            AgentInfoPanel(engine: engine, summary: summary, def: def, instructions: instructions, runs: runs, tab: $tab) { await load() }
                                 .frame(width: 300).sidePanel()
                         }
                     }
@@ -217,7 +205,10 @@ struct AgentPage: View {
     private func load() async {
         people = await engine.agentPeople(summary.ref)
         runs = await engine.agentRuns(summary.ref)
-        if let got = await engine.agentDefinition(summary.ref) { def = AgentDef(got.definition) }
+        if let got = await engine.agentDefinition(summary.ref) {
+            def = AgentDef(got.definition)
+            instructions = got.instructions
+        }
     }
 
     @ViewBuilder private var chat: some View {
@@ -231,43 +222,50 @@ struct AgentPage: View {
         }
     }
 
+    /// "Daily briefing  Next run tomorrow at 8:00", then Run now and the info toggle. In Activity or Setup the title is
+    /// a breadcrumb back to the conversation.
     private var header: some View {
-        HStack(spacing: 12) {
-            AgentAvatar(summary: summary, size: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(summary.title).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.dsFg)
-                HStack(spacing: 5) {
-                    let paused = summary.agent?.status?.paused == true
-                    Circle().fill(paused ? Color.dsFg3 : Color.dsGreen).frame(width: 6, height: 6)
-                    Text(statusLine).accessibilityLabel(statusLine).font(.system(size: 12)).foregroundStyle(paused ? Color.dsAmber : Color.dsFg3)
+        PageHeader {
+            if tab == .chat {
+                PageTitle(name: summary.title, subtitle: statusLine)
+            } else {
+                HStack(spacing: 6) {
+                    Button(summary.title) { tab = .chat }.buttonStyle(.plain).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2)
+                    Text("/").font(.system(size: 13.5)).foregroundStyle(Color.dsFg3)
+                    Text(tab == .activity ? "Activity" : "Setup").font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
                 }
             }
-            Spacer()
+        } actions: {
             if summary.agent?.invalid == true {
-                Text("Setup has errors").font(.system(size: 11.5)).foregroundStyle(Color.dsRed)
+                Button("Setup has errors") { tab = .setup }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
             }
-            if tab == .chat { personPicker }
-            Button("Run now") { runNow() }.buttonStyle(PillStyle(kind: .toolbar))
-            Menu {
-                if let status = summary.agent?.status {
-                    Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
-                }
-                Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
-            } label: { Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)) }
-                .menuStyle(.button).buttonStyle(PillStyle(kind: .toolbar)).menuIndicator(.hidden).fixedSize()
+            if tab == .chat && people.count > 1 { personPicker }
+            if tab == .chat {
+                Button("Run now") { runNow() }.buttonStyle(PillStyle(kind: .toolbar))
+                Menu {
+                    if let status = summary.agent?.status {
+                        Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
+                    }
+                    Button("Activity") { tab = .activity }
+                    Button("Full Setup") { tab = .setup }
+                    Divider()
+                    Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
+                } label: { Image(systemName: "ellipsis") }
+                    .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
+                Button { withAnimation(.easeOut(duration: 0.15)) { showInfo.toggle() } } label: { Image(systemName: "info.circle") }
+                    .buttonStyle(IconButtonStyle(on: showInfo))
+                    .help(showInfo ? "Hide the info panel" : "What it does, when, and what it can do")
+            } else {
+                Button("Back to the conversation") { tab = .chat }.buttonStyle(PillStyle(kind: .toolbar))
+            }
         }
-        .padding(.leading, 28)
-        .padding(.trailing, 16)
-        .frame(height: 64)
-        .contentShape(Rectangle())
-        .gesture(WindowDragGesture())
     }
 
-    /// "This Mac · every day 7:00", "This Mac · paused".
+    /// "Next run tomorrow at 8:00", "Paused".
     private var statusLine: String {
-        if summary.agent?.status?.paused == true { return "This Mac · paused" }
-        if let next = summary.agent?.status?.nextRun { return "This Mac · next \(MainSidebar.when(next))" }
-        return "This Mac · no next run scheduled"
+        if summary.agent?.status?.paused == true { return "Paused" }
+        if let next = summary.agent?.status?.nextRun { return "Next run \(HomeView.at(next).prefix(1).lowercased() + HomeView.at(next).dropFirst())" }
+        return ""
     }
 
     private var personPicker: some View {
@@ -285,7 +283,7 @@ struct AgentPage: View {
         } label: {
             Text(current.map { $0.role == "owner" ? "with \($0.name) (you)" : "with \($0.name)" } ?? "with \(ownerName) (you)")
         }
-        .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.visible).fixedSize()
+        .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
         .help("Whose conversation to show (contacts' are simulated here until channels arrive)")
     }
 
@@ -293,110 +291,153 @@ struct AgentPage: View {
         Task {
             let upcoming = runs?.upcoming.first { $0.kind == "schedule" }
             _ = try? await engine.agentRunNow(summary.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
-            tab = .activity
+            await load()
         }
     }
 }
 
-/// The agent's overview beside its chat (7c): next and last run, what to teach it, what it can do, what it costs.
-private struct AgentSideCard: View {
+/// The info panel (docs/design/grey 13a), like a contact card: Does, When, Can (switches), Reaches you in, Remembers,
+/// Activity, and a footer with the model, where it runs and what it cost this month.
+private struct AgentInfoPanel: View {
     let engine: EngineController
     let summary: SessionSummary
     let def: AgentDef?
+    let instructions: String
     let runs: AgentRunsResult?
     @Binding var tab: AgentPage.Tab
-    @State private var knowsYou = false
+    let reload: () async -> Void
+    @State private var facts: [MemoryRecordInfo] = []
+    @State private var saving = false
+    @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Next run").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
-                Text(summary.agent?.status?.nextRun.map { MainSidebar.when($0).capitalizedFirst } ?? "Nothing scheduled")
-                    .font(.system(size: 22, weight: .bold)).tracking(-0.3)
-                if let last = runs?.runs.first {
-                    Text("Last: \(MainSidebar.when(last.firedAt)) · \(last.status == "done" ? "✓" : last.status)").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg)
+                        if let line = def?.description ?? summary.agent?.description, !line.isEmpty {
+                            Text(line).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    section("Does", action: ("Edit", { tab = .setup })) {
+                        Text(does).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineSpacing(2).lineLimit(6).fixedSize(horizontal: false, vertical: true)
+                    }
+                    section("When", action: ("Change", { tab = .setup })) {
+                        let schedules = def?.schedules ?? []
+                        if schedules.isEmpty {
+                            Text("Only when you write to it").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                        }
+                        ForEach(schedules) { s in Text(CronText.describe(s.cron)).font(.system(size: 13)).foregroundStyle(Color.dsFg) }
+                    }
+                    section("Can") {
+                        ability("Search the web", ["web_search", "web_fetch"])
+                        ability("Remember things", ["memory"])
+                        ability("Message you", ["send_message"])
+                        ability("Set reminders", ["schedule"])
+                        if !(def?.tools.apple ?? []).isEmpty {
+                            row("Use Mac apps") { Text("\(def?.tools.apple?.count ?? 0)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+                        }
+                    }
+                    section("Reaches you in") {
+                        row("Piopio") { Text("On").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+                    }
+                    if !facts.isEmpty {
+                        section("Remembers", action: ("See all", { tab = .setup })) {
+                            ForEach(facts.prefix(3)) { f in Text(f.text).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(2) }
+                        }
+                    }
+                    if let last = runs?.runs.first {
+                        section("Activity", action: ("See all", { tab = .activity })) {
+                            Text("Last run \(BuildSessionView.relative(last.firedAt)) · \(last.status == "done" ? (last.sent > 0 ? "sent \(last.sent)" : "nothing sent") : last.status)")
+                                .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                        }
+                    }
+                    if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                 }
+                .padding(20)
             }
-            if !checklist.allSatisfy(\.done) { teach }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            VStack(spacing: 9) {
-                fact("Can", can)
-                fact("Reaches you via", "Piopio")
-                fact("Model", engine.model(modelRef(def?.models.default ?? summary.agent?.model)).map(ModelChip.short) ?? def?.models.default ?? "—")
-                fact("This month", month)
-            }
-            Spacer()
-            Button { tab = .setup } label: {
-                HStack(spacing: 3) { Text("Edit in Setup"); Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)) }
-                    .font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(18)
-        .task(id: summary.updatedAt) { await checkMemory() }
-    }
-
-    private struct Item { let title: String; let done: Bool; let action: String; let run: () -> Void }
-
-    /// Three things that make an agent useful: something about you, a schedule, a Mac app.
-    private var checklist: [Item] {
-        [
-            Item(title: "Tell it about you", done: knowsYou, action: "Tell") {
-                engine.thread(summary.ref).draft = "A few things about me: "
-            },
-            Item(title: "Give it a schedule", done: !(def?.schedules ?? []).isEmpty, action: "Add") { tab = .setup },
-            Item(title: "Connect a Mac app", done: !(def?.tools.apple ?? []).isEmpty, action: "Allow") { tab = .setup },
-        ]
-    }
-
-    private var teach: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Chick(size: 24)
-                Text("Teach it \(checklist.count) things").font(.system(size: 13, weight: .semibold))
-                Text("\(checklist.filter(\.done).count) / \(checklist.count)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-            }
-            ForEach(checklist, id: \.title) { item in
-                HStack(spacing: 8) {
-                    Image(systemName: item.done ? "checkmark.circle.fill" : "circle").font(.system(size: 13)).foregroundStyle(item.done ? Color.dsGreen : Color.dsFg3)
-                    Text(item.title).font(.system(size: 13)).strikethrough(item.done).foregroundStyle(item.done ? Color.dsFg3 : Color.dsFg)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(model + " · This Mac").font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(1)
                     Spacer()
-                    if !item.done { Button(item.action, action: item.run).buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor) }
+                    Text(month).font(.system(size: 12)).foregroundStyle(Color.dsFg3).monospacedDigit()
                 }
+                AgentAvailability(engine: engine, summary: summary, hasMacTools: !(def?.tools.apple ?? []).isEmpty)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 14)
+        }
+        .task(id: summary.updatedAt) { await loadFacts() }
+    }
+
+    private func section<Content: View>(_ title: String, action: (String, () -> Void)? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                SectionLabel(title)
+                Spacer()
+                if let action { Button(action.0, action: action.1).buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
+            }
+            content()
+        }
+    }
+
+    private func row<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack {
+            Text(title).font(.system(size: 13)).foregroundStyle(Color.dsFg)
+            Spacer()
+            trailing()
+        }
+        .frame(minHeight: 22)
+    }
+
+    /// A switch for built-in tools; it saves the agent's definition (a commit in its history).
+    private func ability(_ title: String, _ tools: [String]) -> some View {
+        let on = !(def?.tools.builtin ?? []).filter(tools.contains).isEmpty
+        return row(title) {
+            Toggle("", isOn: Binding(get: { on }, set: { set(tools, $0, title) }))
+                .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(Color.dsInv).disabled(def == nil || saving)
+        }
+    }
+
+    private func set(_ tools: [String], _ on: Bool, _ title: String) {
+        guard var d = def else { return }
+        var builtin = d.tools.builtin.filter { !tools.contains($0) }
+        if on { builtin += tools }
+        d.tools.builtin = builtin
+        saving = true
+        error = nil
+        Task {
+            defer { saving = false }
+            do {
+                _ = try await engine.saveAgent(summary.ref, definition: d.json, instructions: instructions, message: "\(on ? "Allow" : "Stop"): \(title.lowercased())")
+                await reload()
+            } catch {
+                self.error = (error as? EngineError)?.message ?? String(describing: error)
             }
         }
-        .padding(12)
-        .background(Color.dsYolkSoft, in: RoundedRectangle(cornerRadius: DS.Radius.card))
     }
 
-    private func fact(_ key: String, _ value: String) -> some View {
-        HStack(alignment: .top) {
-            Text(key).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-            Spacer(minLength: 10)
-            Text(value).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).multilineTextAlignment(.trailing)
-        }
+    /// The instructions' first paragraph, without Markdown headings.
+    private var does: String {
+        let paragraphs = instructions.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let first = paragraphs.first { !$0.isEmpty && !$0.hasPrefix("#") } ?? ""
+        return first.isEmpty ? "No instructions yet." : first.replacingOccurrences(of: "\n", with: " ")
     }
 
-    private var can: String {
-        let tools = def?.tools.builtin ?? []
-        var parts: [String] = []
-        if tools.contains("web_search") || tools.contains("web_fetch") { parts.append("Web") }
-        if tools.contains("memory") { parts.append("memory") }
-        if tools.contains("send_message") { parts.append("message you") }
-        if tools.contains("schedule") { parts.append("reminders") }
-        if !(def?.tools.apple ?? []).isEmpty { parts.append("Mac apps") }
-        return parts.isEmpty ? "Just chat" : parts.joined(separator: " · ")
+    private var model: String {
+        engine.model(modelRef(def?.models.default ?? summary.agent?.model)).map(ModelChip.short) ?? def?.models.default ?? "No model"
     }
 
     private var month: String {
-        guard let s = summary.agent?.status else { return "—" }
+        guard let s = summary.agent?.status else { return "" }
         let spent = s.spendUsd < 0.01 && s.spendUsd > 0 ? String(format: "$%.4f", s.spendUsd) : String(format: "$%.2f", s.spendUsd)
-        return s.budgetUsd.map { "\(spent) of \(MainSidebar.money($0))" } ?? spent
+        return (s.budgetUsd.map { "\(spent) of \(MainSidebar.money($0))" } ?? spent) + " this month"
     }
 
-    private func checkMemory() async {
+    private func loadFacts() async {
         guard let memory = await engine.agentMemory(summary.ref), let owner = memory.partitions.first(where: { $0.id == "owner" }) else { return }
-        knowsYou = await engine.memoryList(provider: memory.provider, bank: owner.bank)?.records.contains { $0.kind != "message" } ?? false
+        facts = (await engine.memoryList(provider: memory.provider, bank: owner.bank)?.records ?? []).filter { $0.kind != "message" }
     }
 }
 
@@ -423,13 +464,11 @@ struct AgentChat: View {
             VStack(spacing: 6) {
                 if let simulated {
                     Text("Simulator: you are writing as \(simulated). The agent treats it as their message.")
-                        .font(.system(size: 11.5)).foregroundStyle(Color.dsAmber)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Color.dsChip, in: Capsule())
+                        .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
                 Composer(engine: engine, thread: thread)
-                    .frame(maxWidth: 636)
-                    .padding(.horizontal, 24)
+                    .frame(maxWidth: 680)
+                    .padding(.horizontal, 40)
                     .padding(.bottom, 20)
             }
         }

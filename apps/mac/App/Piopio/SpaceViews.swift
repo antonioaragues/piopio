@@ -729,31 +729,31 @@ struct SpaceView: View {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 22) {
-                    tab("Main", selected: topicId == nil, dot: nil) { selection = space.ref.id }
+                    tab("Main", selected: topicId == nil) { selection = space.ref.id }
                     ForEach(topics) { t in
-                        tab(t.title, selected: topicId == t.id, dot: t.running == true ? .accentColor : t.unread == true ? .accentColor : nil) { selection = space.ref(topic: t.id).key }
+                        tab(t.title, selected: topicId == t.id, running: t.running == true, unread: t.unread == true) { selection = space.ref(topic: t.id).key }
                             .contextMenu { TopicMenu(engine: engine, space: space, topic: t, selection: $selection) }
                     }
                     Button { newTopic() } label: {
-                        Text("+ Topic").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.bottom, 8)
+                        Image(systemName: "plus").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.bottom, 8)
                     }
                     .buttonStyle(.plain)
                     .help("Start a topic yourself")
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 20)
             }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
         }
     }
 
-    private func tab(_ title: String, selected: Bool, dot: Color?, action: @escaping () -> Void) -> some View {
+    private func tab(_ title: String, selected: Bool, running: Bool = false, unread: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 HStack(spacing: 5) {
                     Text(title).font(.system(size: 13, weight: selected ? .semibold : .regular)).foregroundStyle(selected ? Color.dsFg : Color.dsFg2).lineLimit(1)
-                    if let dot { Circle().fill(dot).frame(width: 6, height: 6) }
+                    if running { RunningRing(size: 9) } else if unread { Circle().fill(Color.accentColor).frame(width: 6, height: 6) }
                 }
-                Rectangle().fill(selected ? Color.accentColor : .clear).frame(height: 2)
+                Rectangle().fill(selected ? Color.dsFg : .clear).frame(height: 1.5)
             }
             .fixedSize()
             .contentShape(Rectangle())
@@ -794,77 +794,55 @@ struct SpaceInspector: View {
     @State private var memoryText = ""
 
     private var topics: [TopicInfo] { space.activeTopics }
-    /// A topic is settled when it has answered and nothing new waits to be read.
-    private func settled(_ t: TopicInfo) -> Bool { t.running != true && t.unread != true && t.summary != nil }
 
+    /// docs/design/grey 13e: Topics (each with a grey status line), then Remembers. Plain rows, no boxes.
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Progress").font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    if !topics.isEmpty {
-                        Text("\(topics.filter(settled).count) of \(topics.count) settled").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    }
-                }
-                if !topics.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(topics) { t in
-                            Capsule().fill(settled(t) ? Color.dsGreen : t.running == true || t.unread == true ? Color.dsAmber : Color.dsLine).frame(height: 4)
-                        }
-                    }
-                }
-                ForEach(Array(topics.enumerated()), id: \.element.id) { i, topic in
+            VStack(alignment: .leading, spacing: 4) {
+                SectionLabel("Topics").padding(.bottom, 6)
+                ForEach(topics) { topic in
                     let selected = selection == space.ref(topic: topic.id).key
                     Button { selection = space.ref(topic: topic.id).key } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text("\(i + 1) · \(topic.title)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                                Spacer()
-                                Text(state(topic)).font(.system(size: 11.5, weight: .medium)).foregroundStyle(topic.unread == true ? Color.dsAmber : Color.dsFg3)
-                            }
-                            if let line = topic.summary ?? topic.brief {
-                                Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(2)
-                            }
+                            Text(topic.title).font(.system(size: 13, weight: selected ? .semibold : .regular)).foregroundStyle(Color.dsFg).lineLimit(1)
+                            Text(statusLine(topic)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                         }
-                        .padding(10)
-                        .background(selected ? Color.dsCard : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(selected ? Color.dsLine : .clear, lineWidth: 0.5))
+                        .padding(.horizontal, 8).padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(selected ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .padding(.horizontal, -8)
                 }
                 if topics.isEmpty {
-                    Text("Write in Main: the organizer starts topics as subjects come up.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    Text("Write in Main: the organizer starts topics as subjects come up.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
                 }
                 if space.space?.memory != false {
-                    Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.vertical, 6)
-                    HStack {
-                        Text("Memory").font(.system(size: 13, weight: .semibold))
-                        Spacer()
-                        Button("Open") { showMemory = true }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
-                    }
                     let facts = Self.preview(memoryText)
-                    if facts.isEmpty { Text("Nothing remembered yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                    HStack {
+                        SectionLabel("Remembers")
+                        Spacer()
+                        Button(facts.isEmpty ? "Open" : "See all") { showMemory = true }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    }
+                    .padding(.top, 20).padding(.bottom, 4)
+                    if facts.isEmpty { Text("Nothing yet").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
                     ForEach(Array(facts.enumerated()), id: \.offset) { _, f in
-                        HStack(alignment: .top) {
-                            Text(f.0).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                            Spacer(minLength: 8)
-                            Text(f.1).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg).multilineTextAlignment(.trailing).lineLimit(2)
-                        }
+                        Text(f.1.isEmpty ? f.0 : "\(f.0) \(f.1)").font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(2).padding(.vertical, 3)
                     }
                 }
             }
-            .padding(14)
+            .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: space.space?.memoryLines) { memoryText = (await engine.memory(of: space.ref))?.text ?? "" }
     }
 
-    private func state(_ t: TopicInfo) -> String {
-        if t.running == true { return "Working" }
+    /// "Working…", "New reply", or what it's about.
+    private func statusLine(_ t: TopicInfo) -> String {
+        if t.running == true { return "Working…" }
         if t.unread == true { return "New reply" }
-        return t.summary == nil ? "Waiting" : "Settled"
+        return t.summary ?? t.brief ?? "Not started"
     }
 
     /// The first few facts as key/value pairs ("Size · 4 × 3 m"): a "Label: value" fact, or its first words.

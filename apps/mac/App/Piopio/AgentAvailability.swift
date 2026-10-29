@@ -1,7 +1,8 @@
 import PiopioKit
 import SwiftUI
 
-/// Availability describes what can actually run, including the difference between window close and quit.
+/// Availability describes what can actually run, including the difference between window close and quit. It sits in
+/// the agent's info panel footer as a grey line that opens to the details.
 struct AgentAvailability: View {
     let engine: EngineController
     let summary: SessionSummary
@@ -18,13 +19,11 @@ struct AgentAvailability: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button { expanded.toggle() } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: ready && !paused ? "desktopcomputer" : "pause.circle")
-                    Text(line).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 4)
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(line).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.system(size: 8, weight: .semibold))
                 }
-                .font(.system(size: 12)).foregroundStyle(ready && !paused ? Color.dsFg2 : Color.dsAmber)
+                .font(.system(size: 11.5)).foregroundStyle(ready && !paused ? Color.dsFg3 : Color.dsFg2)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel(line + ". Availability details").accessibilityValue(expanded ? "Expanded" : "Collapsed")
             if expanded {
@@ -37,9 +36,7 @@ struct AgentAvailability: View {
                 }.buttonStyle(.link)
             }
         }
-        .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-        .padding(.horizontal, 24).padding(.vertical, 10)
+        .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.dsChip)
     }
 }
