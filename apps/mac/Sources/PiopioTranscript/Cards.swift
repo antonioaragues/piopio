@@ -287,7 +287,7 @@ public final class DisclosureCard: @unchecked Sendable {
     static let lineHeight: CGFloat = 28
     static let nestedSpacing: CGFloat = 6
 
-    static let collapsedHeight: CGFloat = 34
+    static let collapsedHeight: CGFloat = 26
     static let diffRowHeight: CGFloat = 17
     static let previewLines = 12
 
@@ -409,7 +409,7 @@ struct DisclosureCardView: View {
             Button(action: toggle) {
                 HStack(spacing: 5) {
                     if card.working {
-                        ProgressView().controlSize(.mini).scaleEffect(0.85).frame(width: 12)
+                        RunningRing()
                     } else if card.waiting {
                         Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6)
                     }
@@ -448,10 +448,12 @@ struct DisclosureCardView: View {
                         }
                     }
                 case .text(let text), .terminal(let text):
+                    // A thought: a thin rule on the left, in grey.
                     ScrollView {
-                        Text(text).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: DS.fg2)).textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 12).padding(.vertical, 6)
+                        Text(text).font(.system(size: 13)).lineSpacing(2).foregroundStyle(Color(nsColor: DS.fg2)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14).padding(.vertical, 4)
                     }
+                    .overlay(alignment: .leading) { Rectangle().fill(Color(nsColor: DS.line)).frame(width: 1.5) }
                 case .diff, .plan: EmptyView()
                 }
             }
@@ -463,17 +465,13 @@ struct DisclosureCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: toggle) {
                 HStack(spacing: 8) {
-                    Image(systemName: card.expanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Color(nsColor: DS.fg3))
-                        .frame(width: 10)
-                    if card.failed { Circle().fill(Color(nsColor: DS.fg3)).frame(width: 6, height: 6) }
+                    if card.working { RunningRing() }
                     if card.waiting { Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6) }
-                    Text(card.title).font(.system(size: 12, weight: .medium)).foregroundStyle(Color(nsColor: DS.fg))
+                    Text(card.title).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: card.failed ? DS.fg : DS.fg3)).fixedSize()
                     if !card.detail.isEmpty {
                         Text(card.detail)
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(Color(nsColor: DS.fg3))
+                            .foregroundStyle(Color(nsColor: DS.fg2))
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
@@ -489,26 +487,28 @@ struct DisclosureCardView: View {
                             .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(Color.accentColor)
                     }
+                    if !card.isEmpty {
+                        Image(systemName: card.expanded ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
+                    }
                 }
-                .padding(.horizontal, 12)
                 .frame(height: DisclosureCard.collapsedHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             if card.expanded && !card.isEmpty {
-                Rectangle().fill(Color(nsColor: DS.line)).frame(height: 0.5)
-                switch card.content {
-                case .diff: diff
-                case .terminal(let text): scrolling(text, terminal: true)
-                case .text(let text): scrolling(text, terminal: false)
-                case .cards, .plan: EmptyView()
+                Group {
+                    switch card.content {
+                    case .diff: diff
+                    case .terminal(let text): scrolling(text, terminal: true)
+                    case .text(let text): scrolling(text, terminal: false)
+                    case .cards, .plan: EmptyView()
+                    }
                 }
+                .background(Color(nsColor: DS.bubble), in: RoundedRectangle(cornerRadius: DS.Radius.code))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.code))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: DS.card), in: RoundedRectangle(cornerRadius: DS.Radius.card))
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color(nsColor: DS.line), lineWidth: 0.5))
     }
 
     private func scrolling(_ text: String, terminal: Bool) -> some View {
@@ -567,5 +567,24 @@ struct DisclosureCardView: View {
         case .removed: Color(nsColor: DS.delbg)
         default: .clear
         }
+    }
+}
+
+/// The running mark (docs/design/grey): a 10pt grey ring with a turning gap.
+public struct RunningRing: View {
+    var size: CGFloat
+    @State private var turning = false
+
+    public init(size: CGFloat = 10) { self.size = size }
+
+    public var body: some View {
+        Circle()
+            .trim(from: 0.12, to: 1)
+            .stroke(Color(nsColor: DS.fg3), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+            .frame(width: size - 1.4, height: size - 1.4)
+            .rotationEffect(.degrees(turning ? 360 : 0))
+            .frame(width: size, height: size)
+            .onAppear { withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { turning = true } }
+            .accessibilityLabel("Running")
     }
 }

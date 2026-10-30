@@ -90,6 +90,8 @@ struct SettingsView: View {
         }
         .frame(width: 820, height: 560)
         .background(Color.dsWin)
+        .toolbar(removing: .title)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .onAppear(perform: openRequested)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in openRequested() }
         .onReceive(NotificationCenter.default.publisher(for: .settingsSection)) { note in
@@ -122,8 +124,7 @@ struct ListCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 0) { content }
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            .settingsRows()
     }
 }
 
@@ -288,8 +289,8 @@ private struct EnginesPane: View {
             CardTitle("This Mac")
             ListCard {
                 HStack(spacing: 12) {
-                    Image(systemName: "cpu").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 34, height: 34).background(Color.green.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    Image(systemName: "cpu").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg2)
+                        .frame(width: 34, height: 34).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
                             Text("Local engine").font(.system(size: 14, weight: .semibold))
@@ -336,8 +337,8 @@ private struct EnginesPane: View {
             CardTitle("Cloud").padding(.top, 22)
             ListCard {
                 HStack(spacing: 12) {
-                    Image(systemName: "cloud.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 34, height: 34).background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    Image(systemName: "cloud.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg2)
+                        .frame(width: 34, height: 34).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Cloudflare").font(.system(size: 14, weight: .semibold))
                         Text("Runs agents 24/7 in your own account, even when your Mac sleeps").font(.system(size: 12)).foregroundStyle(Color.dsFg3)

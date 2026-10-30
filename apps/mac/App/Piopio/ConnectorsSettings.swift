@@ -121,8 +121,7 @@ struct ConnectorsPane: View {
                     Button("Connect") { adding = .connect(c.id) }.buttonStyle(PillStyle(kind: c.id == engine.connectors.first?.id ? .primary : .secondary, compact: true))
                 }
                 .padding(.horizontal, 14).frame(minHeight: 60)
-                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                .settingsRows()
             }
             if engine.connectors.isEmpty {
                 FinePrint(engine.client == nil ? "The engine isn't running." : "Loading…")
@@ -142,7 +141,7 @@ private struct ConnectorAccountRow: View {
     let open: () -> Void
 
     var body: some View {
-        SettingsListRow(name: connector.name, dot: account.problem == nil ? .dsGreen : .dsAmber, highlighted: highlighted, open: open) {
+        SettingsListRow(name: connector.name, dot: account.problem == nil ? .dsFg3 : .dsAmber, highlighted: highlighted, open: open) {
             ConnectorTile(id: connector.id, size: 34)
         } subtitle: {
             if account.problem != nil {
@@ -181,7 +180,7 @@ struct ConnectorDetailView: View {
             if let problem = account.problem {
                 StatusText(color: .dsAmber, text: problem)
             } else {
-                StatusText(color: .dsGreen, text: (["Connected as \(account.label)"] + (calendars.isEmpty ? [] : ["\(calendars.count) calendar\(calendars.count == 1 ? "" : "s")"])).joined(separator: " · "))
+                StatusText(color: .dsFg3, text: (["Connected as \(account.label)"] + (calendars.isEmpty ? [] : ["\(calendars.count) calendar\(calendars.count == 1 ? "" : "s")"])).joined(separator: " · "))
             }
         } actions: {
             Button(account.problem == nil ? "Switch account" : "Sign in again") {
@@ -449,7 +448,7 @@ struct AddConnectorSheet: View {
             tile(name: c.name, line: ConnectorCatalog.line(c)) {
                 ConnectorTile(id: c.id, size: 28)
             } badge: {
-                if !c.accounts.isEmpty { Label("Connected", systemImage: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsGreen) }
+                if !c.accounts.isEmpty { Label("Connected", systemImage: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg3) }
             }
         }
         .buttonStyle(.plain)
@@ -472,8 +471,7 @@ struct AddConnectorSheet: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+        .settingsRows()
         .contentShape(Rectangle())
     }
 }
@@ -544,7 +542,7 @@ private struct ConnectStep: View {
                 .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
         } else if let login {
             if let error = login.error {
-                Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 12.5)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true)
+                Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
             } else if !login.finished {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -579,9 +577,9 @@ struct ConnectorTile: View {
         case "outlook": ("envelope.fill", Color(red: 0.0, green: 0.47, blue: 0.83))
         default: ("app.connected.to.app.below.fill", Color.gray)
         }
-        Image(systemName: symbol).font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)
+        Image(systemName: symbol).font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(Color.dsFg2)
             .frame(width: size, height: size)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
     }
 }
 
@@ -609,7 +607,7 @@ private struct ConnectorSetupSheet: View {
                     SecureField("Stored in the macOS Keychain", text: $secret).textFieldStyle(.roundedBorder)
                 }
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
@@ -646,9 +644,9 @@ private struct ConnectorSignInSheet: View {
             }
             if login.finished {
                 if let error = login.error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true)
+                    Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Label("Connected.", systemImage: "checkmark.circle.fill").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsGreen)
+                    Label("Connected.", systemImage: "checkmark.circle.fill").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg3)
                 }
             } else {
                 HStack(spacing: 8) {

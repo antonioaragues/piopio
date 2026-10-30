@@ -191,7 +191,7 @@ struct MemoryPane: View {
                     Divider()
                     Button("Everything…") { erasing = EraseTarget(bank: "*", label: "everything", records: all.reduce(0) { $0 + $1.records }) }
                 } label: {
-                    Text("Erase…").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsRed)
+                    Text("Erase…").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg2)
                 }
                 .menuStyle(.button).buttonStyle(ChipStyle()).fixedSize()
                 .disabled(all.isEmpty)
@@ -270,9 +270,9 @@ struct MemoryTile: View {
     var color: Color
     var size: CGFloat = 34
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.26, style: .continuous).fill(color.gradient)
+        RoundedRectangle(cornerRadius: size * 0.26, style: .continuous).fill(Color.dsChip)
             .frame(width: size, height: size)
-            .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(.white))
+            .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(Color.dsFg2))
     }
 }
 

@@ -21,7 +21,7 @@ struct DataPane: View {
                     if busy { ProgressView().controlSize(.small) }
                 }.disabled(busy || engine.isMaintaining)
                 if let message { Text(message).foregroundStyle(Color.dsFg2).textSelection(.enabled) }
-                if let failure { Text(failure).foregroundStyle(Color.dsRed).textSelection(.enabled) }
+                if let failure { Text(failure).foregroundStyle(Color.dsFg2).textSelection(.enabled) }
                 if let result { Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([result]) }.buttonStyle(.link) }
             }
             .font(.system(size: 12)).padding(16)

@@ -76,10 +76,8 @@ struct NeedsYouView: View {
                     Spacer()
                     HStack(spacing: 2) {
                         ForEach(Filter.allCases, id: \.self) { f in
-                            if f == .all || !entries(f).isEmpty || filter == f {
-                                Button(f.rawValue) { filter = f }.buttonStyle(SelectorStyle(active: filter == f))
-                                    .font(.system(size: 12.5)).foregroundStyle(filter == f ? Color.dsFg : Color.dsFg2)
-                            }
+                            Button(f.rawValue) { filter = f }.buttonStyle(SelectorStyle(active: filter == f))
+                                .font(.system(size: 12.5)).foregroundStyle(filter == f ? Color.dsFg : Color.dsFg2)
                         }
                     }
                     .padding(.top, 6)
@@ -162,35 +160,60 @@ struct NeedsYouCard: View {
                             .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
                     }
                 }
-                content.padding(.leading, 16)
-                if entry.kind == .message { replyField.padding(.leading, 16) } else { actions.padding(.leading, 16) }
+                if entry.kind == .approval {
+                    approvalCard.padding(.leading, 16)
+                } else {
+                    content.padding(.leading, 16)
+                    if entry.kind == .message { replyField.padding(.leading, 16) } else { actions.padding(.leading, 16) }
+                }
                 if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.leading, 16) }
             }
             .disabled(busy)
         }
     }
 
-    @ViewBuilder private var content: some View {
-        switch entry.kind {
-        case .approval:
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.inbox?.approval?.title ?? "Asks before doing something").font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
-                if let body = entry.inbox?.body, !body.isEmpty { Text(body).font(.system(size: 13.5)).foregroundStyle(Color.dsFg) }
+    /// The same card as in a conversation (11c).
+    private var approvalCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+                let title = entry.inbox?.approval?.title ?? "Allow this"
+                Text(title.hasSuffix("?") ? title : title + "?").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
             }
-        default:
-            Text(entry.inbox?.body ?? entry.inbox?.title ?? "").font(.system(size: 13.5)).foregroundStyle(Color.dsFg)
-                .lineSpacing(3).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            if let body = entry.inbox?.body, !body.isEmpty {
+                Text(body).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 14) {
+                Button("Deny") { decide(false) }.buttonStyle(PillStyle(compact: true))
+                Spacer()
+                Button("Allow") { decide(true) }.buttonStyle(PillStyle(kind: .primary, compact: true))
+            }
         }
+        .askCard()
+    }
+
+    private var content: some View {
+        Text(entry.inbox?.body ?? entry.inbox?.title ?? "").font(.system(size: 13.5)).foregroundStyle(Color.dsFg)
+            .lineSpacing(3).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
     }
 
     @ViewBuilder private var actions: some View {
         HStack(spacing: 14) {
             switch entry.kind {
             case .approval:
-                Button("Allow") { decide(true) }.buttonStyle(PillStyle(kind: .primary, compact: true))
-                Button("Deny") { decide(false) }.buttonStyle(PillStyle(compact: true))
+                EmptyView()
             case .runFailed:
-                Button("Run again") { runAgain() }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                // The one black button is the one that fixes it.
+                if engine.needsKey {
+                    Button("Set up a provider") {
+                        UserDefaults.standard.set("Models", forKey: "settingsSection")
+                        WindowOpener.shared.openSettings?()
+                    }
+                    .buttonStyle(PillStyle(kind: .primary, compact: true))
+                    Button("Run again") { runAgain() }.buttonStyle(PillStyle(compact: true))
+                } else {
+                    Button("Run again") { runAgain() }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                }
                 Button("Open run") { open(); markRead() }.buttonStyle(PillStyle(compact: true))
                 Button("Dismiss") { markRead() }.buttonStyle(PillStyle(compact: true))
             case .budget:
@@ -207,7 +230,7 @@ struct NeedsYouCard: View {
     /// The reply field; its send button appears once you type.
     private var replyField: some View {
         HStack(spacing: 8) {
-            TextField("Reply to \(NeedsYouText.source(entry, engine: engine))…", text: $reply).textFieldStyle(.plain).font(.system(size: 13)).onSubmit(send)
+            TextField("", text: $reply, prompt: Text("Reply to \(NeedsYouText.source(entry, engine: engine))…").foregroundStyle(Color.dsFg3)).textFieldStyle(.plain).font(.system(size: 13)).onSubmit(send)
             if !reply.trimmingCharacters(in: .whitespaces).isEmpty {
                 SendButton(enabled: true, action: send).scaleEffect(0.85)
             } else {

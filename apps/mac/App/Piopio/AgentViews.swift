@@ -100,7 +100,7 @@ struct NewAgentSheet: View {
                 AvatarPicker(avatar: $avatar)
                 TextField("Name", text: $name).textFieldStyle(.roundedBorder)
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
@@ -533,7 +533,7 @@ struct AgentRunsView: View {
 
     private var runBar: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if let error { Text(error).font(.system(size: 11.5)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 11.5)).foregroundStyle(Color.dsFg2) }
             HStack {
                 TextField("Run a prompt now", text: $prompt).textFieldStyle(.roundedBorder).onSubmit { runNow(prompt: prompt) }
                 Button("Run") { runNow(prompt: prompt) }.buttonStyle(PillStyle(compact: true)).disabled(prompt.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -607,7 +607,7 @@ struct AgentRunsView: View {
                 }
                 Text(r.summary ?? (r.status == "running" ? "Running…" : r.prompt)).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(2)
                 HStack(spacing: 6) {
-                    Circle().fill(r.status == "done" ? Color.dsGreen : r.status == "failed" ? Color.dsRed : Color.dsAmber).frame(width: 6, height: 6)
+                    Circle().fill(r.status == "done" ? Color.dsFg3 : r.status == "failed" ? Color.dsFg2 : Color.dsAmber).frame(width: 6, height: 6)
                     Text([r.status == "done" ? (r.sent > 0 ? "Sent \(r.sent)" : "Nothing sent") : r.status == "failed" ? "Failed" : "Running", r.costUsd.map { $0 < 0.01 ? String(format: "$%.4f", $0) : String(format: "$%.2f", $0) }].compactMap { $0 }.joined(separator: " · "))
                         .font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                 }

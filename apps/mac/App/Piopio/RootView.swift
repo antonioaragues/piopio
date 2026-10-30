@@ -335,7 +335,7 @@ struct EngineBanner: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Circle().fill(Color.dsRed).frame(width: 7, height: 7)
+            Circle().fill(Color.dsFg2).frame(width: 7, height: 7)
             Text("**Local engine stopped unexpectedly.** Your threads are saved; reconnecting brings them back.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.dsFg)
@@ -345,8 +345,8 @@ struct EngineBanner: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.dsRed.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsRed.opacity(0.35), lineWidth: 0.5))
+        .background(Color.dsFg2.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsFg2.opacity(0.35), lineWidth: 0.5))
         .padding(.horizontal, 16)
         .padding(.top, 12)
     }

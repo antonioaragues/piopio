@@ -121,14 +121,11 @@ struct GitMenu: View {
                 Text("Not a git repository")
             }
         } label: {
+            // The branch is in the subtitle; here only the icon and what's waiting to sync.
             HStack(spacing: 5) {
-                Image(systemName: summary.worktree != nil ? "square.split.2x1" : "arrow.triangle.branch").font(.system(size: 10, weight: .medium)).foregroundStyle(Color.dsFg3)
-                Text(git.status?.branch ?? (git.status?.detached == true ? "detached" : "no git")).font(.system(size: 12, design: .monospaced)).lineLimit(1)
-                if let s = git.status, s.ahead > 0 { Text("↑\(s.ahead)").font(.system(size: 11)).foregroundStyle(Color.dsFg2) }
-                if let s = git.status, s.behind > 0 { Text("↓\(s.behind)").font(.system(size: 11)).foregroundStyle(Color.dsFg2) }
-                if git.changedCount > 0 {
-                    Text("\(git.changedCount)").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Color.dsAmber).help("\(git.changedCount) uncommitted \(git.changedCount == 1 ? "change" : "changes")")
-                }
+                Image(systemName: summary.worktree != nil ? "square.split.2x1" : "arrow.triangle.branch").font(.system(size: 13))
+                if let s = git.status, s.ahead > 0 { Text("↑\(s.ahead)").font(.system(size: 11.5)) }
+                if let s = git.status, s.behind > 0 { Text("↓\(s.behind)").font(.system(size: 11.5)) }
                 if git.busy != nil { ProgressView().controlSize(.mini) }
             }
         }
@@ -234,7 +231,7 @@ struct CommitSheet: View {
                 Toggle("Amend last commit", isOn: $amend).toggleStyle(.checkbox).font(.system(size: 12))
                 Spacer()
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
@@ -280,9 +277,9 @@ struct CommitSheet: View {
 
     private func color(_ s: GitFile.Status) -> Color {
         switch s {
-        case .added, .untracked: .dsGreen
+        case .added, .untracked: .dsFg3
         case .modified, .renamed: .dsAmber
-        case .deleted, .conflicted: .dsRed
+        case .deleted, .conflicted: .dsFg2
         }
     }
 }
@@ -366,7 +363,7 @@ struct NewSessionSheet: View {
                 if project.piConfig { chip(".pi config", "gearshape") }
                 if !project.rules.isEmpty { chip("\(project.rules.count) approval \(project.rules.count == 1 ? "rule" : "rules")", "checkmark.shield") }
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)

@@ -10,6 +10,16 @@ struct PendingAttachment: Identifiable, Hashable {
     let name: String
     let attachment: Attachment
     var isImage: Bool { if case .image = attachment { true } else { false } }
+    /// An image's preview, for its tile.
+    var thumbnail: NSImage? {
+        guard case .image(_, _, let data) = attachment, let bytes = Data(base64Encoded: data) else { return nil }
+        return NSImage(data: bytes)
+    }
+    /// "PDF", "TXT": what kind of file it is.
+    var kindLabel: String {
+        let ext = (name as NSString).pathExtension
+        return ext.isEmpty ? "File" : ext.uppercased()
+    }
 }
 
 /// Turns files and pasted images into attachments: images downscaled to JPEG, PDFs and text files as text.

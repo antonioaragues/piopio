@@ -80,9 +80,9 @@ struct BuildSessionView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                header
+                if !reviewing { header }
                 if let notice = git?.notice {
-                    Text(notice.text).font(.system(size: 12)).foregroundStyle(notice.failed ? Color.dsRed : Color.dsFg2)
+                    Text(notice.text).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                         .lineLimit(2).padding(.horizontal, 24).padding(.bottom, 6).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if let worktree = summary.worktree, let finished = worktree.finished {
@@ -98,7 +98,7 @@ struct BuildSessionView: View {
                         .padding(.horizontal, 24).padding(.bottom, 8)
                 }
                 if reviewing {
-                    DiffReview(session: session, selected: reviewFile) { reviewing = false }
+                    DiffReview(session: session, title: summary.title, selected: reviewFile, commit: !chatLens && git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil) { reviewing = false }
                 } else {
                     conversation
                 }
@@ -118,15 +118,9 @@ struct BuildSessionView: View {
             }
             if showInspector && !reviewing {
                 VStack(spacing: 0) {
-                    do {
-                        Picker("", selection: $inspectorTab) {
-                            ForEach(ChatInspectorTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .padding(.horizontal, 12)
-                        .padding(.top, 12)
-                    }
+                    NeutralSegmented(selection: $inspectorTab, options: ChatInspectorTab.allCases.map { (value: $0, title: $0.rawValue) })
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
                     if inspectorTab == .files, let cwd = summary.cwd {
                         FileBrowser(engine: engine, cwd: cwd, selected: $previewing, mention: { path in
                             let current = session.draft ?? ""
@@ -475,10 +469,9 @@ struct PromptStack: View {
     let session: ThreadModel
 
     var body: some View {
-        VStack(spacing: 8) {
-            ForEach(Array(session.prompts.enumerated()), id: \.element.id) { index, prompt in
-                PromptCard(session: session, prompt: prompt, primary: index == 0)
-            }
+        // One at a time; more waiting show as steps ("1 of 2").
+        if let prompt = session.prompts.first {
+            PromptCard(session: session, prompt: prompt, primary: true, step: session.prompts.count > 1 ? "1 of \(session.prompts.count)" : nil).id(prompt.id)
         }
     }
 }
@@ -488,6 +481,7 @@ struct PromptCard: View {
     let prompt: PendingPrompt
     /// The first card answers ⌘↩.
     let primary: Bool
+    var step: String?
     @State private var denying = false
     @State private var text = ""
     @FocusState private var focused: Bool
@@ -532,18 +526,38 @@ struct PromptCard: View {
                 Circle().fill(Color.accentColor).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
                 Text(heading).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                if let tool = prompt.tool { Text(tool).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
+                if let step { Text(step).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                else if let counts = diffCounts { DiffCounts(added: counts.added, removed: counts.removed) }
+                else if let tool = prompt.tool { Text(tool).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
             }
             if let message = prompt.message {
                 Text(message).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
             }
             if let detail = prompt.detail, !detail.isEmpty {
-                ScrollView {
-                    Text(detail).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Color.dsFg).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if diffCounts != nil {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(detail.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                                Text(line.isEmpty ? " " : line).font(.system(size: 12.5, design: .monospaced))
+                                    .foregroundStyle(line.hasPrefix("-") ? Color.dsFg2 : Color.dsFg)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 16).padding(.vertical, 1)
+                                    .background(line.hasPrefix("+") ? Color(nsColor: DS.addbg) : line.hasPrefix("-") ? Color(nsColor: DS.delbg) : .clear)
+                            }
+                        }
+                        .textSelection(.enabled)
+                    }
+                    .frame(maxHeight: 180)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, -16)
+                } else {
+                    ScrollView {
+                        Text(detail).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Color.dsFg).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 120)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxHeight: 120)
-                .fixedSize(horizontal: false, vertical: true)
             }
             if let reason = prompt.reason {
                 Text("Always asks: \(reason.prefix(1).lowercased() + reason.dropFirst())").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
@@ -551,6 +565,13 @@ struct PromptCard: View {
             actions
         }
         .askCard()
+    }
+
+    /// An edit's detail is a patch: how many lines it adds and removes.
+    private var diffCounts: (added: Int, removed: Int)? {
+        guard prompt.kind == .approval, let lines = prompt.detail?.components(separatedBy: "\n") else { return nil }
+        let added = lines.filter { $0.hasPrefix("+") && !$0.hasPrefix("+++") }.count, removed = lines.filter { $0.hasPrefix("-") && !$0.hasPrefix("---") }.count
+        return added + removed > 0 && lines.count > 1 ? (added, removed) : nil
     }
 
     /// The title phrased as a question: "Run this command?", "Edit codec.ts?", or what the agent asks.
@@ -612,17 +633,19 @@ struct PromptCard: View {
         }
     }
 
-    /// The options as numbered rows, then "Something else…" to answer in your own words.
+    /// The options as numbered rows (the number keys pick them while the composer is empty), then "Something else…",
+    /// and Skip for the agent to go on without an answer.
     @ViewBuilder private var choiceActions: some View {
+        let options = prompt.options ?? []
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array((prompt.options ?? []).enumerated()), id: \.offset) { i, option in
+            ForEach(Array(options.enumerated()), id: \.offset) { i, option in
                 Button { answer(PromptResponse(choice: option)) } label: { OptionRow(number: i + 1, text: option) }
                     .buttonStyle(.plain)
             }
             if prompt.kind == .question {
                 HStack(spacing: 10) {
-                    if let count = prompt.options?.count, count > 0 { KeyBadge(text: "\(count + 1)") }
-                    TextField(prompt.options?.isEmpty == false ? "Something else…" : "Your answer", text: $text)
+                    if !options.isEmpty { KeyBadge(text: "\(options.count + 1)") }
+                    TextField(options.isEmpty ? "Your answer" : "Something else…", text: $text)
                         .textFieldStyle(.plain).font(.system(size: 13.5)).onSubmit { send() }
                     if note != nil { Button("Send") { send() }.buttonStyle(PillStyle(kind: .primary, compact: true)) }
                 }
@@ -630,6 +653,14 @@ struct PromptCard: View {
             }
         }
         .padding(.horizontal, -6)
+        if prompt.kind == .question {
+            HStack(spacing: 12) {
+                Button("Skip") { answer(PromptResponse(text: "Skipped")) }.buttonStyle(PillStyle(compact: true))
+                if options.count > 1 { Text("1–\(options.count) to pick").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                Spacer()
+            }
+            .padding(.horizontal, -4)
+        }
     }
 
     private func freeAnswer(placeholder: String) -> some View {
@@ -662,6 +693,19 @@ struct PromptCard: View {
         case .tool: "Always allow \(rule.pattern)"
         case .path: "Allow edits in \(URL(fileURLWithPath: String(rule.pattern.dropLast(3))).lastPathComponent)"
         }
+    }
+}
+
+/// "+2 −1" for a patch.
+struct DiffCounts: View {
+    let added: Int
+    let removed: Int
+    var body: some View {
+        HStack(spacing: 6) {
+            if added > 0 { Text("+\(added)").foregroundStyle(Color.dsGreen) }
+            if removed > 0 { Text("−\(removed)").foregroundStyle(Color.dsRed) }
+        }
+        .font(.system(size: 12, design: .monospaced))
     }
 }
 

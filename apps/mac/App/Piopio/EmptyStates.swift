@@ -185,7 +185,7 @@ struct AgentsFirstRun: View {
                 HStack(alignment: .top, spacing: 10) {
                     ForEach(featured) { t in card(t) }
                 }
-                if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+                if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                 Button("Start from scratch…") { NotificationCenter.default.post(name: .newAgent, object: nil) }
                     .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.accentColor)
             }

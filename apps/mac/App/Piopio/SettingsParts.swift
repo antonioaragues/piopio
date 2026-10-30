@@ -5,7 +5,7 @@ import SwiftUI
 // Extensions, This Mac & cloud", after Models): a header with a one-line summary and one add button, cards that show
 // only what you have, rows that push a detail page, adding in a sheet, editing on the detail page.
 
-/// Title (24 bold), one line of facts (13.5 fg2), and the page's actions top-right.
+/// Title (20 bold), one line of facts (13.5 fg2), and the page's actions top-right.
 struct SettingsHeader<Actions: View>: View {
     let title: String
     let summary: String
@@ -14,8 +14,8 @@ struct SettingsHeader<Actions: View>: View {
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 24, weight: .bold)).tracking(-0.4)
-                Text(summary).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2)
+                Text(title).font(.system(size: 20, weight: .bold)).tracking(-0.3)
+                Text(summary).font(.system(size: 13)).foregroundStyle(Color.dsFg2)
             }
             Spacer()
             HStack(spacing: 8) { actions }
@@ -33,8 +33,8 @@ struct AddButton: View {
     let title: String
     let action: () -> Void
     var body: some View {
-        Button(action: action) { Label(title, systemImage: "plus").font(.system(size: 12.5, weight: .semibold)) }
-            .buttonStyle(PillStyle(kind: .strong))
+        Button(action: action) { Text(title).font(.system(size: 13)).foregroundStyle(Color.accentColor) }
+            .buttonStyle(.plain)
     }
 }
 
@@ -78,9 +78,7 @@ struct SettingsBadge: View {
     var tint: Color?
     init(_ text: String, tint: Color? = nil) { self.text = text; self.tint = tint }
     var body: some View {
-        Text(text).font(.system(size: 11, weight: .medium)).foregroundStyle(tint ?? Color.dsFg2)
-            .padding(.horizontal, 8).frame(height: 20)
-            .background(tint.map { $0.opacity(0.14) } ?? Color.dsChip, in: Capsule())
+        Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
     }
 }
 
@@ -120,16 +118,16 @@ struct SettingsListRow<Tile: View, Subtitle: View, Trailing: View>: View {
                 tile
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-                        if let dot { Circle().fill(dot).frame(width: 6, height: 6) }
+                        Text(name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        if dot != nil { Circle().strokeBorder(Color.dsFg3, lineWidth: 1).frame(width: 6, height: 6) }
                     }
                     subtitle.font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
                 Spacer(minLength: 12)
                 trailing
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
             }
-            .padding(.horizontal, 14).frame(minHeight: 62)
+            .padding(.horizontal, 14).frame(minHeight: 50)
             .background(highlighted ? Color.dsAccentSoft : .clear)
             .contentShape(Rectangle())
         }
@@ -158,7 +156,7 @@ struct SettingsDetail<Tile: View, Status: View, Actions: View, Content: View>: V
             HStack(spacing: 14) {
                 tile
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 22, weight: .bold)).lineLimit(1)
+                    Text(title).font(.system(size: 20, weight: .bold)).lineLimit(1)
                     status.font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
                 }
                 Spacer()
@@ -187,10 +185,7 @@ struct StatusText: View {
     let color: Color
     let text: String
     var body: some View {
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 6, height: 6)
-            Text(text)
-        }
+        Text(text)
     }
 }
 

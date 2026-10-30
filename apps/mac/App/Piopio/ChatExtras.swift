@@ -99,8 +99,7 @@ struct ThreadPicker: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(height: 120)
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            .settingsRows()
             Text("Each becomes a topic with its whole conversation; the threads move into the Notebook.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
         }
     }
@@ -197,7 +196,7 @@ struct AboutMeEditor: View {
                 }
                 .padding(.horizontal, 14).frame(minHeight: 46)
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.top, 8) }
             FinePrint("Never shared with Build sessions.").padding(.top, 10)
         }
         .task {
@@ -253,7 +252,7 @@ struct AboutMeEditor: View {
                 Spacer(minLength: 8)
                 if hovered == fact.line {
                     Button("Edit") { draft = fact.raw; editing = fact.line }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                    Button("Forget") { forget(fact) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsRed)
+                    Button("Forget") { forget(fact) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                 } else {
                     Text(source(fact)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
@@ -403,8 +402,7 @@ private struct AboutMeHistorySheet: View {
                         if i < min(revisions.count, 100) - 1 { RowDivider(inset: 14) }
                     }
                 }
-                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                .settingsRows()
             }
             .frame(height: 360)
             HStack { Spacer(); Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction) }

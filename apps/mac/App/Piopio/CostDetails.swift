@@ -22,7 +22,7 @@ struct CostDetails: View {
                 if extra.unknownCalls > 0 { Text("Cost unavailable for \(extra.unknownCalls) request(s). They are excluded from these amounts.").foregroundStyle(Color.dsAmber) }
                 if thread != nil { Text("Additional requests cover this whole chat, notebook or agent, including its branches and topics. Utility work without a conversation belongs to Piopio's app total.") }
                 else { Text("Additional requests across Piopio since tracking began. Conversation model estimates are shown in each conversation.") }
-            } else if let error { Text(error).foregroundStyle(Color.dsRed) }
+            } else if let error { Text(error).foregroundStyle(Color.dsFg2) }
             else { ProgressView().controlSize(.small) }
             Divider()
             Text("Provider billing is authoritative. OpenRouter key totals can include other apps and exclude other providers. Missing or subscription pricing is not a promise of zero cost.")

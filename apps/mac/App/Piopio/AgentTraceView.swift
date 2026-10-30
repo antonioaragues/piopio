@@ -20,7 +20,7 @@ struct TraceSheet: View {
                 Spacer()
                 if let trace { Text(String(format: "$%.4f in all", trace.costUsd)).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(rows, id: \.hop.id) { row in hop(row.hop, depth: row.depth) }
@@ -59,7 +59,7 @@ struct TraceSheet: View {
     private func hop(_ h: AgentTrace.Hop, depth: Int) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Circle().fill(h.status == "failed" ? Color.dsRed : h.status == "waiting" ? Color.accentColor : h.status == "no_reply" ? Color.dsAmber : Color.dsGreen).frame(width: 6, height: 6)
+                Circle().fill(h.status == "failed" ? Color.dsFg2 : h.status == "waiting" ? Color.accentColor : h.status == "no_reply" ? Color.dsAmber : Color.dsFg3).frame(width: 6, height: 6)
                 Text("\(h.from.name) → \(h.to.name)").font(.system(size: 12.5, weight: .semibold))
                 Text("\(h.mode) · hop \(h.hop)").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                 Spacer()
@@ -68,7 +68,7 @@ struct TraceSheet: View {
             }
             Text(h.text).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(3).textSelection(.enabled)
             if let reply = h.reply { Text("↳ \(reply)").font(.system(size: 12)).foregroundStyle(Color.dsFg).lineLimit(3).textSelection(.enabled) }
-            if let error = h.error { Text(error).font(.system(size: 11.5)).foregroundStyle(Color.dsRed) }
+            if let error = h.error { Text(error).font(.system(size: 11.5)).foregroundStyle(Color.dsFg2) }
         }
         .padding(10)
         .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))

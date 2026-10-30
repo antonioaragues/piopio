@@ -44,6 +44,10 @@ public enum TranscriptAction: Equatable, Sendable {
     /// A debate's result card: copy its final draft, or add rounds (docs/spec/16-debate).
     case copyDraft(itemId: String)
     case continueDebate
+    /// Copies a code block.
+    case copyText(String)
+    /// Stopped · continue: asks the model to carry on.
+    case continueAnswer
     public enum PlanAnswer: String, Sendable { case approve, edit, revise }
 
     static let scheme = "piopio-action"
@@ -78,6 +82,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case .remember(let text): c.host = "remember"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         case .copyDraft(let id): c.host = "copy-draft"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .continueDebate: c.host = "continue-debate"
+        case .copyText(let text): c.host = "copy-text"; c.queryItems = [URLQueryItem(name: "text", value: text)]
+        case .continueAnswer: c.host = "continue-answer"
         }
         return c.url!
     }
@@ -112,6 +118,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case "remember": guard let text = q("text") else { return nil }; self = .remember(text: text)
         case "copy-draft": guard let id = q("item") else { return nil }; self = .copyDraft(itemId: id)
         case "continue-debate": self = .continueDebate
+        case "copy-text": guard let text = q("text") else { return nil }; self = .copyText(text)
+        case "continue-answer": self = .continueAnswer
         default: return nil
         }
     }

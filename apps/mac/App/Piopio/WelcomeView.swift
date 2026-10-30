@@ -361,7 +361,7 @@ private struct WelcomeModelStep: View {
 
     private var connectedCard: some View {
         HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundStyle(Color.dsGreen)
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundStyle(Color.dsFg3)
             VStack(alignment: .leading, spacing: 2) {
                 Text(connectedNames.isEmpty ? "Connected" : "Connected to \(ListFormatter.localizedString(byJoining: connectedNames))").font(.system(size: 14, weight: .semibold))
                 Text("\(engine.models.count) models available").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
@@ -370,7 +370,7 @@ private struct WelcomeModelStep: View {
         }
         .padding(.horizontal, 16).frame(minHeight: 62)
         .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsGreen.opacity(0.45), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsFg3.opacity(0.45), lineWidth: 1))
         .frame(maxWidth: 520)
         .transition(.scale(scale: 0.97).combined(with: .opacity))
     }
@@ -379,9 +379,9 @@ private struct WelcomeModelStep: View {
     private func keyCard(primary: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Text("OR").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                Text("OR").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(Color.dsFg2)
                     .frame(width: 34, height: 34)
-                    .background(Color(red: 0.39, green: 0.40, blue: 0.95).gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("OpenRouter").font(.system(size: 14, weight: .semibold))
@@ -393,8 +393,8 @@ private struct WelcomeModelStep: View {
                 switch check {
                 case .idle: EmptyView()
                 case .checking: ProgressView().controlSize(.mini)
-                case .verified(let n): Text(n.map { "✓ Verified · \($0) models" } ?? "✓ Verified").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen)
-                case .failed(let m): Text(m).font(.system(size: 12)).foregroundStyle(Color.dsRed).lineLimit(1)
+                case .verified(let n): Text(n.map { "✓ Verified · \($0) models" } ?? "✓ Verified").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg3)
+                case .failed(let m): Text(m).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(1)
                 }
             }
             HStack(spacing: 8) {
@@ -513,7 +513,7 @@ private struct WelcomeSetupStep: View {
                 if areas.contains(.build) { card(.build, "A project to work on", status: setup.project.map { _ in "Added" }) { buildContent } }
                 if areas.contains(.chat) { card(.chat, "A little about you", status: nil) { chatContent } }
                 if areas.contains(.agents) { card(.agents, "Your first agent", status: setup.hatched.map { _ in "Hatched" }) { agentsContent } }
-                if let error = setup.error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+                if let error = setup.error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             }
             .padding(.leading, chickIndent)
         }
@@ -531,7 +531,7 @@ private struct WelcomeSetupStep: View {
                 Text(title).font(.system(size: 14, weight: .semibold))
                 Spacer()
                 if let status {
-                    Label(status, systemImage: "checkmark.circle.fill").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen)
+                    Label(status, systemImage: "checkmark.circle.fill").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg3)
                 } else {
                     Text("Optional").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
@@ -722,7 +722,7 @@ private struct WelcomeReadyStep: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(done, id: \.self) { line in
                             Label { Text(line).font(.system(size: 13)).foregroundStyle(Color.dsFg) } icon: {
-                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.dsGreen)
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.dsFg3)
                             }
                         }
                         if !connected {

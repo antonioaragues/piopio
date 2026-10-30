@@ -77,9 +77,8 @@ struct OpenMenu: View {
             }
         } label: {
             HStack(spacing: 6) {
-                AppIcon(bundleId: target).frame(width: 15, height: 15)
-                Text("Open").font(.system(size: 12, weight: .medium))
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.dsFg3)
+                Image(systemName: "arrow.up.forward.square").font(.system(size: 14))
+                Text("Open in \(name(target))").font(.system(size: 13))
             }
         } primaryAction: {
             open(target)
@@ -185,7 +184,7 @@ struct FileViewer: View {
 
     @ViewBuilder private var content: some View {
         if let error {
-            Text(error).font(.system(size: 13)).foregroundStyle(Color.dsRed).frame(maxWidth: .infinity, maxHeight: .infinity)
+            Text(error).font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let file {
             if file.binary {
                 Text("Binary file").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)

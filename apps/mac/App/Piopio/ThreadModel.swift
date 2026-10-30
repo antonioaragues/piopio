@@ -245,8 +245,10 @@ final class ThreadModel {
             showModelPicker = true
         case .showErrorDetail(let id):
             if case .assistant(let a) = document.item(id) { errorDetail = a.errorDetail ?? a.error }
-        case .copy:
+        case .copy, .copyText:
             break // handled by the document
+        case .continueAnswer:
+            Task { await send("Continue") }
         case .quote(let text):
             // Select and ask: the fragment as a Markdown quote, above what's already in the composer.
             draft = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }.joined(separator: "\n") + "\n\n"

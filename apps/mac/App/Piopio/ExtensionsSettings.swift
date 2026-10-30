@@ -58,9 +58,9 @@ struct PackageTile: View {
     var size: CGFloat = 34
     var body: some View {
         let (symbol, color) = PackageText.tile(extensions: extensions, skills: skills)
-        Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(.white)
+        Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(Color.dsFg2)
             .frame(width: size, height: size)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
     }
 }
 
@@ -122,7 +122,7 @@ struct ExtensionsPane: View {
                     if i < packages.count - 1 { RowDivider() }
                 }
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.top, 8) }
             VStack(alignment: .leading, spacing: 3) {
                 (Text("Extension ").fontWeight(.semibold) + Text("runs code in Build, with your permissions"))
                 (Text("Skills, templates ").fontWeight(.semibold) + Text("are text, usable everywhere"))
@@ -170,7 +170,7 @@ private struct PackageRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(PackageText.name(package)).font(.system(size: 14, weight: .semibold)).foregroundStyle(package.enabled ? Color.dsFg : Color.dsFg3)
-                        if !package.installed { Text("Not installed").font(.system(size: 11.5)).foregroundStyle(Color.dsRed) } else if !package.enabled { Text("Off").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
+                        if !package.installed { Text("Not installed").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2) } else if !package.enabled { Text("Off").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
                     }
                     HStack(spacing: 6) {
                         ForEach(PackageText.badges(extensions: r.extensions.count, skills: r.skills.count, prompts: r.prompts.count), id: \.self) { b in
@@ -225,17 +225,16 @@ struct InstallPackageSheet: View {
                     TextField("npm:@scope/name, git:github.com/user/repo or a folder", text: $source)
                         .textFieldStyle(.plain).font(.system(size: 12.5, design: .monospaced)).focused($focused)
                     if checking { ProgressView().controlSize(.mini) }
-                    else if let preview { preview.ok ? AnyView(Label("Found", systemImage: "checkmark").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen)) : AnyView(EmptyView()) }
+                    else if let preview { preview.ok ? AnyView(Label("Found", systemImage: "checkmark").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg3)) : AnyView(EmptyView()) }
                 }
                 .padding(.horizontal, 10).frame(height: 32)
-                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(focused ? Color.dsAccentLine : Color.dsLine, lineWidth: focused ? 1.5 : 0.5))
+                .settingsRows()
                 .background(focused ? RoundedRectangle(cornerRadius: 11).fill(Color.dsAccentSoft).padding(-3) : nil)
                 Button("Choose Folder…") { chooseFolder() }.buttonStyle(PillStyle())
             }
             .padding(.top, 14)
             if let preview, !preview.ok, let message = preview.error {
-                Text(message).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 6)
+                Text(message).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.top, 6)
             }
             if let preview, preview.ok { previewCard(preview).padding(.top, 14) }
             if let preview, preview.ok, !preview.extensions.isEmpty || !preview.contentsKnown {
@@ -244,7 +243,7 @@ struct InstallPackageSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 8)).padding(.top, 12)
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.top, 8) }
             HStack {
                 Text("Installs with pi, shared with the pi CLI").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                 Spacer()
@@ -291,8 +290,8 @@ struct InstallPackageSheet: View {
                     part(.dsFg3, "Contents", "shown after installing", "Can't read it before")
                 }
                 if !p.extensions.isEmpty { part(.dsAmber, p.extensions.count == 1 ? "Extension" : "\(p.extensions.count) extensions", p.extensions.joined(separator: ", "), "Build only · runs code") }
-                if !p.skills.isEmpty { part(.dsGreen, "\(p.skills.count) skill\(p.skills.count == 1 ? "" : "s")", p.skills.joined(separator: ", "), "Everywhere") }
-                if !p.prompts.isEmpty { part(.dsGreen, "\(p.prompts.count) template\(p.prompts.count == 1 ? "" : "s")", p.prompts.map { "/\($0)" }.joined(separator: ", "), "Everywhere") }
+                if !p.skills.isEmpty { part(.dsFg3, "\(p.skills.count) skill\(p.skills.count == 1 ? "" : "s")", p.skills.joined(separator: ", "), "Everywhere") }
+                if !p.prompts.isEmpty { part(.dsFg3, "\(p.prompts.count) template\(p.prompts.count == 1 ? "" : "s")", p.prompts.map { "/\($0)" }.joined(separator: ", "), "Everywhere") }
                 if !p.themes.isEmpty { part(.dsFg3.opacity(0.5), "Themes", p.themes.joined(separator: ", "), "Not shown in Piopio", muted: true) }
                 if !p.extensions.isEmpty { part(.dsFg3.opacity(0.5), "Terminal panels", nil, "Not shown in Piopio", muted: true) }
                 if p.contentsKnown, p.extensions.isEmpty, p.skills.isEmpty, p.prompts.isEmpty, p.themes.isEmpty {
@@ -301,8 +300,7 @@ struct InstallPackageSheet: View {
             }
             .padding(14)
         }
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+        .settingsRows()
     }
 
     private func part(_ dot: Color, _ title: String, _ names: String?, _ where_: String, muted: Bool = false) -> some View {
@@ -355,11 +353,11 @@ private struct PackageDetail: View {
             PackageTile(extensions: r.extensions.count, skills: r.skills.count, size: 48)
         } status: {
             if !package.installed {
-                StatusText(color: .dsRed, text: "Not installed · run Update to install it")
+                StatusText(color: .dsFg2, text: "Not installed · run Update to install it")
             } else if let latest = package.latest {
                 StatusText(color: .dsAmber, text: "\(package.version ?? "") installed · \(latest) available")
             } else {
-                StatusText(color: package.enabled ? .dsGreen : .dsFg3, text: [package.enabled ? "On" : "Off", package.kind == "local" ? "folder" : package.kind ?? "npm", package.version].compactMap { $0 }.joined(separator: " · "))
+                StatusText(color: package.enabled ? .dsFg3 : .dsFg3, text: [package.enabled ? "On" : "Off", package.kind == "local" ? "folder" : package.kind ?? "npm", package.version].compactMap { $0 }.joined(separator: " · "))
             }
         } actions: {
             if package.latest != nil || package.kind == "git" || !package.installed {
@@ -391,7 +389,7 @@ private struct PackageDetail: View {
             section("Skills", "skills", r.skills, where_: "Everywhere")
             section("Templates", "prompts", r.prompts, where_: "Everywhere", slash: true)
             section("Themes", "themes", r.themes, where_: "Not shown in Piopio")
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
         }
         .alert("Uninstall \(PackageText.name(package))?", isPresented: $removing) {
             Button("Uninstall", role: .destructive) {
@@ -529,7 +527,7 @@ struct McpMemoryEditor: View {
                         .textFieldStyle(.roundedBorder).font(.system(size: 11.5, design: .monospaced))
                 }
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
@@ -618,7 +616,7 @@ struct MemoryTrySheet: View {
                 TextField("What do you want to find?", text: $query).textFieldStyle(.roundedBorder).onSubmit { Task { await recall() } }
                 Button("Recall") { Task { await recall() } }.buttonStyle(PillStyle(kind: .primary, compact: true))
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             List(hits, id: \.self) { h in Text(h.text).font(.system(size: 12.5)) }.frame(height: 220)
             HStack { Spacer(); Button("Done") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction) }
         }

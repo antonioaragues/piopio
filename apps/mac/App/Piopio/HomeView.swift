@@ -175,6 +175,7 @@ struct AskBox: View {
         catch { sendError = "Couldn't save this draft: \(error.localizedDescription)" }
     }
     @State private var showModels = false
+    @State private var attachments: [PendingAttachment] = []
     @State private var model: ModelRef?
     @FocusState private var focused: Bool
 
@@ -208,7 +209,27 @@ struct AskBox: View {
                 .lineLimit(1...6)
                 .focused($focused)
                 .onSubmit(send)
+            if !attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(attachments) { a in
+                            HStack(spacing: 6) {
+                                Text(a.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1)
+                                Button { attachments.removeAll { $0.id == a.id } } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3) }
+                                    .buttonStyle(.plain).accessibilityLabel("Remove attachment \(a.name)")
+                            }
+                            .padding(.horizontal, 10).frame(height: 30)
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                        }
+                    }
+                }
+            }
             HStack(spacing: 4) {
+                if target == .chat {
+                    Button(action: attach) { Image(systemName: "plus").font(.system(size: 13)) }
+                        .buttonStyle(IconButtonStyle(size: 26))
+                        .help("Attach images, PDFs or text files").accessibilityLabel("Attach files")
+                }
                 Menu {
                     if areas.contains(.chat) { Button("New chat") { target = .chat } }
                     if areas.contains(.build), !engine.projects.isEmpty {
@@ -247,6 +268,15 @@ struct AskBox: View {
             if let saved = DraftStore(home: engine.home).load("home") { text = saved.text; pendingChat = saved.destination }
         }
         .onChange(of: areas) { _, _ in if let first = defaultTarget { target = first } }
+    }
+
+    private func attach() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            do { attachments.append(try AttachmentLoader.load(url)) } catch { sendError = error.localizedDescription }
+        }
     }
 
     private var targetLabel: String {
@@ -299,8 +329,8 @@ struct AskBox: View {
                 pendingChat = ref; saveHomeDraft()
                 let thread = engine.thread(ref)
                 await thread.open()
-                if await thread.send(message) {
-                    text = ""; pendingChat = nil; saveHomeDraft()
+                if await thread.send(message, attachments: attachments.map(\.attachment)) {
+                    text = ""; pendingChat = nil; attachments = []; saveHomeDraft()
                     try? await engine.refreshCatalog()
                     item = .chat(ref.id)
                 } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }

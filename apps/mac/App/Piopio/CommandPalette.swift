@@ -101,16 +101,6 @@ struct CommandPalette: View {
             }
             .frame(height: min(400, listHeight))
             if let searchError { Text(searchError).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(10) }
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            HStack(spacing: 14) {
-                Text("↑↓ navigate"); Text("↩ run"); Text("esc close")
-                Spacer()
-                if mode != .models { Text("⇥ \(mode == .all ? "messages only" : "everything")") }
-            }
-            .font(.system(size: 11))
-            .foregroundStyle(Color.dsFg3)
-            .padding(.horizontal, 16)
-            .frame(height: 32)
         }
         .frame(width: 560)
         .glassPanel(radius: 12)

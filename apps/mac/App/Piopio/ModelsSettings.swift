@@ -222,8 +222,7 @@ struct ModelsPane: View {
             Button(action, action: perform).buttonStyle(PillStyle(kind: primary ? .primary : .secondary, compact: true))
         }
         .padding(.horizontal, 14).frame(minHeight: 60)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+        .settingsRows()
     }
 }
 
@@ -260,8 +259,8 @@ private struct ConnectedProviderRow: View {
 
     private var dotColor: Color {
         switch provider.status {
-        case .connected: .dsGreen
-        case .needsAttention: provider.message?.contains("answering") == true ? .dsRed : .dsAmber
+        case .connected: .dsFg3
+        case .needsAttention: provider.message?.contains("answering") == true ? .dsFg2 : .dsAmber
         default: .dsFg3
         }
     }
@@ -455,7 +454,7 @@ struct ProviderDetailView: View {
             HStack(alignment: .center) {
                 Text(impact).font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 12)
-                Button { removing = true } label: { Text("Remove provider…").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsRed) }
+                Button { removing = true } label: { Text("Remove provider…").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg2) }
                     .buttonStyle(PillStyle(compact: true))
             }
             .padding(.top, 12)
@@ -477,7 +476,7 @@ struct ProviderDetailView: View {
 
     @ViewBuilder private var statusLine: some View {
         let (color, state): (Color, String) = switch provider.status {
-        case .connected: (.dsGreen, "Connected")
+        case .connected: (.dsFg3, "Connected")
         case .needsAttention: (.dsAmber, provider.message ?? "Needs attention")
         default: (.dsFg3, "Not connected")
         }
@@ -618,7 +617,7 @@ private struct ProviderFieldSheet: View {
             case .headers:
                 HeadersEditor(rows: $headers)
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
@@ -711,8 +710,8 @@ struct KeyStatus: View {
 
     var body: some View {
         switch result.ok {
-        case true?: Label("Valid\(result.models.map { " · \($0) models" } ?? "")", systemImage: "checkmark").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen)
-        case false?: Text(result.message ?? "This key was rejected.").font(.system(size: 12)).foregroundStyle(Color.dsRed)
+        case true?: Label("Valid\(result.models.map { " · \($0) models" } ?? "")", systemImage: "checkmark").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg3)
+        case false?: Text(result.message ?? "This key was rejected.").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
         case nil: Text(result.message ?? "Checked on first use.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
         }
     }
@@ -724,8 +723,8 @@ struct EndpointStatus: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Circle().fill(check.ok ? Color.dsGreen : Color.dsRed).frame(width: 6, height: 6)
-            Text(check.ok ? "Reachable\(check.latencyMs.map { " · \(Int($0)) ms" } ?? "")" : "Can't connect").font(.system(size: 12, weight: .medium)).foregroundStyle(check.ok ? Color.dsGreen : Color.dsRed)
+            Circle().fill(check.ok ? Color.dsFg3 : Color.dsFg2).frame(width: 6, height: 6)
+            Text(check.ok ? "Reachable\(check.latencyMs.map { " · \(Int($0)) ms" } ?? "")" : "Can't connect").font(.system(size: 12, weight: .medium)).foregroundStyle(check.ok ? Color.dsFg3 : Color.dsFg2)
         }
     }
 }
@@ -880,7 +879,7 @@ struct AddProviderSheet: View {
                 }
                 .buttonStyle(PillStyle(kind: .strong, compact: true))
             } else {
-                Label("Added", systemImage: "checkmark").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen)
+                Label("Added", systemImage: "checkmark").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg3)
             }
         }
         .padding(12)
@@ -896,7 +895,7 @@ struct AddProviderSheet: View {
                         HStack(alignment: .top) {
                             ProviderTile(provider: p, size: 28)
                             Spacer()
-                            if p.isConnected { Label("Connected", systemImage: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsGreen) }
+                            if p.isConnected { Label("Connected", systemImage: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg3) }
                         }
                         Text(p.name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg).padding(.top, 4)
                         Text(p.popular ?? "\(p.models) models").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
@@ -904,8 +903,7 @@ struct AddProviderSheet: View {
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                    .settingsRows()
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -947,8 +945,7 @@ struct AddProviderSheet: View {
             Button("Custom endpoint…") { fromCatalog = true; page = .custom(nil) }.buttonStyle(PillStyle(compact: true))
         }
         .padding(12)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+        .settingsRows()
     }
 
     private func authLabel(_ p: ProviderInfo) -> String {
@@ -994,8 +991,7 @@ private struct ConnectProviderPage: View {
                         if checking { ProgressView().controlSize(.small) } else if let result { KeyStatus(result: result).fixedSize() }
                     }
                     .padding(.horizontal, 10).frame(height: 36)
-                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 9))
-                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(result?.ok == true ? Color.dsAccentLine : result?.ok == false ? Color.dsRed : Color.dsLine, lineWidth: result?.ok == true || result?.ok == false ? 1 : 0.5))
+                    .settingsRows()
                     HStack(spacing: 4) {
                         Text("Stored in your Keychain.").foregroundStyle(Color.dsFg3)
                         if let page = provider.keyPage, let url = URL(string: page) { Link("Create a key at \(url.host() ?? page) ›", destination: url) }
@@ -1011,7 +1007,7 @@ private struct ConnectProviderPage: View {
                 Text("\(provider.name) uses your cloud account's credentials. Piopio asks for them step by step; they're stored in your Keychain.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
                 preview
             }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Spacer()
                 Button("Cancel", action: done).buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
@@ -1152,7 +1148,7 @@ private struct CustomEndpointPage: View {
             }
             if let check, !check.ok { help(check) }
             if let check, check.ok { found(check) }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Text(local ? "Runs on this Mac · free" : "Runs on your network · free").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 Spacer()
@@ -1187,7 +1183,7 @@ private struct CustomEndpointPage: View {
                 content()
             }
             .padding(.horizontal, 14).frame(minHeight: 40)
-            .overlay(highlight ? RoundedRectangle(cornerRadius: 4).strokeBorder(Color.dsRed, lineWidth: 1).padding(1) : nil)
+            .overlay(highlight ? RoundedRectangle(cornerRadius: 4).strokeBorder(Color.dsFg2, lineWidth: 1).padding(1) : nil)
             Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 14)
         }
     }
@@ -1211,8 +1207,7 @@ private struct CustomEndpointPage: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsRed.opacity(0.5), lineWidth: 0.5))
+        .settingsRows()
         .onAppear { if check.error == "auth" { keyFocused = true } }
     }
 

@@ -448,7 +448,7 @@ struct MemoryEditorSheet: View {
                 } else {
                     Button("Edit") { draft = fact.raw; editing = fact.line }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
                 }
-                Button("Forget") { forget(fact) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsRed)
+                Button("Forget") { forget(fact) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)

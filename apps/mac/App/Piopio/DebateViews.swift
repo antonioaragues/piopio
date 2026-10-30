@@ -222,7 +222,11 @@ struct DebateLayout: View {
             }
         }
         .task(id: thread.revision) { await refreshFollowUps() }
-        .onChange(of: debate.drafts.count) { _, _ in version = nil; comparing = false }
+        .onChange(of: debate.drafts.count) { _, count in
+            version = nil
+            // PIOPIO_DEMO_DEBATE_CHANGES=1: show the latest changes (captures).
+            comparing = count > 1 && ProcessInfo.processInfo.environment["PIOPIO_DEMO_DEBATE_CHANGES"] == "1"
+        }
     }
 
     private func open(_ target: Int, compare: Bool) {
@@ -330,6 +334,8 @@ private struct DebateStory: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onChange(of: debate.round) { _, _ in withAnimation { proxy.scrollTo("end") } }
+            .onChange(of: debate.status) { _, _ in withAnimation { proxy.scrollTo("end") } }
+            .onAppear { DispatchQueue.main.async { proxy.scrollTo("end") } }
         }
     }
 

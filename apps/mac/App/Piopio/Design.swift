@@ -20,7 +20,8 @@ extension Color {
     static let dsInv = Color(nsColor: DS.inv)
     static let dsInvFg = Color(nsColor: DS.invfg)
     static let dsGreen = Color(nsColor: DS.green)
-    static let dsAmber = Color(nsColor: DS.amber)
+    /// Warnings read in ink, not amber (docs/design/grey principle 3).
+    static let dsAmber = Color(nsColor: DS.fg2)
     static let dsRed = Color(nsColor: DS.red)
     static let dsAccentSoft = Color(nsColor: DS.accentSoft)
     static let dsAccentLine = Color(nsColor: DS.accentLine)
@@ -91,6 +92,16 @@ struct SidePanel: ViewModifier {
 }
 
 extension View {
+    /// A group of Settings rows (docs/design/grey 10e): hairlines above and below instead of a box; rows line up with the
+    /// page's title.
+    func settingsRows() -> some View {
+        self
+            .padding(.horizontal, -14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .top) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+            .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+    }
+
     func sidePanel(_ edge: HorizontalEdge = .leading, background: Color = .dsWin) -> some View {
         modifier(SidePanel(edge: edge, background: background))
     }
@@ -245,23 +256,6 @@ struct StatusDot: View {
         case .done, .idle:
             Color.clear.frame(width: size, height: size)
         }
-    }
-}
-
-/// The running mark: a 10pt grey ring with a turning gap.
-struct RunningRing: View {
-    var size: CGFloat = 10
-    @State private var turning = false
-
-    var body: some View {
-        Circle()
-            .trim(from: 0.12, to: 1)
-            .stroke(Color.dsFg3, style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
-            .frame(width: size - 1.4, height: size - 1.4)
-            .rotationEffect(.degrees(turning ? 360 : 0))
-            .frame(width: size, height: size)
-            .onAppear { withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { turning = true } }
-            .accessibilityLabel("Running")
     }
 }
 

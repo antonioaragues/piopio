@@ -29,15 +29,15 @@ struct BuildInspector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 22) {
                     if !session.todos.isEmpty { checklist }
                     changes
                     turnList
                 }
-                .padding(14)
+                .padding(.horizontal, 16).padding(.vertical, 14)
             }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            footer.padding(14)
+            footer.padding(.horizontal, 16).padding(.vertical, 12)
         }
         .task(id: session.revision / 4) { await refresh() } // event batches arrive quickly while working
         .task(id: session.revision) { turns = Self.turns(session.document.items) }
@@ -52,38 +52,20 @@ struct BuildInspector: View {
         }
     }
 
+    /// Plain rows (docs/design/grey 9a): path, +N −N; then Review diff and Commit… as text.
     private var changes: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text("Changes").font(.system(size: 13, weight: .semibold))
-                Spacer()
-                let added = files.reduce(0) { $0 + $1.added }, removed = files.reduce(0) { $0 + $1.removed }
-                if added > 0 { Text("+\(added)").foregroundStyle(Color.dsGreen) }
-                if removed > 0 { Text("−\(removed)").foregroundStyle(Color.dsRed) }
+        VStack(alignment: .leading, spacing: 2) {
+            if files.isEmpty {
+                Text("No changes yet.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
             }
-            .font(.system(size: 12, weight: .medium, design: .monospaced))
-            VStack(alignment: .leading, spacing: 0) {
-                if files.isEmpty {
-                    Text("No changes yet. Each message saves a checkpoint first, so you can rewind.")
-                        .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
-                        .padding(12)
+            ForEach(files) { file in ChangeRow(file: file, open: { onReview(file.path) }, revert: { reverting = file }) }
+            if !files.isEmpty || commit != nil {
+                HStack(spacing: 14) {
+                    Button("Review diff") { onReview(nil) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor).disabled(files.isEmpty)
+                    if let commit { Button("Commit…", action: commit).buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
                 }
-                ForEach(Array(files.enumerated()), id: \.element.id) { i, file in
-                    if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 10) }
-                    ChangeRow(file: file, open: { onReview(file.path) }, revert: { reverting = file })
-                }
-                if !files.isEmpty || commit != nil {
-                    Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                    HStack {
-                        Button("Review diff") { onReview(nil) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor).disabled(files.isEmpty)
-                        Spacer()
-                        if let commit { Button("Commit…", action: commit).buttonStyle(PillStyle(kind: .strong, compact: true)) }
-                    }
-                    .padding(.horizontal, 10).frame(height: 34)
-                }
+                .padding(.top, 8)
             }
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
         }
     }
 
@@ -91,7 +73,7 @@ struct BuildInspector: View {
     private var checklist: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Checklist").font(.system(size: 13, weight: .semibold))
+                SectionLabel("Checklist")
                 Spacer()
                 Text("\(session.todos.filter { $0.status == .done }.count) / \(session.todos.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
             }
@@ -108,14 +90,12 @@ struct BuildInspector: View {
         }
     }
 
-    /// One row per message you sent, newest first (replaces the timeline of turns and checkpoints).
+    /// One row per message you sent, newest first; hover one to rewind.
     private var turnList: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Turns").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
-            if turns.isEmpty { Text("Your messages show up here.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+        VStack(alignment: .leading, spacing: 2) {
+            SectionLabel("Turns").padding(.bottom, 4)
+            if turns.isEmpty { Text("Your messages show up here.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
             ForEach(turns) { turn in TurnRow(session: session, turn: turn, current: turn.id == turns.first?.id) }
-            Text("Every message saves a checkpoint. Hover a turn or your message to rewind.")
-                .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true).padding(.top, 6)
         }
     }
 
@@ -180,10 +160,9 @@ private struct TurnRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("\(turn.number)").font(.system(size: 10, weight: .bold).monospacedDigit())
-                .foregroundStyle(current ? Color.dsInvFg : Color.dsFg2)
-                .frame(width: 16, height: 16)
-                .background(current ? Color.dsInv : Color.dsChip, in: RoundedRectangle(cornerRadius: 4))
+            Text("\(turn.number)").font(.system(size: 12).monospacedDigit())
+                .foregroundStyle(Color.dsFg3)
+                .frame(width: 14, alignment: .leading)
             Text(turn.text).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 4)
             if hovering || rewinding {
@@ -199,8 +178,9 @@ private struct TurnRow: View {
             }
         }
         .padding(.horizontal, 6)
-        .frame(height: 28)
+        .frame(height: 26)
         .background(hovering ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+        .padding(.horizontal, -6)
         .onHover { hovering = $0 }
     }
 
@@ -239,13 +219,14 @@ private struct ChangeRow: View {
                     .foregroundStyle(Color.dsFg2)
                     .help("Revert this file")
             }
-            Text(file.status.badge).font(.system(size: 10, weight: .bold)).foregroundStyle(file.status.color)
             if file.added > 0 { Text("+\(file.added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsGreen) }
             if file.removed > 0 { Text("−\(file.removed)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsRed) }
         }
-        .padding(.horizontal, 10)
-        .frame(height: 32)
-        .background(hovering ? Color.dsChip : .clear)
+        .padding(.horizontal, 6)
+        .frame(height: 26)
+        .background(hovering ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+        .padding(.horizontal, -6)
+        .help("\(file.status.badge == "M" ? "Modified" : file.status.badge == "NEW" ? "New file" : "Deleted"): \(file.path)")
         .onHover { hovering = $0 }
     }
 }
@@ -361,7 +342,11 @@ struct RestoreSheet: View {
 /// Replaces the transcript while reviewing: the session's files on the left, the diff on the right.
 struct DiffReview: View {
     let session: ThreadModel
+    /// The session's name, for the breadcrumb back.
+    let title: String
     @State var selected: String?
+    /// Commit…, when there's something to commit.
+    let commit: (() -> Void)?
     let close: () -> Void
     @State private var since: ChangesSince = .session
     @State private var files: [FileChange] = []
@@ -371,14 +356,11 @@ struct DiffReview: View {
     @State private var comment = ""
 
     var body: some View {
+        VStack(spacing: 0) {
+        toolbar
+        Rectangle().fill(Color.dsLine).frame(height: 0.5)
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
-                Picker("", selection: $since) {
-                    Text("Whole session").tag(ChangesSince.session)
-                    Text("Last turn").tag(ChangesSince.turn)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
                 ScrollView {
                     VStack(spacing: 1) {
                         ForEach(files) { file in
@@ -411,21 +393,6 @@ struct DiffReview: View {
             .frame(width: 260)
             Rectangle().fill(Color.dsLine).frame(width: 0.5)
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(selected ?? "").font(.system(size: 13, weight: .semibold, design: .monospaced)).lineLimit(1).truncationMode(.head)
-                    Spacer()
-                    Button(split ? "Split" : "Unified") { split.toggle() }
-                        .buttonStyle(ChipStyle())
-                        .help(split ? "Show one column" : "Show old and new side by side")
-                    if let first = session.checkpoints.first {
-                        Button("Restore checkpoint…") { session.restoring = since == .turn ? session.checkpoints.last ?? first : first }
-                            .buttonStyle(PillStyle(kind: .toolbar))
-                    }
-                    Button("Done") { close() }.buttonStyle(PillStyle(kind: .strong)).keyboardShortcut(.cancelAction)
-                }
-                .padding(.horizontal, 16)
-                .frame(height: Shell.barHeight)
-                Rectangle().fill(Color.dsLine).frame(height: 0.5)
                 GeometryReader { viewport in
                 ScrollView([.vertical, .horizontal]) {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -447,6 +414,7 @@ struct DiffReview: View {
                 }
             }
         }
+        }
         .background(Color.dsWin)
         .task(id: since) {
             files = await session.changes(since: since)
@@ -454,6 +422,32 @@ struct DiffReview: View {
             await loadDiff()
         }
         .onChange(of: selected) { _, _ in Task { await loadDiff() } }
+    }
+
+    /// The toolbar (docs/design/grey 10d): a breadcrumb back, then what to compare, Unified or Split, Restore, and Commit.
+    private var toolbar: some View {
+        PageHeader {
+            HStack(spacing: 6) {
+                Button(title) { close() }.buttonStyle(.plain).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).keyboardShortcut(.cancelAction)
+                Text("/").font(.system(size: 13.5)).foregroundStyle(Color.dsFg3)
+                Text("Changes").font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
+            }
+        } actions: {
+            Button(since == .session ? "Whole session" : "Last turn") { since = since == .session ? .turn : .session }
+                .buttonStyle(ChipStyle()).help("Show the whole session's changes, or only the last turn's")
+            Button(split ? "Split" : "Unified") { split.toggle() }
+                .buttonStyle(ChipStyle()).help(split ? "Show one column" : "Show old and new side by side")
+            if let first = session.checkpoints.first {
+                Button("Restore checkpoint") { session.restoring = since == .turn ? session.checkpoints.last ?? first : first }
+                    .buttonStyle(ChipStyle())
+            }
+            if let commit {
+                Button(files.count == 1 ? "Commit 1 file" : "Commit \(files.count) files", action: commit)
+                    .buttonStyle(PillStyle(kind: .primary, compact: true)).disabled(files.isEmpty).padding(.leading, 6)
+            } else {
+                Button("Done") { close() }.buttonStyle(PillStyle(kind: .primary, compact: true)).padding(.leading, 6)
+            }
+        }
     }
 
     private func loadDiff() async {

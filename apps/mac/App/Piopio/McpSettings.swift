@@ -89,7 +89,7 @@ struct McpPane: View {
                 }
                 .padding(.bottom, 14)
             }
-            ForEach(errors, id: \.self) { Text($0).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.bottom, 6) }
+            ForEach(errors, id: \.self) { Text($0).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.bottom, 6) }
             FinePrint("Changes apply to sessions you start or reopen.")
         }
     }
@@ -222,7 +222,7 @@ private struct McpServerRow: View {
             LetterTile(text: LetterTile.initials(entry.server.name), color: InitialTile.color(for: entry.server.name), size: 34)
         } subtitle: {
             if let status, !status.ok {
-                Text(status.error ?? "Couldn't start").foregroundStyle(McpServerRow.dot(status) ?? .dsRed)
+                Text(status.error ?? "Couldn't start").foregroundStyle(McpServerRow.dot(status) ?? .dsFg2)
             } else {
                 HStack(spacing: 0) {
                     Text(entry.commandLine).font(.system(size: 12, design: .monospaced)).truncationMode(.middle)
@@ -238,8 +238,8 @@ private struct McpServerRow: View {
     /// Green: started. Amber: wants a sign-in. Red: didn't start. None while starting.
     static func dot(_ status: McpProbe?) -> Color? {
         guard let status else { return nil }
-        if status.ok { return .dsGreen }
-        return status.error?.contains("sign in") == true ? .dsAmber : .dsRed
+        if status.ok { return .dsFg3 }
+        return status.error?.contains("sign in") == true ? .dsAmber : .dsFg2
     }
 }
 
@@ -266,9 +266,9 @@ private struct McpServerDetail: View {
             if restarting || status == nil {
                 StatusText(color: .dsFg3, text: "Starting…")
             } else if let status, status.ok {
-                StatusText(color: .dsGreen, text: "Started · \(status.tools.count) tool\(status.tools.count == 1 ? "" : "s")\(status.ms.map { " · " + Self.seconds($0) } ?? "")")
+                StatusText(color: .dsFg3, text: "Started · \(status.tools.count) tool\(status.tools.count == 1 ? "" : "s")\(status.ms.map { " · " + Self.seconds($0) } ?? "")")
             } else {
-                StatusText(color: McpServerRow.dot(status) ?? .dsRed, text: status?.error ?? "Couldn't start")
+                StatusText(color: McpServerRow.dot(status) ?? .dsFg2, text: status?.error ?? "Couldn't start")
             }
         } actions: {
             if status?.log?.isEmpty == false { Button("View log") { showingLog = true }.buttonStyle(PillStyle(compact: true)) }
@@ -381,8 +381,7 @@ private struct McpLogSheet: View {
                 Text(log.isEmpty ? "Nothing was written." : log).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(10)
             }
             .frame(height: 320)
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            .settingsRows()
             HStack { Spacer(); Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction) }
         }
         .padding(22)
@@ -423,7 +422,7 @@ private struct McpImportSheet: View {
                 }
             }
             FinePrint("They're used in Build sessions. Turn each on for chats on its page.")
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Text(found.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle)
                 Spacer()
@@ -493,7 +492,7 @@ struct AddMcpServerView: View {
             Picker("", selection: $mode) { ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                 .pickerStyle(.segmented).labelsHidden().fixedSize().padding(.top, 14).padding(.bottom, 12)
             if mode == .json { jsonForm } else { form }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsRed).padding(.top, 8) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.top, 8) }
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Saved to \(project.map { "\($0.name)/.pi/mcp.json" } ?? "~/.pi/agent/mcp.json")")
@@ -587,15 +586,14 @@ struct AddMcpServerView: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(height: 200)
-                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                .settingsRows()
                 .overlay(alignment: .topLeading) {
                     if json.isEmpty {
                         Text("{ \"mcpServers\": { \"playwright\": { \"command\": \"npx\", \"args\": [\"@playwright/mcp@latest\"] } } }")
                             .font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg3).padding(13).allowsHitTesting(false)
                     }
                 }
-            Text(jsonError ?? "Paste a server from a README or another app's config; it fills in the form.").font(.system(size: 11.5)).foregroundStyle(jsonError == nil ? Color.dsFg3 : Color.dsRed)
+            Text(jsonError ?? "Paste a server from a README or another app's config; it fills in the form.").font(.system(size: 11.5)).foregroundStyle(jsonError == nil ? Color.dsFg3 : Color.dsFg2)
         }
         .onChange(of: json) { _, text in fill(from: text) }
     }
@@ -605,9 +603,9 @@ struct AddMcpServerView: View {
             HStack(spacing: 5) { ProgressView().controlSize(.mini); Text("Starting…") }.font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize()
         } else if let probe {
             if probe.ok {
-                StatusText(color: .dsGreen, text: "Started\(probe.ms.map { " · " + McpServerDetailSeconds.text($0) } ?? "")").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsGreen).fixedSize()
+                StatusText(color: .dsFg3, text: "Started\(probe.ms.map { " · " + McpServerDetailSeconds.text($0) } ?? "")").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg3).fixedSize()
             } else {
-                Text(probe.error ?? "Couldn't start").font(.system(size: 12)).foregroundStyle(Color.dsRed).lineLimit(2).frame(maxWidth: 220, alignment: .trailing).help(probe.log ?? "")
+                Text(probe.error ?? "Couldn't start").font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(2).frame(maxWidth: 220, alignment: .trailing).help(probe.log ?? "")
             }
         }
     }

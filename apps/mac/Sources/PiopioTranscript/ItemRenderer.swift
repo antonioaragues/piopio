@@ -50,7 +50,7 @@ nonisolated struct ItemRenderer: Sendable {
             if let speaker = a.speaker { out.append(speakerLine(speaker)) }
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: Self.thought(a.thinkingMs), detail: "", body: thinking))) }
-            if let o = a.outbound { out.append(note(o.from.hasPrefix("run_") ? "Sent on its own, from an automatic run" : "Sent on its own")) }
+            if let o = a.outbound { out.append(note((o.from.hasPrefix("run_") ? "Automatic run" : "Sent on its own") + (Self.date(a.at).map { " · " + $0.formatted(date: .omitted, time: .shortened) } ?? ""))) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
             if a.status != .streaming, !compact, !midTurn.contains(a.id) { out.append(answerFooter(a)) }
@@ -194,7 +194,7 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
             m.append(pill("Edit…", .editApproval(approvalId: a.approvalId), .secondary))
             m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
-            m.append(pill("Approve", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
+            m.append(pill("Allow", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
         }
         return card(m, .approval, lineHeight: 1.5)
     }
@@ -485,7 +485,12 @@ nonisolated struct ItemRenderer: Sendable {
                 "Nothing was changed."
             return errorCard(title: a.error ?? "The model request failed.", safe: safe, actions: actions)
         case .aborted:
-            return note("Stopped")
+            let stopped = NSMutableAttributedString(string: "Stopped", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3])
+            if !compact, a.speaker == nil {
+                stopped.append(NSAttributedString(string: " · ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
+                stopped.append(NSAttributedString(string: "continue", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2, .link: TranscriptAction.continueAnswer.url]))
+            }
+            return line(stopped, paragraph(spacing: 14, before: 6))
         case .done, .streaming:
             return NSAttributedString()
         }
@@ -535,18 +540,22 @@ nonisolated struct ItemRenderer: Sendable {
     /// do; while it waits, the question card above the composer takes the answer.
     private func questionCard(_ t: ToolItem) -> NSAttributedString {
         let question = t.args?["question"]?.stringValue ?? ""
-        if t.status == .running || t.status == .pendingApproval { return note("Waiting for your answer: \(question)", dot: DS.accent) }
+        // While it waits, the card above the composer holds the question.
+        if t.status == .running || t.status == .pendingApproval { return NSAttributedString() }
         let prefix = "The user answered: "
         let answer = t.details?["answer"]?.stringValue ?? t.output.flatMap { $0.hasPrefix(prefix) ? String($0.dropFirst(prefix.count)) : nil }
-        let m = NSMutableAttributedString(string: "The agent asked", attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .semibold), .foregroundColor: DS.fg3])
-        m.append(NSAttributedString(string: lineSeparator + question, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2]))
-        if let answer {
-            m.append(NSAttributedString(string: lineSeparator + "↳  ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.accent]))
-            m.append(NSAttributedString(string: answer, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
+        // Once answered, one grey line (docs/design/grey 11d); the question is in its tooltip.
+        let grey: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3, .toolTip: question]
+        let m = NSMutableAttributedString()
+        if answer == "Skipped" {
+            m.append(NSAttributedString(string: "Skipped", attributes: grey))
+        } else if let answer {
+            m.append(NSAttributedString(string: "You chose ", attributes: grey))
+            m.append(NSAttributedString(string: answer, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2, .toolTip: question]))
         } else {
-            m.append(NSAttributedString(string: lineSeparator + (t.status == .interrupted ? "Stopped before you answered" : "Not answered"), attributes: [.font: small, .foregroundColor: DS.fg3]))
+            m.append(NSAttributedString(string: (t.status == .interrupted ? "Stopped before you answered: " : "Not answered: ") + question, attributes: grey))
         }
-        return card(m, .link, lineHeight: 1.5)
+        return line(m, paragraph(spacing: 14, before: 6))
     }
 
     /// A grey line in the transcript (docs/design/grey 11h). Only something waiting on you gets the blue dot.
@@ -814,10 +823,12 @@ nonisolated struct ItemRenderer: Sendable {
             if !compact, language == nil || ["text", "txt", "plaintext", "markdown", "md"].contains(language!.lowercased()), let table = TableContent.spaced(code) {
                 return attachmentParagraph(TableAttachment(table: table))
             }
+            // The header: what it is, and Copy.
             let m = NSMutableAttributedString()
-            if let language {
-                m.append(NSAttributedString(string: language + lineSeparator, attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: DS.fg3]))
-            }
+            let label: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg3]
+            if let language { m.append(NSAttributedString(string: language + "  ·  ", attributes: label)) }
+            m.append(NSAttributedString(string: "Copy", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg2, .link: TranscriptAction.copyText(code).url]))
+            m.append(NSAttributedString(string: lineSeparator, attributes: label))
             let start = m.length
             m.append(NSAttributedString(string: code.replacingOccurrences(of: "\n", with: lineSeparator), attributes: [.font: mono, .foregroundColor: DS.fg]))
             for (range, token) in Highlighter.tokens(code) where NSMaxRange(range) + start <= m.length {

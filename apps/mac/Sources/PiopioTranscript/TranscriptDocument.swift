@@ -76,7 +76,7 @@ public final class TranscriptDocument {
         textView.isSelectable = true
         textView.allowsUndo = false
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 40, height: 24)
+        textView.textContainerInset = NSSize(width: compact ? 18 : 40, height: compact ? 14 : 24)
         textView.textContainer?.lineFragmentPadding = 0
         precondition(textView.textLayoutManager != nil, "TranscriptDocument needs TextKit 2")
         textView.textLayoutManager!.delegate = layoutDelegate
@@ -131,6 +131,11 @@ public final class TranscriptDocument {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
             }
+            return
+        }
+        if case .copyText(let text) = action {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
             return
         }
         onAction?(action)

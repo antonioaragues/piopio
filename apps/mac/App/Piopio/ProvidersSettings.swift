@@ -119,9 +119,9 @@ struct ProviderSignInSheet: View {
     @ViewBuilder private var content: some View {
         if login.finished {
             if let error = login.error {
-                Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true)
+                Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
             } else {
-                Label("Connected. Its models are in the model picker now.", systemImage: "checkmark.circle.fill").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsGreen)
+                Label("Connected. Its models are in the model picker now.", systemImage: "checkmark.circle.fill").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg3)
             }
         } else {
             VStack(alignment: .leading, spacing: 12) {

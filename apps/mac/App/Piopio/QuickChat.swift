@@ -218,11 +218,11 @@ struct QuickChatView: View {
                 ZStack(alignment: .topLeading) {
                     if model.text.isEmpty, let question = model.lastQuestion {
                         // The question stays in the header; typing asks a follow-up.
-                        Text(question).font(.system(size: 17)).foregroundStyle(Color.dsFg).lineLimit(3).allowsHitTesting(false)
+                        Text(question).font(.system(size: 15)).foregroundStyle(Color.dsFg).lineLimit(3).allowsHitTesting(false)
                     }
                     TextField(model.lastQuestion == nil ? "Ask anything…" : "", text: Bindable(model).text, axis: .vertical)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 17))
+                        .font(.system(size: 15))
                         .lineLimit(1...6)
                         .focused($focused)
                     .onKeyPress(.return, phases: .down) { press in
@@ -231,32 +231,31 @@ struct QuickChatView: View {
                         return .handled
                     }
                 }
-                Text(model.modelName).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(Color.dsChip, in: Capsule())
             }
             .padding(.horizontal, 18)
-            .frame(minHeight: 64)
+            .frame(minHeight: 52)
             if let thread = model.thread {
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
                 TranscriptView(document: thread.document)
                     .frame(height: 280)
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                HStack(spacing: 6) {
+                HStack(spacing: 12) {
                     Button("Open in Piopio ⌘O") { model.openInMain() }.keyboardShortcut("o")
-                    Button("Copy ⌘C") { model.copyAnswer() }.keyboardShortcut("c", modifiers: [.command, .shift])
+                    Button("Copy") { model.copyAnswer() }.keyboardShortcut("c", modifiers: [.command, .shift])
                     Button("New chat") { model.newChat() }.keyboardShortcut("n")
                     Spacer()
-                    Text("esc to dismiss · saved as thread").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                    Text("\(model.modelName) · esc to close").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
-                .buttonStyle(PillStyle(compact: true))
-                .padding(.horizontal, 14)
-                .frame(height: 46)
+                .buttonStyle(.plain)
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.dsFg2)
+                .padding(.horizontal, 18)
+                .frame(height: 36)
             }
         }
         .frame(width: 620)
-        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous).strokeBorder(Color.dsGlassEdge, lineWidth: 0.5))
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous))
         .onAppear { focused = true }
         .onChange(of: model.focusToken) { _, _ in focused = true }

@@ -34,6 +34,12 @@ struct Composer: View {
                     Text(thread.debate?.status == .running ? "Next round" : item.mode == .steer ? "Steering" : "Queued").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
                     Text(item.text ?? "Queued message").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
                     Spacer()
+                    if let queued = item.text {
+                        Button("Edit") { text = queued; focused = true; Task { await thread.removeQueued(item.id) } }
+                            .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            .help("Put it back in the box")
+                        Text("·").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    }
                     Button("Remove") { Task { await thread.removeQueued(item.id) } }
                         .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                         .help("Remove from queue").accessibilityLabel("Remove queued message")
@@ -45,11 +51,22 @@ struct Composer: View {
             }
             if let error = thread.error {
                 HStack {
-                    Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                    Text(error).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
                     Spacer()
                     if !text.isEmpty { Button("Retry") { Task { await thread.retrySend() } }.buttonStyle(PillStyle(compact: true)).disabled(thread.isSubmitting) }
                     if thread.errorIsAuth { Button("Open Settings") { ThreadModel.openSettings() }.buttonStyle(PillStyle(compact: true)) }
                 }
+                .padding(.horizontal, 16)
+            }
+            if let context = thread.state?.context, let tokens = context.tokens, tokens / max(1, context.window) >= 0.85 {
+                HStack(spacing: 4) {
+                    Text("This conversation is at \(Int(min(1, tokens / max(1, context.window)) * 100))% of its context.").foregroundStyle(Color.dsFg3)
+                    if isBuild {
+                        Button("Compact now") { Task { await thread.compact() } }.buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                    }
+                    Spacer()
+                }
+                .font(.system(size: 12.5))
                 .padding(.horizontal, 16)
             }
             if !suggestions.isEmpty { suggestionList }
@@ -111,6 +128,13 @@ struct Composer: View {
                         send(steer: press.modifiers.contains(.option))
                         return .handled
                     }
+                    .onKeyPress(characters: .decimalDigits) { press in
+                        // 1–9 pick an answer while the agent asks and the box is empty (docs/design/grey 11d).
+                        guard text.isEmpty, let prompt = thread.prompts.first, prompt.kind == .question || prompt.kind == .select,
+                              let options = prompt.options, let n = Int(press.characters), options.indices.contains(n - 1) else { return .ignored }
+                        Task { await thread.respond(prompt, PromptResponse(choice: options[n - 1])) }
+                        return .handled
+                    }
                     .onKeyPress(.tab) {
                         if !suggestions.isEmpty {
                             accept(suggestions[min(highlighted, suggestions.count - 1)])
@@ -165,7 +189,6 @@ struct Composer: View {
                     .help(thread.webEnabled ? "Web search and page reading are on" : "Web search and page reading are off")
                 }
                 Spacer(minLength: 6)
-                if let context = thread.state?.context { ContextRing(context: context, compact: isBuild ? { Task { await thread.compact() } } : nil) }
                 if let debate = thread.debate, debate.status == .running {
                     Text("Round \(debate.round) of up to \(debate.maxRounds)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6)
                 } else {
@@ -225,21 +248,36 @@ struct Composer: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(attachments) { a in
-                    HStack(spacing: 6) {
-                        Image(systemName: a.isImage ? "photo" : "doc.text").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-                        Text(a.name).font(.system(size: 12.5)).lineLimit(1)
-                        Button { attachments.removeAll { $0.id == a.id } } label: {
-                            Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.dsFg3)
+                    if let image = a.thumbnail {
+                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                            .frame(width: 48, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                            .overlay(alignment: .topTrailing) { removeAttachment(a).padding(3) }
+                            .help(a.name)
+                    } else {
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(a.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1)
+                                Text(a.kindLabel).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                            }
+                            removeAttachment(a)
                         }
-                        .buttonStyle(.plain)
-                        .help("Remove").accessibilityLabel("Remove attachment \(a.name)")
+                        .padding(.horizontal, 10)
+                        .frame(height: 40)
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 32)
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsLine, lineWidth: 0.5))
                 }
             }
         }
+    }
+
+    private func removeAttachment(_ a: PendingAttachment) -> some View {
+        Button { attachments.removeAll { $0.id == a.id } } label: {
+            Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
+        }
+        .buttonStyle(.plain)
+        .help("Remove").accessibilityLabel("Remove attachment \(a.name)")
     }
 
     // MARK: Actions
@@ -566,7 +604,7 @@ struct EditModeChip: View {
         switch mode {
         case .planOnly: .dsFg3
         case .askFirst: .dsAmber
-        case .autoEdit: .dsGreen
+        case .autoEdit: .dsFg3
         case .fullAuto: .accentColor
         }
     }

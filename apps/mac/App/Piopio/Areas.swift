@@ -94,9 +94,9 @@ struct AreaTile: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
-            .fill(area.tint.gradient)
+            .fill(Color.dsChip)
             .frame(width: size, height: size)
-            .overlay(Image(systemName: area.symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(.white))
+            .overlay(Image(systemName: area.symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(Color.dsFg2))
     }
 }
 

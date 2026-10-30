@@ -124,14 +124,14 @@ struct AgentDefinitionView: View {
 
     private var errorBox: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Not saved: fix these first").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.dsRed)
+            Text("Not saved: fix these first").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.dsFg2)
             ForEach(errors, id: \.self) { e in
                 Text("\(e.path)  \(e.message)").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.dsRed.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .background(Color.dsFg2.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: Groups
