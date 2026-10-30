@@ -195,6 +195,30 @@ private struct IconButtonBody: View {
     }
 }
 
+/// The neutral segmented control (docs/design/grey): a `track` fill, the selected segment on `seg` with a hairline.
+struct NeutralSegmented<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(value: Value, title: String)]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options, id: \.value) { option in
+                Button { selection = option.value } label: {
+                    Text(option.title).font(.system(size: 12, weight: selection == option.value ? .medium : .regular))
+                        .foregroundStyle(selection == option.value ? Color.dsFg : Color.dsFg2)
+                        .frame(maxWidth: .infinity).frame(height: 22)
+                        .background(selection == option.value ? Color.dsSeg : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(selection == option.value ? Color.dsLine : .clear, lineWidth: 0.5))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(Color.dsTrack, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
 /// 12pt tertiary label, sentence case (section headings).
 struct SectionLabel: View {
     let text: String

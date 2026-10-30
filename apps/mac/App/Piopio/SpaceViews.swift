@@ -643,7 +643,8 @@ struct SpaceFilesSheet: View {
 
 // MARK: Space view
 
-/// A Space (docs/design 2b): header, the topic capsules (Main first), the selected conversation and the composer.
+/// A notebook (docs/design/grey 13e, 13f): the conversation, and Topics in the right column. A topic opens on its own with
+/// a breadcrumb back; "All topics" returns to the notebook's main conversation, where the organizer routes messages.
 struct SpaceView: View {
     let engine: EngineController
     let space: SessionSummary
@@ -652,7 +653,8 @@ struct SpaceView: View {
     @Binding var selection: String?
     @State private var showMemory = false
     @State private var showFiles = false
-    @AppStorage("spaceInspector") private var showInspector = true
+    @AppStorage("notebookTopics") private var showTopics = true
+    @State private var width = 1000.0
 
     private var topics: [TopicInfo] { space.activeTopics }
     private var topic: TopicInfo? { topics.first { $0.id == topicId } }
@@ -660,20 +662,23 @@ struct SpaceView: View {
     var body: some View {
         HStack(spacing: 0) {
             conversation
-            if showInspector {
-                SpaceInspector(engine: engine, space: space, selection: $selection, showMemory: $showMemory)
+            if topicsVisible {
+                SpaceInspector(engine: engine, space: space, selection: $selection, showMemory: $showMemory, showFiles: $showFiles, newTopic: newTopic)
                     .frame(width: 240)
                     .sidePanel()
             }
         }
+        .onGeometryChange(for: Double.self) { $0.size.width } action: { width = $0 }
         .sheet(isPresented: $showMemory) { MemoryEditorSheet(engine: engine, space: space) }
         .sheet(isPresented: $showFiles) { SpaceFilesSheet(engine: engine, space: space) }
     }
 
+    /// The column needs room: on a narrow window the toolbar's Topics menu stands in for it.
+    private var topicsVisible: Bool { showTopics && width >= 640 }
+
     private var conversation: some View {
         VStack(spacing: 0) {
             header
-            capsules
             ZStack(alignment: .bottom) {
                 TranscriptView(document: thread.document)
                 VStack(spacing: 8) {
@@ -684,8 +689,8 @@ struct SpaceView: View {
                         .buttonStyle(PillStyle(kind: .toolbar, compact: true))
                     }
                     Composer(engine: engine, thread: thread)
-                        .frame(maxWidth: 636)
-                        .padding(.horizontal, 24)
+                        .frame(maxWidth: 680)
+                        .padding(.horizontal, 40)
                         .padding(.bottom, 20)
                 }
             }
@@ -697,11 +702,29 @@ struct SpaceView: View {
     }
 
     private var header: some View {
-        PageHeader(space.title, subtitle: subtitle) {
-            Button("Files") { showFiles = true }.buttonStyle(PillStyle(kind: .toolbar)).help("Documents every topic can read")
-            Button { withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() } } label: { Image(systemName: "sidebar.right") }
-                .buttonStyle(IconButtonStyle(on: showInspector))
-                .help(showInspector ? "Hide topics and memory" : "Show topics and memory")
+        PageHeader {
+            if let topic {
+                HStack(spacing: 6) {
+                    Button(space.title) { selection = space.ref.id }.buttonStyle(.plain).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2)
+                    Text("/").font(.system(size: 13.5)).foregroundStyle(Color.dsFg3)
+                    Text(topic.title).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
+                }
+            } else {
+                PageTitle(name: space.title, subtitle: subtitle)
+            }
+        } actions: {
+            if topic != nil {
+                Button("All topics") { selection = space.ref.id }.buttonStyle(PillStyle(kind: .toolbar)).help("Back to the notebook's main conversation")
+            }
+            if !topicsVisible, !topics.isEmpty {
+                Menu {
+                    ForEach(topics) { t in Button(t.title) { selection = space.ref(topic: t.id).key } }
+                } label: { Text("Topics") }
+                    .menuStyle(.button).buttonStyle(PillStyle(kind: .toolbar)).menuIndicator(.hidden).fixedSize()
+            }
+            Button { withAnimation(.easeOut(duration: 0.15)) { showTopics.toggle() } } label: { Image(systemName: "sidebar.right") }
+                .buttonStyle(IconButtonStyle(on: topicsVisible))
+                .help(showTopics ? "Hide topics" : "Show topics, memory and files")
             Menu {
                 SpaceMenu(engine: engine, space: space, selection: $selection)
             } label: {
@@ -725,42 +748,6 @@ struct SpaceView: View {
     }
 
     /// Main, then the topics, as underlined tabs (docs/design v2, 4a); + Topic starts one (/new in Main).
-    private var capsules: some View {
-        VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 22) {
-                    tab("Main", selected: topicId == nil) { selection = space.ref.id }
-                    ForEach(topics) { t in
-                        tab(t.title, selected: topicId == t.id, running: t.running == true, unread: t.unread == true) { selection = space.ref(topic: t.id).key }
-                            .contextMenu { TopicMenu(engine: engine, space: space, topic: t, selection: $selection) }
-                    }
-                    Button { newTopic() } label: {
-                        Image(systemName: "plus").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.bottom, 8)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Start a topic yourself")
-                }
-                .padding(.horizontal, 20)
-            }
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-        }
-    }
-
-    private func tab(_ title: String, selected: Bool, running: Bool = false, unread: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                HStack(spacing: 5) {
-                    Text(title).font(.system(size: 13, weight: selected ? .semibold : .regular)).foregroundStyle(selected ? Color.dsFg : Color.dsFg2).lineLimit(1)
-                    if running { RunningRing(size: 9) } else if unread { Circle().fill(Color.accentColor).frame(width: 6, height: 6) }
-                }
-                Rectangle().fill(selected ? Color.dsFg : .clear).frame(height: 1.5)
-            }
-            .fixedSize()
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
     private func newTopic() {
         let alert = NSAlert()
         alert.messageText = "New topic in \(space.title)"
@@ -785,64 +772,105 @@ struct SpaceView: View {
     }
 }
 
-/// The notebook's inspector (docs/design v2, 4a): progress across its topics, then a preview of its memory.
+/// The notebook's right column (docs/design/grey 13e): Topics, each with a grey status line, then Remembers and Files.
 struct SpaceInspector: View {
     let engine: EngineController
     let space: SessionSummary
     @Binding var selection: String?
     @Binding var showMemory: Bool
+    @Binding var showFiles: Bool
+    let newTopic: () -> Void
     @State private var memoryText = ""
+    @State private var files: [SpaceFile] = []
 
     private var topics: [TopicInfo] { space.activeTopics }
 
-    /// docs/design/grey 13e: Topics (each with a grey status line), then Remembers. Plain rows, no boxes.
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
-                SectionLabel("Topics").padding(.bottom, 6)
-                ForEach(topics) { topic in
-                    let selected = selection == space.ref(topic: topic.id).key
-                    Button { selection = space.ref(topic: topic.id).key } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(topic.title).font(.system(size: 13, weight: selected ? .semibold : .regular)).foregroundStyle(Color.dsFg).lineLimit(1)
-                            Text(statusLine(topic)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(selected ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, -8)
+            VStack(alignment: .leading, spacing: 2) {
+                heading("Topics") {
+                    Button(action: newTopic) { Image(systemName: "plus").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 20, height: 20).contentShape(Rectangle()) }
+                        .buttonStyle(.plain).help("Start a topic yourself")
                 }
+                ForEach(topics) { topicRow($0) }
                 if topics.isEmpty {
-                    Text("Write in Main: the organizer starts topics as subjects come up.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+                    Text("Write here: the organizer starts topics as subjects come up.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                 }
                 if space.space?.memory != false {
-                    let facts = Self.preview(memoryText)
-                    HStack {
-                        SectionLabel("Remembers")
-                        Spacer()
-                        Button(facts.isEmpty ? "Open" : "See all") { showMemory = true }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    let all = Self.facts(memoryText)
+                    heading("Remembers") {
+                        if !all.isEmpty { Text("\(all.count)").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                        Button(all.isEmpty ? "Open" : "See all") { showMemory = true }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                     }
-                    .padding(.top, 20).padding(.bottom, 4)
-                    if facts.isEmpty { Text("Nothing yet").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
-                    ForEach(Array(facts.enumerated()), id: \.offset) { _, f in
-                        Text(f.1.isEmpty ? f.0 : "\(f.0) \(f.1)").font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(2).padding(.vertical, 3)
+                    .padding(.top, 20)
+                    if all.isEmpty { Text("Nothing yet").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+                    ForEach(Array(all.prefix(4).enumerated()), id: \.offset) { _, fact in
+                        Text(fact).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(2).padding(.vertical, 3)
                     }
                 }
+                heading("Files") {
+                    Button("Add") { showFiles = true }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                }
+                .padding(.top, 20)
+                if files.isEmpty { Text("None yet").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+                ForEach(files.prefix(5)) { file in
+                    Button { showFiles = true } label: {
+                        Text(file.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.middle).padding(.vertical, 3)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .padding(20)
+            .padding(.horizontal, 20).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: space.space?.memoryLines) { memoryText = (await engine.memory(of: space.ref))?.text ?? "" }
+        .task(id: "\(space.space?.files ?? 0)\(showFiles)") { files = await engine.spaceFiles(space.ref) }
     }
 
-    /// "Working…", "New reply", or what it's about.
+    private func heading<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: 8) {
+            SectionLabel(title)
+            Spacer()
+            trailing()
+        }
+        .frame(height: 24)
+        .padding(.bottom, 2)
+    }
+
+    private func topicRow(_ topic: TopicInfo) -> some View {
+        let selected = selection == space.ref(topic: topic.id).key
+        return Button { selection = space.ref(topic: topic.id).key } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(topic.title).font(.system(size: 13, weight: selected ? .medium : .regular)).foregroundStyle(topic.summary == nil && topic.running != true && topic.unread != true ? Color.dsFg2 : Color.dsFg).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if topic.running == true { RunningRing() } else if topic.unread == true { Circle().fill(Color.accentColor).frame(width: 6, height: 6).accessibilityLabel("New reply") }
+                }
+                Text(statusLine(topic)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, -8)
+        .contextMenu { TopicMenu(engine: engine, space: space, topic: topic, selection: $selection) }
+    }
+
+    /// "Working…", "New reply", where it stands, or "Not started".
     private func statusLine(_ t: TopicInfo) -> String {
         if t.running == true { return "Working…" }
         if t.unread == true { return "New reply" }
         return t.summary ?? t.brief ?? "Not started"
+    }
+
+    /// The memory's facts as plain lines.
+    static func facts(_ text: String) -> [String] {
+        text.split(separator: "\n").compactMap { line in
+            let l = line.trimmingCharacters(in: .whitespaces)
+            return l.hasPrefix("- ") ? String(l.dropFirst(2)) : nil
+        }
     }
 
     /// The first few facts as key/value pairs ("Size · 4 × 3 m"): a "Label: value" fact, or its first words.

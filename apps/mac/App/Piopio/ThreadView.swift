@@ -13,13 +13,17 @@ struct ThreadView: View {
     @State private var showCosts = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            conversation
-            if let debate = thread.debate, showPanel {
-                Divider().overlay(Color.dsLine)
-                DebatePanel(debate: debate, thread: thread)
+        Group {
+            if let debate = thread.debate {
+                VStack(spacing: 0) {
+                    header
+                    DebateLayout(engine: engine, thread: thread, debate: debate, showPane: showPanel)
+                }
+            } else {
+                conversation
             }
         }
+        .task { await thread.open() }
     }
 
     private var conversation: some View {
@@ -50,7 +54,6 @@ struct ThreadView: View {
                 }
             }
         }
-        .task { await thread.open() }
         // "Ask next" sits in the thread after the last answer (chat v3, 14e).
         .onChange(of: summary.followUps) { _, items in thread.setFollowUps(items ?? Self.demoFollowUps) }
         .onAppear { thread.setFollowUps(summary.followUps ?? Self.demoFollowUps) }

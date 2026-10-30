@@ -20,6 +20,8 @@ nonisolated struct ItemRenderer: Sendable {
     /// Answers with more text after them in the same turn: no action row under them (only the turn's last text has one).
     var midTurn: Set<String> = []
 
+    /// A standalone document (a debate's artifact): larger headings.
+    var prose = false
     /// Answers 15 / 1.6 (chat v3); Quick Chat keeps the compact 13.5.
     private var bodySize: CGFloat { compact ? DS.transcriptSize : 15 }
     private var body: NSFont { .systemFont(ofSize: bodySize) }
@@ -383,15 +385,14 @@ nonisolated struct ItemRenderer: Sendable {
         case (.proposed, .dismissed): "Dismissed: \(facts)"
         case (.proposed, _): "Suggested: \(facts)"
         }
-        let m2 = NSMutableAttributedString(string: "✎  ", attributes: [.font: NSFont.systemFont(ofSize: 10), .foregroundColor: DS.fg3])
-        m2.append(NSAttributedString(string: lead, attributes: [.font: small, .foregroundColor: m.status == .undone || m.status == .dismissed ? DS.fg3 : DS.fg2, .toolTip: facts]))
+        let m2 = NSMutableAttributedString(string: lead, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3, .toolTip: facts])
         if !compact {
             let link: (String, TranscriptAction) -> NSAttributedString = { title, action in
-                NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: action.url])
+                NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2, .link: action.url])
             }
             if m.status == .saved, let revision = m.revisionId {
-                m2.append(NSAttributedString(string: "  ·  ", attributes: [.font: small, .foregroundColor: DS.fg3]))
-                m2.append(link("Undo", .undoMemory(revisionId: revision)))
+                m2.append(NSAttributedString(string: " · ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
+                m2.append(link("undo", .undoMemory(revisionId: revision)))
             } else if m.status == .pending, let proposal = m.proposalId {
                 m2.append(NSAttributedString(string: "   ", attributes: [.font: small]))
                 m2.append(link("Save", .decideMemory(proposalId: proposal, accept: true)))
@@ -405,38 +406,32 @@ nonisolated struct ItemRenderer: Sendable {
         return line(m2, paragraph(spacing: 14, before: 4))
     }
 
-    /// A notebook's Main (docs/design v2, 4a): one compact row per topic a message went to — status dot,
-    /// the topic, one line of where it stands, Open › — instead of a full card. The reply lives in the topic.
+    /// Where the organizer sent a message (docs/design/grey 13e): one grey line under it, right-aligned like the
+    /// message: "New topic: Muebles · Open · Change". The reply lives in the topic.
     private func routingCard(_ r: RoutingItem) -> NSAttributedString {
-        let (status, dot): (String, NSColor) = switch r.status {
-        case .thinking: ("Thinking…", DS.accent)
-        case .replying: ("Replying…", DS.accent)
-        case .replied: (r.message.isEmpty ? "Created" : "Replied", DS.fg3)
-        case .needsYou: ("Needs you", DS.accent)
-        case .failed: ("Failed", DS.fg2)
+        let status: String? = switch r.status {
+        case .thinking: "thinking…"
+        case .replying: "replying…"
+        case .needsYou: "needs you"
+        case .failed: "failed"
+        case .replied: nil
         }
-        let m = NSMutableAttributedString()
-        m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 8), .foregroundColor: dot, .baselineOffset: 1.5]))
-        m.append(NSAttributedString(string: r.topicTitle, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
-        let kind = r.decision == .create ? "new topic" : "sent here"
-        m.append(NSAttributedString(string: "  ·  \(kind)  ·  ", attributes: [.font: small, .foregroundColor: DS.fg3, .toolTip: r.reason]))
-        m.append(NSAttributedString(string: status, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: r.status == .needsYou ? DS.accent : r.status == .failed ? DS.fg2 : DS.fg3]))
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg3]
+        let m = NSMutableAttributedString(string: r.decision == .create ? "New topic: " : "Sent to ", attributes: attrs)
+        m.addAttribute(.toolTip, value: r.preview ?? r.reason, range: NSRange(location: 0, length: m.length))
+        m.append(NSAttributedString(string: r.topicTitle, attributes: attrs))
+        if let status { m.append(NSAttributedString(string: " · \(status)", attributes: attrs)) }
         if !compact, !r.topicId.isEmpty {
-            let link: (String, TranscriptAction) -> NSAttributedString = { title, action in
-                NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: DS.accent, .link: action.url])
-            }
-            m.append(NSAttributedString(string: "     ", attributes: [.font: small]))
-            m.append(link("Open ›", .openTopic(topicId: r.topicId, itemId: r.replyItemId)))
+            m.append(NSAttributedString(string: " · ", attributes: attrs))
+            m.append(NSAttributedString(string: "open", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2, .link: TranscriptAction.openTopic(topicId: r.topicId, itemId: r.replyItemId).url]))
             if !r.message.isEmpty, r.status != .failed {
-                m.append(NSAttributedString(string: "   ", attributes: [.font: small]))
-                m.append(NSAttributedString(string: "Change", attributes: [.font: small, .foregroundColor: DS.fg3, .link: TranscriptAction.wrongTopic(itemId: r.id).url, .toolTip: "Send this to another topic"]))
+                m.append(NSAttributedString(string: " · ", attributes: attrs))
+                m.append(NSAttributedString(string: "change", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2, .link: TranscriptAction.wrongTopic(itemId: r.id).url, .toolTip: "Send this to another topic"]))
             }
         }
-        let line2 = r.preview.map { String($0.prefix(140)) } ?? (r.reason.isEmpty ? nil : r.reason)
-        if let line2 {
-            m.append(NSAttributedString(string: lineSeparator + "    " + line2, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2]))
-        }
-        return card(m, .link, lineHeight: 1.5)
+        let p = paragraph(spacing: 14, before: 2)
+        p.alignment = .right
+        return line(m, p)
     }
 
     // MARK: Messages
@@ -793,8 +788,9 @@ nonisolated struct ItemRenderer: Sendable {
     func render(_ block: MarkdownBlock) -> NSAttributedString {
         switch block {
         case .heading(let level, let text):
-            let size: CGFloat = level == 1 ? 19 : level == 2 ? 17 : 15
-            return line(chips(Inline.ns(text, font: .systemFont(ofSize: size, weight: .semibold), color: DS.fg)), paragraph(spacing: 6, before: 8))
+            let size: CGFloat = prose ? (level == 1 ? 28 : level == 2 ? 17 : 15) : (level == 1 ? 19 : level == 2 ? 17 : 15)
+            let weight: NSFont.Weight = prose && level == 1 ? .bold : .semibold
+            return line(chips(Inline.ns(text, font: .systemFont(ofSize: size, weight: weight), color: DS.fg)), paragraph(spacing: prose ? 10 : 6, before: prose ? 18 : 8))
         case .paragraph(let text):
             // A single line break inside a paragraph stays a line break, not a new paragraph with its spacing.
             return line(chips(Inline.ns(text.replacingOccurrences(of: "\n", with: lineSeparator), font: body, color: DS.fg)), paragraph(spacing: compact ? 10 : 12))

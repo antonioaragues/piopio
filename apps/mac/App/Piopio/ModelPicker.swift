@@ -2,46 +2,59 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The model picker (docs/design v2, 10a): search and capability filters, recent models first, then every model
-/// grouped by its maker with a $–$$$ tier; batch and alias variants folded away; a detail pane for the highlighted one.
+/// The model picker (docs/design/grey 11f): a search field, a group per provider, one plain line for each model, ✓ on the
+/// current one, whatever the caller adds (Thinking), and Manage providers. Recently used models lead their group; batch
+/// and alias variants stay folded until you search. Searching also matches "free", "vision" and "reasoning".
 /// Keyboard: type to search, ↑↓ to move, ↩ to pick, ⌘↩ to pick and make it the default for `role`.
 struct ModelPicker: View {
     let engine: EngineController
     let selected: ModelRef?
     var role: EngineController.ModelRole = .chat
+    /// Shown between the list and Manage providers (the composer's Thinking control).
+    var accessory: AnyView?
     let onPick: (ModelRef) -> Void
     @State private var query = ""
     @State private var showVariants = false
-    @State private var filter: Filter = .all
     @State private var highlighted: String?
     @FocusState private var searching: Bool
     @AppStorage("recentModels") private var recentRaw = ""
-
-    enum Filter: String, CaseIterable { case all = "All", reasoning = "Reasoning", vision = "Vision", free = "Free" }
 
     private struct Section: Identifiable { let id: String; let title: String; let models: [ModelInfo] }
 
     var body: some View {
         VStack(spacing: 0) {
-            search
-            filters
+            TextField("Search models", text: $query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13.5))
+                .focused($searching)
+                .padding(.horizontal, 16)
+                .frame(height: 40)
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            HStack(spacing: 0) {
-                list
-                Rectangle().fill(Color.dsLine).frame(width: 0.5)
-                detail.frame(width: 300)
+            list
+            if let accessory {
+                Rectangle().fill(Color.dsLine).frame(height: 0.5)
+                accessory
             }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            footer
+            HStack {
+                Button("Manage providers") {
+                    UserDefaults.standard.set("Models", forKey: "settingsSection")
+                    WindowOpener.shared.openSettings?()
+                }
+                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+                Spacer()
+                Text("⌘↩ sets as default").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 36)
         }
-        .frame(width: 760, height: 520)
-        .background(Color.dsWin)
+        .frame(width: 340, height: accessory == nil ? 440 : 500)
+        .background(Color.dsCard)
         .onAppear {
             searching = true
-            highlighted = keys.first
+            highlighted = keys.first { $0.hasSuffix("|\(selected?.provider ?? "")/\(selected?.id ?? "")") } ?? keys.first
         }
         .onChange(of: query) { _, _ in highlighted = keys.first }
-        .onChange(of: filter) { _, _ in highlighted = keys.first }
         .onKeyPress(.downArrow) { move(1); return .handled }
         .onKeyPress(.upArrow) { move(-1); return .handled }
         .onKeyPress(.return, phases: .down) { press in
@@ -53,206 +66,74 @@ struct ModelPicker: View {
     }
 
     private var list: some View {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                        ForEach(sections) { section in
-                            SwiftUI.Section {
-                                ForEach(section.models) { model in row(model, in: section.id) }
-                            } header: {
-                                Text(section.title.uppercased())
-                                    .font(.system(size: 10.5, weight: .semibold)).tracking(0.4).foregroundStyle(Color.dsFg3)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 4)
-                                    .background(Color.dsWin)
-                            }
-                        }
-                        if sections.isEmpty {
-                            Text(engine.models.isEmpty ? "Loading models…" : "No models match.")
-                                .font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                                .frame(maxWidth: .infinity).padding(.top, 60)
-                        }
-                        if foldsVariants, hiddenVariants > 0 {
-                            Button { showVariants = true } label: {
-                                Text("Show batch and alias variants (\(hiddenVariants))").font(.system(size: 12)).foregroundStyle(Color.accentColor)
-                                    .padding(.horizontal, 14).padding(.vertical, 10)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.bottom, 6)
-                }
-                .onChange(of: highlighted) { _, key in
-                    if let key { withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(key) } }
-                }
-            }
-    }
-
-    /// The highlighted model: who makes it, what it costs and what it can do.
-    @ViewBuilder private var detail: some View {
-        if let m = model(for: highlighted) {
+        ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        MakerTile(maker: Self.maker(m), size: 36)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(Self.shortName(m)).font(.system(size: 15, weight: .bold)).lineLimit(2)
-                            Text(m.id).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                        }
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    ForEach(sections) { section in
+                        Text(section.title).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 3)
+                        ForEach(section.models) { model in row(model, in: section.id) }
                     }
-                    Text(Self.blurb(m)).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 8) {
-                        if Self.tier(m) == "Yours" {
-                            priceTile("Price", text: "Yours", caption: m.billing == "On this Mac" ? "runs on this Mac" : "your own server")
-                        } else if Self.tier(m) == "Plan" {
-                            priceTile("Price", text: "Plan", caption: "within your plan's limits")
-                        } else {
-                            priceTile("Input", m.pricing.input)
-                            priceTile("Output", m.pricing.output)
-                        }
+                    if sections.isEmpty {
+                        Text(engine.models.isEmpty ? "Loading models…" : "No models match.")
+                            .font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                            .frame(maxWidth: .infinity).padding(.top, 60)
                     }
-                    VStack(spacing: 0) {
-                        fact("Context", m.contextWindow > 0 ? "\(Self.context(m)) tokens" : "Not reported")
-                        fact("Longest answer", "\(Self.tokens(m.maxOutputTokens)) tokens")
-                        fact("Reasoning", m.supports.reasoning ? "Yes" : "No")
-                        fact("Images", m.supports.vision ? "Reads them" : "No", last: m.billing == nil)
-                        if let billing = m.billing { fact("Billed to", billing, last: true) }
-                    }
-                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                    if engine.model(for: role) == m.ref {
-                        Text("Your default for \(Self.roleName(role))").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    } else {
-                        Button("Set as default for \(Self.roleName(role))") { engine.setModel(m.ref, for: role) }
-                            .buttonStyle(.plain).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.accentColor)
+                    if foldsVariants, hiddenVariants > 0 {
+                        Button("Show \(hiddenVariants) more variants") { showVariants = true }
+                            .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                            .padding(.horizontal, 10).padding(.vertical, 8)
                     }
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(6)
             }
-        } else {
-            Text("Pick a model to see its details.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private func priceTile(_ label: String, _ value: Double) -> some View {
-        priceTile(label, text: value == 0 ? "Free" : String(format: value >= 10 ? "$%.0f" : "$%.2f", value), caption: "per million tokens")
-    }
-
-    private func priceTile(_ label: String, text: String, caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            Text(text).font(.system(size: 17, weight: .semibold).monospacedDigit())
-            Text(caption).font(.system(size: 10.5)).foregroundStyle(Color.dsFg3)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private func fact(_ label: String, _ value: String, last: Bool = false) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(label).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                Spacer()
-                Text(value).font(.system(size: 12.5, weight: .medium))
+            .onChange(of: highlighted) { _, key in
+                if let key { proxy.scrollTo(key) }
             }
-            .padding(.horizontal, 12).frame(height: 32)
-            if !last { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 12) }
+            .onAppear { if let highlighted { proxy.scrollTo(highlighted, anchor: .center) } }
         }
-    }
-
-    // MARK: Parts
-
-    private var search: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg3)
-            TextField("Search \(engine.models.count) models", text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .focused($searching)
-            if !query.isEmpty {
-                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.dsFg3) }.buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 36)
-        .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .padding(.horizontal, 12)
-        .padding(.top, 12)
-    }
-
-    private var filters: some View {
-        HStack(spacing: 6) {
-            ForEach(Filter.allCases, id: \.self) { f in
-                Button { filter = f } label: {
-                    HStack(spacing: 4) {
-                        switch f {
-                        case .reasoning: Image(systemName: "brain").font(.system(size: 10))
-                        case .vision: Image(systemName: "eye").font(.system(size: 10))
-                        case .free: Image(systemName: "gift").font(.system(size: 10))
-                        case .all: EmptyView()
-                        }
-                        Text(f.rawValue)
-                    }
-                }
-                .buttonStyle(ChipStyle(active: filter == f))
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-    }
-
-    private var footer: some View {
-        HStack {
-            Text("$ under $2 · $$ under $15 · $$$ more, per million output tokens").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            Spacer()
-            Text("↑↓ move · ↩ choose · ⌘↩ set as default").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 30)
     }
 
     private func row(_ model: ModelInfo, in section: String) -> some View {
         let key = "\(section)|\(model.provider)/\(model.id)"
         let isSelected = selected?.provider == model.provider && selected?.id == model.id
-        let fg: Color = isSelected ? .white : Color.dsFg
-        let fg3: Color = isSelected ? .white.opacity(0.75) : Color.dsFg3
         return Button { pick(model) } label: {
-            HStack(spacing: 10) {
-                MakerTile(maker: Self.maker(model))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Text(Self.shortName(model)).font(.system(size: 13, weight: isSelected ? .semibold : .medium)).foregroundStyle(fg).lineLimit(1)
-                        if model.supports.reasoning { capability("brain", "Reasons before answering").foregroundStyle(fg3) }
-                        if model.supports.vision { capability("eye", "Reads images").foregroundStyle(fg3) }
-                    }
-                    Text("\(multiProvider ? "via \(Self.providerTag(model))" : Self.maker(model)) · \(Self.context(model)) context").font(.system(size: 11)).foregroundStyle(fg3).lineLimit(1)
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(Self.shortName(model)).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                    Text(line(model)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Text(Self.tier(model))
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(isSelected ? .white : Self.isFree(model) ? Color.dsGreen : Color.dsFg2)
-                    .help(Self.price(model) + " per million tokens, input / output")
+                if isSelected { Image(systemName: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2) }
             }
             .padding(.horizontal, 10)
-            .frame(height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? Color.accentColor : highlighted == key ? Color.dsAccentSoft : .clear)
-            )
+            .frame(height: 42)
+            .background(isSelected || highlighted == key ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
             .contentShape(Rectangle())
-            .padding(.horizontal, 6)
         }
         .buttonStyle(.plain)
         .id(key)
+        .help("\(model.id)\n\(Self.price(model)) per million tokens, input / output · \(Self.context(model)) context")
         .onHover { if $0 { highlighted = key } }
+        .contextMenu { Button("Set as Default for \(Self.roleName(role))") { engine.setModel(model.ref, for: role) } }
     }
 
-    private func capability(_ symbol: String, _ help: String) -> some View {
-        Image(systemName: symbol).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Color.dsFg3).help(help)
+    /// One plain line: who makes it and what it's like, not its specs. "Anthropic · premium, reads images · default".
+    private func line(_ m: ModelInfo) -> String {
+        var traits: [String] = []
+        switch Self.tier(m) {
+        case "Free": traits.append("free")
+        case "Plan": traits.append("in your plan")
+        case "Yours": traits.append(m.billing == "On this Mac" ? "runs on this Mac" : "your server")
+        case "$": traits.append("low cost")
+        case "$$": traits.append("mid-priced")
+        case "$$$": traits.append("premium")
+        default: break
+        }
+        if m.supports.reasoning { traits.append("thinks first") }
+        if m.supports.vision { traits.append("reads images") }
+        let main = [Self.maker(m), traits.joined(separator: ", ")].filter { !$0.isEmpty }.joined(separator: " · ")
+        return engine.model(for: role) == m.ref ? main + " · default" : main
     }
 
     // MARK: Data
@@ -260,57 +141,37 @@ struct ModelPicker: View {
     private var matching: [ModelInfo] {
         let terms = query.lowercased().split(separator: " ")
         return engine.models.filter { m in
-            let hay = "\(m.name) \(m.id) \(m.provider) \(m.providerName ?? "") \(m.billing ?? "")".lowercased()
-            guard terms.allSatisfy({ hay.contains($0) }) else { return false }
-            switch filter {
-            case .all: return true
-            case .reasoning: return m.supports.reasoning
-            case .vision: return m.supports.vision
-            case .free: return Self.isFree(m)
-            }
+            let traits = (Self.isFree(m) ? "free " : "") + (m.supports.vision ? "vision images " : "") + (m.supports.reasoning ? "reasoning thinking " : "")
+            let hay = "\(m.name) \(m.id) \(m.provider) \(m.providerName ?? "") \(m.billing ?? "") \(traits)".lowercased()
+            return terms.allSatisfy { hay.contains($0) }
         }
     }
 
     private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
 
-    /// More than one provider connected: rows say which one, OpenRouter's sections say so too.
-    private var multiProvider: Bool { Set(engine.models.map(\.provider)).subtracting(["faux"]).count > 1 }
-
-    /// Batch and alias variants stay folded unless searching, filtering for free models, or asked for.
-    private var foldsVariants: Bool { !showVariants && query.isEmpty && filter != .free }
+    /// Batch and alias variants stay folded unless searching or asked for.
+    private var foldsVariants: Bool { !showVariants && query.isEmpty }
     private var hiddenVariants: Int { matching.filter(Self.isVariant).count }
 
+    /// A group per provider, OpenRouter first. In a group: what you used lately, then the known makers, then the rest.
     private var sections: [Section] {
-        let all = matching
-        var out: [Section] = []
-        if query.isEmpty {
-            // The current model leads Recent.
-            let keys = (selected.map { ["\($0.provider)/\($0.id)"] } ?? []) + recent
-            var seen = Set<String>()
-            let recents = keys.filter { seen.insert($0).inserted }.compactMap { key in all.first { "\($0.provider)/\($0.id)" == key } }
-            if !recents.isEmpty { out.append(Section(id: "recent", title: "Recent", models: Array(recents.prefix(5)))) }
+        let listed = foldsVariants ? matching.filter { !Self.isVariant($0) || ($0.provider == selected?.provider && $0.id == selected?.id) } : matching
+        let recents = (selected.map { ["\($0.provider)/\($0.id)"] } ?? []) + recent
+        let order = ["openrouter", "faux", "openai", "openai-api"]
+        let groups = Dictionary(grouping: listed, by: \.provider)
+        return groups.keys.sorted { (order.firstIndex(of: $0) ?? 9, $0) < (order.firstIndex(of: $1) ?? 9, $1) }.map { provider in
+            let models = groups[provider]!.sorted { a, b in
+                let ra = query.isEmpty ? recents.firstIndex(of: "\(a.provider)/\(a.id)") ?? 99 : 99, rb = query.isEmpty ? recents.firstIndex(of: "\(b.provider)/\(b.id)") ?? 99 : 99
+                if ra != rb { return ra < rb }
+                let ma = Self.makerRank(a), mb = Self.makerRank(b)
+                return ma != mb ? ma < mb : Self.shortName(a) < Self.shortName(b)
+            }
+            return Section(id: "provider:\(provider)", title: Self.providerTag(models[0]), models: models)
         }
-        let listed = foldsVariants ? all.filter { !Self.isVariant($0) } : all
-        // Providers other than OpenRouter first, one section each, titled with who bills (docs/spec/10 FR2):
-        // the same model through two providers stays two choices.
-        let direct = Dictionary(grouping: listed.filter { $0.provider != "openrouter" }, by: \.provider)
-        let providerOrder = ["faux", "openai", "openai-api"]
-        for provider in direct.keys.sorted(by: { (providerOrder.firstIndex(of: $0) ?? 9, $0) < (providerOrder.firstIndex(of: $1) ?? 9, $1) }) {
-            let models = direct[provider]!
-            let title = [Self.providerTag(models[0]), models[0].billing].compactMap { $0 }.joined(separator: " · ")
-            out.append(Section(id: "provider:\(provider)", title: title, models: models.sorted { Self.shortName($0) < Self.shortName($1) }))
-        }
-        let routed = listed.filter { $0.provider == "openrouter" }
-        let byMaker = Dictionary(grouping: routed, by: Self.maker)
-        // Well-known makers first, then the rest by how many models they have; models by name within a maker.
-        let rank = { (maker: String) in Self.knownMakers.firstIndex { $0.caseInsensitiveCompare(maker) == .orderedSame } ?? Self.knownMakers.count }
-        let ordered = byMaker.keys.sorted { a, b in
-            rank(a) != rank(b) ? rank(a) < rank(b) : byMaker[a]!.count != byMaker[b]!.count ? byMaker[a]!.count > byMaker[b]!.count : a < b
-        }
-        for maker in ordered {
-            out.append(Section(id: "maker:\(maker)", title: multiProvider ? "OpenRouter · \(maker)" : maker, models: byMaker[maker]!.sorted { Self.shortName($0) < Self.shortName($1) }))
-        }
-        return out
+    }
+
+    private static func makerRank(_ m: ModelInfo) -> Int {
+        knownMakers.firstIndex { $0.caseInsensitiveCompare(maker(m)) == .orderedSame } ?? knownMakers.count
     }
 
     /// Row keys in display order (keyboard navigation).
@@ -412,20 +273,5 @@ struct ModelPicker: View {
     static func context(_ m: ModelInfo) -> String {
         if m.contextWindow <= 0 { return "unknown" }
         return m.contextWindow >= 1_000_000 ? String(format: "%gM", (m.contextWindow / 100_000).rounded() / 10) : "\(Int(m.contextWindow / 1000))K"
-    }
-}
-
-/// A maker's tile: its initial on a color of its own (no brand logos).
-private struct MakerTile: View {
-    let maker: String
-    var size: CGFloat = 28
-
-    var body: some View {
-        let hue = Double(maker.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) % 360 }) / 360
-        Text(String(maker.prefix(1)).uppercased())
-            .font(.system(size: size * 0.43, weight: .bold, design: .rounded))
-            .foregroundStyle(Color(hue: hue, saturation: 0.55, brightness: 0.55))
-            .frame(width: size, height: size)
-            .background(Color(hue: hue, saturation: 0.35, brightness: 0.95).opacity(0.55), in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
     }
 }

@@ -817,6 +817,22 @@ private final class HoverTracker: NSResponder {
     }
 }
 
+extension TranscriptDocument {
+    /// Shows a whole Markdown document instead of a conversation (a debate's artifact), always rendered.
+    public func showDocument(_ markdown: String) {
+        var prose = ItemRenderer()
+        prose.prose = true
+        textView.textStorage?.setAttributedString(prose.render(MarkdownStream(text: markdown).blocks))
+        layoutColumn(force: true)
+        scrollView.contentView.scroll(to: .zero)
+    }
+}
+
+/// A turn's activity as words, for views outside the transcript: "Searched the web 5 times, read 3 pages".
+public enum TranscriptText {
+    public static func activity(_ steps: StepsItem) -> String { ItemRenderer.stepsCard(steps).title }
+}
+
 /// Markdown rendered in the transcript's style, for other views (the Chat lens file preview).
 public enum MarkdownRendering {
     /// Files are hard-wrapped: lines of one paragraph join with a space, as Markdown reads them.

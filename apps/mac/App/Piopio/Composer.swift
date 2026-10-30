@@ -31,7 +31,7 @@ struct Composer: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(thread.queue, id: \.id) { item in
                 HStack(spacing: 8) {
-                    Text(item.mode == .steer ? "Steering" : "Queued").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+                    Text(thread.debate?.status == .running ? "Next round" : item.mode == .steer ? "Steering" : "Queued").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
                     Text(item.text ?? "Queued message").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
                     Spacer()
                     Button("Remove") { Task { await thread.removeQueued(item.id) } }
@@ -55,7 +55,7 @@ struct Composer: View {
             if !suggestions.isEmpty { suggestionList }
             box
             if thread.isRunning {
-                Text(text.isEmpty ? "esc to stop" : "↩ to queue · ⌥↩ to steer now · esc to stop").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity)
+                Text(thread.debate?.status == .running ? "esc to stop the debate" : text.isEmpty ? "esc to stop" : "↩ to queue · ⌥↩ to steer now · esc to stop").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity)
             }
         }
         .onChange(of: text) { _, value in
@@ -155,6 +155,7 @@ struct Composer: View {
                         .accessibilityLabel(isBuild ? "Mention files or folders" : "Attach files or images")
                 }
                 if isBuild { EditModeChip(engine: engine, thread: thread) }
+                if thread.debate != nil { Text("Debate").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6) }
                 // Spaces always have the web tools (no per-conversation switch yet).
                 if thread.editing == nil && !isBuild && thread.ref.kind != .space && thread.ref.kind != .agent {
                     Button { Task { await thread.setWeb(!thread.webEnabled) } } label: {
@@ -165,7 +166,11 @@ struct Composer: View {
                 }
                 Spacer(minLength: 6)
                 if let context = thread.state?.context { ContextRing(context: context, compact: isBuild ? { Task { await thread.compact() } } : nil) }
-                ModelChip(engine: engine, thread: thread)
+                if let debate = thread.debate, debate.status == .running {
+                    Text("Round \(debate.round) of up to \(debate.maxRounds)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6)
+                } else {
+                    ModelChip(engine: engine, thread: thread)
+                }
                 let stopping = thread.isRunning && text.isEmpty
                 Button { stopping ? stop() : send(steer: false) } label: {
                     Image(systemName: stopping ? "stop.fill" : "arrow.up")
@@ -202,8 +207,8 @@ struct Composer: View {
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
         if let debate = thread.debate {
-            if debate.status == .running { return "Tell both models something: they read it on their next turn" }
-            if !thread.isRunning { return "Ask \(debate.label(.author)) for changes or a follow-up" }
+            if debate.status == .running { return "Add a note for the next round…" }
+            if !thread.isRunning { return "Ask for changes to the draft…" }
         }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
@@ -414,24 +419,36 @@ struct ModelChip: View {
         .buttonStyle(ComposerChipStyle())
         .help("Model and thinking")
         .popover(isPresented: Binding(get: { thread.showModelPicker }, set: { thread.showModelPicker = $0 }), arrowEdge: .top) {
-            VStack(spacing: 0) {
-                ModelPicker(engine: engine, selected: thread.state?.model) { model in
-                    thread.showModelPicker = false
-                    Task { await thread.setModel(model) }
-                }
-                if thread.supportsThinking {
-                    Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Thinking").font(.system(size: 13)).foregroundStyle(Color.dsFg)
-                        Picker("", selection: Binding(get: { ThinkingLevel.value(thread.state?.thinking) }, set: { v in Task { await thread.setThinking(v) } })) {
-                            ForEach(ThinkingLevel.levels, id: \.value) { Text($0.title).tag($0.value) }
-                        }
-                        .pickerStyle(.segmented).labelsHidden()
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 12)
-                }
+            ModelPicker(engine: engine, selected: thread.state?.model, accessory: thread.supportsThinking ? AnyView(thinking) : nil) { model in
+                thread.showModelPicker = false
+                Task { await thread.setModel(model) }
             }
         }
+        .background {
+            Button("") { cycleThinking() }.keyboardShortcut("t", modifiers: .command).hidden().disabled(!thread.supportsThinking)
+        }
+    }
+
+    /// Thinking sits in the same menu, because the two choices go together.
+    private var thinking: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Thinking").font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                Spacer()
+                Text("⌘T to cycle").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+            }
+            NeutralSegmented(
+                selection: Binding(get: { ThinkingLevel.value(thread.state?.thinking) }, set: { v in Task { await thread.setThinking(v) } }),
+                options: ThinkingLevel.levels.map { (value: $0.value, title: $0.title) }
+            )
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+
+    private func cycleThinking() {
+        let levels = ThinkingLevel.levels.map(\.value)
+        let i = levels.firstIndex(of: ThinkingLevel.value(thread.state?.thinking)) ?? 0
+        Task { await thread.setThinking(levels[(i + 1) % levels.count]) }
     }
 
     /// "Anthropic: Claude Haiku 5.5" → "Claude Haiku 5.5".
