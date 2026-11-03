@@ -61,9 +61,19 @@ accent wash for the kind tile and selected things, the dashed outline, and the d
 - **"Notify me"** is a plain label, "Notifies you in Piopio": in-app (with a Mac notification) is the only channel.
 - **Rounds** default to 6 (the debate's existing default), not 4. Template schedules are the templates' own.
 - Hints use ↩ (the app's return glyph) rather than ↵.
+- **Debates aren't listed** under "Bring in chats as topics": the engine can't move a debate into a notebook
+  (docs/spec/16), so every row is a chat.
 
-## Not verified
+## Checked
 
-The pages were captured running, but the create flows of this second version were not clicked through: the earlier
-version's were (chat, notebook with a topic and a note, agent with a message, debate, Chat instead, `/debate`). Engine
-tests cover creating an agent with instructions and a schedule.
+Clicked through in a throwaway home with the scripted model (agent folders in that home too, with
+`PIOPIO_AGENTS_DIR`): switching agent templates (name, icon, instructions and schedule follow) and creating an agent
+with edited instructions (its `agent.json` has the line icon and the template's schedule, `instructions.md` the text);
+creating a notebook with instructions and a first note, and one with two chats as topics; sending from the chat page
+to a notebook's Main through its chip; Chat ⇄ Debate keeping the text; starting a debate. That found two bugs, now
+fixed: the topic rows didn't respond to accessibility presses (VoiceOver), and a debate in the list made the whole
+import fail silently.
+
+Not clicked: opening a folder from the project page (it reuses the existing add-project path, and the recent list
+shows real folders), the schedule menu (a menu can't be opened in the background), and a project chip on the chat
+page.

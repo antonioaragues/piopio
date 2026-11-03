@@ -741,6 +741,7 @@ private struct ModeSwitch: View {
         .padding(2)
         .background(Color.dsTrack, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .focusable()
+        .focusEffectDisabled()
         .onKeyPress(.leftArrow) { pick(.chat); return .handled }
         .onKeyPress(.rightArrow) { pick(.debate); return .handled }
         .accessibilityElement(children: .contain)
@@ -1144,6 +1145,7 @@ private struct TemplateGrid: View {
             ForEach(all, id: \.?.id) { t in tile(t) }
         }
         .focusable()
+        .focusEffectDisabled()
         .onKeyPress(.rightArrow) { move(1) }
         .onKeyPress(.downArrow) { move(3) }
         .onKeyPress(.leftArrow) { move(-1) }
@@ -1204,8 +1206,10 @@ private struct NotebookStart: View {
 
     private var draft: StartDrafts.Draft { drafts[.notebook] }
     private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// Chats that can become topics: debates can't move into a notebook (docs/spec/16).
+    private var movable: [SessionSummary] { engine.threads.filter { $0.debate == nil }.sorted { $0.updatedAt > $1.updatedAt } }
     /// Ticked chats that still exist.
-    private var picked: [String] { draft.threads.filter { id in engine.threads.contains { $0.ref.id == id } } }
+    private var picked: [String] { draft.threads.filter { id in movable.contains { $0.ref.id == id } } }
 
     var body: some View {
         StartHeader(kind: .notebook, description: "One subject, kept together. You write in Main; the organizer files each message under the right topic, or starts a new one.") {
@@ -1248,7 +1252,7 @@ private struct NotebookStart: View {
     }
 
     @ViewBuilder private var chats: some View {
-        let all = engine.threads.sorted { $0.updatedAt > $1.updatedAt }
+        let all = movable
         if !all.isEmpty {
             let selected = Set(picked)
             let shown = showAllChats ? all : all.enumerated().filter { $0.offset < 8 || selected.contains($0.element.ref.id) }.map(\.element)
@@ -1282,14 +1286,21 @@ private struct NotebookStart: View {
         creating = true
         error = nil
         let note = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let moving = engine.threads.filter { picked.contains($0.ref.id) }.map(\.ref)
+        let moving = movable.filter { picked.contains($0.ref.id) }.map(\.ref)
+        let title = name
         Task {
             defer { creating = false }
-            guard let ref = await engine.createSpace(name: name, instructions: draft.instructions.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            guard let ref = await engine.createSpace(name: title, instructions: draft.instructions.trimmingCharacters(in: .whitespacesAndNewlines)) else {
                 error = "Couldn't create the notebook because the engine isn't connected. Nothing was created, and what you typed is kept."
                 return
             }
-            let topics = moving.isEmpty ? [] : ((try? await engine.importThreads(moving, into: ref)) ?? [])
+            var topics: [String] = []
+            do { if !moving.isEmpty { topics = try await engine.importThreads(moving, into: ref) } } catch {
+                // The notebook exists: stay here and say what didn't move.
+                drafts.clear(.notebook)
+                self.error = "“\(title)” was created, but the chats didn't move in: \((error as? EngineError)?.message ?? error.localizedDescription) They're still under Chats."
+                return
+            }
             if !note.isEmpty {
                 let main = engine.thread(ContainerRef(kind: .space, id: ref.id))
                 await main.open()
@@ -1329,7 +1340,6 @@ private struct TopicRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel(thread.title)
         .accessibilityValue(on ? "Selected" : "Not selected")
         .accessibilityAddTraits(.isToggle)
