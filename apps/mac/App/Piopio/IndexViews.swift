@@ -40,8 +40,8 @@ struct ProjectsIndex: View {
                     }
                     .padding(.horizontal, 10).frame(height: 30)
                     .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-                    Picker("", selection: $scope) { ForEach(Scope.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
-                        .pickerStyle(.segmented).labelsHidden().fixedSize()
+                    NeutralSegmented(selection: $scope, options: Scope.allCases.map { (value: $0, title: $0.rawValue) })
+                        .frame(width: 220)
                     Menu {
                         Picker("Sort", selection: $sort) { ForEach(Sort.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                     } label: { Text(sort.rawValue) }
@@ -114,8 +114,7 @@ struct ProjectsIndex: View {
                     .font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity).frame(height: 60)
             }
         }
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 
     private func projectRow(_ p: ProjectInfo) -> some View {
@@ -205,8 +204,8 @@ struct SectionIndex: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(section.title).font(.system(size: 26, weight: .bold)).tracking(-0.5)
-                        Text("\(rows.count) \(section.title.lowercased())").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                        Text(section.title).font(.system(size: 28, weight: .bold)).tracking(-0.6)
+                        Text("\(rows.count) \(rows.count == 1 ? String(section.title.lowercased().dropLast()) : section.title.lowercased())").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
                     }
                     Spacer()
                     Button(newTitle) { NotificationCenter.default.post(name: newName, object: nil) }.buttonStyle(PillStyle(kind: .strong))
@@ -227,8 +226,8 @@ struct SectionIndex: View {
                         Text("Nothing here.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity).frame(height: 60)
                     }
                 }
-                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                .overlay(alignment: .top) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+                .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
                 .padding(.top, 14)
             }
             .padding(.horizontal, 40)

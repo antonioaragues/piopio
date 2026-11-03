@@ -18,6 +18,7 @@ struct PiopioApp: App {
     var body: some Scene {
         Window("Piopio", id: "main") {
             RootView(engine: engine)
+                .tint(Color.dsInv)
                 .frame(minWidth: 760, minHeight: 480)
                 .task {
                     appDelegate.engine = engine
@@ -55,6 +56,11 @@ struct PiopioApp: App {
                         .keyboardShortcut("o")
                 }
             }
+            CommandGroup(before: .toolbar) {
+                Button("Toggle Sidebar") { NotificationCenter.default.post(name: .toggleSidebar, object: nil) }
+                    .keyboardShortcut("s", modifiers: [.control, .command])
+                Divider()
+            }
             CommandGroup(after: .textEditing) {
                 Button("Command Palette") { NotificationCenter.default.post(name: .showPalette, object: false) }
                     .keyboardShortcut("k")
@@ -72,7 +78,7 @@ struct PiopioApp: App {
         }
 
         Settings {
-            SettingsView(engine: engine)
+            SettingsView(engine: engine).tint(Color.dsInv)
         }
         .restorationBehavior(.disabled)
     }

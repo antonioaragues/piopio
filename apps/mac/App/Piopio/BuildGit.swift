@@ -327,12 +327,11 @@ struct NewSessionSheet: View {
             }
             .frame(height: 110)
             .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsAccentLine, lineWidth: 1))
-            .background(RoundedRectangle(cornerRadius: DS.Radius.card + 4).fill(Color.dsAccentSoft).padding(-4))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
 
             row("Work on") {
-                Picker("", selection: $workOn) { ForEach(Kind.allCases) { Text($0.rawValue).tag($0) } }
-                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                NeutralSegmented(selection: $workOn, options: Kind.allCases.map { (value: $0, title: $0.rawValue) })
+                    .frame(width: 330)
                     .disabled(project.branch == nil)
             }
             if workOn != .current {
@@ -347,8 +346,8 @@ struct NewSessionSheet: View {
                 }
             }
             row("Permissions") {
-                Picker("", selection: $mode) { ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0) } }
-                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                NeutralSegmented(selection: $mode, options: ApprovalMode.allCases.map { (value: $0, title: ApprovalModeMenu.title($0)) })
+                    .frame(width: 330)
             }
             row("Model") {
                 Button(engine.model(model).map(ModelChip.short) ?? model?.id ?? "Choose…") { showModels = true }

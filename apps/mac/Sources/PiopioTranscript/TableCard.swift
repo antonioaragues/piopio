@@ -159,8 +159,7 @@ struct TableCardView: View {
                     row(cells, widths: widths, height: heights[r + 1] - 0.5, header: false)
                 }
             }
-            .background(Color(nsColor: DS.card), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(nsColor: DS.line), lineWidth: 0.5))
+            .overlay(alignment: .top) { Rectangle().fill(Color(nsColor: DS.line)).frame(height: 0.5) }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
     }
@@ -170,7 +169,7 @@ struct TableCardView: View {
             ForEach(widths.indices, id: \.self) { c in
                 Text(Self.inline(table.cell(cells, c)))
                     .font(Font(header ? TableContent.headerFont : c == 0 ? TableContent.firstColumnFont : TableContent.cellFont))
-                    .foregroundStyle(Color(nsColor: header ? DS.fg2 : DS.fg))
+                    .foregroundStyle(Color(nsColor: header ? DS.fg3 : DS.fg))
                     .lineSpacing(1)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, TableContent.padH)
@@ -179,7 +178,7 @@ struct TableCardView: View {
                     .textSelection(.enabled)
             }
         }
-        .background(header ? Color(nsColor: DS.chip) : .clear)
+        .background(Color.clear)
     }
 
     /// **bold**, *italic* and `code` inside a cell.

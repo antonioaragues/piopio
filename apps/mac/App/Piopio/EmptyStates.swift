@@ -46,8 +46,8 @@ struct BuildFirstRun: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 96)
-                .background(targeted ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(targeted ? Color.dsAccentLine : Color.dsLine, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                .background(targeted ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(targeted ? Color.dsFg3 : Color.dsLine, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
                 if let found, !found.repos.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         SectionLabel("Found in \(found.folder)")
@@ -155,7 +155,7 @@ struct ChatFirstRun: View {
     private func tile(_ title: String, _ shortcut: String, _ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: icon).font(.system(size: 14)).foregroundStyle(Color.accentColor).frame(width: 20)
+                Image(systemName: icon).font(.system(size: 14)).foregroundStyle(Color.dsFg2).frame(width: 20)
                 Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg)
                 Spacer()
                 Text(shortcut).font(.system(size: 12)).foregroundStyle(Color.dsFg3)

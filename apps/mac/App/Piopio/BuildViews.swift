@@ -140,7 +140,10 @@ struct BuildSessionView: View {
         .task { await session.open() }
         .task(id: summary.ref.id) { showInspector = Self.inspectorChoice(summary.ref.id) ?? hasChanges }
         .onChange(of: hasChanges) { _, changed in
-            if changed, Self.inspectorChoice(summary.ref.id) == nil { withAnimation(.easeOut(duration: 0.15)) { showInspector = true } }
+            if changed, Self.inspectorChoice(summary.ref.id) == nil {
+                inspectorTab = .changes
+                withAnimation(.easeOut(duration: 0.15)) { showInspector = true }
+            }
         }
         .onChange(of: summary.followUps) { _, items in session.setFollowUps(items ?? ThreadView.demoFollowUps) }
         .onAppear { session.setFollowUps(summary.followUps ?? ThreadView.demoFollowUps) }
@@ -267,6 +270,7 @@ struct BuildSessionView: View {
             if let cwd = summary.cwd { OpenMenu(path: cwd) }
             Button { toggleInspector() } label: { Image(systemName: "sidebar.right") }
                 .buttonStyle(IconButtonStyle(on: showInspector))
+                .accessibilityLabel(showInspector ? "Hide inspector" : "Show inspector")
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .help(showInspector ? "Hide the inspector (⌘⇧I)" : "Changes, files and turns (⌘⇧I)")
         }
@@ -523,7 +527,7 @@ struct PromptCard: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Circle().fill(Color.accentColor).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                Circle().fill(Color.accentColor).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[.bottom] + 2.5 }
                 Text(heading).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 if let step { Text(step).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
@@ -574,16 +578,7 @@ struct PromptCard: View {
         return added + removed > 0 && lines.count > 1 ? (added, removed) : nil
     }
 
-    /// The title phrased as a question: "Run this command?", "Edit codec.ts?", or what the agent asks.
-    private var heading: String {
-        switch prompt.kind {
-        case .approval:
-            if prompt.title == "Run a command" || prompt.title.isEmpty { return "Run this command?" }
-            return prompt.title.hasSuffix("?") ? prompt.title : prompt.title + "?"
-        case .question, .confirm, .select, .input: return prompt.title
-        case .plan: return "Build this plan?"
-        }
-    }
+    private var heading: String { prompt.question }
 
     @ViewBuilder private var actions: some View {
         switch prompt.kind {
@@ -859,6 +854,19 @@ struct ApprovalModeMenu: View {
 }
 
 extension CheckpointItem: @retroactive Identifiable {}
+
+extension PendingPrompt {
+    /// The title phrased as a question: "Run this command?", "Write a file?", or what the agent asks.
+    var question: String {
+        switch kind {
+        case .approval:
+            if title == "Run a command" || title.isEmpty { return "Run this command?" }
+            return title.hasSuffix("?") ? title : title + "?"
+        case .question, .confirm, .select, .input: return title
+        case .plan: return "Build this plan?"
+        }
+    }
+}
 
 extension Notification.Name {
     /// Object: a session id. Opens its diff review (automation).

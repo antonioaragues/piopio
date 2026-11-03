@@ -39,8 +39,7 @@ struct AgentDefinitionView: View {
                                     .font(.system(size: 12, design: .monospaced))
                                     .frame(minHeight: 480)
                                     .padding(6)
-                                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-                                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                                    .settingsRows()
                             } else if def != nil {
                                 instructionsGroup.id("Instructions")
                                 modelGroup.id("Model")
@@ -479,8 +478,7 @@ struct SetupGroup<Content: View>: View {
                     }
                 }
             }
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            .settingsRows()
             if let footer { Text(footer).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
         }
     }

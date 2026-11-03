@@ -77,9 +77,10 @@ struct OpenMenu: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "arrow.up.forward.square").font(.system(size: 14))
+                Image(systemName: "arrow.up.forward.square").font(.system(size: 14)).accessibilityHidden(true)
                 Text("Open in \(name(target))").font(.system(size: 13))
             }
+            .accessibilityElement(children: .combine)
         } primaryAction: {
             open(target)
         }

@@ -181,22 +181,22 @@ nonisolated struct ItemRenderer: Sendable {
         if !compact, a.source == "connector" {
             // A connected app's change in a chat (docs/spec/12-connectors): Deny / Allow, and "don't ask again" for plain writes.
             m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            m.append(pill("Allow", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
+            m.append(NSAttributedString(string: "    ", attributes: [.font: small]))
             m.append(pill("Deny", .decideApproval(approvalId: a.approvalId, approve: false), .secondary))
             if !a.always.isEmpty {
                 m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
                 m.append(pill("Allow, don't ask again", .allowAlways(approvalId: a.approvalId), .secondary))
             }
-            m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
-            m.append(pill("Allow", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
         } else if !compact {
             m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            m.append(pill("Allow", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
+            m.append(NSAttributedString(string: "    ", attributes: [.font: small]))
             m.append(pill("Deny", .decideApproval(approvalId: a.approvalId, approve: false), .secondary))
             m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
             m.append(pill("Edit…", .editApproval(approvalId: a.approvalId), .secondary))
-            m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
-            m.append(pill("Allow", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
         }
-        return card(m, .approval, lineHeight: 1.5)
+        return card(m, .approval, lineHeight: 1.6)
     }
 
     /// What a tool changed (06-agents §4.2 RC1): the change, and Undo while it can be undone.
@@ -307,10 +307,12 @@ nonisolated struct ItemRenderer: Sendable {
         }
         if edited.count == 1 { parts.append(ActivityPart(text: "edited", chip: edited[0], added: added > 0 ? added : nil, help: edited[0])) }
         else if edited.count > 1 { parts.append(ActivityPart(text: "edited \(edited.count) files", added: added > 0 ? added : nil, help: edited.joined(separator: "\n"))) }
-        let commands = tools.filter { $0.tool == "bash" }.count
+        let commands = tools.filter { $0.tool == "bash" && $0.status != .denied }.count
         if commands > 0 { parts.append(ActivityPart(text: "ran \(commands) command\(commands == 1 ? "" : "s")")) }
-        let rest = tools.filter { !["read", "edit", "write", "bash"].contains($0.tool) }
+        let rest = tools.filter { !["read", "edit", "write", "bash"].contains($0.tool) && $0.status != .denied }
         parts += activitySummary(rest).map { ActivityPart(text: $0) }
+        let denied = tools.filter { $0.status == .denied }.count
+        if denied > 0 { parts.append(ActivityPart(text: denied == 1 ? "you denied 1 step" : "you denied \(denied) steps")) }
         let failed = tools.filter { $0.status == .error }.count
         if failed > 0 { parts.append(ActivityPart(text: failed == 1 ? "1 step failed" : "\(failed) steps failed", warning: true)) }
         if parts.isEmpty { parts.append(ActivityPart(text: "worked")) }
@@ -829,6 +831,7 @@ nonisolated struct ItemRenderer: Sendable {
             if let language { m.append(NSAttributedString(string: language + "  ·  ", attributes: label)) }
             m.append(NSAttributedString(string: "Copy", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg2, .link: TranscriptAction.copyText(code).url]))
             m.append(NSAttributedString(string: lineSeparator, attributes: label))
+            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: NSFont.systemFont(ofSize: 4)]))
             let start = m.length
             m.append(NSAttributedString(string: code.replacingOccurrences(of: "\n", with: lineSeparator), attributes: [.font: mono, .foregroundColor: DS.fg]))
             for (range, token) in Highlighter.tokens(code) where NSMaxRange(range) + start <= m.length {

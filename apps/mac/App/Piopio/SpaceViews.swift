@@ -724,11 +724,12 @@ struct SpaceView: View {
             }
             Button { withAnimation(.easeOut(duration: 0.15)) { showTopics.toggle() } } label: { Image(systemName: "sidebar.right") }
                 .buttonStyle(IconButtonStyle(on: topicsVisible))
+                .accessibilityLabel(showTopics ? "Hide topics" : "Show topics")
                 .help(showTopics ? "Hide topics" : "Show topics, memory and files")
             Menu {
                 SpaceMenu(engine: engine, space: space, selection: $selection)
             } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "ellipsis").accessibilityLabel("More")
             }
             .menuStyle(.button)
             .buttonStyle(IconButtonStyle())

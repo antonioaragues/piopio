@@ -9,6 +9,7 @@ struct RootView: View {
     @AppStorage("sidebarItem") private var itemRaw = "home"
     @AppStorage("sidebarWidth") private var sidebarWidth = 260.0
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
+    @State private var fullScreen = false
     @State private var availableWidth = 1280.0
     @State private var sidebarDragStart: Double?
     @State private var showNewAgent = false
@@ -55,11 +56,12 @@ struct RootView: View {
         }
         .background(Color.dsWin)
         .overlay(alignment: .topLeading) {
-            if sidebarCollapsed { SidebarToggle().frame(height: Shell.barHeight).padding(.leading, 78) }
+            // In full screen there are no traffic lights to make room for.
+            if sidebarCollapsed { SidebarToggle().frame(height: Shell.barHeight).padding(.leading, fullScreen ? 14 : 78) }
         }
         .background { TrafficLightsPosition() }
-        .background { Button("") { toggleSidebar() }.keyboardShortcut("s", modifiers: [.control, .command]).hidden() }
-        .environment(\.sidebarControl, SidebarControl(collapsed: sidebarCollapsed, toggle: toggleSidebar))
+        .modifier(ShellEvents(fullScreen: $fullScreen, toggleSidebar: toggleSidebar))
+        .environment(\.sidebarControl, SidebarControl(collapsed: sidebarCollapsed, fullScreen: fullScreen, toggle: toggleSidebar))
         .onGeometryChange(for: Double.self) { $0.size.width } action: { availableWidth = $0 }
         .ignoresSafeArea(.container, edges: .top)
         .overlay(alignment: .top) {
@@ -326,6 +328,21 @@ extension Notification.Name {
     static let openTrace = Notification.Name("piopio.openTrace")
     /// Settings › General › Run setup again: the welcome, with the current areas ticked.
     static let runSetupAgain = Notification.Name("piopio.runSetupAgain")
+    /// View › Toggle Sidebar (⌃⌘S).
+    static let toggleSidebar = Notification.Name("piopio.toggleSidebar")
+}
+
+/// View › Toggle Sidebar, and whether the window is in full screen (no traffic lights to make room for).
+private struct ShellEvents: ViewModifier {
+    @Binding var fullScreen: Bool
+    let toggleSidebar: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in toggleSidebar() }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in fullScreen = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in fullScreen = false }
+    }
 }
 
 // MARK: Banner (8d: what happened → what's safe → one action)

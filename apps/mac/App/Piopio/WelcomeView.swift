@@ -74,7 +74,7 @@ struct WelcomeView: View {
         HStack(spacing: 6) {
             ForEach(Step.allCases, id: \.self) { s in
                 VStack(spacing: 6) {
-                    Capsule().fill(s.rawValue <= step.rawValue ? Color.accentColor : Color.dsChip).frame(width: 64, height: 4)
+                    Capsule().fill(s.rawValue <= step.rawValue ? Color.dsInv : Color.dsChip).frame(width: 64, height: 4)
                     Text(s.label).font(.system(size: 11, weight: s == step ? .semibold : .regular)).foregroundStyle(s == step ? Color.dsFg : Color.dsFg3)
                 }
             }
@@ -224,8 +224,8 @@ private struct AreaChoiceCard: View {
                     ZStack {
                         Circle().strokeBorder(on ? Color.clear : Color.dsFg3.opacity(0.45), lineWidth: 1.5)
                         if on {
-                            Circle().fill(Color.accentColor)
-                            Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                            Circle().fill(Color.dsInv)
+                            Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.dsInvFg)
                         }
                     }
                     .frame(width: 22, height: 22)
@@ -239,8 +239,7 @@ private struct AreaChoiceCard: View {
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: 214, alignment: .topLeading)
             .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(on ? Color.dsAccentLine : Color.dsLine, lineWidth: on ? 1 : 0.5))
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? Color.dsAccentSoft : .clear).padding(-4))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(on ? Color.dsFg3 : Color.dsLine, lineWidth: on ? 1 : 0.5))
             .shadow(color: .black.opacity(hovering && !on ? 0.06 : 0), radius: 10, y: 4)
             .contentShape(Rectangle())
         }
@@ -385,7 +384,7 @@ private struct WelcomeModelStep: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("OpenRouter").font(.system(size: 14, weight: .semibold))
-                        if primary { Text("Recommended").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.accentColor) }
+                        if primary { Text("Recommended").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3) }
                     }
                     Text("One key, hundreds of models from every lab").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
@@ -415,8 +414,7 @@ private struct WelcomeModelStep: View {
         }
         .padding(14)
         .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(primary ? Color.dsAccentLine : Color.dsLine, lineWidth: primary ? 1 : 0.5))
-        .background(primary ? RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.dsAccentSoft).padding(-4) : nil)
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(primary ? Color.dsFg3 : Color.dsLine, lineWidth: primary ? 1 : 0.5))
     }
 
     private func chatgptRow(_ provider: ProviderInfo, primary: Bool) -> some View {
@@ -425,7 +423,7 @@ private struct WelcomeModelStep: View {
         } text: {
             HStack(spacing: 6) {
                 Text("ChatGPT subscription").font(.system(size: 14, weight: .semibold))
-                if primary { Text("You may already pay for it").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.accentColor) }
+                if primary { Text("You may already pay for it").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3) }
             }
             Text("Sign in; usage counts against your Plus or Pro plan").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
         } action: {
@@ -458,8 +456,7 @@ private struct WelcomeModelStep: View {
         }
         .padding(.horizontal, 14).frame(minHeight: 62)
         .background(yolk ? Color.dsYolkSoft : Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(primary ? Color.dsAccentLine : yolk ? .clear : Color.dsLine, lineWidth: primary ? 1 : 0.5))
-        .background(primary ? RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.dsAccentSoft).padding(-4) : nil)
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(primary ? Color.dsFg3 : yolk ? .clear : Color.dsLine, lineWidth: primary ? 1 : 0.5))
         .padding(.bottom, primary ? 4 : 0)
     }
 
@@ -563,8 +560,8 @@ private struct WelcomeSetupStep: View {
                 Button("Open Folder…") { choose() }.buttonStyle(PillStyle(kind: .primary, compact: true))
             }
             .frame(maxWidth: .infinity).frame(height: 64)
-            .background(targeted ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(targeted ? Color.dsAccentLine : Color.dsLine, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+            .background(targeted ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(targeted ? Color.dsFg3 : Color.dsLine, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
             .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in
                 guard let provider = providers.first else { return false }
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -686,15 +683,15 @@ private struct WelcomeSetupStep: View {
                 HStack(alignment: .top) {
                     Text(t.avatar).font(.system(size: 24))
                     Spacer()
-                    if picked { Image(systemName: "checkmark.circle.fill").font(.system(size: 16)).foregroundStyle(Color.accentColor) }
+                    if picked { Image(systemName: "checkmark.circle.fill").font(.system(size: 16)).foregroundStyle(Color.dsFg3) }
                 }
                 Text(t.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
                 Text(t.description).font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).lineLimit(3).fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
             .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
-            .background(picked ? Color.dsAccentSoft : Color.dsWin, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(picked ? Color.dsAccentLine : Color.dsLine, lineWidth: picked ? 1 : 0.5))
+            .background(Color.dsWin, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(picked ? Color.dsFg3 : Color.dsLine, lineWidth: picked ? 1 : 0.5))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

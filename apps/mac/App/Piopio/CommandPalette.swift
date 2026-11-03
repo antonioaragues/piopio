@@ -66,7 +66,7 @@ struct CommandPalette: View {
                 if mode != .models {
                     Menu {
                         ForEach(SearchScope.allCases, id: \.self) { s in Button(s.rawValue) { searchScope = s } }
-                    } label: { Text(mode == .messages ? "Messages in \(searchScope.rawValue.lowercased())" : searchScope.rawValue) }
+                    } label: { Text(mode == .messages && searchScope == .all ? "Messages" : searchScope.rawValue) }
                         .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
                         .accessibilityLabel("Search scope")
                 }

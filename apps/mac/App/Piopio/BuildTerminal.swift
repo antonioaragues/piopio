@@ -137,7 +137,7 @@ struct TerminalDrawer: View {
             HStack(spacing: 4) {
                 ForEach(tabs) { tab in
                     HStack(spacing: 6) {
-                        Circle().fill(tab.running ? Color(red: 0x30 / 255, green: 0xD1 / 255, blue: 0x58 / 255) : Color(red: 0x8E / 255, green: 0x8E / 255, blue: 0x93 / 255)).frame(width: 6, height: 6)
+                        Circle().fill(tab.running ? Color(white: 0.85) : Color(white: 0.45)).frame(width: 6, height: 6)
                         Text(tab.title).font(.system(size: 11.5, weight: .medium))
                         Button { store.close(tab) } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
                             .buttonStyle(.plain)

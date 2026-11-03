@@ -80,7 +80,7 @@ struct ThreadView: View {
                 Divider()
                 Button("Cost…") { showCosts = true }
             } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "ellipsis").accessibilityLabel("More")
             }
             .menuStyle(.button)
             .buttonStyle(IconButtonStyle())

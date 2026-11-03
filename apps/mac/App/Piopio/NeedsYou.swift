@@ -119,8 +119,8 @@ enum NeedsYouText {
         case .budget: return entry.inbox?.title ?? "Budget"
         case .buildPrompt:
             guard let s = entry.session, let prompt = engine.thread(s.ref).prompts.first else { return "Waiting on you" }
-            if prompt.kind == .approval, let detail = prompt.detail, !detail.isEmpty, !detail.contains("\n") { return "Run \(detail)?" }
-            return prompt.title
+            if prompt.kind == .approval, prompt.tool == "bash", let detail = prompt.detail, !detail.isEmpty, !detail.contains("\n") { return "Run \(detail)?" }
+            return prompt.question
         }
     }
 

@@ -8,6 +8,7 @@ import SwiftUI
 /// The sidebar's collapsed state, for page toolbars: they leave room for the traffic lights and show the toggle.
 struct SidebarControl: @unchecked Sendable {
     var collapsed = false
+    var fullScreen = false
     var toggle: @MainActor () -> Void = {}
 }
 
@@ -54,7 +55,7 @@ struct PageHeader<Title: View, Actions: View>: View {
             Spacer(minLength: 12)
             actions
         }
-        .padding(.leading, control.collapsed ? Shell.collapsedLeading : 20)
+        .padding(.leading, control.collapsed ? (control.fullScreen ? 48 : Shell.collapsedLeading) : 20)
         .padding(.trailing, 12)
         .frame(height: Shell.barHeight)
         .contentShape(Rectangle())

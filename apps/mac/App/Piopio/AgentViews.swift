@@ -250,10 +250,11 @@ struct AgentPage: View {
                     Button("Full Setup") { tab = .setup }
                     Divider()
                     Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
-                } label: { Image(systemName: "ellipsis") }
+                } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
                     .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
                 Button { withAnimation(.easeOut(duration: 0.15)) { showInfo.toggle() } } label: { Image(systemName: "info.circle") }
                     .buttonStyle(IconButtonStyle(on: showInfo))
+                    .accessibilityLabel(showInfo ? "Hide info" : "Show info")
                     .help(showInfo ? "Hide the info panel" : "What it does, when, and what it can do")
             } else {
                 Button("Back to the conversation") { tab = .chat }.buttonStyle(PillStyle(kind: .toolbar))

@@ -124,7 +124,10 @@ final class CardLayoutFragment: NSTextLayoutFragment {
                 let b = line.typographicBounds
                 let rect = CGRect(x: b.minX + x0 - 2, y: b.minY + 1, width: x1 - x0 + 4, height: b.height - 2).offsetBy(dx: point.x, dy: point.y)
                 switch style {
-                case .primary: fill(context, rect.insetBy(dx: 0, dy: -2), DS.inv, radius: 6)
+                case .primary:
+                    // Tall lines put the text at their bottom: the pill hugs the text, not the line.
+                    let h = min(rect.height, 21)
+                    fill(context, CGRect(x: rect.minX - 3, y: rect.maxY - h + 1.5, width: rect.width + 6, height: h), DS.inv, radius: 6)
                 case .secondary: break
                 case .file:
                     fill(context, rect, DS.card, radius: 8)
