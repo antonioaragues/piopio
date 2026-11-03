@@ -214,6 +214,7 @@ struct Composer: View {
         .padding(.bottom, 10)
         .composerBox()
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color.dsFg3, lineWidth: dropTargeted ? 1 : 0))
+        .composerMorph()
         .background {
             Button("") { if thread.isRunning { stop() } }.keyboardShortcut(".", modifiers: .command).hidden()
         }

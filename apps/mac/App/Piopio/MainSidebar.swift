@@ -35,11 +35,9 @@ struct MainSidebar: View {
             .frame(height: Shell.barHeight)
             .contentShape(Rectangle())
             .gesture(WindowDragGesture())
+            // The middle scrolls: Pinned, Projects, Notebooks, Agents, Chats.
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
-                    searchRow
-                    navRow(.home, "Home", symbol: "house")
-                    navRow(.needsYou, "Needs you", symbol: "tray", count: engine.needsYouCount)
                     pinnedSection
                     if areas.showsProjects { projectsSection }
                     if areas.showsNotebooks { notebooksSection }
@@ -49,7 +47,15 @@ struct MainSidebar: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 10)
             }
+            // Fixed above the footer: Search, Home, Needs you.
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
+            VStack(alignment: .leading, spacing: 1) {
+                searchRow
+                navRow(.home, "Home", symbol: "house")
+                navRow(.needsYou, "Needs you", symbol: "tray", count: engine.needsYouCount)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
             footer
         }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
@@ -231,21 +237,85 @@ struct MainSidebar: View {
         }
     }
 
+    /// The project whose session (or new session page, or project page) is open.
+    private var openProjectId: String? {
+        switch item {
+        case .session(let id): engine.buildSessions.first { $0.ref.id == id }.flatMap { engine.project(of: $0) }?.id
+        case .project(let id), .newSession(let id): id
+        default: nil
+        }
+    }
+
+    /// New sessions are Build sessions: only for projects with the Build lens, with Build on.
+    private func startsSessions(_ project: ProjectInfo) -> Bool {
+        areas.contains(.build) && project.lenses.contains(.build) && project.missing != true
+    }
+
+    /// The project's sessions, nested under it on a hairline (docs/design/start-pages, addendum): a "New session ·
+    /// Draft" row first while one is being written, the live sessions, "N earlier", and on the open project
+    /// "+ New session ⌘N".
     @ViewBuilder private func projectSessions(_ project: ProjectInfo) -> some View {
         let all = engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
-        ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in sessionRow(s, indent: true) }
-        if !earlier.isEmpty {
-            Button {
-                if showAll { showingEarlier.remove(project.id) } else { showingEarlier.insert(project.id) }
-            } label: {
-                Text(showAll ? "Hide earlier sessions" : "\(earlier.count) earlier session\(earlier.count == 1 ? "" : "s")")
-                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-                    .padding(.leading, 36).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+        let drafting = item == .newSession(project.id) || StartDrafts.shared.hasContent(key: StartDrafts.sessionKey(project.id))
+        let isOpen = openProjectId == project.id && startsSessions(project)
+        if drafting || !all.isEmpty || isOpen {
+            VStack(alignment: .leading, spacing: 1) {
+                if drafting { sessionDraftRow(project) }
+                ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in sessionRow(s, indent: true) }
+                if !earlier.isEmpty {
+                    Button {
+                        if showAll { showingEarlier.remove(project.id) } else { showingEarlier.insert(project.id) }
+                    } label: {
+                        Text(showAll ? "Hide earlier sessions" : "\(earlier.count) earlier session\(earlier.count == 1 ? "" : "s")")
+                            .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+                            .padding(.leading, 8).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                if isOpen && !drafting { newSessionLink(project) }
             }
-            .buttonStyle(.plain)
+            .padding(.leading, 9)
+            .overlay(alignment: .leading) { Rectangle().fill(Color.dsLine).frame(width: 1) }
+            .padding(.leading, 17)
+            .padding(.bottom, 4)
         }
+    }
+
+    /// "New session · Draft", highlighted while its page is open.
+    private func sessionDraftRow(_ project: ProjectInfo) -> some View {
+        let selected = item == .newSession(project.id)
+        return Button { item = .newSession(project.id) } label: {
+            HStack(spacing: 8) {
+                Text("New session").font(.system(size: 13)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                Spacer(minLength: 4)
+                Text("Draft").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+            }
+            .rowChrome(selected: selected, height: 30)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Discard Draft", role: .destructive) {
+                StartDrafts.shared.clear(key: StartDrafts.sessionKey(project.id))
+                if selected { item = .project(project.id) }
+            }
+        }
+    }
+
+    private func newSessionLink(_ project: ProjectInfo) -> some View {
+        Button { item = .newSession(project.id) } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "plus").font(.system(size: 11, weight: .medium))
+                Text("New session").font(.system(size: 13))
+                Spacer(minLength: 4)
+                Text("⌘N").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+            }
+            .foregroundStyle(Color.dsFg2)
+            .rowChrome(selected: false, height: 30)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("New session in \(project.name)")
     }
 
     /// Live sessions (running, waiting on you, or recent; those that need you first) and the rest.
@@ -267,21 +337,12 @@ struct MainSidebar: View {
 
     private func projectRow(_ project: ProjectInfo) -> some View {
         let selected = item == .project(project.id)
-        return Button { item = .project(project.id) } label: {
-            HStack(spacing: 10) {
-                RowGlyph(symbol: "folder")
-                Text(project.name).font(.system(size: 13))
-                    .foregroundStyle(project.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1)
-                Spacer(minLength: 4)
-                if project.missing == true {
-                    Text("missing").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-                } else if let branch = project.branch {
-                    Text(branch).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                }
-            }
-            .rowChrome(selected: selected)
+        // Build projects start a session; folders you only chat about start a chat in the folder.
+        let plus: ProjectRow.Plus? = startsSessions(project) ? .session : (areas.contains(.chat) && project.lenses.contains(.chat) && project.missing != true ? .chat : nil)
+        return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, open: { item = .project(project.id) }) {
+            if plus == .session { item = .newSession(project.id) }
+            else { Task { await BuildActions.chat(in: project, engine: engine) { item = .session($0) } } }
         }
-        .buttonStyle(.plain)
         .contextMenu {
             if areas.contains(.build) { Button("New Session…") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) } }
             if areas.contains(.chat) { Button("New Chat in This Folder") { Task { await BuildActions.chat(in: project, engine: engine) { item = .session($0) } } } }
@@ -296,6 +357,10 @@ struct MainSidebar: View {
     }
 
     private func sessionRow(_ s: SessionSummary, indent: Bool) -> some View {
+        sessionRowBody(s, indent: indent)
+    }
+
+    private func sessionRowBody(_ s: SessionSummary, indent: Bool) -> some View {
         let selected = item == .session(s.ref.id)
         return Button { item = .session(s.ref.id) } label: {
             HStack(spacing: 8) {
@@ -306,7 +371,7 @@ struct MainSidebar: View {
                 }
                 SidebarDot(status: dotStatus(s))
             }
-            .rowChrome(selected: selected, leading: indent ? 36 : 8)
+            .rowChrome(selected: selected, height: indent ? 30 : 29)
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -612,4 +677,60 @@ private struct RowChrome: ViewModifier {
 
 extension Notification.Name {
     static let newChat = Notification.Name("piopio.newChat")
+}
+
+/// A project row: folder, name, and a + that starts a session there (or a chat, in a folder you only chat about). On
+/// the open project the + always shows (on a grey fill) and the name is medium weight; on the others it shows on hover
+/// or keyboard focus, in place of the branch. VoiceOver reaches it as the row's "New session" action.
+private struct ProjectRow: View {
+    enum Plus { case session, chat }
+    let project: ProjectInfo
+    let selected: Bool
+    let isOpen: Bool
+    let plus: Plus?
+    let open: () -> Void
+    let start: () -> Void
+    @State private var hovering = false
+    @FocusState private var plusFocused: Bool
+
+    private var showsPlus: Bool { plus != nil && (isOpen || hovering || plusFocused) }
+    private var plusLabel: String { plus == .chat ? "New chat in \(project.name)" : "New session in \(project.name)" }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Button(action: open) {
+                HStack(spacing: 10) {
+                    RowGlyph(symbol: "folder")
+                    Text(project.name).font(.system(size: 13, weight: isOpen ? .medium : .regular))
+                        .foregroundStyle(project.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1)
+                    Spacer(minLength: 4)
+                    if project.missing == true {
+                        Text("missing").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                    } else if !showsPlus, let branch = project.branch {
+                        Text(branch).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    }
+                    if plus != nil { Color.clear.frame(width: 22, height: 1) }
+                }
+                .rowChrome(selected: selected)
+            }
+            .buttonStyle(.plain)
+            .accessibilityAction(named: plus == .chat ? "New chat" : "New session") { if plus != nil { start() } }
+            if plus != nil {
+                Button(action: start) {
+                    Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isOpen ? Color.dsFg : Color.dsFg2)
+                        .frame(width: 26, height: 26)
+                        .background(isOpen ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focused($plusFocused)
+                .opacity(showsPlus ? 1 : 0)
+                .padding(.trailing, 2)
+                .help(plus == .chat ? "New chat in this folder" : "New session ⌘N")
+                .accessibilityLabel(plusLabel)
+            }
+        }
+        .onHover { hovering = $0 }
+    }
 }

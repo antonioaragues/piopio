@@ -64,7 +64,41 @@ accent wash for the kind tile and selected things, the dashed outline, and the d
 - **Debates aren't listed** under "Bring in chats as topics": the engine can't move a debate into a notebook
   (docs/spec/16), so every row is a chat.
 
+## New session in a project (addendum, 2026-11-03)
+
+The "New session in <project>" sheet is gone. Starting a session is a page built from the composer alone:
+
+- **Header**: a folder tile with the project's name, and "What should the agent do?". No description.
+- **Composer**: "Describe the task…", then attach · **In the folder ▾** · **permissions ▾** · model · the round start
+  button (the same as Chat's: grey until there's text). Return or ⌘↩ starts; ⇧↩ adds a line; Esc goes back.
+- **Work on**: In the folder, New branch, Worktree. Outside a git repo the last two are disabled, with "Not a git repo"
+  in the menu. The branch is named from the task (`git.suggestBranch`), as the sheet did; there's no name field.
+- **Permissions**: the three Piopio already has, each with its line in the menu: Ask before edits, Auto-edit, Full
+  auto.
+- **Defaults** are what the sheet used: the project's own permission mode (Settings › the project; new projects get
+  Auto-edit, decision BQ1) and the place it last worked; "In the folder" the first time.
+- Starting creates the session, sends the task, and the page moves into the session in place of the draft row.
+
+**Sidebar**: Projects, Notebooks, Agents and Chats scroll in the middle; Search, Home and Needs you are fixed at the
+bottom above the footer. A project row has a + (26pt): always on the open project (grey fill, name in medium weight),
+on hover for the others, where it takes the branch's place. VoiceOver gets it as the row's "New session" action. A
+folder you only chat about gets a + that starts a chat in it. Sessions nest under their project on a hairline (rows
+30pt); the open project's list ends with "+ New session ⌘N", replaced by "New session · Draft" at the top while one is
+being written. ⌘N starts a session in the open project, or a chat anywhere else.
+
+**Motion**: on every start page (chat, debate, notebook, agent, session), starting moves the card down into the
+conversation's composer (a matched-geometry move, 0.42 s) while the page fades into the conversation, instead of
+cutting to it.
+
 ## Checked
+
+**Addendum** (throwaway home, its own agents and pi folders): the open project's + and "+ New session" open the
+page; the draft row takes the link's place; starting moved into the session, which replaced the draft row; ⌘N from a
+session opened a new one there; Esc on an empty page went back and removed the draft row; a chat-only folder shows its
+chat +. Screenshots mid-start show the card on its way down. Not clicked: the Work on and permissions menus (menus
+can't be opened in the background), and a non-git Build project.
+
+**First version**:
 
 Clicked through in a throwaway home with the scripted model (agent folders in that home too, with
 `PIOPIO_AGENTS_DIR`): switching agent templates (name, icon, instructions and schedule follow) and creating an agent

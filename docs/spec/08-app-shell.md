@@ -32,7 +32,7 @@
 | Command palette | ⌘K | Navigate to anything, run actions (new session, switch model, deploy agent…) |
 | Global search | ⌘⇧F | FTS across all containers, filter by mode/date/model |
 | Quick Chat | ⌥Space (global) | Floating panel (04-chat §4) |
-| New (contextual) | ⌘N | In a project, a new session there; otherwise the chat start page. Each sidebar + opens its own start page (project, chat, notebook, agent); ⌥⌘N opens Debate, ⌘⇧N the notebook one. Nothing is created until you start (docs/design/start-pages). |
+| New (contextual) | ⌘N | In a project, the new session page there; otherwise the chat start page. Each sidebar + opens its own start page (project, chat, notebook, agent); ⌥⌘N opens Debate, ⌘⇧N the notebook one. Nothing is created until you start (docs/design/start-pages). |
 | Model picker | ⌘M | |
 | Approvals inbox | ⌘⇧A | All pending approvals |
 | Settings | ⌘, | |

@@ -50,29 +50,37 @@ import SwiftUI
         if let data = try? Data(contentsOf: url), let saved = try? JSONDecoder().decode([String: Draft].self, from: data) { drafts = saved }
     }
 
-    subscript(kind: StartKind) -> Draft { drafts[kind.rawValue] ?? Draft() }
+    /// The draft key for a new session in a project.
+    static func sessionKey(_ projectId: String) -> String { "session:" + projectId }
 
-    func update(_ kind: StartKind, _ change: (inout Draft) -> Void) {
-        var draft = self[kind]
+    subscript(kind: StartKind) -> Draft { self[key: kind.rawValue] }
+    subscript(key key: String) -> Draft { drafts[key] ?? Draft() }
+
+    func update(_ kind: StartKind, _ change: (inout Draft) -> Void) { update(key: kind.rawValue, change) }
+    func update(key: String, _ change: (inout Draft) -> Void) {
+        var draft = self[key: key]
         change(&draft)
-        guard draft != self[kind] else { return }
-        drafts[kind.rawValue] = draft == Draft() ? nil : draft
+        guard draft != self[key: key] else { return }
+        drafts[key] = draft == Draft() ? nil : draft
         save()
     }
 
-    func binding(_ kind: StartKind, _ field: WritableKeyPath<Draft, String>) -> Binding<String> {
-        Binding(get: { self[kind][keyPath: field] }, set: { value in self.update(kind) { $0[keyPath: field] = value } })
+    func binding(_ kind: StartKind, _ field: WritableKeyPath<Draft, String>) -> Binding<String> { binding(key: kind.rawValue, field) }
+    func binding(key: String, _ field: WritableKeyPath<Draft, String>) -> Binding<String> {
+        Binding(get: { self[key: key][keyPath: field] }, set: { value in self.update(key: key) { $0[keyPath: field] = value } })
     }
 
-    func clear(_ kind: StartKind) {
-        guard drafts[kind.rawValue] != nil else { return }
-        drafts[kind.rawValue] = nil
+    func clear(_ kind: StartKind) { clear(key: kind.rawValue) }
+    func clear(key: String) {
+        guard drafts[key] != nil else { return }
+        drafts[key] = nil
         save()
     }
 
     /// Something typed, so the sidebar keeps a draft row for it.
-    func hasContent(_ kind: StartKind) -> Bool {
-        let d = self[kind]
+    func hasContent(_ kind: StartKind) -> Bool { hasContent(key: kind.rawValue) }
+    func hasContent(key: String) -> Bool {
+        let d = self[key: key]
         return !(d.text + d.name + d.criteria + d.instructions).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -132,6 +140,47 @@ private enum StartStyle {
     static let sideB = Color.orange
 }
 
+// MARK: Motion: the start page's composer becomes the conversation's
+
+/// The namespace the start page's card and the conversation's composer share, so starting moves the card down into
+/// place instead of cutting to the new view.
+private struct ComposerSpaceKey: EnvironmentKey { static let defaultValue: Namespace.ID? = nil }
+/// Back to where you were before the start page (Esc).
+private struct StartBackKey: EnvironmentKey { static let defaultValue: (@MainActor @Sendable () -> Void)? = nil }
+
+extension EnvironmentValues {
+    var composerSpace: Namespace.ID? {
+        get { self[ComposerSpaceKey.self] }
+        set { self[ComposerSpaceKey.self] = newValue }
+    }
+    var startBack: (@MainActor @Sendable () -> Void)? {
+        get { self[StartBackKey.self] }
+        set { self[StartBackKey.self] = newValue }
+    }
+}
+
+private struct ComposerMorph: ViewModifier {
+    @Environment(\.composerSpace) private var space
+    func body(content: Content) -> some View {
+        if let space { content.matchedGeometryEffect(id: "composer", in: space, properties: .frame, anchor: .bottom) } else { content }
+    }
+}
+
+extension View {
+    /// Marks the composer whose place the start page's card moves into (one on screen at a time).
+    func composerMorph() -> some View { modifier(ComposerMorph()) }
+}
+
+enum StartMotion {
+    /// Long enough to follow the card down, short enough not to wait for it.
+    static let morph = Animation.smooth(duration: 0.42)
+}
+
+/// Opens what was just started, moving the composer down into place.
+@MainActor private func morph(to target: SidebarItem, _ item: Binding<SidebarItem>) {
+    withAnimation(StartMotion.morph) { item.wrappedValue = target }
+}
+
 // MARK: Page
 
 /// The start page for one kind. Chat and debate are one page with a mode switch.
@@ -141,36 +190,62 @@ struct StartView: View {
     @Binding var item: SidebarItem
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: StartStyle.gap) {
-                switch kind {
-                case .chat, .debate: ChatStart(engine: engine, mode: kind, item: $item)
-                case .notebook: NotebookStart(engine: engine, item: $item)
-                case .agent: AgentStart(engine: engine, item: $item)
-                case .project: ProjectStart(engine: engine, item: $item)
-                }
+        StartColumn(top: kind == .agent || kind == .notebook ? 112 : 128) {
+            switch kind {
+            case .chat, .debate: ChatStart(engine: engine, mode: kind, item: $item)
+            case .notebook: NotebookStart(engine: engine, item: $item)
+            case .agent: AgentStart(engine: engine, item: $item)
+            case .project: ProjectStart(engine: engine, item: $item)
             }
-            .padding(.horizontal, 32)
-            .padding(.top, kind == .agent || kind == .notebook ? 112 : 128)
-            .padding(.bottom, 64)
-            .frame(maxWidth: StartStyle.column + 64)
-            .frame(maxWidth: .infinity)
         }
         .id(kind == .debate ? StartKind.chat : kind)
     }
 }
 
+/// A new session in a project: only the header and the composer (docs/design/start-pages, addendum).
+struct NewSessionView: View {
+    let engine: EngineController
+    let projectId: String
+    @Binding var item: SidebarItem
+
+    var body: some View {
+        StartColumn(top: 128) { SessionStart(engine: engine, projectId: projectId, item: $item) }
+            .id(projectId)
+    }
+}
+
+/// The one centered column every start page uses: 720 wide, 28 between blocks.
+private struct StartColumn<Content: View>: View {
+    let top: CGFloat
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: StartStyle.gap) { content }
+                .padding(.horizontal, 32)
+                .padding(.top, top)
+                .padding(.bottom, 64)
+                .frame(maxWidth: StartStyle.column + 64)
+                .frame(maxWidth: .infinity)
+        }
+    }
+}
+
 // MARK: Shared parts
 
-/// The 24pt tile with the kind's icon in the accent, and its name.
+/// The 24pt tile with the kind's icon in the accent, and its name (or the project's, for a new session).
 private struct KindLabel: View {
-    let kind: StartKind
+    let symbol: String
+    let text: String
+    init(kind: StartKind) { symbol = kind.symbol; text = kind.title }
+    init(symbol: String, text: String) { self.symbol = symbol; self.text = text }
+
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: kind.symbol).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.accentColor)
+            Image(systemName: symbol).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.accentColor)
                 .frame(width: 24, height: 24)
                 .background(StartStyle.accentWash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            Text(kind.title).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
+            Text(text).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
         }
         .accessibilityElement(children: .combine)
     }
@@ -249,6 +324,7 @@ private struct ComposerCard<Extra: View, Leading: View, Action: View>: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .shadow(color: .black.opacity(0.04), radius: 12, y: 8)
+        .composerMorph()
     }
 }
 
@@ -261,6 +337,7 @@ private struct CardText: View {
     var field: StartField = .text
     var returnSubmits = false
     var minHeight: CGFloat = 56
+    var escape: (() -> Void)?
     let submit: () -> Void
 
     var body: some View {
@@ -279,6 +356,11 @@ private struct CardText: View {
                 .onKeyPress(.return, phases: .down) { press in
                     if press.modifiers.contains(.command) || (returnSubmits && press.modifiers.isEmpty) { submit(); return .handled }
                     return .ignored
+                }
+                .onKeyPress(.escape) {
+                    guard let escape else { return .ignored }
+                    escape()
+                    return .handled
                 }
         }
         .padding(.horizontal, 20 - 5)
@@ -320,15 +402,43 @@ private struct MainActionStyle: ButtonStyle {
     }
 }
 
-/// A 36pt icon-only button in the card's footer.
+/// A 36pt icon-only button in the card's footer; `bordered` draws its outline (the new-session attach button).
 private struct FooterIcon: View {
     let symbol: String
     let label: String
+    var bordered = false
     let action: () -> Void
     var body: some View {
         Button(action: action) { Image(systemName: symbol).font(.system(size: 15)) }
             .buttonStyle(IconButtonStyle(size: 36))
+            .overlay { if bordered { RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1).allowsHitTesting(false) } }
             .help(label).accessibilityLabel(label)
+    }
+}
+
+/// The round 36pt send button: dark once there is something to send (the same on Chat and New session).
+private struct SendCircle: View {
+    let enabled: Bool
+    var busy = false
+    var label = "Send"
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if busy { ProgressView().controlSize(.mini) }
+                else { Image(systemName: "arrow.up").font(.system(size: 14, weight: .semibold)) }
+            }
+            .foregroundStyle(enabled ? Color.dsInvFg : Color.dsFg2)
+            .frame(width: 36, height: 36)
+            .background(enabled ? Color.dsInv : Color.dsTrack, in: Circle())
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled || busy)
+        .keyboardShortcut(.return, modifiers: .command)
+        .accessibilityLabel(label)
+        .help("\(label) (↩)")
     }
 }
 
@@ -506,21 +616,7 @@ private struct ChatStart: View {
     }
 
     private var sendButton: some View {
-        Button(action: send) {
-            Group {
-                if sending { ProgressView().controlSize(.mini) }
-                else { Image(systemName: "arrow.up").font(.system(size: 14, weight: .semibold)) }
-            }
-            .foregroundStyle(canSend ? Color.dsInvFg : Color.dsFg2)
-            .frame(width: 36, height: 36)
-            .background(canSend ? Color.dsInv : Color.dsTrack, in: Circle())
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSend)
-        .keyboardShortcut(.return, modifiers: .command)
-        .accessibilityLabel("Send")
-        .help("Send (↩)")
+        SendCircle(enabled: canSend, busy: sending, action: send)
     }
 
     private var attachmentTiles: some View {
@@ -703,15 +799,16 @@ private struct ChatStart: View {
             error = (thread.error ?? "Couldn't send.") + " Your message is kept; try again."
             return
         }
+        try? await engine.refreshCatalog()
+        switch ref.kind {
+        case .space: morph(to: .notebook(ref.id), $item)
+        case .build: morph(to: .session(ref.id), $item)
+        default: morph(to: .chat(ref.id), $item)
+        }
+        // Cleared once the page has moved on, so it doesn't flash empty first.
         drafts.clear(.chat)
         attachments = []
         pending = nil
-        try? await engine.refreshCatalog()
-        switch ref.kind {
-        case .space: item = .notebook(ref.id)
-        case .build: item = .session(ref.id)
-        default: item = .chat(ref.id)
-        }
     }
 
     private func startDebate() async {
@@ -721,7 +818,7 @@ private struct ChatStart: View {
             let ref = try await engine.createDebate(config)
             lastReviewer = "\(reviewer.provider)|\(reviewer.id)"
             drafts.clear(.debate)
-            item = .chat(ref.id)
+            morph(to: .chat(ref.id), $item)
         } catch {
             self.error = ((error as? EngineError)?.message ?? error.localizedDescription) + " Nothing was started, and your question is kept."
         }
@@ -1070,7 +1167,7 @@ private struct AgentStart: View {
                 let ref = try await engine.createAgent(name: name, template: draft.template, avatar: draft.avatar.trimmingCharacters(in: .whitespaces), instructions: instructions, schedule: schedule)
                 UserDefaults.standard.set("Chat", forKey: "agentTab")
                 drafts.clear(.agent)
-                item = .agent(ref.id)
+                morph(to: .agent(ref.id), $item)
             } catch {
                 self.error = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was created, and what you typed is kept."
             }
@@ -1308,7 +1405,7 @@ private struct NotebookStart: View {
             }
             // Cleared only now, so the page doesn't flash empty while chats move in.
             drafts.clear(.notebook)
-            item = .notebook(note.isEmpty ? topics.first.map { ContainerRef(kind: .space, id: ref.id, conversationId: $0).key } ?? ref.id : ref.id)
+            morph(to: .notebook(note.isEmpty ? topics.first.map { ContainerRef(kind: .space, id: ref.id, conversationId: $0).key } ?? ref.id : ref.id), $item)
         }
     }
 }
@@ -1343,5 +1440,202 @@ private struct TopicRow: View {
         .accessibilityLabel(thread.title)
         .accessibilityValue(on ? "Selected" : "Not selected")
         .accessibilityAddTraits(.isToggle)
+    }
+}
+
+// MARK: New session in a project
+
+/// The composer alone: the task, where it works (the folder, a new branch or a worktree), the permissions, the
+/// model, and start. Return or ⌘↩ starts; Esc goes back.
+private struct SessionStart: View {
+    let engine: EngineController
+    let projectId: String
+    @Binding var item: SidebarItem
+    @Environment(\.startBack) private var back
+    private var drafts: StartDrafts { .shared }
+    @State private var workOn: WorkChoice = .folder
+    @State private var mode: ApprovalMode = .autoEdit
+    @State private var model: ModelRef?
+    @State private var showModels = false
+    @State private var attachments: [PendingAttachment] = []
+    @State private var starting = false
+    @State private var error: String?
+    @FocusState private var focus: StartField?
+
+    /// Where the session works. The raw values are the ones the old sheet remembered per project.
+    enum WorkChoice: String, CaseIterable {
+        case folder = "Current branch", branch = "New branch", worktree = "Worktree"
+        var title: String {
+            switch self {
+            case .folder: "In the folder"
+            case .branch: "New branch"
+            case .worktree: "Worktree"
+            }
+        }
+        var summary: String {
+            switch self {
+            case .folder: "Works on the folder as it is, on its current branch"
+            case .branch: "Switches the folder to a new branch first"
+            case .worktree: "A separate checkout, so your working copy isn't touched"
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .folder: "folder"
+            case .branch: "arrow.triangle.branch"
+            case .worktree: "square.on.square"
+            }
+        }
+    }
+
+    private var key: String { StartDrafts.sessionKey(projectId) }
+    private var project: ProjectInfo? { engine.projects.first { $0.id == projectId } }
+    private var isGit: Bool { project?.branch != nil }
+    private var text: String { drafts[key: key].text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canStart: Bool { !starting && !text.isEmpty && project != nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            KindLabel(symbol: "folder", text: project?.name ?? "Project").padding(.bottom, 4)
+            TitleText(text: "What should the agent do?")
+        }
+        VStack(alignment: .leading, spacing: 12) {
+            ComposerCard {
+                AnyView(CardText(placeholder: "Describe the task…", text: drafts.binding(key: key, \.text), focused: $focus, returnSubmits: true, minHeight: 102, escape: { back?() }, submit: start))
+            } extra: {
+                if !attachments.isEmpty { attachmentTiles.padding(.horizontal, 20).padding(.top, 8) }
+            } leading: {
+                FooterIcon(symbol: "plus", label: "Attach files", bordered: true, action: attach)
+                workMenu
+                permissionsMenu
+            } action: {
+                modelSelector
+                SendCircle(enabled: canStart, busy: starting, label: "Start session", action: start)
+            }
+            StartError(text: error ?? (project == nil ? "This project isn't in Piopio any more." : nil))
+        }
+        Color.clear.frame(height: 0)
+            .onAppear(perform: defaults)
+            .onExitCommand { back?() }
+    }
+
+    private var workMenu: some View {
+        Menu {
+            Section {
+                ForEach(WorkChoice.allCases, id: \.self) { choice in
+                    Toggle(isOn: Binding(get: { workOn == choice }, set: { if $0 { workOn = choice } })) {
+                        Text(choice.title)
+                        Text(choice.summary)
+                    }
+                    .disabled(choice != .folder && !isGit)
+                }
+            }
+            if !isGit {
+                Section("Not a git repo") {
+                    Text("New branch and Worktree need git in this folder.")
+                }
+            }
+        } label: {
+            FooterSelector(symbol: workOn.symbol, title: workOn.title)
+        }
+        .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
+        .accessibilityLabel("Work on: \(workOn.title.lowercased())")
+        .help("Where the session works")
+    }
+
+    private var permissionsMenu: some View {
+        Menu {
+            ForEach(ApprovalMode.allCases) { m in
+                Toggle(isOn: Binding(get: { mode == m }, set: { if $0 { mode = m } })) {
+                    Text(ApprovalModeMenu.title(m))
+                    Text(ApprovalModeMenu.summary(m))
+                }
+            }
+        } label: {
+            FooterSelector(symbol: "checkmark.shield", title: ApprovalModeMenu.title(mode))
+        }
+        .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
+        .accessibilityLabel("Permissions: \(ApprovalModeMenu.title(mode).lowercased())")
+        .help("What the agent may do without asking")
+    }
+
+    private var modelSelector: some View {
+        let label = engine.model(model).map(ModelChip.short) ?? model?.id ?? "Model"
+        return Button { showModels = true } label: { FooterSelector(symbol: nil, title: label) }
+            .buttonStyle(SelectorStyle())
+            .accessibilityLabel("Model: \(label)")
+            .help("The model for this session")
+            .popover(isPresented: $showModels, arrowEdge: .bottom) {
+                ModelPicker(engine: engine, selected: model, role: .build) { m in model = m; showModels = false }
+            }
+    }
+
+    private var attachmentTiles: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(attachments) { a in
+                    HStack(spacing: 6) {
+                        Image(systemName: a.isImage ? "photo" : "doc").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                        Text(a.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        Button { attachments.removeAll { $0.id == a.id } } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3) }
+                            .buttonStyle(.plain).accessibilityLabel("Remove attachment \(a.name)")
+                    }
+                    .padding(.horizontal, 10).frame(height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                }
+            }
+        }
+    }
+
+    /// The project's permissions and the place it last worked (as the sheet did); the Build model.
+    private func defaults() {
+        focus = .text
+        guard let project else { return }
+        mode = project.approvalMode
+        model = model ?? engine.model(for: .build)
+        if isGit, let raw = UserDefaults.standard.string(forKey: "newSession.workOn.\(project.id)"), let choice = WorkChoice(rawValue: raw) { workOn = choice }
+        let env = ProcessInfo.processInfo.environment
+        if env["PIOPIO_DEMO_WORKTREE"] == "1", isGit { workOn = .worktree }
+        if let demo = env["PIOPIO_DEMO_NEW_SESSION"], drafts[key: key].text.isEmpty { drafts.update(key: key) { $0.text = demo } }
+    }
+
+    private func attach() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            do { attachments.append(try AttachmentLoader.load(url)) } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    private func start() {
+        guard canStart, let project else { return }
+        starting = true
+        error = nil
+        let prompt = text
+        let choice = workOn
+        Task {
+            defer { starting = false }
+            let target: WorkOn
+            switch choice {
+            case .folder: target = .current
+            case .branch, .worktree:
+                let suggested = try? await engine.client?.call("git.suggestBranch", SuggestBranchParams(prompt: prompt), as: SuggestBranchResult.self).branch
+                let name = suggested?.isEmpty == false ? suggested! : "piopio/session-\(Int(Date().timeIntervalSince1970))"
+                target = choice == .branch ? .branch(name, base: nil) : .worktree(name, base: nil)
+            }
+            do {
+                let ref = try await engine.createBuildSession(in: project, workOn: target, mode: mode, model: model)
+                UserDefaults.standard.set(choice.rawValue, forKey: "newSession.workOn.\(project.id)")
+                let session = engine.thread(ref)
+                await session.open()
+                _ = await session.send(prompt, attachments: attachments.map(\.attachment))
+                morph(to: .session(ref.id), $item)
+                drafts.clear(key: key)
+                attachments = []
+            } catch {
+                self.error = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was started, and your task is kept."
+            }
+        }
     }
 }

@@ -80,6 +80,7 @@ extension Area {
         case .chat, .notebook: self = .chat
         case .agent, .start(.agent): self = .agents
         case .start(.project): self = Areas.shared.contains(.build) ? .build : .chat
+        case .newSession: self = .build
         case .start: self = .chat
         case .index(.agents): self = .agents
         case .index(.chats), .index(.notebooks): self = .chat
@@ -277,6 +278,7 @@ extension AreaSet {
         case .notebook: showsNotebooks
         case .chat: showsChats
         case .agent: showsAgents
+        case .newSession: showsProjects
         case .start(let kind):
             switch kind {
             case .chat, .debate: showsChats

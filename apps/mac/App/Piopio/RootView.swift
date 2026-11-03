@@ -12,10 +12,11 @@ struct RootView: View {
     @State private var fullScreen = false
     @State private var availableWidth = 1280.0
     @State private var sidebarDragStart: Double?
-    @State private var newSessionProject: ProjectInfo?
     @State private var showOnboarding = false
-    /// What a start screen typed before opening the new session sheet.
-    @State private var newSessionPrompt = ""
+    /// Where you were before a start page, for Esc.
+    @State private var previousRaw = "home"
+    /// Shared by the start pages' card and the conversations' composer (the move into place when starting).
+    @Namespace private var composerSpace
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
     @State private var editingInstructions: SessionSummary?
@@ -47,7 +48,11 @@ struct RootView: View {
                 if engine.isLost { EngineBanner(engine: engine) }
                 if let hidden = hiddenArea { HiddenAreaBar(area: hidden) }
                 if engine.isMaintaining { ProgressView("Saving or restoring Piopio data…").frame(maxWidth: .infinity, maxHeight: .infinity) }
-                else { content.id(engine.dataGeneration) }
+                else {
+                    content.id(engine.dataGeneration)
+                        .environment(\.composerSpace, composerSpace)
+                        .environment(\.startBack, { itemRaw = previousRaw })
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -73,23 +78,23 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in
             // ⌘N follows the selection: a session in its project, otherwise a chat (in the areas that are on).
             let areas = Areas.shared.set
-            let inProject: Bool = { if case .session = item { true } else if case .project = item { true } else { false } }()
+            let inProject: Bool = { if case .session = item { true } else if case .project = item { true } else if case .newSession = item { true } else { false } }()
             if areas.contains(.build), inProject || !areas.contains(.chat) { newBuildSession() }
             else if areas.contains(.chat) { newChat() }
             else { itemRaw = SidebarItem.start(.agent).raw }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newChat)) { _ in newChat() }
         .onReceive(NotificationCenter.default.publisher(for: .newBuildSession)) { note in
-            newSessionPrompt = note.userInfo?["prompt"] as? String ?? ""
-            newSessionProject = engine.projects.first { $0.id == note.object as? String }
-        }
-        .sheet(item: $newSessionProject) { project in
-            NewSessionSheet(engine: engine, project: project, initialPrompt: newSessionPrompt) { ref in
-                if DraftStore(home: engine.home).load("home")?.text.trimmingCharacters(in: .whitespacesAndNewlines) == newSessionPrompt.trimmingCharacters(in: .whitespacesAndNewlines) {
+            // A prompt typed elsewhere (Home's box, a project's start screen) becomes the new session's draft.
+            guard let id = note.object as? String, engine.projects.contains(where: { $0.id == id }) else { return }
+            let prompt = (note.userInfo?["prompt"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !prompt.isEmpty {
+                StartDrafts.shared.update(key: StartDrafts.sessionKey(id)) { $0.text = prompt }
+                if DraftStore(home: engine.home).load("home")?.text.trimmingCharacters(in: .whitespacesAndNewlines) == prompt {
                     try? DraftStore(home: engine.home).save(ComposerDraft(), for: "home")
                 }
-                itemRaw = SidebarItem.session(ref.id).raw
             }
+            itemRaw = SidebarItem.newSession(id).raw
         }
         .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in
             if let url = note.object as? URL {
@@ -113,7 +118,10 @@ struct RootView: View {
             paletteQuery = (note.object as? String) ?? ""
             palette = (note.object as? Bool) == true || note.object is String ? .messages : .all
         }
-        .onChange(of: itemRaw) { _, _ in engine.selectedThreadId = item.engineId }
+        .onChange(of: itemRaw) { old, _ in
+            engine.selectedThreadId = item.engineId
+            if !SidebarItem(raw: old).isStart { previousRaw = old }
+        }
         .onAppear {
             engine.selectedThreadId = item.engineId
             WindowOpener.shared.openMain = { [openWindow] in openWindow(id: "main") }
@@ -235,6 +243,8 @@ struct RootView: View {
             }
         case .start(let kind):
             StartView(engine: engine, kind: kind, item: itemBinding)
+        case .newSession(let id):
+            NewSessionView(engine: engine, projectId: id, item: itemBinding)
         }
     }
 
@@ -294,12 +304,12 @@ struct RootView: View {
         let project: ProjectInfo? = {
             switch item {
             case .session(let id): return engine.buildSessions.first { $0.ref.id == id }.flatMap { engine.project(of: $0) }
-            case .project(let id): return engine.projects.first { $0.id == id }
+            case .project(let id), .newSession(let id): return engine.projects.first { $0.id == id }
             default: return nil
             }
         }()
         if let project = project ?? engine.projects.first {
-            newSessionProject = project
+            itemRaw = SidebarItem.newSession(project.id).raw
         } else {
             NotificationCenter.default.post(name: .openProject, object: nil)
         }

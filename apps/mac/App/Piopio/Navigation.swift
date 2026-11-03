@@ -18,6 +18,8 @@ enum SidebarItem: Hashable {
     case chat(String)
     /// A start page (docs/design/start-pages): what a sidebar + opens. Nothing exists until you start.
     case start(StartKind)
+    /// A new session in a project (its id): the composer alone, in place of the old sheet.
+    case newSession(String)
 
     var raw: String {
         switch self {
@@ -30,6 +32,7 @@ enum SidebarItem: Hashable {
         case .agent(let id): "agent:\(id)"
         case .chat(let id): "chat:\(id)"
         case .start(let kind): "start:\(kind.rawValue)"
+        case .newSession(let id): "newsession:\(id)"
         }
     }
 
@@ -45,7 +48,16 @@ enum SidebarItem: Hashable {
         case "agent": self = .agent(value)
         case "chat": self = .chat(value)
         case "start": self = StartKind(rawValue: value).map { .start($0) } ?? .home
+        case "newsession": self = .newSession(value)
         default: self = .home
+        }
+    }
+
+    /// A page where something is being started (Esc goes back from it).
+    var isStart: Bool {
+        switch self {
+        case .start, .newSession: true
+        default: false
         }
     }
 
