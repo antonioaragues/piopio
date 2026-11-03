@@ -76,7 +76,8 @@ The "New session in <project>" sheet is gone. Starting a session is a page built
 - **Permissions**: the three Piopio already has, each with its line in the menu: Ask before edits, Auto-edit, Full
   auto.
 - **Defaults** are what the sheet used: the project's own permission mode (Settings › the project; new projects get
-  Auto-edit, decision BQ1) and the place it last worked; "In the folder" the first time.
+  Auto-edit, decision BQ1) and the place it last worked; "In the folder" the first time. Confirmed on 2026-11-04
+  (the handoff's "Ask before edits" default was a question to confirm): each project keeps its own mode.
 - Starting creates the session, sends the task, and the page moves into the session in place of the draft row.
 
 **Sidebar**: Projects, Notebooks, Agents and Chats scroll in the middle; Search, Home and Needs you are fixed at the
