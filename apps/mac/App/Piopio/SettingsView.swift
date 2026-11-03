@@ -153,12 +153,20 @@ private struct GeneralPane: View {
     private let updater = AppUpdater.shared
 
     var body: some View {
-        PaneTitle(title: "General", subtitle: "Areas, shortcuts, notifications and updates.")
+        PaneTitle(title: "General", subtitle: "Areas, appearance, shortcuts, notifications and updates.")
         AreasCard(engine: engine) {
             NSApp.keyWindow?.performClose(nil)
             NotificationCenter.default.post(name: .runSetupAgain, object: nil)
         }
         ListCard {
+            Row(title: "Appearance") {
+                NeutralSegmented(selection: Binding(get: { AppAppearance.current }, set: { $0.save(); tick += 1 }),
+                                 options: AppAppearance.allCases.map { (value: $0, title: $0.title) })
+                    .frame(width: 220)
+                    .accessibilityLabel("Appearance")
+                Text(AppAppearance.current == .system ? "Follows macOS" : "Just for Piopio").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                Spacer()
+            }
             Row(title: "Quick Chat") {
                 Picker("", selection: Binding(get: { QuickChatShortcut.current }, set: { value in
                     UserDefaults.standard.set(value.rawValue, forKey: "quickChatShortcut")

@@ -4,7 +4,7 @@
 - A single main window type (multiple windows allowed), built on `NavigationSplitView`: **sidebar | content | inspector**.
 - **Mode switcher** in the sidebar header: `Build · Chat · Agents` (⌘1 / ⌘2 / ⌘3). Each mode remembers its own selection.
 - Toolbar (content): container title, model chip, mode-specific controls (branch, approval mode, space memory…), share/export, inspector toggle (⌘⌥I).
-- Native look: Liquid Glass materials on macOS 27, system accent color, SF Symbols, full Dark Mode support, and Dynamic Type where SwiftUI supports it on macOS.
+- Native look: Liquid Glass materials on macOS 27, system accent color, SF Symbols, full Dark Mode support, and Dynamic Type where SwiftUI supports it on macOS. Settings › General › Appearance: System (follows macOS, the default), Light or Dark, for the whole app (2026-11-04).
 
 ## 2. Sidebar (per mode)
 - Build: Projects → sessions (status icons).

@@ -98,6 +98,11 @@ extension PiopioApp {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor var engine: EngineController?
 
+    /// The saved appearance, before the first window draws.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated { AppAppearance.current.apply() }
+    }
+
     /// Quick Chat keeps working with the main window closed.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         MainActor.assumeIsolated {
@@ -148,6 +153,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             TerminalStore.shared.closeAll()
             engine?.stop()
+        }
+    }
+}
+
+/// Light, dark, or following macOS (Settings › General). Applied to the whole app, so every window, panel and menu
+/// follows it; the design tokens are dynamic colors and resolve from it.
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    static var current: AppAppearance {
+        UserDefaults.standard.string(forKey: "appearance").flatMap(AppAppearance.init(rawValue:)) ?? .system
+    }
+
+    @MainActor func save() {
+        UserDefaults.standard.set(rawValue, forKey: "appearance")
+        apply()
+    }
+
+    @MainActor func apply() {
+        switch self {
+        case .system: NSApp.appearance = nil
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
         }
     }
 }
