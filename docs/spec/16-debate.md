@@ -47,21 +47,21 @@ Models in a debate tend to agree too fast ("great point, I fully agree"). The sy
 - `withdrawn` needs a reason; `pushback` needs a reason. Both show in the transcript.
 - The criteria are written once, up front, and quoted in every reviewer turn, so the bar doesn't drift.
 - In Debate style, round 1 is blind: both answers are written before either sees the other.
-- Picking models from **different providers** is suggested in the start sheet (two models of one family tend to share blind spots), but not required.
+- Picking models from **different providers** is suggested on the start page (two models of one family tend to share blind spots), but not required.
 
 ## 4. When it ends
 
 In this order:
 1. **Agreed:** the reviewer approves (Review), or both sides' last turns say they agree with the same draft version (Debate).
 2. **Stalled:** two rounds in a row with no change to the draft and the same open objections. Ends as *No agreement*, listing them.
-3. **Round limit:** default 6, settable 2–12 in the start sheet. Ends as *No agreement*, listing what's open.
+3. **Round limit:** default 6, settable 2–12 on the start page. Ends as *No agreement*, listing what's open.
 4. **Stopped by you,** or a model error that a retry doesn't fix. Ends as *Stopped*, with the latest draft.
 
 **Keep going** on the result card adds rounds (the same number again) and continues from where it ended. In Judged style, *No agreement* goes to the judge instead of ending.
 
 ## 5. What the user sees
 
-- **Start sheet:** goal, criteria (optional), style, author and reviewer models (each a normal model picker with its thinking level), rounds, and the estimate. Defaults: the Chat default model as author, the last reviewer used (or a different provider's flagship) as reviewer.
+- **Start page** (docs/design/start-pages; a sheet until 2026-11-03): the goal is the message, the criteria (optional) a second line in the box, and under it one line of selectors: *Author writes · Reviewer reviews · up to N rounds*, with the estimate. Opened from the chat start page's *Start a debate* link, `/debate` there, ⌥⌘N, the compose menu and ⌘K. Defaults: the Chat default model as author, the last reviewer used (or a different provider's flagship) as reviewer.
 - **Transcript:** your goal as the first message. Each model turn is an assistant message with a speaker badge (name and colour) above it; the tool call shows as a compact line (*Submitted draft v3 · 4 changes · 1 pushback*, *2 objections, 1 resolved*) that expands. A round divider between rounds. Your steering messages show as yours, in place.
 - **Draft panel** (right side, like a notebook's Progress panel): the current draft rendered, a *v3 · changed in round 3* header, Show changes (a diff against the previous version), Copy. Below it, **Objections**: open ones first, each with who raised it, blocking/minor, and its history (raised in round 1, pushed back in round 2, resolved in round 3).
 - **Result card:** Agreed / No agreement / Stopped, the final draft, open objections with both positions, rounds and total cost; Copy, Export, Keep going.
@@ -88,7 +88,7 @@ In this order:
 - `sessions.debate.continue` (more rounds), `sessions.debate.stop` (end now; `sessions.abort` keeps meaning "stop this turn").
 
 ### App
-- Start sheet (from New Thread and `/debate`), speaker badges and round dividers in the transcript, the draft and objections panel, the result card, the sidebar icon.
+- Start page (from the chat start page and `/debate`), speaker badges and round dividers in the transcript, the draft and objections panel, the result card, the sidebar icon.
 
 ### Tests
 With the scripted model, as other runtimes: agree in round 2; stall detection; round limit; a turn without its tool call; steering mid-debate; quit and resume mid-round; Keep going; continuing as a normal thread afterwards with edit and fork; cost adding up across both models.
@@ -113,6 +113,7 @@ With the scripted model, as other runtimes: agree in round 2; stall detection; r
 - **Protocol:** `sessions.create` takes `debate`; `AssistantItem.speaker`; a `debate` timeline item (round divider, turn summary, result); `SessionState.debate`; `SessionSummary.debate`; `sessions.debate.continue` and `sessions.debate.stop`.
 - **App:** New Debate sheet (⌥⌘N, File menu, palette, the sidebar's new menu, the Chat empty state) with goal, criteria, the two models (the last reviewer is remembered, and a hint suggests models from different makers), rounds and a rough cost estimate. In the transcript, each answer carries its speaker's color and name, plus round dividers, turn summaries, and the result card (Copy draft, Keep going) followed by the final draft. A panel shows the status, the draft with version picker, Changes (a line diff) and Copy, and the objections with severity, pushback and history. The header has Stop debate or Keep going and toggles the panel. The composer says where your message goes. The sidebar marks debate threads.
 - **Verified:** 3 engine tests with the scripted model: agreeing in round 2 with the transcript, panel state, chat afterwards and a restart; the round limit, Keep going and a note from you; a missing draft, a nudge, validation and stopping. App captures of a running debate, a finished one and the sheet.
+- **2026-11-03:** the New Debate sheet became a start page in the main window (decision X10). No style picker yet, as before.
 
 **Different from the spec above**
 - Edit, Regenerate and Fork aren't offered in debate threads (the moderator decides who speaks next). Moving one to a Notebook isn't offered either.

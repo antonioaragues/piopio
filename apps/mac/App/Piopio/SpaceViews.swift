@@ -169,62 +169,14 @@ extension Notification.Name {
     static let editSpaceInstructions = Notification.Name("piopio.editSpaceInstructions")
 }
 
-// MARK: New Space
-
-/// Name and instructions (S5). Topics come later, as you write in Main.
-struct NewSpaceSheet: View {
-    let engine: EngineController
-    var preselected: Set<String> = []
-    /// The selection to show: Main, or the first topic made from a thread.
-    let created: (String) -> Void
-    @State private var threads: Set<String> = []
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var instructions = ""
-    @State private var creating = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("New Notebook").font(.system(size: 17, weight: .bold))
-            Text("A Notebook is a long-running area of your life or work. You write in Main; the organizer sends each message to the right topic, or starts one.")
-                .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Name").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg2)
-                TextField("Home renovation", text: $name).textFieldStyle(.roundedBorder)
-            }
-            InstructionsField(text: $instructions)
-            if !engine.threads.isEmpty { ThreadPicker(threads: engine.threads, selected: $threads) }
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
-                Button(creating ? "Creating…" : "Create Notebook") {
-                    creating = true
-                    Task {
-                        if let ref = await engine.createSpace(name: name.trimmingCharacters(in: .whitespaces), instructions: instructions.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                            let moving = engine.threads.filter { threads.contains($0.ref.id) }.map(\.ref)
-                            let topics = moving.isEmpty ? [] : ((try? await engine.importThreads(moving, into: ref)) ?? [])
-                            created(topics.first.map { ContainerRef(kind: .space, id: ref.id, conversationId: $0).key } ?? ref.id)
-                        }
-                        dismiss()
-                    }
-                }
-                .buttonStyle(PillStyle(kind: .primary))
-                .keyboardShortcut(.defaultAction)
-                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || creating)
-            }
-        }
-        .padding(22)
-        .frame(width: 460)
-        .onAppear { threads = preselected }
-    }
-}
-
-private struct InstructionsField: View {
+/// A notebook's instructions: a short editor and what they're for. The start page hides the title (its row names it).
+struct InstructionsField: View {
     @Binding var text: String
+    var title: String? = "Instructions (optional)"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Instructions (optional)").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg2)
+            if let title { Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg2) }
             TextEditor(text: $text)
                 .font(.system(size: 13))
                 .scrollContentBackground(.hidden)
@@ -232,7 +184,7 @@ private struct InstructionsField: View {
                 .frame(height: 96)
                 .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
-            Text("Every agent in the Notebook is told this: who you are, what matters, how to answer.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+            Text("Every agent in the notebook is told this: who you are, what matters, how to answer.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
         }
     }
 }

@@ -26,7 +26,7 @@ seen running. Nothing here has been used with real models.
 | 11h Interruptions | Built | Code only | The 85% context line replaces the ring; Compact now only in Build |
 | 12a–12d Debate | Built | Yes (running, agreed, Changes) | One document, so one tab; objections explain a version as a list above the document, not beside each change, because the engine records them per version |
 | 13a Agent | Built | Yes | Automatic runs are labeled "Automatic run · 8:00"; no day separators; failed runs show in Needs you, not in the conversation; no Telegram or "Keep it always on" |
-| 13b New agent | **Not built** | n/a | Still the form sheet: drafting from a sentence needs engine work |
+| 13b New agent | Start page instead (2026-11-03) | Yes, clicked | Name, avatar, a template and an optional first message on a start page; drafting the agent from a sentence still needs engine work |
 | 13e–13f Notebook | Right column built | Yes | Topics stay separate conversations with Main; no merged timeline with headings, no Where it stands, no Decided/Open states |
 | 14a Home | Built | Yes, without Coming up data | Also lists sessions under Recent by project |
 | 14b Needs you | Built | Message: yes. Approval and failed run: code only | "Set up a provider" appears when no model is connected, not per provider |
@@ -49,6 +49,13 @@ captured one run at a time in a throwaway home. What came out of it, fixed:
 Checked and working: the sidebar toggle and the inspector toggle with real clicks in the top bar, dragging the window
 by it, full screen in and out (the traffic lights return to their place), sending, approving and denying, creating a
 notebook, Settings, ⌘K.
+
+## Start pages (2026-11-03)
+
+New chat, debate, notebook and agent no longer open sheets: each opens a start page in the main window
+([docs/design/start-pages](../start-pages/README.md)). Clicked through in a throwaway home with the scripted model:
+sending from the chat page, creating a notebook with a chat brought in and a first note, creating an agent from a
+template with a first message, starting a debate, Chat instead / Start a debate, and `/debate`.
 
 ## Captures
 

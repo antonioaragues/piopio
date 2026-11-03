@@ -78,33 +78,6 @@ struct MoveToSpaceMenu: View {
     }
 }
 
-/// Threads to bring into a new Space, each as a topic (S5): the New Space sheet's list.
-struct ThreadPicker: View {
-    let threads: [SessionSummary]
-    @Binding var selected: Set<String>
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Bring in threads (optional)").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg2)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(threads, id: \.ref.id) { thread in
-                        Toggle(isOn: Binding(get: { selected.contains(thread.ref.id) }, set: { on in if on { selected.insert(thread.ref.id) } else { selected.remove(thread.ref.id) } })) {
-                            Text(thread.title).font(.system(size: 12.5)).lineLimit(1)
-                        }
-                        .toggleStyle(.checkbox)
-                    }
-                }
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(height: 120)
-            .settingsRows()
-            Text("Each becomes a topic with its whole conversation; the threads move into the Notebook.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-        }
-    }
-}
-
 // MARK: Settings › Chat
 
 /// Settings › Chat (design handoff h1): suggestions. About me and memory moved to Settings › Memory (docs/spec/14 M3).

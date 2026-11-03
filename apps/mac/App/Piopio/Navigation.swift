@@ -16,6 +16,8 @@ enum SidebarItem: Hashable {
     case notebook(String)
     case agent(String)
     case chat(String)
+    /// A start page (docs/design/start-pages): what a sidebar + opens. Nothing exists until you start.
+    case start(StartKind)
 
     var raw: String {
         switch self {
@@ -27,6 +29,7 @@ enum SidebarItem: Hashable {
         case .notebook(let key): "notebook:\(key)"
         case .agent(let id): "agent:\(id)"
         case .chat(let id): "chat:\(id)"
+        case .start(let kind): "start:\(kind.rawValue)"
         }
     }
 
@@ -41,6 +44,7 @@ enum SidebarItem: Hashable {
         case "notebook": self = .notebook(value)
         case "agent": self = .agent(value)
         case "chat": self = .chat(value)
+        case "start": self = StartKind(rawValue: value).map { .start($0) } ?? .home
         default: self = .home
         }
     }
@@ -53,6 +57,11 @@ enum SidebarItem: Hashable {
         default: nil
         }
     }
+}
+
+/// What a start page makes.
+enum StartKind: String, CaseIterable, Hashable {
+    case chat, debate, notebook, agent
 }
 
 enum SidebarSection: String, CaseIterable, Identifiable {

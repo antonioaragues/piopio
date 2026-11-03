@@ -78,7 +78,8 @@ extension Area {
             guard let s = engine.buildSessions.first(where: { $0.ref.id == id }) else { return nil }
             self = s.profile == .chat ? .chat : .build
         case .chat, .notebook: self = .chat
-        case .agent: self = .agents
+        case .agent, .start(.agent): self = .agents
+        case .start: self = .chat
         case .index(.agents): self = .agents
         case .index(.chats), .index(.notebooks): self = .chat
         case .index(.projects), .project: self = .build
@@ -275,6 +276,12 @@ extension AreaSet {
         case .notebook: showsNotebooks
         case .chat: showsChats
         case .agent: showsAgents
+        case .start(let kind):
+            switch kind {
+            case .chat, .debate: showsChats
+            case .notebook: showsNotebooks
+            case .agent: showsAgents
+            }
         }
     }
 

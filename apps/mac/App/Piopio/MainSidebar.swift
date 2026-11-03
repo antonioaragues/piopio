@@ -337,8 +337,9 @@ struct MainSidebar: View {
     @ViewBuilder private var notebooksSection: some View {
         let spaces = engine.spaces
         let cap = Self.caps[.notebooks]!
-        header(.notebooks, total: spaces.count, shown: min(cap, spaces.count), add: { NotificationCenter.default.post(name: .newSpace, object: nil) }, addHelp: "New notebook (⌘⇧N)")
+        header(.notebooks, total: spaces.count, shown: min(cap, spaces.count), add: { item = .start(.notebook) }, addHelp: "New notebook (⌘⇧N)")
         if !collapsed.contains(SidebarSection.notebooks.rawValue) {
+            draftRow(.notebook)
             ForEach(spaces.prefix(cap), id: \.ref.id) { notebookRow($0) }
             if spaces.count > cap { more("\(spaces.count - cap) more", .index(.notebooks)) }
         }
@@ -375,8 +376,9 @@ struct MainSidebar: View {
     @ViewBuilder private var agentsSection: some View {
         let agents = engine.agents
         let cap = Self.caps[.agents]!
-        header(.agents, total: agents.count, shown: min(cap, agents.count), add: { NotificationCenter.default.post(name: .newAgent, object: nil) }, addHelp: "New agent")
+        header(.agents, total: agents.count, shown: min(cap, agents.count), add: { item = .start(.agent) }, addHelp: "New agent")
         if !collapsed.contains(SidebarSection.agents.rawValue) {
+            draftRow(.agent)
             ForEach(agents.prefix(cap), id: \.ref.id) { agentRow($0) }
             if agents.count > cap { more("\(agents.count - cap) more", .index(.agents)) }
         }
@@ -439,8 +441,10 @@ struct MainSidebar: View {
     @ViewBuilder private var chatsSection: some View {
         let threads = engine.threads
         let cap = Self.caps[.chats]!
-        header(.chats, total: threads.count, shown: min(cap, threads.count), add: { NotificationCenter.default.post(name: .newChat, object: nil) }, addHelp: "New chat")
+        header(.chats, total: threads.count, shown: min(cap, threads.count), add: { item = .start(.chat) }, addHelp: "New chat (⌘N)")
         if !collapsed.contains(SidebarSection.chats.rawValue) {
+            draftRow(.chat)
+            draftRow(.debate)
             ForEach(threads.prefix(cap), id: \.ref.id) { chatRow($0) }
             if threads.count > cap { more("\(threads.count - cap) earlier", .index(.chats)) }
         }
@@ -467,6 +471,33 @@ struct MainSidebar: View {
             Button("Delete", role: .destructive) {
                 if selected { item = .home }
                 Task { await engine.delete(thread.ref) }
+            }
+        }
+    }
+
+    // MARK: Drafts
+
+    /// A start page's row (docs/design/start-pages): shown while it's open or once something is typed there, at the
+    /// top of the section where the thing will live, in fg2 with "Draft".
+    @ViewBuilder private func draftRow(_ kind: StartKind) -> some View {
+        let drafts = StartDrafts.shared
+        let selected = item == .start(kind)
+        if selected || drafts.hasContent(kind) {
+            Button { item = .start(kind) } label: {
+                HStack(spacing: 10) {
+                    RowGlyph(symbol: kind.symbol)
+                    Text(drafts.title(kind)).font(.system(size: 13)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("Draft").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                }
+                .rowChrome(selected: selected)
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
+                Button("Discard Draft", role: .destructive) {
+                    drafts.clear(kind)
+                    if selected { item = .home }
+                }
             }
         }
     }

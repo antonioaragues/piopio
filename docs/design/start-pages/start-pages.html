@@ -1,0 +1,383 @@
+<title>Piopio Start Pages</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a document column (720) around one wide, live window mockup in Piopio's grey ink. */
+:root {
+  --canvas:#e9e8e4; --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96;
+  --line:rgba(0,0,0,.08); --sel:rgba(0,0,0,.06); --bubble:#f0f0ed; --field:#ffffff;
+  --inv:#1f1f1e; --invfg:#ffffff; --accent:#2f6fde; --page:#f7f7f5;
+  --shadow:0 0 0 .5px rgba(0,0,0,.2),0 24px 70px rgba(0,0,0,.14);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --canvas:#0f0f0e; --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.07); --bubble:#2b2b29; --field:#252524;
+  --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#151514;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 24px 70px rgba(0,0,0,.6); color-scheme:dark } }
+:root[data-theme="dark"] {
+  --canvas:#0f0f0e; --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.07); --bubble:#2b2b29; --field:#252524;
+  --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#151514;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 24px 70px rgba(0,0,0,.6); color-scheme:dark }
+
+* { box-sizing:border-box }
+body { background:var(--page); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:56px 80px }
+a { color:var(--accent) }
+.doc { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:20px }
+.wide { max-width:1120px; margin:36px auto 8px }
+h1 { font-size:34px; line-height:1.15; letter-spacing:-.8px; margin:0; text-wrap:balance }
+h2 { font-size:20px; letter-spacing:-.3px; margin:36px 0 0; text-wrap:balance }
+p { margin:0 }
+.lede { font-size:17px; color:var(--fg2); text-wrap:pretty }
+.eyebrow { font-size:12px; color:var(--fg3); letter-spacing:.04em; text-transform:uppercase }
+.muted { color:var(--fg2) }
+kbd { font-family:var(--sans); font-size:12.5px; color:var(--fg2); background:var(--sel); border-radius:4px; padding:1px 5px }
+code { font-family:var(--mono); font-size:13px; background:var(--sel); border-radius:4px; padding:1px 4px }
+
+.map { display:grid; grid-template-columns:auto 1fr; gap:0; border-top:.5px solid var(--line) }
+.map > * { padding:10px 0; border-bottom:.5px solid var(--line); min-width:0 }
+.map > .k { padding-right:20px; color:var(--fg2); white-space:nowrap }
+
+/* ---------- the window mockup ---------- */
+.stage { background:var(--canvas); border-radius:16px; padding:28px; }
+.stage-cap { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; margin-bottom:14px; font-size:13px; color:var(--fg2) }
+.stage-cap strong { color:var(--fg); font-weight:600; font-size:14px }
+.win { display:flex; height:660px; border-radius:12px; overflow:hidden; background:var(--win); box-shadow:var(--shadow); font-size:13px; line-height:1.4 }
+.side { width:232px; flex-shrink:0; background:var(--side); border-right:.5px solid var(--line); display:flex; flex-direction:column }
+.side-top { height:52px; display:flex; align-items:center; gap:8px; padding:0 12px 0 16px }
+.light { width:12px; height:12px; border-radius:50%; background:var(--fg3); opacity:.35 }
+.side-top .icons { margin-left:auto; display:flex; gap:2px; color:var(--fg2) }
+.ib { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px }
+.rows { padding:4px 8px; display:flex; flex-direction:column; gap:1px }
+.row { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:7px; min-width:0 }
+.row svg { color:var(--fg2); flex-shrink:0 }
+.row .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.row .n { font-size:12px; color:var(--fg2) }
+.row.on { background:var(--sel) }
+.row.draft .t { color:var(--fg2) }
+.row.draft .pen { font-size:11px; color:var(--fg3) }
+.sec { padding:14px 4px 4px 8px; font-size:12px; color:var(--fg3); display:flex; align-items:center }
+.plus { all:unset; margin-left:auto; width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--fg3); cursor:pointer }
+.plus:hover, .plus[aria-pressed="true"] { background:var(--sel); color:var(--fg) }
+.plus:focus-visible { outline:2px solid var(--accent); outline-offset:1px }
+.plus.static { cursor:default }
+.plus.static:hover { background:none; color:var(--fg3) }
+.side-foot { margin-top:auto; height:52px; border-top:.5px solid var(--line); display:flex; align-items:center; gap:10px; padding:0 16px }
+.avatar { width:24px; height:24px; border-radius:50%; background:var(--sel); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--fg2) }
+
+.main { flex:1; min-width:0; display:flex; flex-direction:column }
+.bar { height:52px; flex-shrink:0; display:flex; align-items:center; padding:0 16px 0 24px; gap:8px }
+.bar .title { font-size:13.5px; font-weight:600; color:var(--fg2) }
+.bar .sub { font-size:12px; color:var(--fg3) }
+.body { flex:1; overflow:auto; display:flex; justify-content:center; padding:64px 28px 32px }
+.col { width:100%; max-width:628px; display:flex; flex-direction:column }
+
+.hello { font-size:26px; font-weight:700; letter-spacing:-.6px; margin-bottom:6px }
+.hint { font-size:13.5px; color:var(--fg3); margin-bottom:20px; text-wrap:pretty }
+.name { all:unset; flex:1; min-width:0; font-size:26px; font-weight:700; letter-spacing:-.6px; color:var(--fg) }
+.name::placeholder { color:var(--fg3) }
+.name:focus-visible { box-shadow:0 1.5px 0 var(--accent) }
+.namerow { display:flex; align-items:center; gap:12px; margin-bottom:6px }
+.ava { width:36px; height:36px; border-radius:50%; background:var(--sel); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0 }
+
+.composer { border-radius:16px; background:var(--field); border:.5px solid var(--line); box-shadow:0 2px 10px rgba(0,0,0,.04); padding:12px 14px 10px; display:flex; flex-direction:column; gap:10px }
+.composer textarea { all:unset; width:100%; min-height:44px; font-size:14.5px; line-height:1.5; color:var(--fg); white-space:pre-wrap; overflow-wrap:anywhere }
+.composer textarea::placeholder { color:var(--fg3) }
+.crit { border-top:.5px solid var(--line); padding-top:9px; display:flex; flex-direction:column; gap:2px }
+.crit label { font-size:12px; color:var(--fg3) }
+.crit input { all:unset; font-size:13.5px; color:var(--fg) }
+.crow { display:flex; align-items:center; gap:12px; font-size:12.5px; color:var(--fg2); flex-wrap:wrap }
+.selr { padding:3px 6px; margin:-3px -6px; border-radius:6px; cursor:default; white-space:nowrap }
+.selr:hover { background:var(--sel); color:var(--fg) }
+.selr b { font-weight:500; color:var(--fg) }
+.dot { color:var(--fg3) }
+.push { margin-left:auto }
+.send { width:28px; height:28px; border-radius:50%; background:var(--inv); color:var(--invfg); display:flex; align-items:center; justify-content:center }
+.send.off { background:var(--sel); color:var(--fg3) }
+.go { background:var(--inv); color:var(--invfg); border-radius:8px; padding:5px 11px; font-size:12.5px; font-weight:600; white-space:nowrap }
+
+.below { margin-top:14px; display:flex; flex-direction:column }
+.below .lab { font-size:12px; color:var(--fg3); padding:18px 0 6px; display:flex }
+.below .lab span:last-child { margin-left:auto; color:var(--fg2) }
+.pick { display:flex; align-items:center; gap:10px; padding:8px; margin:0 -8px; border-radius:7px; font-size:13.5px; min-width:0 }
+.pick:hover { background:var(--sel) }
+.pick .d { color:var(--fg3); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0 }
+.box { width:14px; height:14px; border-radius:4px; border:1px solid var(--fg3); flex-shrink:0; display:flex; align-items:center; justify-content:center }
+.box.on { background:var(--inv); border-color:var(--inv); color:var(--invfg) }
+.radio { width:14px; height:14px; border-radius:50%; border:1px solid var(--fg3); flex-shrink:0 }
+.radio.on { border:4px solid var(--inv) }
+.pick .m { margin-left:auto; font-size:12px; color:var(--fg3); white-space:nowrap }
+.disc { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--fg2); padding:12px 0 0 }
+.tip { font-size:12px; color:var(--fg3); margin-top:16px }
+.swap { all:unset; cursor:pointer; color:var(--accent); font-size:13px }
+.swap:hover { opacity:.8 }
+.swap:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:2px }
+.est { font-size:12px; color:var(--fg3) }
+
+@media (max-width:820px) { .side { width:180px } .side .side-foot { display:none } .stage { padding:12px } .body { padding:36px 18px 24px } }
+@media (max-width:600px) { .win { flex-direction:column; height:auto } .side { width:100%; border-right:0; border-bottom:.5px solid var(--line) } .side-top, .rows:not(.keep) { display:none } }
+
+/* ---------- notes ---------- */
+.notes { display:grid; grid-template-columns:repeat(4, 1fr); gap:24px; margin-top:28px }
+.notes > div { min-width:0; border-top:.5px solid var(--line); padding-top:14px }
+.notes h3 { font-size:14.5px; margin:0 0 6px }
+.notes p { font-size:14px; color:var(--fg2) }
+@media (max-width:900px) { .notes { grid-template-columns:1fr 1fr } }
+@media (max-width:560px) { .notes { grid-template-columns:1fr; gap:8px } }
+
+ol.rules, ul.plain { margin:0; padding-left:20px; display:flex; flex-direction:column; gap:10px }
+ol.rules li::marker { color:var(--fg3); font-size:13px }
+ul.plain li::marker { color:var(--fg3) }
+
+.q { border-top:.5px solid var(--line); padding:14px 0 2px; display:grid; gap:4px }
+.q b { font-weight:600 }
+.q .rec { font-size:14px; color:var(--fg2) }
+.q .rec em { font-style:normal; color:var(--fg); font-weight:500 }
+footer { font-size:13px; color:var(--fg3); margin-top:20px }
+@media (prefers-reduced-motion: no-preference) { .page { animation:fade .18s ease-out } @keyframes fade { from { opacity:.5 } to { opacity:1 } } }
+</style>
+
+<main>
+<div class="doc">
+  <div class="eyebrow">Piopio · design proposal · 3 November 2026 · v2</div>
+  <h1>Start pages: each + opens its own page</h1>
+  <p class="lede">Press + next to Chats, Notebooks or Agents in the sidebar and the main window shows a start page made for that kind of thing, the way a new conversation starts in ChatGPT or Claude. It has a heading, the composer, and only the options that kind needs. No sheets, and nothing is created until you start.</p>
+  <div class="map">
+    <span class="k">Chats +</span><span>The chat page. A debate starts from here too, because debates are listed under Chats.</span>
+    <span class="k">Notebooks +</span><span>The notebook page: name, first note, instructions, chats to bring in.</span>
+    <span class="k">Agents +</span><span>The agent page: name and avatar, a template, an optional first message.</span>
+    <span class="k">Projects +</span><span>Unchanged. It opens the folder picker, because adding a project means choosing a folder.</span>
+  </div>
+</div>
+
+<div class="wide">
+  <div class="stage">
+    <div class="stage-cap"><strong>Try it</strong><span>Click a + in the sidebar. On the chat page, “Start a debate” turns it into a debate and keeps your text.</span></div>
+    <div class="win">
+      <aside class="side" aria-label="Sidebar mockup">
+        <div class="side-top">
+          <span class="light"></span><span class="light"></span><span class="light"></span>
+          <div class="icons">
+            <span class="ib"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg></span>
+            <span class="ib"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h8a1.5 1.5 0 0 0 1.5-1.5V8"/><path d="M12 1.8l2.2 2.2L8.5 9.7H6.3V7.5z"/></svg></span>
+          </div>
+        </div>
+        <div class="rows">
+          <div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg><span class="t">Search</span><span class="n" style="color:var(--fg3)">⌘K</span></div>
+          <div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 7L8 2.5 13.5 7v6.5h-11z"/></svg><span class="t">Home</span></div>
+          <div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 9l2-6h8l2 6v4H2z"/><path d="M2 9h3.5l1 1.5h3l1-1.5H14"/></svg><span class="t">Needs you</span><span class="n">1</span></div>
+        </div>
+
+        <div class="sec">Projects<span class="plus static" title="Opens the folder picker, as today"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10"/></svg></span></div>
+        <div class="rows">
+          <div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg><span class="t">piopio</span></div>
+        </div>
+
+        <div class="sec">Notebooks<button class="plus" data-open="notebook" aria-label="New notebook" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10"/></svg></button></div>
+        <div class="rows keep">
+          <div class="row draft on" data-for="notebook" hidden><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 2.5h8.5a1 1 0 0 1 1 1v10H4a1 1 0 0 1-1-1z"/><path d="M3 11.5h9.5"/></svg><span class="t" id="nbDraft">New notebook</span><span class="pen">draft</span></div>
+          <div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 2.5h8.5a1 1 0 0 1 1 1v10H4a1 1 0 0 1-1-1z"/><path d="M3 11.5h9.5"/></svg><span class="t">Running</span></div>
+        </div>
+
+        <div class="sec">Agents<button class="plus" data-open="agent" aria-label="New agent" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10"/></svg></button></div>
+        <div class="rows keep">
+          <div class="row draft on" data-for="agent" hidden><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.6"/></svg><span class="t" id="agDraft">New agent</span><span class="pen">draft</span></div>
+          <div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.6"/></svg><span class="t">Price watcher</span></div>
+        </div>
+
+        <div class="sec">Chats<button class="plus" data-open="chat" aria-label="New chat" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10"/></svg></button></div>
+        <div class="rows keep">
+          <div class="row draft on" data-for="chat" hidden><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"/></svg><span class="t">New chat</span><span class="pen">draft</span></div>
+          <div class="row draft on" data-for="debate" hidden><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="5.5" cy="6" r="2.3"/><circle cx="11" cy="6" r="2.3"/><path d="M1.8 13c.4-2 1.9-3.2 3.7-3.2S8.8 11 9.2 13M7.4 13c.4-2 1.9-3.2 3.6-3.2s3.3 1.2 3.7 3.2"/></svg><span class="t">New debate</span><span class="pen">draft</span></div>
+          <div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"/></svg><span class="t">Tile options for the backsplash</span></div>
+          <div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 7.5C2.5 4.9 5 3 8 3s5.5 1.9 5.5 4.5S11 12 8 12c-.8 0-1.6-.1-2.3-.4L3 13l.6-2.4c-.7-.9-1.1-2-1.1-3.1z"/></svg><span class="t">Half-marathon training plan</span></div>
+        </div>
+        <div class="side-foot"><span class="avatar">A</span><div style="display:flex;flex-direction:column"><span>Antonio</span><span style="font-size:11px;color:var(--fg3)">This Mac · $0.84 today</span></div></div>
+      </aside>
+
+      <section class="main" aria-label="Start page mockup">
+        <div class="bar"><span class="title" id="barTitle">New notebook</span><span class="sub">not started</span></div>
+        <div class="body"><div class="col" id="col">
+
+          <!-- Chat -->
+          <div class="page" data-page="chat" hidden>
+            <div class="hello">What's on your mind?</div>
+            <div class="hint">A chat keeps its own history. You can move it into a notebook later.</div>
+            <div class="composer">
+              <textarea class="msg" rows="2" aria-label="Message" placeholder="Ask anything…"></textarea>
+              <div class="crow">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-label="Attach"><path d="M8 3v10M3 8h10"/></svg>
+                <span class="selr push">Sonnet 4.5</span>
+                <span class="send off"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"/></svg></span>
+              </div>
+            </div>
+            <div class="below">
+              <div class="tip" style="margin-top:4px">Want two models to work on it until they agree? <button class="swap" data-open="debate">Start a debate</button></div>
+              <div class="tip">⌥Space opens Quick Chat from any app.</div>
+            </div>
+          </div>
+
+          <!-- Debate -->
+          <div class="page" data-page="debate" hidden>
+            <div class="hello">What should they work on?</div>
+            <div class="hint">One model writes, the other reviews it against your goal, round after round, until the reviewer approves or the rounds run out.</div>
+            <div class="composer">
+              <textarea class="msg" rows="2" aria-label="Goal" placeholder="The goal: what should come out of it, and for whom"></textarea>
+              <div class="crit">
+                <label for="critIn">A good result must… (optional)</label>
+                <input id="critIn" value="Cover rollback. Stay under 600 words. No vendor marketing.">
+              </div>
+              <div class="crow">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-label="Attach"><path d="M8 3v10M3 8h10"/></svg>
+                <span class="go push">Start ⌘↩</span>
+              </div>
+            </div>
+            <div class="below">
+              <div class="crow" style="padding-top:2px">
+                <span class="selr"><b>Opus 4.5</b> writes</span><span class="dot">·</span>
+                <span class="selr"><b>GPT-5</b> reviews</span><span class="dot">·</span>
+                <span class="selr">up to <b>6</b> rounds</span>
+                <span class="est push">about $0.40 at most</span>
+              </div>
+              <div class="tip">The debate opens with this same line, so you can see what you set. <button class="swap" data-open="chat">Just chat instead</button></div>
+            </div>
+          </div>
+
+          <!-- Notebook -->
+          <div class="page" data-page="notebook">
+            <input class="name" id="nbName" placeholder="Name this notebook" value="Kitchen renovation" aria-label="Notebook name" style="display:block;width:100%;margin-bottom:6px">
+            <div class="hint">A long-running subject. You write in Main and the organizer files each message under the right topic.</div>
+            <div class="composer">
+              <textarea class="msg" rows="2" aria-label="First note" placeholder="First note for Main (optional)…"></textarea>
+              <div class="crow">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-label="Attach"><path d="M8 3v10M3 8h10"/></svg>
+                <span class="selr push">Sonnet 4.5</span>
+                <span class="go">Create ↩</span>
+              </div>
+            </div>
+            <div class="below">
+              <div class="disc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3l5 5-5 5"/></svg>Instructions for every agent in this notebook <span style="color:var(--fg3)">· optional</span></div>
+              <div class="lab"><span>Bring in chats as topics</span><span>1 selected</span></div>
+              <div class="pick"><span class="box on"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 8.5l3 3 7-7"/></svg></span>Tile options for the backsplash<span class="m">Chat · 2d</span></div>
+              <div class="pick"><span class="box"></span>Contractor quotes, side by side<span class="m">Chat · 5d</span></div>
+              <div class="pick"><span class="box"></span>Fridge sizes for a 60 cm gap<span class="m">Chat · 1w</span></div>
+            </div>
+          </div>
+
+          <!-- Agent -->
+          <div class="page" data-page="agent" hidden>
+            <div class="namerow"><span class="ava" title="Pick an avatar">☀︎</span><input class="name" id="agName" placeholder="Name your agent" value="Morning briefing" aria-label="Agent name"></div>
+            <div class="hint">Agents run on a schedule, remember what you teach them and reach you when something matters. This one runs on this Mac.</div>
+            <div class="composer">
+              <textarea class="msg" rows="2" aria-label="First message" placeholder="First message (optional): tell it what you want, in your words…"></textarea>
+              <div class="crow">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-label="Attach"><path d="M8 3v10M3 8h10"/></svg>
+                <span class="go push">Create ↩</span>
+              </div>
+            </div>
+            <div class="below">
+              <div class="lab"><span>Start from</span><span></span></div>
+              <div class="pick"><span class="radio on"></span>Daily briefing<span class="d">· weather, calendar and news at 8:00</span></div>
+              <div class="pick"><span class="radio"></span>Habit coach<span class="d">· checks in on the habits you pick</span></div>
+              <div class="pick"><span class="radio"></span>Research watcher<span class="d">· tells you when a topic moves</span></div>
+              <div class="pick"><span class="radio"></span>From scratch<span class="d">· instructions you write</span></div>
+            </div>
+          </div>
+
+        </div></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div><h3>Chat</h3><p>A heading and the composer. The chat is created with the first message, so the sidebar no longer fills with empty “New chat” rows.</p></div>
+    <div><h3>Debate</h3><p>The goal is the message, the criteria are a second line in the box, and the setup is one sentence of selectors with the cost beside it. Reached from the chat page, not from its own +.</p></div>
+    <div><h3>Notebook</h3><p>The name is the heading, typed in place. The box takes an optional first note for Main. Instructions fold away, and recent chats can come in as topics.</p></div>
+    <div><h3>Agent</h3><p>Avatar and name as the heading, then the templates as plain rows. An optional first message is sent once the agent exists, so you can tell it what you want straight away.</p></div>
+  </div>
+</div>
+
+<div class="doc">
+  <h2>How it behaves</h2>
+  <ol class="rules">
+    <li><b>Each + opens its own page.</b> Chats, Notebooks and Agents each have a start page. Projects + still opens the folder picker.</li>
+    <li><b>Nothing exists until you start.</b> The item is created when you send, press Start or press Create. Leaving an untouched page leaves nothing behind.</li>
+    <li><b>Debate lives under Chats.</b> “Start a debate” on the chat page turns it into the debate page and keeps your text as the goal. “Just chat instead” goes back. <code>/debate</code> in the chat box, <kbd>⌥⌘N</kbd> and the compose menu open the debate page directly.</li>
+    <li><b>Drafts survive.</b> Leave a page with something typed and a grey “draft” row stays in that section, named with what you typed (“Kitchen renovation”). Clicking it, or the same + again, reopens the page with your text. A second + never makes a second draft.</li>
+    <li><b>It starts in place.</b> On start, the composer moves to the bottom, your message appears, and the draft row becomes the real one. A debate opens with the “writes · reviews · rounds” line, a notebook on Main, an agent on its conversation.</li>
+    <li><b>The other ways in open the same pages.</b> <kbd>⌘N</kbd> opens the chat page and <kbd>⌘⇧N</kbd> the notebook page. The compose menu, ⌘K, the File menu and the first-run screens do the same. “Move to notebook” on a chat opens the notebook page with that chat ticked.</li>
+    <li><b>Errors stay on the page.</b> A line under the box says what happened, that nothing was created, and offers Retry. Your text is kept.</li>
+    <li><b>Creating is a page, editing is a sheet.</b> Notebook settings, commit, restore and the trace viewer stay as sheets, because they change something that already exists.</li>
+  </ol>
+
+  <h2>What changes in the code</h2>
+  <ul class="plain">
+    <li><code>SidebarItem</code> gets <code>.start(kind)</code> for <code>chat</code>, <code>debate</code>, <code>notebook</code> and <code>agent</code>. <code>RootView</code> shows a <code>StartView</code> for it: one shared layout (heading, hint, composer, what goes below), with a part for each kind.</li>
+    <li>The Chats, Notebooks and Agents + in <code>MainSidebar</code>, and the compose menu, set the selection instead of posting notifications that open sheets.</li>
+    <li><code>newChat()</code> stops calling <code>createThread()</code> up front. The chat page reuses <code>AskBox</code>'s send path, which already creates the thread on send.</li>
+    <li>What <code>NewDebateSheet</code>, <code>NewSpaceSheet</code> and <code>NewAgentSheet</code> do moves into their pages (defaults, the maker hint, the estimate, <code>ThreadPicker</code>, templates). The three sheets and their <code>.sheet</code> modifiers go away.</li>
+    <li>Drafts use <code>DraftStore</code> under <code>start:&lt;kind&gt;</code>, as Home does with <code>home</code>. The sidebar shows a draft row when one has text.</li>
+    <li>Docs: spec 16 (the “start sheet” becomes a start page), 04, 06 and 08, and the deliberate differences in <code>docs/design/grey/IMPLEMENTATION.md</code>. New captures of the four pages.</li>
+  </ul>
+  <p class="muted">Later, with the same pattern: a <b>new session</b> page inside a project (branch, mode and model as composer selectors instead of <code>NewSessionSheet</code>).</p>
+
+  <h2>Decisions for you</h2>
+  <div class="q"><b>1. How do you get to a debate from the sidebar?</b><span class="rec">Decided: <em>a link on the chat page</em>. Chats + stays one click.</span></div>
+  <div class="q"><b>2. Should the notebook and agent name come first, or come from the first message?</b><span class="rec">Decided: <em>name required</em>, as today. Create stays off until there is a name. Naming them automatically can come later.</span></div>
+
+  <footer>Mockup in Piopio's grey ink tokens (docs/design/grey). Names, models and prices are examples.</footer>
+</div>
+</main>
+
+<script>
+(function () {
+  const titles = { chat: "New chat", debate: "New debate", notebook: "New notebook", agent: "New agent" };
+  const owner = { chat: "chat", debate: "chat", notebook: "notebook", agent: "agent" };
+  const nbName = document.getElementById("nbName");
+  const agName = document.getElementById("agName");
+  const touched = new Set();
+  let kind = "notebook";
+
+  function textOf(k) { return document.querySelector('[data-page="' + k + '"] .msg').value; }
+  function heading(k) {
+    if (k === "notebook") return nbName.value.trim() || titles.notebook;
+    if (k === "agent") return agName.value.trim() || titles.agent;
+    return titles[k];
+  }
+  function open(k) {
+    // Chat and debate share the text: the message becomes the goal and back.
+    if ((kind === "chat" && k === "debate") || (kind === "debate" && k === "chat")) {
+      const t = textOf(kind);
+      if (t) { document.querySelector('[data-page="' + k + '"] .msg').value = t; document.querySelector('[data-page="' + kind + '"] .msg').value = ""; }
+    }
+    kind = k;
+    touched.add(k);
+    if (k === "debate") touched.delete("chat");
+    if (k === "chat") touched.delete("debate");
+    document.querySelectorAll(".page").forEach(el => { el.hidden = el.dataset.page !== k; });
+    document.querySelectorAll(".plus[data-open]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.open === owner[k])));
+    document.querySelectorAll(".row.draft").forEach(el => { el.hidden = !touched.has(el.dataset.for); el.classList.toggle("on", el.dataset.for === k); });
+    document.getElementById("barTitle").textContent = heading(k);
+    syncSend();
+  }
+  function syncSend() {
+    const s = document.querySelector('[data-page="chat"] .send');
+    s.classList.toggle("off", textOf("chat").trim() === "");
+  }
+  document.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => open(b.dataset.open)));
+  document.querySelectorAll(".row.draft").forEach(r => r.addEventListener("click", () => open(r.dataset.for)));
+  document.querySelectorAll(".msg").forEach(m => m.addEventListener("input", () => {
+    syncSend();
+    if (kind === "chat" && m.value.startsWith("/debate")) { m.value = m.value.replace(/^\/debate\s*/, ""); open("debate"); }
+  }));
+  nbName.addEventListener("input", () => { document.getElementById("nbDraft").textContent = nbName.value.trim() || titles.notebook; if (kind === "notebook") document.getElementById("barTitle").textContent = heading("notebook"); });
+  agName.addEventListener("input", () => { document.getElementById("agDraft").textContent = agName.value.trim() || titles.agent; if (kind === "agent") document.getElementById("barTitle").textContent = heading("agent"); });
+  document.getElementById("nbDraft").textContent = nbName.value.trim();
+  document.getElementById("agDraft").textContent = agName.value.trim();
+  // Example text so each page shows a realistic state at rest.
+  document.querySelector('[data-page="debate"] .msg').value = "A one-page plan to migrate our billing to Stripe, for the CTO";
+  open("notebook");
+})();
+</script>

@@ -60,7 +60,7 @@ enum DebugAutomation {
         }
         // PIOPIO_DEMO_DEBATE=1: a debate the scripted model plays both sides of (an objection in round 1, agreed in
         // round 2), with PIOPIO_DEMO_DEBATE_ROUNDS rounds at most (default 4; 1 ends without agreement).
-        // PIOPIO_DEMO_DEBATE=sheet: open the New Debate sheet instead.
+        // PIOPIO_DEMO_DEBATE=sheet: open the New debate start page instead.
         if let debate = env["PIOPIO_DEMO_DEBATE"], engine.status == .ready {
             Task {
                 if debate == "sheet" {

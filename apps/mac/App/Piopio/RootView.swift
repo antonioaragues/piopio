@@ -12,15 +12,12 @@ struct RootView: View {
     @State private var fullScreen = false
     @State private var availableWidth = 1280.0
     @State private var sidebarDragStart: Double?
-    @State private var showNewAgent = false
     @State private var newSessionProject: ProjectInfo?
     @State private var showOnboarding = false
     /// What a start screen typed before opening the new session sheet.
     @State private var newSessionPrompt = ""
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
-    @State private var showNewSpace = false
-    @State private var newSpaceThreads: [String] = []
     @State private var editingInstructions: SessionSummary?
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
@@ -79,7 +76,7 @@ struct RootView: View {
             let inProject: Bool = { if case .session = item { true } else if case .project = item { true } else { false } }()
             if areas.contains(.build), inProject || !areas.contains(.chat) { newBuildSession() }
             else if areas.contains(.chat) { newChat() }
-            else { showNewAgent = true }
+            else { itemRaw = SidebarItem.start(.agent).raw }
         }
         .onReceive(NotificationCenter.default.publisher(for: .newChat)) { _ in newChat() }
         .onReceive(NotificationCenter.default.publisher(for: .newBuildSession)) { note in
@@ -104,7 +101,7 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .selectBuildSession)) { note in
             if let id = note.object as? String { itemRaw = SidebarItem.session(id).raw }
         }
-        .modifier(SpaceAndAgentSheets(engine: engine, item: itemBinding, showNewAgent: $showNewAgent, showNewSpace: $showNewSpace, newSpaceThreads: $newSpaceThreads, editingInstructions: $editingInstructions))
+        .modifier(SpaceAndAgentSheets(engine: engine, item: itemBinding, editingInstructions: $editingInstructions))
         .onReceive(NotificationCenter.default.publisher(for: .selectThread)) { note in
             guard let id = note.object as? String else { return }
             itemRaw = (engine.item(for: id) ?? .chat(id)).raw
@@ -236,6 +233,8 @@ struct RootView: View {
             } else {
                 missing
             }
+        case .start(let kind):
+            StartView(engine: engine, kind: kind, item: itemBinding)
         }
     }
 
@@ -306,13 +305,9 @@ struct RootView: View {
         }
     }
 
+    /// The chat start page: the chat is created with its first message.
     private func newChat() {
-        Task {
-            if let ref = await engine.createThread() {
-                try? await engine.refreshCatalog()
-                itemRaw = SidebarItem.chat(ref.id).raw
-            }
-        }
+        itemRaw = SidebarItem.start(.chat).raw
     }
 }
 
@@ -369,23 +364,18 @@ struct EngineBanner: View {
     }
 }
 
-/// The notebook and agent sheets and their notifications (kept apart so the root view type-checks quickly).
+/// The start pages, the notebook and trace sheets and their notifications (kept apart so the root view type-checks
+/// quickly). New debate, notebook and agent open their start pages (docs/design/start-pages); "New notebook" from a
+/// chat ticks that chat to bring in.
 private struct SpaceAndAgentSheets: ViewModifier {
     let engine: EngineController
     @Binding var item: SidebarItem
-    @Binding var showNewAgent: Bool
-    @Binding var showNewSpace: Bool
-    @Binding var newSpaceThreads: [String]
     @Binding var editingInstructions: SessionSummary?
     @State private var trace: TraceTarget?
-    @State private var showNewDebate = false
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .newDebate)) { _ in showNewDebate = true }
-            .sheet(isPresented: $showNewDebate) {
-                NewDebateSheet(engine: engine) { item = .chat($0.id) }
-            }
+            .onReceive(NotificationCenter.default.publisher(for: .newDebate)) { _ in item = .start(.debate) }
             .onReceive(NotificationCenter.default.publisher(for: .openTrace)) { note in
                 if let id = note.object as? String { trace = TraceTarget(id: id) }
             }
@@ -394,16 +384,12 @@ private struct SpaceAndAgentSheets: ViewModifier {
                 item = .needsYou
                 if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in showNewAgent = true }
-            .sheet(isPresented: $showNewAgent) {
-                NewAgentSheet(engine: engine) { item = .agent($0.id) }
-            }
+            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in item = .start(.agent) }
             .onReceive(NotificationCenter.default.publisher(for: .newSpace)) { note in
-                newSpaceThreads = (note.object as? String).map { [$0] } ?? []
-                showNewSpace = true
-            }
-            .sheet(isPresented: $showNewSpace) {
-                NewSpaceSheet(engine: engine, preselected: Set(newSpaceThreads)) { item = .notebook($0) }
+                if let thread = note.object as? String {
+                    StartDrafts.shared.update(.notebook) { if !$0.threads.contains(thread) { $0.threads.append(thread) } }
+                }
+                item = .start(.notebook)
             }
             .onReceive(NotificationCenter.default.publisher(for: .editSpaceInstructions)) { note in
                 editingInstructions = engine.space(note.object as? String ?? "")
