@@ -227,7 +227,8 @@ Milestones:
 | **4.5** Apple apps as tools | The native bridge (§4.1 NB1–NB2) through `app.tool` reverse requests (03 §3.12): Reminders, Calendar, Contacts, Notes, Music, Shortcuts, each with result cards and Undo. |
 | **4.6** Agent-to-agent | `ask_agent` and `tell_agent`, permissions, loop guards and the trace budget, `agent_msg` items and the trace view, shared memory partitions (§7 AA1–AA7). |
 | **4.7** Hindsight provider | The native Hindsight adapter: remote URL first (self-hosted or Hindsight Cloud), then the supervised local daemon behind a download prompt (S6: JSON mode off, the utility model for extraction, recall per turn and reflect as a tool). The harder memory set (2,000+ messages, paraphrased questions) to revisit the default (AQ11). |
-| **4.8** Agent Builder and extras | The Agent Builder chat (§2 AD1). If time allows: side-by-side agents, link previews, voice, quick entry to an agent (§12 UI3–UI6). |
+| **4.8** Agent Builder and extras | The Agent Builder chat (§2 AD1), which **interviews first** with question cards (AD5), so it needs 4.9's `ask_user` for agents. If time allows: side-by-side agents, link previews, voice, quick entry to an agent (§12 UI3–UI6). |
+| **4.9** Agents, from the Grok Bot review (2026-11-03) | See [docs/research/grok-bot.md](../research/grok-bot.md). `ask_user` for agents, with inline question cards in the transcript, the Inbox and channel buttons (§4, UI7). Approval rules as sentences, in Always ask / Allow without asking, with judged rules checked by the utility model (AS5). Background runs that report back in the owner's chat (PR7). `save_skill` (§4). The agent page's Schedules, Skills and Files as lists with "Ask {agent}…" empty states (UI8), the per-agent Library (UI9), the agent color (UI10) and the spend line (UI11). Later ideas are in 06 §12.2. Build the question cards first, because 4.8 depends on them. |
 
 The first week-long acceptance run can start after 4.4 (two agents, schedules, approvals). 4.5–4.8 add to it.
 
@@ -304,6 +305,9 @@ GitHub PR/CI loop (G4–G8), worktrees UX, usage page, export everything, access
 
 ## Onboarding and areas (built 2026-10-25)
 A new first-run welcome asks what Piopio is for you (Build, Chat, Agents, or several). Areas you don't use are hidden from the sidebar, Home, menus and the palette, and can be turned on and off in Settings › General. Hiding stops and deletes nothing. See [15-onboarding-and-areas](15-onboarding-and-areas.md); the decisions are in §7 and what's built in §8.
+
+## Dispatch (2026-11-03)
+Planned in [17-dispatch.md](17-dispatch.md): DP1 Watchdog rules, DP2–DP3 Dispatch (engine, app), DP4 non-blocking subagents, DP5 PR events (after G6–G7), DP6 the off-track check. Open questions DPQ1–DPQ6 are there.
 
 ## Debate (2026-10-29)
 Two models work on one goal until they agree: an author writes a draft, a reviewer raises objections, and it ends with the agreed draft or a clear list of what's still disputed. A debate is a thread run by a new debate runtime, with one pi-durable conversation per model. Milestones DB1 (Review style, engine), DB2 (Review style, app), DB3 (Debate and Judged styles), then an agent recipe later. **DB1 and DB2 built 2026-10-29** (§9 of the spec); prompts not yet tuned with real models. See [16-debate](16-debate.md).

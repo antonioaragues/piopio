@@ -63,6 +63,7 @@ A folder that is a git repo (auto-committed on every save → history, diff, rol
 - **AD2** Secrets are referenced as `secret:NAME` and never stored in the folder. Values live in Keychain locally and in encrypted storage in the cloud.
 - **AD3** Validation on save (JSON Schema + semantic checks: cron syntax, contact channel IDs, referenced agents exist). Errors show inline.
 - **AD4** Templates: "Personal assistant", "Daily briefing", "Habit coach", "Family helper", "Research watcher".
+- **AD5** **The Builder interviews first** (from the Grok Bot review, docs/research/grok-bot.md). A new agent opens in the Builder chat, which introduces the agent and asks two or three question cards (UI7) before writing anything: what it's for, which apps and people it works with, and how it should reach you. It then shows the drafted definition as a diff to apply. A template only fills the first answers. The form editor stays the place for later edits and for people who prefer it.
 
 ## 3. Runtime (shared Node/Workers code in `@piopio/runtime`)
 
@@ -88,12 +89,14 @@ Custom entries: `piopio.channel-in` / `piopio.channel-out` (delivery metadata), 
 | `send_message(to, text, attachments?, channel?)` | Proactive or cross-person messaging. `to` = contact id or `owner`. Respects quiet hours (queues), outbound limits, approval policy. |
 | `schedule(when, prompt, deliverTo?)` / `list_schedules` / `cancel_schedule` | One-off and recurring reminders created by the agent ("remind me Thursday at 9"). Durable tasks with `sleepUntil`. |
 | `remember(partition, fact)` / `recall(query)` / `forget(id)` | Memory operations. Every write shows up in the app's memory view with provenance. |
+| `ask_user(question, options, allowOther?)` → answer | A question card (UI7). In a person's conversation it asks that person. In a run it asks the owner, in the owner's chat and the Inbox. The call waits durably, like an approval (AS1), and an unanswered question expires with the approval window. Channels show it as buttons (Telegram inline keyboard, WhatsApp reply buttons for up to 3 options, a numbered list beyond that). "Something else" is a free reply. |
 | `ask_agent(agentId, message)` → reply | Synchronous-style delegation (§7). |
 | `tell_agent(agentId, message)` | Fire-and-forget notification to another agent. |
 | `web_search`, `web_fetch` | As in Chat. |
 | `http_request(method, url, headers, body)` | Domain allowlist per agent. Non-GET requests need approval by default. |
 | `codemode` | pi-durable codemode (QuickJS sandbox; `RemoteCodemodeSandbox` on Cloudflare) that can call the agent's other tools. |
 | `files_*` | Agent workspace files (R2-backed in the cloud). |
+| `save_skill(name, description, body)` | Writes `skills/<name>/SKILL.md` in the agent's folder, so "remember how to do this" becomes a skill. Only from the owner's conversation or a run. The owner sees the new file as a diff with Keep / Undo, and the definition's git history records it (§2). |
 | MCP tools | From remote MCP servers in the definition. |
 | `apple_*`, `shortcuts_run` | Apple apps on the user's Mac (§4.1). Local agents directly; cloud agents through the Mac Bridge (§10). |
 | `mac_*` (later, Mac Bridge) | Local tools when the Mac is online (§10). |
@@ -182,6 +185,7 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 - **PR4** **Quiet hours:** outbound messages during quiet hours are queued and delivered at the end of quiet hours, unless the agent marks them `urgent` **and** the policy allows urgent sends (`policies.urgentBypassesQuiet`). Times are in the agent's `timezone` (default: the Mac's).
 - **PR5** **Outbound limits:** per-day cap per contact (`maxOutboundPerContactPerDay`) and globally (`maxOutboundPerDay`). When hit, messages are queued until the next day and the owner gets one notice that day.
 - **PR6** Durable implementation: schedules are pi-durable tasks (`defineTask` + `runtime.sleepUntil`). The cloud uses `PiHarness` alarm projection, and alarms are at-least-once, so every run is idempotent (keyed by `scheduleId + fireTime`).
+- **PR7** **Background work reports back in the chat.** When the owner asks for something long, the agent can start it as a run (`schedule` with `when: "now"`), say so ("I'm collecting the sources in the background"), and keep talking. When the run ends, its result arrives as a new message in the owner's conversation, with its files as cards (UI9). It also sets the unread dot and goes to the Inbox, as well as showing in Runs.
 
 ## 7. Agent-to-agent
 
@@ -213,6 +217,11 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 - **AS2** Messages from non-owner contacts can never trigger: memory writes to the owner partition, `send_message` to other contacts, or `ask_agent`, unless explicitly enabled. (A contact's conversation may still message that contact or the owner.)
 - **AS3** **Budget:** a monthly $ cap per agent. At 80% the owner is notified. At 100% the agent replies with a canned "I'm out of budget" and stops runs, and the owner can raise the cap from the app or the channel.
 - **AS4** **Kill switch:** "Pause agent" (app or `/pause` from the owner on any channel) stops all runs and outbound immediately. Paused, fires are recorded as skipped runs, messages wait in the outbox, and people's messages are kept without a turn; `/resume` or the app's Resume starts it again and releases what was held.
+
+- **AS5** **Rules in plain language.** The approval rules show as sentences in two lists per agent, **Always ask** and **Allow without asking** (the "Always allow …" choices from AS1 land in the second). The pattern rules read as sentences ("Messages to anyone but you", "Web requests that send data"). The owner can add a rule as a sentence ("Purchases over $50", "Emails to dana@acme.com"):
+  - The Builder turns it into a pattern rule when one fits, and shows the pattern.
+  - Otherwise it stays a **judged rule**. Before each tool call that changes something, the agent's utility model checks the call against the judged rules. A match pauses the call as in AS1, and the card says which rule matched. Its verdicts are cached per tool and argument shape.
+  - Pattern rules and the deny-list are always checked first. A judged rule can make an agent ask more, never less: "Allow without asking" only takes pattern rules.
 
 ## 10. Mac Bridge (later)
 While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud Engine and registers **bridge tools**: the Apple app tools of §4.1 (served by the Mac app), `mac_files`, `mac_imessage_send`, and `mac_shell` with mandatory approval. Cloud agents see these tools only while the bridge is connected. Otherwise the tool returns "Mac offline". The agent header says where an agent runs ("Cloud", "This Mac", or another of the user's Macs once multi-Mac exists).
@@ -248,10 +257,23 @@ While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud En
 - **UI4 Links and files:** links in messages get a preview card (title, site, image, summary) with Open / Copy / Share. A side panel lists a conversation's links and files ("3 links · 2 files").
 - **UI5 Voice:** dictation in every composer (on-device speech recognition), and voice notes sent as audio and transcribed like channel voice notes (CH3). A hands-free voice mode comes later.
 - **UI6 Quick entry to an agent:** Quick Chat (04-chat §4) can address an agent ("@Cobot remind me…"), so the request goes to that agent instead of a new thread.
+- **UI7 Question cards in the transcript:** an `ask_user` question is a card in the conversation, not a sheet above the composer. It shows the question, lettered options (A, B, C…) that wrap, and a last "Something else" row that takes a typed answer. While it's open, the composer placeholder reads "Answer, or talk about something else", and typing there answers "Something else". Once answered, the card shrinks to the question and the chosen answer (as Build's S1 does). The Inbox shows open questions with the same card.
+- **UI8 Sections list what exists:** the agent page's Schedules, Skills and Files sections list what the agent has. When a section is empty it says what to ask instead of showing a blank form: "No routines yet. Ask {agent} to set one up", or "No skills yet. Ask {agent} to save one". Each item opens the agent's chat with the item quoted, so you can ask for changes. Editing the raw definition stays in the Definition tab.
+- **UI9 Library:** one list per agent of every file, page and link it produced, across all its conversations and runs, grouped by time (Today, This week, Earlier). Each item has Open, Reveal in Finder, Share and a link back to the message that made it. UI4's per-conversation panel is the same list, filtered to one conversation.
+- **UI10 Agent color:** each agent has a tint, picked from its avatar or chosen. The tint is used for the avatar ring, the send button and the header in that agent's pages and columns, so side-by-side agents (UI3) are easy to tell apart. The rest of the app keeps the grey style (docs/design/grey).
+- **UI11 Spend at a glance:** a single line in the Agents sidebar footer, such as "This month · $4.10 of $40", sums the agents' budgets (AS3). Clicking it opens Costs. It turns amber at 80%.
 
 ## 12.1 Agent boards (later)
 
 A **board** of tasks for agents ("Projects" in Agents): columns To do / Doing / Done, with cards assigned to an agent. The agent picks up a card as a run, keeps its checklist on the card (the Build `todo` tool), moves it, and posts the result card when done. The owner can add, reorder or reassign cards; agents can add cards for each other (agent-to-agent, §7) within their budgets.
+
+## 12.2 Later, from the Grok Bot review
+
+Noted on 2026-11-03 (docs/research/grok-bot.md) and not scheduled:
+- **Screen panel:** when computer use lands (11-computer-use, D10), the agent page gets a live view of what the agent is driving. It shows "asleep" / "waking up…" states while nothing runs. The same panel would show a cloud sandbox later.
+- **Devices:** Settings lists the Macs (and later phones) the agents can reach through the Mac Bridge (§10), each with online or last-seen status.
+- **Vault for computer use:** logins and addresses the agent may type for you, and cards it fills without ever seeing them: the app types the number and the model only sees "•••• 4242". Only matters once agents fill forms. Fits the password-manager connectors (12-connectors).
+- **Teach a task:** record yourself doing something (screen and input events), and the agent writes a skill (`save_skill`) from the recording for you to review.
 
 ## 13. Resolved questions (Agents)
 - **AQ1** Telegram → **one bot per agent** (§5.2).
