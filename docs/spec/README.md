@@ -39,7 +39,7 @@ Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release o
 | X6 | Global library of skills/MCP/prompts/memory, opted in per project/space/agent. | User |
 | X7–X8 | No multi-Mac sync, no sharing in v1. Export only. | Default |
 | X9 | Solo developer, no deadline. **Start with the easiest mode** → Chat Threads (see roadmap). | User |
-| X10 | **Start pages, not sheets** (2026-11-03): the + next to Chats, Notebooks and Agents opens a start page for that kind in the main window, and nothing is created until you start. Debate starts from a link on the chat page (and `/debate`). Notebooks and agents need a name before Create. See `docs/design/start-pages/`. | User |
+| X10 | **Start pages, not sheets** (2026-11-03): the + next to Projects, Chats, Notebooks and Agents opens a start page for that kind in the main window, all with one layout, and nothing is created until you start. Debate is a mode of the chat page (and `/debate`). Notebooks and agents need a name before Create; agents also need instructions. Agent templates use line icons, not emoji. See `docs/design/start-pages/`. | User |
 | M1 | OpenRouter only in v1. Direct providers, local models and subscription logins come later. | Default |
 | M2–M4 | Searchable model picker with per-mode defaults. Live cost meter. Keys in Keychain. | Default |
 | B1 | **Agent-first** Build mode (no full editor). | User |

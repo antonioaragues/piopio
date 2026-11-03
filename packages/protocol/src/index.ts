@@ -1489,10 +1489,12 @@ export const methods = {
 	/** Agents (06-agents §2, §11). */
 	"agents.templates": {
 		params: Type.Object({}),
-		result: Type.Object({ templates: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.String(), description: Type.String() })) }),
+		/** `instructions` may contain "{owner}"; `schedule` is the first schedule's cron, when the template has one. */
+		result: Type.Object({ templates: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.String(), description: Type.String(), instructions: Type.String(), schedule: Type.Optional(Type.String()) })) }),
 	},
 	"agents.create": {
-		params: Type.Object({ name: Type.String(), template: Type.Optional(Type.String()), avatar: Type.Optional(Type.String()), model: Type.Optional(ModelRef), owner: Type.Optional(Type.String()) }),
+		/** `instructions` replaces the template's; `schedule` (a cron, or null for none) replaces its first schedule. */
+		params: Type.Object({ name: Type.String(), template: Type.Optional(Type.String()), avatar: Type.Optional(Type.String()), model: Type.Optional(ModelRef), owner: Type.Optional(Type.String()), instructions: Type.Optional(Type.String()), schedule: Type.Optional(Type.Union([Type.String(), Type.Null()])) }),
 		result: Type.Object({ ref: ContainerRef }),
 	},
 	/** The definition as saved, its validation and its history (git log). */

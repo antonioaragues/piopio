@@ -99,7 +99,8 @@ struct BuildFirstRun: View {
 
     /// Git repos directly inside the first of the usual code folders that has any, newest first, and the
     /// working folders of pi's sessions (`~/.pi/agent/sessions/<cwd>/*.jsonl`, whose first line names the cwd).
-    nonisolated static func scan() -> Found {
+    /// `limit`: how many repos to keep from the first code folder that has any.
+    nonisolated static func scan(limit: Int = 4) -> Found {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
         var folder = "", repos: [Repo] = []
@@ -109,7 +110,7 @@ struct BuildFirstRun: View {
             let git = kids.filter { fm.fileExists(atPath: $0.appendingPathComponent(".git").path) }
             guard !git.isEmpty else { continue }
             let date = { (u: URL) in (try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast }
-            repos = git.sorted { date($0) > date($1) }.prefix(4).map(Repo.init)
+            repos = git.sorted { date($0) > date($1) }.prefix(limit).map(Repo.init)
             folder = "~/" + name
             break
         }
@@ -213,7 +214,7 @@ struct AgentsFirstRun: View {
             }
         } label: {
             VStack(alignment: .leading, spacing: 6) {
-                Text(t.avatar).font(.system(size: 26))
+                AvatarGlyph(avatar: t.avatar, size: 26)
                 Text(t.name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
                 Text(t.description).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(3).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)

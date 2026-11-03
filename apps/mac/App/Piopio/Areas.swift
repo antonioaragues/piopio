@@ -79,6 +79,7 @@ extension Area {
             self = s.profile == .chat ? .chat : .build
         case .chat, .notebook: self = .chat
         case .agent, .start(.agent): self = .agents
+        case .start(.project): self = Areas.shared.contains(.build) ? .build : .chat
         case .start: self = .chat
         case .index(.agents): self = .agents
         case .index(.chats), .index(.notebooks): self = .chat
@@ -281,6 +282,7 @@ extension AreaSet {
             case .chat, .debate: showsChats
             case .notebook: showsNotebooks
             case .agent: showsAgents
+            case .project: showsProjects
             }
         }
     }

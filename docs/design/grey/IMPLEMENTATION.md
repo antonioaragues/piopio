@@ -52,10 +52,10 @@ notebook, Settings, ⌘K.
 
 ## Start pages (2026-11-03)
 
-New chat, debate, notebook and agent no longer open sheets: each opens a start page in the main window
-([docs/design/start-pages](../start-pages/README.md)). Clicked through in a throwaway home with the scripted model:
-sending from the chat page, creating a notebook with a chat brought in and a first note, creating an agent from a
-template with a first message, starting a debate, Chat instead / Start a debate, and `/debate`.
+New project, chat, debate, notebook and agent no longer open sheets: each opens a start page in the main window
+([docs/design/start-pages](../start-pages/README.md)), redone from a later handoff with its own layout (a kind
+label, a 34pt title, a composer card with the action at the bottom right). It adds a soft accent wash and colored
+debate badges that grey ink otherwise avoids; the README lists that and what differs from the handoff.
 
 ## Captures
 

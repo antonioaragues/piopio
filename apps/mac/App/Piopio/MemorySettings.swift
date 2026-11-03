@@ -281,7 +281,7 @@ struct EmojiTile: View {
     let text: String
     var size: CGFloat = 34
     var body: some View {
-        Text(text).font(.system(size: size * 0.55))
+        AvatarGlyph(avatar: text, size: size * 0.55, color: .dsFg)
             .frame(width: size, height: size)
             .background(Color.dsYolkSoft, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
     }
@@ -352,7 +352,7 @@ struct MemoryBrowser: View {
                     let mine = all.filter { $0.agent?.id == agent.id }
                     if !mine.isEmpty {
                         HStack(spacing: 6) {
-                            Text(agent.avatar ?? "").font(.system(size: 11))
+                            AvatarGlyph(avatar: agent.avatar ?? "", size: 11)
                             SectionLabel(agent.name)
                         }
                         .padding(.horizontal, 8).padding(.top, 12).padding(.bottom, 3)

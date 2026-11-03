@@ -1,40 +1,69 @@
 # Start pages
 
-New chat, debate, notebook and agent open a page in the main window instead of a sheet, the way a new conversation
-starts in ChatGPT or Claude. Decided on 2026-11-03 (spec decision X10). `start-pages.html` is the proposal with a
-clickable mockup; `app/` holds captures of the built pages with the scripted model.
+The + next to Projects, Chats, Agents and Notebooks opens a page in the main window instead of a sheet. First built
+on 2026-11-03 (spec decision X10), then redone the same day from a design handoff ("redesign of the + empty states")
+so all four follow one layout. `start-pages.html` is the first proposal; `app/` holds captures with the scripted
+model in light and dark (none of the project page, which lists real folders on the Mac it runs on).
 
-## Behavior
+## Layout (all pages)
 
-- **Each + opens its own page.** Chats + opens the chat page, Notebooks + the notebook page, Agents + the agent page.
-  Projects + still opens the folder picker.
-- **Debate lives under Chats.** The chat page has a *Start a debate* link, and the debate page a *Chat instead* link.
-  The text moves with you (the message becomes the goal and back). `/debate` in the chat box, ⌥⌘N, the compose menu
-  and ⌘K open the debate page too.
-- **Nothing exists until you start.** Sending, Start or Create makes the item and opens it. ⌘N no longer creates an
-  empty chat.
-- **Names are required** for notebooks and agents: Create stays off until there is one.
-- **Drafts survive.** What you type is saved in `<home>/drafts/start.json`. While a page is open or has something
-  typed, a grey row with "Draft" sits at the top of its section (named with what you typed). Its context menu has
-  Discard Draft.
-- **Errors stay on the page**, under the box, and say that nothing was created and what you typed is kept.
-- **Creating is a page, editing is a sheet.** Notebook settings, commit, restore and traces stay sheets.
+One centered column, 720 wide, starting 128pt from the top (112 on Agent and Notebook), 28pt between blocks:
+
+1. **Kind label**: a 24pt tile with the kind's icon in the accent on a soft accent wash, and "New chat" etc.
+2. **Title**: 34/700. On Agent and Notebook the title is the name field (no border, placeholder in the same style).
+3. **Description**: 15pt, secondary.
+4. **Composer card**: card fill, 1pt hairline, radius 16, a soft double shadow. 16pt text with no border; a footer
+   with settings on the left and the **main action at the bottom right** (dark, 36pt, radius 10, with its shortcut;
+   grey until it can run).
+5. **"Start from…" section**: a 13/600 heading and its content.
+6. **Hints**: 13pt.
+
+Tokens are the grey-ink ones (`DS`), so dark mode comes with them. The few additions live in `StartStyle`: a soft
+accent wash for the kind tile and selected things, the dashed outline, and the debate badges' blue and orange.
 
 ## Pages
 
-| Page | Heading | In the box | Below |
+| Page | Title | In the card | Below |
 |---|---|---|---|
-| Chat | What's on your mind? | Message, attach, model, send | Start a debate; the Quick Chat tip |
-| Debate | What should they work on? | Goal; "A good result must…"; Start ⌘↩ | *Model writes · Model reviews · up to N rounds*, the estimate, the maker hint, Chat instead |
-| Notebook | The name, typed in place | First note for Main (optional); Create ⌘↩ | Instructions (folded), chats to bring in as topics |
-| Agent | Avatar and name | First message (optional); Create ⌘↩ | Templates as rows, From scratch |
+| Chat | What's on your mind? | Attach · **Chat \| Debate** · model · send | Projects and notebooks to talk about, and Attach a file |
+| Debate (same page) | What should they work out? | A vs B models, swap, "Until they agree · max N rounds" · Start debate ↩ | The maker hint and what a debate costs |
+| Project | Open a folder | A drop zone with Choose folder… ⌘O and New empty folder | Recent folders on this Mac, with branch, date and Open |
+| Agent | Icon picker + name | What it should do · schedule · "Notifies you in Piopio" · Runs on this Mac · Create ⌘↩ | A 3-column template grid |
+| Notebook | Name | First note for Main · Instructions (opens inside the card) · Create with N topics ⌘↩ | Chats to bring in as topics, Select all |
 
-## Code
+## Behavior
 
-`StartView.swift` (pages and `StartDrafts`), `SidebarItem.start(kind)` in `Navigation.swift`, the draft rows in
-`MainSidebar.swift`, routing in `RootView.swift`. The New debate, New notebook and New agent sheets were removed.
+- **Nothing exists until you start.** The draft is kept in `<home>/drafts/start.json`, and the sidebar shows a
+  "Draft" row at the top of the section while the page is open or has text.
+- **Chat and Debate are one page.** The switch keeps the text. `/debate` in the box switches too. Return sends or
+  starts; ⇧↩ adds a line; ⌘↩ submits on every page.
+- **Talk about something you already have**: a project chip starts the chat in that folder (it can read the files,
+  and it's listed under the project); a notebook chip sends the message to that notebook's Main, where the organizer
+  files it. Only one at a time.
+- **Debate**: A answers and revises, B critiques (the engine's author and reviewer). Swap exchanges them. Defaults are
+  the ones the debate already had: the Chat model, and the last reviewer (or a model from another maker).
+- **Agent**: name and instructions are required. A template sets the schedule, and drafts the name, icon and
+  instructions unless you wrote your own. The schedule menu offers Every day, Weekdays, Weekends, Mondays or Only when
+  you message it, at 07:00, 08:00, 09:00, 12:00, 18:00 or 21:00. The engine takes the instructions and the schedule
+  in `agents.create`.
+- **Icons, not emoji**: template avatars are `symbol:<SF Symbol>`; the icon picker offers line icons (an emoji can
+  still be typed). Older agents keep their emoji.
+- **Project**: dropping, choosing or creating a folder opens it as a project (a Build project, or a folder to chat
+  about when Build is off). Recent folders are the git repos in the usual code folders and the folders the pi CLI
+  worked in, minus the ones that are already projects.
 
-## Not yet
+## Different from the handoff
 
-- A start page for a new Build session (`NewSessionSheet` stays a sheet).
-- Naming a notebook or agent from its first message.
+- **Debate copy** says what the engine does (one model answers, the other critiques until they agree) rather than
+  "two models answer". The criteria field is gone from the page; put criteria in the question.
+- **No "Give both models the same context"** in Debate: debates don't take attachments or folders yet.
+- **No Clone from Git** on the project page, and **no Dock tip**: neither exists in the app yet.
+- **"Notify me"** is a plain label, "Notifies you in Piopio": in-app (with a Mac notification) is the only channel.
+- **Rounds** default to 6 (the debate's existing default), not 4. Template schedules are the templates' own.
+- Hints use ↩ (the app's return glyph) rather than ↵.
+
+## Not verified
+
+The pages were captured running, but the create flows of this second version were not clicked through: the earlier
+version's were (chat, notebook with a topic and a note, agent with a message, debate, Chat instead, `/debate`). Engine
+tests cover creating an agent with instructions and a schedule.

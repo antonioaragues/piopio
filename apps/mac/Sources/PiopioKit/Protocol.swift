@@ -575,11 +575,38 @@ public struct AgentInfo: Codable, Sendable, Hashable {
     public var status: Status?
 }
 
-public struct AgentTemplate: Decodable, Sendable, Hashable, Identifiable { public var id, name, avatar, description: String }
+/// `avatar` is "symbol:<SF Symbol>"; `instructions` may contain "{owner}"; `schedule` is the first schedule's cron.
+public struct AgentTemplate: Decodable, Sendable, Hashable, Identifiable {
+    public var id, name, avatar, description: String
+    public var instructions: String?
+    public var schedule: String?
+}
 public struct AgentTemplatesResult: Decodable, Sendable { public var templates: [AgentTemplate] }
 public struct CreateAgentParams: Encodable, Sendable {
+    /// The schedule at creation: the template's, none, or this cron.
+    public enum Schedule: Sendable, Equatable { case template, none, cron(String) }
     public var name: String; public var template: String?; public var avatar: String?; public var model: ModelRef?; public var owner: String?
-    public init(name: String, template: String?, avatar: String?, model: ModelRef?, owner: String?) { self.name = name; self.template = template; self.avatar = avatar; self.model = model; self.owner = owner }
+    /// Replaces the template's instructions when set.
+    public var instructions: String?
+    public var schedule: Schedule
+    public init(name: String, template: String?, avatar: String?, model: ModelRef?, owner: String?, instructions: String? = nil, schedule: Schedule = .template) {
+        self.name = name; self.template = template; self.avatar = avatar; self.model = model; self.owner = owner; self.instructions = instructions; self.schedule = schedule
+    }
+    enum CodingKeys: String, CodingKey { case name, template, avatar, model, owner, instructions, schedule }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(template, forKey: .template)
+        try c.encodeIfPresent(avatar, forKey: .avatar)
+        try c.encodeIfPresent(model, forKey: .model)
+        try c.encodeIfPresent(owner, forKey: .owner)
+        try c.encodeIfPresent(instructions, forKey: .instructions)
+        switch schedule {
+        case .template: break
+        case .none: try c.encodeNil(forKey: .schedule)
+        case .cron(let cron): try c.encode(cron, forKey: .schedule)
+        }
+    }
 }
 public struct DefinitionError: Codable, Sendable, Hashable {
     public var path: String

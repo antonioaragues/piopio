@@ -618,9 +618,9 @@ final class EngineController {
         (try? await client?.call("agents.templates", Empty(), as: AgentTemplatesResult.self).templates) ?? []
     }
 
-    func createAgent(name: String, template: String?, avatar: String) async throws -> ContainerRef {
+    func createAgent(name: String, template: String?, avatar: String, instructions: String? = nil, schedule: CreateAgentParams.Schedule = .template) async throws -> ContainerRef {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let ref = try await client.call("agents.create", CreateAgentParams(name: name, template: template, avatar: avatar.isEmpty ? nil : avatar, model: model(for: .agent), owner: NSFullUserName().split(separator: " ").first.map(String.init)), as: CreateSessionResult.self).ref
+        let ref = try await client.call("agents.create", CreateAgentParams(name: name, template: template, avatar: avatar.isEmpty ? nil : avatar, model: model(for: .agent), owner: NSFullUserName().split(separator: " ").first.map(String.init), instructions: instructions, schedule: schedule), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return ref
     }

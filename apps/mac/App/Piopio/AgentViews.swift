@@ -54,7 +54,7 @@ struct AgentDef: Codable, Equatable {
     var json: JSONValue { (try? JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(self))) ?? .null }
 }
 
-/// The circle with the agent's emoji (or initial).
+/// The circle with the agent's icon, emoji or initial.
 struct AgentAvatar: View {
     let summary: SessionSummary
     var size: CGFloat = 24
@@ -63,11 +63,35 @@ struct AgentAvatar: View {
         let avatar = summary.agent?.avatar
         ZStack {
             Circle().fill(Color.accentColor.opacity(avatar == nil ? 0.85 : 0.14))
-            Text(avatar ?? String(summary.title.prefix(1)).uppercased())
-                .font(.system(size: avatar == nil ? size * 0.45 : size * 0.55, weight: .semibold))
-                .foregroundStyle(avatar == nil ? Color.white : Color.dsFg)
+            if let avatar {
+                AvatarGlyph(avatar: avatar, size: size * 0.55, color: .dsFg)
+            } else {
+                Text(String(summary.title.prefix(1)).uppercased())
+                    .font(.system(size: size * 0.45, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
         }
         .frame(width: size, height: size)
+    }
+}
+
+/// An agent's avatar: "symbol:<SF Symbol>" draws a line icon (templates use these); anything else is shown as text,
+/// an emoji someone picked.
+struct AvatarGlyph: View {
+    let avatar: String
+    var size: CGFloat
+    var color: Color = .dsFg2
+
+    var body: some View {
+        if let symbol = Self.symbol(avatar) {
+            Image(systemName: symbol).font(.system(size: size * 0.85, weight: .regular)).foregroundStyle(color)
+        } else {
+            Text(avatar).font(.system(size: size))
+        }
+    }
+
+    static func symbol(_ avatar: String) -> String? {
+        avatar.hasPrefix("symbol:") ? String(avatar.dropFirst(7)) : nil
     }
 }
 
@@ -652,24 +676,30 @@ struct AgentMemoryView: View {
 /// An agent's icon: its emoji in a tile; click for a grid of common ones, or type any emoji.
 struct AvatarPicker: View {
     @Binding var avatar: String
+    /// The button's size: 32 × 28 in forms, 44 × 44 on the start page.
+    var size = CGSize(width: 32, height: 28)
     @State private var open = false
     @State private var typed = ""
 
-    private static let choices = ["☀️", "🗓️", "📬", "🏃", "🏡", "🔭", "📚", "🧠", "💡", "📝", "🛒", "💰",
-                                  "🍳", "🌱", "🎧", "✈️", "🧳", "🐣", "🤖", "🦉", "🐝", "⚡️", "🔔", "❤️"]
+    /// Line icons (SF Symbols), stored as "symbol:<name>". An emoji can still be typed.
+    private static let choices = ["sun.max", "calendar", "envelope", "figure.run", "house", "binoculars", "books.vertical", "brain",
+                                  "lightbulb", "note.text", "cart", "banknote", "fork.knife", "leaf", "headphones", "airplane",
+                                  "suitcase", "bird", "cpu", "moon.stars", "pawprint", "bolt", "bell", "heart"].map { "symbol:" + $0 }
 
     var body: some View {
         Button { open = true } label: {
-            Text(avatar.isEmpty ? "🙂" : avatar)
-                .font(.system(size: 17))
-                .opacity(avatar.isEmpty ? 0.45 : 1)
-                .frame(width: 32, height: 28)
-                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(open ? Color.dsAccentLine : Color.dsLine, lineWidth: open ? 1 : 0.5))
-                .contentShape(Rectangle())
+            Group {
+                if avatar.isEmpty { Image(systemName: "face.smiling").font(.system(size: size.height * 0.5)).foregroundStyle(Color.dsFg3) }
+                else { AvatarGlyph(avatar: avatar, size: size.height * 0.55, color: .dsFg) }
+            }
+            .frame(width: size.width, height: size.height)
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: size.height > 40 ? 12 : 7, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: size.height > 40 ? 12 : 7, style: .continuous).strokeBorder(open ? Color.dsAccentLine : Color.dsLine, lineWidth: open ? 1 : 0.5))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("Choose an icon")
+        .accessibilityLabel("Choose an icon")
         .task {
             // PIOPIO_DEMO_AVATAR_PICKER=1: open the grid (captures).
             if ProcessInfo.processInfo.environment["PIOPIO_DEMO_AVATAR_PICKER"] == "1" { try? await Task.sleep(for: .seconds(2)); open = true }
@@ -677,13 +707,14 @@ struct AvatarPicker: View {
         .popover(isPresented: $open, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 10) {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(32), spacing: 4), count: 6), spacing: 4) {
-                    ForEach(Self.choices, id: \.self) { emoji in
-                        Button { pick(emoji) } label: {
-                            Text(emoji).font(.system(size: 18)).frame(width: 32, height: 32)
-                                .background(emoji == avatar ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: 7))
+                    ForEach(Self.choices, id: \.self) { choice in
+                        Button { pick(choice) } label: {
+                            AvatarGlyph(avatar: choice, size: 18, color: .dsFg).frame(width: 32, height: 32)
+                                .background(choice == avatar ? Color.dsAccentSoft : .clear, in: RoundedRectangle(cornerRadius: 7))
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(AvatarGlyph.symbol(choice) ?? choice)
                     }
                 }
                 HStack(spacing: 6) {

@@ -34,7 +34,8 @@ export const AgentDefinition = Type.Object({
 	id: Type.String({ pattern: "^agt_[A-Za-z0-9]+$" }),
 	slug: Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }),
 	name: Type.String({ minLength: 1, maxLength: 60 }),
-	avatar: Type.Optional(Type.String({ maxLength: 8 })),
+	/** An emoji, or "symbol:<SF Symbol name>" for a line icon. */
+	avatar: Type.Optional(Type.String({ maxLength: 48 })),
 	/** IANA time zone for schedules, quiet hours and daily limits. Default: the machine's. */
 	timezone: Type.Optional(Type.String()),
 	/** One line for the sidebar. */

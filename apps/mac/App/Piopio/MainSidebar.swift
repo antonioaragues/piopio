@@ -220,12 +220,9 @@ struct MainSidebar: View {
         let cap = Self.caps[.projects]!
         let pinnedHere = Set(pinned)
         let shown = Array(projects.prefix(cap))
-        if areas.contains(.build) {
-            header(.projects, total: projects.count, shown: shown.count, add: { BuildActions.addProject(engine: engine) { item = .session($0) } }, addHelp: "Add a project folder (⌘O)")
-        } else {
-            header(.projects, total: projects.count, shown: shown.count, add: { BuildActions.addFolderToChat(engine: engine) { item = .session($0) } }, addHelp: "Add a folder to chat about")
-        }
+        header(.projects, total: projects.count, shown: shown.count, add: { item = .start(.project) }, addHelp: areas.contains(.build) ? "New project" : "Add a folder to chat about")
         if !collapsed.contains(SidebarSection.projects.rawValue) {
+            draftRow(.project)
             ForEach(shown) { project in
                 if !pinnedHere.contains(SidebarItem.project(project.id).raw) { projectRow(project) }
                 projectSessions(project)

@@ -2,8 +2,9 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-// Start pages (docs/design/start-pages): each sidebar + opens a page for that kind in the main window, the way a new
-// conversation starts in ChatGPT or Claude. Nothing is created until you start; what you type is kept as a draft.
+// Start pages (docs/design/start-pages): each sidebar + opens a page for that kind in the main window. One layout for
+// all of them: the kind, a title, one sentence, the composer card with the main action at its bottom right, then a
+// "start from…" section and hints. Nothing is created until you start; what you type is kept as a draft.
 
 // MARK: Drafts
 
@@ -12,7 +13,7 @@ import SwiftUI
     static let shared = StartDrafts()
 
     struct Draft: Codable, Equatable {
-        /// The message (chat), the goal (debate) or the first note or message (notebook, agent).
+        /// The message (chat), the question (debate), the first note (notebook) or the instructions (agent).
         var text = ""
         /// A notebook's or an agent's name.
         var name = ""
@@ -22,6 +23,8 @@ import SwiftUI
         var template: String?
         /// Chats to bring into a new notebook as topics.
         var threads: [String] = []
+        /// An agent's schedule as a cron; empty for none.
+        var schedule = ""
 
         init() {}
 
@@ -35,6 +38,7 @@ import SwiftUI
             avatar = try c.decodeIfPresent(String.self, forKey: .avatar) ?? ""
             template = try c.decodeIfPresent(String.self, forKey: .template)
             threads = try c.decodeIfPresent([String].self, forKey: .threads) ?? []
+            schedule = try c.decodeIfPresent(String.self, forKey: .schedule) ?? ""
         }
     }
 
@@ -94,6 +98,7 @@ extension StartKind {
         case .debate: "New debate"
         case .notebook: "New notebook"
         case .agent: "New agent"
+        case .project: "New project"
         }
     }
 
@@ -103,13 +108,33 @@ extension StartKind {
         case .debate: "person.2"
         case .notebook: "book.closed"
         case .agent: "smallcircle.circle"
+        case .project: "folder"
         }
     }
 }
 
+// MARK: Tokens (the handoff's, mapped onto the grey-ink ones; light and dark)
+
+private enum StartStyle {
+    static let column: CGFloat = 720
+    static let gap: CGFloat = 28
+    /// The dashed outline of the drop zone and of "Attach a file".
+    static let dash = Color(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor.white.withAlphaComponent(0.22) : NSColor(srgbRed: 0.81, green: 0.80, blue: 0.77, alpha: 1)
+    })
+    /// The kind tile and selected things: a soft wash of the accent.
+    static let accentWash = Color.accentColor.opacity(0.12)
+    static let accentFaint = Color.accentColor.opacity(0.06)
+    /// The debate's settings strip.
+    static let strip = Color.dsBubble
+    /// The two debaters' badges.
+    static let sideA = Color.accentColor
+    static let sideB = Color.orange
+}
+
 // MARK: Page
 
-/// The start page for one kind: a heading, the composer, and only what that kind needs below it.
+/// The start page for one kind. Chat and debate are one page with a mode switch.
 struct StartView: View {
     let engine: EngineController
     let kind: StartKind
@@ -117,47 +142,71 @@ struct StartView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: StartStyle.gap) {
                 switch kind {
-                case .chat: ChatStart(engine: engine, item: $item)
-                case .debate: DebateStart(engine: engine, item: $item)
+                case .chat, .debate: ChatStart(engine: engine, mode: kind, item: $item)
                 case .notebook: NotebookStart(engine: engine, item: $item)
                 case .agent: AgentStart(engine: engine, item: $item)
+                case .project: ProjectStart(engine: engine, item: $item)
                 }
             }
             .padding(.horizontal, 32)
-            .padding(.top, 96)
-            .padding(.bottom, 48)
-            .frame(maxWidth: 692)
+            .padding(.top, kind == .agent || kind == .notebook ? 112 : 128)
+            .padding(.bottom, 64)
+            .frame(maxWidth: StartStyle.column + 64)
             .frame(maxWidth: .infinity)
         }
-        .id(kind)
+        .id(kind == .debate ? StartKind.chat : kind)
     }
 }
 
 // MARK: Shared parts
 
-private struct StartHeading: View {
-    let title: String
-    let hint: String
+/// The 24pt tile with the kind's icon in the accent, and its name.
+private struct KindLabel: View {
+    let kind: StartKind
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: kind.symbol).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.accentColor)
+                .frame(width: 24, height: 24)
+                .background(StartStyle.accentWash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            Text(kind.title).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The kind, the title (text or the name field) and the one-sentence description.
+private struct StartHeader<Title: View>: View {
+    let kind: StartKind
+    let description: String
+    @ViewBuilder var title: Title
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 26, weight: .bold)).tracking(-0.6).foregroundStyle(Color.dsFg)
-            StartHint(text: hint)
+        VStack(alignment: .leading, spacing: 12) {
+            KindLabel(kind: kind).padding(.bottom, 4)
+            title
+            Text(description).font(.system(size: 15)).lineSpacing(4.5).foregroundStyle(Color.dsFg2)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-private struct StartHint: View {
+private enum TitleFont {
+    static let font = Font.system(size: 34, weight: .bold)
+    static let tracking: CGFloat = -0.68
+}
+
+private struct TitleText: View {
     let text: String
     var body: some View {
-        Text(text).font(.system(size: 13.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true).padding(.bottom, 20)
+        Text(text).font(TitleFont.font).tracking(TitleFont.tracking).foregroundStyle(Color.dsFg)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// A notebook's or an agent's name, typed in place as the page's heading.
-private struct NameField: View {
+/// A notebook's or an agent's name, typed in place as the title: no border, the placeholder in the same style.
+private struct TitleField: View {
     let placeholder: String
     @Binding var text: String
     var focused: FocusState<StartField?>.Binding
@@ -166,8 +215,8 @@ private struct NameField: View {
     var body: some View {
         TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3))
             .textFieldStyle(.plain)
-            .font(.system(size: 26, weight: .bold))
-            .tracking(-0.6)
+            .font(TitleFont.font)
+            .tracking(TitleFont.tracking)
             .foregroundStyle(Color.dsFg)
             .focused(focused, equals: .name)
             .onSubmit(onSubmit)
@@ -175,31 +224,72 @@ private struct NameField: View {
     }
 }
 
-enum StartField: Hashable { case name, text, criteria }
+enum StartField: Hashable { case name, text, extra }
 
-/// The composer's text: 14pt, growing to eight lines.
-private struct StartText: View {
+/// The composer card: the text, anything extra inside it, and a footer with settings on the left and the main action
+/// at the bottom right.
+private struct ComposerCard<Extra: View, Leading: View, Action: View>: View {
+    @ViewBuilder var text: AnyView
+    @ViewBuilder var extra: Extra
+    @ViewBuilder var leading: Leading
+    @ViewBuilder var action: Action
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            text
+            extra
+            HStack(spacing: 8) {
+                leading
+                Spacer(minLength: 8)
+                action
+            }
+            .padding(.top, 10).padding(.horizontal, 12).padding(.bottom, 12)
+        }
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .shadow(color: .black.opacity(0.04), radius: 12, y: 8)
+    }
+}
+
+/// The card's text: 16pt, no border, a placeholder. Return submits when `returnSubmits`; ⇧↩ adds a line; ⌘↩ always
+/// submits.
+private struct CardText: View {
     let placeholder: String
     @Binding var text: String
     var focused: FocusState<StartField?>.Binding
     var field: StartField = .text
-    let onSubmit: () -> Void
+    var returnSubmits = false
+    var minHeight: CGFloat = 56
+    let submit: () -> Void
 
     var body: some View {
-        TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3), axis: .vertical)
-            .textFieldStyle(.plain)
-            .font(.system(size: 14))
-            .lineLimit(2...8)
-            .focused(focused, equals: field)
-            .onSubmit(onSubmit)
-            .accessibilityLabel(placeholder)
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text(placeholder).font(.system(size: 16)).foregroundStyle(Color.dsFg3).padding(.leading, 5).allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            TextEditor(text: $text)
+                .font(.system(size: 16))
+                .scrollContentBackground(.hidden)
+                .focused(focused, equals: field)
+                .frame(minHeight: minHeight, maxHeight: 220)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(placeholder)
+                .onKeyPress(.return, phases: .down) { press in
+                    if press.modifiers.contains(.command) || (returnSubmits && press.modifiers.isEmpty) { submit(); return .handled }
+                    return .ignored
+                }
+        }
+        .padding(.horizontal, 20 - 5)
+        .padding(.top, 18)
     }
 }
 
-/// The page's one black action ("Start ⌘↩", "Create ↩"), with a spinner while it works.
-private struct StartButton: View {
+/// The page's main action: dark, 36pt, radius 10, the label with its shortcut. Grey while it can't run yet.
+private struct MainAction: View {
     let title: String
-    let busy: Bool
+    var busy = false
     let enabled: Bool
     let action: () -> Void
 
@@ -210,79 +300,88 @@ private struct StartButton: View {
                 Text(title)
             }
         }
-        .buttonStyle(PillStyle(kind: .primary, compact: true))
+        .buttonStyle(MainActionStyle(enabled: enabled && !busy))
         .keyboardShortcut(.return, modifiers: .command)
         .disabled(!enabled || busy)
     }
 }
 
-/// What went wrong, that nothing was lost, under the box.
+private struct MainActionStyle: ButtonStyle {
+    let enabled: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13.5, weight: .medium))
+            .foregroundStyle(enabled ? Color.dsInvFg : Color.dsFg2)
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .background(enabled ? Color.dsInv : Color.dsTrack, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(Rectangle())
+    }
+}
+
+/// A 36pt icon-only button in the card's footer.
+private struct FooterIcon: View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 15)) }
+            .buttonStyle(IconButtonStyle(size: 36))
+            .help(label).accessibilityLabel(label)
+    }
+}
+
+/// A footer selector: an icon, its value and a small chevron; a grey fill on hover.
+private struct FooterSelector: View {
+    let symbol: String?
+    let title: String
+    var body: some View {
+        HStack(spacing: 5) {
+            if let symbol { Image(systemName: symbol).font(.system(size: 12)) }
+            Text(title)
+            Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
+        }
+        .font(.system(size: 13))
+        .foregroundStyle(Color.dsFg2)
+        .frame(height: 36)
+    }
+}
+
+/// "Section title" in 13/600, with something on the right.
+private struct SectionHeader<Trailing: View>: View {
+    let title: String
+    @ViewBuilder var trailing: Trailing
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg2).accessibilityAddTraits(.isHeader)
+            Spacer()
+            trailing
+        }
+    }
+}
+
+extension SectionHeader where Trailing == EmptyView {
+    init(title: String) { self.init(title: title) { EmptyView() } }
+}
+
+/// The page's hints, 13pt muted, separated by dots.
+private struct Hints: View {
+    let items: [String]
+    var body: some View {
+        Text(items.joined(separator: "   ·   ")).font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// What went wrong, and that nothing was lost.
 private struct StartError: View {
     let text: String?
     var body: some View {
         if let text {
-            Label(text, systemImage: "exclamationmark.circle").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            Label(text, systemImage: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                .fixedSize(horizontal: false, vertical: true)
         }
-    }
-}
-
-/// A plain row to pick: a check box or a radio, the name, and a grey note.
-private struct PickRow: View {
-    enum Mark { case check, radio }
-    let mark: Mark
-    let on: Bool
-    let title: String
-    var note = ""
-    var trailing = ""
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                indicator
-                Text(title).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(1)
-                if !note.isEmpty { Text(note).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).lineLimit(1) }
-                Spacer(minLength: 12)
-                if !trailing.isEmpty { Text(trailing).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
-            }
-            .frame(height: 34)
-            .padding(.horizontal, 8)
-            .background(hovering ? Color.dsChip.opacity(0.6) : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-            .padding(.horizontal, -8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    @ViewBuilder private var indicator: some View {
-        switch mark {
-        case .check:
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(on ? Color.dsInv : .clear)
-                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(on ? Color.dsInv : Color.dsFg3, lineWidth: 1))
-                .overlay { if on { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.dsInvFg) } }
-                .frame(width: 14, height: 14)
-        case .radio:
-            Circle().strokeBorder(on ? Color.dsInv : Color.dsFg3, lineWidth: on ? 4 : 1).frame(width: 14, height: 14)
-        }
-    }
-}
-
-private struct SectionCaption: View {
-    let title: String
-    var trailing = ""
-    var body: some View {
-        HStack {
-            Text(title).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            Spacer()
-            if !trailing.isEmpty { Text(trailing).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
-        }
-        .padding(.top, 28)
-        .padding(.bottom, 4)
     }
 }
 
@@ -294,66 +393,134 @@ private struct LinkButton: View {
     }
 }
 
-// MARK: Chat
+/// A list in a card: rows divided by hairlines.
+private struct CardList<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        VStack(spacing: 0) { content }
+            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
 
-/// New chat: a heading and the composer. The chat is created with the first message.
+/// "36 min", "5 d", "now".
+private func age(_ iso: String) -> String {
+    let seconds = Date().timeIntervalSince(MainSidebar.date(iso))
+    if seconds < 60 { return "now" }
+    if seconds < 3600 { return "\(Int(seconds / 60)) min" }
+    if seconds < 86_400 { return "\(Int(seconds / 3600)) h" }
+    return "\(Int(seconds / 86_400)) d"
+}
+
+// MARK: Chat and debate
+
+/// New chat, with a Chat | Debate switch in the composer. The text stays when you switch.
 private struct ChatStart: View {
     let engine: EngineController
+    let mode: StartKind
     @Binding var item: SidebarItem
     private var drafts: StartDrafts { .shared }
     @State private var attachments: [PendingAttachment] = []
     @State private var model: ModelRef?
     @State private var showModels = false
+    /// What the chat is about: a project (a chat in its folder) or a notebook (the message goes to its Main).
+    @State private var context: Context?
     @State private var sending = false
     @State private var error: String?
     /// The chat made for a message that then failed to send, so Retry doesn't make another.
     @State private var pending: ContainerRef?
+    // Debate
+    @State private var author: ModelRef?
+    @State private var reviewer: ModelRef?
+    @AppStorage("debate.rounds") private var rounds = 6
+    @AppStorage("debate.reviewer") private var lastReviewer = ""
+    @State private var picking: DebateRole?
     @FocusState private var focus: StartField?
 
-    private var text: String { drafts[.chat].text }
-    private var canSend: Bool { !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    enum Context: Hashable { case project(String), notebook(String) }
+
+    private var debate: Bool { mode == .debate }
+    private var text: String { drafts[mode].text }
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSend: Bool { !sending && !trimmed.isEmpty && (!debate || (author != nil && reviewer != nil)) }
 
     var body: some View {
-        StartHeading(title: "What's on your mind?", hint: "A chat keeps its own history. You can move it into a notebook later.")
-        VStack(alignment: .leading, spacing: 10) {
-            StartText(placeholder: "Ask anything…", text: drafts.binding(.chat, \.text), focused: $focus, onSubmit: send)
-            if !attachments.isEmpty { attachmentTiles }
-            HStack(spacing: 4) {
-                Button(action: attach) { Image(systemName: "plus").font(.system(size: 13)) }
-                    .buttonStyle(IconButtonStyle(size: 26))
-                    .help("Attach images, PDFs or text files").accessibilityLabel("Attach files")
-                Spacer()
-                Button { showModels = true } label: { Text(modelLabel) }
-                    .buttonStyle(ChipStyle())
-                    .popover(isPresented: $showModels, arrowEdge: .bottom) {
-                        ModelPicker(engine: engine, selected: model ?? engine.preferredModel) { m in model = m; showModels = false }
-                    }
-                SendButton(enabled: canSend, action: send)
-                    .accessibilityLabel("Send")
-                    .keyboardShortcut(.return, modifiers: .command)
+        StartHeader(kind: mode, description: debate
+            ? "One model answers, the other critiques it, round by round, until they agree. You get the agreed answer and any points they never settled."
+            : "A chat keeps its own history. Move it into a notebook whenever it grows into a subject.") {
+            TitleText(text: debate ? "What should they work out?" : "What's on your mind?")
+        }
+        VStack(alignment: .leading, spacing: 12) {
+            ComposerCard {
+                AnyView(CardText(placeholder: debate ? "A question or decision worth a second opinion…" : "Ask anything…", text: drafts.binding(mode, \.text), focused: $focus, returnSubmits: true, submit: send))
+            } extra: {
+                if !attachments.isEmpty { attachmentTiles.padding(.horizontal, 20).padding(.top, 8) }
+                if debate { debateStrip.padding(.horizontal, 12).padding(.top, 12) }
+            } leading: {
+                if !debate { FooterIcon(symbol: "plus", label: "Attach files", action: attach) }
+                ModeSwitch(mode: mode) { switchMode(to: $0) }
+            } action: {
+                if debate {
+                    MainAction(title: "Start debate ↩", busy: sending, enabled: canSend, action: send)
+                } else {
+                    if context.map({ if case .notebook = $0 { false } else { true } }) ?? true { modelSelector }
+                    sendButton
+                }
             }
-            .padding(.leading, -6)
+            StartError(text: error)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .composerBox()
-        StartError(text: error)
-        HStack(spacing: 4) {
-            Text("Want two models to work on it until they agree?").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-            LinkButton(title: "Start a debate") { toDebate(drafts[.chat].text) }
+        if debate {
+            if let author, let reviewer, family(author) == family(reviewer) {
+                Label("Models from different makers catch more of each other's blind spots.", systemImage: "lightbulb")
+                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+            }
+            Hints(items: ["Each round runs both models, so a debate uses more than a chat" + (estimate.map { " (about \($0) at most)" } ?? "") + ".", "You can step in between rounds."])
+        } else {
+            contextSection
+            Hints(items: ["\(QuickChatShortcut.current.label) Quick Chat from any app", "↩ send", "⇧↩ new line"])
         }
-        .padding(.top, 18)
-        Text("Tip: \(QuickChatShortcut.current.label) opens Quick Chat from any app.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 8)
-            .onAppear { focus = .text }
+        Color.clear.frame(height: 0)
+            .onAppear {
+                defaults()
+                focus = .text
+            }
             .onChange(of: text) { _, t in
-                // "/debate" turns the page into a debate, with what follows as the goal.
-                if t.hasPrefix("/debate") { toDebate(String(t.dropFirst(7)).trimmingCharacters(in: .whitespaces)) }
+                // "/debate" switches to Debate, with what follows as the question.
+                if !debate, t.hasPrefix("/debate") {
+                    drafts.update(.chat) { $0.text = String(t.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
+                    switchMode(to: .debate)
+                }
             }
     }
 
-    private var modelLabel: String {
-        let ref = model ?? engine.preferredModel
-        return engine.model(ref).map(ModelChip.short) ?? ref?.id ?? "Model"
+    // MARK: Chat
+
+    private var modelSelector: some View {
+        Button { showModels = true } label: { FooterSelector(symbol: nil, title: modelLabel(model ?? engine.preferredModel)) }
+            .buttonStyle(SelectorStyle())
+            .help("The model for this chat")
+            .popover(isPresented: $showModels, arrowEdge: .bottom) {
+                ModelPicker(engine: engine, selected: model ?? engine.preferredModel) { m in model = m; showModels = false }
+            }
+    }
+
+    private var sendButton: some View {
+        Button(action: send) {
+            Group {
+                if sending { ProgressView().controlSize(.mini) }
+                else { Image(systemName: "arrow.up").font(.system(size: 14, weight: .semibold)) }
+            }
+            .foregroundStyle(canSend ? Color.dsInvFg : Color.dsFg2)
+            .frame(width: 36, height: 36)
+            .background(canSend ? Color.dsInv : Color.dsTrack, in: Circle())
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSend)
+        .keyboardShortcut(.return, modifiers: .command)
+        .accessibilityLabel("Send")
+        .help("Send (↩)")
     }
 
     private var attachmentTiles: some View {
@@ -361,6 +528,7 @@ private struct ChatStart: View {
             HStack(spacing: 6) {
                 ForEach(attachments) { a in
                     HStack(spacing: 6) {
+                        Image(systemName: a.isImage ? "photo" : "doc").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                         Text(a.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1)
                         Button { attachments.removeAll { $0.id == a.id } } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3) }
                             .buttonStyle(.plain).accessibilityLabel("Remove attachment \(a.name)")
@@ -372,142 +540,80 @@ private struct ChatStart: View {
         }
     }
 
-    private func toDebate(_ goal: String) {
-        let goal = goal.trimmingCharacters(in: .whitespacesAndNewlines)
-        drafts.update(.chat) { $0.text = "" }
-        if !goal.isEmpty { drafts.update(.debate) { $0.text = goal } }
-        item = .start(.debate)
-    }
-
-    private func attach() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        guard panel.runModal() == .OK else { return }
-        for url in panel.urls {
-            do { attachments.append(try AttachmentLoader.load(url)) } catch { self.error = error.localizedDescription }
+    /// Projects and notebooks to talk about, and a file to attach.
+    @ViewBuilder private var contextSection: some View {
+        let areas = Areas.shared.set
+        let projects = areas.showsProjects ? Array(engine.projects.prefix(6)) : []
+        let notebooks = areas.showsNotebooks ? Array(engine.spaces.sorted { $0.updatedAt > $1.updatedAt }.prefix(6)) : []
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Talk about something you already have")
+            FlowLayout(spacing: 8) {
+                ForEach(projects) { p in
+                    ContextChip(symbol: "folder", title: p.name, on: context == .project(p.id), help: "Chat in \(p.name): it can read the folder's files") {
+                        context = context == .project(p.id) ? nil : .project(p.id)
+                    }
+                }
+                ForEach(notebooks, id: \.ref.id) { n in
+                    ContextChip(symbol: "book.closed", title: n.title, on: context == .notebook(n.ref.id), help: "Write in \(n.title)'s Main; the organizer files it under the right topic") {
+                        context = context == .notebook(n.ref.id) ? nil : .notebook(n.ref.id)
+                    }
+                }
+                ContextChip(symbol: "paperclip", title: "Attach a file", on: false, dashed: true, help: "Images, PDFs or text files", action: attach)
+            }
+            if let context { Text(contextNote(context)).font(.system(size: 13)).foregroundStyle(Color.dsFg2) }
         }
     }
 
-    private func send() {
-        let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard canSend, !message.isEmpty else { return }
-        error = nil
-        sending = true
-        Task {
-            defer { sending = false }
-            let created: ContainerRef?
-            if let pending { created = pending } else { created = await engine.createThread(model: model) }
-            guard let ref = created else {
-                error = "Couldn't start the chat because the engine isn't connected. Nothing was created, and your message is kept."
-                return
-            }
-            pending = ref
-            let thread = engine.thread(ref)
-            await thread.open()
-            if await thread.send(message, attachments: attachments.map(\.attachment)) {
-                drafts.clear(.chat)
-                attachments = []
-                pending = nil
-                try? await engine.refreshCatalog()
-                item = .chat(ref.id)
-            } else {
-                error = (thread.error ?? "Couldn't send.") + " Your message is kept; try again."
-            }
+    private func contextNote(_ context: Context) -> String {
+        switch context {
+        case .project(let id): "The chat opens in \(engine.projects.first { $0.id == id }?.name ?? "the project") and can read its files. It's listed under the project."
+        case .notebook(let id): "Your message goes to \(engine.space(id)?.title ?? "the notebook")'s Main, and the organizer files it under the right topic."
         }
     }
-}
 
-// MARK: Debate
+    // MARK: Debate
 
-/// New debate (docs/spec/16 §5): the goal is the message, what a good result needs is a second line in the box, and
-/// the setup is one line of selectors under it: who writes, who reviews, how many rounds, and what it may cost.
-private struct DebateStart: View {
-    let engine: EngineController
-    @Binding var item: SidebarItem
-    private var drafts: StartDrafts { .shared }
-    @State private var author: ModelRef?
-    @State private var reviewer: ModelRef?
-    @AppStorage("debate.rounds") private var rounds = 6
-    @State private var picking: DebateRole?
-    @State private var starting = false
-    @State private var error: String?
-    @AppStorage("debate.reviewer") private var lastReviewer = ""
-    @FocusState private var focus: StartField?
-
-    private var goal: String { drafts[.debate].text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canStart: Bool { !goal.isEmpty && author != nil && reviewer != nil }
-
-    var body: some View {
-        StartHeading(title: "What should they work on?", hint: "One model writes, the other reviews it against your goal, round after round, until the reviewer approves or the rounds run out.")
-        VStack(alignment: .leading, spacing: 10) {
-            StartText(placeholder: "The goal: what should come out of it, and for whom", text: drafts.binding(.debate, \.text), focused: $focus, onSubmit: {})
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("A good result must… (optional)").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                StartText(placeholder: "Cover rollback. Stay under 600 words. No vendor marketing.", text: drafts.binding(.debate, \.criteria), focused: $focus, field: .criteria, onSubmit: {})
-                    .lineLimit(1...4)
-                    .help("The reviewer checks every draft against this.")
-            }
-            HStack {
-                Spacer()
-                StartButton(title: "Start ⌘↩", busy: starting, enabled: canStart) { Task { await start() } }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .composerBox()
-        HStack(spacing: 6) {
-            participant(.author, "writes", $author)
-            Text("·").foregroundStyle(Color.dsFg3)
-            participant(.reviewer, "reviews", $reviewer)
-            Text("·").foregroundStyle(Color.dsFg3)
-            Menu {
-                ForEach(2...12, id: \.self) { n in Button("\(n) rounds") { rounds = n } }
-            } label: { Text("up to \(rounds) rounds") }
-                .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
-                .help("It stops sooner when the reviewer approves.")
+    /// [A · model] vs [B · model] ⇄ · Until they agree · max N rounds.
+    private var debateStrip: some View {
+        HStack(spacing: 8) {
+            side(.author, badge: "A", tint: StartStyle.sideA, $author)
+            Text("vs").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+            side(.reviewer, badge: "B", tint: StartStyle.sideB, $reviewer)
+            Button { (author, reviewer) = (reviewer, author) } label: { Image(systemName: "arrow.left.arrow.right").font(.system(size: 12)) }
+                .buttonStyle(IconButtonStyle(size: 30))
+                .help("Swap who answers and who critiques").accessibilityLabel("Swap models")
             Spacer(minLength: 8)
-            if let estimate {
-                Text("about \(estimate) at most").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    .help("A rough estimate for a one-page draft; it stops sooner when the reviewer approves.")
+            Menu {
+                ForEach(2...12, id: \.self) { n in Button("Up to \(n) rounds") { rounds = n } }
+            } label: {
+                FooterSelector(symbol: "checkmark", title: "Until they agree · max \(rounds) rounds")
             }
+            .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
+            .help("It stops as soon as they agree")
         }
-        .font(.system(size: 12.5))
-        .padding(.top, 12)
-        if let author, let reviewer, family(author) == family(reviewer) {
-            Label("Models from different makers catch more of each other's blind spots.", systemImage: "lightbulb")
-                .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 8)
-        }
-        StartError(text: error)
-        HStack(spacing: 4) {
-            Text("Just want an answer?").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-            LinkButton(title: "Chat instead") {
-                // The goal becomes the message; the debate draft (criteria too) goes, so no stray draft row is left.
-                let text = drafts[.debate].text
-                drafts.clear(.debate)
-                if !text.isEmpty { drafts.update(.chat) { $0.text = text } }
-                item = .start(.chat)
-            }
-        }
-        .padding(.top, 18)
-        .onAppear {
-            defaults()
-            focus = .text
-        }
+        .padding(.horizontal, 8)
+        .background(StartStyle.strip, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func participant(_ role: DebateRole, _ verb: String, _ model: Binding<ModelRef?>) -> some View {
+    private func side(_ role: DebateRole, badge: String, tint: Color, _ model: Binding<ModelRef?>) -> some View {
         Button { picking = role } label: {
-            HStack(spacing: 4) {
-                Text(engine.model(model.wrappedValue).map(ModelChip.short) ?? model.wrappedValue?.id ?? "Choose a model").foregroundStyle(Color.dsFg)
-                Text(verb)
+            HStack(spacing: 6) {
+                Text(badge).font(.system(size: 11, weight: .bold)).foregroundStyle(tint)
+                    .frame(width: 20, height: 20)
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                FooterSelector(symbol: nil, title: modelLabel(model.wrappedValue))
             }
         }
-        .buttonStyle(ChipStyle())
-        .help(role == .author ? "The model that writes each draft" : "The model that reviews each draft against your goal")
+        .buttonStyle(SelectorStyle())
+        .help(role == .author ? "A answers first and revises" : "B critiques each answer until it agrees")
+        .accessibilityLabel("\(badge): \(modelLabel(model.wrappedValue))")
         .popover(isPresented: Binding(get: { picking == role }, set: { if !$0 { picking = nil } }), arrowEdge: .bottom) {
             ModelPicker(engine: engine, selected: model.wrappedValue) { m in model.wrappedValue = m; picking = nil }
         }
+    }
+
+    private func modelLabel(_ ref: ModelRef?) -> String {
+        engine.model(ref).map(ModelChip.short) ?? ref?.id ?? "Choose a model"
     }
 
     /// The maker: "anthropic" in "anthropic/claude-…", else the provider.
@@ -515,7 +621,7 @@ private struct DebateStart: View {
         m.id.contains("/") ? String(m.id.split(separator: "/")[0]) : m.provider
     }
 
-    /// The Chat model writes; the last reviewer reviews, or a model from another maker.
+    /// The Chat model answers; the last reviewer critiques, or a model from another maker.
     private func defaults() {
         author = author ?? engine.preferredModel
         guard reviewer == nil else { return }
@@ -528,7 +634,7 @@ private struct DebateStart: View {
         }
     }
 
-    /// Up to `rounds` rounds of a one-page draft: each side's context grows by one exchange a round.
+    /// Up to `rounds` rounds of a one-page answer: each side's context grows by one exchange a round.
     private var estimate: String? {
         guard let a = engine.model(author), let r = engine.model(reviewer) else { return nil }
         var usd = 0.0
@@ -541,33 +647,551 @@ private struct DebateStart: View {
         return usd < 0.01 ? "<$0.01" : String(format: "$%.2f", usd)
     }
 
-    private func start() async {
-        guard canStart, let author, let reviewer, !starting else { return }
-        starting = true
+    // MARK: Actions
+
+    /// The text moves with you; the draft you leave goes, so no stray draft row is left behind.
+    private func switchMode(to target: StartKind) {
+        guard target != mode else { return }
+        let carried = drafts[mode].text
+        drafts.clear(mode)
+        if !carried.isEmpty { drafts.update(target) { $0.text = carried } }
         error = nil
-        defer { starting = false }
-        let criteria = drafts[.debate].criteria.trimmingCharacters(in: .whitespacesAndNewlines)
-        let config = DebateConfig(
-            goal: goal,
-            criteria: criteria.isEmpty ? nil : criteria,
-            participants: [.init(role: .author, model: author), .init(role: .reviewer, model: reviewer)],
-            maxRounds: rounds
-        )
+        item = .start(target)
+    }
+
+    private func attach() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            do { attachments.append(try AttachmentLoader.load(url)) } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    private func send() {
+        guard canSend else { return }
+        error = nil
+        sending = true
+        Task {
+            defer { sending = false }
+            if debate { await startDebate() } else { await sendChat() }
+        }
+    }
+
+    private func sendChat() async {
+        let message = trimmed
+        let created: ContainerRef?
+        if let pending { created = pending } else {
+            switch context {
+            case .project(let id):
+                guard let project = engine.projects.first(where: { $0.id == id }) else { error = "That project isn't available any more. Pick another, or none."; return }
+                created = try? await engine.createBuildSession(in: project, workOn: .current, mode: nil, model: model, profile: .chat)
+            case .notebook(let id):
+                created = ContainerRef(kind: .space, id: id)
+            case nil:
+                created = await engine.createThread(model: model)
+            }
+        }
+        guard let ref = created else {
+            error = "Couldn't start the chat because the engine isn't connected. Nothing was created, and your message is kept."
+            return
+        }
+        pending = ref
+        let thread = engine.thread(ref)
+        await thread.open()
+        guard await thread.send(message, attachments: attachments.map(\.attachment)) else {
+            error = (thread.error ?? "Couldn't send.") + " Your message is kept; try again."
+            return
+        }
+        drafts.clear(.chat)
+        attachments = []
+        pending = nil
+        try? await engine.refreshCatalog()
+        switch ref.kind {
+        case .space: item = .notebook(ref.id)
+        case .build: item = .session(ref.id)
+        default: item = .chat(ref.id)
+        }
+    }
+
+    private func startDebate() async {
+        guard let author, let reviewer else { return }
+        let config = DebateConfig(goal: trimmed, criteria: nil, participants: [.init(role: .author, model: author), .init(role: .reviewer, model: reviewer)], maxRounds: rounds)
         do {
             let ref = try await engine.createDebate(config)
             lastReviewer = "\(reviewer.provider)|\(reviewer.id)"
             drafts.clear(.debate)
             item = .chat(ref.id)
         } catch {
-            self.error = ((error as? EngineError)?.message ?? error.localizedDescription) + " Nothing was started, and your goal is kept."
+            self.error = ((error as? EngineError)?.message ?? error.localizedDescription) + " Nothing was started, and your question is kept."
         }
+    }
+}
+
+/// Chat | Debate, as a radio group: click, or ← → once it has focus.
+private struct ModeSwitch: View {
+    let mode: StartKind
+    let pick: (StartKind) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            segment(.chat, "Chat")
+            segment(.debate, "Debate")
+        }
+        .padding(2)
+        .background(Color.dsTrack, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .focusable()
+        .onKeyPress(.leftArrow) { pick(.chat); return .handled }
+        .onKeyPress(.rightArrow) { pick(.debate); return .handled }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Mode")
+    }
+
+    private func segment(_ kind: StartKind, _ title: String) -> some View {
+        let on = mode == kind
+        return Button { pick(kind) } label: {
+            Text(title).font(.system(size: 13, weight: on ? .medium : .regular))
+                .foregroundStyle(on ? Color.dsFg : Color.dsFg2)
+                .padding(.horizontal, 12).frame(height: 30)
+                .background(on ? Color.dsSeg : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(on ? Color.dsLine : .clear, lineWidth: 0.5))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? [.isSelected] : [])
+        .accessibilityHint(kind == .debate ? "Two models work on it until they agree" : "One model answers")
+    }
+}
+
+/// A 36pt pill: an icon and a name. Selected: an accent outline on a faint wash. "Attach a file" is dashed.
+private struct ContextChip: View {
+    let symbol: String
+    let title: String
+    let on: Bool
+    var dashed = false
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(on ? Color.accentColor : Color.dsFg2)
+                Text(title).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(1)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .background(on ? StartStyle.accentFaint : (hovering ? Color.dsChip : Color.dsCard), in: Capsule())
+            .overlay {
+                if dashed { Capsule().strokeBorder(StartStyle.dash, style: StrokeStyle(lineWidth: 1, dash: [4, 3])) }
+                else { Capsule().strokeBorder(on ? Color.accentColor : Color.dsLine, lineWidth: on ? 1.5 : 1) }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .accessibilityAddTraits(on ? [.isSelected] : [])
+    }
+}
+
+// MARK: Project
+
+/// New project: drop a folder or choose one, or pick from the folders with code on this Mac.
+private struct ProjectStart: View {
+    let engine: EngineController
+    @Binding var item: SidebarItem
+    @State private var targeted = false
+    @State private var recent: [RecentFolder] = []
+    @State private var showAll = false
+    @State private var error: String?
+
+    private var buildOn: Bool { Areas.shared.contains(.build) }
+
+    var body: some View {
+        StartHeader(kind: .project, description: buildOn
+            ? "A project is a folder on your Mac. Its sessions can read, edit and run what's inside, or just chat about the files."
+            : "A project is a folder on your Mac. Chats in it can read the files inside; they don't run commands.") {
+            TitleText(text: "Open a folder")
+        }
+        dropZone
+        StartError(text: error)
+        if !recent.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(title: "Recent folders on this Mac") {
+                    if recent.count > 5, !showAll { LinkButton(title: "Show all") { showAll = true } }
+                }
+                CardList {
+                    let shown = showAll ? recent : Array(recent.prefix(5))
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, folder in
+                        RecentFolderRow(folder: folder) { open(folder.url) }
+                        if i < shown.count - 1 { RowDivider(inset: 52) }
+                    }
+                }
+            }
+        }
+        Color.clear.frame(height: 0)
+            .task {
+                let known = Set(engine.projects.map(\.path))
+                recent = await Task.detached { RecentFolder.scan().filter { !known.contains($0.url.path) } }.value
+            }
+    }
+
+    private var dropZone: some View {
+        VStack(spacing: 14) {
+            Text("Drop a folder here").font(.system(size: 15)).foregroundStyle(Color.dsFg2)
+            HStack(spacing: 8) {
+                Button(action: choose) { Text("Choose folder… ⌘O") }
+                    .buttonStyle(MainActionStyle(enabled: true))
+                    .keyboardShortcut("o", modifiers: .command)
+                Button(action: newFolder) { Text("New empty folder") }
+                    .buttonStyle(SecondaryActionStyle())
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 168)
+        .background(targeted ? StartStyle.accentFaint : .clear, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(targeted ? Color.accentColor : StartStyle.dash, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+        .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in open(url) }
+            }
+            return true
+        }
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Open"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        open(url)
+    }
+
+    /// A new folder where you choose, opened as a project.
+    private func newFolder() {
+        let panel = NSSavePanel()
+        panel.title = "New empty folder"
+        panel.nameFieldLabel = "Folder name:"
+        panel.nameFieldStringValue = "New project"
+        panel.prompt = "Create"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+            open(url)
+        } catch {
+            self.error = "Couldn't create the folder: \(error.localizedDescription)"
+        }
+    }
+
+    private func open(_ url: URL) {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            error = "That isn't a folder. Drop or choose a folder."
+            return
+        }
+        error = nil
+        Task {
+            if buildOn {
+                await BuildActions.add(url, engine: engine) { item = .session($0) }
+            } else if let project = await engine.addProject(url, lens: .chat) {
+                await BuildActions.chat(in: project, engine: engine) { item = .session($0) }
+            }
+            if case .start(.project) = item { error = "Couldn't open the folder because the engine isn't connected." }
+        }
+    }
+}
+
+private struct SecondaryActionStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13.5))
+            .foregroundStyle(Color.dsFg)
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Rectangle())
+    }
+}
+
+/// A folder with code on this Mac: a git repo in the usual code folders, or a folder the pi CLI worked in.
+struct RecentFolder: Identifiable, Hashable, Sendable {
+    let url: URL
+    let branch: String?
+    let modified: Date
+    var id: String { url.path }
+
+    /// "~/Proyectos/piopio".
+    var path: String { url.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~") }
+
+    nonisolated static func scan() -> [RecentFolder] {
+        let found = BuildFirstRun.scan(limit: 40)
+        var seen = Set<String>()
+        let urls = (found.repos.map(\.url) + found.piFolders).filter { seen.insert($0.standardizedFileURL.path).inserted }
+        return urls.map { url in
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return RecentFolder(url: url, branch: branch(url), modified: modified)
+        }
+        .sorted { $0.modified > $1.modified }
+    }
+
+    /// The checked-out branch from .git/HEAD, or nil without git.
+    nonisolated static func branch(_ url: URL) -> String? {
+        guard let head = try? String(contentsOf: url.appending(path: ".git/HEAD"), encoding: .utf8) else { return nil }
+        let line = head.trimmingCharacters(in: .whitespacesAndNewlines)
+        return line.hasPrefix("ref: refs/heads/") ? String(line.dropFirst(16)) : String(line.prefix(7))
+    }
+}
+
+private struct RecentFolderRow: View {
+    let folder: RecentFolder
+    let open: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "folder").font(.system(size: 16)).foregroundStyle(Color.dsFg2).frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(folder.url.lastPathComponent).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Text(folder.path).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1).truncationMode(.middle)
+            }
+            Spacer(minLength: 12)
+            Text(folder.branch ?? "no git").font(.system(size: 11.5, design: folder.branch == nil ? .default : .monospaced)).foregroundStyle(Color.dsFg2)
+                .padding(.horizontal, 7).frame(height: 22)
+                .background(Color.dsTrack, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .lineLimit(1)
+            Text(folder.modified == .distantPast ? "" : folder.modified.formatted(.relative(presentation: .named)))
+                .font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 96, alignment: .trailing)
+            Button("Open", action: open).buttonStyle(SecondaryActionStyle()).accessibilityLabel("Open \(folder.url.lastPathComponent)")
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 56)
+        .background(hovering ? Color.dsChip.opacity(0.5) : .clear)
+        .onHover { hovering = $0 }
+    }
+}
+
+// MARK: Agent
+
+/// New agent: icon and name as the title, what it should do in your words, its schedule, and a template to start
+/// from. The name and the instructions are required.
+private struct AgentStart: View {
+    let engine: EngineController
+    @Binding var item: SidebarItem
+    private var drafts: StartDrafts { .shared }
+    @State private var templates: [AgentTemplate] = []
+    @State private var creating = false
+    @State private var error: String?
+    @FocusState private var focus: StartField?
+
+    private var draft: StartDrafts.Draft { drafts[.agent] }
+    private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var instructions: String { draft.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canCreate: Bool { !name.isEmpty && !instructions.isEmpty }
+
+    var body: some View {
+        StartHeader(kind: .agent, description: "Runs on a schedule on this Mac, remembers what you teach it, and reaches you only when something matters.") {
+            HStack(spacing: 14) {
+                AvatarPicker(avatar: drafts.binding(.agent, \.avatar), size: CGSize(width: 44, height: 44))
+                TitleField(placeholder: "Name your agent", text: drafts.binding(.agent, \.name), focused: $focus) { focus = .text }
+            }
+        }
+        VStack(alignment: .leading, spacing: 12) {
+            ComposerCard {
+                AnyView(CardText(placeholder: "What should it do? In your own words, e.g. “Every morning, tell me what's on my calendar and which emails need a reply.”", text: drafts.binding(.agent, \.text), focused: $focus, minHeight: 84, submit: create))
+            } extra: {
+                EmptyView()
+            } leading: {
+                ScheduleMenu(cron: drafts.binding(.agent, \.schedule))
+                HStack(spacing: 5) {
+                    Image(systemName: "bell").font(.system(size: 12))
+                    Text("Notifies you in Piopio")
+                }
+                .font(.system(size: 13)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6)
+                .help("It writes to you here, with a Mac notification. Other channels come later.")
+                Text("Runs on this Mac").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.leading, 4)
+            } action: {
+                MainAction(title: "Create ⌘↩", busy: creating, enabled: canCreate, action: create)
+                    .help(name.isEmpty ? "Name the agent first" : instructions.isEmpty ? "Say what it should do first" : "Create the agent")
+            }
+            StartError(text: error)
+        }
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Start from a template")
+            TemplateGrid(templates: ordered, selected: draft.template, owner: HomeView.firstName) { pick($0) }
+        }
+        Color.clear.frame(height: 0)
+            .task {
+                templates = await engine.agentTemplates()
+                focus = name.isEmpty ? .name : .text
+            }
+    }
+
+    /// From scratch first, then a briefing, a watcher, an assistant, a coach and a helper.
+    private var ordered: [AgentTemplate] {
+        let order = ["daily-briefing", "research-watcher", "personal-assistant", "habit-coach", "family-helper"]
+        return templates.sorted { (order.firstIndex(of: $0.id) ?? 9) < (order.firstIndex(of: $1.id) ?? 9) }
+    }
+
+    /// A template sets the schedule, and drafts the name, icon and instructions unless you wrote your own.
+    private func pick(_ t: AgentTemplate?) {
+        let previous = templates.first { $0.id == draft.template }
+        drafts.update(.agent) { d in
+            d.template = t?.id
+            d.schedule = t?.schedule ?? ""
+            if d.name.isEmpty || templates.contains(where: { $0.name == d.name }) { d.name = t?.name ?? "" }
+            if d.avatar.isEmpty || templates.contains(where: { $0.avatar == d.avatar }) { d.avatar = t?.avatar ?? "" }
+            let untouched = d.text.isEmpty || d.text == previous.map { Self.draft($0) }
+            if untouched { d.text = t.map { Self.draft($0) } ?? "" }
+        }
+    }
+
+    /// A template's instructions with your first name in place of {owner}.
+    private static func draft(_ t: AgentTemplate) -> String {
+        (t.instructions ?? t.description).replacingOccurrences(of: "{owner}", with: HomeView.firstName)
+    }
+
+    private func create() {
+        guard canCreate, !creating else { return }
+        creating = true
+        error = nil
+        let schedule: CreateAgentParams.Schedule = draft.schedule.isEmpty ? .none : .cron(draft.schedule)
+        Task {
+            defer { creating = false }
+            do {
+                let ref = try await engine.createAgent(name: name, template: draft.template, avatar: draft.avatar.trimmingCharacters(in: .whitespaces), instructions: instructions, schedule: schedule)
+                UserDefaults.standard.set("Chat", forKey: "agentTab")
+                drafts.clear(.agent)
+                item = .agent(ref.id)
+            } catch {
+                self.error = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was created, and what you typed is kept."
+            }
+        }
+    }
+}
+
+/// When it runs: days and a time, or only when you message it. Built from and into a cron ("0 8 * * 1-5").
+private struct ScheduleMenu: View {
+    @Binding var cron: String
+
+    private static let days: [(String, String)] = [("*", "Every day"), ("1-5", "Weekdays"), ("0,6", "Weekends"), ("1", "Mondays")]
+    private static let hours = [7, 8, 9, 12, 18, 21]
+
+    var body: some View {
+        Menu {
+            Section("Days") {
+                ForEach(Self.days, id: \.0) { value, title in
+                    Button { set(days: value) } label: { if parts?.days == value { Label(title, systemImage: "checkmark") } else { Text(title) } }
+                }
+                Button { cron = "" } label: { if cron.isEmpty { Label("Only when you message it", systemImage: "checkmark") } else { Text("Only when you message it") } }
+            }
+            Section("Time") {
+                ForEach(Self.hours, id: \.self) { h in
+                    Button { set(hour: h) } label: { if parts?.hour == h && parts?.minute == 0 { Label(String(format: "%02d:00", h), systemImage: "checkmark") } else { Text(String(format: "%02d:00", h)) } }
+                }
+            }
+        } label: {
+            FooterSelector(symbol: "clock", title: label)
+        }
+        .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
+        .help("When it runs on its own")
+        .accessibilityLabel("Schedule: \(label)")
+    }
+
+    private var parts: (minute: Int, hour: Int, days: String)? {
+        let f = cron.split(separator: " ").map(String.init)
+        guard f.count == 5, let m = Int(f[0]), let h = Int(f[1]), f[2] == "*", f[3] == "*" else { return nil }
+        return (m, h, f[4])
+    }
+
+    /// "Weekdays · 08:00", "When you message it".
+    private var label: String {
+        if cron.isEmpty { return "When you message it" }
+        guard let p = parts else { return cron }
+        let days = Self.days.first { $0.0 == p.days }?.1 ?? CronText.describe(cron)
+        return "\(days) · \(String(format: "%02d:%02d", p.hour, p.minute))"
+    }
+
+    private func set(days: String) {
+        let p = parts ?? (0, 8, days)
+        cron = "\(p.minute) \(p.hour) * * \(days)"
+    }
+
+    private func set(hour: Int) {
+        let p = parts ?? (0, hour, "*")
+        cron = "0 \(hour) * * \(p.days)"
+    }
+}
+
+/// Templates as a 3-column radio group of tiles: icon, name, what it does, when it runs.
+private struct TemplateGrid: View {
+    let templates: [AgentTemplate]
+    let selected: String?
+    let owner: String
+    let pick: (AgentTemplate?) -> Void
+
+    private var all: [AgentTemplate?] { [nil] + templates.map { Optional($0) } }
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+            ForEach(all, id: \.?.id) { t in tile(t) }
+        }
+        .focusable()
+        .onKeyPress(.rightArrow) { move(1) }
+        .onKeyPress(.downArrow) { move(3) }
+        .onKeyPress(.leftArrow) { move(-1) }
+        .onKeyPress(.upArrow) { move(-3) }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Templates")
+    }
+
+    private func move(_ step: Int) -> KeyPress.Result {
+        let i = all.firstIndex { $0?.id == selected } ?? 0
+        let next = min(max(i + step, 0), all.count - 1)
+        pick(all[next])
+        return .handled
+    }
+
+    private func tile(_ t: AgentTemplate?) -> some View {
+        let on = t?.id == selected
+        return Button { pick(t) } label: {
+            HStack(alignment: .top, spacing: 10) {
+                AvatarGlyph(avatar: t?.avatar ?? "symbol:square.and.pencil", size: 15, color: on ? .accentColor : .dsFg2)
+                    .frame(width: 28, height: 28)
+                    .background(on ? StartStyle.accentWash : Color.dsTrack, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(t?.name ?? "From scratch").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
+                    Text(t?.description ?? "Instructions you write").font(.system(size: 13)).foregroundStyle(Color.dsFg2).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Text(t?.schedule.map(CronText.describe) ?? "When you message it").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+            .background(on ? StartStyle.accentFaint : Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(on ? Color.accentColor : Color.dsLine, lineWidth: on ? 1.5 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? [.isSelected] : [])
+        .accessibilityLabel(t?.name ?? "From scratch")
+        .accessibilityHint(t?.description ?? "Instructions you write")
     }
 }
 
 // MARK: Notebook
 
-/// New notebook (docs/spec/04 S5): the name as the heading, an optional first note for Main, instructions, and chats
-/// to bring in as topics. The name is required.
+/// New notebook (docs/spec/04 S5): the name as the title, an optional first note for Main, instructions inside the
+/// card, and chats to bring in as topics. The name is required.
 private struct NotebookStart: View {
     let engine: EngineController
     @Binding var item: SidebarItem
@@ -580,67 +1204,76 @@ private struct NotebookStart: View {
 
     private var draft: StartDrafts.Draft { drafts[.notebook] }
     private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// Ticked chats that still exist.
+    private var picked: [String] { draft.threads.filter { id in engine.threads.contains { $0.ref.id == id } } }
 
     var body: some View {
-        NameField(placeholder: "Name this notebook", text: drafts.binding(.notebook, \.name), focused: $focus) { focus = .text }
-            .padding(.bottom, 6)
-        StartHint(text: "A notebook keeps one subject together. You write in Main, and the organizer files each message under the right topic, or starts one.")
-        VStack(alignment: .leading, spacing: 10) {
-            StartText(placeholder: "First note for Main (optional)…", text: drafts.binding(.notebook, \.text), focused: $focus, onSubmit: create)
-            HStack {
-                Spacer()
-                StartButton(title: "Create ⌘↩", busy: creating, enabled: !name.isEmpty, action: create)
+        StartHeader(kind: .notebook, description: "One subject, kept together. You write in Main; the organizer files each message under the right topic, or starts a new one.") {
+            TitleField(placeholder: "Name this notebook", text: drafts.binding(.notebook, \.name), focused: $focus) { focus = .text }
+        }
+        VStack(alignment: .leading, spacing: 12) {
+            ComposerCard {
+                AnyView(CardText(placeholder: "First note for Main (optional)…", text: drafts.binding(.notebook, \.text), focused: $focus, submit: create))
+            } extra: {
+                if showInstructions {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.horizontal, 20).padding(.top, 10)
+                        CardText(placeholder: "Who you are, what matters, how to answer. Every agent in the notebook is told this.", text: drafts.binding(.notebook, \.instructions), focused: $focus, field: .extra, submit: create)
+                    }
+                }
+            } leading: {
+                Button { withAnimation(.easeOut(duration: 0.15)) { showInstructions.toggle() } } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(showInstructions ? 90 : 0))
+                        Text("Instructions for its agents").foregroundStyle(Color.dsFg2)
+                        Text("· optional").foregroundStyle(Color.dsFg3)
+                    }
+                    .font(.system(size: 13))
+                    .frame(height: 36)
+                }
+                .buttonStyle(SelectorStyle())
+                .accessibilityValue(showInstructions ? "Expanded" : "Collapsed")
+            } action: {
+                MainAction(title: picked.isEmpty ? "Create ⌘↩" : "Create with \(picked.count) topic\(picked.count == 1 ? "" : "s") ⌘↩", busy: creating, enabled: !name.isEmpty, action: create)
                     .help(name.isEmpty ? "Name the notebook first" : "Create the notebook")
             }
+            StartError(text: error)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .composerBox()
-        StartError(text: error)
-        instructions
         chats
+        Color.clear.frame(height: 0)
             .onAppear {
                 focus = name.isEmpty ? .name : .text
                 showInstructions = !draft.instructions.isEmpty
             }
     }
 
-    @ViewBuilder private var instructions: some View {
-        Button { withAnimation(.easeOut(duration: 0.15)) { showInstructions.toggle() } } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(showInstructions ? 90 : 0))
-                Text("Instructions for every agent in this notebook").foregroundStyle(Color.dsFg2)
-                Text("· optional").foregroundStyle(Color.dsFg3)
+    @ViewBuilder private var chats: some View {
+        let all = engine.threads.sorted { $0.updatedAt > $1.updatedAt }
+        if !all.isEmpty {
+            let selected = Set(picked)
+            let shown = showAllChats ? all : all.enumerated().filter { $0.offset < 8 || selected.contains($0.element.ref.id) }.map(\.element)
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(title: "Bring in chats as topics" + (selected.isEmpty ? "" : " · \(selected.count) selected")) {
+                    LinkButton(title: selected.count == all.count ? "Select none" : "Select all") {
+                        drafts.update(.notebook) { $0.threads = selected.count == all.count ? [] : all.map(\.ref.id) }
+                    }
+                }
+                CardList {
+                    ForEach(Array(shown.enumerated()), id: \.element.ref.id) { i, thread in
+                        TopicRow(thread: thread, on: selected.contains(thread.ref.id)) { toggle(thread.ref.id) }
+                        if i < shown.count - 1 { RowDivider(inset: 48) }
+                    }
+                }
+                if shown.count < all.count { LinkButton(title: "Show all \(all.count) chats") { showAllChats = true } }
+                Text("Each chat becomes a topic with its whole conversation, and moves out of Chats into the notebook.")
+                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
             }
-            .font(.system(size: 13))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 20)
-        if showInstructions {
-            InstructionsField(text: drafts.binding(.notebook, \.instructions), title: nil).padding(.top, 8)
         }
     }
 
-    @ViewBuilder private var chats: some View {
-        let selected = Set(draft.threads)
-        let recent = engine.threads.sorted { $0.updatedAt > $1.updatedAt }
-        if !recent.isEmpty {
-            // The five most recent, plus any already ticked.
-            let shown = showAllChats ? recent : recent.enumerated().filter { $0.offset < 5 || selected.contains($0.element.ref.id) }.map(\.element)
-            SectionCaption(title: "Bring in chats as topics", trailing: selected.isEmpty ? "" : "\(selected.count) selected")
-            ForEach(shown, id: \.ref.id) { thread in
-                PickRow(mark: .check, on: selected.contains(thread.ref.id), title: thread.title, trailing: "\(thread.debate != nil ? "Debate" : "Chat") · \(HomeView.age(thread.updatedAt))") {
-                    drafts.update(.notebook) { d in
-                        if let i = d.threads.firstIndex(of: thread.ref.id) { d.threads.remove(at: i) } else { d.threads.append(thread.ref.id) }
-                    }
-                }
-            }
-            if shown.count < recent.count {
-                LinkButton(title: "Show all \(recent.count) chats") { showAllChats = true }.padding(.top, 6)
-            }
-            Text("Each becomes a topic with its whole conversation, and the chat moves into the notebook.")
-                .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 8)
+    private func toggle(_ id: String) {
+        drafts.update(.notebook) { d in
+            if let i = d.threads.firstIndex(of: id) { d.threads.remove(at: i) } else { d.threads.append(id) }
         }
     }
 
@@ -649,14 +1282,13 @@ private struct NotebookStart: View {
         creating = true
         error = nil
         let note = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let picked = draft.threads
+        let moving = engine.threads.filter { picked.contains($0.ref.id) }.map(\.ref)
         Task {
             defer { creating = false }
             guard let ref = await engine.createSpace(name: name, instructions: draft.instructions.trimmingCharacters(in: .whitespacesAndNewlines)) else {
                 error = "Couldn't create the notebook because the engine isn't connected. Nothing was created, and what you typed is kept."
                 return
             }
-            let moving = engine.threads.filter { picked.contains($0.ref.id) }.map(\.ref)
             let topics = moving.isEmpty ? [] : ((try? await engine.importThreads(moving, into: ref)) ?? [])
             if !note.isEmpty {
                 let main = engine.thread(ContainerRef(kind: .space, id: ref.id))
@@ -670,88 +1302,36 @@ private struct NotebookStart: View {
     }
 }
 
-// MARK: Agent
-
-/// New agent: avatar and name as the heading, a template to start from, and an optional first message sent once it
-/// exists. The name is required.
-private struct AgentStart: View {
-    let engine: EngineController
-    @Binding var item: SidebarItem
-    private var drafts: StartDrafts { .shared }
-    @State private var templates: [AgentTemplate] = []
-    @State private var creating = false
-    @State private var error: String?
-    @FocusState private var focus: StartField?
-
-    private var draft: StartDrafts.Draft { drafts[.agent] }
-    private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+/// A 48pt row that is one control: a check box, the chat's kind, its title, and its kind and age.
+private struct TopicRow: View {
+    let thread: SessionSummary
+    let on: Bool
+    let toggle: () -> Void
+    @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            AvatarPicker(avatar: drafts.binding(.agent, \.avatar))
-            NameField(placeholder: "Name your agent", text: drafts.binding(.agent, \.name), focused: $focus) { focus = .text }
-        }
-        .padding(.bottom, 6)
-        StartHint(text: "Agents run on a schedule, remember what you teach them and reach you when something matters. This one runs on this Mac.")
-        VStack(alignment: .leading, spacing: 10) {
-            StartText(placeholder: "First message (optional): what you want from it, in your words…", text: drafts.binding(.agent, \.text), focused: $focus, onSubmit: create)
-            HStack {
-                Spacer()
-                StartButton(title: "Create ⌘↩", busy: creating, enabled: !name.isEmpty, action: create)
-                    .help(name.isEmpty ? "Name the agent first" : "Create the agent")
+        Button(action: toggle) {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(on ? Color.accentColor : Color.dsCard)
+                    .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(on ? Color.accentColor : Color.dsFg3, lineWidth: 1))
+                    .overlay { if on { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white) } }
+                    .frame(width: 16, height: 16)
+                Image(systemName: thread.debate != nil ? "person.2" : "bubble.left").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                Text(thread.title).font(.system(size: 14)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 12)
+                Text("\(thread.debate != nil ? "Debate" : "Chat") · \(age(thread.updatedAt))").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
             }
+            .padding(.horizontal, 16)
+            .frame(height: 48)
+            .background(hovering ? Color.dsChip.opacity(0.5) : .clear)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .composerBox()
-        StartError(text: error)
-        SectionCaption(title: "Start from")
-        ForEach(ordered) { t in
-            PickRow(mark: .radio, on: draft.template == t.id, title: "\(t.avatar)  \(t.name)", note: t.description) { pick(t) }
-        }
-        PickRow(mark: .radio, on: draft.template == nil, title: "From scratch", note: "Instructions you write") { pick(nil) }
-            .task {
-                templates = await engine.agentTemplates()
-                focus = name.isEmpty ? .name : .text
-            }
-    }
-
-    /// A briefing, a coach and a watcher first (as in Agents' first run).
-    private var ordered: [AgentTemplate] {
-        let order = ["daily-briefing", "habit-coach", "research-watcher"]
-        return templates.sorted { (order.firstIndex(of: $0.id) ?? 9) < (order.firstIndex(of: $1.id) ?? 9) }
-    }
-
-    /// A template fills the name and avatar, unless you typed your own.
-    private func pick(_ t: AgentTemplate?) {
-        drafts.update(.agent) { d in
-            let typedOwn = !d.name.isEmpty && !templates.contains { $0.name == d.name }
-            d.template = t?.id
-            if !typedOwn { d.name = t?.name ?? "" }
-            if d.avatar.isEmpty || templates.contains(where: { $0.avatar == d.avatar }) { d.avatar = t?.avatar ?? "" }
-        }
-    }
-
-    private func create() {
-        guard !name.isEmpty, !creating else { return }
-        creating = true
-        error = nil
-        let message = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        Task {
-            defer { creating = false }
-            do {
-                let ref = try await engine.createAgent(name: name, template: draft.template, avatar: draft.avatar.trimmingCharacters(in: .whitespaces))
-                if !message.isEmpty {
-                    let thread = engine.thread(ContainerRef(kind: .agent, id: ref.id))
-                    await thread.open()
-                    _ = await thread.send(message)
-                }
-                UserDefaults.standard.set("Chat", forKey: "agentTab")
-                drafts.clear(.agent)
-                item = .agent(ref.id)
-            } catch {
-                self.error = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was created, and what you typed is kept."
-            }
-        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(thread.title)
+        .accessibilityValue(on ? "Selected" : "Not selected")
+        .accessibilityAddTraits(.isToggle)
     }
 }

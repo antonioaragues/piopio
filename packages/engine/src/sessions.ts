@@ -515,7 +515,7 @@ export class Sessions {
 	}
 
 	/** A new local agent from a template (or from scratch): its folder, its git repo, its catalog entry. */
-	async createAgent(params: { name: string; template?: string; avatar?: string; model?: ModelRef; owner?: string }): Promise<ContainerRef> {
+	async createAgent(params: { name: string; template?: string; avatar?: string; model?: ModelRef; owner?: string; instructions?: string; schedule?: string | null }): Promise<ContainerRef> {
 		const name = params.name.trim();
 		if (!name) throw new EngineError("INVALID", "The agent needs a name.");
 		if (params.template && !TEMPLATES.some((t) => t.id === params.template)) throw new EngineError("INVALID", `No template “${params.template}”.`);
@@ -523,7 +523,7 @@ export class Sessions {
 		const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "agent";
 		const model = params.model ?? this.hub.defaultModel;
 		const folder = this.host.files.folderFor(slug);
-		const made = newDefinition({ id, slug: basename(folder), name, owner: params.owner?.trim() || "Owner", model: model.provider === "openrouter" ? model.id : `${model.provider}:${model.id}`, ...(params.template ? { template: params.template } : {}), ...(params.avatar ? { avatar: params.avatar } : {}) });
+		const made = newDefinition({ id, slug: basename(folder), name, owner: params.owner?.trim() || "Owner", model: model.provider === "openrouter" ? model.id : `${model.provider}:${model.id}`, ...(params.template ? { template: params.template } : {}), ...(params.avatar ? { avatar: params.avatar } : {}), ...(params.instructions !== undefined ? { instructions: params.instructions } : {}), ...(params.schedule !== undefined ? { schedule: params.schedule } : {}) });
 		await this.host.files.create(folder, made);
 		this.definitions.set(id, made);
 		const now = new Date().toISOString();

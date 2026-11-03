@@ -1533,13 +1533,31 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 	}
 	const idleAfter = (n: number) => (s: Snapshot) => s.state.status === "idle" && s.items.filter((i) => i.kind === "assistant" && i.parts.some((p) => p.text)).length >= n;
 
+	test("an agent from the start page: icons, the template's instructions and schedule, or your own", async () => {
+		const a = await start();
+		const { templates } = await a.client.call("agents.templates", {});
+		const briefing = templates.find((t) => t.id === "daily-briefing")!;
+		expect(briefing).toMatchObject({ avatar: "symbol:sun.max", schedule: "0 8 * * 1-5" });
+		expect(briefing.instructions).toContain("{owner}");
+		expect(templates.every((t) => t.avatar.startsWith("symbol:"))).toBe(true);
+		const mine = await a.client.call("agents.create", { name: "Mornings", template: "daily-briefing", owner: "Antonio", instructions: "Tell {owner} the weather first.", schedule: "30 7 * * *", model: { provider: "faux", id: "faux-1" } });
+		const got = await a.client.call("agents.get", { ref: mine.ref });
+		expect(got.instructions).toContain("Tell Antonio the weather first.");
+		expect(got.errors).toEqual([]);
+		expect(got.definition).toMatchObject({ avatar: "symbol:sun.max", schedules: [{ id: "morning", cron: "30 7 * * *", prompt: "Write today's briefing.", deliverTo: "owner" }] });
+		const none = await a.client.call("agents.create", { name: "Quiet", template: "daily-briefing", owner: "Antonio", schedule: null, model: { provider: "faux", id: "faux-1" } });
+		expect((await a.client.call("agents.get", { ref: none.ref })).definition).not.toHaveProperty("schedules");
+		const scratch = await a.client.call("agents.create", { name: "Scratch", owner: "Antonio", instructions: "Check the plants.", schedule: "0 9 * * *", model: { provider: "faux", id: "faux-1" } });
+		expect((await a.client.call("agents.get", { ref: scratch.ref })).definition).toMatchObject({ schedules: [{ cron: "0 9 * * *", deliverTo: "owner" }] });
+	});
+
 	test("an agent from a template: owner chat with compact steps and memory, edits with validation, contacts kept apart, restart, delete", async () => {
 		const a = await start();
 		expect((await a.client.call("agents.templates", {})).templates.map((t) => t.id)).toEqual(["personal-assistant", "daily-briefing", "habit-coach", "family-helper", "research-watcher"]);
 		const { ref } = await a.client.call("agents.create", { name: "Coach", template: "habit-coach", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
 		expect(ref.kind).toBe("agent");
 		const [listed] = (await a.client.call("sessions.list", { kind: "agent" })).sessions;
-		expect(listed).toMatchObject({ title: "Coach", agent: { slug: "coach", avatar: "🏃", location: "local", model: "faux:faux-1", contacts: [{ id: "owner", name: "Antonio", role: "owner" }] } });
+		expect(listed).toMatchObject({ title: "Coach", agent: { slug: "coach", avatar: "symbol:figure.run", location: "local", model: "faux:faux-1", contacts: [{ id: "owner", name: "Antonio", role: "owner" }] } });
 		const folder = join(a.home, "Agents", "coach");
 		expect(readFileSync(join(folder, "instructions.md"), "utf8")).toContain("You coach Antonio");
 		let got = await a.client.call("agents.get", { ref });

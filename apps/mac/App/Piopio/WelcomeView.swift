@@ -681,7 +681,7 @@ private struct WelcomeSetupStep: View {
         return Button { withAnimation(.easeOut(duration: 0.15)) { setup.template = picked ? nil : t } } label: {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .top) {
-                    Text(t.avatar).font(.system(size: 24))
+                    AvatarGlyph(avatar: t.avatar, size: 24)
                     Spacer()
                     if picked { Image(systemName: "checkmark.circle.fill").font(.system(size: 16)).foregroundStyle(Color.dsFg3) }
                 }

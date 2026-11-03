@@ -642,7 +642,7 @@ export class Engine {
 				return {};
 			}
 			case "agents.templates":
-				return { templates: TEMPLATES.map(({ id, name, avatar, description }) => ({ id, name, avatar, description })) } satisfies Result<"agents.templates">;
+				return { templates: TEMPLATES.map(({ id, name, avatar, description, instructions, definition }) => ({ id, name, avatar, description, instructions, ...(definition.schedules?.[0] ? { schedule: definition.schedules[0].cron } : {}) })) } satisfies Result<"agents.templates">;
 			case "agents.create": {
 				const p = params as Params<"agents.create">;
 				return { ref: await this.sessions.createAgent(p) } satisfies Result<"agents.create">;

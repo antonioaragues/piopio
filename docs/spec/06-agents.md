@@ -62,7 +62,7 @@ A folder that is a git repo (auto-committed on every save → history, diff, rol
 - **AD1** Two ways to author, both writing the same files: a **form editor** (tabs: Persona, Model, Tools, Contacts, Channels, Schedules, Policies), and the **Agent Builder** (a chat with a built-in agent that edits the definition through tools and shows a diff before applying).
 - **AD2** Secrets are referenced as `secret:NAME` and never stored in the folder. Values live in Keychain locally and in encrypted storage in the cloud.
 - **AD3** Validation on save (JSON Schema + semantic checks: cron syntax, contact channel IDs, referenced agents exist). Errors show inline.
-- **AD4** Templates: "Personal assistant", "Daily briefing", "Habit coach", "Family helper", "Research watcher".
+- **AD4** Templates: "Personal assistant", "Daily briefing", "Habit coach", "Family helper", "Research watcher". Their avatars are line icons (`symbol:<SF Symbol>`), not emoji. `agents.templates` also returns each template's instructions and first schedule, and `agents.create` takes `instructions` and `schedule` (a cron, or null for none) so the start page can set them (2026-11-03).
 - **AD5** **The Builder interviews first** (from the Grok Bot review, docs/research/grok-bot.md). A new agent opens in the Builder chat, which introduces the agent and asks two or three question cards (UI7) before writing anything: what it's for, which apps and people it works with, and how it should reach you. It then shows the drafted definition as a diff to apply. A template only fills the first answers. The form editor stays the place for later edits and for people who prefer it.
 
 ## 3. Runtime (shared Node/Workers code in `@piopio/runtime`)
