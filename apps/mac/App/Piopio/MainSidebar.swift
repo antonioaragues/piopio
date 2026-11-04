@@ -12,6 +12,8 @@ struct MainSidebar: View {
     let engine: EngineController
     @Binding var item: SidebarItem
     @AppStorage("collapsedSections") private var collapsedRaw = ""
+    /// Projects whose sessions are folded away (ids, one per line). Clicking a project row folds or unfolds it.
+    @AppStorage("collapsedProjects") private var collapsedProjectsRaw = ""
     @AppStorage("pinnedItems") private var pinnedRaw = ""
     @State private var showingEarlier: Set<String> = []
     @State private var renaming: SessionSummary?
@@ -52,6 +54,9 @@ struct MainSidebar: View {
             }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             footer
+        }
+        .onChange(of: item) { _, _ in
+            if let id = openProjectId, collapsedProjects.contains(id) { setProject(id, collapsed: false) }
         }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Title", text: $newTitle)
@@ -115,6 +120,13 @@ struct MainSidebar: View {
     // MARK: Sections
 
     private var collapsed: Set<String> { Set(collapsedRaw.split(separator: ",").map(String.init)) }
+    private var collapsedProjects: Set<String> { Set(collapsedProjectsRaw.split(separator: "\n").map(String.init)) }
+
+    private func setProject(_ id: String, collapsed fold: Bool) {
+        var c = collapsedProjects
+        if fold { c.insert(id) } else { c.remove(id) }
+        collapsedProjectsRaw = c.sorted().joined(separator: "\n")
+    }
     private var pinned: [String] { pinnedRaw.split(separator: "\n").map(String.init) }
 
     private func toggle(_ section: SidebarSection) {
@@ -247,15 +259,14 @@ struct MainSidebar: View {
     }
 
     /// The project's sessions, nested under it on a hairline (docs/design/start-pages, addendum): a "New session ·
-    /// Draft" row first while one is being written, the live sessions, "N earlier", and on the open project
-    /// "+ New session ⌘N".
+    /// Draft" row first while one is being written, the live sessions and "N earlier". Hidden while the project is
+    /// folded.
     @ViewBuilder private func projectSessions(_ project: ProjectInfo) -> some View {
         let all = engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
         let drafting = item == .newSession(project.id) || StartDrafts.shared.hasContent(key: StartDrafts.sessionKey(project.id))
-        let isOpen = openProjectId == project.id && startsSessions(project)
-        if drafting || !all.isEmpty || isOpen {
+        if !collapsedProjects.contains(project.id), drafting || !all.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
                 if drafting { sessionDraftRow(project) }
                 ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in sessionRow(s, indent: true) }
@@ -269,7 +280,6 @@ struct MainSidebar: View {
                     }
                     .buttonStyle(.plain)
                 }
-                if isOpen && !drafting { newSessionLink(project) }
             }
             .padding(.leading, 9)
             .overlay(alignment: .leading) { Rectangle().fill(Color.dsLine).frame(width: 1) }
@@ -293,24 +303,9 @@ struct MainSidebar: View {
         .contextMenu {
             Button("Discard Draft", role: .destructive) {
                 StartDrafts.shared.clear(key: StartDrafts.sessionKey(project.id))
-                if selected { item = .project(project.id) }
+                if selected { item = .home }
             }
         }
-    }
-
-    private func newSessionLink(_ project: ProjectInfo) -> some View {
-        Button { item = .newSession(project.id) } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "plus").font(.system(size: 11, weight: .medium))
-                Text("New session").font(.system(size: 13))
-                Spacer(minLength: 4)
-                Text("⌘N").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            }
-            .foregroundStyle(Color.dsFg2)
-            .rowChrome(selected: false, height: 30)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("New session in \(project.name)")
     }
 
     /// Live sessions (running, waiting on you, or recent; those that need you first) and the rest.
@@ -334,7 +329,10 @@ struct MainSidebar: View {
         let selected = item == .project(project.id)
         // Build projects start a session; folders you only chat about start a chat in the folder.
         let plus: ProjectRow.Plus? = startsSessions(project) ? .session : (areas.contains(.chat) && project.lenses.contains(.chat) && project.missing != true ? .chat : nil)
-        return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, open: { item = .project(project.id) }) {
+        let folded = collapsedProjects.contains(project.id)
+        let hasSessions = !engine.sessions(in: project).filter { $0.parent == nil }.isEmpty
+        return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil,
+                          toggle: { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }) {
             if plus == .session { item = .newSession(project.id) }
             else { Task { await BuildActions.chat(in: project, engine: engine) { item = .session($0) } } }
         }
@@ -674,7 +672,8 @@ extension Notification.Name {
     static let newChat = Notification.Name("piopio.newChat")
 }
 
-/// A project row: folder, name, and a + that starts a session there (or a chat, in a folder you only chat about). On
+/// A project row: folder, name, and a + that starts a session there (or a chat, in a folder you only chat about).
+/// Clicking the row folds or unfolds its sessions (a chevron marks a folded one). On
 /// the open project the + always shows (on a grey fill) and the name is medium weight; on the others it shows on hover
 /// or keyboard focus, in place of the branch. VoiceOver reaches it as the row's "New session" action.
 private struct ProjectRow: View {
@@ -683,7 +682,9 @@ private struct ProjectRow: View {
     let selected: Bool
     let isOpen: Bool
     let plus: Plus?
-    let open: () -> Void
+    /// Whether its sessions are folded away; nil when it has none.
+    let folded: Bool?
+    let toggle: () -> Void
     let start: () -> Void
     @State private var hovering = false
     @FocusState private var plusFocused: Bool
@@ -693,11 +694,14 @@ private struct ProjectRow: View {
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            Button(action: open) {
+            Button(action: toggle) {
                 HStack(spacing: 10) {
                     RowGlyph(symbol: "folder")
                     Text(project.name).font(.system(size: 13, weight: isOpen ? .medium : .regular))
                         .foregroundStyle(project.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1)
+                    if folded == true {
+                        Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                    }
                     Spacer(minLength: 4)
                     if project.missing == true {
                         Text("missing").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
@@ -709,6 +713,8 @@ private struct ProjectRow: View {
                 .rowChrome(selected: selected)
             }
             .buttonStyle(.plain)
+            .help(folded == nil ? "" : folded == true ? "Show its sessions" : "Hide its sessions")
+            .accessibilityValue(folded == nil ? "" : folded == true ? "Collapsed" : "Expanded")
             .accessibilityAction(named: plus == .chat ? "New chat" : "New session") { if plus != nil { start() } }
             if plus != nil {
                 Button(action: start) {

@@ -84,8 +84,10 @@ The "New session in <project>" sheet is gone. Starting a session is a page built
 them at the bottom; moved back on 2026-11-04 at the user's request). A project row has a + (26pt): always on the open project (grey fill, name in medium weight),
 on hover for the others, where it takes the branch's place. VoiceOver gets it as the row's "New session" action. A
 folder you only chat about gets a + that starts a chat in it. Sessions nest under their project on a hairline (rows
-30pt); the open project's list ends with "+ New session ⌘N", replaced by "New session · Draft" at the top while one is
-being written. ⌘N starts a session in the open project, or a chat anywhere else.
+30pt), with "New session · Draft" at the top while one is being written. Clicking a project row folds or unfolds its
+sessions (a chevron after the name marks a folded one; it unfolds by itself when you open one of its sessions); it
+no longer opens the Projects page. The handoff's "+ New session ⌘N" row was dropped on 2026-11-04 at the user's
+request: the row's + and ⌘N start a session. ⌘N starts a session in the open project, or a chat anywhere else.
 
 **Motion**: on every start page (chat, debate, notebook, agent, session), starting moves the card down into the
 conversation's composer (a matched-geometry move, 0.42 s) while the page fades into the conversation, instead of
