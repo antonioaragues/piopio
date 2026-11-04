@@ -90,6 +90,8 @@ struct GitMenu: View {
     let engine: EngineController
     let summary: SessionSummary
     @Binding var committing: Bool
+    /// In Summary's branch row, which already names the branch: only a chevron.
+    var inRow = false
     @State private var newBranch = false
     @State private var branchName = ""
     @State private var finishing: FinishParams.Action?
@@ -122,11 +124,19 @@ struct GitMenu: View {
             }
         } label: {
             // The branch is in the subtitle; here only the icon and what's waiting to sync.
+            if inRow {
+                HStack(spacing: 4) {
+                    if git.busy != nil { ProgressView().controlSize(.mini) }
+                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                }
+                .accessibilityLabel("Git: commit, push, pull, branches")
+            } else {
             HStack(spacing: 5) {
                 Image(systemName: summary.worktree != nil ? "square.split.2x1" : "arrow.triangle.branch").font(.system(size: 13))
                 if let s = git.status, s.ahead > 0 { Text("↑\(s.ahead)").font(.system(size: 11.5)) }
                 if let s = git.status, s.behind > 0 { Text("↓\(s.behind)").font(.system(size: 11.5)) }
                 if git.busy != nil { ProgressView().controlSize(.mini) }
+            }
             }
         }
         .menuStyle(.button)

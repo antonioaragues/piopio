@@ -1,0 +1,376 @@
+<title>Piopio Session Panel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a document column (720) around one wide, live session mockup in Piopio's grey ink. */
+:root {
+  --canvas:#e9e8e4; --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96;
+  --line:rgba(0,0,0,.08); --sel:rgba(0,0,0,.06); --bubble:#f0f0ed; --field:#ffffff;
+  --inv:#1f1f1e; --invfg:#ffffff; --accent:#2f6fde; --page:#f7f7f5; --add:#3a8a55; --del:#c2493f;
+  --shadow:0 0 0 .5px rgba(0,0,0,.2),0 24px 70px rgba(0,0,0,.14);
+  --menu:0 0 0 .5px rgba(0,0,0,.12),0 10px 30px rgba(0,0,0,.14);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --canvas:#0f0f0e; --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.07); --bubble:#2b2b29; --field:#252524;
+  --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#151514; --add:#6cc28a; --del:#ef7d72;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 24px 70px rgba(0,0,0,.6);
+  --menu:0 0 0 .5px rgba(255,255,255,.14),0 10px 30px rgba(0,0,0,.5); color-scheme:dark } }
+:root[data-theme="dark"] {
+  --canvas:#0f0f0e; --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.07); --bubble:#2b2b29; --field:#252524;
+  --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#151514; --add:#6cc28a; --del:#ef7d72;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 24px 70px rgba(0,0,0,.6);
+  --menu:0 0 0 .5px rgba(255,255,255,.14),0 10px 30px rgba(0,0,0,.5); color-scheme:dark }
+
+* { box-sizing:border-box }
+body { background:var(--page); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:56px 80px }
+.doc { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:20px }
+.wide { max-width:1180px; margin:36px auto 8px }
+h1 { font-size:34px; line-height:1.15; letter-spacing:-.8px; margin:0; text-wrap:balance }
+h2 { font-size:20px; letter-spacing:-.3px; margin:36px 0 0; text-wrap:balance }
+p { margin:0 }
+.lede { font-size:17px; color:var(--fg2); text-wrap:pretty }
+.eyebrow { font-size:12px; color:var(--fg3); letter-spacing:.04em; text-transform:uppercase }
+.muted { color:var(--fg2) }
+code { font-family:var(--mono); font-size:13px; background:var(--sel); border-radius:4px; padding:1px 4px }
+kbd { font-family:var(--sans); font-size:12.5px; color:var(--fg2); background:var(--sel); border-radius:4px; padding:1px 5px }
+
+.ideas { display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:.5px solid var(--line); border-bottom:.5px solid var(--line) }
+.ideas > div { padding:14px 16px 14px 0; min-width:0 }
+.ideas > div + div { padding-left:16px; border-left:.5px solid var(--line) }
+.ideas b { display:block; font-size:14px; margin-bottom:2px }
+.ideas span { font-size:13.5px; color:var(--fg2) }
+@media (max-width:640px) { .ideas { grid-template-columns:1fr } .ideas > div + div { padding-left:0; border-left:0; border-top:.5px solid var(--line) } }
+
+/* ---------- mockup ---------- */
+.stage { background:var(--canvas); border-radius:16px; padding:28px }
+.stage-cap { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; margin-bottom:14px; font-size:13px; color:var(--fg2) }
+.stage-cap strong { color:var(--fg); font-weight:600; font-size:14px }
+.win { display:flex; height:680px; border-radius:12px; overflow:hidden; background:var(--win); box-shadow:var(--shadow); font-size:13px; line-height:1.4; position:relative }
+.side { width:210px; flex-shrink:0; background:var(--side); border-right:.5px solid var(--line); display:flex; flex-direction:column; padding:0 8px }
+.side-top { height:52px; display:flex; align-items:center; gap:8px; padding:0 4px 0 8px }
+.light { width:12px; height:12px; border-radius:50%; background:var(--fg3); opacity:.35 }
+.row { display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:7px; min-width:0 }
+.row .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.row.on { background:var(--sel) }
+.row svg { color:var(--fg2); flex-shrink:0 }
+.nest { margin-left:17px; padding-left:9px; border-left:1px solid var(--line); display:flex; flex-direction:column; gap:1px }
+.sec { padding:14px 8px 4px; font-size:12px; color:var(--fg3) }
+.pl { margin-left:auto; width:22px; height:22px; border-radius:6px; background:var(--sel); display:flex; align-items:center; justify-content:center; color:var(--fg) }
+
+.main { flex:1; min-width:0; display:flex; flex-direction:column; position:relative }
+.bar { height:52px; flex-shrink:0; display:flex; align-items:center; gap:6px; padding:0 10px 0 22px; border-bottom:.5px solid var(--line) }
+.bar .title { font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.bar .sub { font-size:12px; color:var(--fg3); white-space:nowrap }
+.tools { margin-left:auto; display:flex; gap:2px; color:var(--fg2) }
+.tb { all:unset; width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:7px; cursor:pointer; color:var(--fg2) }
+.tb:hover { background:var(--sel); color:var(--fg) }
+.tb[aria-pressed="true"] { background:var(--sel); color:var(--fg) }
+.tb:focus-visible { outline:2px solid var(--accent); outline-offset:1px }
+.tdiv { width:.5px; background:var(--line); margin:6px 4px }
+.body { flex:1; display:flex; min-height:0 }
+.chat { flex:1; min-width:0; display:flex; flex-direction:column; position:relative }
+.transcript { flex:1; overflow:hidden; padding:24px 36px; display:flex; flex-direction:column; gap:14px; max-width:640px; margin:0 auto; width:100% }
+.you { align-self:flex-end; background:var(--bubble); border-radius:12px; padding:8px 13px; max-width:80% }
+.steps { font-size:12.5px; color:var(--fg3) }
+.answer { color:var(--fg) }
+.answer p + p { margin-top:8px }
+.chip { font-family:var(--mono); font-size:12px; background:var(--sel); border-radius:4px; padding:0 4px }
+
+.composerwrap { padding:0 24px 18px; position:relative; max-width:640px; margin:0 auto; width:100% }
+.composer { border-radius:16px; background:var(--field); border:.5px solid var(--line); box-shadow:0 2px 10px rgba(0,0,0,.04); padding:12px 12px 10px 14px; display:flex; flex-direction:column; gap:10px }
+.composer .ph { color:var(--fg3); font-size:14px }
+.crow { display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--fg2) }
+.plus { all:unset; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--fg2) }
+.plus:hover, .plus[aria-expanded="true"] { background:var(--sel); color:var(--fg) }
+.plus:focus-visible { outline:2px solid var(--accent) }
+.push { margin-left:auto }
+.send { width:28px; height:28px; border-radius:50%; background:var(--sel); color:var(--fg3); display:flex; align-items:center; justify-content:center }
+.tag { padding:2px 7px; border-radius:6px; background:var(--sel); color:var(--fg2); font-size:12px; white-space:nowrap }
+
+.menu { position:absolute; left:24px; bottom:96px; width:300px; background:var(--field); border-radius:12px; box-shadow:var(--menu); padding:6px; z-index:5 }
+.mi { display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:7px; cursor:default; position:relative }
+.mi:hover, .mi.hot { background:var(--sel) }
+.mi svg { color:var(--fg2); flex-shrink:0 }
+.mi .k { margin-left:auto; font-size:12px; color:var(--fg3) }
+.mi .d { font-size:12px; color:var(--fg3) }
+.msep { height:.5px; background:var(--line); margin:5px 6px }
+.sub { position:absolute; left:302px; bottom:0; width:270px; background:var(--field); border-radius:12px; box-shadow:var(--menu); padding:6px; z-index:6 }
+.sub .hd { font-size:11.5px; color:var(--fg3); padding:6px 9px 2px }
+.tg { margin-left:auto; width:26px; height:15px; border-radius:8px; background:var(--sel); position:relative; flex-shrink:0 }
+.tg::after { content:""; position:absolute; top:2px; left:2px; width:11px; height:11px; border-radius:50%; background:var(--field); box-shadow:0 0 0 .5px var(--line) }
+.tg.on { background:var(--inv) }
+.tg.on::after { left:13px }
+.warn { font-size:11.5px; color:var(--fg3) }
+
+.panel { width:290px; flex-shrink:0; border-left:.5px solid var(--line); overflow:auto; padding:16px 18px; display:flex; flex-direction:column; gap:4px }
+.ph-h { font-size:12px; color:var(--fg3); padding:10px 0 4px; display:flex; align-items:center; gap:6px }
+.ph-h:first-child { padding-top:0 }
+.pr { display:flex; align-items:center; gap:9px; padding:5px 0; min-width:0 }
+.pr svg { color:var(--fg2); flex-shrink:0 }
+.pr .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.pr .m { font-size:12px; color:var(--fg3); white-space:nowrap }
+.pr .act { font-size:12px; color:var(--accent) }
+.hr { height:.5px; background:var(--line); margin:8px 0 }
+.meter { width:46px; height:4px; border-radius:2px; background:var(--sel); overflow:hidden }
+.meter i { display:block; height:100%; background:var(--fg2) }
+.num { font-variant-numeric:tabular-nums }
+.plus-c { color:var(--add) } .minus-c { color:var(--del) }
+.todo { display:flex; gap:8px; align-items:flex-start; padding:3px 0; font-size:12.5px }
+.todo .b { width:12px; height:12px; border-radius:3px; border:1px solid var(--fg3); margin-top:2px; flex-shrink:0 }
+.todo.done .b { background:var(--fg2); border-color:var(--fg2) }
+.todo.done span { color:var(--fg3); text-decoration:line-through }
+.foot { margin-top:auto; padding-top:10px; border-top:.5px solid var(--line); font-size:12px; color:var(--fg3); display:flex }
+
+.drawer { height:120px; border-top:.5px solid var(--line); background:var(--side); font-family:var(--mono); font-size:12px; color:var(--fg2); padding:10px 16px }
+
+@media (max-width:900px) { .side { display:none } .panel { width:240px } .stage { padding:12px } }
+@media (max-width:640px) { .win { height:auto; min-height:640px; flex-direction:column } .body { flex-direction:column } .panel { width:auto; border-left:0; border-top:.5px solid var(--line); max-height:none } .menu { left:12px; width:calc(100% - 24px) } .sub { left:0; bottom:100%; width:100% } }
+
+/* ---------- notes ---------- */
+.notes { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin-top:28px }
+.notes > div { min-width:0; border-top:.5px solid var(--line); padding-top:14px }
+.notes h3 { font-size:14.5px; margin:0 0 6px }
+.notes p, .notes li { font-size:14px; color:var(--fg2) }
+.notes ul { margin:6px 0 0; padding-left:18px }
+@media (max-width:820px) { .notes { grid-template-columns:1fr; gap:8px } }
+
+.tbl { overflow-x:auto }
+table { border-collapse:collapse; width:100%; font-size:14px; min-width:560px }
+th, td { text-align:left; vertical-align:top; padding:9px 12px 9px 0; border-bottom:.5px solid var(--line) }
+th { font-size:12px; font-weight:500; color:var(--fg3) }
+td:first-child { font-weight:500; white-space:nowrap }
+td { color:var(--fg2) }
+ol.steps-l, ul.plain { margin:0; padding-left:20px; display:flex; flex-direction:column; gap:10px }
+.q { border-top:.5px solid var(--line); padding:14px 0 2px; display:grid; gap:4px }
+.q b { font-weight:600 }
+.q .rec { font-size:14px; color:var(--fg2) }
+.q .rec em { font-style:normal; color:var(--fg); font-weight:500 }
+.new { font-size:11px; color:var(--accent); border:1px solid var(--accent); border-radius:4px; padding:0 4px; margin-left:6px; vertical-align:1px }
+footer { font-size:13px; color:var(--fg3); margin-top:20px }
+</style>
+
+<main>
+<div class="doc">
+  <div class="eyebrow">Piopio · design proposal · 4 November 2026</div>
+  <h1>One panel for what a session has: its place, context, tools and results</h1>
+  <p class="lede">Three ideas from Claude's app, adapted to Piopio's grey ink: a composer + that does more than attach files, every view one click away in the toolbar, and a right-hand Summary that says where the session runs, how full its context is, which tools it may use, and what it has made.</p>
+  <div class="ideas">
+    <div><b>The + menu</b><span>Files and photos, a folder, commands, and this conversation's connectors and MCP servers.</span></div>
+    <div><b>Icons in the toolbar</b><span>Summary, Changes, Files and Terminal at the top, so you don't open a panel to reach them.</span></div>
+    <div><b>Summary column</b><span>Where it runs, context, connectors, the agent's checklist, and results: files changed, commits, documents.</span></div>
+  </div>
+</div>
+
+<div class="wide">
+  <div class="stage">
+    <div class="stage-cap"><strong>A Build session</strong><span>Click the toolbar icons, the composer's +, and Connectors inside it.</span></div>
+    <div class="win">
+      <aside class="side" aria-label="Sidebar mockup">
+        <div class="side-top"><span class="light"></span><span class="light"></span><span class="light"></span></div>
+        <div class="row"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg><span class="t">Search</span></div>
+        <div class="row"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 7L8 2.5 13.5 7v6.5h-11z"/></svg><span class="t">Home</span></div>
+        <div class="sec">Projects</div>
+        <div class="row"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg><span class="t" style="font-weight:500">piopio</span><span class="pl">+</span></div>
+        <div class="nest">
+          <div class="row on"><span class="t">Session panel and + menu</span></div>
+          <div class="row"><span class="t">Fold projects in the sidebar</span></div>
+        </div>
+        <div class="row"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg><span class="t">smart-paste</span></div>
+      </aside>
+
+      <section class="main" aria-label="Session mockup">
+        <div class="bar">
+          <span class="title">Session panel and + menu</span><span class="sub">piopio · main</span>
+          <div class="tools" role="toolbar" aria-label="Session views">
+            <button class="tb" data-view="summary" aria-pressed="true" title="Summary ⌘⇧I" aria-label="Summary"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M5 6h6M5 8.5h6M5 11h3.5"/></svg></button>
+            <button class="tb" data-view="changes" aria-pressed="false" title="Changes ⌘⇧D" aria-label="Changes"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M8 5v4M6 7h4M6 11h4"/></svg></button>
+            <button class="tb" data-view="files" aria-pressed="false" title="Files ⌘⇧E" aria-label="Files"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg></button>
+            <button class="tb" id="termBtn" aria-pressed="false" title="Terminal ⌃`" aria-label="Terminal"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 4.5L6.5 8 3 11.5M8 12h5"/></svg></button>
+            <span class="tdiv"></span>
+            <button class="tb" title="Open in VS Code" aria-label="Open in editor"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5"/><path d="M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/></svg></button>
+            <button class="tb" title="Rename, session tree, export…" aria-label="More"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.5" cy="8" r="1.2"/></svg></button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="chat">
+            <div class="transcript">
+              <div class="you">Make the composer's + a menu with files, folder, commands, connectors and MCP.</div>
+              <div class="steps">Read 4 files, edited 2, ran 1 command ›</div>
+              <div class="answer">
+                <p>Done. The + now opens a menu: <span class="chip">Composer.swift</span> builds it, and the connector toggles call <span class="chip">sessions.configure</span>.</p>
+                <p>Tests pass (17). I didn't change the Settings pages.</p>
+              </div>
+            </div>
+            <div class="composerwrap">
+              <div class="menu" id="menu" role="menu" aria-label="Add to this conversation">
+                <div class="mi" role="menuitem"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M10.5 4.5L5.8 9.2a1.5 1.5 0 0 0 2.1 2.1l5-5a3 3 0 0 0-4.2-4.2l-5 5a4.5 4.5 0 0 0 6.4 6.4L13 10.6"/></svg>Add files or photos<span class="k">⌘U</span></div>
+                <div class="mi" role="menuitem"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg>Add a folder</div>
+                <div class="mi" role="menuitem"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M9.5 5L6.5 11"/></svg>Commands and skills<span class="k">/</span></div>
+                <div class="msep"></div>
+                <div class="mi hot" role="menuitem" aria-haspopup="true" id="connItem"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><path d="M11.5 9v5M9 11.5h5"/></svg>Connectors and MCP<span class="k">3 on ›</span>
+                  <div class="sub" id="sub" role="menu" aria-label="Connectors and MCP servers for this conversation">
+                    <div class="hd">Connected apps</div>
+                    <div class="mi" role="menuitemcheckbox" aria-checked="true">Google Calendar<span class="tg on"></span></div>
+                    <div class="mi" role="menuitemcheckbox" aria-checked="false">Outlook <span class="warn">· reconnect</span><span class="tg"></span></div>
+                    <div class="hd">MCP servers</div>
+                    <div class="mi" role="menuitemcheckbox" aria-checked="true">github<span class="tg on"></span></div>
+                    <div class="mi" role="menuitemcheckbox" aria-checked="true">linear<span class="tg on"></span></div>
+                    <div class="mi" role="menuitemcheckbox" aria-checked="false">postgres<span class="tg"></span></div>
+                    <div class="msep"></div>
+                    <div class="mi" role="menuitem" style="color:var(--fg2)">Manage in Settings…</div>
+                  </div>
+                </div>
+                <div class="mi" role="menuitemcheckbox" aria-checked="true"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c1.7 1.6 2.5 3.4 2.5 5.5S9.7 11.9 8 13.5C6.3 11.9 5.5 10.1 5.5 8S6.3 4.1 8 2.5z"/></svg>Web search<span class="tg on"></span></div>
+                <div class="msep"></div>
+                <div class="mi" role="menuitem"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M6 2.5v3M10 2.5v3M4.5 5.5h7v3a3.5 3.5 0 0 1-7 0z"/><path d="M8 12v2"/></svg>Add extensions<span class="d">· Settings</span></div>
+              </div>
+              <div class="composer">
+                <span class="ph">Reply…</span>
+                <div class="crow">
+                  <button class="plus" id="plusBtn" aria-expanded="true" aria-controls="menu" aria-label="Add to this conversation"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg></button>
+                  <span>Ask before edits</span>
+                  <span class="tag">3 tools on</span>
+                  <span class="push">Opus 5.5</span>
+                  <span class="send"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 13V3M4 7l4-4 4 4"/></svg></span>
+                </div>
+              </div>
+            </div>
+            <div class="drawer" id="drawer" hidden>~/Proyectos/piopio (main) $ swift test<br>✔ Test run with 17 tests passed after 0.013 seconds.</div>
+          </div>
+
+          <aside class="panel" id="panel" aria-label="Session panel">
+            <div data-pane="summary">
+              <div class="ph-h">Where it runs</div>
+              <div class="pr"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="3" width="11" height="7.5" rx="1"/><path d="M1 13h14"/></svg><span class="t">This Mac</span></div>
+              <div class="pr"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5a1 1 0 0 1 1-1H6l1.5 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg><span class="t">piopio <span class="m">· ~/Proyectos</span></span></div>
+              <div class="pr"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-7 2-7 4"/></svg><span class="t">main</span><span class="m">2 to push</span></div>
+              <div class="pr"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 1.8l5 2v4c0 3-2.2 5.2-5 6.4C5.2 13 3 10.8 3 7.8v-4z"/><path d="M5.8 8l1.6 1.6L10.4 6.6"/></svg><span class="t">Ask before edits</span></div>
+              <div class="hr"></div>
+              <div class="pr"><span class="t">Context</span><span class="m num">68%</span><span class="meter"><i style="width:68%"></i></span></div>
+              <div class="pr" style="padding-top:0"><span class="m">AGENTS.md, 2 skills, 1 compaction</span><span class="act" style="margin-left:auto">Compact</span></div>
+              <div class="hr"></div>
+              <div class="pr"><span class="t">Connectors and MCP</span><span class="m">3 on · 1 to reconnect</span></div>
+              <div class="hr"></div>
+              <div class="ph-h">Checklist</div>
+              <div class="todo done"><span class="b"></span><span>Turn the + into a menu</span></div>
+              <div class="todo done"><span class="b"></span><span>Toggles per conversation</span></div>
+              <div class="todo"><span class="b"></span><span>Update the docs</span></div>
+              <div class="hr"></div>
+              <div class="ph-h">Results</div>
+              <div class="pr"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 1.5h5.5L12.5 4.5v10h-8.5z"/></svg><span class="t">Composer.swift</span><span class="m num"><span class="plus-c">+84</span> <span class="minus-c">−12</span></span></div>
+              <div class="pr"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 1.5h5.5L12.5 4.5v10h-8.5z"/></svg><span class="t">Protocol.swift</span><span class="m num"><span class="plus-c">+9</span></span></div>
+              <div class="pr"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.5"/><path d="M1 8h4.5M10.5 8H15"/></svg><span class="t">Composer + menu</span><span class="m">commit</span></div>
+              <div class="pr"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2" width="11" height="12" rx="1.5"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/></svg><span class="t">session-panel.html</span><span class="m">page</span></div>
+              <div class="foot"><span>This session</span><span class="num" style="margin-left:auto">$0.42</span></div>
+            </div>
+            <div data-pane="changes" hidden>
+              <div class="ph-h">Changes <span style="margin-left:auto">Whole session · Last turn</span></div>
+              <div class="pr"><span class="t">apps/mac/…/Composer.swift</span><span class="m num"><span class="plus-c">+84</span> <span class="minus-c">−12</span></span></div>
+              <div class="pr"><span class="t">apps/mac/…/Protocol.swift</span><span class="m num"><span class="plus-c">+9</span></span></div>
+              <div class="hr"></div>
+              <div class="pr"><span class="act">Review all…</span><span class="act" style="margin-left:auto">Commit…</span></div>
+            </div>
+            <div data-pane="files" hidden>
+              <div class="ph-h">Files</div>
+              <div class="pr"><span class="t">▸ apps</span></div>
+              <div class="pr"><span class="t">▸ docs</span></div>
+              <div class="pr"><span class="t">▸ packages</span></div>
+              <div class="pr"><span class="t">README.md</span></div>
+              <div class="pr"><span class="t">package.json</span></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div><h3>The + menu</h3>
+      <ul><li>Files or photos (<kbd>⌘U</kbd>) and a folder: what the + does today, split in two.</li>
+      <li>Commands and skills: opens the <code>/</code> list that already exists.</li>
+      <li>Connectors and MCP: toggles for <em>this</em> conversation, on top of the defaults in Settings. One that needs signing in again says so.</li>
+      <li>Web search moves here from its own composer button.</li>
+      <li>Add extensions opens Settings › Extensions.</li></ul></div>
+    <div><h3>Icons in the toolbar</h3>
+      <ul><li>Summary, Changes and Files each open the right column on that view; clicking the lit one closes it.</li>
+      <li>Terminal stays a drawer under the conversation, now with its own button.</li>
+      <li>Open in editor and ··· (rename, session tree, export) after a divider.</li>
+      <li>The git menu moves into Summary's branch row, so the toolbar has one kind of thing: views.</li></ul></div>
+    <div><h3>Summary column</h3>
+      <ul><li><b>Where it runs</b>: This Mac, the folder, the branch (its git menu), the permissions.</li>
+      <li><b>Context</b>: the meter, what fills it, Compact.</li>
+      <li><b>Connectors and MCP</b>: how many are on, which need you.</li>
+      <li><b>Checklist</b>: the agent's todos.</li>
+      <li><b>Results</b>: files changed, commits, pages and documents it wrote. Each opens its diff or viewer.</li>
+      <li>The cost at the bottom, as today.</li></ul></div>
+  </div>
+</div>
+
+<div class="doc">
+  <h2>Across Piopio</h2>
+  <p class="muted">The same toolbar and column everywhere, each with what that kind of conversation has.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Where</th><th>Toolbar</th><th>Summary shows</th></tr></thead>
+    <tbody>
+      <tr><td>Build session</td><td>Summary · Changes · Files · Terminal · Open in · ···</td><td>Where it runs, context, tools, checklist, results (files, commits, pages)</td></tr>
+      <tr><td>Chat</td><td>Summary · ···</td><td>Model, context, tools, results (attachments, files it wrote, exports)</td></tr>
+      <tr><td>Notebook</td><td>Summary · Files · ···</td><td>Topics, what it remembers, tools, results; replaces today's right column</td></tr>
+      <tr><td>Debate</td><td>Summary · Draft · ···</td><td>The two models, rounds, open objections, the agreed draft</td></tr>
+      <tr><td>Agent</td><td>Info · ···</td><td>Stays its contact card (what it does, when, its tools), with a Results section added</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>What it takes</h2>
+  <ul class="plain">
+    <li><b>App only:</b> the toolbar icons, the Summary column built from what the app already has (folder, branch and git menu, permissions, context, todos, changes, cost), and the + menu for files, folder, commands, web search and extensions.</li>
+    <li><b>Engine:</b> connectors and MCP servers on or off per conversation. Today both are app-wide: a connector's "use in chats" flag and an MCP server's "In Chat" switch. A conversation would keep its own list in <code>sessions.configure</code>, and Build sessions would filter pi's MCP servers by it. Also a "needs signing in again" state per connector account, and a list of what fills the context.</li>
+    <li><b>Results:</b> Build has files and diffs today. Commits, written pages and exports need to be recorded as results as they happen, per session.</li>
+  </ul>
+
+  <h2>In what order</h2>
+  <ol class="steps-l">
+    <li><b>Toolbar and Summary in Build sessions.</b> App only, with today's data. The inspector becomes the column's Changes and Files views.</li>
+    <li><b>The + menu</b> with files, folder, commands, web search and extensions, in every composer.</li>
+    <li><b>Connectors and MCP per conversation.</b> The engine change, then the submenu and the Summary row.</li>
+    <li><b>Results beyond files</b>, then the column in Chat, Notebooks and Debates.</li>
+  </ol>
+
+  <h2>Decisions for you</h2>
+  <div class="q"><b>1. Does a toggle in the + menu change only this conversation, or the default too?</b><span class="rec">Recommended: <em>only this conversation</em>. Settings stays where defaults live; the menu is for "not here" or "here too".</span></div>
+  <div class="q"><b>2. Should the Summary column open by itself?</b><span class="rec">Recommended: <em>remember per session</em>, as the inspector does now, and open by itself the first time a session changes files.</span></div>
+  <div class="q"><b>3. Where does the git menu live?</b><span class="rec">Recommended: <em>in Summary's branch row</em>, with Commit… also in Changes. The toolbar only switches views.</span></div>
+  <div class="q"><b>4. "Where it runs" before there is a cloud option?</b><span class="rec">Recommended: <em>show "This Mac" anyway</em>. It's true today and leaves room for the choice in Q4 of the roadmap.</span></div>
+
+  <footer>Mockup in Piopio's grey ink tokens. Project names, files, counts and costs are examples.</footer>
+</div>
+</main>
+
+<script>
+(function () {
+  const views = document.querySelectorAll('.tb[data-view]');
+  const panel = document.getElementById('panel');
+  function show(v) {
+    const lit = document.querySelector('.tb[data-view="' + v + '"]').getAttribute('aria-pressed') === 'true';
+    views.forEach(b => b.setAttribute('aria-pressed', String(!lit && b.dataset.view === v)));
+    panel.hidden = lit;
+    panel.querySelectorAll('[data-pane]').forEach(p => { p.hidden = p.dataset.pane !== v; });
+  }
+  views.forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+  const term = document.getElementById('termBtn'), drawer = document.getElementById('drawer');
+  term.addEventListener('click', () => { drawer.hidden = !drawer.hidden; term.setAttribute('aria-pressed', String(!drawer.hidden)); });
+  const plus = document.getElementById('plusBtn'), menu = document.getElementById('menu');
+  plus.addEventListener('click', () => { menu.hidden = !menu.hidden; plus.setAttribute('aria-expanded', String(!menu.hidden)); });
+  const conn = document.getElementById('connItem'), sub = document.getElementById('sub');
+  conn.addEventListener('click', e => { if (e.target.closest('#sub')) return; sub.hidden = !sub.hidden; conn.classList.toggle('hot', !sub.hidden); });
+  document.querySelectorAll('[role="menuitemcheckbox"]').forEach(it => it.addEventListener('click', e => {
+    e.stopPropagation();
+    const on = it.getAttribute('aria-checked') !== 'true';
+    it.setAttribute('aria-checked', String(on));
+    const t = it.querySelector('.tg'); if (t) t.classList.toggle('on', on);
+  }));
+})();
+</script>

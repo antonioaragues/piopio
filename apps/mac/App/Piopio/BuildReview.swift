@@ -12,6 +12,8 @@ struct BuildInspector: View {
     let session: ThreadModel
     /// Opens the commit sheet; nil when there's nothing to commit (or no git).
     let commit: (() -> Void)?
+    /// The agent's checklist; off in the Changes view, where Summary shows it.
+    var checklist = true
     let onReview: (String?) -> Void
     @State private var files: [FileChange] = []
     @State private var reverting: FileChange?
@@ -30,7 +32,7 @@ struct BuildInspector: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    if !session.todos.isEmpty { checklist }
+                    if checklist, !session.todos.isEmpty { ChecklistSection(todos: session.todos) }
                     changes
                     turnList
                 }
@@ -65,27 +67,6 @@ struct BuildInspector: View {
                     if let commit { Button("Commit…", action: commit).buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
                 }
                 .padding(.top, 8)
-            }
-        }
-    }
-
-    /// The agent's checklist (piopio-todos), latest version.
-    private var checklist: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                SectionLabel("Checklist")
-                Spacer()
-                Text("\(session.todos.filter { $0.status == .done }.count) / \(session.todos.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
-            }
-            ForEach(Array(session.todos.enumerated()), id: \.offset) { _, todo in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: todo.status == .done ? "checkmark.circle.fill" : todo.status == .inProgress ? "circle.dotted.circle" : "circle")
-                        .font(.system(size: 11))
-                        .foregroundStyle(todo.status == .inProgress ? Color.dsFg : Color.dsFg3)
-                    Text(todo.text).font(.system(size: 12.5)).foregroundStyle(todo.status == .done ? Color.dsFg3 : Color.dsFg)
-                        .strikethrough(todo.status == .done, color: Color.dsFg3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
         }
     }
@@ -545,5 +526,212 @@ struct DiffReview: View {
         case .hunk: Color.dsChip
         case .context: .clear
         }
+    }
+}
+
+// MARK: Summary (docs/design/session-panel)
+
+/// The agent's checklist (piopio-todos), latest version: shared by Summary and the Changes view.
+struct ChecklistSection: View {
+    let todos: [Todo]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                SectionLabel("Checklist")
+                Spacer()
+                Text("\(todos.filter { $0.status == .done }.count) / \(todos.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
+            }
+            ForEach(Array(todos.enumerated()), id: \.offset) { _, todo in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: todo.status == .done ? "checkmark.circle.fill" : todo.status == .inProgress ? "circle.dotted.circle" : "circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(todo.status == .inProgress ? Color.dsFg : Color.dsFg3)
+                    Text(todo.text).font(.system(size: 12.5)).foregroundStyle(todo.status == .done ? Color.dsFg3 : Color.dsFg)
+                        .strikethrough(todo.status == .done, color: Color.dsFg3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
+/// What a session has, in one column: where it runs (this Mac, the folder, the branch with its git menu, the
+/// permissions), how full its context is, the agent's checklist, and its results (the files it changed). The cost is
+/// at the bottom.
+struct SessionSummaryPanel: View {
+    let engine: EngineController
+    let session: ThreadModel
+    let summary: SessionSummary
+    let project: ProjectInfo?
+    let git: GitModel?
+    let chatLens: Bool
+    @Binding var committing: Bool
+    let onReview: (String?) -> Void
+    @State private var files: [FileChange] = []
+    @State private var compacting = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    whereItRuns
+                    if let context = session.state?.context { contextSection(context) }
+                    if !session.todos.isEmpty { ChecklistSection(todos: session.todos) }
+                    results
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+            }
+            Rectangle().fill(Color.dsLine).frame(height: 0.5)
+            HStack {
+                Text("This session").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                Spacer()
+                let cost = session.state?.usage.costUsd ?? 0
+                Text(cost > 0 && cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)).font(.system(size: 12).monospacedDigit())
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+        }
+        .task(id: session.revision / 4) { files = await session.changes(since: .session) }
+        .onChange(of: session.state?.status) { _, _ in Task { files = await session.changes(since: .session) } }
+    }
+
+    // MARK: Where it runs
+
+    private var whereItRuns: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            SectionLabel("Where it runs").padding(.bottom, 4)
+            SummaryRow(symbol: "laptopcomputer", title: "This Mac")
+            if let cwd = summary.cwd {
+                Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) } label: {
+                    SummaryRow(symbol: "folder", title: URL(fileURLWithPath: cwd).lastPathComponent, detail: Self.parent(cwd))
+                }
+                .buttonStyle(.plain)
+                .help("Reveal in Finder")
+            }
+            branchRow
+            if !chatLens {
+                HStack(spacing: 9) {
+                    Image(systemName: "checkmark.shield").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                    ApprovalModeMenu(engine: engine, session: session, project: project)
+                        .padding(.leading, -7)
+                    Spacer(minLength: 0)
+                }
+                .frame(minHeight: 26)
+                .help("What the agent may do without asking")
+            }
+        }
+    }
+
+    /// The branch (or the worktree's), what waits to sync, and the git menu.
+    @ViewBuilder private var branchRow: some View {
+        if let git, git.status?.repo == true {
+            HStack(spacing: 9) {
+                Image(systemName: summary.worktree?.finished == nil && summary.worktree != nil ? "square.split.2x1" : "arrow.triangle.branch")
+                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                Text(git.status?.branch ?? summary.worktree?.branch ?? "HEAD").font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                if let s = git.status, s.ahead + s.behind > 0 {
+                    Text([s.ahead > 0 ? "\(s.ahead) to push" : nil, s.behind > 0 ? "\(s.behind) to pull" : nil].compactMap { $0 }.joined(separator: " · "))
+                        .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                if !chatLens { GitMenu(git: git, engine: engine, summary: summary, committing: $committing, inRow: true) }
+            }
+            .frame(minHeight: 26)
+            if let worktree = summary.worktree, worktree.finished == nil {
+                Text("A separate copy, from \(worktree.base)").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.leading, 27)
+            }
+        } else if summary.cwd != nil {
+            SummaryRow(symbol: "arrow.triangle.branch", title: "No git", dim: true)
+        }
+    }
+
+    // MARK: Context
+
+    private func contextSection(_ context: SessionState.Context) -> some View {
+        let fraction = min(1, (context.tokens ?? 0) / max(1, context.window))
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                SectionLabel("Context")
+                Spacer()
+                Text("\(Int((fraction * 100).rounded()))%").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.dsLine)
+                    Capsule().fill(fraction > 0.85 ? Color.dsFg : Color.dsFg2).frame(width: max(3, 46 * fraction))
+                }
+                .frame(width: 46, height: 4)
+            }
+            HStack {
+                Text("\(context.tokens.map { ContextRing.short($0) } ?? "–") of \(ContextRing.short(context.window)) tokens")
+                    .font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+                Spacer()
+                if (context.tokens ?? 0) > 0 {
+                    Button(compacting ? "Compacting…" : "Compact") {
+                        compacting = true
+                        Task { await session.compact(); compacting = false }
+                    }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
+                    .disabled(session.isRunning || compacting)
+                    .help("Summarize the conversation so far to free up room")
+                }
+            }
+        }
+    }
+
+    // MARK: Results
+
+    private var results: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                SectionLabel("Results")
+                Spacer()
+                if !files.isEmpty {
+                    Button("Review") { onReview(nil) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
+                }
+            }
+            .padding(.bottom, 4)
+            if files.isEmpty {
+                Text("Files it changes show up here.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+            }
+            ForEach(files) { file in
+                Button { onReview(file.path) } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: file.status == .added ? "doc.badge.plus" : file.status == .deleted ? "doc.badge.ellipsis" : "doc")
+                            .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                        Text(URL(fileURLWithPath: file.path).lastPathComponent).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        Spacer(minLength: 4)
+                        if file.added > 0 { Text("+\(file.added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsGreen) }
+                        if file.removed > 0 { Text("−\(file.removed)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsRed) }
+                    }
+                    .frame(minHeight: 26)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(file.path)
+            }
+        }
+    }
+
+    /// "~/Proyectos".
+    static func parent(_ path: String) -> String {
+        URL(fileURLWithPath: path).deletingLastPathComponent().path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
+    }
+}
+
+/// A Summary row: a 16pt line icon, the value, and a grey detail.
+private struct SummaryRow: View {
+    let symbol: String
+    let title: String
+    var detail: String?
+    var dim = false
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 18)
+            Text(title).font(.system(size: 13)).foregroundStyle(dim ? Color.dsFg3 : Color.dsFg).lineLimit(1)
+            if let detail { Text("· \(detail)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.head) }
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: 26)
+        .contentShape(Rectangle())
     }
 }

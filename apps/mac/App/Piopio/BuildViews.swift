@@ -62,9 +62,10 @@ struct BuildSessionView: View {
     /// Shown in Chat (docs/spec/04-chat §2): file browser and preview instead of the terminal and git.
     var chatLens = false
 
-    /// Closed by default; opens the first time a turn changes files; your toggle is then kept per session (chat v3).
+    /// The right column (docs/design/session-panel): closed by default; opens on Summary the first time a turn changes
+    /// files; your toggle is then kept per session.
     @State private var showInspector = false
-    @AppStorage("inspectorTab") private var inspectorTab = ChatInspectorTab.changes
+    @AppStorage("inspectorTab") private var inspectorTab = SessionPanel.summary
     @State private var previewing: String?
     /// The file preview's width, dragged from its left edge (kept across sessions).
     @AppStorage("previewWidth") private var previewWidth: Double = 440
@@ -118,22 +119,22 @@ struct BuildSessionView: View {
             }
             if showInspector && !reviewing {
                 VStack(spacing: 0) {
-                    NeutralSegmented(selection: $inspectorTab, options: ChatInspectorTab.allCases.map { (value: $0, title: $0.rawValue) })
-                        .padding(.horizontal, 16)
-                        .padding(.top, 10)
-                    if inspectorTab == .files, let cwd = summary.cwd {
-                        FileBrowser(engine: engine, cwd: cwd, selected: $previewing, mention: { path in
-                            let current = session.draft ?? ""
-                            session.draft = current + (current.isEmpty || current.hasSuffix(" ") ? "" : " ") + "@\(path) "
-                        })
-                    } else {
-                        BuildInspector(session: session, commit: !chatLens && git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil) { file in
-                            reviewFile = file
-                            reviewing = true
+                    switch inspectorTab {
+                    case .files:
+                        if let cwd = summary.cwd {
+                            FileBrowser(engine: engine, cwd: cwd, selected: $previewing, mention: { path in
+                                let current = session.draft ?? ""
+                                session.draft = current + (current.isEmpty || current.hasSuffix(" ") ? "" : " ") + "@\(path) "
+                            })
                         }
+                    case .changes:
+                        BuildInspector(session: session, commit: canCommit ? { committing = true } : nil, checklist: false, onReview: review)
+                    case .summary:
+                        SessionSummaryPanel(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
+                                            committing: $committing, onReview: review)
                     }
                 }
-                .frame(width: 280)
+                .frame(width: 290)
                 .sidePanel()
             }
         }
@@ -141,7 +142,7 @@ struct BuildSessionView: View {
         .task(id: summary.ref.id) { showInspector = Self.inspectorChoice(summary.ref.id) ?? hasChanges }
         .onChange(of: hasChanges) { _, changed in
             if changed, Self.inspectorChoice(summary.ref.id) == nil {
-                inspectorTab = .changes
+                inspectorTab = .summary
                 withAnimation(.easeOut(duration: 0.15)) { showInspector = true }
             }
         }
@@ -249,14 +250,42 @@ struct BuildSessionView: View {
 
     private func toggleInspector() {
         withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() }
+        rememberInspector()
+    }
+
+    /// A toolbar view icon: opens the column on that view, or closes it when that view is already showing.
+    private func show(_ view: SessionPanel) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            if showInspector && inspectorTab == view { showInspector = false } else { inspectorTab = view; showInspector = true }
+        }
+        rememberInspector()
+    }
+
+    private func rememberInspector() {
         var all = (UserDefaults.standard.dictionary(forKey: "inspectorOpen") as? [String: Bool]) ?? [:]
         all[summary.ref.id] = showInspector
         UserDefaults.standard.set(all, forKey: "inspectorOpen")
     }
 
-    /// The toolbar (docs/design/grey 9a): the title (it opens the session tree) and "project · branch", then Git,
-    /// Open and the inspector as ghost buttons. Status and cost aren't here: status is in the sidebar, cost in the
-    /// inspector's footer.
+    private var canCommit: Bool { !chatLens && git?.status?.repo == true && (git?.changedCount ?? 0) > 0 }
+
+    private func review(_ file: String?) {
+        reviewFile = file
+        reviewing = true
+    }
+
+    private func viewButton(_ view: SessionPanel) -> some View {
+        let on = showInspector && inspectorTab == view
+        return Button { show(view) } label: { Image(systemName: view.symbol) }
+            .buttonStyle(IconButtonStyle(on: on))
+            .accessibilityLabel(view.rawValue)
+            .accessibilityAddTraits(on ? .isSelected : [])
+            .help(on ? "Hide \(view.rawValue.lowercased())" : view.help)
+    }
+
+    /// The toolbar (docs/design/session-panel): the title (it opens the session tree) and "project · branch", then the
+    /// views as icons (Summary, Changes, Files, Terminal), a divider, Open in and ···. Git lives in Summary's branch
+    /// row. Status and cost aren't here: status is in the sidebar, cost in the column's footer.
     private var header: some View {
         PageHeader {
             Button { session.showTree = true } label: { PageTitle(name: summary.title, subtitle: subtitle) }
@@ -266,13 +295,35 @@ struct BuildSessionView: View {
                     SessionTreePopover(session: session)
                 }
         } actions: {
-            if !chatLens, let git, git.status?.repo == true { GitMenu(git: git, engine: engine, summary: summary, committing: $committing) }
-            if let cwd = summary.cwd { OpenMenu(path: cwd) }
-            Button { toggleInspector() } label: { Image(systemName: "sidebar.right") }
-                .buttonStyle(IconButtonStyle(on: showInspector))
-                .accessibilityLabel(showInspector ? "Hide inspector" : "Show inspector")
-                .keyboardShortcut("i", modifiers: [.command, .shift])
-                .help(showInspector ? "Hide the inspector (⌘⇧I)" : "Changes, files and turns (⌘⇧I)")
+            HStack(spacing: 2) {
+                viewButton(.summary)
+                viewButton(.changes)
+                viewButton(.files)
+                if !chatLens {
+                    Button { showTerminal.toggle() } label: { Image(systemName: "apple.terminal") }
+                        .buttonStyle(IconButtonStyle(on: showTerminal))
+                        .accessibilityLabel("Terminal")
+                        .help(showTerminal ? "Hide the terminal (⌃`)" : "Terminal (⌃`)")
+                }
+            }
+            Rectangle().fill(Color.dsLine).frame(width: 0.5, height: 18).padding(.horizontal, 4)
+            if let cwd = summary.cwd { OpenMenu(path: cwd, iconOnly: true) }
+            Menu {
+                Button("Session Tree") { session.showTree = true }
+                Button("Review All Changes") { review(nil) }
+                if let cwd = summary.cwd {
+                    Divider()
+                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) }
+                    Button("Copy Path") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(cwd, forType: .string)
+                    }
+                }
+            } label: { Image(systemName: "ellipsis") }
+                .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
+                .accessibilityLabel("More")
+                .help("Session tree, review, Finder")
+            Button("") { toggleInspector() }.keyboardShortcut("i", modifiers: [.command, .shift]).hidden().frame(width: 0)
         }
         .background {
             Button("") { if !chatLens { showTerminal.toggle() } }.keyboardShortcut("`", modifiers: .control).hidden()
@@ -298,9 +349,25 @@ struct BuildSessionView: View {
 }
 
 
-enum ChatInspectorTab: String, CaseIterable {
-    case changes = "Changes"
-    case files = "Files"
+/// The right column's views, each an icon in the session toolbar (docs/design/session-panel).
+enum SessionPanel: String, CaseIterable {
+    case summary = "Summary", changes = "Changes", files = "Files"
+
+    var symbol: String {
+        switch self {
+        case .summary: "list.bullet.rectangle"
+        case .changes: "plus.forwardslash.minus"
+        case .files: "folder"
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .summary: "Summary: where it runs, context, checklist and results (⌘⇧I)"
+        case .changes: "What this session changed, and its turns"
+        case .files: "The project's files"
+        }
+    }
 }
 
 /// Build with no session selected (docs/design 5c, 7a). With no project yet: open a folder (button, ⌘O or drop).

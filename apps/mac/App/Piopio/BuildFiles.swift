@@ -48,6 +48,8 @@ struct Editor: Identifiable, Hashable {
 /// the button repeats the last choice, whose app icon it shows.
 struct OpenMenu: View {
     let path: String
+    /// The toolbar shows only the icon; the app's name is in the tooltip.
+    var iconOnly = false
     @AppStorage("lastOpenTarget") private var last = ""
     @AppStorage("editor") private var defaultEditor = ""
 
@@ -78,9 +80,11 @@ struct OpenMenu: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.up.forward.square").font(.system(size: 14)).accessibilityHidden(true)
-                Text("Open in \(name(target))").font(.system(size: 13))
+                if !iconOnly { Text("Open in \(name(target))").font(.system(size: 13)) }
             }
             .accessibilityElement(children: .combine)
+            .accessibilityLabel("Open in \(name(target))")
+            .help("Open in \(name(target))")
         } primaryAction: {
             open(target)
         }
