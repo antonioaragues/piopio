@@ -189,14 +189,6 @@ struct Composer: View {
                 }
                 if isBuild { EditModeChip(engine: engine, thread: thread) }
                 if thread.debate != nil { Text("Debate").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6) }
-                // Web search is switched in the + menu; while it's on, a globe says so (a click turns it off).
-                if thread.editing == nil, hasWebSwitch, thread.webEnabled {
-                    Button { Task { await thread.setWeb(false) } } label: { Image(systemName: "globe").font(.system(size: 12.5)) }
-                        .buttonStyle(IconButtonStyle(size: 26))
-                        .help("Web search is on (click to turn it off)")
-                        .accessibilityLabel("Web search on")
-                        .accessibilityHint("Turns web search off")
-                }
                 Spacer(minLength: 6)
                 if let debate = thread.debate, debate.status == .running {
                     Text("Round \(debate.round) of up to \(debate.maxRounds)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6)
@@ -837,6 +829,22 @@ struct AddMenu: View {
 
     var body: some View {
         Menu {
+            Group { items }.labelStyle(.titleAndIcon)
+        } label: {
+            Image(systemName: "plus").font(.system(size: size > 30 ? 15 : 13))
+        }
+        .menuStyle(.button)
+        .buttonStyle(IconButtonStyle(size: size))
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .overlay { if bordered { RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1).allowsHitTesting(false) } }
+        .background { Button("", action: files).keyboardShortcut("u", modifiers: .command).hidden() }
+        .help("Add files, a folder, commands\(web != nil ? ", web search" : "") or extensions")
+        .accessibilityLabel("Add to this conversation")
+    }
+
+    /// The menu's items; their icons show (macOS menus hide a Label's icon unless asked).
+    @ViewBuilder private var items: some View {
             Button(action: files) { Label(filesTitle, systemImage: "paperclip") }
                 .keyboardShortcut("u", modifiers: .command)
             Button(action: folder) { Label(folderTitle, systemImage: "folder") }
@@ -855,16 +863,5 @@ struct AddMenu: View {
                 NotificationCenter.default.post(name: .settingsSection, object: "Extensions")
                 WindowOpener.shared.openSettings?()
             } label: { Label("Add extensions…", systemImage: "puzzlepiece.extension") }
-        } label: {
-            Image(systemName: "plus").font(.system(size: size > 30 ? 15 : 13))
-        }
-        .menuStyle(.button)
-        .buttonStyle(IconButtonStyle(size: size))
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .overlay { if bordered { RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1).allowsHitTesting(false) } }
-        .background { Button("", action: files).keyboardShortcut("u", modifiers: .command).hidden() }
-        .help("Add files, a folder, commands\(web != nil ? ", web search" : "") or extensions")
-        .accessibilityLabel("Add to this conversation")
     }
 }

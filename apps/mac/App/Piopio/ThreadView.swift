@@ -87,12 +87,13 @@ struct ThreadView: View {
     private var header: some View {
         PageHeader(summary.title, subtitle: subtitle) {
             if let debate = thread.debate { debateControls(debate) } else {
+                ToolbarIcon(symbol: "list.bullet.rectangle", label: "Summary", on: showSummary || Self.demoSummary,
+                            help: showSummary ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
+                    withAnimation(.easeOut(duration: 0.15)) { showSummary.toggle() }
+                }
                 moveMenu
-                Button { withAnimation(.easeOut(duration: 0.15)) { showSummary.toggle() } } label: { Image(systemName: "list.bullet.rectangle") }
-                    .buttonStyle(IconButtonStyle(on: showSummary))
-                    .accessibilityLabel("Summary")
-                    .help(showSummary ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources")
             }
+            ToolbarDivider()
             Menu {
                 Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
                 Divider()
@@ -125,9 +126,10 @@ struct ThreadView: View {
             }
             if !engine.spaces.isEmpty { Divider() }
             Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: summary.ref.id) }
-        } label: { Text("Move to Notebook…") }
-            .menuStyle(.button).buttonStyle(PillStyle(kind: .toolbar)).menuIndicator(.hidden).fixedSize()
-            .help("Make this chat a topic in a notebook")
+        } label: { Image(systemName: "book.closed") }
+            .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel("Move to a notebook")
+            .help("Move to a notebook: this chat becomes one of its topics")
     }
 
     /// Debates: stop it while it runs, add rounds once it ended, and show or hide the draft panel.
@@ -139,8 +141,7 @@ struct ThreadView: View {
             Button("Keep going") { Task { await thread.continueDebate() } }
                 .buttonStyle(PillStyle(kind: .toolbar)).help("Add as many rounds again as it started with")
         }
-        Button { showPanel.toggle() } label: { Image(systemName: "sidebar.right") }
-            .buttonStyle(IconButtonStyle(on: showPanel)).help(showPanel ? "Hide the draft" : "Show the draft and objections")
+        ToolbarIcon(symbol: "doc.text", label: "Draft", on: showPanel, help: showPanel ? "Hide the draft" : "The draft and objections") { showPanel.toggle() }
     }
 
     private var subtitle: String {

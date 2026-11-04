@@ -276,11 +276,7 @@ struct BuildSessionView: View {
 
     private func viewButton(_ view: SessionPanel) -> some View {
         let on = showInspector && inspectorTab == view
-        return Button { show(view) } label: { Image(systemName: view.symbol) }
-            .buttonStyle(IconButtonStyle(on: on))
-            .accessibilityLabel(view.rawValue)
-            .accessibilityAddTraits(on ? .isSelected : [])
-            .help(on ? "Hide \(view.rawValue.lowercased())" : view.help)
+        return ToolbarIcon(symbol: view.symbol, label: view.rawValue, on: on, help: on ? "Hide \(view.rawValue.lowercased())" : view.help) { show(view) }
     }
 
     /// The toolbar (docs/design/session-panel): the title (it opens the session tree) and "project · branch", then the
@@ -306,7 +302,7 @@ struct BuildSessionView: View {
                         .help(showTerminal ? "Hide the terminal (⌃`)" : "Terminal (⌃`)")
                 }
             }
-            Rectangle().fill(Color.dsLine).frame(width: 0.5, height: 18).padding(.horizontal, 4)
+            ToolbarDivider()
             if let cwd = summary.cwd { OpenMenu(path: cwd, iconOnly: true) }
             Menu {
                 Button("Session Tree") { session.showTree = true }

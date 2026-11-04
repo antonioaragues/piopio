@@ -77,3 +77,19 @@ Checked with captures: a chat's column (model, web search, "Connectors and MCP �
 Settings, two shared files) and Build's Summary with the section back ("1 on"). `git.log` has an engine test. Not
 seen in a capture: a commit row (the scripted commit waited for approval), sources from a real web search, and the
 notebook section; nothing was clicked, because the user's own Piopio was open.
+
+## The same toolbar everywhere (2026-11-05)
+
+Views first as icons (lit while showing; `ToolbarIcon`), then a divider and ··· (`ToolbarDivider`):
+
+| Where | Views | After the divider |
+|---|---|---|
+| Build session | Summary · Changes · Files · Terminal | Open in · ··· |
+| Chat | Summary · Move to a notebook (a menu) | ··· (copy, export, cost) |
+| Debate | Stop or Keep going (text) · Draft | ··· |
+| Notebook | Topics (the right column) · Go to a topic (when the column is hidden) · Memory · Files | ··· |
+| Agent | Info · Activity · Setup · Run now | ··· (pause, Finder) |
+
+The "All topics" and "Back to the conversation" pills are gone: the title's breadcrumb, or the lit icon, goes back.
+The composer no longer shows a globe for web search (it's a switch in the + menu and in a chat's Summary), and the +
+menu's items show their icons.

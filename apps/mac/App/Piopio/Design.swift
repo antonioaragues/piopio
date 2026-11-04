@@ -206,6 +206,29 @@ private struct IconButtonBody: View {
     }
 }
 
+/// A toolbar view icon (docs/design/session-panel): it shows or hides a view, and is lit while that view shows.
+/// Build sessions, chats, notebooks and agents all put their views first, then a divider and ···.
+struct ToolbarIcon: View {
+    let symbol: String
+    let label: String
+    var on = false
+    var help: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) { Image(systemName: symbol) }
+            .buttonStyle(IconButtonStyle(on: on))
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(on ? .isSelected : [])
+            .help(help ?? label)
+    }
+}
+
+/// The hairline between a toolbar's views and its actions.
+struct ToolbarDivider: View {
+    var body: some View { Rectangle().fill(Color.dsLine).frame(width: 0.5, height: 18).padding(.horizontal, 4).accessibilityHidden(true) }
+}
+
 /// The neutral segmented control (docs/design/grey): a `track` fill, the selected segment on `seg` with a hairline.
 struct NeutralSegmented<Value: Hashable>: View {
     @Binding var selection: Value

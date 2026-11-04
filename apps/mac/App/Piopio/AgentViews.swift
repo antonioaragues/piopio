@@ -185,25 +185,31 @@ struct AgentPage: View {
                 Button("Setup has errors") { tab = .setup }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
             }
             if tab == .chat && people.count > 1 { personPicker }
-            if tab == .chat {
-                Button("Run now") { runNow() }.buttonStyle(PillStyle(kind: .toolbar))
-                Menu {
-                    if let status = summary.agent?.status {
-                        Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
-                    }
-                    Button("Activity") { tab = .activity }
-                    Button("Full Setup") { tab = .setup }
-                    Divider()
-                    Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
-                } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
-                    .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-                Button { withAnimation(.easeOut(duration: 0.15)) { showInfo.toggle() } } label: { Image(systemName: "info.circle") }
-                    .buttonStyle(IconButtonStyle(on: showInfo))
-                    .accessibilityLabel(showInfo ? "Hide info" : "Show info")
-                    .help(showInfo ? "Hide the info panel" : "What it does, when, and what it can do")
-            } else {
-                Button("Back to the conversation") { tab = .chat }.buttonStyle(PillStyle(kind: .toolbar))
+            // Views as icons (docs/design/session-panel): the info panel beside the conversation, and Activity and
+            // Setup in its place (the lit one goes back to the conversation).
+            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Info", on: tab == .chat && showInfo,
+                        help: "What it does, when, and what it can do") {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if tab != .chat { tab = .chat; showInfo = true } else { showInfo.toggle() }
+                }
             }
+            ToolbarIcon(symbol: "clock.arrow.circlepath", label: "Activity", on: tab == .activity, help: "Its runs: what fired, what it did, what it cost") {
+                tab = tab == .activity ? .chat : .activity
+            }
+            ToolbarIcon(symbol: "slider.horizontal.3", label: "Setup", on: tab == .setup, help: "Its full setup") {
+                tab = tab == .setup ? .chat : .setup
+            }
+            ToolbarIcon(symbol: "play", label: "Run now", help: "Run it now") { runNow() }
+            ToolbarDivider()
+            Menu {
+                if let status = summary.agent?.status {
+                    Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
+                    Divider()
+                }
+                Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
+            } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
+                .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
+                .help("Pause, Finder")
         }
     }
 

@@ -82,6 +82,7 @@ struct ToolChoicesMenu: View {
         } label: {
             Label(summary, systemImage: "square.grid.2x2")
         }
+        .labelStyle(.titleAndIcon)
     }
 
     @ViewBuilder private func section(_ title: String, _ items: [ToolChoice]) -> some View {

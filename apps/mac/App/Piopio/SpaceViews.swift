@@ -665,19 +665,24 @@ struct SpaceView: View {
                 PageTitle(name: space.title, subtitle: subtitle)
             }
         } actions: {
-            if topic != nil {
-                Button("All topics") { selection = space.ref.id }.buttonStyle(PillStyle(kind: .toolbar)).help("Back to the notebook's main conversation")
+            // Views as icons (docs/design/session-panel); the title's notebook name goes back to Main from a topic.
+            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Topics", on: topicsVisible,
+                        help: showTopics ? "Hide topics" : "Topics, memory, files and connectors") {
+                withAnimation(.easeOut(duration: 0.15)) { showTopics.toggle() }
             }
             if !topicsVisible, !topics.isEmpty {
                 Menu {
+                    Button("Main") { selection = space.ref.id }
+                    Divider()
                     ForEach(topics) { t in Button(t.title) { selection = space.ref(topic: t.id).key } }
-                } label: { Text("Topics") }
-                    .menuStyle(.button).buttonStyle(PillStyle(kind: .toolbar)).menuIndicator(.hidden).fixedSize()
+                } label: { Image(systemName: "rectangle.stack") }
+                    .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel("Go to a topic")
+                    .help("Go to a topic")
             }
-            Button { withAnimation(.easeOut(duration: 0.15)) { showTopics.toggle() } } label: { Image(systemName: "sidebar.right") }
-                .buttonStyle(IconButtonStyle(on: topicsVisible))
-                .accessibilityLabel(showTopics ? "Hide topics" : "Show topics")
-                .help(showTopics ? "Hide topics" : "Show topics, memory and files")
+            ToolbarIcon(symbol: "brain", label: "Memory", on: showMemory, help: "What the notebook remembers") { showMemory = true }
+            ToolbarIcon(symbol: "folder", label: "Files", on: showFiles, help: "The notebook's files") { showFiles = true }
+            ToolbarDivider()
             Menu {
                 SpaceMenu(engine: engine, space: space, selection: $selection)
             } label: {
