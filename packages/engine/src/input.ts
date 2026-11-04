@@ -18,7 +18,7 @@ export function isUserEntry(kind: string): boolean {
 	return kind === "pi.user" || kind === USER_ENTRY;
 }
 
-export function buildInput(text: string, attachments: readonly Attachment[] = []): BuiltInput {
+export function buildInput(text: string, attachments: readonly (Attachment & { stored?: string })[] = []): BuiltInput {
 	if (attachments.length === 0) return { content: text };
 	const images = attachments.filter((a) => a.kind === "image");
 	if (images.length > LIMITS.images) throw new EngineError("INVALID", `At most ${LIMITS.images} images per message.`);
@@ -29,14 +29,14 @@ export function buildInput(text: string, attachments: readonly Attachment[] = []
 		if (a.kind === "image") {
 			if (a.data.length > LIMITS.imageBase64Bytes) throw new EngineError("INVALID", `${a.name} is too large; images are limited to about 6 MB.`);
 			blocks.push({ type: "image", data: a.data, mimeType: a.mimeType });
-			infos.push({ name: a.name, kind: "image", mimeType: a.mimeType, size: Math.floor((a.data.length * 3) / 4) });
+			infos.push({ name: a.name, kind: "image", mimeType: a.mimeType, size: Math.floor((a.data.length * 3) / 4), ...(a.stored ? { stored: a.stored } : {}) });
 		} else {
 			let body = a.text;
 			if (body.length > LIMITS.textChars) body = `${body.slice(0, LIMITS.textChars)}\n[… truncated: the file has ${a.text.length} characters]`;
 			totalText += body.length;
 			if (totalText > LIMITS.totalTextChars) throw new EngineError("INVALID", "The attached files are too long together. Attach fewer or shorter files.");
 			blocks.push({ type: "text", text: `<attachment name="${a.name.replaceAll('"', "'")}">\n${body}\n</attachment>` });
-			infos.push({ name: a.name, kind: "text", ...(a.mimeType ? { mimeType: a.mimeType } : {}), size: a.text.length });
+			infos.push({ name: a.name, kind: "text", ...(a.mimeType ? { mimeType: a.mimeType } : {}), size: a.text.length, ...(a.stored ? { stored: a.stored } : {}) });
 		}
 	}
 	blocks.push({ type: "text", text });

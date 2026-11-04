@@ -278,6 +278,34 @@ describe("milestone 1.3", () => {
 		expect(reopened.items.find((i) => i.kind === "user")).toMatchObject({ attachments: [{ name: "notes.md" }] });
 	});
 
+	test("sent files are kept to show again: originals copied, the rest as sent; branches copy them, delete removes them", async () => {
+		const a = await start();
+		const folder = mkdtempSync(join(tmpdir(), "piopio-files-"));
+		writeFileSync(join(folder, "report.pdf"), "%PDF-1.4 original bytes");
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: "Read these", attachments: [
+			{ kind: "text", name: "report.pdf", mimeType: "application/pdf", text: "The extracted text", path: join(folder, "report.pdf") },
+			{ kind: "text", name: "../notes.md", text: "# Pasted notes" },
+			{ kind: "text", name: "scan.pdf", mimeType: "application/pdf", text: "Text only" },
+		] } });
+		const s = await settled(a, ref);
+		const user = s.items.find((i) => i.kind === "user");
+		const files = user?.kind === "user" ? user.attachments ?? [] : [];
+		const dir = join(a.home, "attachments", ref.id);
+		expect(files.map((f) => f.stored?.split("/")[1])).toEqual(["report.pdf", "notes.md", "scan.pdf.txt"]);
+		expect(readFileSync(join(dir, files[0]!.stored!), "utf8")).toBe("%PDF-1.4 original bytes");
+		expect(readFileSync(join(dir, files[1]!.stored!), "utf8")).toBe("# Pasted notes");
+		const answer = s.items.find((i) => i.kind === "assistant");
+		expect(answer?.kind === "assistant" && answer.parts.map((p) => p.text).join("")).not.toContain(folder);
+
+		const branch = await a.client.call("sessions.fork", { ref, itemId: user!.id });
+		expect(existsSync(join(a.home, "attachments", branch.ref.id, files[0]!.stored!))).toBe(true);
+		await a.client.call("sessions.delete", { ref });
+		expect(existsSync(dir)).toBe(false);
+		expect(existsSync(join(a.home, "attachments", branch.ref.id))).toBe(true);
+	});
+
 	test("images need a vision model", async () => {
 		const a = await start();
 		a.client.secrets["provider.openrouter.apiKey"] = "sk-or-test";

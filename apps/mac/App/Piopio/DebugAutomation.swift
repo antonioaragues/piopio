@@ -97,6 +97,11 @@ enum DebugAutomation {
                 // PIOPIO_DEMO_ATTACH: colon-separated file paths attached to the first message.
                 let files = (env["PIOPIO_DEMO_ATTACH"] ?? "").split(separator: ":").compactMap { try? AttachmentLoader.load(URL(fileURLWithPath: String($0))).attachment }
                 await thread.send(prompt, attachments: files)
+                // PIOPIO_DEMO_OPEN_ATTACHMENT=1: then open the first file sent, in the viewer.
+                if env["PIOPIO_DEMO_OPEN_ATTACHMENT"] == "1" {
+                    await waitIdle(thread)
+                    if case .user(let u)? = thread.document.lastUser, let stored = u.attachments?.first?.stored { thread.handle(.openAttachment(stored: stored)) }
+                }
                 // PIOPIO_DEMO_FOLLOWUP: a second message; PIOPIO_DEMO_EDIT: then edit it into this text.
                 if let followUp = env["PIOPIO_DEMO_FOLLOWUP"] {
                     await waitIdle(thread)

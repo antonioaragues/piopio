@@ -81,13 +81,23 @@ export const BranchInfo = Type.Object({
 export type BranchInfo = Static<typeof BranchInfo>;
 
 /** A file sent with a message, as the transcript shows it. */
-export const AttachmentInfo = Type.Object({ name: Type.String(), kind: literals("image", "text"), mimeType: Type.Optional(Type.String()), size: Type.Optional(Type.Number()) });
+export const AttachmentInfo = Type.Object({
+	name: Type.String(),
+	kind: literals("image", "text"),
+	mimeType: Type.Optional(Type.String()),
+	size: Type.Optional(Type.Number()),
+	/** Where Piopio keeps a copy, relative to `<home>/attachments/<container id>/` (to show it again). */
+	stored: Type.Optional(Type.String()),
+});
 export type AttachmentInfo = Static<typeof AttachmentInfo>;
 
-/** A file to send. Clients prepare it: images as base64 (already downscaled), documents as extracted text. */
+/**
+ * A file to send. Clients prepare it: images as base64 (already downscaled), documents as extracted text. `path` is the
+ * original on this Mac, which the engine copies so the file can be shown again; it never reaches the model.
+ */
 export const Attachment = Type.Union([
-	Type.Object({ kind: Type.Literal("image"), name: Type.String(), mimeType: Type.String(), data: Type.String() }),
-	Type.Object({ kind: Type.Literal("text"), name: Type.String(), mimeType: Type.Optional(Type.String()), text: Type.String() }),
+	Type.Object({ kind: Type.Literal("image"), name: Type.String(), mimeType: Type.String(), data: Type.String(), path: Type.Optional(Type.String()) }),
+	Type.Object({ kind: Type.Literal("text"), name: Type.String(), mimeType: Type.Optional(Type.String()), text: Type.String(), path: Type.Optional(Type.String()) }),
 ]);
 export type Attachment = Static<typeof Attachment>;
 

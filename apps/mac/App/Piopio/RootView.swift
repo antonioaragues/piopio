@@ -75,6 +75,7 @@ struct RootView: View {
                 }
             }
         }
+        .modifier(FileViewerSheet())
         .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in
             // ⌘N follows the selection: a session in its project, otherwise a chat (in the areas that are on).
             let areas = Areas.shared.set

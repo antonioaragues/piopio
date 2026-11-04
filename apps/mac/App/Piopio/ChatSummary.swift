@@ -86,14 +86,22 @@ struct ChatSummaryPanel: View {
                 Text("Files you share and pages it reads show up here.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(found.files, id: \.self) { name in
-                HStack(spacing: 9) {
-                    Image(systemName: "paperclip").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                    Text(name).font(.system(size: 13)).lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text("shared").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+            ForEach(found.files, id: \.name) { file in
+                Button {
+                    if let stored = file.stored { thread.handle(.openAttachment(stored: stored)) }
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: "paperclip").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                        Text(file.name).font(.system(size: 13)).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text("shared").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    }
+                    .frame(minHeight: 26)
+                    .contentShape(Rectangle())
                 }
-                .frame(minHeight: 26)
+                .buttonStyle(.plain)
+                .disabled(file.stored == nil)
+                .help(file.stored == nil ? "Sent before Piopio kept copies of files" : "Open \(file.name)")
             }
             ForEach(found.pages, id: \.url) { page in
                 Button { if let url = URL(string: page.url) { NSWorkspace.shared.open(url) } } label: {
@@ -116,7 +124,7 @@ struct ChatSummaryPanel: View {
 /// What a chat produced and used: the files you attached, and the pages it opened or found while searching.
 struct ChatResults {
     struct Page: Hashable { let url: String; let title: String; var host: String { URL(string: url)?.host()?.replacingOccurrences(of: "www.", with: "") ?? "" } }
-    var files: [String] = []
+    var files: [AttachmentInfo] = []
     var pages: [Page] = []
 
     init(items: [TimelineItem]) {
@@ -137,7 +145,10 @@ struct ChatResults {
         for item in items {
             switch item {
             case .user(let u):
-                for a in u.attachments ?? [] where seenFiles.insert(a.name).inserted { files.append(a.name) }
+                // The latest copy of a file sent more than once.
+                for a in u.attachments ?? [] {
+                    if seenFiles.insert(a.name).inserted { files.append(a) } else if let i = files.firstIndex(where: { $0.name == a.name }), a.stored != nil { files[i] = a }
+                }
             case .tool(let t): add(t)
             case .steps(let s): s.tools.forEach(add)
             default: break

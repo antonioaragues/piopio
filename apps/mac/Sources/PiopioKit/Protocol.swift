@@ -63,7 +63,9 @@ public struct AttachmentInfo: Codable, Sendable, Hashable {
     public var kind: Kind
     public var mimeType: String?
     public var size: Double?
-    public init(name: String, kind: Kind, mimeType: String? = nil, size: Double? = nil) { self.name = name; self.kind = kind; self.mimeType = mimeType; self.size = size }
+    /// Where the engine keeps a copy, relative to `<home>/attachments/<container id>/`; nil for files sent before it kept them.
+    public var stored: String?
+    public init(name: String, kind: Kind, mimeType: String? = nil, size: Double? = nil, stored: String? = nil) { self.name = name; self.kind = kind; self.mimeType = mimeType; self.size = size; self.stored = stored }
 }
 
 public struct UserItem: Codable, Sendable, Hashable {
@@ -1220,26 +1222,29 @@ public struct ListSessionsResult: Decodable, Sendable { public var sessions: [Se
 
 /// A file to send: images as base64 (prepared by the client), documents as extracted text.
 public enum Attachment: Codable, Sendable, Hashable {
-    case image(name: String, mimeType: String, data: String)
-    case text(name: String, mimeType: String?, text: String)
+    /// `path`: the original on this Mac, which the engine keeps a copy of so it can be shown again.
+    case image(name: String, mimeType: String, data: String, path: String? = nil)
+    case text(name: String, mimeType: String?, text: String, path: String? = nil)
 
-    private enum Key: String, CodingKey { case kind, name, mimeType, data, text }
+    public var name: String { switch self { case .image(let n, _, _, _), .text(let n, _, _, _): n } }
+
+    private enum Key: String, CodingKey { case kind, name, mimeType, data, text, path }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Key.self)
         let name = try c.decode(String.self, forKey: .name)
         switch try c.decode(String.self, forKey: .kind) {
-        case "image": self = .image(name: name, mimeType: try c.decode(String.self, forKey: .mimeType), data: try c.decode(String.self, forKey: .data))
-        case "text": self = .text(name: name, mimeType: try c.decodeIfPresent(String.self, forKey: .mimeType), text: try c.decode(String.self, forKey: .text))
+        case "image": self = .image(name: name, mimeType: try c.decode(String.self, forKey: .mimeType), data: try c.decode(String.self, forKey: .data), path: try c.decodeIfPresent(String.self, forKey: .path))
+        case "text": self = .text(name: name, mimeType: try c.decodeIfPresent(String.self, forKey: .mimeType), text: try c.decode(String.self, forKey: .text), path: try c.decodeIfPresent(String.self, forKey: .path))
         default: throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "Unknown attachment kind")
         }
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: Key.self)
         switch self {
-        case .image(let name, let mime, let data):
-            try c.encode("image", forKey: .kind); try c.encode(name, forKey: .name); try c.encode(mime, forKey: .mimeType); try c.encode(data, forKey: .data)
-        case .text(let name, let mime, let text):
-            try c.encode("text", forKey: .kind); try c.encode(name, forKey: .name); try c.encodeIfPresent(mime, forKey: .mimeType); try c.encode(text, forKey: .text)
+        case .image(let name, let mime, let data, let path):
+            try c.encode("image", forKey: .kind); try c.encode(name, forKey: .name); try c.encode(mime, forKey: .mimeType); try c.encode(data, forKey: .data); try c.encodeIfPresent(path, forKey: .path)
+        case .text(let name, let mime, let text, let path):
+            try c.encode("text", forKey: .kind); try c.encode(name, forKey: .name); try c.encodeIfPresent(mime, forKey: .mimeType); try c.encode(text, forKey: .text); try c.encodeIfPresent(path, forKey: .path)
         }
     }
 }

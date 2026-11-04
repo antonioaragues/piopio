@@ -48,6 +48,8 @@ public enum TranscriptAction: Equatable, Sendable {
     case copyText(String)
     /// Stopped · continue: asks the model to carry on.
     case continueAnswer
+    /// A file you sent: the engine's copy, relative to the conversation's attachments folder (roadmap D8).
+    case openAttachment(stored: String)
     public enum PlanAnswer: String, Sendable { case approve, edit, revise }
 
     static let scheme = "piopio-action"
@@ -84,6 +86,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .continueDebate: c.host = "continue-debate"
         case .copyText(let text): c.host = "copy-text"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         case .continueAnswer: c.host = "continue-answer"
+        case .openAttachment(let stored): c.host = "attachment"; c.queryItems = [URLQueryItem(name: "stored", value: stored)]
         }
         return c.url!
     }
@@ -120,6 +123,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "continue-debate": self = .continueDebate
         case "copy-text": guard let text = q("text") else { return nil }; self = .copyText(text)
         case "continue-answer": self = .continueAnswer
+        case "attachment": guard let stored = q("stored") else { return nil }; self = .openAttachment(stored: stored)
         default: return nil
         }
     }

@@ -46,8 +46,14 @@ struct FileContentView: View {
     @State private var showSource = false
 
     var body: some View {
+        if FileManager.default.fileExists(atPath: url.path) { content } else {
+            Text("This file isn't here anymore.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var content: some View {
         let kind = FileKind.of(url)
-        VStack(spacing: 0) {
+        return VStack(spacing: 0) {
             if kind == .markdown {
                 HStack {
                     Spacer()
@@ -280,7 +286,31 @@ private struct QuickLookView: NSViewRepresentable {
     }
 }
 
-/// A file in a sheet (a notebook's files): its name and size, Open with the default app, Reveal in Finder, Done.
+extension Notification.Name {
+    /// Show a file (its URL is the object) in the viewer sheet, from anywhere: a file you sent in a conversation.
+    static let viewFile = Notification.Name("piopio.viewFile")
+}
+
+/// A file being viewed, for `.sheet(item:)`.
+struct ViewedFile: Identifiable {
+    let url: URL
+    var id: String { url.path }
+}
+
+/// Shows files posted with `.viewFile` in the viewer sheet (the main window has one).
+struct FileViewerSheet: ViewModifier {
+    @State private var viewed: ViewedFile?
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .viewFile)) { note in
+                if let url = note.object as? URL { viewed = ViewedFile(url: url) }
+            }
+            .sheet(item: $viewed) { FileSheet(url: $0.url) }
+    }
+}
+
+/// A file in a sheet (a notebook's files, files you sent): its name and size, Open with the default app, Reveal in Finder, Done.
 struct FileSheet: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss

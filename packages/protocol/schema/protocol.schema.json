@@ -91,6 +91,9 @@
 									},
 									"size": {
 										"type": "number"
+									},
+									"stored": {
+										"type": "string"
 									}
 								}
 							}
@@ -2213,6 +2216,9 @@
 													},
 													"size": {
 														"type": "number"
+													},
+													"stored": {
+														"type": "string"
 													}
 												}
 											}
@@ -3830,6 +3836,9 @@
 													},
 													"size": {
 														"type": "number"
+													},
+													"stored": {
+														"type": "string"
 													}
 												}
 											}
@@ -5427,6 +5436,9 @@
 													},
 													"size": {
 														"type": "number"
+													},
+													"stored": {
+														"type": "string"
 													}
 												}
 											}
@@ -7607,6 +7619,9 @@
 																},
 																"size": {
 																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
 																}
 															}
 														}
@@ -9768,6 +9783,9 @@
 												},
 												"size": {
 													"type": "number"
+												},
+												"stored": {
+													"type": "string"
 												}
 											}
 										}
@@ -12196,6 +12214,12 @@
 							]
 						}
 					}
+				},
+				"toolsOff": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
 				}
 			}
 		},
@@ -12281,6 +12305,9 @@
 																},
 																"size": {
 																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
 																}
 															}
 														}
@@ -13898,6 +13925,9 @@
 																},
 																"size": {
 																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
 																}
 															}
 														}
@@ -15495,6 +15525,9 @@
 																},
 																"size": {
 																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
 																}
 															}
 														}
@@ -17675,6 +17708,9 @@
 																			},
 																			"size": {
 																				"type": "number"
+																			},
+																			"stored": {
+																				"type": "string"
 																			}
 																		}
 																	}
@@ -20192,6 +20228,12 @@
 										]
 									}
 								}
+							},
+							"toolsOff": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
 							}
 						}
 					}
@@ -20769,6 +20811,12 @@
 										]
 									}
 								}
+							},
+							"toolsOff": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
 							}
 						}
 					}
@@ -21161,6 +21209,9 @@
 												},
 												"size": {
 													"type": "number"
+												},
+												"stored": {
+													"type": "string"
 												}
 											}
 										}
@@ -23374,6 +23425,9 @@
 														},
 														"size": {
 															"type": "number"
+														},
+														"stored": {
+															"type": "string"
 														}
 													}
 												}
@@ -25526,6 +25580,9 @@
 											},
 											"data": {
 												"type": "string"
+											},
+											"path": {
+												"type": "string"
 											}
 										}
 									},
@@ -25548,6 +25605,9 @@
 												"type": "string"
 											},
 											"text": {
+												"type": "string"
+											},
+											"path": {
 												"type": "string"
 											}
 										}
@@ -26253,6 +26313,12 @@
 				},
 				"planMode": {
 					"type": "boolean"
+				},
+				"toolsOff": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
 				}
 			}
 		},
@@ -28806,6 +28872,53 @@
 							},
 							"current": {
 								"type": "boolean"
+							}
+						}
+					}
+				}
+			}
+		},
+		"git.log.params": {
+			"type": "object",
+			"required": [
+				"cwd"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"since": {
+					"type": "string"
+				},
+				"limit": {
+					"type": "number"
+				}
+			}
+		},
+		"git.log.result": {
+			"type": "object",
+			"required": [
+				"commits"
+			],
+			"properties": {
+				"commits": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"hash",
+							"subject",
+							"at"
+						],
+						"properties": {
+							"hash": {
+								"type": "string"
+							},
+							"subject": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
 							}
 						}
 					}
@@ -32821,7 +32934,8 @@
 							"id",
 							"name",
 							"avatar",
-							"description"
+							"description",
+							"instructions"
 						],
 						"properties": {
 							"id": {
@@ -32834,6 +32948,12 @@
 								"type": "string"
 							},
 							"description": {
+								"type": "string"
+							},
+							"instructions": {
+								"type": "string"
+							},
+							"schedule": {
 								"type": "string"
 							}
 						}
@@ -32873,6 +32993,19 @@
 				},
 				"owner": {
 					"type": "string"
+				},
+				"instructions": {
+					"type": "string"
+				},
+				"schedule": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					]
 				}
 			}
 		},

@@ -587,7 +587,7 @@ struct SpaceFilesSheet: View {
         run {
             for url in urls {
                 // Documents the engine can't read itself (PDFs) go with their text.
-                let extracted: String? = if url.pathExtension.lowercased() == "pdf", let loaded = try? AttachmentLoader.load(url), case .text(_, _, let text) = loaded.attachment { text } else { nil }
+                let extracted: String? = if url.pathExtension.lowercased() == "pdf", let loaded = try? AttachmentLoader.load(url), case .text(_, _, let text, _) = loaded.attachment { text } else { nil }
                 try await engine.spaceCall("spaces.files.add", SpaceFileAddParams(ref: space.ref, name: url.lastPathComponent, path: url.path, extracted: extracted))
             }
             files = await engine.spaceFiles(space.ref)

@@ -12,7 +12,7 @@ struct PendingAttachment: Identifiable, Hashable {
     var isImage: Bool { if case .image = attachment { true } else { false } }
     /// An image's preview, for its tile.
     var thumbnail: NSImage? {
-        guard case .image(_, _, let data) = attachment, let bytes = Data(base64Encoded: data) else { return nil }
+        guard case .image(_, _, let data, _) = attachment, let bytes = Data(base64Encoded: data) else { return nil }
         return NSImage(data: bytes)
     }
     /// "PDF", "TXT": what kind of file it is.
@@ -65,19 +65,19 @@ enum AttachmentLoader {
         let type = UTType(filenameExtension: url.pathExtension) ?? .data
         if type.conforms(to: .image) {
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { throw Failure.unreadable(name) }
-            return try image(source, name: name)
+            return try image(source, name: name, path: url.path)
         }
         if type.conforms(to: .pdf) {
             guard let doc = PDFDocument(url: url) else { throw Failure.unreadable(name) }
             let text = (doc.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { throw Failure.emptyPDF(name) }
-            return PendingAttachment(name: name, attachment: .text(name: name, mimeType: "application/pdf", text: text))
+            return PendingAttachment(name: name, attachment: .text(name: name, mimeType: "application/pdf", text: text, path: url.path))
         }
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
         if size > maxTextBytes { throw Failure.tooLarge(name) }
         guard let data = try? Data(contentsOf: url) else { throw Failure.unreadable(name) }
         guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1), !data.contains(0) else { throw Failure.unsupported(name) }
-        return PendingAttachment(name: name, attachment: .text(name: name, mimeType: type.preferredMIMEType, text: text))
+        return PendingAttachment(name: name, attachment: .text(name: name, mimeType: type.preferredMIMEType, text: text, path: url.path))
     }
 
     /// Images from the pasteboard (screenshots, copied images).
@@ -86,7 +86,7 @@ enum AttachmentLoader {
         return try image(source, name: name)
     }
 
-    private static func image(_ source: CGImageSource, name: String) throws -> PendingAttachment {
+    private static func image(_ source: CGImageSource, name: String, path: String? = nil) throws -> PendingAttachment {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -97,6 +97,6 @@ enum AttachmentLoader {
         guard let dest = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { throw Failure.unreadable(name) }
         CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { throw Failure.unreadable(name) }
-        return PendingAttachment(name: name, attachment: .image(name: name, mimeType: "image/jpeg", data: (data as Data).base64EncodedString()))
+        return PendingAttachment(name: name, attachment: .image(name: name, mimeType: "image/jpeg", data: (data as Data).base64EncodedString(), path: path))
     }
 }

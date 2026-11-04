@@ -75,11 +75,7 @@ final class ThreadModel {
         self.notifies = notifies
         if let saved = draftStore.load(draftKey) {
             composerText = saved.text
-            composerAttachments = saved.attachments.map { attachment in
-                let name: String
-                switch attachment { case .image(let n, _, _), .text(let n, _, _): name = n }
-                return PendingAttachment(name: name, attachment: attachment)
-            }
+            composerAttachments = saved.attachments.map { PendingAttachment(name: $0.name, attachment: $0) }
             pendingInput = saved
             if let id = saved.editItemId { editing = (id, saved.text) }
         }
@@ -163,11 +159,7 @@ final class ThreadModel {
         // Direct entry points (Home, suggestions) get the same recovery as the composer.
         if composerText.isEmpty {
             composerText = text
-            composerAttachments = attachments.map { attachment in
-                let name: String
-                switch attachment { case .image(let n, _, _), .text(let n, _, _): name = n }
-                return PendingAttachment(name: name, attachment: attachment)
-            }
+            composerAttachments = attachments.map { PendingAttachment(name: $0.name, attachment: $0) }
         }
         let candidate = ComposerDraft(text: trimmed, attachments: attachments, editItemId: editing?.itemId, steer: steer)
         let previous = pendingInput
@@ -232,7 +224,7 @@ final class ThreadModel {
 
     func beginEditing(_ itemId: String, original: String) { editing = (itemId, original) }
 
-    private func handle(_ action: TranscriptAction) {
+    func handle(_ action: TranscriptAction) {
         switch action {
         case .edit(let id):
             // Build: rewind the chat (not the files) to before it, and put it in the composer (chat v3, 14b).
@@ -272,6 +264,10 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .selectBuildSession, object: id)
         case .openFile(let path, let line):
             viewing = FileTarget(path: path, line: line)
+        case .openAttachment(let stored):
+            guard let engine else { return }
+            let url = engine.home.appending(path: "attachments").appending(path: ref.id).appending(path: stored)
+            NotificationCenter.default.post(name: .viewFile, object: url)
         case .revealFile(let path):
             NotificationCenter.default.post(name: .revealInInspector, object: RevealTarget(sessionId: ref.id, path: path))
         case .openTopic(let topicId, let itemId):

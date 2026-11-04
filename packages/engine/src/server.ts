@@ -1,4 +1,5 @@
 /** Local Engine: Engine Protocol over a Unix domain socket. */
+import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { existsSync, unlinkSync, chmodSync, statSync } from "node:fs";
@@ -409,7 +410,7 @@ export class Engine {
 				const { disposition } = await runtime.submit(p.input.text, {
 					whenBusy: p.whenBusy ?? "followUp",
 					...(p.clientRequestId ? { requestId: p.clientRequestId } : {}),
-					...(p.input.attachments ? { attachments: p.input.attachments } : {}),
+					...(p.input.attachments ? { attachments: p.ref.kind === "build" ? p.input.attachments : keepAttachments(this.options.paths.home, p.ref.id, p.input.attachments) } : {}),
 				});
 				this.sessions.touch(p.ref, isFirst ? p.input.text : undefined);
 				return { accepted: true, disposition } satisfies Result<"sessions.submit">;

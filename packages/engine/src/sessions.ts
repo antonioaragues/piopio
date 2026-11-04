@@ -12,6 +12,7 @@ import type { ApprovalMode, ApprovalRule, ContainerRef, DebateConfig, ModelRef, 
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
+import { copyAttachments, deleteAttachments } from "./attachment-files.js";
 import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import type { TaskResult } from "@piopio/pi-extensions";
@@ -275,6 +276,7 @@ export class Sessions {
 			const copy = [...this.entries.values()].find((e) => e.sessionFile === file);
 			if (!copy) throw new EngineError("INTERNAL", "The new session didn't show up.");
 			copy.title = `${source.title} (fork)`;
+			copyAttachments(this.paths.home, ref.id, copy.ref.id);
 			if (source.model) copy.model = source.model;
 			this.save();
 			this.changed(copy);
@@ -292,6 +294,7 @@ export class Sessions {
 			branches: { ...(source.branches?.active ? { active: source.branches.active } : {}), activity: {} },
 		};
 		copy.file = join(this.paths.threadsDir, `${copy.ref.id}.sqlite`);
+		copyAttachments(this.paths.home, ref.id, copy.ref.id);
 		const db = new DatabaseSync(source.file, { readOnly: true });
 		try {
 			db.exec(`VACUUM INTO '${copy.file.replaceAll("'", "''")}'`);
@@ -333,6 +336,7 @@ export class Sessions {
 			if (entry.agentFolder) this.agentHost?.files.trash(entry.agentFolder, this.piOverrides.trashDir);
 			this.definitions.delete(entry.ref.id);
 		}
+		deleteAttachments(this.paths.home, ref.id);
 		this.search.deleteContainer(ref.id);
 		this.search.deleteSession(ref.id);
 		this.entries.delete(ref.id);
