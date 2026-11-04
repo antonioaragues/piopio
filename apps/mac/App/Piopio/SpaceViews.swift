@@ -539,6 +539,7 @@ struct SpaceFilesSheet: View {
     let space: SessionSummary
     @Environment(\.dismiss) private var dismiss
     @State private var files: [SpaceFile] = []
+    @State private var viewing: SpaceFileTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -554,9 +555,16 @@ struct SpaceFilesSheet: View {
             } else {
                 List(files) { file in
                     HStack {
-                        Image(systemName: file.name.hasSuffix(".pdf") ? "doc.richtext" : "doc.text").foregroundStyle(Color.dsFg3)
-                        Text(file.name).font(.system(size: 13))
-                        Spacer()
+                        Button { viewing = SpaceFileTarget(url: SpaceFileTarget.url(engine: engine, space: space, name: file.name)) } label: {
+                            HStack {
+                                Image(systemName: file.name.hasSuffix(".pdf") ? "doc.richtext" : "doc.text").foregroundStyle(Color.dsFg3)
+                                Text(file.name).font(.system(size: 13))
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("View \(file.name)")
                         Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                         Button { remove(file) } label: { Image(systemName: "trash") }.buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Remove")
                     }
@@ -567,6 +575,7 @@ struct SpaceFilesSheet: View {
         .padding(20)
         .frame(width: 480)
         .task { files = await engine.spaceFiles(space.ref) }
+        .sheet(item: $viewing) { FileSheet(url: $0.url) }
     }
 
     private func add() {
@@ -590,6 +599,16 @@ struct SpaceFilesSheet: View {
             try await engine.spaceCall("spaces.files.remove", SpaceFileParams(ref: space.ref, name: file.name))
             files = await engine.spaceFiles(space.ref)
         }
+    }
+}
+
+/// A notebook file to view: where the engine keeps its copy.
+struct SpaceFileTarget: Identifiable {
+    let url: URL
+    var id: String { url.path }
+
+    @MainActor static func url(engine: EngineController, space: SessionSummary, name: String) -> URL {
+        engine.home.appending(path: "spaces").appending(path: space.ref.id).appending(path: "files").appending(path: name)
     }
 }
 
@@ -740,6 +759,7 @@ struct SpaceInspector: View {
     let newTopic: () -> Void
     @State private var memoryText = ""
     @State private var files: [SpaceFile] = []
+    @State private var viewing: SpaceFileTarget?
 
     private var topics: [TopicInfo] { space.activeTopics }
 
@@ -772,7 +792,7 @@ struct SpaceInspector: View {
                 .padding(.top, 20)
                 if files.isEmpty { Text("None yet").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
                 ForEach(files.prefix(5)) { file in
-                    Button { showFiles = true } label: {
+                    Button { viewing = SpaceFileTarget(url: SpaceFileTarget.url(engine: engine, space: space, name: file.name)) } label: {
                         Text(file.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.middle).padding(.vertical, 3)
                     }
                     .buttonStyle(.plain)
@@ -786,6 +806,7 @@ struct SpaceInspector: View {
         }
         .task(id: space.space?.memoryLines) { memoryText = (await engine.memory(of: space.ref))?.text ?? "" }
         .task(id: "\(space.space?.files ?? 0)\(showFiles)") { files = await engine.spaceFiles(space.ref) }
+        .sheet(item: $viewing) { FileSheet(url: $0.url) }
     }
 
     private func heading<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {

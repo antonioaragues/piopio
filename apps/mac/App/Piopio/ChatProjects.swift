@@ -122,7 +122,6 @@ struct FilePreview: View {
     let close: () -> Void
 
     private var url: URL { URL(fileURLWithPath: cwd).appending(path: path) }
-    private var ext: String { url.pathExtension.lowercased() }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -148,72 +147,8 @@ struct FilePreview: View {
         .id(path)
     }
 
-    @ViewBuilder private var content: some View {
-        switch ext {
-        case "pdf": PDFPreview(url: url)
-        case "png", "jpg", "jpeg", "gif", "heic", "webp", "tiff":
-            if let image = NSImage(contentsOf: url) {
-                ScrollView { Image(nsImage: image).resizable().scaledToFit().padding(16) }
-            } else {
-                Text("Can't show this image").foregroundStyle(Color.dsFg3)
-            }
-        case "md", "markdown":
-            TextPreview(url: url, markdown: true)
-        default:
-            TextPreview(url: url, markdown: false)
-        }
-    }
-}
-
-private struct PDFPreview: NSViewRepresentable {
-    let url: URL
-    func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
-        view.document = PDFDocument(url: url)
-        return view
-    }
-    func updateNSView(_ view: PDFView, context: Context) {
-        if view.document?.documentURL != url { view.document = PDFDocument(url: url) }
-    }
-}
-
-/// Markdown in the transcript's style, or plain monospaced text; read-only and selectable.
-private struct TextPreview: NSViewRepresentable {
-    let url: URL
-    let markdown: Bool
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
-        let text = scroll.documentView as! NSTextView
-        text.isEditable = false
-        text.drawsBackground = false
-        text.textContainerInset = NSSize(width: 18, height: 16)
-        scroll.drawsBackground = false
-        load(into: text)
-        return scroll
-    }
-
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
-        if let text = scroll.documentView as? NSTextView { load(into: text) }
-    }
-
-    private func load(into text: NSTextView) {
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
-            text.string = "Can't read this file."
-            return
-        }
-        if data.prefix(8000).contains(0) {
-            text.string = "Binary file: open it in an app to see it."
-            return
-        }
-        let string = String(decoding: data.prefix(2_000_000), as: UTF8.self)
-        if markdown {
-            text.textStorage?.setAttributedString(MarkdownRendering.attributed(string))
-        } else {
-            text.textStorage?.setAttributedString(NSAttributedString(string: string, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular), .foregroundColor: DS.fg]))
-        }
-    }
+    /// The shared viewer (roadmap D8).
+    private var content: some View { FileContentView(url: url) }
 }
 
 extension Notification.Name {

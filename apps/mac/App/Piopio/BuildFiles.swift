@@ -136,37 +136,47 @@ struct FileTarget: Identifiable, Hashable {
     var id: String { "\(path):\(line ?? 0)" }
 }
 
-/// Read-only, highlighted view of a file with a quick-edit mode (BR4).
+/// A file from Build (BR4, roadmap D8): the shared viewer (Markdown rendered, PDF, images, code with line numbers,
+/// Quick Look for the rest), with a quick edit for text and Markdown.
 struct FileViewer: View {
     let engine: EngineController
     let cwd: String
     let target: FileTarget
     @Environment(\.dismiss) private var dismiss
-    @State private var file: ReadFileResult?
     @State private var error: String?
     @State private var editing = false
     @State private var draft = ""
     @State private var saving = false
+    /// Bumped after a save, so the view reads the file again.
+    @State private var revision = 0
 
-    private var lines: [Substring] { file?.content.split(separator: "\n", omittingEmptySubsequences: false) ?? [] }
     private var fullPath: String { target.path.hasPrefix("/") ? target.path : "\(cwd)/\(target.path)" }
+    private var url: URL { URL(fileURLWithPath: fullPath) }
+    private var editable: Bool { [.text, .markdown].contains(FileKind.of(url)) }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "doc.text").foregroundStyle(Color.dsFg3)
+                Image(systemName: FileKind.of(url).icon).foregroundStyle(Color.dsFg3)
                 Text(target.path).font(.system(size: 13, weight: .semibold, design: .monospaced)).lineLimit(1).truncationMode(.head)
-                if let file { Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
+                if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                }
                 Spacer()
                 if editing {
                     Button("Cancel") { editing = false }.buttonStyle(PillStyle(compact: true))
                     Button(saving ? "Saving…" : "Save") { Task { await save() } }.buttonStyle(PillStyle(kind: .primary, compact: true)).keyboardShortcut("s").disabled(saving)
                 } else {
-                    if file?.binary == false, file?.truncated == false {
-                        Button("Edit") { draft = file?.content ?? ""; editing = true }.buttonStyle(PillStyle(compact: true)).help("Make a quick change")
-                    }
-                    ForEach(Editor.installed.prefix(2)) { editor in
-                        Button("Open in \(editor.name)") { editor.open(fullPath, line: target.line) }.buttonStyle(PillStyle(compact: true))
+                    if editable {
+                        Button("Edit") { Task { await startEditing() } }.buttonStyle(PillStyle(compact: true)).help("Make a quick change")
+                        ForEach(Editor.installed.prefix(2)) { editor in
+                            Button("Open in \(editor.name)") { editor.open(fullPath, line: target.line) }.buttonStyle(PillStyle(compact: true))
+                        }
+                    } else {
+                        // A PDF, an image or a document: the app that opens it, not a code editor.
+                        Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: { Image(systemName: "folder") }
+                            .buttonStyle(IconButtonStyle()).help("Reveal in Finder").accessibilityLabel("Reveal in Finder")
+                        Button("Open") { NSWorkspace.shared.open(url) }.buttonStyle(PillStyle(compact: true)).help("Open in its default app")
                     }
                     Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.cancelAction)
                 }
@@ -174,73 +184,39 @@ struct FileViewer: View {
             .padding(.horizontal, 16)
             .frame(height: 48)
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            content
-        }
-        .frame(width: 860, height: 620)
-        .background(Color.dsWin)
-        .task {
-            do {
-                file = try await engine.client?.call("projects.readFile", ReadFileParams(cwd: cwd, path: target.path), as: ReadFileResult.self)
-            } catch {
-                self.error = String(describing: error)
-            }
-        }
-    }
-
-    @ViewBuilder private var content: some View {
-        if let error {
-            Text(error).font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let file {
-            if file.binary {
-                Text("Binary file").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)
+            if let error {
+                Text(error).font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if editing {
                 TextEditor(text: $draft)
                     .font(.system(size: 12, design: .monospaced))
                     .scrollContentBackground(.hidden)
                     .padding(8)
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView([.vertical, .horizontal]) {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                                HStack(spacing: 0) {
-                                    Text("\(index + 1)").foregroundStyle(Color.dsFg3).frame(width: 52, alignment: .trailing).padding(.trailing, 12)
-                                    Text(highlighted(String(line))).fixedSize()
-                                    Spacer(minLength: 0)
-                                }
-                                .font(.system(size: 12, design: .monospaced))
-                                .frame(height: 18)
-                                .background(index + 1 == target.line ? Color.dsAccentSoft : .clear)
-                                .id(index + 1)
-                            }
-                            if file.truncated {
-                                Text("… the file is larger than 2 MB; open it in an editor to see the rest.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(12)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    .onAppear { if let line = target.line { DispatchQueue.main.async { proxy.scrollTo(line, anchor: .center) } } }
-                }
+                FileContentView(url: url, line: target.line).id(revision)
             }
-        } else {
-            ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(width: 860, height: 620)
+        .background(Color.dsWin)
     }
 
-    private func highlighted(_ line: String) -> AttributedString {
-        let ns = NSMutableAttributedString(string: line.isEmpty ? " " : line, attributes: [.foregroundColor: DS.fg])
-        for (range, token) in Highlighter.tokens(line) where NSMaxRange(range) <= ns.length {
-            ns.addAttribute(.foregroundColor, value: Highlighter.color(token), range: range)
+    /// Reads through the engine, which keeps edits inside the project.
+    private func startEditing() async {
+        do {
+            guard let file = try await engine.client?.call("projects.readFile", ReadFileParams(cwd: cwd, path: target.path), as: ReadFileResult.self) else { return }
+            if file.binary || file.truncated { error = "This file is too large or not text, so it can't be edited here."; return }
+            draft = file.content
+            editing = true
+        } catch {
+            self.error = String(describing: error)
         }
-        return AttributedString(ns)
     }
 
     private func save() async {
         saving = true
         do {
             _ = try await engine.client?.call("projects.writeFile", WriteFileParams(cwd: cwd, path: target.path, content: draft), as: Empty.self)
-            file = ReadFileResult(content: draft, size: draft.utf8.count, truncated: false, binary: false)
             editing = false
+            revision += 1
         } catch {
             self.error = String(describing: error)
         }
