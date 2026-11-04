@@ -19,6 +19,7 @@ import { createWebExtension, type WebOptions } from "../tools/web.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 import { SpaceFiles } from "./space-files.js";
 import { attachChatMcp, MCP_EXTENSION, type ChatMcp } from "../tools/mcp-chat.js";
+import { offFilter } from "./thread.js";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import { exportConversation, importInto, type Portable } from "./transfer.js";
 import { applyPatch, describe, diffFacts, lineCount, MemoryDoc, pushRevision, type MemoryAuthor, type MemoryState, type Proposal, type Revision } from "./space-memory.js";
@@ -52,6 +53,8 @@ export type SpaceOpenOptions = {
 	extensions?: Extension[];
 	/** MCP servers, when Chat may use them. */
 	mcp?: ChatMcp;
+	/** MCP servers this notebook turned off ("mcp:<server>"). */
+	toolsOff?: () => string[];
 	/** Expands a `/command` (prompt templates, skills), or undefined. */
 	expand?: (text: string) => string | undefined;
 	/** The topics or the header's numbers changed (sidebar, header). */
@@ -99,7 +102,7 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		const shared = sharedExtension(() => host) as unknown as Extension;
 		const extra = options.extensions ?? [];
 		for (const e of [web, organizer, topic, shared, ...extra]) registry.install(e as never);
-		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp) : undefined;
+		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp, offFilter(options.toolsOff, "mcp")) : undefined;
 		// Selected by name: MCP and tool_search count once they are installed (Chat MCP on, servers connected).
 		const mcpByName = [defineExtension({ name: MCP_EXTENSION }), options.mcp?.toolSearch ?? createToolSearchExtension()] as unknown as Extension[];
 		const mainExtensions = [organizer, shared, ...extra, ...mcpByName, web];

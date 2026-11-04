@@ -48,7 +48,14 @@ export type ThreadOpenOptions = {
 	expand?: (text: string) => string | undefined;
 	/** Connected apps (docs/spec/12-connectors): their tools, asking here before a change. */
 	connectors?: ConnectorHub;
+	/** Connectors and MCP servers this conversation turned off ("connector:<id>", "mcp:<server>"). */
+	toolsOff?: () => string[];
 };
+
+/** A filter for one kind of entry in a conversation's off-list. */
+export function offFilter(toolsOff: (() => string[]) | undefined, kind: "connector" | "mcp"): (id: string) => boolean {
+	return (id) => toolsOff?.().includes(`${kind}:${id}`) ?? false;
+}
 
 /** A connector change waiting for the user in this thread. */
 type PendingApproval = { item: ApprovalItem; resolve: (answer: { approved: boolean; always?: boolean; reason?: string }) => void };
@@ -85,13 +92,14 @@ export class ThreadRuntime implements Runtime {
 		const webExtension = createWebExtension(options.hub, { ...options.webOptions, scope: options.ref.id }) as unknown as Extension;
 		registry.install(webExtension as never);
 		for (const e of options.extensions ?? []) registry.install(e as never);
-		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp) : undefined;
+		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp, offFilter(options.toolsOff, "mcp")) : undefined;
 		let runtime: ThreadRuntime | undefined;
-		const connectors = options.connectors ? (durableConnectorsExtension(options.connectors, "chat", (site) => runtime!.confirmFor(site)) as unknown as Extension) : undefined;
+		const connectors = options.connectors ? (durableConnectorsExtension(options.connectors, "chat", (site) => runtime!.confirmFor(site), offFilter(options.toolsOff, "connector")) as unknown as Extension) : undefined;
 		if (connectors) registry.install(connectors as never);
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
 		runtime = new ThreadRuntime(options.ref, options.hub, harness, options.model, options.thinking, options.branches, options.onBranchState, options.web ?? true, webExtension);
 		runtime.connectors = options.connectors;
+		runtime.connectorsOff = offFilter(options.toolsOff, "connector");
 		runtime.connectorsExtension = connectors;
 		runtime.detachMcp = detachMcp;
 		runtime.expand = options.expand;
@@ -125,13 +133,14 @@ export class ThreadRuntime implements Runtime {
 	// MARK: Connected apps
 
 	connectors?: ConnectorHub;
+	connectorsOff: (connector: string) => boolean = () => false;
 	connectorsExtension?: Extension;
 	/** Whether the connector tools were on when settings were last applied. */
 	private appsOn = false;
 	private readonly approvals = new Map<string, PendingApproval>();
 
 	private hasApps(): boolean {
-		return Boolean(this.connectors && (this.connectors.calendars("chat").length || this.connectors.mailboxes("chat").length));
+		return Boolean(this.connectors && (this.connectors.calendars("chat", this.connectorsOff).length || this.connectors.mailboxes("chat", this.connectorsOff).length));
 	}
 
 	/** Asks in this thread before a connector changes something: an approval card until answered or stopped. */

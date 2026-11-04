@@ -43,3 +43,21 @@ clicked: the toolbar icons and menus, because the user's own Piopio was open.
 
 Checked with a capture of a chat's composer (+ and the globe). Not checked: the open menu (a window capture can't
 show it, and the user's own Piopio was open, so no clicking), ⌘U, and the start pages' menus.
+
+## Step 3, built 2026-11-04
+
+- **Settings decides what's on; a conversation can only turn things off for itself.** Chat MCP is opt-in because
+  chats don't ask before a tool runs, so the + menu doesn't turn on what Settings keeps off: those are listed greyed
+  out, with why ("Off for chats in Settings", "Off in Settings") and links to Settings › Connectors and › MCP servers.
+- **Engine:** a conversation's `toolsOff` list ("connector:<id>", "mcp:<server>"), set with `sessions.configure` and
+  shown on its summary. Chats leave out a turned-off app's calendar and mail tools and a turned-off server's tools
+  (reinstalled at once, keeping the connections). Notebooks do the same for MCP servers. Build sessions keep pi's MCP
+  connections (pi reads `mcp.json` for every session) and refuse a turned-off server's tools through pi's tool
+  pipeline, codemode included, and the model is told which servers are off. Debates and agents don't have the switch.
+- **App:** "Connectors and MCP · N on" in the + menu, a switch per app and server for this conversation; and in Build's
+  Summary a "Connectors and MCP" row (on, off here, to sign in again) that unfolds into the same switches.
+- Tests: an MCP server turned off and back on in a Build session (refused, then answered) and in a chat (not offered,
+  then answered); a calendar turned off and back on in a chat.
+
+Checked with a capture of the Summary row ("1 on", with a server off in Settings). Not clicked: the submenu and the
+row's switches, because the user's own Piopio was open.

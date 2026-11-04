@@ -13,8 +13,8 @@ export const CONNECTORS_EXTENSION = "piopio-connectors";
 /** Where a tool call happens, so the runtime can show its approval in the right conversation. */
 export type CallSite = { conversationId: string; callId: string; context: Context };
 
-export function durableConnectorsExtension(hub: ConnectorHub, scope: "chat" | "agent", confirmFor: (site: CallSite) => Confirm) {
-	const tools = connectorTools(hub, scope).map((tool) =>
+export function durableConnectorsExtension(hub: ConnectorHub, scope: "chat" | "agent", confirmFor: (site: CallSite) => Confirm, off: (connector: string) => boolean = () => false) {
+	const tools = connectorTools(hub, scope, off).map((tool) =>
 		defineTool({
 			name: tool.name,
 			description: tool.description,
@@ -33,18 +33,18 @@ export function durableConnectorsExtension(hub: ConnectorHub, scope: "chat" | "a
 	return defineExtension({
 		name: CONNECTORS_EXTENSION,
 		tools,
-		sections: [section("connected-apps", () => connectorsSection(hub, scope))],
+		sections: [section("connected-apps", () => connectorsSection(hub, scope, off))],
 	});
 }
 
 /** Build sessions: the same tools, asking through Build's prompts. */
-export function codingConnectorsExtension(hub: ConnectorHub, confirmFor: (callId: string, signal: AbortSignal | undefined) => Confirm): ExtensionFactory {
+export function codingConnectorsExtension(hub: ConnectorHub, confirmFor: (callId: string, signal: AbortSignal | undefined) => Confirm, off: (connector: string) => boolean = () => false): ExtensionFactory {
 	return (pi) => {
 		pi.on("before_agent_start", (event) => {
-			const text = connectorsSection(hub, "chat");
+			const text = connectorsSection(hub, "chat", off);
 			return text ? { systemPrompt: `${event.systemPrompt}\n\n# Connected apps\n${text}` } : undefined;
 		});
-		for (const tool of connectorTools(hub, "chat")) {
+		for (const tool of connectorTools(hub, "chat", off)) {
 			pi.registerTool(
 				defineCodingTool({
 					name: tool.name,

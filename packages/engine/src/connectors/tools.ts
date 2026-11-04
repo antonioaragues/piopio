@@ -39,9 +39,10 @@ function parseId(id: unknown): { accountId: string; id: string } {
 	return { accountId: s.slice(0, at), id: s.slice(at + 1) };
 }
 
-export function connectorTools(hub: ConnectorHub, scope: "chat" | "agent"): ConnectorTool[] {
-	const calendars = () => hub.calendars(scope);
-	const mailboxes = () => hub.mailboxes(scope);
+/** `off`: connectors the conversation turned off (their accounts are left out, as if not connected here). */
+export function connectorTools(hub: ConnectorHub, scope: "chat" | "agent", off: (connector: string) => boolean = () => false): ConnectorTool[] {
+	const calendars = () => hub.calendars(scope, off);
+	const mailboxes = () => hub.mailboxes(scope, off);
 	const where = (a: Account) => `${hub.definition(a.connector)?.name ?? a.connector} (${a.label})`;
 
 	/** The calendar to write to: the one named, else the only one. */
@@ -314,9 +315,9 @@ export function availableTools(hub: ConnectorHub, scope: "chat" | "agent"): Conn
 }
 
 /** The prompt section: which apps are connected, the time zone, and that their content is data. */
-export function connectorsSection(hub: ConnectorHub, scope: "chat" | "agent"): string | undefined {
-	const calendars = hub.calendars(scope).map((c) => `${c.name} (${c.account.label})`);
-	const mail = hub.mailboxes(scope).map((m) => `${m.name} mail (${m.account.label})`);
+export function connectorsSection(hub: ConnectorHub, scope: "chat" | "agent", off: (connector: string) => boolean = () => false): string | undefined {
+	const calendars = hub.calendars(scope, off).map((c) => `${c.name} (${c.account.label})`);
+	const mail = hub.mailboxes(scope, off).map((m) => `${m.name} mail (${m.account.label})`);
 	if (!calendars.length && !mail.length) return undefined;
 	const now = new Date();
 	return [

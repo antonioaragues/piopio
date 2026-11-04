@@ -552,6 +552,8 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var suggestion: SpaceSuggestion?
     /// Next messages suggested after the latest answer (docs/design v2 "You could also").
     public var followUps: [String]?
+    /// Connectors and MCP servers turned off in this conversation only ("connector:<id>", "mcp:<server>").
+    public var toolsOff: [String]?
     /// Agents.
     public var agent: AgentInfo?
     /// Debate threads: where the debate stands.
@@ -1427,8 +1429,10 @@ public struct ConfigureParams: Encodable, Sendable {
     public var web: Bool?
     public var approvalMode: ApprovalMode?
     public var planMode: Bool?
-    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil, web: Bool? = nil, approvalMode: ApprovalMode? = nil, planMode: Bool? = nil) {
-        self.ref = ref; self.model = model; self.thinking = thinking; self.web = web; self.approvalMode = approvalMode; self.planMode = planMode
+    /// Replaces the conversation's list of tools turned off here ("connector:<id>", "mcp:<server>").
+    public var toolsOff: [String]?
+    public init(ref: ContainerRef, model: ModelRef? = nil, thinking: String? = nil, web: Bool? = nil, approvalMode: ApprovalMode? = nil, planMode: Bool? = nil, toolsOff: [String]? = nil) {
+        self.ref = ref; self.model = model; self.thinking = thinking; self.web = web; self.approvalMode = approvalMode; self.planMode = planMode; self.toolsOff = toolsOff
     }
 }
 

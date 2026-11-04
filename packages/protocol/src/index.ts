@@ -652,6 +652,11 @@ export const SessionSummary = Type.Object({
 	followUps: Type.Optional(Type.Array(Type.String())),
 	/** Debate threads: where the debate stands (the sidebar's icon). */
 	debate: Type.Optional(Type.Object({ status: DebateStatus })),
+	/**
+	 * Tools turned off in this conversation only (docs/design/session-panel, step 3): "connector:<id>" for a connected
+	 * app, "mcp:<server>" for an MCP server. Settings decides what's on; this can only take things away.
+	 */
+	toolsOff: Type.Optional(Type.Array(Type.String())),
 });
 export type SessionSummary = Static<typeof SessionSummary>;
 
@@ -975,7 +980,8 @@ export const methods = {
 		result: Type.Object({ filename: Type.String(), mimeType: Type.String(), content: Type.String() }),
 	},
 	"sessions.configure": {
-		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()), web: Type.Optional(Type.Boolean()), approvalMode: Type.Optional(ApprovalMode), planMode: Type.Optional(Type.Boolean()) }),
+		/** `toolsOff` replaces the conversation's list (see SessionSummary.toolsOff). */
+		params: Type.Object({ ref: ContainerRef, model: Type.Optional(ModelRef), thinking: Type.Optional(Type.String()), web: Type.Optional(Type.Boolean()), approvalMode: Type.Optional(ApprovalMode), planMode: Type.Optional(Type.Boolean()), toolsOff: Type.Optional(Type.Array(Type.String())) }),
 		result: Type.Object({}),
 	},
 	"sessions.rename": {

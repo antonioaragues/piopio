@@ -94,3 +94,10 @@ The same connector folders, listed in a gallery with trust labels — **Official
 
 ## Sources (read 2026-10-22)
 [Google's MCP setup guide](https://developers.google.com/workspace/guides/configure-mcp-servers) · [Workspace updates, May 2026](https://workspaceupdates.googleblog.com/2026/05/agent-tools-and-security-updates-for-workspace-developers.html) · [Scalekit on Outlook MCP](https://www.scalekit.com/blog/outlook-mcp-vs-api) · [Datadog MCP setup](https://docs.datadoghq.com/mcp_server/setup/) · [GitHub remote MCP GA](https://github.blog/changelog/2025-09-04-remote-github-mcp-server-is-now-generally-available/) · [openhelm.ai remote MCP list](https://www.openhelm.ai/blog/best-remote-mcp-servers-2026) · [DataCamp remote MCP servers](https://www.datacamp.com/blog/top-remote-mcp-servers)
+
+## Per conversation (2026-11-04)
+
+A conversation can turn a connected app (or an MCP server) off for itself only, from the composer's + menu or Build's
+Summary column: `sessions.configure { toolsOff: ["connector:google-calendar", "mcp:github"] }`. Settings still decides
+what's on; the per-conversation list only takes things away. See docs/design/session-panel (step 3).
+

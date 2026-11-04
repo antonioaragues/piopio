@@ -12,6 +12,7 @@ import {
 	SessionManager,
 	SettingsManager,
 	type AgentSession,
+	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { approvalsExtension, checkpointsExtension, notifyExtension, planExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge } from "@piopio/pi-extensions";
 import type { ApprovalRule, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
@@ -32,6 +33,8 @@ const CHECKPOINT_ENTRY = "piopio.checkpoint";
 export type BuildOpenOptions = {
 	/** Connected apps: their tools, asking through Build's approval prompt before a change. */
 	connectors?: ConnectorHub;
+	/** Connectors and MCP servers this session turned off ("connector:<id>", "mcp:<server>"). */
+	toolsOff?: () => string[];
 	ref: ContainerRef;
 	hub: ModelHub;
 	cwd: string;
@@ -106,6 +109,8 @@ export class BuildRuntime implements Runtime {
 				{ name: "mcp", factory: createMcpExtension(), replaceable: true, builtin: true },
 				// First, so the snapshot is taken before anything else can change files.
 				checkpointsExtension({ snapshot: async (callId) => void (await runtime?.takeCheckpoint(callId)) }),
+				// Before approvals: a server turned off here is refused without asking.
+				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
 				approvalsExtension({
 					mode: o.approvals.mode,
 					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),
@@ -133,7 +138,7 @@ export class BuildRuntime implements Runtime {
 							codingConnectorsExtension(o.connectors, (callId, signal) => async (request) => {
 								const response = await broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId }, signal);
 								return { approved: response?.decision === "allow" || response?.decision === "always", ...(response?.decision === "always" && request.canAllowAlways ? { always: true } : {}), ...(response?.text ? { reason: response.text } : {}) };
-							}),
+							}, (id) => o.toolsOff?.().includes(`connector:${id}`) ?? false),
 						]
 					: []),
 				todosExtension(),
@@ -494,4 +499,23 @@ export class BuildRuntime implements Runtime {
 		this.unsubscribe?.();
 		this.session.dispose();
 	}
+}
+
+/**
+ * MCP servers a session turned off (docs/design/session-panel, step 3). pi connects the servers from mcp.json for every
+ * session, so their tools are refused here instead, through pi's tool pipeline (codemode scripts included), and the
+ * model is told which servers are off. Turning a server back on takes effect with the next call.
+ */
+function mcpOffExtension(toolsOff: () => string[]): ExtensionFactory {
+	const servers = () => toolsOff().flatMap((t) => (t.startsWith("mcp:") ? [t.slice(4)] : []));
+	return (pi) => {
+		pi.on("before_agent_start", (event) => {
+			const off = servers();
+			return off.length ? { systemPrompt: `${event.systemPrompt}\n\nThese MCP servers are turned off in this conversation, so don't use their tools: ${off.join(", ")}.` } : undefined;
+		});
+		pi.on("tool_call", (event) => {
+			const hit = servers().find((s) => event.toolName.startsWith(`mcp__${s}__`) || event.toolName.startsWith(`mcp__${s.replace(/[^A-Za-z0-9_]/g, "_")}__`));
+			return hit ? { block: true, reason: `The MCP server “${hit}” is turned off in this conversation. The user can turn it back on in the composer's + menu.` } : undefined;
+		});
+	};
 }

@@ -308,11 +308,14 @@ export class ConnectorHub {
 		};
 	}
 
-	/** Calendars to read: every connected account with one (in chats, only connectors allowed there). */
-	calendars(scope: "chat" | "agent"): { account: Account; calendar: Calendar; name: string }[] {
+	/**
+	 * Calendars to read: every connected account with one (in chats, only connectors allowed there, minus those the
+	 * conversation turned off: `off`).
+	 */
+	calendars(scope: "chat" | "agent", off: (connector: string) => boolean = () => false): { account: Account; calendar: Calendar; name: string }[] {
 		return this.state.accounts.flatMap((account) => {
 			const def = this.definition(account.connector);
-			if (!def?.calendar || (scope === "chat" && !this.settings(def.id).chats)) return [];
+			if (!def?.calendar || (scope === "chat" && (!this.settings(def.id).chats || off(def.id)))) return [];
 			const calendar = def.calendar(this.authorized(account));
 			const chosen = this.state.calendars?.[account.id];
 			// Calendars turned off in Settings aren't read.
@@ -321,10 +324,10 @@ export class ConnectorHub {
 		});
 	}
 
-	mailboxes(scope: "chat" | "agent"): { account: Account; mailbox: Mailbox; name: string }[] {
+	mailboxes(scope: "chat" | "agent", off: (connector: string) => boolean = () => false): { account: Account; mailbox: Mailbox; name: string }[] {
 		return this.state.accounts.flatMap((account) => {
 			const def = this.definition(account.connector);
-			if (!def?.mailbox || (scope === "chat" && !this.settings(def.id).chats)) return [];
+			if (!def?.mailbox || (scope === "chat" && (!this.settings(def.id).chats || off(def.id)))) return [];
 			return [{ account, mailbox: def.mailbox(this.authorized(account)), name: def.name }];
 		});
 	}

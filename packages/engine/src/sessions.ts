@@ -147,10 +147,17 @@ export class Sessions {
 		for (const l of this.listeners) l({ upserted: [summary(entry)], removed: [] });
 	}
 
-	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean; approvalMode?: ApprovalMode; planMode?: boolean }): Promise<void> {
+	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean; approvalMode?: ApprovalMode; planMode?: boolean; toolsOff?: string[] }): Promise<void> {
 		const entry = this.entry(ref);
 		if (change.approvalMode) entry.approvalMode = change.approvalMode; // read by the runtime's approvals bridge
 		if (change.planMode !== undefined) entry.planMode = change.planMode;
+		if (change.toolsOff) {
+			// Read live by the runtimes; chat MCP tools are reinstalled, connector tools follow on the next turn.
+			const list = [...new Set(change.toolsOff.filter((t) => /^(connector|mcp):.+/.test(t)))].sort();
+			if (list.length) entry.toolsOff = list;
+			else delete entry.toolsOff;
+			this.chat?.mcp.refresh();
+		}
 		if (this.open.has(ref.id)) await (await this.runtime(ref)).configure(change);
 		if (change.web !== undefined) entry.web = change.web;
 		if (change.model) entry.model = change.model;
@@ -1263,6 +1270,7 @@ export class Sessions {
 				settings: () => ({ memory: !entry.memoryOff, autoTidy: entry.autoTidy ?? false }),
 				webOptions: this.webOptions,
 				...this.chatExtras("space"),
+				toolsOff: () => entry.toolsOff ?? [],
 				onTopics: (topics, stats) => {
 					if (!this.entries.has(entry.ref.id)) return;
 					if (JSON.stringify(topics) === JSON.stringify(entry.topicState) && JSON.stringify(stats) === JSON.stringify(entry.stats)) return;
@@ -1305,6 +1313,7 @@ export class Sessions {
 				webOptions: this.webOptions,
 				...this.chatExtras("thread"),
 				...(this.connectors ? { connectors: this.connectors } : {}),
+				toolsOff: () => entry.toolsOff ?? [],
 			});
 		}
 		const runtime = await BuildRuntime.open({
@@ -1334,6 +1343,7 @@ export class Sessions {
 			...(entry.parent ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress) }),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 			...(this.connectors ? { connectors: this.connectors } : {}),
+			toolsOff: () => entry.toolsOff ?? [],
 		});
 		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {
 			entry.sessionFile = runtime.sessionFile;

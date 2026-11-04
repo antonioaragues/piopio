@@ -41,6 +41,16 @@ afterEach(async () => {
 const settled = (subscriptionId: string, after = 0) => (n: { subscriptionId: string; seq: number; events: SessionEvent[] }) =>
 	n.subscriptionId === subscriptionId && n.seq > after && n.events.some((e) => e.type === "state" && e.state.status === "idle");
 
+	/** The conversation's tool items once `count` of them have finished. */
+	const finishedTools = async (ctx: Ctx, ref: ContainerRef, count: number) => {
+		for (let i = 0; i < 300; i++) {
+			const tools = ((await ctx.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((x) => (x.kind === "tool" && (x.status === "done" || x.status === "error") ? [x] : []));
+			if (tools.length >= count) return tools as { tool: string; status: string; output?: string }[];
+			await new Promise((r) => setTimeout(r, 100));
+		}
+		throw new Error("tools didn't finish: " + JSON.stringify(((await ctx.client.call("sessions.open", { ref })) as Snapshot).items.map((x) => [x.kind, (x as { status?: string }).status, (x as { output?: string }).output?.slice(0, 120), (x as { text?: string }).text?.slice(0, 80)])));
+	};
+
 const texts = (s: Snapshot) => s.items.map((i) => [i.kind, i.kind === "user" ? i.text : i.kind === "assistant" ? i.parts.map((p) => p.text).join("") : ""]);
 
 describe.each(["thread", "build"] as const)("%s session", (kind) => {
@@ -942,6 +952,47 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		expect((await a.client.call("mcp.list", {})).servers).toEqual([]);
 		await expect(a.client.call("mcp.add", { scope: "global", name: "bad name", command: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 	}, 60_000);
+
+	test("a conversation turns an MCP server off for itself: refused in a Build session, gone from a chat, back when on again", async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-mcp-")));
+		await a.client.call("projects.add", { path: folder });
+		const server = fileURLToPath(new URL("./fixtures/echo-mcp-server.mjs", import.meta.url));
+		await a.client.call("mcp.add", { scope: "global", name: "test", command: process.execPath, args: [server], chat: true });
+		const file = join(a.home, "pi-agent", "mcp.json");
+		const config = JSON.parse(readFileSync(file, "utf8"));
+		config.mcpServers.test.exposure = "direct";
+		writeFileSync(file, JSON.stringify(config));
+		await a.client.call("settings.set", { chat: { mcp: true } });
+		const call = 'call: mcp__test__echo | {"text":"hi"}';
+
+		// Build: the server stays connected, its calls are refused while it's off here.
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: "full_auto" });
+		await a.client.call("sessions.configure", { ref, toolsOff: ["mcp:test", "not-a-kind"] });
+		expect((await a.client.call("sessions.list", {})).sessions.find((s: { ref: ContainerRef }) => s.ref.id === ref.id)).toMatchObject({ toolsOff: ["mcp:test"] });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: call } });
+		expect((await finishedTools(a, ref, 1))[0]).toMatchObject({ tool: "mcp__test__echo", status: "error", output: expect.stringContaining("turned off in this conversation") });
+		await a.client.call("sessions.configure", { ref, toolsOff: [] });
+		expect((await a.client.call("sessions.list", {})).sessions.find((s: { ref: ContainerRef }) => s.ref.id === ref.id)?.toolsOff).toBeUndefined();
+		await a.client.call("sessions.submit", { ref, input: { text: call } });
+		expect((await finishedTools(a, ref, 2))[1]).toMatchObject({ status: "done", output: expect.stringContaining("echo: hi") });
+
+		// A chat: the server's tools aren't offered while it's off here.
+		const chat = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		await a.client.call("sessions.configure", { ref: chat, toolsOff: ["mcp:test"] });
+		await a.client.call("sessions.subscribe", { ref: chat });
+		await a.client.call("sessions.submit", { ref: chat, input: { text: call } });
+		let items: Snapshot["items"] = [];
+		for (let i = 0; i < 100 && !items.some((x) => x.kind === "assistant" && x.status === "done"); i++) {
+			await new Promise((r) => setTimeout(r, 100));
+			items = ((await a.client.call("sessions.open", { ref: chat })) as Snapshot).items;
+		}
+		expect(items.some((x) => x.kind === "tool")).toBe(false); // not offered, so never called
+		await a.client.call("sessions.configure", { ref: chat, toolsOff: [] });
+		await a.client.call("sessions.submit", { ref: chat, input: { text: call } });
+		expect((await finishedTools(a, chat, 1))[0]).toMatchObject({ status: "done", output: "echo: hi" });
+	}, 90_000);
 
 	test("Settings › MCP servers: a server is started to list its tools, used in chats per server, tools turned off one by one", async () => {
 		const a = await start();
@@ -2360,6 +2411,26 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		expect(tool.output).toContain("Google Calendar (me@gmail.com)");
 		expect(tool.output).toContain("Team sync");
 		expect(tool.output).toContain("Outlook (me@outlook.com)");
+		apps.close();
+	}, 30_000);
+
+	test("a chat turns a connected app off for itself, and back on", async () => {
+		const { a, apps } = await withApps();
+		await connect(a, "google-calendar");
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.configure", { ref, toolsOff: ["connector:google-calendar"] });
+		await a.client.call("sessions.subscribe", { ref });
+		const call = `call: calendar_events | {"from":"${apps.at(0)}","to":"${apps.at(24)}"}`;
+		await a.client.call("sessions.submit", { ref, input: { text: call } });
+		let items: Snapshot["items"] = [];
+		for (let i = 0; i < 100 && !items.some((x) => x.kind === "assistant" && x.status === "done"); i++) {
+			await new Promise((r) => setTimeout(r, 100));
+			items = ((await a.client.call("sessions.open", { ref })) as Snapshot).items;
+		}
+		expect(items.some((x) => x.kind === "tool")).toBe(false); // the calendar tools aren't offered here
+		await a.client.call("sessions.configure", { ref, toolsOff: [] });
+		await a.client.call("sessions.submit", { ref, input: { text: call } });
+		expect((await finishedTools(a, ref, 1))[0]?.output).toContain("Dentist");
 		apps.close();
 	}, 30_000);
 

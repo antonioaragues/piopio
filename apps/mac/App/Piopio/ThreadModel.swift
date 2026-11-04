@@ -201,6 +201,11 @@ final class ThreadModel {
         await call("sessions.configure", ConfigureParams(ref: ref, web: enabled))
     }
 
+    /// Connectors and MCP servers turned off in this conversation (docs/design/session-panel, step 3).
+    func setToolsOff(_ ids: [String]) async {
+        await call("sessions.configure", ConfigureParams(ref: ref, toolsOff: ids))
+    }
+
     /// Asks where to save, then writes the export.
     func export(_ format: ExportParams.Format) async {
         guard let client = engine?.client else { return }

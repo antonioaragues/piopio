@@ -35,11 +35,14 @@ export class ChatMcp {
 		return this.config.globalServers().filter(({ name, server }) => this.inChat(name, server));
 	}
 
-	/** The extension with every connected server's tools, or undefined when off or without servers. */
-	async extension(): Promise<Extension | undefined> {
-		if (!this.servers().length) return undefined;
+	/**
+	 * The extension with every connected server's tools, or undefined when off or without servers. `off`: servers the
+	 * conversation turned off (docs/design/session-panel, step 3).
+	 */
+	async extension(off: (server: string) => boolean = () => false): Promise<Extension | undefined> {
+		if (!this.servers().some(({ name }) => !off(name))) return undefined;
 		this.connecting ??= this.connect();
-		const servers = await this.connecting;
+		const servers = (await this.connecting).filter((s) => !off(s.name));
 		if (!servers.length) return undefined;
 		const tools = servers.flatMap((s) =>
 			s.tools.map((t) =>
@@ -67,6 +70,11 @@ export class ChatMcp {
 		const old = this.connecting;
 		this.connecting = undefined;
 		for (const s of (await old?.catch(() => [])) ?? []) await s.client.close().catch(() => undefined);
+		for (const l of this.listeners) l();
+	}
+
+	/** A conversation's own list changed: runtimes reinstall the tools, keeping the connections. */
+	refresh(): void {
 		for (const l of this.listeners) l();
 	}
 
@@ -121,10 +129,10 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /** Installs the MCP tools (and `tool_search`) in a runtime's registry, and again whenever they change. */
-export async function attachChatMcp(registry: { install(e: never): void; uninstall(e: never): void }, mcp: ChatMcp): Promise<() => void> {
+export async function attachChatMcp(registry: { install(e: never): void; uninstall(e: never): void }, mcp: ChatMcp, off: (server: string) => boolean = () => false): Promise<() => void> {
 	let current: Extension | undefined;
 	const apply = async () => {
-		const next = await mcp.extension().catch(() => undefined);
+		const next = await mcp.extension(off).catch(() => undefined);
 		if (current) {
 			registry.uninstall(current as never);
 			registry.uninstall(mcp.toolSearch as never);
