@@ -18,6 +18,7 @@ export type GitFile = {
 };
 export type GitStatus = { repo: boolean; branch?: string; detached?: boolean; upstream?: string; ahead: number; behind: number; files: GitFile[] };
 export type GitBranch = { name: string; upstream?: string; lastCommitAt?: string; current: boolean };
+export type GitCommit = { hash: string; subject: string; at: string };
 
 export async function git(cwd: string, args: string[], options: { stdin?: string; timeoutMs?: number } = {}): Promise<string> {
 	return new Promise((resolve, reject) => {
@@ -90,6 +91,26 @@ export async function branches(cwd: string): Promise<GitBranch[]> {
 		.map((line) => {
 			const [head, name, upstream, date] = line.split("\0");
 			return { name: name!, current: head === "*", ...(upstream ? { upstream } : {}), ...(date ? { lastCommitAt: date } : {}) };
+		});
+}
+
+/** The current branch's commits, newest first, since a moment (a session's start). An empty repo has none. */
+export async function log(cwd: string, since?: string, limit = 20): Promise<GitCommit[]> {
+	const n = Math.max(1, Math.min(100, Math.floor(limit)));
+	// "2026-11-04 22:55:50 +0000": a form git always reads (ISO with milliseconds or a far year may not be).
+	const from = since && !Number.isNaN(Date.parse(since)) ? `${new Date(since).toISOString().replace("T", " ").slice(0, 19)} +0000` : undefined;
+	let out: string;
+	try {
+		out = await git(cwd, ["log", `-n${n}`, "--format=%H%x1f%s%x1f%cI", ...(from ? [`--since=${from}`] : [])]);
+	} catch {
+		return []; // no commits yet
+	}
+	return out
+		.split("\n")
+		.filter(Boolean)
+		.map((line) => {
+			const [hash, subject, at] = line.split("\x1f");
+			return { hash: hash!, subject: subject ?? "", at: at ?? "" };
 		});
 }
 

@@ -772,6 +772,9 @@ struct SpaceInspector: View {
                     }
                     .buttonStyle(.plain)
                 }
+                // MCP servers for this notebook only (docs/design/session-panel, steps 3–4).
+                ToolChoicesSection(engine: engine, thread: engine.thread(space.ref), summary: space)
+                    .padding(.top, 20)
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)

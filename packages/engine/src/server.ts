@@ -828,6 +828,10 @@ export class Engine {
 				return (await gitOps.status(this.folder(params))) satisfies Result<"git.status">;
 			case "git.branches":
 				return { branches: await gitOps.branches(this.folder(params)) } satisfies Result<"git.branches">;
+			case "git.log": {
+				const p = params as Params<"git.log">;
+				return { commits: await gitOps.log(this.folder(p), p.since, p.limit ?? 20) } satisfies Result<"git.log">;
+			}
 			case "git.checkout": {
 				const p = params as Params<"git.checkout">;
 				await gitOps.checkout(this.folder(p), p.branch, p.create ?? false, p.base);

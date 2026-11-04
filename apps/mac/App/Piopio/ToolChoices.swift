@@ -104,3 +104,70 @@ struct ToolChoicesMenu: View {
         return choices.isEmpty ? "Connectors and MCP" : "Connectors and MCP · \(on) on"
     }
 }
+
+/// "Connectors and MCP · 3 on · 1 off here · 1 to sign in", unfolding into a switch per app and server for this
+/// conversation (Build's Summary, a chat's Summary, a notebook's column).
+struct ToolChoicesSection: View {
+    let engine: EngineController
+    /// The conversation whose switches these are (a thread, a session, or a notebook's Main).
+    let thread: ThreadModel
+    let summary: SessionSummary
+    @State private var servers: [McpServerInfo] = []
+    @State private var open = false
+
+    private var choices: [ToolChoice] { ToolChoices.compute(engine: engine, ref: summary.ref, debate: summary.debate != nil, servers: servers) }
+    private var off: Set<String> { Set(summary.toolsOff ?? []) }
+
+    var body: some View {
+        let choices = choices
+        // A VStack, not a Group: it exists while the list is empty, so the loading task runs.
+        VStack(alignment: .leading, spacing: 0) {
+            if !choices.isEmpty {
+                let on = choices.filter { $0.available && !off.contains($0.id) }.count
+                let offHere = choices.filter { $0.available && off.contains($0.id) }.count
+                let signIn = choices.filter { $0.note == "Sign in again in Settings" }.count
+                VStack(alignment: .leading, spacing: 4) {
+                    Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
+                        HStack(spacing: 6) {
+                            SectionLabel("Connectors and MCP")
+                            Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                                .rotationEffect(.degrees(open ? 90 : 0))
+                            Spacer()
+                            Text(["\(on) on", offHere > 0 ? "\(offHere) off here" : nil, signIn > 0 ? "\(signIn) to sign in" : nil].compactMap { $0 }.joined(separator: " · "))
+                                .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(open ? "Expanded" : "Collapsed")
+                    if open {
+                        ForEach(choices) { choice in row(choice) }
+                        Text("Only this conversation. What's on everywhere is set in Settings.")
+                            .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).padding(.top, 2)
+                    }
+                }
+            }
+        }
+        .task(id: summary.ref.id) { servers = await ToolChoices.load(engine: engine, cwd: summary.ref.kind == .build ? summary.cwd : nil) }
+    }
+
+    private func row(_ choice: ToolChoice) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: choice.group == .app ? "calendar" : "server.rack").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(choice.title).font(.system(size: 13)).foregroundStyle(choice.available ? Color.dsFg : Color.dsFg3).lineLimit(1)
+                if let note = choice.note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1) }
+            }
+            Spacer(minLength: 4)
+            Toggle("", isOn: Binding(get: { choice.available && !off.contains(choice.id) }, set: { on in
+                var next = off
+                if on { next.remove(choice.id) } else { next.insert(choice.id) }
+                Task { await thread.setToolsOff(next.sorted()) }
+            }))
+            .toggleStyle(.switch).controlSize(.mini).labelsHidden()
+            .disabled(!choice.available)
+            .accessibilityLabel("\(choice.title) in this conversation")
+        }
+        .frame(minHeight: 26)
+    }
+}

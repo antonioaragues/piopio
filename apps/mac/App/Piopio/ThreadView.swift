@@ -10,6 +10,10 @@ struct ThreadView: View {
     let thread: ThreadModel
     let summary: SessionSummary
     @AppStorage("debate.panel") private var showPanel = true
+    /// The Summary column (docs/design/session-panel, step 4), shown or hidden for every chat.
+    @AppStorage("chat.summary") private var showSummary = false
+    /// PIOPIO_DEMO_CHAT_SUMMARY=1: show the column without changing the saved choice (captures).
+    private static let demoSummary = ProcessInfo.processInfo.environment["PIOPIO_DEMO_CHAT_SUMMARY"] == "1"
     @State private var showCosts = false
 
     var body: some View {
@@ -27,6 +31,18 @@ struct ThreadView: View {
     }
 
     private var conversation: some View {
+        HStack(spacing: 0) {
+            chatColumn
+            if showSummary || Self.demoSummary {
+                ChatSummaryPanel(engine: engine, thread: thread, summary: summary)
+                    .frame(width: 290)
+                    .sidePanel()
+                    .transition(.move(edge: .trailing))
+            }
+        }
+    }
+
+    private var chatColumn: some View {
         VStack(spacing: 0) {
             header
             if let suggestion = summary.suggestion {
@@ -70,7 +86,13 @@ struct ThreadView: View {
 
     private var header: some View {
         PageHeader(summary.title, subtitle: subtitle) {
-            if let debate = thread.debate { debateControls(debate) } else { moveMenu }
+            if let debate = thread.debate { debateControls(debate) } else {
+                moveMenu
+                Button { withAnimation(.easeOut(duration: 0.15)) { showSummary.toggle() } } label: { Image(systemName: "list.bullet.rectangle") }
+                    .buttonStyle(IconButtonStyle(on: showSummary))
+                    .accessibilityLabel("Summary")
+                    .help(showSummary ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources")
+            }
             Menu {
                 Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
                 Divider()

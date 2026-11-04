@@ -1110,6 +1110,13 @@ public struct McpDetectResult: Decodable, Sendable {
     public var found: [Found]
 }
 public struct McpListParams: Encodable, Sendable { public var cwd: String?; public init(cwd: String? = nil) { self.cwd = cwd } }
+/// A commit on the current branch (`git.log`): a session's results.
+public struct GitCommit: Decodable, Sendable, Hashable, Identifiable { public var hash, subject, at: String; public var id: String { hash } }
+public struct GitLogParams: Encodable, Sendable {
+    public var cwd: String; public var since: String?; public var limit: Int?
+    public init(cwd: String, since: String? = nil, limit: Int? = nil) { self.cwd = cwd; self.since = since; self.limit = limit }
+}
+public struct GitLogResult: Decodable, Sendable { public var commits: [GitCommit] }
 public struct McpListResult: Decodable, Sendable { public var servers: [McpServerInfo]; public var errors: [String] }
 public struct McpAddParams: Encodable, Sendable {
     public var scope: McpServerInfo.Scope; public var cwd: String?; public var name: String

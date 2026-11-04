@@ -61,3 +61,19 @@ show it, and the user's own Piopio was open, so no clicking), ⌘U, and the star
 
 Checked with a capture of the Summary row ("1 on", with a server off in Settings). Not clicked: the submenu and the
 row's switches, because the user's own Piopio was open.
+
+## Step 4, built 2026-11-05
+
+- **Build results gain commits**: the branch's commits since the session started (by the agent or by you), from a new
+  `git.log` call (newest first, `since`, `limit`). A commit row copies its hash.
+- **Chats get the Summary column**, toggled from a toolbar icon (remembered for every chat): the model and context,
+  web search as a switch, Connectors and MCP (the same section as Build's), and Results: the files you shared and the
+  pages it opened or found while searching (each opens in the browser), then what the chat cost. Debates keep their
+  own draft pane.
+- **Notebooks** get the Connectors and MCP section at the bottom of their right column (MCP servers, for the notebook).
+- The Connectors and MCP section is one shared view (`ToolChoicesSection`) used by all three.
+
+Checked with captures: a chat's column (model, web search, "Connectors and MCP · 0 on" with MCP off for chats in
+Settings, two shared files) and Build's Summary with the section back ("1 on"). `git.log` has an engine test. Not
+seen in a capture: a commit row (the scripted commit waited for approval), sources from a real web search, and the
+notebook section; nothing was clicked, because the user's own Piopio was open.

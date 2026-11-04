@@ -570,11 +570,7 @@ struct SessionSummaryPanel: View {
     let onReview: (String?) -> Void
     @State private var files: [FileChange] = []
     @State private var compacting = false
-    @State private var servers: [McpServerInfo] = []
-    @State private var showTools = false
-
-    private var choices: [ToolChoice] { ToolChoices.compute(engine: engine, ref: session.ref, debate: false, servers: servers) }
-    private var off: Set<String> { Set(summary.toolsOff ?? []) }
+    @State private var commits: [GitCommit] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -582,7 +578,7 @@ struct SessionSummaryPanel: View {
                 VStack(alignment: .leading, spacing: 18) {
                     whereItRuns
                     if let context = session.state?.context { contextSection(context) }
-                    if !choices.isEmpty { toolsSection }
+                    ToolChoicesSection(engine: engine, thread: session, summary: summary)
                     if !session.todos.isEmpty { ChecklistSection(todos: session.todos) }
                     results
                 }
@@ -598,7 +594,8 @@ struct SessionSummaryPanel: View {
             .padding(.horizontal, 16).padding(.vertical, 12)
         }
         .task(id: session.revision / 4) { files = await session.changes(since: .session) }
-        .task(id: summary.cwd) { servers = await ToolChoices.load(engine: engine, cwd: summary.cwd) }
+        .task(id: session.revision / 4) { await loadCommits() }
+        .onChange(of: git?.status?.files.count) { _, _ in Task { await loadCommits() } }
         .onChange(of: session.state?.status) { _, _ in Task { files = await session.changes(since: .session) } }
     }
 
@@ -684,53 +681,6 @@ struct SessionSummaryPanel: View {
         }
     }
 
-    // MARK: Connectors and MCP
-
-    /// "Connectors and MCP · 3 on · 1 off here · 1 to sign in", unfolding into a switch per app and server.
-    private var toolsSection: some View {
-        let on = choices.filter { $0.available && !off.contains($0.id) }.count
-        let offHere = choices.filter { $0.available && off.contains($0.id) }.count
-        let signIn = choices.filter { $0.note == "Sign in again in Settings" }.count
-        return VStack(alignment: .leading, spacing: 4) {
-            Button { withAnimation(.easeOut(duration: 0.15)) { showTools.toggle() } } label: {
-                HStack(spacing: 6) {
-                    SectionLabel("Connectors and MCP")
-                    Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
-                        .rotationEffect(.degrees(showTools ? 90 : 0))
-                    Spacer()
-                    Text(["\(on) on", offHere > 0 ? "\(offHere) off here" : nil, signIn > 0 ? "\(signIn) to sign in" : nil].compactMap { $0 }.joined(separator: " · "))
-                        .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(showTools ? "Expanded" : "Collapsed")
-            if showTools {
-                ForEach(choices) { choice in
-                    HStack(spacing: 9) {
-                        Image(systemName: choice.group == .app ? "calendar" : "server.rack").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(choice.title).font(.system(size: 13)).foregroundStyle(choice.available ? Color.dsFg : Color.dsFg3).lineLimit(1)
-                            if let note = choice.note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1) }
-                        }
-                        Spacer(minLength: 4)
-                        Toggle("", isOn: Binding(get: { choice.available && !off.contains(choice.id) }, set: { on in
-                            var next = off
-                            if on { next.remove(choice.id) } else { next.insert(choice.id) }
-                            Task { await session.setToolsOff(next.sorted()) }
-                        }))
-                        .toggleStyle(.switch).controlSize(.mini).labelsHidden()
-                        .disabled(!choice.available)
-                        .accessibilityLabel("\(choice.title) in this conversation")
-                    }
-                    .frame(minHeight: 26)
-                }
-                Text("Only this conversation. What's on everywhere is set in Settings.")
-                    .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).padding(.top, 2)
-            }
-        }
-    }
-
     // MARK: Results
 
     private var results: some View {
@@ -743,8 +693,26 @@ struct SessionSummaryPanel: View {
                 }
             }
             .padding(.bottom, 4)
-            if files.isEmpty {
-                Text("Files it changes show up here.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+            if files.isEmpty && commits.isEmpty {
+                Text("Files it changes and commits show up here.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+            }
+            ForEach(commits) { commit in
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(commit.hash, forType: .string)
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: "smallcircle.filled.circle").font(.system(size: 11)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                        Text(commit.subject).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(String(commit.hash.prefix(7))).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3)
+                    }
+                    .frame(minHeight: 26)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Commit \(String(commit.hash.prefix(7))): click to copy its hash")
+                .accessibilityLabel("Commit: \(commit.subject)")
             }
             ForEach(files) { file in
                 Button { onReview(file.path) } label: {
@@ -763,6 +731,12 @@ struct SessionSummaryPanel: View {
                 .help(file.path)
             }
         }
+    }
+
+    /// The branch's commits since the session started (made by the agent or by you).
+    private func loadCommits() async {
+        guard !chatLens, let cwd = summary.cwd, git?.status?.repo == true else { commits = []; return }
+        commits = (try? await engine.client?.call("git.log", GitLogParams(cwd: cwd, since: summary.createdAt, limit: 10), as: GitLogResult.self).commits) ?? []
     }
 
     /// "~/Proyectos".

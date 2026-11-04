@@ -857,6 +857,9 @@ export type GitStatus = Static<typeof GitStatus>;
 
 export const GitBranch = Type.Object({ name: Type.String(), upstream: Type.Optional(Type.String()), lastCommitAt: Type.Optional(Type.String()), current: Type.Boolean() });
 export type GitBranch = Static<typeof GitBranch>;
+/** A commit on the current branch (a session's results: what was committed since it started). */
+export const GitCommit = Type.Object({ hash: Type.String(), subject: Type.String(), at: Type.String() });
+export type GitCommit = Static<typeof GitCommit>;
 
 /** Where a new Build session works: the project as it is, a new branch in it, or a new worktree. */
 export const WorkOn = Type.Union([
@@ -1200,6 +1203,8 @@ export const methods = {
 	/** Git in a project folder or a session's worktree (`cwd`). */
 	"git.status": { params: Type.Object({ cwd: Type.String() }), result: GitStatus },
 	"git.branches": { params: Type.Object({ cwd: Type.String() }), result: Type.Object({ branches: Type.Array(GitBranch) }) },
+	/** The current branch's commits, newest first: since `since` (ISO), at most `limit` (default 20, up to 100). */
+	"git.log": { params: Type.Object({ cwd: Type.String(), since: Type.Optional(Type.String()), limit: Type.Optional(Type.Number()) }), result: Type.Object({ commits: Type.Array(GitCommit) }) },
 	"git.checkout": { params: Type.Object({ cwd: Type.String(), branch: Type.String(), create: Type.Optional(Type.Boolean()), base: Type.Optional(Type.String()) }), result: Type.Object({}) },
 	/** Commits `paths` (default: every change), new and deleted files included. */
 	"git.commit": {
