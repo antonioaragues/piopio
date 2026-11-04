@@ -24,6 +24,27 @@ struct PendingAttachment: Identifiable, Hashable {
 
 /// Turns files and pasted images into attachments: images downscaled to JPEG, PDFs and text files as text.
 enum AttachmentLoader {
+    /// A folder's files, skipping hidden ones, dependencies and build output, and anything that can't be attached;
+    /// at most `limit`, so a whole repo can't flood the message. `note` says what was left out, if anything.
+    static func folder(_ folder: URL, limit: Int = 20) -> (files: [PendingAttachment], note: String?) {
+        let skipped: Set<String> = ["node_modules", "build", "dist", ".build", "DerivedData", "Pods", "vendor", "__pycache__"]
+        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return ([], nil) }
+        var files: [PendingAttachment] = [], unreadable = 0, more = false
+        for case let url as URL in walker {
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                if skipped.contains(url.lastPathComponent) { walker.skipDescendants() }
+                continue
+            }
+            guard files.count < limit else { more = true; break }
+            if let file = try? load(url) { files.append(file) } else { unreadable += 1 }
+        }
+        let name = folder.lastPathComponent
+        if more { return (files, "Attached the first \(limit) files of \(name).") }
+        if files.isEmpty { return (files, "Nothing in \(name) could be attached.") }
+        if unreadable > 0 { return (files, "Skipped \(unreadable) file\(unreadable == 1 ? "" : "s") in \(name) that can't be attached.") }
+        return (files, nil)
+    }
+
     static let maxImageSide: CGFloat = 2048
     static let maxTextBytes = 4 * 1024 * 1024
 

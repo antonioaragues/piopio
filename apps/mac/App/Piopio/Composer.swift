@@ -173,20 +173,24 @@ struct Composer: View {
             .font(.system(size: 14))
             HStack(spacing: 2) {
                 if thread.editing == nil {
-                    Button(action: pickFiles) { Image(systemName: "plus").font(.system(size: 13)) }
-                        .buttonStyle(IconButtonStyle(size: 26))
-                        .help(isBuild ? "Mention files or folders (or drop them here)" : "Attach images, PDFs, text files or a folder (or drop them here)")
-                        .accessibilityLabel(isBuild ? "Mention files or folders" : "Attach files or images")
+                    AddMenu(
+                        filesTitle: isBuild ? "Mention files" : "Add files or photos",
+                        folderTitle: isBuild ? "Mention a folder" : "Add a folder",
+                        files: { pickFiles(folders: false) },
+                        folder: { pickFiles(folders: true) },
+                        commands: text.isEmpty ? { text = "/"; focused = true } : nil,
+                        web: hasWebSwitch ? Binding(get: { thread.webEnabled }, set: { on in Task { await thread.setWeb(on) } }) : nil
+                    )
                 }
                 if isBuild { EditModeChip(engine: engine, thread: thread) }
                 if thread.debate != nil { Text("Debate").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6) }
-                // Spaces always have the web tools (no per-conversation switch yet).
-                if thread.editing == nil && !isBuild && thread.ref.kind != .space && thread.ref.kind != .agent {
-                    Button { Task { await thread.setWeb(!thread.webEnabled) } } label: {
-                        Text(thread.webEnabled ? "Web search on" : "Web search off")
-                    }
-                    .buttonStyle(ChipStyle(active: thread.webEnabled))
-                    .help(thread.webEnabled ? "Web search and page reading are on" : "Web search and page reading are off")
+                // Web search is switched in the + menu; while it's on, a globe says so (a click turns it off).
+                if thread.editing == nil, hasWebSwitch, thread.webEnabled {
+                    Button { Task { await thread.setWeb(false) } } label: { Image(systemName: "globe").font(.system(size: 12.5)) }
+                        .buttonStyle(IconButtonStyle(size: 26))
+                        .help("Web search is on (click to turn it off)")
+                        .accessibilityLabel("Web search on")
+                        .accessibilityHint("Turns web search off")
                 }
                 Spacer(minLength: 6)
                 if let debate = thread.debate, debate.status == .running {
@@ -290,21 +294,22 @@ struct Composer: View {
 
     private func stop() { Task { await thread.stop() } }
 
-    private func pickFiles() {
+    /// Threads and debates switch web search per conversation; notebooks and agents always have it.
+    private var hasWebSwitch: Bool { !isBuild && thread.ref.kind != .space && thread.ref.kind != .agent }
+
+    /// Files, or folders (the + menu's two items). Build reads them itself, so they become @paths in the message.
+    private func pickFiles(folders: Bool) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = folders
+        panel.canChooseFiles = !folders
         if isBuild {
-            // Build reads files itself: they become @paths in the message.
-            let panel = NSOpenPanel()
-            panel.allowsMultipleSelection = true
-            panel.canChooseDirectories = true
             if let cwd = thread.cwd { panel.directoryURL = URL(fileURLWithPath: cwd) }
             guard panel.runModal() == .OK else { return }
             for url in panel.urls { mention(url) }
             return
         }
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = true
-        panel.allowedContentTypes = [.image, .pdf, .text, .sourceCode, .json, .xml, .commaSeparatedText, .data, .folder]
+        if !folders { panel.allowedContentTypes = [.image, .pdf, .text, .sourceCode, .json, .xml, .commaSeparatedText, .data] }
         guard panel.runModal() == .OK else { return }
         add(panel.urls)
     }
@@ -324,23 +329,10 @@ struct Composer: View {
     /// The folder's files, skipping hidden ones, dependencies and build output, and anything that can't be attached;
     /// at most `folderLimit`, so a whole repo can't flood the message.
     private func addFolder(_ folder: URL) {
-        let skipped: Set<String> = ["node_modules", "build", "dist", ".build", "DerivedData", "Pods", "vendor", "__pycache__"]
-        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return }
-        var added = 0, unreadable = 0, more = false
-        for case let url as URL in walker {
-            if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
-                if skipped.contains(url.lastPathComponent) { walker.skipDescendants() }
-                continue
-            }
-            guard added < Self.folderLimit else { more = true; break }
-            if let file = try? AttachmentLoader.load(url) { attachments.append(file); added += 1 } else { unreadable += 1 }
-        }
-        if more { attachError = "Attached the first \(Self.folderLimit) files of \(folder.lastPathComponent)." }
-        else if added == 0 { attachError = "Nothing in \(folder.lastPathComponent) could be attached." }
-        else if unreadable > 0 { attachError = "Skipped \(unreadable) file\(unreadable == 1 ? "" : "s") in \(folder.lastPathComponent) that can't be attached." }
+        let (files, note) = AttachmentLoader.folder(folder)
+        attachments.append(contentsOf: files)
+        if let note { attachError = note }
     }
-
-    private static let folderLimit = 20
 
     private func paste(_ providers: [NSItemProvider]) {
         for provider in providers {
@@ -794,5 +786,52 @@ extension Composer {
         case .spaceCommand: "command"
         }
         Image(systemName: name).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+    }
+}
+
+/// The composer's + (docs/design/session-panel, step 2): add files or photos (⌘U) or a folder, the / list of commands
+/// and skills, web search, and a way to add extensions. Items that don't apply are left out.
+struct AddMenu: View {
+    var filesTitle = "Add files or photos"
+    var folderTitle = "Add a folder"
+    let files: () -> Void
+    let folder: () -> Void
+    /// Opens the / list; nil when the box isn't empty (commands start a message).
+    var commands: (() -> Void)? = nil
+    var showsCommands = true
+    var web: Binding<Bool>? = nil
+    var size: CGFloat = 26
+    var bordered = false
+
+    var body: some View {
+        Menu {
+            Button(action: files) { Label(filesTitle, systemImage: "paperclip") }
+                .keyboardShortcut("u", modifiers: .command)
+            Button(action: folder) { Label(folderTitle, systemImage: "folder") }
+            if showsCommands {
+                Button { commands?() } label: { Label("Commands and skills", systemImage: "slash.circle") }
+                    .disabled(commands == nil)
+            }
+            if let web {
+                Divider()
+                Toggle(isOn: web) { Label("Web search", systemImage: "globe") }
+            }
+            Divider()
+            Button {
+                UserDefaults.standard.set("Extensions", forKey: "settingsSection")
+                NotificationCenter.default.post(name: .settingsSection, object: "Extensions")
+                WindowOpener.shared.openSettings?()
+            } label: { Label("Add extensions…", systemImage: "puzzlepiece.extension") }
+        } label: {
+            Image(systemName: "plus").font(.system(size: size > 30 ? 15 : 13))
+        }
+        .menuStyle(.button)
+        .buttonStyle(IconButtonStyle(size: size))
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .overlay { if bordered { RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1).allowsHitTesting(false) } }
+        .background { Button("", action: files).keyboardShortcut("u", modifiers: .command).hidden() }
+        .help("Add files, a folder, commands\(web != nil ? ", web search" : "") or extensions")
+        .accessibilityLabel("Add to this conversation")
     }
 }

@@ -27,3 +27,19 @@ Order: (1) toolbar and Summary in Build sessions, app only; (2) the + menu; (3) 
 
 Checked with captures (light and dark) of a scripted session that keeps a checklist and writes and edits files. Not
 clicked: the toolbar icons and menus, because the user's own Piopio was open.
+
+## Step 2, built 2026-11-04
+
+- **The + is a menu** in every conversation composer (chats, Build sessions, notebooks, agents, debates): Add files or
+  photos (⌘U), Add a folder, Commands and skills (puts `/` in an empty box and shows the list; greyed out while
+  you're typing), Web search as a switch (chats and debates; notebooks and agents always have it), and Add
+  extensions…, which opens Settings › Extensions. In Build the first two read "Mention files" and "Mention a folder",
+  because Build sessions read files themselves (they become @paths).
+- **Web search** left the composer's row: a globe shows while it's on, and clicking it turns it off.
+- **Start pages**: the chat page's + offers files or photos and a folder (its readable files are attached); the new
+  session page's + offers files and a folder, which goes into the task as an @path.
+- Folder attaching is shared (`AttachmentLoader.folder`): at most 20 files, skipping hidden files, dependencies and
+  build output, with a note on what was left out.
+
+Checked with a capture of a chat's composer (+ and the globe). Not checked: the open menu (a window capture can't
+show it, and the user's own Piopio was open, so no clicking), ⌘U, and the start pages' menus.

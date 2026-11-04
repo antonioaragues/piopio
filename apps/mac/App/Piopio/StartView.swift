@@ -568,7 +568,7 @@ private struct ChatStart: View {
                 if !attachments.isEmpty { attachmentTiles.padding(.horizontal, 20).padding(.top, 8) }
                 if debate { debateStrip.padding(.horizontal, 12).padding(.top, 12) }
             } leading: {
-                if !debate { FooterIcon(symbol: "plus", label: "Attach files", action: attach) }
+                if !debate { AddMenu(files: attach, folder: attachFolder, showsCommands: false, size: 36) }
                 ModeSwitch(mode: mode) { switchMode(to: $0) }
             } action: {
                 if debate {
@@ -762,6 +762,17 @@ private struct ChatStart: View {
         for url in panel.urls {
             do { attachments.append(try AttachmentLoader.load(url)) } catch { self.error = error.localizedDescription }
         }
+    }
+
+    /// A folder's readable files, as the conversation's + does.
+    private func attachFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let (files, note) = AttachmentLoader.folder(url)
+        attachments.append(contentsOf: files)
+        error = note
     }
 
     private func send() {
@@ -1505,7 +1516,7 @@ private struct SessionStart: View {
             } extra: {
                 if !attachments.isEmpty { attachmentTiles.padding(.horizontal, 20).padding(.top, 8) }
             } leading: {
-                FooterIcon(symbol: "plus", label: "Attach files", bordered: true, action: attach)
+                AddMenu(files: attach, folder: mentionFolder, showsCommands: false, size: 36, bordered: true)
                 workMenu
                 permissionsMenu
             } action: {
@@ -1606,6 +1617,18 @@ private struct SessionStart: View {
         for url in panel.urls {
             do { attachments.append(try AttachmentLoader.load(url)) } catch { self.error = error.localizedDescription }
         }
+    }
+
+    /// A folder in the project becomes an @path in the task (the agent reads it), as in a session's composer.
+    private func mentionFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        if let project { panel.directoryURL = URL(fileURLWithPath: project.path) }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        var path = url.path
+        if let root = project?.path, path.hasPrefix(root + "/") { path = String(path.dropFirst(root.count + 1)) }
+        drafts.update(key: key) { d in d.text += (d.text.isEmpty || d.text.hasSuffix(" ") ? "" : " ") + "@" + path + " " }
     }
 
     private func start() {
