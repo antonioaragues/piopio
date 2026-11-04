@@ -80,8 +80,8 @@ The "New session in <project>" sheet is gone. Starting a session is a page built
   (the handoff's "Ask before edits" default was a question to confirm): each project keeps its own mode.
 - Starting creates the session, sends the task, and the page moves into the session in place of the draft row.
 
-**Sidebar**: Projects, Notebooks, Agents and Chats scroll in the middle; Search, Home and Needs you are fixed at the
-bottom above the footer. A project row has a + (26pt): always on the open project (grey fill, name in medium weight),
+**Sidebar**: Search, Home and Needs you stay at the top, above Projects, Notebooks, Agents and Chats (the handoff put
+them at the bottom; moved back on 2026-11-04 at the user's request). A project row has a + (26pt): always on the open project (grey fill, name in medium weight),
 on hover for the others, where it takes the branch's place. VoiceOver gets it as the row's "New session" action. A
 folder you only chat about gets a + that starts a chat in it. Sessions nest under their project on a hairline (rows
 30pt); the open project's list ends with "+ New session ⌘N", replaced by "New session · Draft" at the top while one is

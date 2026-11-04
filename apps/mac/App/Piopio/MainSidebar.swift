@@ -35,9 +35,12 @@ struct MainSidebar: View {
             .frame(height: Shell.barHeight)
             .contentShape(Rectangle())
             .gesture(WindowDragGesture())
-            // The middle scrolls: Pinned, Projects, Notebooks, Agents, Chats.
+            // Search, Home and Needs you first, then Pinned, Projects, Notebooks, Agents and Chats; all of it scrolls.
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
+                    searchRow
+                    navRow(.home, "Home", symbol: "house")
+                    navRow(.needsYou, "Needs you", symbol: "tray", count: engine.needsYouCount)
                     pinnedSection
                     if areas.showsProjects { projectsSection }
                     if areas.showsNotebooks { notebooksSection }
@@ -47,15 +50,7 @@ struct MainSidebar: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 10)
             }
-            // Fixed above the footer: Search, Home, Needs you.
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            VStack(alignment: .leading, spacing: 1) {
-                searchRow
-                navRow(.home, "Home", symbol: "house")
-                navRow(.needsYou, "Needs you", symbol: "tray", count: engine.needsYouCount)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
             footer
         }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
