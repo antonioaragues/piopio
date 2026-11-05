@@ -318,6 +318,21 @@ enum DebugAutomation {
                 }
                 guard let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] else { return }
                 await session.send(prompt)
+                // PIOPIO_DEMO_CURSOR_PROBE="x,y;x,y" (window points from the top left): after 6 s, the cursor the
+                // transcript shows at each point, one line per point, to PIOPIO_DEMO_CURSOR_OUT.
+                if let probe = env["PIOPIO_DEMO_CURSOR_PROBE"], let out = env["PIOPIO_DEMO_CURSOR_OUT"] {
+                    try? await Task.sleep(for: .seconds(6))
+                    let height = NSApp.windows.first { $0.isVisible && $0.contentView != nil }?.contentView?.bounds.height ?? 0
+                    var lines: [String] = []
+                    for pair in probe.split(separator: ";") {
+                        let xy = pair.split(separator: ",").compactMap { Double($0) }
+                        let point = NSPoint(x: xy[0], y: height - xy[1])
+                        _ = session.document.debugCursor(at: point) // reveals hover buttons
+                        try? await Task.sleep(for: .milliseconds(600))
+                        lines.append("\(pair) \(session.document.debugCursor(at: point))")
+                    }
+                    try? lines.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
+                }
                 // PIOPIO_DEMO_PLAN_EDIT=1: open the plan editor; =approve: approve an edited version (drops the last step).
                 if let mode = env["PIOPIO_DEMO_PLAN_EDIT"] {
                     for _ in 0..<50 where !session.prompts.contains(where: { $0.kind == .plan }) { try? await Task.sleep(for: .milliseconds(200)) }

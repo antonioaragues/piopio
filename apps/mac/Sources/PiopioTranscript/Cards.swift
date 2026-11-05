@@ -373,12 +373,66 @@ final class DisclosureAttachment: NSTextAttachment, @unchecked Sendable {
     }
 }
 
+/// A view inside the transcript that wants the arrow cursor, not the text view's I-beam.
+@MainActor protocol ArrowCursorArea: AnyObject {}
+
+/// The transcript's text view: the I-beam over text, the arrow over the views it hosts (cards, message buttons) and
+/// over what's laid on top of it (an approval card, buttons above the composer). Its I-beam covers its whole visible
+/// rect and is set again on every mouse move, so those views can't keep the arrow on their own.
+final class TranscriptTextView: NSTextView {
+    /// Sets the arrow when the mouse isn't over transcript text; true when it did.
+    @discardableResult func arrowIfNeeded(_ event: NSEvent) -> Bool {
+        guard let content = window?.contentView, let hit = content.hitTest(content.superview?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow) else { return false }
+        var view: NSView? = hit, hosted = false
+        while let v = view {
+            if v === self {
+                if hosted { NSCursor.arrow.set() }
+                return hosted
+            }
+            if v is ArrowCursorArea { hosted = true }
+            view = v.superview
+        }
+        // Something on top of the transcript. Text fields (the composer) show their own I-beam.
+        if hit is NSText || hit is NSTextField { return false }
+        NSCursor.arrow.set()
+        return true
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        if !arrowIfNeeded(event) { super.mouseMoved(with: event) }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if !arrowIfNeeded(event) { super.cursorUpdate(with: event) }
+    }
+}
+
+/// SwiftUI inside the transcript (cards, message buttons, the selection bar): an arrow, not the text view's I-beam,
+/// which otherwise covers every view the text view hosts. Text inside that's selectable still sets its own cursor.
+final class ArrowHostingView<Content: View>: NSHostingView<Content>, ArrowCursorArea {
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .arrow)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if !trackingAreas.contains(where: { $0.owner === self && $0.options.contains(.cursorUpdate) }) {
+            addTrackingArea(NSTrackingArea(rect: .zero, options: [.cursorUpdate, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil))
+        }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.arrow.set()
+    }
+}
+
 final class DisclosureViewProvider: NSTextAttachmentViewProvider {
     private var card: DisclosureCard { (textAttachment as! DisclosureAttachment).card }
 
     override func loadView() {
         let card = self.card
-        view = MainActor.assumeIsolated { NSHostingView(rootView: DisclosureCardView(card: card)) }
+        view = MainActor.assumeIsolated { ArrowHostingView(rootView: DisclosureCardView(card: card)) }
     }
 
     override func attachmentBounds(for attributes: [NSAttributedString.Key: Any], location: NSTextLocation, textContainer: NSTextContainer?, proposedLineFragment: CGRect, position: CGPoint) -> CGRect {

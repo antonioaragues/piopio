@@ -70,7 +70,7 @@ final class ActionsAttachment: NSTextAttachment, @unchecked Sendable {
 final class ActionsViewProvider: NSTextAttachmentViewProvider {
     override func loadView() {
         let actions = (textAttachment as! ActionsAttachment).actions
-        view = MainActor.assumeIsolated { NSHostingView(rootView: ActionsRow(actions: actions)) }
+        view = MainActor.assumeIsolated { ArrowHostingView(rootView: ActionsRow(actions: actions)) }
     }
 
     override func attachmentBounds(for attributes: [NSAttributedString.Key: Any], location: NSTextLocation, textContainer: NSTextContainer?, proposedLineFragment: CGRect, position: CGPoint) -> CGRect {
@@ -450,7 +450,7 @@ final class AskNextAttachment: NSTextAttachment, @unchecked Sendable {
 final class AskNextViewProvider: NSTextAttachmentViewProvider {
     override func loadView() {
         let model = (textAttachment as! AskNextAttachment).model
-        view = MainActor.assumeIsolated { NSHostingView(rootView: AskNextView(model: model)) }
+        view = MainActor.assumeIsolated { ArrowHostingView(rootView: AskNextView(model: model)) }
     }
 
     override func attachmentBounds(for attributes: [NSAttributedString.Key: Any], location: NSTextLocation, textContainer: NSTextContainer?, proposedLineFragment: CGRect, position: CGPoint) -> CGRect {

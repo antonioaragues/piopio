@@ -64,14 +64,25 @@ public final class TranscriptDocument {
     /// Where Remember this saves ("About me", "Daily briefing's memory"); nil hides it (Quick Chat).
     public var rememberDestination: String?
     /// Select and ask: the bar over selected text (Ask about this, Remember, Copy).
-    private var selectionBar: NSHostingView<SelectionBar>?
+    private var selectionBar: ArrowHostingView<SelectionBar>?
 
     public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true, build: Bool = false, root: String? = nil) {
         renderer = ItemRenderer(compact: compact, versions: versions, build: build, root: root)
         self.windowSize = windowSize
         self.pageSize = pageSize
-        scrollView = NSTextView.scrollableTextView()
-        textView = scrollView.documentView as! NSTextView
+        // Like NSTextView.scrollableTextView(), with the transcript's own text view (its cursor over cards).
+        let text = TranscriptTextView(usingTextLayoutManager: true)
+        text.minSize = .zero
+        text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        text.isVerticallyResizable = true
+        text.isHorizontallyResizable = false
+        text.autoresizingMask = [.width]
+        text.textContainer?.widthTracksTextView = true
+        text.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.documentView = text
+        textView = text
         textView.isEditable = false
         textView.isSelectable = true
         textView.allowsUndo = false
@@ -700,7 +711,7 @@ extension TranscriptDocument {
         let onScreen = textView.firstRect(forCharacterRange: range, actualRange: nil)
         let rect = textView.convert(window.convertFromScreen(onScreen), from: nil)
         let bar = SelectionBar(remember: rememberDestination, act: { [weak self] choice in self?.selectionAction(choice, text: text) })
-        let host = selectionBar ?? NSHostingView(rootView: bar)
+        let host = selectionBar ?? ArrowHostingView(rootView: bar)
         host.rootView = bar
         let size = host.fittingSize
         // Above the selection's first line; below it when there's no room above.
@@ -812,6 +823,7 @@ private final class HoverTracker: NSResponder {
     override func mouseMoved(with event: NSEvent) {
         guard let document else { return }
         let textView = document.textView
+        (textView as? TranscriptTextView)?.arrowIfNeeded(event)
         let p = textView.convert(event.locationInWindow, from: nil)
         let inset = textView.textContainerInset
         document.hover(at: NSPoint(x: p.x - inset.width, y: p.y - inset.height))
@@ -823,6 +835,20 @@ private final class HoverTracker: NSResponder {
 }
 
 extension TranscriptDocument {
+    /// For DebugAutomation: the cursor after a mouse move to this window point ("arrow", "ibeam" or "other").
+    public func debugCursor(at point: NSPoint) -> String {
+        guard let window = textView.window,
+              let event = NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0) else { return "none" }
+        // Hovering first reveals a message's buttons, as the real mouse would.
+        let p = textView.convert(point, from: nil)
+        hover(at: NSPoint(x: p.x - textView.textContainerInset.width, y: p.y - textView.textContainerInset.height))
+        textView.layoutSubtreeIfNeeded()
+        NSCursor.iBeam.set()
+        textView.mouseMoved(with: event)
+        let current = NSCursor.current
+        return current == .arrow ? "arrow" : current == .iBeam ? "ibeam" : "other"
+    }
+
     /// Shows a whole Markdown document instead of a conversation (a debate's artifact), always rendered.
     public func showDocument(_ markdown: String) {
         var prose = ItemRenderer()

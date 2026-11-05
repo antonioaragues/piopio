@@ -135,7 +135,7 @@ final class TableViewProvider: NSTextAttachmentViewProvider {
 
     override func loadView() {
         let table = self.table
-        view = MainActor.assumeIsolated { NSHostingView(rootView: TableCardView(table: table)) }
+        view = MainActor.assumeIsolated { ArrowHostingView(rootView: TableCardView(table: table)) }
     }
 
     override func attachmentBounds(for attributes: [NSAttributedString.Key: Any], location: NSTextLocation, textContainer: NSTextContainer?, proposedLineFragment: CGRect, position: CGPoint) -> CGRect {
