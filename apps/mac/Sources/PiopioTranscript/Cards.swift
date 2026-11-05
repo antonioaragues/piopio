@@ -133,8 +133,14 @@ final class CardLayoutFragment: NSTextLayoutFragment {
                     fill(context, rect, DS.card, radius: 8)
                     stroke(context, rect, DS.line, radius: 8)
                 case .code:
-                    // Inline code and project paths (chat v3): chip fill, radius 5, a little air around the text.
-                    fill(context, rect.insetBy(dx: 1, dy: 0.5), DS.chip, radius: 5)
+                    // Inline code and project paths (chat v3): chip fill, radius 5, a little air around the text. Sized
+                    // from the chip's own font at its baseline: tall lines put their extra space above the text, so the
+                    // line's bounds would leave the text sitting low in the chip.
+                    let font = paragraph.attribute(.font, at: start, effectiveRange: nil) as? NSFont ?? .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+                    let baseline = b.minY + line.glyphOrigin.y + point.y
+                    let pad: CGFloat = 3
+                    let chip = CGRect(x: rect.minX + 1, y: baseline - font.ascender - pad, width: rect.width - 2, height: font.ascender - font.descender + pad * 2)
+                    fill(context, chip, DS.chip, radius: 5)
                 }
             }
         }
