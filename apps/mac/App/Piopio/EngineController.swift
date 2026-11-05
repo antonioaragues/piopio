@@ -20,7 +20,7 @@ final class EngineController {
     private(set) var buildSessions: [SessionSummary] = []
     private(set) var models: [ModelInfo] = []
     private(set) var defaultModel: ModelRef?
-    private(set) var hasKey = ProcessInfo.processInfo.environment["PIOPIO_FAUX"] == "1" ? false : Keychain.read(secretOpenRouter) != nil
+    private(set) var hasKey = ProcessInfo.processInfo.environment["PIOPIO_FAUX"] == "1" ? false : Keychain.exists(secretOpenRouter)
     /// Model providers and how each is connected (docs/spec/10-model-providers).
     private(set) var providers: [ProviderInfo] = []
     /// The sign-in in progress (Settings › Models shows it as a sheet).
@@ -839,7 +839,7 @@ final class EngineController {
     func loadProviders() async {
         guard let client, let list = try? await client.call("providers.list", Empty(), as: ProvidersListResult.self) else { return }
         providers = list.providers
-        if faux { hasKey = await scriptedSecrets.get(secretOpenRouter) != nil } else { hasKey = Keychain.read(secretOpenRouter) != nil }
+        if faux { hasKey = await scriptedSecrets.get(secretOpenRouter) != nil } else { hasKey = Keychain.exists(secretOpenRouter) }
     }
 
     /// Starts connecting a provider; the sign-in sheet follows `login`.
