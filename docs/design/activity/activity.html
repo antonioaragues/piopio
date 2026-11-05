@@ -1,0 +1,279 @@
+<title>Piopio Activity Log</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a reading column (720) around two transcript mockups (now, proposed) in Piopio's grey ink. */
+:root {
+  --canvas:#e9e8e4; --win:#fcfcfb; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --fg4:#c4c4bf;
+  --line:rgba(0,0,0,.08); --sel:rgba(0,0,0,.05); --chip:rgba(0,0,0,.06); --bubble:#f0f0ed; --code:#f4f4f1;
+  --accent:#2f6fde; --page:#f7f7f5; --add:#3a8a55; --del:#c2493f; --run:#2f6fde;
+  --shadow:0 0 0 .5px rgba(0,0,0,.2),0 18px 50px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --canvas:#0f0f0e; --win:#1e1e1d; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --fg4:#4a4a46;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.05); --chip:rgba(255,255,255,.08); --bubble:#2b2b29; --code:#232322;
+  --accent:#6ea0ff; --page:#151514; --add:#6cc28a; --del:#ef7d72; --run:#6ea0ff;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 18px 50px rgba(0,0,0,.55); color-scheme:dark } }
+:root[data-theme="dark"] {
+  --canvas:#0f0f0e; --win:#1e1e1d; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --fg4:#4a4a46;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.05); --chip:rgba(255,255,255,.08); --bubble:#2b2b29; --code:#232322;
+  --accent:#6ea0ff; --page:#151514; --add:#6cc28a; --del:#ef7d72; --run:#6ea0ff;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 18px 50px rgba(0,0,0,.55); color-scheme:dark }
+
+* { box-sizing:border-box }
+body { background:var(--page); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:56px 80px }
+.doc { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:18px }
+.wide { max-width:1180px; margin:28px auto 4px }
+h1 { font-size:34px; line-height:1.15; letter-spacing:-.8px; margin:0; text-wrap:balance }
+h2 { font-size:20px; letter-spacing:-.3px; margin:30px 0 0; text-wrap:balance }
+p { margin:0 }
+.lede { font-size:17px; color:var(--fg2); text-wrap:pretty }
+.eyebrow { font-size:12px; color:var(--fg3); letter-spacing:.05em; text-transform:uppercase }
+code { font-family:var(--mono); font-size:13px; background:var(--chip); border-radius:4px; padding:1px 4px }
+ol.issues, ul.spec { margin:0; padding-left:20px; display:flex; flex-direction:column; gap:8px }
+ol.issues li, ul.spec li { padding-left:4px; text-wrap:pretty }
+ul.spec b { font-weight:600 }
+
+/* ---------- stage ---------- */
+.stage { background:var(--canvas); border-radius:16px; padding:24px }
+.states { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; align-items:center }
+.states span { font-size:13px; color:var(--fg2); margin-right:6px }
+.states button { font:inherit; font-size:13px; color:var(--fg2); background:transparent; border:.5px solid var(--line); border-radius:999px; padding:4px 12px; cursor:pointer }
+.states button[aria-pressed="true"] { background:var(--fg); color:var(--win); border-color:var(--fg) }
+.states button:focus-visible, .act:focus-visible, .step:focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+.pair { display:grid; grid-template-columns:1fr 1fr; gap:20px }
+@media (max-width:900px) { .pair { grid-template-columns:1fr } }
+.pane { min-width:0 }
+.pane-cap { font-size:13px; color:var(--fg2); margin-bottom:8px; display:flex; gap:8px; align-items:baseline }
+.pane-cap strong { color:var(--fg); font-size:14px }
+.win { background:var(--win); border-radius:12px; box-shadow:var(--shadow); padding:26px 28px 30px; font-size:14px; line-height:1.5; min-height:440px; overflow:hidden }
+.bubble { margin-left:auto; width:fit-content; max-width:80%; background:var(--bubble); border-radius:18px 18px 4px 18px; padding:9px 15px; font-size:15px; margin-bottom:22px }
+.answer { font-size:15px; line-height:1.6; margin-top:18px; color:var(--fg) }
+.answer[hidden] { display:none }
+
+/* ---------- now (as Piopio draws it today) ---------- */
+.old .line { color:var(--fg3); font-size:13.5px; display:flex; flex-wrap:wrap; align-items:center; gap:0 }
+.old .pill { font-family:var(--mono); font-size:12px; color:var(--fg2); background:var(--chip); border-radius:6px; padding:2px 7px; margin:0 4px }
+.old .sub { margin:12px 0 0 }
+.old .th { color:var(--fg3); font-size:13.5px }
+.old .rule { border-left:2px solid var(--line); padding:6px 0 6px 18px; margin:8px 0 14px; color:var(--fg2); font-size:14px }
+.old .rule p + p { margin-top:12px }
+.old .tool { display:flex; gap:8px; align-items:center; color:var(--fg3); font-size:13.5px; padding:5px 0; min-width:0 }
+.old .tool .m { font-family:var(--mono); font-size:12.5px; color:var(--fg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0 }
+.old .open { color:var(--accent); margin-left:auto }
+
+/* ---------- proposed ---------- */
+.act { display:inline-flex; align-items:center; gap:6px; color:var(--fg3); font-size:13px; cursor:pointer; background:none; border:0; padding:2px 0; font-family:inherit; text-align:left; max-width:100% }
+.act:hover { color:var(--fg2) }
+.act .name { color:var(--fg2) }
+.act .add { color:var(--add); font-family:var(--mono); font-size:12px }
+.act .chev { transition:transform .15s; flex-shrink:0 }
+.act[aria-expanded="true"] .chev { transform:rotate(90deg) }
+.spin { width:10px; height:10px; border-radius:50%; border:1.5px solid var(--fg4); border-top-color:var(--fg2); animation:spin .8s linear infinite; flex-shrink:0 }
+@keyframes spin { to { transform:rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .spin { animation:none } .act .chev { transition:none } }
+.wait { width:7px; height:7px; border-radius:50%; background:var(--run); flex-shrink:0 }
+
+.log { margin:10px 0 0; position:relative; display:flex; flex-direction:column }
+.log[hidden] { display:none }
+.log::before { content:""; position:absolute; left:7px; top:12px; bottom:12px; width:1px; background:var(--line) }
+.step { display:grid; grid-template-columns:16px 1fr auto; column-gap:10px; align-items:start; padding:4px 0; border-radius:6px; position:relative; cursor:default; width:100% }
+button.step { font:inherit; color:inherit; background:none; border:0; text-align:left; cursor:pointer }
+button.step:hover .row { color:var(--fg2) }
+.glyph { width:16px; height:20px; display:grid; place-items:center; background:var(--win); color:var(--fg3); position:relative; z-index:1 }
+.glyph svg { width:13px; height:13px }
+.glyph.bad { color:var(--del) }
+.row { display:flex; gap:7px; align-items:baseline; min-width:0; color:var(--fg3); font-size:13px; line-height:20px }
+.row .what { flex-shrink:0 }
+.row .obj { font-family:var(--mono); font-size:12.5px; color:var(--fg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0 }
+.meta { font-size:12px; color:var(--fg3); line-height:20px; display:flex; gap:8px; align-items:center; white-space:nowrap; font-variant-numeric:tabular-nums }
+.meta .ok { color:var(--fg3) }
+.meta .bad { color:var(--del) }
+.meta .hov { opacity:0; transition:opacity .12s }
+.step:hover .meta .hov, .step:focus-visible .meta .hov { opacity:1 }
+.thinking { grid-column:2 / 4; color:var(--fg3); font-size:13px; line-height:1.55; margin:2px 0 4px; text-wrap:pretty }
+.thinking.clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
+.more { grid-column:2 / 4; font-size:12px; color:var(--fg3); background:none; border:0; padding:0; text-align:left; cursor:pointer; font-family:inherit; width:fit-content; margin-bottom:4px }
+.more:hover { color:var(--fg2) }
+.out { grid-column:2 / 4; background:var(--code); border-radius:8px; padding:10px 12px; margin:4px 0 6px; font-family:var(--mono); font-size:12px; line-height:1.55; color:var(--fg2); overflow-x:auto; white-space:pre }
+.out .cmd { color:var(--fg) }
+.out .err { color:var(--del) }
+.out[hidden], .thinking[hidden], .more[hidden] { display:none }
+
+/* ---------- notes ---------- */
+.table { overflow-x:auto }
+table { border-collapse:collapse; width:100%; font-size:14px }
+th, td { text-align:left; padding:9px 10px 9px 0; border-bottom:.5px solid var(--line); vertical-align:top }
+th { font-size:12px; color:var(--fg3); font-weight:500; letter-spacing:.04em; text-transform:uppercase }
+td:first-child { color:var(--fg2); white-space:nowrap; padding-right:18px }
+</style>
+
+<div class="doc">
+  <p class="eyebrow">Proposal · transcript · 2026-11-05</p>
+  <h1>The activity line, as a short log</h1>
+  <p class="lede">What the agent did before it answers (its thinking, the files it read, the commands it ran) should read as one quiet line that opens into a short log, in the order it happened. Today it reads as several things stacked on top of each other.</p>
+
+  <h2>What feels off now</h2>
+  <ol class="issues">
+    <li><b>The line mixes text and a pill.</b> The file name sits in a grey box, which breaks the sentence and leaves a gap before the comma ("Thought , read").</li>
+    <li><b>The order doesn't match.</b> The line says read, then ran; the list underneath shows Ran first, then Read.</li>
+    <li><b>Thinking shows up twice and too loud.</b> "Thought" is in the line and again as its own row, open by default, at almost answer size, behind a thick rule. It reads like part of the answer.</li>
+    <li><b>Commands show their noise.</b> <code>cd /Users/…/financial_ia &amp;&amp;</code> takes the space and the middle of the command gets cut.</li>
+    <li><b>A blue "Open" competes with the answer</b>, on every file row, all the time.</li>
+  </ol>
+</div>
+
+<div class="wide">
+  <div class="stage">
+    <div class="states" role="group" aria-label="State to show">
+      <span>Show</span>
+      <button type="button" data-state="closed" aria-pressed="true">Done</button>
+      <button type="button" data-state="open" aria-pressed="false">Done, opened</button>
+      <button type="button" data-state="running" aria-pressed="false">Working</button>
+      <button type="button" data-state="failed" aria-pressed="false">A command failed</button>
+    </div>
+    <div class="pair">
+      <div class="pane">
+        <div class="pane-cap"><strong>Now</strong> opened, as in your screenshot</div>
+        <div class="win old">
+          <div class="bubble">Hazme un PDF básico</div>
+          <div class="line">Thought <span>&nbsp;, read</span><span class="pill">documento-random.md</span><span>, ran 1 command</span>&nbsp;⌄</div>
+          <div class="sub">
+            <div class="th">Thought ⌄</div>
+            <div class="rule">
+              <p>I need to produce a basic PDF, so I'll look at the project folder in /Users/antonioaragues/Proyectos/financial_ia first. Then I'll check whether Python, reportlab, or another tool is available to generate it.</p>
+              <p>I'm noticing a file called documento-random.md in the project, and I wonder whether the "basic PDF" the user mentioned refers to it. I'll open that file to check.</p>
+            </div>
+            <div class="tool">Ran <span class="m">cd /Users/antonioaragues/Proyectos/financ…fpdf; print('fpdf ok')" 2&gt;&amp;1) | head -20</span> ›</div>
+            <div class="tool">Read <span class="m">documento-random.md</span><span class="open">Open</span> ›</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="pane-cap"><strong>Proposed</strong> click the line, a thought, or a command</div>
+        <div class="win">
+          <div class="bubble">Hazme un PDF básico</div>
+          <div id="proposed"></div>
+          <p class="answer" id="answer">I made <b>documento-random.pdf</b> from your Markdown file with fpdf: one page, the title as a heading and the three sections below it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="doc">
+  <h2>The proposal</h2>
+  <ul class="spec">
+    <li><b>One line, one voice.</b> "Thought for 4s, read documento-random.md, ran a command ›". Plain text in the quiet grey; the file name is just a shade darker, with no box. The chevron points right and turns down when open. Edits keep their green +N.</li>
+    <li><b>Opened, it's a log in the order things happened.</b> A thin rail on the left with a small glyph per step (thought, read, ran, edited, searched). Each step is one row: verb, object in mono, and on the right what you'd want to know at a glance (how long, how it ended).</li>
+    <li><b>Thinking becomes a step, not a block.</b> "Thought for 4s", then the first two lines of it in the same small grey, with "Show all". No rule, no second disclosure, never at answer size.</li>
+    <li><b>Commands show what they do.</b> A leading <code>cd &lt;project&gt; &amp;&amp;</code> is dropped (it's where the session already is; a different folder shows as "in other-folder" on the right). Long commands cut at the end, not the middle. Clicking opens the full command and its output, with the exit code.</li>
+    <li><b>Actions appear on hover.</b> Open (a file) and Copy (a command) show at the right of the row only while you point at it, in grey.</li>
+    <li><b>Working and waiting stay on the line.</b> "Running python3 -c …" with a small spinner while it runs; "Waiting for you" with the blue dot when it needs approval, as today. A failed command shows a red ✕ in the log and "1 failed" on the line.</li>
+  </ul>
+
+  <h2>What changes in the app</h2>
+  <div class="table">
+    <table>
+      <thead><tr><th>Where</th><th>Change</th></tr></thead>
+      <tbody>
+        <tr><td>Activity line</td><td>Built from the steps in the order they ran; the file name drawn as tinted text instead of a chip, so no stray space before the comma. (<code>ItemRenderer.activityParts</code>, <code>stepsCard</code>)</td></tr>
+        <tr><td>Opened log</td><td>The nested cards become rows on a rail, with glyphs and right-aligned meta (duration, exit status, +N). Thinking is the first row, clamped to two lines. (<code>DisclosureCardView</code>)</td></tr>
+        <tr><td>Commands</td><td>A display form of the command without the project's own <code>cd</code>, cut at the end; the full text and output when opened, as now.</td></tr>
+        <tr><td>Open, Copy</td><td>Shown on hover only, grey.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="color:var(--fg2)">App only: the engine already sends the steps, their order, durations and exit codes. Applies everywhere the transcript shows activity: chats, Build sessions, notebooks and agents.</p>
+</div>
+
+<script>
+(function () {
+  const icons = {
+    thought: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5" stroke-dasharray="2.2 2"/></svg>',
+    read: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3"/></svg>',
+    ran: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3.5 3.5L3 11.5"/><path d="M8.5 12h5"/></svg>',
+    write: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M3 13l1-3.5L10.5 3l2.5 2.5L6.5 12z"/></svg>',
+    bad: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+  };
+  const chev = '<svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 2l3 3-3 3"/></svg>';
+  const thinking = "I need to produce a basic PDF, so I'll look at the project folder first. Then I'll check whether Python, reportlab, or another tool is available to generate it. I'm noticing a file called documento-random.md in the project, and I wonder whether the \"basic PDF\" the user mentioned refers to it. I'll open that file to check.";
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  function steps(state) {
+    const list = [
+      { kind: "thought", what: "Thought for 4s", meta: "" },
+      { kind: "read", what: "Read", obj: "documento-random.md", meta: "2 KB", hover: "Open" },
+      { kind: "ran", what: "Ran", obj: "python3 -c \"import fpdf; print('fpdf ok')\" 2>&1 | head -20", meta: "0.4s", hover: "Copy",
+        out: '<span class="cmd">$ cd /Users/antonioaragues/Proyectos/financial_ia\n$ python3 -c "import fpdf; print(\'fpdf ok\')" 2>&1 | head -20</span>\nfpdf ok\n\nexit 0' },
+    ];
+    if (state === "failed") {
+      list[2] = { kind: "ran", what: "Ran", obj: "python3 -c \"import reportlab\"", meta: '<span class="bad">exit 1</span>', bad: true, hover: "Copy",
+        out: '<span class="cmd">$ python3 -c "import reportlab"</span>\n<span class="err">ModuleNotFoundError: No module named \'reportlab\'</span>\n\nexit 1' };
+      list.push({ kind: "ran", what: "Ran", obj: "python3 -c \"import fpdf; print('fpdf ok')\"", meta: "0.4s", hover: "Copy",
+        out: '<span class="cmd">$ python3 -c "import fpdf; print(\'fpdf ok\')"</span>\nfpdf ok\n\nexit 0' });
+      list.push({ kind: "write", what: "Wrote", obj: "make_pdf.py", meta: '<span style="color:var(--add);font-family:var(--mono)">+24</span>', hover: "Open" });
+    }
+    if (state === "running") {
+      list.push({ kind: "ran", what: "Running", obj: "python3 make_pdf.py", meta: "", live: true });
+    }
+    return list;
+  }
+
+  function lineHTML(state, open) {
+    if (state === "running") return `<button type="button" class="act" aria-expanded="${open}"><span class="spin" aria-hidden="true"></span>Running <span class="name" style="font-family:var(--mono);font-size:12.5px">python3 make_pdf.py</span>…</button>`;
+    if (state === "failed") return `<button type="button" class="act" aria-expanded="${open}">Thought for 4s, read <span class="name">documento-random.md</span>, wrote <span class="name">make_pdf.py</span> <span class="add">+24</span>, ran 2 commands (1 failed) ${chev}</button>`;
+    return `<button type="button" class="act" aria-expanded="${open}">Thought for 4s, read <span class="name">documento-random.md</span>, ran a command ${chev}</button>`;
+  }
+
+  function stepHTML(s, i) {
+    const glyph = s.live ? '<span class="glyph"><span class="spin"></span></span>' : `<span class="glyph${s.bad ? " bad" : ""}">${s.bad ? icons.bad : icons[s.kind]}</span>`;
+    if (s.kind === "thought") {
+      return `<div class="step">${glyph}<div class="row"><span class="what">${s.what}</span></div><div class="meta"></div>
+        <p class="thinking clamp" id="th">${esc(thinking)}</p><button type="button" class="more" data-more>Show all</button></div>`;
+    }
+    const tag = s.out ? "button" : "div";
+    const attrs = s.out ? ` type="button" aria-expanded="false" data-out="o${i}"` : "";
+    return `<${tag} class="step"${attrs}>${glyph}<div class="row"><span class="what">${s.what}</span><span class="obj">${esc(s.obj)}</span></div>
+      <div class="meta">${s.hover ? `<span class="hov">${s.hover}</span>` : ""}<span>${s.meta}</span>${s.out ? chev : ""}</div></${tag}>
+      ${s.out ? `<pre class="out" id="o${i}" hidden>${s.out}</pre>` : ""}`;
+  }
+
+  const root = document.getElementById("proposed");
+  const answer = document.getElementById("answer");
+  let state = "closed";
+
+  function render() {
+    const open = state !== "closed";
+    root.innerHTML = lineHTML(state, open) + `<div class="log"${open ? "" : " hidden"}>${steps(state).map(stepHTML).join("")}</div>`;
+    answer.hidden = state === "running";
+    root.querySelector(".act").addEventListener("click", (e) => {
+      const log = root.querySelector(".log");
+      log.hidden = !log.hidden;
+      e.currentTarget.setAttribute("aria-expanded", String(!log.hidden));
+    });
+    root.querySelectorAll("[data-out]").forEach((b) => b.addEventListener("click", () => {
+      const out = document.getElementById(b.dataset.out);
+      out.hidden = !out.hidden;
+      b.setAttribute("aria-expanded", String(!out.hidden));
+      const c = b.querySelector(".chev"); if (c) c.style.transform = out.hidden ? "" : "rotate(90deg)";
+    }));
+    const more = root.querySelector("[data-more]");
+    if (more) more.addEventListener("click", () => {
+      const th = document.getElementById("th");
+      th.classList.toggle("clamp");
+      more.textContent = th.classList.contains("clamp") ? "Show all" : "Show less";
+    });
+  }
+
+  document.querySelectorAll(".states button").forEach((b) => b.addEventListener("click", () => {
+    state = b.dataset.state;
+    document.querySelectorAll(".states button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    render();
+  }));
+  render();
+})();
+</script>

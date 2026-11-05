@@ -32,3 +32,26 @@ import Testing
     let read = ToolItem(id: "t3", at: "", callId: "c3", tool: "read", args: .object(["path": .string("x.swift"), "offset": .number(10), "limit": .number(5)]), status: .running)
     #expect(ItemRenderer.toolTitle(read) == ("Reading", "x.swift:10–14"))
 }
+
+@Test func commandsDropTheProjectsOwnCd() {
+    #expect(ItemRenderer.displayCommand("cd /Users/me/app && npm test", root: "/Users/me/app") == ("npm test", nil))
+    #expect(ItemRenderer.displayCommand("cd \"/Users/me/app\"; ls", root: "/Users/me/app") == ("ls", nil))
+    #expect(ItemRenderer.displayCommand("cd /tmp/other && make", root: "/Users/me/app") == ("make", "other"))
+    #expect(ItemRenderer.displayCommand("npm test", root: "/Users/me/app") == ("npm test", nil))
+
+    let bash = ToolItem(id: "t", at: "", callId: "c", tool: "bash", args: .object(["command": .string("cd /Users/me/app && python3 -c 'print(1)'")]), status: .done, output: "1",
+                        details: .object(["type": .string("terminal"), "command": .string("x"), "exitCode": .number(0)]), durationMs: 400)
+    let card = ItemRenderer.toolCard(bash, root: "/Users/me/app")
+    #expect(card.detail == "python3 -c 'print(1)'")
+    #expect(card.body.hasPrefix("$ cd /Users/me/app && python3"))
+    #expect(card.glyph == "apple.terminal")
+}
+
+@Test func theActivityLineFollowsTheOrderThingsHappened() {
+    let ran = ToolItem(id: "a", at: "", callId: "a", tool: "bash", args: .object(["command": .string("ls")]), status: .error)
+    let read = ToolItem(id: "b", at: "", callId: "b", tool: "read", args: .object(["path": .string("/p/notes.md")]), status: .done)
+    let steps = StepsItem(id: "s", at: "", tools: [ran, read], thinking: "Hmm", thinkingMs: 4000)
+    let parts = ItemRenderer.activityParts(steps, root: "/p")
+    #expect(parts.map(\.text) == ["Thought for 4s", "ran a command (it failed)", "read"])
+    #expect(parts[2].chip == "notes.md")
+}

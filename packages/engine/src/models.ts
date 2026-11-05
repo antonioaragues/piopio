@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Model, type Api, type Provider } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider, fauxText, fauxThinking, fauxToolCall, type Model, type Api, type Provider } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { ModelInfo, ModelRef, ProviderInfo } from "@piopio/protocol";
 import { credentialSecret, KeychainCredentialStore } from "./credentials.js";
@@ -426,6 +426,7 @@ function toInfo(m: Model<Api>, providerName: string, billing: string | undefined
  *   plan: <summary> | <step>…          propose_plan
  *   task: <title> | <prompt>           task (a subagent)
  *   call: <tool> | <JSON arguments>    any tool (MCP tools in tests)
+ *   think: <text>                      thinking before the first step
  */
 function installEcho(faux: FauxHandle): void {
 	const step = (context: { messages: readonly { role: string; content: unknown }[] }) => {
@@ -436,7 +437,9 @@ function installEcho(faux: FauxHandle): void {
 		const script = scriptedTools(text);
 		const done = context.messages.slice(lastUser + 1).filter((m) => m.role === "toolResult").length;
 		const next = script[done];
-		if (next) return fauxAssistantMessage([fauxToolCall(next.name, next.args as Parameters<typeof fauxToolCall>[1])], { stopReason: "toolUse" });
+		const thinking = done === 0 ? text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("think: ")).map((l) => l.slice(7)).join("\n\n") : "";
+		const call = next ? fauxToolCall(next.name, next.args as Parameters<typeof fauxToolCall>[1]) : undefined;
+		if (call) return fauxAssistantMessage(thinking ? [fauxThinking(thinking), call] : [call], { stopReason: "toolUse" });
 		return fauxAssistantMessage([fauxText(`Echo: ${text}`)]);
 	};
 	faux.setResponses([step]);

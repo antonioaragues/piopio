@@ -258,8 +258,8 @@ nonisolated struct ItemRenderer: Sendable {
         let card = DisclosureCard(kind: .activity, title: "", body: "")
         var nested = s.tools.map { toolCard($0, root: root) }
         if let thinking = s.thinking, !thinking.isEmpty {
-            let thought = DisclosureCard(kind: .thinking, title: thought(s.thinkingMs), body: thinking)
-            thought.expanded = true
+            let thought = DisclosureCard(kind: .thinking, title: thought(s.thinkingMs), body: thinking.trimmingCharacters(in: .whitespacesAndNewlines))
+            thought.glyph = "circle.dashed"
             nested.insert(thought, at: 0)
         }
         card.content = .cards(nested)
@@ -269,8 +269,9 @@ nonisolated struct ItemRenderer: Sendable {
         if waiting {
             card.title = "Waiting for you"
         } else if let running {
-            let (verb, detail) = toolTitle(running)
-            card.title = detail.isEmpty ? "\(verb)…" : "\(verb) \(relative(detail, root: root))…"
+            let (verb, raw) = toolTitle(running)
+            let detail = running.tool == "bash" ? displayCommand(raw, root: root).command : relative(raw, root: root)
+            card.title = detail.isEmpty ? "\(verb)…" : "\(verb) \(detail)…"
         } else {
             card.parts = activityParts(s, root: root)
             card.title = card.parts.map { [$0.text, $0.chip].compactMap { $0 }.joined(separator: " ") }.joined(separator: ", ")
@@ -285,7 +286,8 @@ nonisolated struct ItemRenderer: Sendable {
         return s < 60 ? "Thought for \(s)s" : "Thought for \(s / 60)m \(s % 60)s"
     }
 
-    /// The pieces of a finished activity line: what it thought, read, edited (+lines), ran, and anything else.
+    /// The pieces of a finished activity line, in the order they happened: what it thought, read, edited (+lines),
+    /// ran, and anything else (docs/design/activity).
     static func activityParts(_ s: StepsItem, root: String?) -> [ActivityPart] {
         var parts: [ActivityPart] = []
         let tools = s.tools
@@ -298,26 +300,57 @@ nonisolated struct ItemRenderer: Sendable {
             }
             return seen
         }
-        let reads = paths(["read"])
-        if reads.count == 1 { parts.append(ActivityPart(text: "read", chip: reads[0], help: reads[0])) }
-        else if reads.count > 1 { parts.append(ActivityPart(text: "read \(reads.count) files", help: reads.joined(separator: "\n"))) }
-        let edited = paths(["edit", "write"])
-        let added = tools.filter { ["edit", "write"].contains($0.tool) && $0.status != .error }.reduce(0) { n, t in
-            if case .diff(_, let patch)? = t.typedDetails { n + DiffLine.parse(patch).added } else { n }
+        func group(_ tool: String) -> String { ["read": "read", "edit": "edit", "write": "edit", "bash": "bash"][tool] ?? "rest" }
+        var order: [String] = []
+        for t in tools where t.status != .denied && !order.contains(group(t.tool)) { order.append(group(t.tool)) }
+        let failedCommands = tools.filter { $0.tool == "bash" && $0.status == .error }.count
+        for key in order {
+            switch key {
+            case "read":
+                let reads = paths(["read"])
+                if reads.count == 1 { parts.append(ActivityPart(text: "read", chip: reads[0], help: reads[0])) }
+                else if reads.count > 1 { parts.append(ActivityPart(text: "read \(reads.count) files", help: reads.joined(separator: "\n"))) }
+            case "edit":
+                let edited = paths(["edit", "write"])
+                let added = tools.filter { ["edit", "write"].contains($0.tool) && $0.status != .error }.reduce(0) { n, t in
+                    if case .diff(_, let patch)? = t.typedDetails { n + DiffLine.parse(patch).added } else { n }
+                }
+                let verb = tools.contains { $0.tool == "edit" } ? "edited" : "wrote"
+                if edited.count == 1 { parts.append(ActivityPart(text: verb, chip: edited[0], added: added > 0 ? added : nil, help: edited[0])) }
+                else if edited.count > 1 { parts.append(ActivityPart(text: "\(verb) \(edited.count) files", added: added > 0 ? added : nil, help: edited.joined(separator: "\n"))) }
+            case "bash":
+                let commands = tools.filter { $0.tool == "bash" && $0.status != .denied }.count
+                var text = commands == 1 ? "ran a command" : "ran \(commands) commands"
+                if failedCommands > 0 { text += commands == 1 ? " (it failed)" : " (\(failedCommands) failed)" }
+                parts.append(ActivityPart(text: text, warning: failedCommands > 0))
+            default:
+                let rest = tools.filter { group($0.tool) == "rest" && $0.status != .denied }
+                parts += activitySummary(rest).map { ActivityPart(text: $0) }
+            }
         }
-        if edited.count == 1 { parts.append(ActivityPart(text: "edited", chip: edited[0], added: added > 0 ? added : nil, help: edited[0])) }
-        else if edited.count > 1 { parts.append(ActivityPart(text: "edited \(edited.count) files", added: added > 0 ? added : nil, help: edited.joined(separator: "\n"))) }
-        let commands = tools.filter { $0.tool == "bash" && $0.status != .denied }.count
-        if commands > 0 { parts.append(ActivityPart(text: "ran \(commands) command\(commands == 1 ? "" : "s")")) }
-        let rest = tools.filter { !["read", "edit", "write", "bash"].contains($0.tool) && $0.status != .denied }
-        parts += activitySummary(rest).map { ActivityPart(text: $0) }
         let denied = tools.filter { $0.status == .denied }.count
         if denied > 0 { parts.append(ActivityPart(text: denied == 1 ? "you denied 1 step" : "you denied \(denied) steps")) }
-        let failed = tools.filter { $0.status == .error }.count
+        let failed = tools.filter { $0.status == .error && $0.tool != "bash" }.count
         if failed > 0 { parts.append(ActivityPart(text: failed == 1 ? "1 step failed" : "\(failed) steps failed", warning: true)) }
         if parts.isEmpty { parts.append(ActivityPart(text: "worked")) }
         parts[0].text = parts[0].text.prefix(1).uppercased() + parts[0].text.dropFirst()
         return parts
+    }
+
+    /// A command as it reads best: without a leading `cd` into the project (where the session already is). A `cd`
+    /// somewhere else is dropped too and named as `folder`.
+    static func displayCommand(_ command: String, root: String?) -> (command: String, folder: String?) {
+        let pattern = #"^\s*cd\s+("[^"]+"|'[^']+'|\S+)\s*(&&|;)\s*"#
+        guard let match = command.range(of: pattern, options: .regularExpression) else { return (command, nil) }
+        var dir = String(command[match]).replacingOccurrences(of: #"^\s*cd\s+"#, with: "", options: .regularExpression)
+        dir = dir.replacingOccurrences(of: #"\s*(&&|;)\s*$"#, with: "", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        let rest = String(command[match.upperBound...])
+        guard !rest.isEmpty else { return (command, nil) }
+        if dir == "." { return (rest, nil) }
+        // /var and /private/var are the same folder: compare where both really are.
+        let real = { (path: String) in URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path }
+        if let root, real(dir) == real(root) { return (rest, nil) }
+        return (rest, URL(fileURLWithPath: dir).lastPathComponent)
     }
 
     /// A path inside the project, relative to it ("src/app.ts"); anything else as given.
@@ -583,7 +616,8 @@ nonisolated struct ItemRenderer: Sendable {
     static func toolCard(_ t: ToolItem, root: String? = nil) -> DisclosureCard {
         let (title, raw) = toolTitle(t)
         let detail = relative(raw, root: root)
-        let duration = t.durationMs.map { $0 < 1000 ? String(format: "%.1fs", $0 / 1000) : String(format: "%.0fs", $0 / 1000) } ?? (t.status == .running ? "…" : "")
+        // Steps quicker than a tenth of a second show no time.
+        let duration = t.durationMs.map { $0 < 100 ? "" : $0 < 1000 ? String(format: "%.1fs", $0 / 1000) : String(format: "%.0fs", $0 / 1000) } ?? (t.status == .running ? "…" : "")
         let failed = t.status == .error
         let card: DisclosureCard
         switch t.typedDetails {
@@ -605,10 +639,18 @@ nonisolated struct ItemRenderer: Sendable {
             card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .text(t.output ?? ""))
             if let sessionId { card.action = ("Open", .openSession(sessionId)) }
         case .terminal(_, let exitCode):
+            let full = t.args?["command"]?.stringValue ?? raw
+            let shown = displayCommand(full, root: root)
             var trailing = [String]()
+            if let folder = shown.folder { trailing.append("in \(folder)") }
             if let exitCode, exitCode != 0 { trailing.append("exit \(exitCode)") }
             if !duration.isEmpty { trailing.append(duration) }
-            card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .terminal(t.output ?? ""))
+            let firstLine = shown.command.split(separator: "\n").first.map(String.init) ?? shown.command
+            // Opened: the whole command, then what it printed.
+            let output = (t.output ?? "").trimmingCharacters(in: .newlines)
+            card = DisclosureCard(tool: title, detail: firstLine, trailing: trailing.joined(separator: " · "), content: .terminal("$ \(full)" + (output.isEmpty ? "" : "\n\n\(output)")))
+            card.truncateTail = true
+            card.action = ("Copy", .copyText(full))
         default:
             var body = t.output ?? ""
             if t.tool == "propose_plan", case .array(let steps)? = t.args?["steps"] {
@@ -618,6 +660,8 @@ nonisolated struct ItemRenderer: Sendable {
             card.expanded = t.tool == "propose_plan"
         }
         card.failed = failed
+        card.glyph = glyph(t.tool)
+        if ["codemode"].contains(t.tool) { card.truncateTail = true }
         // Files the agent read or changed open in the viewer (BR4).
         if ["read", "edit", "write"].contains(t.tool), let path = t.args?["path"]?.stringValue, t.status != .denied {
             var line: Int?
@@ -633,6 +677,24 @@ nonisolated struct ItemRenderer: Sendable {
         default: break
         }
         return card
+    }
+
+    /// A step's icon in the activity log.
+    static func glyph(_ tool: String) -> String {
+        switch tool {
+        case "read": "doc.text"
+        case "edit", "write": "pencil"
+        case "bash", "codemode": "apple.terminal"
+        case "grep", "find", "web_search", "tool_search": "magnifyingglass"
+        case "ls": "folder"
+        case "web_fetch": "globe"
+        case "todo": "checklist"
+        case "task": "person.2"
+        case "propose_plan": "list.number"
+        case let name where name.hasPrefix("calendar"): "calendar"
+        case let name where name.hasPrefix("mail"): "envelope"
+        default: "wrench.and.screwdriver"
+        }
     }
 
     /// Human titles for known tools ("Searched the web" + the query); others show their name and status.

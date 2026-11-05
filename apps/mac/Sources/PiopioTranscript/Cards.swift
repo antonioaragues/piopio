@@ -234,8 +234,14 @@ public final class DisclosureCard: @unchecked Sendable {
     public var toggledByReader = false
     /// Diff cards show the first `previewLines` until "more lines" is clicked.
     public var showAll = false
-    /// A link in the header (a subagent's "Open").
+    /// A link in the header (a subagent's "Open"); in an activity log it shows on hover.
     public var action: (title: String, action: TranscriptAction)?
+    /// The step's icon in an activity log (an SF Symbol).
+    public var glyph = "circle"
+    /// Commands cut at the end; paths in the middle.
+    public var truncateTail = false
+    /// The width last laid out at, so nested rows measure with the same width.
+    @ObservationIgnored var measuredWidth: CGFloat = 600
     @ObservationIgnored var onToggle: (@MainActor (DisclosureCard) -> Void)?
     @ObservationIgnored var onAction: (@MainActor (TranscriptAction) -> Void)?
 
@@ -302,11 +308,12 @@ public final class DisclosureCard: @unchecked Sendable {
     }
 
     func height(width: CGFloat) -> CGFloat {
+        measuredWidth = width
         if case .plan(let plan) = content { return plan.height(width: width) }
         let header = kind == .tool ? Self.collapsedHeight : Self.lineHeight
         guard expanded, !isEmpty else { return header }
         if case .cards(let cards) = content {
-            return header + cards.reduce(0) { $0 + $1.height(width: width) + Self.nestedSpacing } + 2
+            return header + 2 + cards.reduce(0) { $0 + $1.logHeight(width: width) + Self.logSpacing }
         }
         if case .diff = content {
             let (lines, hidden) = visibleDiff
@@ -317,6 +324,42 @@ public final class DisclosureCard: @unchecked Sendable {
         let h = text.boundingRect(with: NSSize(width: max(50, width - 28), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height
         // Long outputs scroll inside the card.
         return header + min(ceil(h) + 20, 360)
+    }
+}
+
+extension DisclosureCard {
+    /// An activity log: a rail on the left, a glyph per step, and the step's text after it (docs/design/activity).
+    static let logIndent: CGFloat = 26
+    static let logSpacing: CGFloat = 2
+    static var thoughtFont: NSFont { .systemFont(ofSize: 13) }
+
+    private static func thoughtHeight(_ text: String, width: CGFloat) -> CGFloat {
+        let p = NSMutableParagraphStyle()
+        p.lineSpacing = 2
+        let s = NSAttributedString(string: text, attributes: [.font: thoughtFont, .paragraphStyle: p])
+        return ceil(s.boundingRect(with: NSSize(width: max(50, width), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height)
+    }
+
+    /// The thinking's height at full length and clamped to two lines, at this width.
+    func thoughtHeights(width: CGFloat) -> (full: CGFloat, clamped: CGFloat) {
+        let full = Self.thoughtHeight(body, width: width - Self.logIndent)
+        return (full, min(full, Self.thoughtHeight("A\nA", width: 200)))
+    }
+
+    /// A thought in the log shows two lines and "Show all"; at full length it scrolls past 360.
+    var thoughtNeedsMore: Bool {
+        let (full, clamped) = thoughtHeights(width: measuredWidth + Self.logIndent)
+        return full > clamped + 1
+    }
+
+    /// A step's height inside an activity log.
+    func logHeight(width: CGFloat) -> CGFloat {
+        guard kind == .thinking else { return height(width: width - Self.logIndent) }
+        measuredWidth = width - Self.logIndent
+        let (full, clamped) = thoughtHeights(width: width)
+        let more = full > clamped + 1
+        let text = showAll ? min(full, 360) : clamped
+        return Self.collapsedHeight + text + (more ? 22 : 4)
     }
 }
 
@@ -473,15 +516,7 @@ struct DisclosureCardView: View {
                     if card.parts.isEmpty {
                         Text(card.title).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).truncationMode(.tail)
                     } else {
-                        ForEach(Array(card.parts.enumerated()), id: \.offset) { i, part in
-                            Text(i == 0 ? part.text : ", " + part.text).foregroundStyle(Color(nsColor: part.warning ? DS.fg2 : DS.fg3)).lineLimit(1).fixedSize()
-                            if let chip = part.chip {
-                                Text(chip).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.fg2)).lineLimit(1).truncationMode(.middle)
-                                    .padding(.horizontal, 5).frame(height: 20)
-                                    .background(Color(nsColor: DS.chip), in: RoundedRectangle(cornerRadius: 5))
-                            }
-                            if let added = part.added { Text("+\(added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.green)).fixedSize() }
-                        }
+                        Text(Self.line(card.parts)).lineLimit(1).truncationMode(.tail)
                     }
                     if !card.working && !card.isEmpty {
                         Image(systemName: card.expanded ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
@@ -497,25 +532,48 @@ struct DisclosureCardView: View {
             if card.expanded {
                 switch card.content {
                 case .cards(let cards):
-                    VStack(alignment: .leading, spacing: DisclosureCard.nestedSpacing) {
+                    // The log (docs/design/activity): steps in the order they happened, on a thin rail.
+                    VStack(alignment: .leading, spacing: DisclosureCard.logSpacing) {
                         ForEach(Array(cards.enumerated()), id: \.offset) { _, child in
-                            DisclosureCardView(card: child, relay: { [card] in card.onToggle?(card) })
-                                .frame(height: child.height(width: 600))
+                            LogStepView(card: child, relay: { [card] in card.onToggle?(card) })
+                                .frame(height: child.logHeight(width: card.measuredWidth))
                                 .onAppear { child.onAction = card.onAction }
                         }
                     }
+                    .padding(.top, 2)
+                    .background(alignment: .topLeading) {
+                        Rectangle().fill(Color(nsColor: DS.line)).frame(width: 1).padding(.leading, 7.5).padding(.vertical, 13)
+                    }
                 case .text(let text), .terminal(let text):
-                    // A thought: a thin rule on the left, in grey.
+                    // A thought on its own: small and grey, under a hairline rule.
                     ScrollView {
-                        Text(text).font(.system(size: 13)).lineSpacing(2).foregroundStyle(Color(nsColor: DS.fg2)).textSelection(.enabled)
+                        Text(text).font(.system(size: 13)).lineSpacing(2).foregroundStyle(Color(nsColor: DS.fg3)).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14).padding(.vertical, 4)
                     }
-                    .overlay(alignment: .leading) { Rectangle().fill(Color(nsColor: DS.line)).frame(width: 1.5) }
+                    .overlay(alignment: .leading) { Rectangle().fill(Color(nsColor: DS.line)).frame(width: 1) }
                 case .diff, .plan: EmptyView()
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// The activity line as one run of text: "Thought for 4s, read documento-random.md, ran a command". Names a shade
+    /// darker, no boxes; an edit's +N in green.
+    static func line(_ parts: [ActivityPart]) -> AttributedString {
+        var out = AttributedString()
+        func add(_ text: String, _ color: NSColor, mono: Bool = false) {
+            var run = AttributedString(text)
+            run.foregroundColor = Color(nsColor: color)
+            if mono { run.font = .system(size: 12, design: .monospaced) }
+            out += run
+        }
+        for (i, part) in parts.enumerated() {
+            add((i == 0 ? "" : ", ") + part.text, part.warning ? DS.fg2 : DS.fg3)
+            if let chip = part.chip { add(" ", DS.fg3); add(chip, DS.fg2) }
+            if let added = part.added { add(" +\(added)", DS.green, mono: true) }
+        }
+        return out
     }
 
     private var toolCard: some View {
@@ -552,20 +610,23 @@ struct DisclosureCardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if card.expanded && !card.isEmpty {
-                Group {
-                    switch card.content {
-                    case .diff: diff
-                    case .terminal(let text): scrolling(text, terminal: true)
-                    case .text(let text): scrolling(text, terminal: false)
-                    case .cards, .plan: EmptyView()
-                    }
-                }
-                .background(Color(nsColor: DS.bubble), in: RoundedRectangle(cornerRadius: DS.Radius.code))
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.code))
-            }
+            if card.expanded && !card.isEmpty { expandedBody }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// A tool card's open body: its diff, terminal output or text.
+    var expandedBody: some View {
+        Group {
+            switch card.content {
+            case .diff: diff
+            case .terminal(let text): scrolling(text, terminal: true)
+            case .text(let text): scrolling(text, terminal: false)
+            case .cards, .plan: EmptyView()
+            }
+        }
+        .background(Color(nsColor: DS.bubble), in: RoundedRectangle(cornerRadius: DS.Radius.code))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.code))
     }
 
     private func scrolling(_ text: String, terminal: Bool) -> some View {
@@ -624,6 +685,120 @@ struct DisclosureCardView: View {
         case .removed: Color(nsColor: DS.delbg)
         default: .clear
         }
+    }
+}
+
+/// One step of an activity log: a glyph on the rail, the verb and its object, and on the right how it ended
+/// (+N, exit code, duration). Open or Copy show while pointing at it. A thought shows two lines and "Show all".
+struct LogStepView: View {
+    let card: DisclosureCard
+    var relay: (@MainActor () -> Void)?
+    @State private var hovering = false
+
+    var body: some View {
+        if card.kind == .thinking { thought } else { step }
+    }
+
+    private func changed() { if let relay { relay() } else { card.onToggle?(card) } }
+
+    private var glyph: some View {
+        Group {
+            if card.working { RunningRing() }
+            else if card.waiting { Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6) }
+            else {
+                Image(systemName: card.failed ? "xmark" : card.glyph)
+                    .font(.system(size: 10.5, weight: card.failed ? .bold : .regular))
+                    .foregroundStyle(Color(nsColor: card.failed ? DS.red : DS.fg3))
+            }
+        }
+        .frame(width: 16, height: 18)
+        .background(Color(nsColor: DS.win))
+        .frame(width: 16, height: DisclosureCard.collapsedHeight)
+    }
+
+    private var thought: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                glyph
+                Text(card.title).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: DS.fg3))
+                Spacer(minLength: 0)
+            }
+            .frame(height: DisclosureCard.collapsedHeight)
+            Group {
+                if card.showAll {
+                    ScrollView { thoughtText }.frame(maxHeight: 360)
+                } else {
+                    thoughtText.lineLimit(2).truncationMode(.tail)
+                }
+            }
+            .padding(.leading, DisclosureCard.logIndent)
+            if card.thoughtNeedsMore {
+                Button(card.showAll ? "Show less" : "Show all") {
+                    card.showAll.toggle()
+                    changed()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color(nsColor: hovering ? DS.fg2 : DS.fg3))
+                .onHover { hovering = $0 }
+                .padding(.leading, DisclosureCard.logIndent)
+                .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var thoughtText: some View {
+        Text(card.body).font(.system(size: 13)).lineSpacing(2).foregroundStyle(Color(nsColor: DS.fg3))
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var step: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                guard !card.isEmpty else { return }
+                card.expanded.toggle()
+                card.toggledByReader = true
+                changed()
+            } label: {
+                HStack(spacing: 10) {
+                    glyph
+                    HStack(spacing: 7) {
+                        Text(card.title).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: card.failed ? DS.fg2 : DS.fg3)).fixedSize()
+                        if !card.detail.isEmpty {
+                            Text(card.detail).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color(nsColor: DS.fg2))
+                                .lineLimit(1).truncationMode(card.truncateTail ? .tail : .middle)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    if let action = card.action, hovering {
+                        Button(action.title) { card.onAction?(action.action) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color(nsColor: DS.fg2))
+                    }
+                    if card.added > 0 { Text("+\(card.added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.green)) }
+                    if card.removed > 0 { Text("−\(card.removed)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color(nsColor: DS.red)) }
+                    if !card.trailing.isEmpty {
+                        Text(card.trailing).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: card.failed ? DS.red : DS.fg3)).monospacedDigit().fixedSize()
+                    }
+                    if !card.isEmpty {
+                        Image(systemName: card.expanded ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
+                            .frame(width: 10)
+                    }
+                }
+                .frame(height: DisclosureCard.collapsedHeight)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            if card.expanded && !card.isEmpty {
+                DisclosureCardView(card: card, relay: relay).expandedBody
+                    .padding(.leading, DisclosureCard.logIndent)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

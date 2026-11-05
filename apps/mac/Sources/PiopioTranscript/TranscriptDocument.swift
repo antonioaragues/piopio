@@ -835,6 +835,16 @@ private final class HoverTracker: NSResponder {
 }
 
 extension TranscriptDocument {
+    /// For DebugAutomation: opens every activity line, as a click would.
+    public func debugOpenActivity() {
+        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, _, _ in
+            guard let card = (value as? DisclosureAttachment)?.card, card.kind == .activity, !card.expanded else { return }
+            card.expanded = true
+            card.toggledByReader = true
+            card.onToggle?(card)
+        }
+    }
+
     /// For DebugAutomation: the cursor after a mouse move to this window point ("arrow", "ibeam" or "other").
     public func debugCursor(at point: NSPoint) -> String {
         guard let window = textView.window,

@@ -364,15 +364,22 @@ enum DebugAutomation {
                     try? await Task.sleep(for: .milliseconds(800))
                     NotificationCenter.default.post(name: .showCommit, object: ref.id)
                 }
-                // PIOPIO_DEMO_RESPOND=allow|always|deny: answer the first approval the session asks for.
+                // PIOPIO_DEMO_RESPOND=allow|always|deny: answer the approvals the session asks for (up to 5).
                 if let decision = env["PIOPIO_DEMO_RESPOND"].flatMap(PromptResponse.Decision.init(rawValue:)) {
-                    for _ in 0..<100 {
+                    var answered = 0
+                    for _ in 0..<150 where answered < 5 {
                         try? await Task.sleep(for: .milliseconds(100))
                         if let first = session.prompts.first {
                             await session.respond(first, PromptResponse(decision: decision))
-                            break
+                            answered += 1
                         }
                     }
+                }
+                // PIOPIO_DEMO_OPEN_STEPS=1: open the activity lines once the turn is done.
+                if env["PIOPIO_DEMO_OPEN_STEPS"] == "1" {
+                    await waitIdle(session)
+                    try? await Task.sleep(for: .milliseconds(500))
+                    session.document.debugOpenActivity()
                 }
             }
         }
