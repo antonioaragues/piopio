@@ -99,6 +99,8 @@ export class AgentRuntime implements Runtime {
 			...(options.askTimeoutMs ? { askTimeoutMs: options.askTimeoutMs } : {}),
 			// Learned facts (docs/spec/14-memory M2) on the utility model, after a conversation goes quiet.
 			learn: options.learn ?? ((system, prompt) => options.hub.utility(system, prompt, options.ref.id)),
+			// Web search and learned facts are recorded under this agent's id (scope): they count toward its budget.
+			extraSpend: (month) => options.hub.extraCosts.monthUsd(options.ref.id, month),
 			...(options.learnQuietMs ? { learnQuietMs: options.learnQuietMs } : {}),
 			...(options.onLearned ? { onLearned: options.onLearned } : {}),
 			onPeerLog: () => options.onActivity?.(),

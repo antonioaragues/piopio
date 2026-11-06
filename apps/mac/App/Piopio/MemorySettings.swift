@@ -175,7 +175,7 @@ struct MemoryPane: View {
         let all = banks?.banks ?? []
         CardTitle("Your data")
         ListCard {
-            dataRow("Export everything", "memory.json and memory.md: every fact and message, and what replaced what") {
+            dataRow("Export built-in memory", "memory.json and memory.md: every fact and message Piopio's own memory keeps, and what replaced what. Not other providers or notebook memory; Settings › Backup & costs keeps everything.") {
                 Button("Export…", action: export).buttonStyle(PillStyle(compact: true)).disabled(all.isEmpty)
             }
             RowDivider(inset: 14)

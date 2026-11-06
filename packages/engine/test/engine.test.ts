@@ -1135,6 +1135,24 @@ describe("projects in the Chat lens (milestone 3.1)", () => {
 		]);
 		expect((await a.client.call("projects.listDir", { cwd: notes, dir: "plans" })).entries).toEqual([{ name: "budget.md", path: "plans/budget.md", kind: "file" }]);
 	});
+
+	test("a subagent of a chat-profile session keeps its profile and the tools turned off (no bash through a task)", async () => {
+		const a = await start();
+		const notes = realpathSync(mkdtempSync(join(tmpdir(), "piopio-notes-")));
+		await a.client.call("projects.add", { path: notes });
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: notes, profile: "chat", approvalMode: "full_auto" });
+		await a.client.call("sessions.configure", { ref, toolsOff: ["mcp:example"] });
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: "task: Try a command | $ printf child-ran" } });
+		await a.client.waitFor(settled(sub.subscriptionId, 1), 20_000);
+		const [task] = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "tool" ? [i] : []));
+		const childId = task!.details?.type === "task" ? task!.details.sessionId : undefined;
+		const child = (await a.client.call("sessions.list", { kind: "build" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === childId);
+		expect(child).toMatchObject({ profile: "chat" });
+		const childTools = ((await a.client.call("sessions.open", { ref: child.ref })) as Snapshot).items.flatMap((i) => (i.kind === "tool" ? [i] : []));
+		expect(childTools.map((t) => `${t.tool}:${t.status}`)).toEqual(["bash:error"]);
+		expect(childTools[0]!.output).not.toContain("child-ran");
+	});
 });
 
 describe("Spaces (milestone 3.2)", () => {
@@ -2005,6 +2023,23 @@ describe("Agents: Apple apps as tools (milestone 4.5)", () => {
 	type Item = Snapshot["items"][number];
 	const steps = (items: Item[]) => items.filter((i): i is Extract<Item, { kind: "steps" }> => i.kind === "steps").flatMap((s) => s.tools);
 	const results = (items: Item[]) => items.filter((i): i is Extract<Item, { kind: "result" }> => i.kind === "result");
+
+	test("web tools: an agent gets exactly the ones its definition lists", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("agents.create", { name: "Reader", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		const got = await a.client.call("agents.get", { ref });
+		const def = got.definition as Record<string, unknown>;
+		expect(await a.client.call("agents.save", { ref, definition: { ...def, tools: { builtin: ["web_fetch"] } }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+		const owner = () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+		await a.client.call("sessions.submit", { ref, input: { text: `${call("web_search", { query: "x" })}\n${call("web_fetch", { url: "http://127.0.0.1:9/" })}` } });
+		const items = await until(owner, (xs) => steps(xs).length >= 2 && !steps(xs).some((t) => t.status === "running"));
+		const [search, fetch] = steps(items);
+		expect(search).toMatchObject({ tool: "web_search", status: "error" });
+		expect(search!.output).not.toContain("OpenRouter");
+		expect(fetch).toMatchObject({ tool: "web_fetch" });
+		expect(fetch!.output).toContain("fetch failed"); // it ran (nothing listens on port 9)
+		expect(search!.output).toContain("Tool web_search is not available");
+	});
 
 	test("tools by group through the Mac app: unavailable without it, cards and Undo with it, Shortcuts by name", async () => {
 		const a = await start();

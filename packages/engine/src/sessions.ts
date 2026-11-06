@@ -471,9 +471,12 @@ export class Sessions {
 		}
 		slot.running++;
 		try {
-			const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
+			// A child never gets more than its parent: the same profile (a Chat-lens parent has no bash) and the
+			// same tools turned off (see `toolsOff` in build(), which also follows later changes to the parent).
+			const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), profile: parent.profile ?? "build", title: task.description });
 			const child = this.entry(ref);
 			child.parent = { id: parent.ref.id, callId: task.callId };
+			if (parent.toolsOff?.length) child.toolsOff = [...parent.toolsOff];
 			if (parent.projectPath) child.projectPath = parent.projectPath;
 			this.save();
 			this.changed(child);
@@ -790,6 +793,7 @@ export class Sessions {
 	private validateAgent(definition: unknown, id: string): DefinitionError[] {
 		const knownAgents = [...this.entries.values()].filter((e) => e.ref.kind === "agent" && e.ref.id !== id).map((e) => e.ref.id);
 		return validate(definition, {
+			unsupported: true,
 			knownAgents,
 			knownModels: (m) => {
 				const { provider, modelId } = modelOf(m);
@@ -1347,7 +1351,7 @@ export class Sessions {
 			...(entry.parent ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress) }),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 			...(this.connectors ? { connectors: this.connectors } : {}),
-			toolsOff: () => entry.toolsOff ?? [],
+			toolsOff: () => [...new Set([...(entry.toolsOff ?? []), ...((entry.parent && this.entries.get(entry.parent.id)?.toolsOff) || [])])],
 		});
 		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {
 			entry.sessionFile = runtime.sessionFile;

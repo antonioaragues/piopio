@@ -101,6 +101,8 @@ export interface SafetyHost {
 	onApproval?(approval: Approval): void;
 	onUndo?(undo: UndoRecord): void;
 	onStatus?(): void;
+	/** Paid requests outside the harness this month ("YYYY-MM", UTC): web search, the utility model (USD). */
+	extraSpend?(month: string): number | Promise<number>;
 }
 
 export class Safety {
@@ -139,8 +141,17 @@ export class Safety {
 		return { ok: true };
 	}
 
-	/** This month's spend across every conversation and run (USD). */
+	/**
+	 * This month's spend across every conversation and run (USD): the model calls in the harness plus the requests
+	 * outside it (web search, learned facts). Requests with unknown pricing count as $0. The budget is a soft cap:
+	 * it stops new turns and runs once reached; a turn already running finishes.
+	 */
 	async spend(): Promise<number> {
+		const extra = (await this.host.extraSpend?.(this.iso().slice(0, 7))) ?? 0;
+		return (await this.harnessSpend()) + extra;
+	}
+
+	private async harnessSpend(): Promise<number> {
 		const usage = await this.host.harness.usage(this.host.context);
 		let total = 0;
 		for (const u of [...Object.values(usage.models), ...Object.values(usage.tools)]) total += (u as { cost?: { total?: number } }).cost?.total ?? 0;

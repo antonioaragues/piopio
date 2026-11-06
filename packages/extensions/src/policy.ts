@@ -8,8 +8,9 @@
  * | auto_edit | auto              | auto                  | ask unless a rule     | auto          | ask             |
  * | full_auto | auto              | auto                  | auto                  | auto          | ask             |
  */
+import { lstatSync, readlinkSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 
 export type ApprovalMode = "ask" | "auto_edit" | "full_auto";
 export type RuleKind = "command" | "tool" | "path";
@@ -25,19 +26,21 @@ const RUNNERS = new Set(["npm", "pnpm", "yarn", "npx", "bun", "bunx", "deno", "n
 
 export function decide(mode: ApprovalMode, tool: string, input: Record<string, unknown>, cwd: string, rules: readonly Rule[], home = homedir()): Decision {
 	if (USER_TOOLS.has(tool)) return { action: "allow" };
-	const path = typeof input.path === "string" ? resolve(cwd, expandHome(input.path, home)) : undefined;
+	const logical = typeof input.path === "string" ? resolve(cwd, expandHome(input.path, home)) : undefined;
+	// Where the file really is: symlinks inside the project can point anywhere (a cloned repo can ship them).
+	const path = logical && physical(logical);
+	const viaLink = Boolean(logical && path !== logical);
+	const secret = logical && (sensitivePath(logical, home) ?? sensitivePath(path!, physical(home)));
 
 	if (READ_TOOLS.has(tool)) {
-		const secret = path && sensitivePath(path, home);
-		return secret ? { action: "ask", reason: secret } : { action: "allow" };
+		return secret ? { action: "ask", reason: viaLink ? `${secret} (through a symlink)` : secret } : { action: "allow" };
 	}
 
 	if (WRITE_TOOLS.has(tool)) {
-		const secret = path && sensitivePath(path, home);
-		if (secret) return { action: "ask", reason: secret };
-		if (path && !inside(path, cwd)) {
+		if (secret) return { action: "ask", reason: viaLink ? `${secret} (through a symlink)` : secret };
+		if (path && !inside(path, physical(resolve(cwd)))) {
 			if (rules.some((r) => r.kind === "path" && pathMatches(r.pattern, path))) return { action: "allow" };
-			return { action: "ask", reason: "Writes outside the project", rule: { kind: "path", pattern: `${parentOf(path)}/**` } };
+			return { action: "ask", reason: viaLink ? "Writes outside the project (through a symlink)" : "Writes outside the project", rule: { kind: "path", pattern: `${parentOf(path)}/**` } };
 		}
 		if (mode === "ask") return { action: "ask" };
 		return { action: "allow" };
@@ -110,6 +113,34 @@ function sensitivePath(path: string, home: string): string | undefined {
 		if (inside(path, `${home}/${dir}`)) return `Touches ~/${dir}`;
 	}
 	return undefined;
+}
+
+/**
+ * The physical location of `path`: symlinks resolved, including a dangling last link (writing through it creates
+ * its target) and paths that don't exist yet (resolved from their closest existing folder).
+ */
+export function physical(path: string): string {
+	let dir = resolve(path);
+	const rest: string[] = [];
+	for (let hops = 0; hops < 64; hops++) {
+		try {
+			return join(realpathSync(dir), ...[...rest].reverse());
+		} catch {
+			try {
+				if (lstatSync(dir).isSymbolicLink()) {
+					dir = resolve(dirname(dir), readlinkSync(dir));
+					continue;
+				}
+			} catch {
+				// doesn't exist: try its folder
+			}
+		}
+		const parent = dirname(dir);
+		if (parent === dir) break;
+		rest.push(basename(dir));
+		dir = parent;
+	}
+	return resolve(path);
 }
 
 function inside(path: string, dir: string): boolean {

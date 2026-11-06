@@ -1,5 +1,5 @@
 import { describe as group, expect, test } from "vitest";
-import { allowKey, matches } from "../src/agents/safety.js";
+import { allowKey, matches, Safety } from "../src/agents/safety.js";
 
 group("approval rules (06 §9 AS1)", () => {
 	test("tool names, recipients, methods and MCP tools", () => {
@@ -22,5 +22,27 @@ group("approval rules (06 §9 AS1)", () => {
 		expect(allowKey("send_message", { to: "maria", text: "hi" })).toBe("send_message:to:maria");
 		expect(allowKey("http_request", { method: "post" })).toBe("http_request:POST");
 		expect(allowKey("schedule", { when: "x" })).toBe("schedule");
+	});
+});
+
+group("budget (06 §9 AS3)", () => {
+	const safetyWith = (harnessUsd: number, extraUsd: number | undefined, budget: number) => {
+		let state: Record<string, unknown> = {};
+		const host = {
+			harness: { usage: async () => ({ models: { m: { cost: { total: harnessUsd } } }, tools: {} }) },
+			context: {},
+			definition: () => ({ name: "Ada", contacts: [], policies: { budgetUsdPerMonth: budget } }),
+			now: () => Date.parse("2026-11-06T12:00:00Z"),
+			read: async () => state,
+			write: async (change: (s: Record<string, unknown>) => void) => { const next = structuredClone(state); change(next); state = next; },
+			...(extraUsd === undefined ? {} : { extraSpend: (month: string) => (month === "2026-11" ? extraUsd : 0) }),
+		};
+		return new Safety(host as never);
+	};
+
+	test("web search and utility requests outside the harness count toward the monthly budget", async () => {
+		expect(await safetyWith(0.4, 0.2, 1).spend()).toBeCloseTo(0.6);
+		expect(await safetyWith(0.7, 0.4, 1).gate()).toMatchObject({ ok: false, reason: "budget" });
+		expect(await safetyWith(0.7, undefined, 1).gate()).toEqual({ ok: true });
 	});
 });

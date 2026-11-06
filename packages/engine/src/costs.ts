@@ -15,5 +15,10 @@ export class ExtraCosts {
 		const rows = this.db.prepare(`SELECT kind, COUNT(*) calls, SUM(usd) usd, SUM(CASE WHEN usd IS NULL THEN 1 ELSE 0 END) unknown FROM extra_costs ${where} GROUP BY kind`).all(...(scope ? [scope] : [])) as { kind: string; calls: number; usd: number | null; unknown: number }[];
 		return { scope: scope ?? "app", knownUsd: rows.reduce((sum, row) => sum + (row.usd ?? 0), 0), unknownCalls: rows.reduce((sum, row) => sum + row.unknown, 0), calls: rows.reduce((sum, row) => sum + row.calls, 0), breakdown: rows.map(row => ({ kind: row.kind, calls: row.calls, knownUsd: row.usd ?? 0, unknownCalls: row.unknown })) };
 	}
+	/** Known USD for `scope` in `month` ("YYYY-MM", UTC); unknown prices count as 0. */
+	monthUsd(scope: string, month: string): number {
+		const row = this.db.prepare("SELECT SUM(usd) usd FROM extra_costs WHERE scope = ? AND substr(at, 1, 7) = ?").get(scope, month) as { usd: number | null } | undefined;
+		return row?.usd ?? 0;
+	}
 	close() { this.db.close(); }
 }

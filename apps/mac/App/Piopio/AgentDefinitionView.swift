@@ -188,8 +188,11 @@ struct AgentDefinitionView: View {
     private var abilitiesGroup: some View {
         SetupGroup("Abilities", footer: "HTTP requests, code and workspace files are coming later and stay hidden until then.") {
             ForEach(Self.abilities, id: \.title) { a in
-                let on = a.tools.allSatisfy { def?.tools.builtin.contains($0) ?? false }
-                SetupRow(a.title, subtitle: on ? subtitle(for: a) : "Off") {
+                // On when any of its tools is: an agent.json can list web_fetch alone, and the engine runs exactly
+                // what's listed. Turning the toggle off removes them all; on adds them all.
+                let listed = a.tools.filter { def?.tools.builtin.contains($0) ?? false }
+                let on = !listed.isEmpty
+                SetupRow(a.title, subtitle: !on ? "Off" : listed.count < a.tools.count ? "Only \(listed.joined(separator: ", "))" : subtitle(for: a)) {
                     HStack(spacing: 10) {
                         if on {
                             let asks = asksFirst(a.tools)

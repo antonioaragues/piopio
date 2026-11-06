@@ -77,6 +77,8 @@ export type AgentCoreOptions = {
 	learnQuietMs?: number;
 	/** Facts were learned, or a learning step failed (tests wait for it). */
 	onLearned?: (bank: string, changes: LearnedChange[]) => void;
+	/** This agent's paid requests outside the harness in a month (web search, utility model), for its budget. */
+	extraSpend?: (month: string) => number | Promise<number>;
 };
 
 /** An entry in a person's conversation: what the agent learned after a quiet moment, with Undo (M2). */
@@ -118,6 +120,7 @@ export class AgentCore {
 			reverse: (undo) => this.reverse(undo),
 			...(options.onApproval ? { onApproval: options.onApproval } : {}),
 			...(options.onUndo ? { onUndo: options.onUndo } : {}),
+			...(options.extraSpend ? { extraSpend: options.extraSpend } : {}),
 			...(options.onStatus ? { onStatus: options.onStatus } : {}),
 		});
 		this.proactive = new Proactivity({
@@ -326,6 +329,8 @@ export class AgentCore {
 			...(builtin.includes("memory") ? [] : this.memoryTools),
 			...(builtin.includes("send_message") ? [] : [p.send]),
 			...(builtin.includes("schedule") ? [] : [p.schedule, p.list, p.cancel]),
+			// The web extension brings both tools when either is on: only the listed ones stay.
+			...(["web_search", "web_fetch"] as const).filter((t) => !builtin.includes(t)).map((name) => ({ name })),
 			...this.apple.filter((t) => !this.appleGroups.includes(APPLE_TOOLS.find((s) => s.name === t.name)!.group)),
 			...(this.def.tools.agents?.length ? [] : [this.peers.tools.ask, this.peers.tools.tell]),
 		];

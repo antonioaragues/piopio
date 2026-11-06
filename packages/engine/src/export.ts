@@ -1,5 +1,5 @@
 /** Exports a session's visible transcript (the active branch) as Markdown, HTML or JSONL. */
-import { marked } from "marked";
+import { Marked, type Tokens } from "marked";
 import type { TimelineItem } from "@piopio/protocol";
 
 export type ExportFormat = "markdown" | "html" | "jsonl";
@@ -11,9 +11,35 @@ export function exportTranscript(title: string, items: readonly TimelineItem[], 
 	}
 	const markdown = toMarkdown(title, items);
 	if (format === "markdown") return { filename: `${base}.md`, mimeType: "text/markdown", content: markdown };
-	const body = marked.parse(markdown, { async: false, gfm: true }) as string;
+	const body = safeMarked.parse(markdown, { async: false }) as string;
 	return { filename: `${base}.html`, mimeType: "text/html", content: htmlPage(title, body) };
 }
+
+/**
+ * The HTML export is opened in a browser and shared, and the transcript holds text from models, pages and files:
+ * raw HTML is shown as text (only the export's own Thinking <details> stays), links and images keep safe URLs
+ * only, and the page's Content-Security-Policy blocks scripts in any case.
+ */
+const OWN_HTML = /^(<details><summary>Thinking<\/summary>|<\/details>)$/;
+const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const scheme = (url: string) => /^([a-z][a-z0-9+.-]*):/i.exec(url.replace(/[\u0000-\u0020\u007f]/g, ""))?.[1]?.toLowerCase();
+const safeLink = (url: string) => [undefined, "http", "https", "mailto"].includes(scheme(url));
+const safeImage = (url: string) => ["http", "https"].includes(scheme(url) ?? "") || /^data:image\/(png|jpe?g|gif|webp);/i.test(url.trim());
+const safeMarked = new Marked({
+	gfm: true,
+	renderer: {
+		html(token: Tokens.HTML | Tokens.Tag) {
+			const text = token.text.trim();
+			return OWN_HTML.test(text) ? text + (token.block ? "\n" : "") : escapeHtml(token.text);
+		},
+		link(token: Tokens.Link) {
+			return safeLink(token.href) ? false : this.parser.parseInline(token.tokens);
+		},
+		image(token: Tokens.Image) {
+			return safeImage(token.href) ? false : escapeHtml(token.text);
+		},
+	},
+});
 
 export function toMarkdown(title: string, items: readonly TimelineItem[]): string {
 	const out: string[] = [`# ${title}`, ""];
@@ -63,6 +89,7 @@ function htmlPage(title: string, body: string): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: http: data:">
 <title>${esc}</title>
 <style>
 :root { color-scheme: light dark; --fg: #1d1d1f; --muted: #6e6e73; --bg: #fff; --code: #f2f2f4; }

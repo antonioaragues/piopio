@@ -1,6 +1,6 @@
 # Current status — personal alpha
 
-Updated 2026-10-26. This is a personal-use application. Implementation milestones describe available code;
+Updated 2026-11-06. This is a personal-use application. Implementation milestones describe available code;
 they do not establish that every provider, OS permission flow or production service has been validated.
 
 | Area | Implemented | Acceptance still pending |
@@ -25,7 +25,7 @@ tests use temporary engine data, but launch a real native window and require a l
 
 ## Latest local verification
 
-The TypeScript suite passes (151 tests; two opt-in tests skipped), as do Swift package tests (31 tests).
+The TypeScript suite passes (171 tests; three opt-in tests skipped), as do Swift package tests (39 tests).
 The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draft recovery, offline backup and
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also
@@ -44,9 +44,13 @@ been captured and inspected. This does not replace the real-provider, OS-permiss
 
 ## Boundaries
 
-- Build policy is an approval aid, not an OS sandbox. Unknown shell syntax asks again; arbitrary approved
+- Build policy is an approval aid, not an OS sandbox. File paths are judged where they really are (symlinks resolved),
+  and subagents keep their parent's profile and tools turned off. Unknown shell syntax asks again; arbitrary approved
   executables can still do arbitrary work.
 - Search covers active conversation branches. It is not a source-code index or an index of every historical branch.
 - Agents on this Mac cannot run while it is asleep/off. Mac-app tools need the native app and OS permissions.
 - Additional request costs are recorded from this version onward. Unknown pricing is excluded, not treated as free.
+  An agent's budget counts its web searches and learned-fact requests too; it's a soft cap that stops new turns
+  and runs once reached.
+- Agent definitions refuse fields that nothing runs yet (http_request, codemode, files, tools.mcp, channels) on save.
 - Cloud and channels remain separate roadmap work. See [09-roadmap.md](spec/09-roadmap.md) for historical milestones.

@@ -1,5 +1,8 @@
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe as group, expect, test } from "vitest";
-import { decide, deniedCommand, readOnlyCommand, suggestCommandRule, type Rule } from "../src/policy.js";
+import { decide, deniedCommand, physical, readOnlyCommand, suggestCommandRule, type Rule } from "../src/policy.js";
 
 const cwd = "/work/app";
 const home = "/Users/me";
@@ -93,4 +96,41 @@ test("shell evaluation never inherits a command prefix approval", () => {
 test("Plan mode refuses mutating arguments on otherwise readable programs", () => {
 	for (const command of ["find . -delete", "find . -exec touch x ;", "git branch -D example", "git branch new", "git remote add x https://example.com", "git diff --output=x", "sed -n 'w /tmp/x' README.md", "sort -o x y", "uniq input output", "rg --pre=sh x", "fd --exec touch x", "file -C", "date 10251200", "sed -n 1p -i x.txt", "fd -xsh", "tree -ooutput.html", "file -Cm magic"]) expect(readOnlyCommand(command), command).toBe(false);
 	for (const command of ["git branch", "git branch --list", "git remote -v", "sort a.txt", "date +%F", "find . -name '*.ts'", "rg 'a|b' src"]) expect(readOnlyCommand(command), command).toBe(true);
+});
+
+group("symlinks: the policy decides on where a file really is", () => {
+	const root = realpathSync(mkdtempSync(join(tmpdir(), "piopio-policy-")));
+	const project = join(root, "project");
+	const outside = join(root, "outside");
+	const fakeHome = join(root, "home");
+	mkdirSync(join(project, "src"), { recursive: true });
+	mkdirSync(outside);
+	mkdirSync(join(fakeHome, ".ssh"), { recursive: true });
+	writeFileSync(join(outside, "notes.txt"), "x");
+	symlinkSync(outside, join(project, "link"));
+	symlinkSync(join(outside, "notes.txt"), join(project, "notes.txt"));
+	symlinkSync(join(outside, "missing.txt"), join(project, "dangling.txt"));
+	symlinkSync(join(fakeHome, ".ssh"), join(project, "keys"));
+	symlinkSync(join(project, "src"), join(project, "inner"));
+	const act = (mode: "auto_edit" | "full_auto", tool: string, path: string) => decide(mode, tool, { path }, project, [], fakeHome);
+
+	test("writing through a linked folder, file or dangling link outside the project asks", () => {
+		for (const path of ["link/new.txt", "link/notes.txt", "notes.txt", "dangling.txt", "link/a/b/new.txt"]) {
+			expect(act("full_auto", "write", path), path).toEqual({ action: "ask", reason: "Writes outside the project (through a symlink)", rule: expect.objectContaining({ kind: "path" }) });
+		}
+		expect(act("auto_edit", "edit", "link/notes.txt")).toMatchObject({ rule: { pattern: `${outside}/**` } });
+	});
+	test("links that stay inside the project, and new files, are still automatic", () => {
+		expect(act("auto_edit", "write", "inner/a.ts").action).toBe("allow");
+		expect(act("auto_edit", "write", "src/new/deep/a.ts").action).toBe("allow");
+	});
+	test("a link to a sensitive folder asks even for reads", () => {
+		expect(act("auto_edit", "read", "keys/id_ed25519")).toEqual({ action: "ask", reason: "Touches ~/.ssh (through a symlink)" });
+	});
+	test("a project reached through a symlinked path is still inside", () => {
+		const alias = join(root, "alias");
+		symlinkSync(project, alias);
+		expect(decide("auto_edit", "write", { path: "src/a.ts" }, alias, [], fakeHome).action).toBe("allow");
+		expect(physical(join(alias, "src/none/x.ts"))).toBe(join(project, "src/none/x.ts"));
+	});
 });

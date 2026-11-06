@@ -108,6 +108,11 @@ struct AgentPage: View {
     @Binding var selection: String?
     @AppStorage("agentTab") private var tab: Tab = .chat
     @AppStorage("agentInfo") private var showInfo = true
+    /// Below `infoBesideWidth` the panel can't sit beside the conversation: Info opens it over the conversation
+    /// instead, and only for this visit (the saved `showInfo` is for wide windows).
+    @State private var infoOver = false
+    @State private var wide = true
+    private static let infoBesideWidth: CGFloat = 760
     /// Whose conversation shows: the owner's (nil), a contact's (`person:<id>`), another agent's (`agent:<id>`).
     @State private var conversation: String?
     @State private var people: [AgentPerson] = []
@@ -118,6 +123,11 @@ struct AgentPage: View {
     /// What the main area shows: the conversation, or the runs or the setup opened from the info panel.
     enum Tab: String, CaseIterable { case chat = "Chat", activity = "Activity", setup = "Setup" }
 
+    private var infoPanel: some View {
+        AgentInfoPanel(engine: engine, summary: summary, def: def, instructions: instructions, runs: runs, tab: $tab) { await load() }
+            .frame(width: 300).sidePanel()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -126,10 +136,16 @@ struct AgentPage: View {
                 GeometryReader { proxy in
                     HStack(spacing: 0) {
                         chat
-                        if showInfo && proxy.size.width >= 760 {
-                            AgentInfoPanel(engine: engine, summary: summary, def: def, instructions: instructions, runs: runs, tab: $tab) { await load() }
-                                .frame(width: 300).sidePanel()
+                        if showInfo && wide { infoPanel }
+                    }
+                    .overlay(alignment: .trailing) {
+                        if infoOver && !wide {
+                            infoPanel.shadow(color: .black.opacity(0.12), radius: 12, x: -2).transition(.move(edge: .trailing))
                         }
+                    }
+                    .onChange(of: proxy.size.width >= Self.infoBesideWidth, initial: true) { _, isWide in
+                        wide = isWide
+                        if isWide { infoOver = false }
                     }
                 }
             case .activity: AgentRunsView(engine: engine, summary: summary)
@@ -187,10 +203,13 @@ struct AgentPage: View {
             if tab == .chat && people.count > 1 { personPicker }
             // Views as icons (docs/design/session-panel): the info panel beside the conversation, and Activity and
             // Setup in its place (the lit one goes back to the conversation).
-            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Info", on: tab == .chat && showInfo,
+            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Info", on: tab == .chat && (wide ? showInfo : infoOver),
                         help: "What it does, when, and what it can do") {
                 withAnimation(.easeOut(duration: 0.15)) {
-                    if tab != .chat { tab = .chat; showInfo = true } else { showInfo.toggle() }
+                    if tab != .chat {
+                        tab = .chat
+                        if wide { showInfo = true } else { infoOver = true }
+                    } else if wide { showInfo.toggle() } else { infoOver.toggle() }
                 }
             }
             ToolbarIcon(symbol: "clock.arrow.circlepath", label: "Activity", on: tab == .activity, help: "Its runs: what fired, what it did, what it cost") {

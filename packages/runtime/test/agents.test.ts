@@ -5,9 +5,21 @@ describe("agent definitions", () => {
 	test("every template makes a valid definition", () => {
 		for (const t of TEMPLATES) {
 			const { definition, instructions } = newDefinition({ id: "agt_1", slug: "coach", name: "Coach", owner: "Antonio", model: "anthropic/claude-haiku-5.5", template: t.id });
-			expect(validate(definition)).toEqual([]);
+			expect(validate(definition, { unsupported: true })).toEqual([]);
 			expect(instructions).toContain("Antonio");
 		}
+	});
+
+	test("planned fields that nothing runs yet load, but a save refuses them", () => {
+		const { definition } = newDefinition({ id: "agt_1", slug: "coach", name: "Coach", owner: "Antonio", model: "m" });
+		const planned = {
+			...definition,
+			tools: { ...definition.tools, builtin: [...definition.tools.builtin, "http_request", "files"], mcp: [{ name: "notion", url: "https://example.com/mcp" }] },
+			channels: { telegram: { bot: "secret:telegram_bot" } },
+		};
+		expect(validate(planned)).toEqual([]);
+		const n = definition.tools.builtin.length;
+		expect(validate(planned, { unsupported: true }).map((e) => e.path)).toEqual([`/tools/builtin/${n}`, `/tools/builtin/${n + 1}`, "/tools/mcp", "/channels"]);
 	});
 
 	test("schema and semantic errors carry paths", () => {

@@ -99,8 +99,22 @@ export type AgentDefinition = Static<typeof AgentDefinition>;
 
 export type DefinitionError = { path: string; message: string };
 
-/** Schema errors, then the semantic checks of AD3. `knownAgents`: the ids an agent may reference. */
-export function validate(value: unknown, options: { knownAgents?: readonly string[]; knownModels?: (id: string) => boolean } = {}): DefinitionError[] {
+/**
+ * Fields the schema keeps for what's planned (06-agents) but no runtime runs yet. Saving them would look like it
+ * worked and do nothing, so a save says so instead. Files that already have them still load.
+ */
+export function unsupported(def: AgentDefinition): DefinitionError[] {
+	const errors: DefinitionError[] = [];
+	def.tools.builtin.forEach((t, i) => {
+		if (t === "http_request" || t === "codemode" || t === "files") errors.push({ path: `/tools/builtin/${i}`, message: `“${t}” isn't available yet: remove it.` });
+	});
+	if (def.tools.mcp?.length) errors.push({ path: "/tools/mcp", message: "MCP servers for agents aren't available yet: remove tools.mcp." });
+	if (def.channels?.telegram || def.channels?.whatsapp) errors.push({ path: "/channels", message: "Telegram and WhatsApp come with cloud agents: remove channels for now." });
+	return errors;
+}
+
+/** Schema errors, then the semantic checks of AD3. `unsupported`: also refuse planned fields (on save). */
+export function validate(value: unknown, options: { knownAgents?: readonly string[]; knownModels?: (id: string) => boolean; unsupported?: boolean } = {}): DefinitionError[] {
 	const errors: DefinitionError[] = [...Value.Errors(AgentDefinition, value)].slice(0, 20).map((e) => ({ path: e.instancePath || "/", message: e.message }));
 	if (errors.length) return errors;
 	const def = value as AgentDefinition;
@@ -131,6 +145,7 @@ export function validate(value: unknown, options: { knownAgents?: readonly strin
 			else if (!options.knownAgents!.includes(a)) errors.push({ path: `/tools/agents/${i}`, message: `No agent “${a}”.` });
 		});
 	}
+	if (options.unsupported) errors.push(...unsupported(def));
 	if (options.knownModels && !options.knownModels(def.models.default)) errors.push({ path: "/models/default", message: `Unknown model “${def.models.default}”.` });
 	return errors;
 }
