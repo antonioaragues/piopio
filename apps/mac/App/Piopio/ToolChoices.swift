@@ -142,7 +142,7 @@ struct ToolChoicesSection: View {
                     .buttonStyle(.plain)
                     .accessibilityValue(open ? "Expanded" : "Collapsed")
                     if open {
-                        ForEach(choices) { choice in row(choice) }
+                        ForEach(choices) { choice in ToolChoiceRow(choice: choice, off: off, thread: thread) }
                         Text("Only this conversation. What's on everywhere is set in Settings.")
                             .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).padding(.top, 2)
                     }
@@ -151,10 +151,20 @@ struct ToolChoicesSection: View {
         }
         .task(id: summary.ref.id) { servers = await ToolChoices.load(engine: engine, cwd: summary.ref.kind == .build ? summary.cwd : nil) }
     }
+}
 
-    private func row(_ choice: ToolChoice) -> some View {
+/// One app or server with its switch for this conversation (ToolChoicesSection, Build's Summary "Uses").
+struct ToolChoiceRow: View {
+    let choice: ToolChoice
+    let off: Set<String>
+    let thread: ThreadModel
+    var icon = true
+
+    var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: choice.group == .app ? "calendar" : "server.rack").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+            if icon {
+                Image(systemName: choice.group == .app ? "calendar" : "server.rack").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(choice.title).font(.system(size: 13)).foregroundStyle(choice.available ? Color.dsFg : Color.dsFg3).lineLimit(1)
                 if let note = choice.note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1) }

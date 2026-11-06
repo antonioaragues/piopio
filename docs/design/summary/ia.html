@@ -1,0 +1,412 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piopio Summary Structure</title>
+<style>
+:root {
+  --canvas:#e9e8e4; --win:#fcfcfb; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96;
+  --line:rgba(0,0,0,.08); --sel:rgba(0,0,0,.06); --bubble:#f0f0ed; --field:#ffffff;
+  --inv:#1f1f1e; --invfg:#ffffff; --accent:#2f6fde; --page:#f7f7f5; --add:#3a8a55; --del:#c2493f;
+  --shadow:0 0 0 .5px rgba(0,0,0,.2),0 18px 50px rgba(0,0,0,.12);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --canvas:#0f0f0e; --win:#1e1e1d; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.07); --bubble:#2b2b29; --field:#252524;
+  --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#151514; --add:#6cc28a; --del:#ef7d72;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 18px 50px rgba(0,0,0,.6); color-scheme:dark } }
+:root[data-theme="dark"] {
+  --canvas:#0f0f0e; --win:#1e1e1d; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.07); --bubble:#2b2b29; --field:#252524;
+  --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#151514; --add:#6cc28a; --del:#ef7d72;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 18px 50px rgba(0,0,0,.6); color-scheme:dark }
+
+* { box-sizing:border-box }
+body { margin:0; background:var(--page); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.55; padding:56px 16px 96px }
+.doc { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:14px }
+.wide { max-width:1040px; margin:24px auto 8px }
+h1 { font-size:34px; line-height:1.15; letter-spacing:-.8px; margin:0; text-wrap:balance }
+h2 { font-size:22px; letter-spacing:-.3px; margin:48px 0 0; text-wrap:balance }
+h3 { font-size:16px; margin:16px 0 0 }
+p { margin:0; text-wrap:pretty }
+.lede { font-size:17px; color:var(--fg2) }
+.eyebrow { font-size:12px; color:var(--fg3); letter-spacing:.04em; text-transform:uppercase }
+.muted { color:var(--fg2) }
+code { font-family:var(--mono); font-size:13px; background:var(--sel); border-radius:4px; padding:1px 4px }
+ul.plain { margin:0; padding-left:18px; color:var(--fg2) } ul.plain li + li { margin-top:5px } ul.plain b { color:var(--fg) }
+
+/* Tables */
+.tw { overflow-x:auto; margin:0 -2px }
+table { border-collapse:collapse; width:100%; font-size:13.5px }
+th, td { text-align:left; padding:7px 12px 7px 0; border-bottom:.5px solid var(--line); vertical-align:baseline }
+th { font-size:12px; font-weight:400; color:var(--fg3); white-space:nowrap }
+td.k { white-space:nowrap }
+td .m, .m { color:var(--fg3); font-size:12px }
+tr.grp td { padding-top:16px; font-weight:600; color:var(--fg); border-bottom:.5px solid var(--line) }
+.flag { color:var(--fg); font-weight:500 }
+
+/* Groups */
+.groups { display:flex; flex-direction:column; border-top:.5px solid var(--line) }
+.g { display:grid; grid-template-columns:96px minmax(0,1fr); gap:2px 16px; padding:14px 0; border-bottom:.5px solid var(--line) }
+.g > b { font-size:15px }
+.g > b span { display:block; font-weight:400; font-size:12.5px; color:var(--fg3) }
+.g p { color:var(--fg2); font-size:14px }
+.g p + p { margin-top:4px }
+@media (max-width:560px) { .g { grid-template-columns:1fr } }
+
+/* Placement */
+.places { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:.5px solid var(--line); border-bottom:.5px solid var(--line) }
+.places > div { padding:14px 16px 14px 0; min-width:0 }
+.places > div + div { padding-left:16px; border-left:.5px solid var(--line) }
+.places > div:nth-child(4) { border-left:0; padding-left:0 }
+.places > div:nth-child(n+4) { border-top:.5px solid var(--line) }
+.places b { display:block; font-size:14px }
+.places i { display:block; font-style:normal; font-size:12.5px; color:var(--fg3); margin-bottom:4px }
+.places span { font-size:13.5px; color:var(--fg2) }
+@media (max-width:640px) { .places { grid-template-columns:1fr } .places > div + div { padding-left:0; border-left:0; border-top:.5px solid var(--line) } }
+
+/* Switchers */
+.controls { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin-bottom:16px; font-size:13px; color:var(--fg3) }
+.switch { display:inline-flex; background:var(--sel); border-radius:9px; padding:2px; gap:2px; flex-wrap:wrap }
+.switch button { all:unset; font-size:13px; padding:5px 12px; border-radius:7px; cursor:pointer; color:var(--fg2) }
+.switch button[aria-pressed="true"] { background:var(--field); color:var(--fg); box-shadow:0 0 0 .5px var(--line),0 1px 2px rgba(0,0,0,.06) }
+.switch button:focus-visible { outline:2px solid var(--accent) }
+
+/* Columns (style A) */
+.stage { background:var(--canvas); border-radius:16px; padding:24px }
+.cols { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; align-items:start }
+@media (max-width:980px) { .cols { grid-template-columns:minmax(0,320px); justify-content:center } }
+.colcap { font-size:13px; color:var(--fg2); margin:0 0 8px 2px }
+.colcap b { color:var(--fg); font-weight:600; margin-right:6px }
+.col { background:var(--win); border-radius:12px; box-shadow:var(--shadow); font-size:13px; line-height:1.4; display:flex; flex-direction:column; min-height:620px; overflow:hidden }
+.col .in { padding:4px 18px 16px; flex:1; display:flex; flex-direction:column }
+.foot { border-top:.5px solid var(--line); padding:11px 18px; font-size:12px; color:var(--fg2); display:flex; gap:8px }
+.foot > :last-child { margin-left:auto }
+.num { font-variant-numeric:tabular-nums }
+.a { color:var(--accent); font-size:12px; cursor:pointer; white-space:nowrap }
+.mono { font-family:var(--mono); font-size:12px }
+.plus { color:var(--add); font-family:var(--mono); font-size:12px; white-space:nowrap }
+.minus { color:var(--del); font-family:var(--mono); font-size:12px; white-space:nowrap }
+.ell { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0 }
+.meter { width:42px; height:3px; border-radius:2px; background:var(--sel); overflow:hidden; display:inline-block; vertical-align:middle }
+.meter i { display:block; height:100%; background:var(--fg2) }
+.word { border-radius:5px; padding:1px 4px; margin:-1px -4px; cursor:pointer }
+.word:hover { background:var(--sel) }
+
+.sec { display:flex; flex-direction:column; padding:14px 0 12px; border-bottom:.5px solid var(--line) }
+.sec:last-child { border-bottom:0 }
+.sh { display:flex; align-items:baseline; gap:8px; font-size:12px; color:var(--fg3); margin-bottom:9px }
+.sh .r { margin-left:auto; display:flex; gap:8px; align-items:center }
+.card { display:grid; grid-template-columns:70px minmax(0,1fr); column-gap:12px; row-gap:8px; align-items:baseline; margin:0 }
+.card dt { color:var(--fg3); font-size:12px }
+.card dd { margin:0; min-width:0; display:flex; flex-wrap:wrap; gap:2px 8px; align-items:baseline }
+.list { display:flex; flex-direction:column; gap:5px; width:100% }
+.li { display:flex; gap:8px; align-items:baseline; min-width:0 }
+.li .ell { flex:1 }
+.tick { width:11px; height:11px; border-radius:50%; border:1px solid var(--fg3); flex-shrink:0; position:relative; top:1px }
+.tick.done { background:var(--fg2); border-color:var(--fg2) }
+.tick.now { border-color:var(--fg); border-width:1.5px }
+.li.done .ell { color:var(--fg3) }
+.nowline { font-size:15px; font-weight:600; letter-spacing:-.1px }
+.nows { font-size:12px; color:var(--fg3); margin-top:2px }
+.ring { width:10px; height:10px; border-radius:50%; border:1.5px solid var(--fg3); border-top-color:var(--fg); display:inline-block; margin-right:6px; vertical-align:-1px }
+.dot { width:6px; height:6px; border-radius:50%; background:var(--accent); display:inline-block; margin-right:6px; vertical-align:2px }
+.order-pipe .s-setup { order:1 } .order-pipe .s-context { order:2 } .order-pipe .s-plan { order:3 } .order-pipe .s-made { order:4 }
+.order-pipe .s-now { order:0 }
+.order-pipe .sec { border-bottom:.5px solid var(--line) }
+[hidden] { display:none !important }
+</style>
+
+<div class="doc">
+  <div class="eyebrow">Piopio · information architecture · 2026-11-06</div>
+  <h1>What the column is for</h1>
+  <p class="lede">The Summary mixes how a conversation is set up, what it was given, what it's doing and what it made,
+  and leaves some of it out. This page lists everything a conversation can tell you, sorts it into five groups, decides
+  where each thing lives in the window, and redraws the column in style A.</p>
+</div>
+
+<!-- ============ 1. Inventory ============ -->
+<div class="doc">
+  <h2>1 · Everything a conversation can tell you</h2>
+  <p class="muted">Each item, what kind of information it is, how often it changes, and where it is today.
+  <span class="flag">Bold</span> marks the problems.</p>
+  <div class="tw"><table>
+    <tr><th>Item</th><th>Kind</th><th>Changes</th><th>Today</th></tr>
+    <tr><td class="k">This Mac / cloud</td><td>Setup</td><td>never</td><td>Summary · Where it runs</td></tr>
+    <tr><td class="k">Folder, branch, worktree</td><td>Setup</td><td>rarely</td><td>Summary · Where it runs</td></tr>
+    <tr><td class="k">Permission mode</td><td>Setup</td><td>every few turns</td><td><span class="flag">composer and Summary</span></td></tr>
+    <tr><td class="k">Model, thinking</td><td>Setup</td><td>every few turns</td><td>composer (Summary in chats)</td></tr>
+    <tr><td class="k">Apps, MCP servers, web search</td><td>Setup</td><td>sometimes</td><td><span class="flag">+ menu and Summary</span></td></tr>
+    <tr><td class="k">Skills</td><td>Setup</td><td>rarely</td><td><span class="flag">only as / commands</span></td></tr>
+    <tr><td class="k">Files and folders you gave it</td><td>Context</td><td>each message</td><td><span class="flag">chats: under Results · Build: nowhere</span></td></tr>
+    <tr><td class="k">Project instructions (AGENTS.md)</td><td>Context</td><td>never</td><td><span class="flag">nowhere</span></td></tr>
+    <tr><td class="k">What it remembers</td><td>Context</td><td>grows</td><td>notebooks and agents only</td></tr>
+    <tr><td class="k">Pages and files it read</td><td>Context</td><td>each turn</td><td><span class="flag">chats: under Results</span> · Build: transcript</td></tr>
+    <tr><td class="k">How full its context is</td><td>Context</td><td>each turn</td><td><span class="flag">Summary · Context, apart from what fills it</span></td></tr>
+    <tr><td class="k">What it's doing, waiting on you</td><td>Now</td><td>constantly</td><td>transcript and sidebar dot</td></tr>
+    <tr><td class="k">Checklist</td><td>Plan</td><td>each step</td><td>Summary · Checklist</td></tr>
+    <tr><td class="k">Documents and files it created</td><td>Made</td><td>each turn</td><td><span class="flag">mixed with edits under Results</span></td></tr>
+    <tr><td class="k">Edits to existing files</td><td>Made</td><td>each turn</td><td>Summary · Results, Changes view</td></tr>
+    <tr><td class="k">Commits, what waits to push</td><td>Made</td><td>sometimes</td><td><span class="flag">split: commits in Results, "to push" in Where it runs</span></td></tr>
+    <tr><td class="k">Debate drafts</td><td>Made</td><td>each round</td><td>debate's own pane</td></tr>
+    <tr><td class="k">Cost, time</td><td>Spend</td><td>each turn</td><td>Summary footer</td></tr>
+  </table></div>
+  <p class="muted">What goes wrong today, in short: <b style="color:var(--fg)">Results</b> mixes input (files you
+  shared, pages it read) with output (what it wrote); <b style="color:var(--fg)">Context</b> is a meter with nothing
+  under it; things you gave it in Build don't appear at all; and the same switches live in two places.</p>
+</div>
+
+<!-- ============ 2. Groups ============ -->
+<div class="doc">
+  <h2>2 · Five groups, one question each</h2>
+  <div class="groups">
+    <div class="g"><b>Now<span>is it busy?</span></b>
+      <div><p>What it's doing this moment, or that it's waiting on you (with a link to the card in the transcript).</p>
+      <p>Only there while something is happening; gone when it's done.</p></div></div>
+    <div class="g"><b>Made<span>what came out?</span></b>
+      <div><p>Three verbs: <b>Wrote</b> (new documents and files, which open in the viewer: the artifacts),
+      <b>Changed</b> (edits to files that were there, which open as a diff), <b>Saved</b> (commits and what waits to
+      push; a pull request later).</p>
+      <p>A file the agent created is an artifact even in a code project; an edit is a change.</p></div></div>
+    <div class="g"><b>Plan<span>where is it going?</span></b>
+      <div><p>The checklist, when the agent keeps one. Hidden otherwise.</p></div></div>
+    <div class="g"><b>Context<span>what is it working from?</span></b>
+      <div><p><b>You gave</b> (files, folders, @mentions, images), <b>Follows</b> (AGENTS.md),
+      <b>Remembers</b> (notebooks and agents), <b>Read</b> (pages and files it looked at itself).</p>
+      <p>The meter becomes this group's header ("1% full · Compact"): it measures exactly what's listed under it.</p></div></div>
+    <div class="g"><b>Setup<span>how is it set up?</span></b>
+      <div><p><b>Works in</b> (folder), <b>On</b> (branch or worktree), <b>Runs on</b> (this Mac or the cloud),
+      <b>Uses</b> (apps, MCP servers, web search), <b>Knows</b> (skills).</p>
+      <p>For agents, also <b>Does</b>, <b>When</b>, <b>Reaches you</b>: for them the setup is the identity.</p></div></div>
+    <div class="g"><b>Spend<span>what did it cost?</span></b>
+      <div><p>Cost and time, in the footer. Not a group, a total.</p></div></div>
+  </div>
+</div>
+
+<!-- ============ 3. Placement ============ -->
+<div class="doc">
+  <h2>3 · Where each thing lives</h2>
+  <p class="muted">The column is one of six places. The rule that decides is how far the thing reaches: one message,
+  the whole conversation, every conversation.</p>
+  <div class="places">
+    <div><b>Composer</b><i>this message</i><span>Attachments (+), and the two things you change every few turns: model
+    and mode. Setup doesn't repeat them.</span></div>
+    <div><b>/</b><i>do something now</i><span>Commands and running a skill.</span></div>
+    <div><b>Column</b><i>this conversation</i><span>The five groups: an index of it, not the detail.</span></div>
+    <div><b>Transcript</b><i>the story</i><span>Activity, approvals, questions. The column points into it, it doesn't
+    repeat it.</span></div>
+    <div><b>Toolbar views</b><i>the detail</i><span>Changes (the full diff, commit, rewind), Files (the tree),
+    Terminal. Made's rows open them.</span></div>
+    <div><b>Settings</b><i>every conversation</i><span>Defaults. The column can only turn things off for this
+    conversation, as today.</span></div>
+  </div>
+</div>
+
+<!-- ============ 4. Order ============ -->
+<div class="doc">
+  <h2>4 · In what order</h2>
+  <p class="muted">Two ways to stack the groups. <b style="color:var(--fg)">By attention</b> (recommended): what
+  changes and matters most on top, what's stable at the bottom, so you never scroll to see the result.
+  <b style="color:var(--fg)">By flow</b>: setup → context → plan → made, top to bottom like a recipe; easier to
+  explain, but the result ends up last. Switch between them in the mockups below.</p>
+  <p class="muted">Empty groups are hidden: a chat with no plan and nothing made shows Context and Setup only.</p>
+</div>
+
+<!-- ============ 5. Mockups ============ -->
+<div class="wide">
+  <div class="controls">
+    <div class="switch" role="group" aria-label="Order">
+      <button aria-pressed="true" data-order="att">By attention</button>
+      <button aria-pressed="false" data-order="pipe">By flow</button>
+    </div>
+    <div class="switch" role="group" aria-label="State">
+      <button aria-pressed="true" data-state="run">Working</button>
+      <button aria-pressed="false" data-state="done">Done</button>
+    </div>
+  </div>
+  <div class="stage">
+  <div class="cols" id="order">
+    <!-- BUILD -->
+    <div><div class="colcap"><b>Build session</b>financial_ia</div>
+    <div class="col"><div class="in">
+      <div class="sec s-now" data-st="run">
+        <div class="nowline"><span class="ring"></span>Writing the PDF report</div>
+        <div class="nows">Step 3 of 4 · for 2 min</div>
+      </div>
+      <div class="sec s-made">
+        <div class="sh">Made<span class="r"><span class="a">Review all</span></span></div>
+        <dl class="card">
+          <dt>Wrote</dt><dd><div class="list">
+            <div class="li"><span class="ell">documento-random.pdf</span><span class="m">PDF · 3 pages</span></div>
+            <div class="li" data-st="done" hidden><span class="ell">resumen.md</span><span class="m">Markdown</span></div>
+          </div></dd>
+          <dt>Changed</dt><dd><div class="list">
+            <div class="li"><span class="ell">report.py</span><span class="plus">+38</span><span class="minus">−4</span></div>
+            <div class="li"><span class="ell">requirements.txt</span><span class="plus">+1</span></div>
+          </div></dd>
+          <dt>Saved</dt><dd><div class="list">
+            <div class="li"><span class="ell"><span class="mono m">3f2a91c</span> Add the report</span></div>
+            <div class="li"><span class="m">1 to push</span><span class="a">Push</span></div>
+          </div></dd>
+        </dl>
+      </div>
+      <div class="sec s-plan">
+        <div class="sh">Plan<span class="r"><span data-st="run">2 of 4</span><span data-st="done" hidden>4 of 4</span></span></div>
+        <div class="list">
+          <div class="li done"><span class="tick done"></span><span class="ell">Read the bank export</span></div>
+          <div class="li done"><span class="tick done"></span><span class="ell">Build the monthly table</span></div>
+          <div class="li" data-st="run"><span class="tick now"></span><span class="ell">Write the PDF report</span></div>
+          <div class="li" data-st="run"><span class="tick"></span><span class="ell m">Check the totals</span></div>
+          <div class="li done" data-st="done" hidden><span class="tick done"></span><span class="ell">Write the PDF report</span></div>
+          <div class="li done" data-st="done" hidden><span class="tick done"></span><span class="ell">Check the totals</span></div>
+        </div>
+      </div>
+      <div class="sec s-context">
+        <div class="sh">Context<span class="r"><span class="meter"><i style="width:4%"></i></span><span>4% full</span><span class="a">Compact</span></span></div>
+        <dl class="card">
+          <dt>You gave</dt><dd><div class="list">
+            <div class="li"><span class="ell">extracto-octubre.xlsx</span></div>
+            <div class="li"><span class="ell">informes/</span><span class="m">folder</span></div>
+          </div></dd>
+          <dt>Follows</dt><dd><span class="word">AGENTS.md</span></dd>
+          <dt>Read</dt><dd><span class="word">14 files</span><span class="m">and 2 commands</span></dd>
+        </dl>
+      </div>
+      <div class="sec s-setup">
+        <div class="sh">Setup</div>
+        <dl class="card">
+          <dt>Works in</dt><dd><span class="word">financial_ia</span><span class="m">~/Proyectos</span></dd>
+          <dt>On</dt><dd><span class="word">main</span></dd>
+          <dt>Runs on</dt><dd>This Mac</dd>
+          <dt>Uses</dt><dd><span class="word">GitHub, Linear</span><span class="m">2 of 3</span></dd>
+          <dt>Knows</dt><dd><span class="word">pdf, xlsx</span></dd>
+        </dl>
+      </div>
+    </div>
+    <div class="foot"><span>This session</span><span class="num">$0.04 · 23 min</span></div></div></div>
+
+    <!-- CHAT -->
+    <div><div class="colcap"><b>Chat</b>Hipoteca: fijo o variable</div>
+    <div class="col"><div class="in">
+      <div class="sec s-now" data-st="run">
+        <div class="nowline"><span class="ring"></span>Searching the web</div>
+        <div class="nows">3 pages so far</div>
+      </div>
+      <div class="sec s-made" data-st="done" hidden>
+        <div class="sh">Made</div>
+        <dl class="card">
+          <dt>Wrote</dt><dd><div class="list"><div class="li"><span class="ell">comparativa.xlsx</span><span class="m">table</span></div></div></dd>
+        </dl>
+      </div>
+      <div class="sec s-context">
+        <div class="sh">Context<span class="r"><span class="meter"><i style="width:3%"></i></span><span>3% full</span></span></div>
+        <dl class="card">
+          <dt>You gave</dt><dd><div class="list">
+            <div class="li"><span class="ell">extracto-octubre.xlsx</span></div>
+            <div class="li"><span class="ell">hipoteca.pdf</span></div>
+          </div></dd>
+          <dt>Read</dt><dd><div class="list">
+            <div class="li"><span class="ell">bde.es · Tipos de interés</span></div>
+            <div class="li"><span class="ell">ecb.europa.eu · Key rates</span></div>
+            <div class="li"><span class="a">and 3 more</span></div>
+          </div></dd>
+        </dl>
+      </div>
+      <div class="sec s-setup">
+        <div class="sh">Setup</div>
+        <dl class="card">
+          <dt>Uses</dt><dd><span class="word">the web, Calendar</span></dd>
+          <dt>Knows</dt><dd><span class="word">xlsx</span></dd>
+        </dl>
+      </div>
+      <p class="m" style="margin-top:auto;padding-top:12px;order:9">No plan: chats rarely keep one, so the group isn't there. "Made" appears
+      once it writes a file (not built yet for chats).</p>
+    </div>
+    <div class="foot"><span>This chat</span><span class="num">$0.01</span></div></div></div>
+
+    <!-- AGENT -->
+    <div><div class="colcap"><b>Agent</b>Morning briefing</div>
+    <div class="col"><div class="in">
+      <div class="sec s-now" data-st="run">
+        <div class="nowline"><span class="dot"></span>Waiting for you</div>
+        <div class="nows">Wants to send an email · <span class="a">Show</span></div>
+      </div>
+      <div class="sec s-made">
+        <div class="sh">Made</div>
+        <dl class="card">
+          <dt>Last run</dt><dd><span>Today 8:00</span><span class="m">sent the briefing</span></dd>
+          <dt>Next</dt><dd><span>Tomorrow 8:00</span></dd>
+        </dl>
+      </div>
+      <div class="sec s-context">
+        <div class="sh">Context</div>
+        <dl class="card">
+          <dt>Remembers</dt><dd><span class="word">8 things</span></dd>
+          <dt>You gave</dt><dd><span class="word">equipo.pdf</span></dd>
+        </dl>
+      </div>
+      <div class="sec s-setup">
+        <div class="sh">Setup</div>
+        <dl class="card">
+          <dt>Does</dt><dd>Reads your calendar and mail and tells you what matters today</dd>
+          <dt>When</dt><dd><span class="word">Weekdays at 8:00</span></dd>
+          <dt>Uses</dt><dd><span class="word">Calendar, Mail</span></dd>
+          <dt>Knows</dt><dd><span class="m">no skills</span></dd>
+          <dt>Reaches</dt><dd>Piopio <span class="a">Telegram</span></dd>
+          <dt>Runs on</dt><dd>This Mac</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="foot"><span>This month</span><span class="num">$0.30</span></div></div></div>
+  </div>
+  </div>
+</div>
+
+<!-- ============ 6. Matrix ============ -->
+<div class="doc">
+  <h2>5 · The same groups in every kind of conversation</h2>
+  <div class="tw"><table>
+    <tr><th></th><th>Build</th><th>Chat</th><th>Notebook</th><th>Agent</th></tr>
+    <tr><td class="k"><b>Now</b></td><td>step, waiting on you</td><td>answering, searching</td><td>answering</td><td>running, waiting on you</td></tr>
+    <tr><td class="k"><b>Made</b></td><td>Wrote · Changed · Saved</td><td>Wrote <span class="m">(new)</span></td><td>Topics' state: Decided / Open</td><td>Last run · Next</td></tr>
+    <tr><td class="k"><b>Plan</b></td><td>checklist</td><td>—</td><td>open topics</td><td>—</td></tr>
+    <tr><td class="k"><b>Context</b></td><td>You gave · Follows · Read</td><td>You gave · Read</td><td>Files · Remembers</td><td>Remembers · You gave</td></tr>
+    <tr><td class="k"><b>Setup</b></td><td>Works in · On · Runs on · Uses · Knows</td><td>Uses · Knows</td><td>Uses · Knows</td><td>Does · When · Uses · Knows · Reaches · Runs on</td></tr>
+    <tr><td class="k"><b>Spend</b></td><td>session</td><td>chat</td><td>this month</td><td>this month</td></tr>
+  </table></div>
+  <p class="muted"><b style="color:var(--fg)">Notebooks</b> are the one exception to the layout: their Topics list
+  is both Plan (open topics) and Made (decided ones), and it's also how you move around, so it stays on top as it is.
+  Context and Setup go below it.</p>
+  <p class="muted"><b style="color:var(--fg)">Debates</b> keep their draft pane: there, Made is the whole screen.</p>
+</div>
+
+<!-- ============ 7. Decisions ============ -->
+<div class="doc">
+  <h2>6 · What this needs from you</h2>
+  <ul class="plain">
+    <li><b>Order:</b> by attention or by flow.</li>
+    <li><b>Model and mode out of Setup?</b> I've left them only in the composer, since you change them every few turns.
+    The cost: the column alone no longer tells you everything about how it's set up.</li>
+    <li><b>Wrote vs Changed in Build:</b> new files count as artifacts (open in the viewer), edits as changes (open as a
+    diff). Should a new code file count as written, or only documents, images and data?</li>
+  </ul>
+  <h3>What's new to build</h3>
+  <ul class="plain">
+    <li>App: the groups, Build's "You gave" (from @mentions and attachments), "Follows" and "Read", the Now line, Made's
+    three verbs.</li>
+    <li>Engine: chats writing files (for chats' Made), and turning skills off per conversation (Knows' switches).</li>
+  </ul>
+</div>
+
+<script>
+const root = document.getElementById('order');
+document.querySelectorAll('[data-order]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-order]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  root.classList.toggle('order-pipe', b.dataset.order === 'pipe');
+}));
+document.querySelectorAll('[data-state]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-state]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  document.querySelectorAll('[data-st]').forEach(el => el.hidden = el.dataset.st !== b.dataset.state);
+}));
+</script>

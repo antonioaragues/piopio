@@ -131,7 +131,7 @@ struct BuildSessionView: View {
                         BuildInspector(session: session, commit: canCommit ? { committing = true } : nil, checklist: false, onReview: review)
                     case .summary:
                         SessionSummaryPanel(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
-                                            committing: $committing, onReview: review)
+                                            committing: $committing, onReview: review, onOpen: { previewing = $0 })
                     }
                 }
                 .frame(width: 290)

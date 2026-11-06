@@ -372,13 +372,15 @@ struct Composer: View {
         }
     }
 
-    /// Build: a dropped file becomes its path (relative to the project) in the message; the agent reads it.
+    /// Build: a dropped or picked file becomes an @mention of its path (relative to the project), like one typed after
+    /// @; the agent reads it, and Summary lists it under Context › You gave.
     private func mention(_ url: URL) {
         var path = url.path
         if let cwd = engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.cwd, path.hasPrefix(cwd + "/") {
             path = String(path.dropFirst(cwd.count + 1))
         }
-        text += (text.isEmpty || text.hasSuffix(" ") ? "" : " ") + path + " "
+        if url.hasDirectoryPath, !path.hasSuffix("/") { path += "/" }
+        text += (text.isEmpty || text.hasSuffix(" ") ? "" : " ") + "@" + path + " "
     }
 
     private func send(steer: Bool) {
