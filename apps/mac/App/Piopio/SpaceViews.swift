@@ -749,7 +749,8 @@ struct SpaceView: View {
     }
 }
 
-/// The notebook's right column (docs/design/grey 13e): Topics, each with a grey status line, then Remembers and Files.
+/// The notebook's right column (docs/design/grey 13e, docs/design/summary/ia.html): Topics, each with a grey status
+/// line, then Context (Remembers, Has: its files) and Setup (Uses: MCP servers; Knows: skills).
 struct SpaceInspector: View {
     let engine: EngineController
     let space: SessionSummary
@@ -774,32 +775,39 @@ struct SpaceInspector: View {
                 if topics.isEmpty {
                     Text("Write here: the organizer starts topics as subjects come up.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                 }
-                if space.space?.memory != false {
-                    let all = Self.facts(memoryText)
-                    heading("Remembers") {
-                        if !all.isEmpty { Text("\(all.count)").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                        Button(all.isEmpty ? "Open" : "See all") { showMemory = true }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                // Topics are the notebook's plan and what it decided, and how you move around, so they stay on top;
+                // then the groups every conversation has (docs/design/summary/ia.html, SummaryCard.swift).
+                Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.top, 12)
+                VStack(alignment: .leading, spacing: 9) {
+                    GroupHeader("Context") { EmptyView() }
+                    if space.space?.memory != false {
+                        let all = Self.facts(memoryText)
+                        CardRow("Remembers") {
+                            if all.isEmpty { Text("Nothing yet").font(.system(size: 13)).foregroundStyle(Color.dsFg3) }
+                            ForEach(Array(all.prefix(3).enumerated()), id: \.offset) { _, fact in
+                                Text(fact).font(.system(size: 13)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            }
+                            SummaryLink(all.isEmpty ? "Open" : all.count > 3 ? "See all \(all.count)" : "See all") { showMemory = true }
+                        }
                     }
-                    .padding(.top, 20)
-                    if all.isEmpty { Text("Nothing yet").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
-                    ForEach(Array(all.prefix(4).enumerated()), id: \.offset) { _, fact in
-                        Text(fact).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(2).padding(.vertical, 3)
+                    CardRow("Has") {
+                        if files.isEmpty { Text("No files").font(.system(size: 13)).foregroundStyle(Color.dsFg3) }
+                        ForEach(files.prefix(5)) { file in
+                            ItemButton(title: file.name, help: "Open \(file.name)") {
+                                viewing = SpaceFileTarget(url: SpaceFileTarget.url(engine: engine, space: space, name: file.name))
+                            }
+                        }
+                        if files.count > 5 { Text("and \(files.count - 5) more").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                        SummaryLink("Add files…") { showFiles = true }
                     }
                 }
-                heading("Files") {
-                    Button("Add") { showFiles = true }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                .summaryGroup()
+                VStack(alignment: .leading, spacing: 9) {
+                    GroupHeader("Setup") { EmptyView() }
+                    UsesRow(engine: engine, thread: engine.thread(space.ref), summary: space)
+                    KnowsRow(thread: engine.thread(space.ref))
                 }
-                .padding(.top, 20)
-                if files.isEmpty { Text("None yet").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
-                ForEach(files.prefix(5)) { file in
-                    Button { viewing = SpaceFileTarget(url: SpaceFileTarget.url(engine: engine, space: space, name: file.name)) } label: {
-                        Text(file.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.middle).padding(.vertical, 3)
-                    }
-                    .buttonStyle(.plain)
-                }
-                // MCP servers for this notebook only (docs/design/session-panel, steps 3–4).
-                ToolChoicesSection(engine: engine, thread: engine.thread(space.ref), summary: space)
-                    .padding(.top, 20)
+                .padding(.vertical, 14)
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)

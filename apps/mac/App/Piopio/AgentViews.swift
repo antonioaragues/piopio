@@ -248,8 +248,9 @@ struct AgentPage: View {
     }
 }
 
-/// The info panel (docs/design/grey 13a), like a contact card: Does, When, Can (switches), Reaches you in, Remembers,
-/// Activity, and a footer with the model, where it runs and what it cost this month.
+/// The info panel (docs/design/grey 13a, regrouped by docs/design/summary/ia.html): who it is, Now (while it works),
+/// Made (last run, next), Context (Remembers), Setup (Does, When, Can with switches, Reaches, Runs on), and a footer
+/// with the model and what it cost this month.
 private struct AgentInfoPanel: View {
     let engine: EngineController
     let summary: SessionSummary
@@ -264,55 +265,62 @@ private struct AgentInfoPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // docs/design/summary/ia.html: who it is, then the groups in order of attention (Now, Made, Context,
+            // Setup), each a card of verbs (SummaryCard.swift). For an agent the setup is its identity, so it's fuller.
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg)
                         if let line = def?.description ?? summary.agent?.description, !line.isEmpty {
                             Text(line).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    section("Does", action: ("Edit", { tab = .setup })) {
-                        Text(does).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineSpacing(2).lineLimit(6).fixedSize(horizontal: false, vertical: true)
-                    }
-                    section("When", action: ("Change", { tab = .setup })) {
-                        let schedules = def?.schedules ?? []
-                        if schedules.isEmpty {
-                            Text("Only when you write to it").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-                        }
-                        ForEach(schedules) { s in Text(CronText.describe(s.cron)).font(.system(size: 13)).foregroundStyle(Color.dsFg) }
-                    }
-                    section("Can") {
-                        ability("Search the web", ["web_search", "web_fetch"])
-                        ability("Remember things", ["memory"])
-                        ability("Message you", ["send_message"])
-                        ability("Set reminders", ["schedule"])
-                        if !(def?.tools.apple ?? []).isEmpty {
-                            row("Use Mac apps") { Text("\(def?.tools.apple?.count ?? 0)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
-                        }
-                    }
-                    section("Reaches you in") {
-                        row("Piopio") { Text("On").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
-                    }
+                    .padding(.bottom, 2)
+                    now
+                    made
                     if !facts.isEmpty {
-                        section("Remembers", action: ("See all", { tab = .setup })) {
-                            ForEach(facts.prefix(3)) { f in Text(f.text).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(2) }
+                        VStack(alignment: .leading, spacing: 9) {
+                            GroupHeader("Context") { SummaryLink("See all") { tab = .setup }.help("Everything it remembers") }
+                            CardRow("Remembers") {
+                                ForEach(facts.prefix(3)) { f in Text(f.text).font(.system(size: 13)).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
+                                if facts.count > 3 { Text("and \(facts.count - 3) more").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                            }
                         }
+                        .summaryGroup()
                     }
-                    if let last = runs?.runs.first {
-                        section("Activity", action: ("See all", { tab = .activity })) {
-                            Text("Last run \(BuildSessionView.relative(last.firedAt)) · \(last.status == "done" ? (last.sent > 0 ? "sent \(last.sent)" : "nothing sent") : last.status)")
-                                .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                    VStack(alignment: .leading, spacing: 9) {
+                        GroupHeader("Setup") { SummaryLink("Edit") { tab = .setup }.help("Its instructions, schedule and tools") }
+                        CardRow("Does") {
+                            Text(does).font(.system(size: 13)).lineSpacing(2).lineLimit(6).fixedSize(horizontal: false, vertical: true)
                         }
+                        CardRow("When") {
+                            let schedules = def?.schedules ?? []
+                            if schedules.isEmpty {
+                                Text("When you write to it").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                            }
+                            ForEach(schedules) { s in Text(CronText.describe(s.cron)).font(.system(size: 13)) }
+                        }
+                        CardRow("Can") {
+                            ability("Search the web", ["web_search", "web_fetch"])
+                            ability("Remember things", ["memory"])
+                            ability("Message you", ["send_message"])
+                            ability("Set reminders", ["schedule"])
+                            if !(def?.tools.apple ?? []).isEmpty {
+                                row("Use Mac apps") { Text("\(def?.tools.apple?.count ?? 0)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+                            }
+                        }
+                        CardRow("Reaches") { Text("You in Piopio").font(.system(size: 13)) }
+                        CardRow("Runs on") { Text("This Mac").font(.system(size: 13)) }
+                        if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                     }
-                    if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
+                    .padding(.vertical, 14)
                 }
-                .padding(20)
+                .padding(.horizontal, 20).padding(.top, 18)
             }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(model + " · This Mac").font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                    Text(model).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(1)
                     Spacer()
                     Text(month).font(.system(size: 12)).foregroundStyle(Color.dsFg3).monospacedDigit()
                 }
@@ -323,15 +331,51 @@ private struct AgentInfoPanel: View {
         .task(id: summary.updatedAt) { await loadFacts() }
     }
 
-    private func section<Content: View>(_ title: String, action: (String, () -> Void)? = nil, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                SectionLabel(title)
-                Spacer()
-                if let action { Button(action.0, action: action.1).buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
-            }
-            content()
+    // MARK: Now and Made
+
+    /// While it works on a run or waits for your approval.
+    @ViewBuilder private var now: some View {
+        let status = engine.thread(summary.ref).state?.status
+        if status == .running || status == .waitingApproval {
+            NowGroup(waiting: status == .waitingApproval, title: "Working",
+                     detail: status == .waitingApproval ? "It's asking in the conversation" : nil)
         }
+    }
+
+    /// What its runs did: the last one, and when the next is.
+    @ViewBuilder private var made: some View {
+        let last = runs?.runs.first
+        let next = runs?.upcoming.compactMap(\.next).sorted().first
+        if last != nil || next != nil {
+            VStack(alignment: .leading, spacing: 9) {
+                GroupHeader("Made") {
+                    if last != nil { SummaryLink("See all") { tab = .activity }.help("Every run") }
+                }
+                if let last {
+                    CardRow("Last run") {
+                        Text(BuildSessionView.relative(last.firedAt)).font(.system(size: 13))
+                        Text(last.status == "done" ? (last.sent > 0 ? "sent \(last.sent) message\(last.sent == 1 ? "" : "s")" : "nothing to send") : last.status)
+                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    }
+                }
+                if let next {
+                    CardRow("Next") { Text(Self.when(next)).font(.system(size: 13)) }
+                }
+            }
+            .summaryGroup()
+        }
+    }
+
+    /// "Today 8:00", "Tomorrow 8:00", "Mon 10 Nov 8:00".
+    static func when(_ iso: String) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
+        let time = date.formatted(date: .omitted, time: .shortened)
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today \(time)" }
+        if calendar.isDateInTomorrow(date) { return "Tomorrow \(time)" }
+        return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) + " " + time
     }
 
     private func row<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {

@@ -29,7 +29,8 @@ struct CardRow<Content: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(label).font(.system(size: 12)).foregroundStyle(Color.dsFg3).frame(width: 62, alignment: .leading)
+            Text(label).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).fixedSize()
+                .frame(width: 68, alignment: .leading)
             VStack(alignment: .leading, spacing: 5) { content }
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -98,6 +99,7 @@ struct SummaryLink: View {
 
     var body: some View {
         Button(title, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
+            .lineLimit(1).fixedSize()
     }
 }
 
@@ -201,12 +203,9 @@ struct UsesRow: View {
         let total = choices.count + (web ? 1 : 0)
         CardRow("Uses") {
             if total == 0 {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("No apps").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                    SummaryLink("Connect…") { ToolChoices.openSettings("Connectors") }
-                        .help("Connect apps and MCP servers in Settings")
-                    Spacer(minLength: 0)
-                }
+                Text("No apps").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                SummaryLink("Connect…") { ToolChoices.openSettings("Connectors") }
+                    .help("Connect apps and MCP servers in Settings")
             } else {
                 FoldButton(open: open, help: "Turn things off for this conversation") { open.toggle() } label: {
                     Text(names.isEmpty ? "Nothing on" : names.joined(separator: ", ")).font(.system(size: 13))

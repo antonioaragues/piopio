@@ -72,7 +72,21 @@ nothing was clicked, because the user's own Piopio was open. Next: Chat, then No
   "and N more"; an untitled page shows its address); **Setup** with **Uses** ("the web" plus apps and servers, unfolding
   into Web search and a switch each) and **Knows** (skills). No Plan or Made: chats keep no checklist and write no
   files. The model card left (it's in the composer), as did the separate Web search row.
-- Notebooks still use the old Connectors and MCP section (`ToolChoicesSection`) until their step.
-
 Checked with captures: a chat with an attached file and a fetched page, and Build's column again after the move to
 shared parts. Not seen: Now in a chat, Uses unfolded, a chat with apps connected.
+
+## Step 3, built 2026-11-06: notebooks and agents
+
+- **Notebook** (`SpaceInspector`): Topics stay on top as they were (they're the notebook's plan, what it decided, and
+  how you move around). Below: **Context** with **Remembers** (the first three facts, See all) and **Has** (its files,
+  opening in the viewer; Add files…), then **Setup** with **Uses** (MCP servers, a switch each) and **Knows**.
+- **Agent** (`AgentInfoPanel`): the name and its line, then **Now** (working, or waiting for your approval), **Made**
+  (Last run, when and what it sent; Next, "Today 8:00" / "Tomorrow 8:00"; See all opens Activity), **Context** with
+  **Remembers**, and **Setup** (Edit): **Does**, **When**, **Can** (the switches), **Reaches** (you in Piopio),
+  **Runs on**. The footer keeps the model, the month's cost and when it runs. Agents have no Uses or Knows yet: they
+  don't take connectors or MCP servers, and skills aren't offered to them.
+- `ToolChoicesSection` (the old "Connectors and MCP · N on" block) is gone; `UsesRow` replaced it everywhere.
+- Card labels stay on one line (68pt column) and links don't wrap, for the notebook's narrower column.
+
+Checked with captures: a new notebook (no topics, memory or files yet) and an agent after a run. Not seen: a notebook
+with topics, facts and files; an agent with a schedule (Next), facts, or working (Now).
