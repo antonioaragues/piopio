@@ -61,3 +61,18 @@ under Changed.
 Checked with captures of a scripted session (an @mention, a read, a checklist, two new documents and an edit): while
 waiting for approval and when done. Not seen: Saved (no commit in the script), Uses with apps, the unfolded lists;
 nothing was clicked, because the user's own Piopio was open. Next: Chat, then Notebook and Agent.
+
+## Step 2, built 2026-11-06: chats
+
+- The card parts moved to `SummaryCard.swift`, shared by both columns: `GroupHeader`, `CardRow`, `ItemButton`,
+  `FoldButton`, `SummaryLink`, `.summaryGroup()`, `SummaryFooter`, `NowGroup`, `ContextMeter`, `UsesRow`, `KnowsRow`.
+- **A chat's column** (`ChatSummaryPanel`): **Now** while it answers ("Searching the web", "Reading a page", "Using
+  <tool>", "Answering") or waits on you; **Context** with the meter as header (no Compact: the engine compacts Build
+  sessions only), **You gave** (files sent, opening in the viewer) and **Read** (pages, title and host, five then
+  "and N more"; an untitled page shows its address); **Setup** with **Uses** ("the web" plus apps and servers, unfolding
+  into Web search and a switch each) and **Knows** (skills). No Plan or Made: chats keep no checklist and write no
+  files. The model card left (it's in the composer), as did the separate Web search row.
+- Notebooks still use the old Connectors and MCP section (`ToolChoicesSection`) until their step.
+
+Checked with captures: a chat with an attached file and a fetched page, and Build's column again after the move to
+shared parts. Not seen: Now in a chat, Uses unfolded, a chat with apps connected.

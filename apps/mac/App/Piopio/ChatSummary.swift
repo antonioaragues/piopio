@@ -3,120 +3,110 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// A chat's Summary column (docs/design/session-panel, step 4): the model and context, web search, connectors and MCP
-/// for this conversation, then its results (the files you shared and the pages it read), and what it cost.
+/// A chat's Summary column (docs/design/summary/ia.html), the same groups as Build's in style A (SummaryCard.swift):
+/// **Now** (while it answers or waits on you), **Context** (how full; You gave · Read), **Setup** (Uses: the web,
+/// apps and MCP servers, a switch each for this chat; Knows: skills), and the cost. Chats keep no plan and write no
+/// files, so they have no Plan or Made. The model is in the composer.
 struct ChatSummaryPanel: View {
     let engine: EngineController
     let thread: ThreadModel
     let summary: SessionSummary
+    @State private var allPages = false
+
+    private static let shortList = 5
 
     var body: some View {
+        let found = ChatResults(items: thread.document.items)
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    model
-                    tools
-                    results
+                VStack(alignment: .leading, spacing: 0) {
+                    now
+                    contextGroup(found)
+                    VStack(alignment: .leading, spacing: 9) {
+                        GroupHeader("Setup") { EmptyView() }
+                        UsesRow(engine: engine, thread: thread, summary: summary, web: true)
+                        KnowsRow(thread: thread)
+                    }
+                    .padding(.vertical, 14)
                 }
-                .padding(.horizontal, 16).padding(.vertical, 14)
+                .padding(.horizontal, 16)
             }
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            HStack {
-                Text("This chat").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                Spacer()
-                let cost = thread.state?.usage.costUsd ?? 0
-                Text(cost > 0 && cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)).font(.system(size: 12).monospacedDigit())
-            }
-            .padding(.horizontal, 16).padding(.vertical, 12)
+            SummaryFooter(label: "This chat", cost: thread.state?.usage.costUsd ?? 0)
         }
     }
 
-    // MARK: Model and context
+    // MARK: Now
 
-    private var model: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            SectionLabel("Model").padding(.bottom, 2)
-            HStack(spacing: 9) {
-                Image(systemName: "cpu").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                Text(engine.model(summary.model).map(ModelChip.short) ?? summary.model?.id ?? "Default model").font(.system(size: 13)).lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .frame(minHeight: 26)
-            if let context = thread.state?.context {
-                let fraction = min(1, (context.tokens ?? 0) / max(1, context.window))
-                HStack(spacing: 8) {
-                    Text("Context").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                    Spacer()
-                    Text("\(Int((fraction * 100).rounded()))%").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.dsLine)
-                        Capsule().fill(Color.dsFg2).frame(width: max(3, 46 * fraction))
-                    }
-                    .frame(width: 46, height: 4)
-                }
-                .padding(.leading, 27)
-            }
+    @ViewBuilder private var now: some View {
+        let status = thread.state?.status
+        if status == .running || status == .waitingApproval {
+            NowGroup(waiting: status == .waitingApproval, title: Self.activity(thread.document.items),
+                     detail: status == .waitingApproval ? "It's asking in the conversation" : nil)
         }
     }
 
-    // MARK: Tools
-
-    private var tools: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 9) {
-                Image(systemName: "globe").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                Text("Web search").font(.system(size: 13))
-                Spacer()
-                Toggle("", isOn: Binding(get: { thread.webEnabled }, set: { on in Task { await thread.setWeb(on) } }))
-                    .toggleStyle(.switch).controlSize(.mini).labelsHidden()
-                    .accessibilityLabel("Web search in this chat")
+    /// What the running turn is doing: searching, reading a page, using an app, or answering.
+    static func activity(_ items: [TimelineItem]) -> String {
+        for item in items.reversed() {
+            let tools: [ToolItem]
+            switch item {
+            case .tool(let t): tools = [t]
+            case .steps(let s): tools = s.tools
+            case .user: return "Answering"
+            default: continue
             }
-            .frame(minHeight: 26)
-            ToolChoicesSection(engine: engine, thread: thread, summary: summary)
+            guard let running = tools.last(where: { $0.status == .running }) else { continue }
+            return switch running.tool {
+            case "web_search": "Searching the web"
+            case "web_fetch": "Reading a page"
+            default: "Using \(running.tool.replacingOccurrences(of: "_", with: " "))"
+            }
         }
+        return "Answering"
     }
 
-    // MARK: Results
+    // MARK: Context
 
-    private var results: some View {
-        let found = ChatResults(items: thread.document.items)
-        return VStack(alignment: .leading, spacing: 2) {
-            SectionLabel("Results").padding(.bottom, 4)
-            if found.files.isEmpty && found.pages.isEmpty {
-                Text("Files you share and pages it reads show up here.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            ForEach(found.files, id: \.name) { file in
-                Button {
-                    if let stored = file.stored { thread.handle(.openAttachment(stored: stored)) }
-                } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: "paperclip").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                        Text(file.name).font(.system(size: 13)).lineLimit(1)
-                        Spacer(minLength: 0)
-                        Text("shared").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                    }
-                    .frame(minHeight: 26)
-                    .contentShape(Rectangle())
+    @ViewBuilder private func contextGroup(_ found: ChatResults) -> some View {
+        let context = thread.state?.context
+        if context != nil || !found.files.isEmpty || !found.pages.isEmpty {
+            VStack(alignment: .leading, spacing: 9) {
+                GroupHeader("Context") {
+                    if let context { ContextMeter(thread: thread, context: context) }
                 }
-                .buttonStyle(.plain)
-                .disabled(file.stored == nil)
-                .help(file.stored == nil ? "Sent before Piopio kept copies of files" : "Open \(file.name)")
-            }
-            ForEach(found.pages, id: \.url) { page in
-                Button { if let url = URL(string: page.url) { NSWorkspace.shared.open(url) } } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: "link").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                        Text(page.title).font(.system(size: 13)).lineLimit(1)
-                        Spacer(minLength: 4)
-                        Text(page.host).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                if !found.files.isEmpty {
+                    CardRow("You gave") {
+                        ForEach(found.files, id: \.name) { file in
+                            ItemButton(title: file.name, help: file.stored == nil ? "Sent before Piopio kept copies of files" : "Open \(file.name)") {
+                                if let stored = file.stored { thread.handle(.openAttachment(stored: stored)) }
+                            } trailing: {
+                                Text(file.kind == .image ? "image" : "file").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            }
+                            .disabled(file.stored == nil)
+                        }
                     }
-                    .frame(minHeight: 26)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help(page.url)
+                if !found.pages.isEmpty {
+                    CardRow("Read") {
+                        ForEach(allPages ? found.pages : Array(found.pages.prefix(Self.shortList)), id: \.url) { page in
+                            // A page without a title reads as its address, without the scheme.
+                            let untitled = page.title == page.url
+                            let address = page.url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression)
+                            ItemButton(title: untitled ? address.trimmingCharacters(in: CharacterSet(charactersIn: "/")) : page.title, help: page.url) {
+                                if let url = URL(string: page.url) { NSWorkspace.shared.open(url) }
+                            } trailing: {
+                                if !untitled { Text(page.host).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
+                            }
+                        }
+                        if found.pages.count > Self.shortList {
+                            SummaryLink(allPages ? "Show fewer" : "and \(found.pages.count - Self.shortList) more") {
+                                withAnimation(.easeOut(duration: 0.15)) { allPages.toggle() }
+                            }
+                        }
+                    }
+                }
             }
+            .summaryGroup()
         }
     }
 }
