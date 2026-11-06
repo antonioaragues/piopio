@@ -131,7 +131,7 @@ Engine environment variables are documented in `packages/engine/src/main.ts`.
 Conversations and built-in memory are stored locally. Settings › Memory can export built-in memory as JSON and Markdown. Memory searches by words on this Mac by default; semantic search is opt-in and sends memory text and queries to the configured embeddings endpoint.
 
 > [!IMPORTANT]
-> Local storage does not mean all processing stays on the Mac. Remote models, web search, connected tools and auxiliary model requests can send content to external services. Auxiliary requests currently prefer OpenRouter when connected, independently of the conversation's model.
+> Local storage does not mean all processing stays on the Mac. Remote models, web search and connected tools send content to external services. Background work (titles, summaries, suggested replies, commit messages) runs on Apple's on-device model unless you pick another model, and learned facts stay off until you choose where they run. When a choice can't run, the work is skipped rather than sent elsewhere. Settings › Models lists what leaves this Mac.
 
 OpenRouter usage totals cover the API key, may include other apps and exclude other providers. They are not a complete total of Piopio's costs.
 

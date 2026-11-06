@@ -21,6 +21,7 @@ struct MemoryPane: View {
     struct EraseTarget: Identifiable { let bank: String; let label: String; let records: Int; var id: String { bank } }
 
     private var settings: EngineSettings? { engine.settings }
+    @State private var onDevice: OnDeviceStatus?
 
     var body: some View {
         Group {
@@ -31,6 +32,7 @@ struct MemoryPane: View {
         }
         .task(id: tick) {
             await engine.loadSettings()
+            onDevice = await engine.onDeviceStatus()
             banks = try? await engine.client?.call("memory.banks", Empty(), as: MemoryBanksResult.self)
         }
         .task {
@@ -138,7 +140,8 @@ struct MemoryPane: View {
     private func agentLine(_ agent: MemoryBanksResult.Agent, _ mine: [MemoryBanksResult.Bank]) -> String {
         let facts = mine.reduce(0) { $0 + $1.facts }, messages = mine.reduce(0) { $0 + $1.messages }
         let what = facts + messages == 0 ? "Nothing yet" : "\(count(facts, "fact")) · \(count(messages, "message"))"
-        return "\(what) · \(agent.learns ? "learns by itself" : "keeps what was said")"
+        let learns = agent.learns && (settings?.models?.learning ?? .off) != .off
+        return "\(what) · \(learns ? "learns by itself" : "keeps what was said")"
     }
 
     private func count(_ n: Int, _ noun: String, plural: String? = nil) -> String {
@@ -149,17 +152,42 @@ struct MemoryPane: View {
 
     @ViewBuilder private var learning: some View {
         let agents = banks?.agents ?? []
+        let learnsWith = settings?.models?.learning ?? .off
         CardTitle("Learning")
         ListCard {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Learn facts with").font(.system(size: 13))
+                    Text(learningLine(learnsWith)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                UtilityChoicePicker(engine: engine, choice: learnsWith, onDevice: onDevice) { choice in
+                    Task { await engine.updateSettings(SettingsPatch(models: .init(learning: choice))) }
+                }
+            }
+            .padding(.horizontal, 14).frame(minHeight: 54)
+            RowDivider(inset: 14)
             ToggleRow(title: "Chats add to About me", subtitle: "When you mention something lasting about yourself", last: agents.isEmpty, isOn: Binding(get: { settings?.aboutMe.capture ?? false }, set: { v in
                 Task { await engine.updateSettings(SettingsPatch(aboutMe: .init(capture: v))) }
             }))
             ForEach(Array(agents.enumerated()), id: \.element.id) { i, agent in
                 ToggleRow(title: "\(agent.name) learns facts by itself", subtitle: agent.provider == nil || agent.provider == "builtin" ? "After a quiet moment, from what was said; newer facts replace older ones" : "Its MCP memory decides what it keeps", last: i == agents.count - 1, isOn: Binding(get: { agent.learns }, set: { v in setLearning(agent, v) }))
-                    .disabled(agent.provider != nil && agent.provider != "builtin")
+                    .disabled((agent.provider != nil && agent.provider != "builtin") || learnsWith == .off)
             }
         }
         FinePrint("Everything learned shows in the conversation with Undo, and in Browse with what it replaced.").padding(.top, 8)
+    }
+
+    private func learningLine(_ choice: UtilityChoice) -> String {
+        switch choice {
+        case .off: return "Off: agents keep what was said and what you add, and learn nothing by themselves"
+        case .onDevice:
+            if onDevice?.available == false { return (onDevice?.reason ?? "Apple's model isn't available.") + " Nothing is learned until then." }
+            return "Apple's model, on this Mac. Free and private, but it gets more facts wrong: check them with Undo"
+        case .model(let ref):
+            let p = engine.providerPlace(ref.provider)
+            return p.local ? "A model on this Mac" : "What was said goes to \(p.name) to pick out facts, billed to your account (about $0.01 per 100 messages on a small model)"
+        }
     }
 
     private func setLearning(_ agent: MemoryBanksResult.Agent, _ learn: Bool) {

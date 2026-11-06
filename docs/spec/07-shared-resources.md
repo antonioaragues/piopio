@@ -21,9 +21,17 @@ Resources defined once and opted in per mode, project, space or agent (decision 
 | Chat | threads, topics | a strong general model |
 | Organizer | Space routing | a fast, cheap tool-capable model |
 | Agents | agent default | a cheap capable model |
-| Utility | titles, summaries, commit messages, topic summaries, routing hints, memory extraction | **Apple's on-device model** (Foundation Models, through the app) when available, else the cheapest fast OpenRouter model |
+| Utility | titles, summaries, commit messages, topic summaries, suggested replies, notebook suggestions | **Apple's on-device model** (Foundation Models), or a model you pick, or off |
+| Learning | learned facts (agents' memory, 14-memory M2) | **Off** until you pick a model: on this Mac, or a provider's model |
 
 Defaults are overridable per project, space, agent and session.
+
+**The privacy contract (2026-11-06).** Content goes only where the user chose, and the app says where:
+- The utility and learning slots are engine settings (`settings.models.utility` / `.learning`: `"on_device"`, `"off"` or a model ref), so background mode honors them too. An agent's `models.utility` (`"on-device"`, `"off"` or a model id) overrides learning for that agent.
+- Apple's model runs through `piopio-fm`, a helper in `Piopio.app/Contents/MacOS` that the engine starts as a child process (`PIOPIO_FM`), with or without the window open. Its context is about 4k tokens, so input is cut to 9,000 characters.
+- **No silent fallback.** When the choice can't run (Apple Intelligence off, the model still downloading, the picked provider disconnected), the task is skipped: no summary or suggestion, commit messages list the files, nothing is learned. Settings says why.
+- Learning is off by default because the on-device model invented a fact in our first test (2026-11-06: "studies at University of Valencia" from an exchange that never said it). Picking it is allowed, with that warning.
+- Settings › Models shows "What leaves this Mac": conversations (the model each uses), background work, learned facts, web search (the search words go to OpenRouter's web plugin, CQ3) and memory search (by words on this Mac, or by meaning through OpenRouter).
 
 ### 1.4 Cost tracking
 - **CO1** Every model call writes a ledger row (engine `catalog.db`; cloud: AgentDO, synced to the app when connected).

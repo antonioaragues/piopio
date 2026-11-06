@@ -64,3 +64,15 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     let model = try decode(#"{"provider":"openai-api","id":"gpt-6-sol","name":"GPT-6 Sol","contextWindow":400000,"maxOutputTokens":128000,"pricing":{"input":2,"output":10,"cacheRead":0,"cacheWrite":0},"supports":{"vision":true,"reasoning":true},"providerName":"OpenAI API","billing":"OpenAI API billing"}"#, as: ModelInfo.self)
     #expect(model.billing == "OpenAI API billing")
 }
+
+@Test func utilityChoicesMatchTheEngine() throws {
+    let s: EngineSettings = try decode(#"{"models":{"utility":"on_device","learning":{"provider":"ollama","id":"llama4"}},"chat":{"mcp":false,"suggestSpaces":true},"aboutMe":{"enabled":false,"capture":false,"inThreads":true,"inSpaces":true,"provider":"builtin"},"memory":{"providers":[]}}"#)
+    #expect(s.models?.utility == .onDevice)
+    #expect(s.models?.learning == .model(ModelRef(provider: "ollama", id: "llama4")))
+    let old: EngineSettings = try decode(#"{"chat":{"mcp":false,"suggestSpaces":true},"aboutMe":{"enabled":false,"capture":false,"inThreads":true,"inSpaces":true,"provider":"builtin"},"memory":{"providers":[]}}"#)
+    #expect(old.models == nil)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    let patch = String(decoding: try encoder.encode(SettingsPatch(models: .init(utility: .off, learning: .onDevice))), as: UTF8.self)
+    #expect(patch == #"{"models":{"learning":"on_device","utility":"off"}}"#)
+}

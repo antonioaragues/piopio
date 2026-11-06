@@ -47,6 +47,7 @@ struct ModelsPane: View {
     @State private var adding: AddProviderRoute?
     @State private var detected: [EndpointsDetectResult.Found] = []
     @State private var picking: EngineController.ModelRole?
+    @State private var onDevice: OnDeviceStatus?
     @AppStorage("dismissedLocalServers") private var dismissedRaw = ""
 
     private var connected: [ProviderInfo] { engine.providers.filter { $0.isConnected || $0.status == .connecting } }
@@ -73,6 +74,10 @@ struct ModelsPane: View {
                 detected = await engine.detectEndpoints()
                 try? await Task.sleep(for: .seconds(60))
             }
+        }
+        .task {
+            if engine.settings == nil { await engine.loadSettings() }
+            onDevice = await engine.onDeviceStatus()
         }
         .task {
             await engine.loadProviders()
@@ -133,6 +138,32 @@ struct ModelsPane: View {
                 roleRow(.agent, "New agents", last: true)
             }
             Text("Billed to your own accounts. Keys stay in the macOS Keychain.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 12)
+
+            Text("Background work").font(.system(size: 13, weight: .semibold)).padding(.top, 22).padding(.bottom, 7)
+            ListCard {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Titles, summaries and suggestions").font(.system(size: 13))
+                        Text(backgroundLine).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    UtilityChoicePicker(engine: engine, choice: engine.settings?.models?.utility ?? .onDevice, onDevice: onDevice) { choice in
+                        Task { await engine.updateSettings(SettingsPatch(models: .init(utility: choice))) }
+                    }
+                }
+                .padding(.horizontal, 14).frame(minHeight: 54)
+            }
+            FinePrint("If the choice can't run, the work is skipped. Piopio never switches to another provider by itself.").padding(.top, 8).padding(.bottom, 22)
+
+            DataRoutesCard(engine: engine, onDevice: onDevice)
+        }
+    }
+
+    private var backgroundLine: String {
+        switch engine.settings?.models?.utility ?? .onDevice {
+        case .onDevice: onDevice?.available == false ? (onDevice?.reason ?? "Apple's model isn't available") + " Until then, this work is skipped." : "Apple's model, on this Mac: free, private, works offline"
+        case .off: "Off: chats get no summaries or suggested replies; commit messages list the files"
+        case .model(let ref): engine.providerPlace(ref.provider).local ? "A model on this Mac" : "Sent to \(engine.providerPlace(ref.provider).name), billed to your account"
         }
     }
 

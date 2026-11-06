@@ -50,6 +50,7 @@ flags=(--force --sign "$identity")
 sign() { codesign "${flags[@]}" "$@"; }
 sign --options runtime --entitlements "$app_dir/Node.entitlements" "$app/Contents/Helpers/node"
 sign "$app/Contents/MacOS/piopio-engine"
+sign "$app/Contents/MacOS/piopio-fm"
 sparkle="$app/Contents/Frameworks/Sparkle.framework"
 sign "$sparkle/Versions/B/XPCServices/Installer.xpc"
 sign --preserve-metadata=entitlements "$sparkle/Versions/B/XPCServices/Downloader.xpc"

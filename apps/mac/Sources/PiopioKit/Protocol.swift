@@ -806,7 +806,38 @@ public struct MemoryStatus: Decodable, Sendable, Equatable {
 }
 
 /// Engine-wide settings (Settings › Chat, Settings › MCP servers).
+/// Where background model work runs (07-shared §1.3): Apple's on-device model, a picked model, or nowhere.
+/// On the wire: "on_device", "off", or a model ref.
+public enum UtilityChoice: Codable, Sendable, Hashable {
+    case onDevice, off, model(ModelRef)
+
+    public init(from decoder: Decoder) throws {
+        if let text = try? decoder.singleValueContainer().decode(String.self) {
+            self = text == "off" ? .off : .onDevice
+        } else {
+            self = .model(try ModelRef(from: decoder))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .onDevice: var c = encoder.singleValueContainer(); try c.encode("on_device")
+        case .off: var c = encoder.singleValueContainer(); try c.encode("off")
+        case .model(let ref): try ref.encode(to: encoder)
+        }
+    }
+}
+
+public struct OnDeviceStatus: Decodable, Sendable, Hashable { public var available: Bool; public var reason: String? }
+
 public struct EngineSettings: Codable, Sendable, Hashable {
+    /// Unset: general work on this Mac, learned facts off.
+    public struct Models: Codable, Sendable, Hashable {
+        public var utility: UtilityChoice?
+        public var learning: UtilityChoice?
+        public init(utility: UtilityChoice? = nil, learning: UtilityChoice? = nil) { self.utility = utility; self.learning = learning }
+    }
+    public var models: Models?
     public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var suggestSpaces: Bool; public var followUps: Bool? }
     public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var inAgents: Bool?; public var provider: String }
     public struct Memory: Codable, Sendable, Hashable {
@@ -893,10 +924,11 @@ public struct SettingsPatch: Encodable, Sendable {
         public var localOnly: Bool?
         public init(providers: [McpMemoryProvider]? = nil, semantic: Bool? = nil, localOnly: Bool? = nil) { self.providers = providers; self.semantic = semantic; self.localOnly = localOnly }
     }
+    public var models: EngineSettings.Models?
     public var chat: Chat?
     public var aboutMe: AboutMe?
     public var memory: Memory?
-    public init(chat: Chat? = nil, aboutMe: AboutMe? = nil, memory: Memory? = nil) { self.chat = chat; self.aboutMe = aboutMe; self.memory = memory }
+    public init(models: EngineSettings.Models? = nil, chat: Chat? = nil, aboutMe: AboutMe? = nil, memory: Memory? = nil) { self.models = models; self.chat = chat; self.aboutMe = aboutMe; self.memory = memory }
 }
 
 public struct TextParams: Encodable, Sendable { public var text: String; public init(text: String) { self.text = text } }

@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS: EngineSettings = {
 	memory: { providers: [] },
 };
 
-export type SettingsPatch = { chat?: Partial<EngineSettings["chat"]>; aboutMe?: Partial<EngineSettings["aboutMe"]>; memory?: Partial<EngineSettings["memory"]> };
+export type SettingsPatch = { models?: NonNullable<EngineSettings["models"]>; chat?: Partial<EngineSettings["chat"]>; aboutMe?: Partial<EngineSettings["aboutMe"]>; memory?: Partial<EngineSettings["memory"]> };
 
 export class Settings {
 	private value: EngineSettings;
@@ -19,7 +19,7 @@ export class Settings {
 
 	constructor(private readonly file: string) {
 		const saved = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as SettingsPatch) : {};
-		this.value = { chat: { ...DEFAULT_SETTINGS.chat, ...saved.chat }, aboutMe: { ...DEFAULT_SETTINGS.aboutMe, ...saved.aboutMe }, memory: { ...DEFAULT_SETTINGS.memory, ...saved.memory } };
+		this.value = { ...(saved.models ? { models: saved.models } : {}), chat: { ...DEFAULT_SETTINGS.chat, ...saved.chat }, aboutMe: { ...DEFAULT_SETTINGS.aboutMe, ...saved.aboutMe }, memory: { ...DEFAULT_SETTINGS.memory, ...saved.memory } };
 	}
 
 	get(): EngineSettings {
@@ -28,7 +28,8 @@ export class Settings {
 
 	set(patch: SettingsPatch): EngineSettings {
 		const previous = this.value;
-		this.value = { chat: { ...previous.chat, ...patch.chat }, aboutMe: { ...previous.aboutMe, ...patch.aboutMe }, memory: { ...previous.memory, ...patch.memory } };
+		const models = { ...previous.models, ...patch.models };
+		this.value = { ...(Object.keys(models).length ? { models } : {}), chat: { ...previous.chat, ...patch.chat }, aboutMe: { ...previous.aboutMe, ...patch.aboutMe }, memory: { ...previous.memory, ...patch.memory } };
 		const tmp = `${this.file}.tmp`;
 		writeFileSync(tmp, JSON.stringify(this.value, null, "\t"));
 		renameSync(tmp, this.file);

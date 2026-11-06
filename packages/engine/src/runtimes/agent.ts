@@ -13,8 +13,8 @@ import type { ConnectorHub } from "../connectors/hub.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
-import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
+import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem, UtilityChoice } from "@piopio/protocol";
+import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder } from "../timeline/builder.js";
@@ -98,7 +98,8 @@ export class AgentRuntime implements Runtime {
 			...(options.peers ? { peers: options.peers } : {}),
 			...(options.askTimeoutMs ? { askTimeoutMs: options.askTimeoutMs } : {}),
 			// Learned facts (docs/spec/14-memory M2) on the utility model, after a conversation goes quiet.
-			learn: options.learn ?? ((system, prompt) => options.hub.utility(system, prompt, options.ref.id)),
+			// Where: the agent's own models.utility, else Settings › Memory's choice (off unless the user picked one).
+			learn: options.learn ?? ((system, prompt) => options.hub.utility(system, prompt, options.ref.id, { task: "learning", ...agentUtility(options.definition().models.utility) })),
 			// Web search and learned facts are recorded under this agent's id (scope): they count toward its budget.
 			extraSpend: (month) => options.hub.extraCosts.monthUsd(options.ref.id, month),
 			...(options.learnQuietMs ? { learnQuietMs: options.learnQuietMs } : {}),
@@ -622,4 +623,13 @@ function withConnectorApprovals(def: AgentDefinition, hub: ConnectorHub | undefi
 	}
 	const rules = [...new Set([...(def.policies?.requireApproval ?? []), ...asked])];
 	return { ...def, policies: { ...def.policies, requireApproval: rules } };
+}
+
+/** An agent definition's `models.utility`: "on-device", "off", or a model id ("provider:model"). */
+export function agentUtility(value: string | undefined): { choice?: UtilityChoice } {
+	if (!value) return {};
+	if (value === "on-device") return { choice: "on_device" };
+	if (value === "off") return { choice: "off" };
+	const { provider, modelId } = modelOf(value);
+	return { choice: { provider, id: modelId } };
 }

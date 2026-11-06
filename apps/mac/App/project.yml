@@ -49,6 +49,12 @@ targets:
         codeSign: false
         copy:
           destination: executables
+      # Apple's on-device model for the engine's utility work (07-shared §1.3).
+      - target: piopio-fm
+        embed: true
+        codeSign: false
+        copy:
+          destination: executables
     postBuildScripts:
       # Release builds carry the engine and Node (docs/spec/02-architecture §4.1). Debug builds run the repo's
       # engine with the system Node; set PIOPIO_BUNDLE_ENGINE=YES to bundle there too.
@@ -101,6 +107,17 @@ targets:
     settings:
       base:
         PRODUCT_NAME: piopio-engine
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: NO
+        SKIP_INSTALL: YES
+  piopio-fm:
+    type: tool
+    platform: macOS
+    sources: [OnDeviceModel]
+    settings:
+      base:
+        PRODUCT_NAME: piopio-fm
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Manual
         ENABLE_HARDENED_RUNTIME: NO

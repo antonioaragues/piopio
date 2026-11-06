@@ -361,6 +361,21 @@ describe("milestone 1.3", () => {
 	});
 });
 
+test("where background work runs: settings keep the choices across restarts; the on-device status explains itself", async () => {
+	const a = await start();
+	expect((await a.client.call("settings.get", {})).models).toBeUndefined();
+	const status = await a.client.call("models.onDevice", {});
+	expect(status.available).toBe(false); // no piopio-fm helper in tests
+	expect(status.reason).toContain("Piopio app");
+	await a.client.call("settings.set", { models: { learning: "on_device" } });
+	const set = await a.client.call("settings.set", { models: { utility: { provider: "ollama", id: "llama4" } } });
+	expect(set.models).toEqual({ learning: "on_device", utility: { provider: "ollama", id: "llama4" } });
+	await expect(a.client.call("settings.set", { models: { utility: "cloud" } })).rejects.toBeTruthy();
+	await stop(a);
+	const b = await start(a.home);
+	expect((await b.client.call("settings.get", {})).models).toEqual({ learning: "on_device", utility: { provider: "ollama", id: "llama4" } });
+});
+
 test("search finds messages across threads, follows renames and deletes, and backfills", async () => {
 	const a = await start();
 	const ask = async (text: string) => {

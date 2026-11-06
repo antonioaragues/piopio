@@ -359,6 +359,8 @@ final class EngineController {
         }
         var env = ProcessInfo.processInfo.environment
         env["PIOPIO_HOME"] = home.path
+        // Apple's on-device model for utility work (07-shared §1.3), next to the engine launcher.
+        if env["PIOPIO_FM"] == nil, let fm = Bundle.main.url(forAuxiliaryExecutable: "piopio-fm") { env["PIOPIO_FM"] = fm.path }
         p.environment = env
         let log = home.appending(path: "logs/engine.log")
         if !FileManager.default.fileExists(atPath: log.path) { FileManager.default.createFile(atPath: log.path, contents: nil) }
@@ -728,6 +730,11 @@ final class EngineController {
 
     func updateSettings(_ patch: SettingsPatch) async {
         if let next = try? await client?.call("settings.set", patch, as: EngineSettings.self) { settings = next }
+    }
+
+    /// Whether Apple's on-device model can run now (Settings › Models, Memory).
+    func onDeviceStatus() async -> OnDeviceStatus? {
+        try? await client?.call("models.onDevice", Empty(), as: OnDeviceStatus.self)
     }
 
     func aboutMe() async -> MemoryResult? {

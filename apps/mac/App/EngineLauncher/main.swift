@@ -18,6 +18,9 @@ let env = ProcessInfo.processInfo.environment
 let home = env["PIOPIO_HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Piopio").path
 try? FileManager.default.createDirectory(atPath: "\(home)/logs", withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
 setenv("PIOPIO_HOME", home, 1)
+// Apple's on-device model for utility work (07-shared §1.3): the helper next to this launcher.
+let fm = contents.appending(path: "MacOS/piopio-fm").path
+if env["PIOPIO_FM"] == nil, FileManager.default.isExecutableFile(atPath: fm) { setenv("PIOPIO_FM", fm, 1) }
 let log = open("\(home)/logs/engine.log", O_WRONLY | O_CREAT | O_APPEND, 0o600)
 if log >= 0 {
     dup2(log, STDOUT_FILENO)

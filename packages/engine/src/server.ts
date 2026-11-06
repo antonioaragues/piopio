@@ -150,6 +150,7 @@ export class Engine {
 		this.projects = new Projects(options.paths.projectsIndex, agentDir);
 		this.mcp = new McpConfig(agentDir);
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
+		this.hub.utilityChoices = () => this.settings.get().models ?? {};
 		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings, async (provider) => {
 			const credential = await this.hub.credentials.read(provider).catch(() => undefined);
 			return credential?.type === "api_key" ? credential.key : undefined;
@@ -949,6 +950,8 @@ export class Engine {
 				const p = params as Params<"models.verifyKey">;
 				return (await verifyProviderKey(p.provider, p.key)) satisfies Result<"models.verifyKey">;
 			}
+			case "models.onDevice":
+				return (await this.hub.onDevice.status()) satisfies Result<"models.onDevice">;
 			case "models.list": {
 				const p = params as Params<"models.list">;
 				return { models: await this.hub.listModels(p.refresh ?? false), defaultModel: this.hub.defaultModel } satisfies Result<"models.list">;
