@@ -12,7 +12,6 @@ struct Composer: View {
     let engine: EngineController
     let thread: ThreadModel
     /// MCP servers as configured, for the + menu's switches (loaded when the conversation opens).
-    @State private var mcpServers: [McpServerInfo] = []
     @Binding private var text: String
     @Binding private var attachments: [PendingAttachment]
     @State private var attachError: String?
@@ -175,17 +174,7 @@ struct Composer: View {
             .font(.system(size: 14))
             HStack(spacing: 2) {
                 if thread.editing == nil {
-                    AddMenu(
-                        filesTitle: isBuild ? "Mention files" : "Add files or photos",
-                        folderTitle: isBuild ? "Mention a folder" : "Add a folder",
-                        files: { pickFiles(folders: false) },
-                        folder: { pickFiles(folders: true) },
-                        commands: text.isEmpty ? { text = "/"; focused = true } : nil,
-                        web: hasWebSwitch ? Binding(get: { thread.webEnabled }, set: { on in Task { await thread.setWeb(on) } }) : nil,
-                        tools: toolChoices,
-                        toolsOff: toolsOff,
-                        setTool: setTool
-                    )
+                    AttachButton(pick: pickFiles, help: isBuild ? "Mention files or folders (⌘U)" : "Add files, photos or folders (⌘U)")
                 }
                 if isBuild { EditModeChip(engine: engine, thread: thread) }
                 if thread.debate != nil { Text("Debate").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6) }
@@ -220,10 +209,6 @@ struct Composer: View {
             Button("") { if thread.isRunning { stop() } }.keyboardShortcut(".", modifiers: .command).hidden()
         }
         .onAppear { focused = true }
-        .task(id: thread.ref.id) {
-            let kinds = ToolChoices.supports(thread.ref, debate: thread.debate != nil)
-            if kinds.apps || kinds.mcp { mcpServers = await ToolChoices.load(engine: engine, cwd: isBuild ? thread.cwd : nil) }
-        }
     }
 
     /// Build sessions take files by path (the agent reads them) and have their own tools.
@@ -301,35 +286,20 @@ struct Composer: View {
         return engine.threads.first { $0.ref.id == id } ?? engine.buildSessions.first { $0.ref.id == id } ?? engine.spaces.first { $0.ref.id == id }
     }
 
-    private var toolsOff: Set<String> { Set(summary?.toolsOff ?? []) }
-
-    private var toolChoices: [ToolChoice] {
-        ToolChoices.compute(engine: engine, ref: thread.ref, debate: thread.debate != nil, servers: mcpServers)
-    }
-
-    /// Switches one connector or server for this conversation only.
-    private func setTool(_ id: String, _ on: Bool) {
-        var off = toolsOff
-        if on { off.remove(id) } else { off.insert(id) }
-        Task { await thread.setToolsOff(off.sorted()) }
-    }
-
-    /// Threads and debates switch web search per conversation; notebooks and agents always have it.
-    private var hasWebSwitch: Bool { !isBuild && thread.ref.kind != .space && thread.ref.kind != .agent }
-
-    /// Files, or folders (the + menu's two items). Build reads them itself, so they become @paths in the message.
-    private func pickFiles(folders: Bool) {
+    /// The +: files and folders in one open panel. Build reads them itself, so they become @paths in the message;
+    /// elsewhere files are attached, and a folder's readable files.
+    private func pickFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = folders
-        panel.canChooseFiles = !folders
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
         if isBuild {
             if let cwd = thread.cwd { panel.directoryURL = URL(fileURLWithPath: cwd) }
             guard panel.runModal() == .OK else { return }
             for url in panel.urls { mention(url) }
             return
         }
-        if !folders { panel.allowedContentTypes = [.image, .pdf, .text, .sourceCode, .json, .xml, .commaSeparatedText, .data] }
+        panel.allowedContentTypes = [.folder, .image, .pdf, .text, .sourceCode, .json, .xml, .commaSeparatedText, .data]
         guard panel.runModal() == .OK else { return }
         add(panel.urls)
     }
@@ -811,59 +781,24 @@ extension Composer {
     }
 }
 
-/// The composer's + (docs/design/session-panel, step 2): add files or photos (⌘U) or a folder, the / list of commands
-/// and skills, web search, and a way to add extensions. Items that don't apply are left out.
-struct AddMenu: View {
-    var filesTitle = "Add files or photos"
-    var folderTitle = "Add a folder"
-    let files: () -> Void
-    let folder: () -> Void
-    /// Opens the / list; nil when the box isn't empty (commands start a message).
-    var commands: (() -> Void)? = nil
-    var showsCommands = true
-    var web: Binding<Bool>? = nil
-    /// Connectors and MCP servers this conversation can switch (step 3); none hides the submenu.
-    var tools: [ToolChoice] = []
-    var toolsOff: Set<String> = []
-    var setTool: (String, Bool) -> Void = { _, _ in }
+/// The composer's + (docs/design/summary, option 2): files and folders in one open panel (⌘U); dropping and pasting
+/// work too. It's only for what goes with this message: what the conversation uses and knows is in its Summary column
+/// (Setup › Uses, Knows), and commands and skills start with /.
+struct AttachButton: View {
+    let pick: () -> Void
+    var help = "Add files, photos or folders (⌘U)"
     var size: CGFloat = 26
     var bordered = false
 
     var body: some View {
-        Menu {
-            Group { items }.labelStyle(.titleAndIcon)
-        } label: {
+        Button(action: pick) {
             Image(systemName: "plus").font(.system(size: size > 30 ? 15 : 13))
         }
-        .menuStyle(.button)
         .buttonStyle(IconButtonStyle(size: size))
-        .menuIndicator(.hidden)
+        .keyboardShortcut("u", modifiers: .command)
         .fixedSize()
         .overlay { if bordered { RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1).allowsHitTesting(false) } }
-        .background { Button("", action: files).keyboardShortcut("u", modifiers: .command).hidden() }
-        .help("Add files, a folder, commands\(web != nil ? ", web search" : "") or extensions")
-        .accessibilityLabel("Add to this conversation")
-    }
-
-    /// The menu's items; their icons show (macOS menus hide a Label's icon unless asked).
-    @ViewBuilder private var items: some View {
-            Button(action: files) { Label(filesTitle, systemImage: "paperclip") }
-                .keyboardShortcut("u", modifiers: .command)
-            Button(action: folder) { Label(folderTitle, systemImage: "folder") }
-            if showsCommands {
-                Button { commands?() } label: { Label("Commands and skills", systemImage: "slash.circle") }
-                    .disabled(commands == nil)
-            }
-            if !tools.isEmpty || web != nil { Divider() }
-            if !tools.isEmpty { ToolChoicesMenu(choices: tools, off: toolsOff, set: setTool) }
-            if let web {
-                Toggle(isOn: web) { Label("Web search", systemImage: "globe") }
-            }
-            Divider()
-            Button {
-                UserDefaults.standard.set("Extensions", forKey: "settingsSection")
-                NotificationCenter.default.post(name: .settingsSection, object: "Extensions")
-                WindowOpener.shared.openSettings?()
-            } label: { Label("Add extensions…", systemImage: "puzzlepiece.extension") }
+        .help(help)
+        .accessibilityLabel("Add files or folders")
     }
 }

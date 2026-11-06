@@ -90,3 +90,19 @@ shared parts. Not seen: Now in a chat, Uses unfolded, a chat with apps connected
 
 Checked with captures: a new notebook (no topics, memory or files yet) and an agent after a run. Not seen: a notebook
 with topics, facts and files; an agent with a schedule (Next), facts, or working (Now).
+
+## Step 4, built 2026-11-06: the + is for files (option 2)
+
+Each place has one job: **+** is for this message, the **column** for this conversation, **/** for doing something now.
+
+- The composer's + (`AttachButton`, was `AddMenu`) is a button, not a menu: it opens one panel for files and folders
+  (⌘U). In Build they become @mentions; elsewhere files are attached, and a folder's readable files. Dropping and
+  pasting work as before.
+- Gone from the +: Commands and skills (type /), Connectors and MCP and Web search (Summary › Setup › Uses), Add
+  extensions (Knows › Add skills…, and Uses › Connect…). `ToolChoicesMenu` is gone. Debates, which have no Summary
+  column, keep web search in ⌘K ("Turn Off Web Search").
+- The start pages' + does the same: the chat page attaches files or a folder's files; the new session page attaches
+  files and mentions a folder as @path/.
+
+Checked with a capture of a chat's composer (the plain +). Not checked: the open panel itself, and picking a folder
+(a capture can't show the panel, and nothing was clicked).

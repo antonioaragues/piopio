@@ -93,3 +93,6 @@ Views first as icons (lit while showing; `ToolbarIcon`), then a divider and ··
 The "All topics" and "Back to the conversation" pills are gone: the title's breadcrumb, or the lit icon, goes back.
 The composer no longer shows a globe for web search (it's a switch in the + menu and in a chat's Summary), and the +
 menu's items show their icons.
+
+> **Superseded (2026-11-06):** the + menu (step 2) and the Summary layout are replaced by docs/design/summary: the + only
+> adds files and folders, and the column is grouped into Now, Made, Plan, Context and Setup.

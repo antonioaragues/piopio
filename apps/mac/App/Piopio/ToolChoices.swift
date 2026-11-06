@@ -66,46 +66,6 @@ struct ToolChoice: Identifiable, Hashable {
     }
 }
 
-/// The + menu's "Connectors and MCP" submenu: a switch per app and server, for this conversation.
-struct ToolChoicesMenu: View {
-    let choices: [ToolChoice]
-    let off: Set<String>
-    let set: (String, Bool) -> Void
-
-    var body: some View {
-        Menu {
-            section("Connected apps", choices.filter { $0.group == .app })
-            section("MCP servers", choices.filter { $0.group == .mcp })
-            Divider()
-            Button("Connectors in Settings…") { ToolChoices.openSettings("Connectors") }
-            Button("MCP servers in Settings…") { ToolChoices.openSettings("MCP servers") }
-        } label: {
-            Label(summary, systemImage: "square.grid.2x2")
-        }
-        .labelStyle(.titleAndIcon)
-    }
-
-    @ViewBuilder private func section(_ title: String, _ items: [ToolChoice]) -> some View {
-        if !items.isEmpty {
-            Section(title) {
-                ForEach(items) { item in
-                    Toggle(isOn: Binding(get: { item.available && !off.contains(item.id) }, set: { set(item.id, $0) })) {
-                        Text(item.title)
-                        if let note = item.note { Text(note) }
-                    }
-                    .disabled(!item.available)
-                }
-            }
-        }
-    }
-
-    /// "Connectors and MCP · 3 on".
-    private var summary: String {
-        let on = choices.filter { $0.available && !off.contains($0.id) }.count
-        return choices.isEmpty ? "Connectors and MCP" : "Connectors and MCP · \(on) on"
-    }
-}
-
 /// One app or server with its switch for this conversation (Summary › Setup › Uses).
 struct ToolChoiceRow: View {
     let choice: ToolChoice

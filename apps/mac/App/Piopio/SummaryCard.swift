@@ -247,6 +247,8 @@ struct KnowsRow: View {
         CardRow("Knows") {
             if skills.isEmpty {
                 Text("No skills").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                SummaryLink("Add skills…") { ToolChoices.openSettings("Extensions") }
+                    .help("Skills, prompt templates and extensions in Settings")
             } else {
                 FoldButton(open: open, help: "What each skill is for") { open.toggle() } label: {
                     Text(skills.prefix(3).map { Self.name($0) }.joined(separator: ", ") + (skills.count > 3 ? " and \(skills.count - 3) more" : ""))
@@ -261,7 +263,10 @@ struct KnowsRow: View {
                             }
                         }
                     }
-                    Text("Type / in the message box to use one.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    HStack(spacing: 8) {
+                        Text("Type / to use one.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                        SummaryLink("Add skills…") { ToolChoices.openSettings("Extensions") }
+                    }
                 }
             }
         }
