@@ -48,6 +48,7 @@ struct PiopioApp: App {
                         .keyboardShortcut("n", modifiers: [.command, .shift])
                     Button("New Debate…") { NotificationCenter.default.post(name: .newDebate, object: nil) }
                         .keyboardShortcut("n", modifiers: [.command, .option])
+                    Button("Turn Conversation into Agent…") { NotificationCenter.default.post(name: .turnIntoAgent, object: nil) }
                     Button("Quick Chat") { QuickChatController.shared?.show() }
                 }
                 if areas.contains(.build) {

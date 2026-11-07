@@ -25,7 +25,7 @@ tests use temporary engine data, but launch a real native window and require a l
 
 ## Latest local verification
 
-The TypeScript suite passes (178 tests; three opt-in tests skipped), as do Swift package tests (40 tests).
+The TypeScript suite passes (183 tests; three opt-in tests skipped), as do Swift package tests (40 tests).
 The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draft recovery, offline backup and
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also
@@ -55,7 +55,8 @@ been captured and inspected. This does not replace the real-provider, OS-permiss
 - Background model work (titles, summaries, suggestions, commit messages, learned facts) uses the provider each
   conversation already uses (local stays local, OpenRouter uses its small model). Settings › Models can pin another
   model, Apple's on-device model, or Off. Web search sends the search words to OpenRouter. See 07-shared §1.3.
-- Conversation first, phases 1 and 2 (spec 18): notebooks are gone; a project can have no folder.
+- Conversation first, phases 1–3 (spec 18): notebooks are gone; a project can have no folder; a conversation can
+  become an agent (File › Turn Conversation into Agent…).
   Home is the one start, with the project and permissions in the box; Read only replaces the Chat lens (folders
   of documents start in it); a chat can continue in a project folder or move into a project without one.
 - Agent definitions refuse fields that nothing runs yet (http_request, codemode, files, tools.mcp, channels) on save.

@@ -1180,6 +1180,14 @@ export const methods = {
 		params: Type.Object({ id: Type.String(), name: Type.String() }),
 		result: Type.Object({}),
 	},
+	/**
+	 * Turn into an agent (18 phase 3): a draft for the Agent start page from a conversation's active branch: a name,
+	 * instructions and, when the conversation said when, a schedule (a cron). Nothing is created.
+	 */
+	"sessions.agentDraft": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({ name: Type.String(), instructions: Type.String(), schedule: Type.Union([Type.String(), Type.Null()]) }),
+	},
 	/** Move a conversation into a project without a folder, or out of it (`projectId: null`). Same thread, same history. */
 	"sessions.setProject": {
 		params: Type.Object({ ref: ContainerRef, projectId: Type.Union([Type.String(), Type.Null()]) }),

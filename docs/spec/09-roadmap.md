@@ -307,7 +307,7 @@ GitHub PR/CI loop (G4–G8), worktrees UX, usage page, export everything, access
 A new first-run welcome asks what Piopio is for you (Build, Chat, Agents, or several). Areas you don't use are hidden from the sidebar, Home, menus and the palette, and can be turned on and off in Settings › General. Hiding stops and deletes nothing. See [15-onboarding-and-areas](15-onboarding-and-areas.md); the decisions are in §7 and what's built in §8.
 
 ## Conversation first (2026-11-07)
-**Phases 1 and 2 built 2026-11-07, see [18-conversation-first §10–11](18-conversation-first.md#11-phase-2-as-built-2026-11-07).** Phase 1: Home is the one start, with project and
+**Phases 1–3 built 2026-11-07, see [18-conversation-first §10–12](18-conversation-first.md#12-phase-3-as-built-2026-11-07).** Phase 1: Home is the one start, with project and
 permissions chips; Read only replaces the Chat lens. Phase 2: projects without a folder replace notebooks. Phase 3:
 turn a conversation into an agent; the location chip. Next after the hardening and background-work changes of
 2026-11-06/07.

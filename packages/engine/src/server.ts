@@ -511,6 +511,10 @@ export class Engine {
 				this.projects.touch();
 				return {};
 			}
+			case "sessions.agentDraft": {
+				const p = params as Params<"sessions.agentDraft">;
+				return (await this.sessions.agentDraft(p.ref)) satisfies Result<"sessions.agentDraft">;
+			}
 			case "sessions.setProject": {
 				const p = params as Params<"sessions.setProject">;
 				await this.sessions.setProject(p.ref, p.projectId);

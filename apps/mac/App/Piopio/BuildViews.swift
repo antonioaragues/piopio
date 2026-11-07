@@ -315,6 +315,8 @@ struct BuildSessionView: View {
                         NSPasteboard.general.setString(cwd, forType: .string)
                     }
                 }
+                Divider()
+                Button("Turn into an Agent…") { run { try await engine.turnIntoAgent(summary.ref) } }
             } label: { Image(systemName: "ellipsis") }
                 .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
                 .accessibilityLabel("More")

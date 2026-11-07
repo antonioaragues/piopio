@@ -420,6 +420,24 @@ test("a project without a folder: files, instructions and shared memory across i
 	expect(((await a.client.call("memory.banks", {})).banks as { bank: string }[]).some((b) => b.bank === `project:${project.id}`)).toBe(false);
 }, 30_000);
 
+test("turn into an agent: a draft from the conversation, with the schedule it said (docs/spec/18 phase 3)", async () => {
+	const a = await start();
+	const { ref } = await a.client.call("sessions.create", { kind: "thread", title: "Umbrella check" });
+	await a.client.call("sessions.subscribe", { ref });
+	await a.client.call("sessions.submit", { ref, input: { text: "Every weekday at 7:30, check the weather in Valencia and tell me if I need an umbrella." } });
+	for (let i = 0; i < 200; i++) {
+		const s: Snapshot = await a.client.call("sessions.open", { ref });
+		if (s.state.status === "idle" && s.items.at(-1)?.kind === "assistant") break;
+		await new Promise((r) => setTimeout(r, 30));
+	}
+	const draft = await a.client.call("sessions.agentDraft", { ref });
+	expect(draft).toMatchObject({ name: "Umbrella check", schedule: "30 7 * * 1-5" });
+	expect(draft.instructions).toContain("check the weather in Valencia");
+	// The start page then creates it as any agent.
+	const { ref: agent } = await a.client.call("agents.create", { name: draft.name, instructions: draft.instructions, schedule: draft.schedule, model: { provider: "faux", id: "faux-1" } });
+	expect(((await a.client.call("agents.get", { ref: agent })).definition as { schedules?: { cron: string }[] }).schedules?.[0]?.cron).toBe("30 7 * * 1-5");
+});
+
 test("a chat continues in a project folder with its text and images; the chat stays, linked (docs/spec/18 §5)", async () => {
 	const a = await start();
 	const { ref: chat } = await a.client.call("sessions.create", { kind: "thread" });

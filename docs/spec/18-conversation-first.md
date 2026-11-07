@@ -1,6 +1,6 @@
 # 18 · Conversation first: one way to start, projects with or without a folder
 
-Status: decided 2026-11-07; **phases 1 and 2 built 2026-11-07** (§10, §11). Phases in §8. It changes the start (X10), the Chat lens (C2), notebooks
+Status: decided 2026-11-07; **phases 1–3 built 2026-11-07** (§10–§12). The location chip waits for cloud agents (CF7). It changes the start (X10), the Chat lens (C2), notebooks
 (C3, CQ1, CQ2, AQ13) and areas (15). Those docs stay as history and point here.
 
 **The idea:** you always start the same way, by writing. Where the conversation lives is a chip in the composer, not
@@ -299,14 +299,14 @@ Acceptance:
 - **Sidebar:** "Chats" is "Conversations".
 
 **Different from §4–§8, for now:**
-- **The project chip is a menu, not a popover with search.** That's enough for a handful of projects; search can come
-  with phase 2.
+- ~~The project chip is a menu, not a popover with search.~~ It became a popover with search in phase 3 (§12).
 - **⌘N always opens Home with no project.** It used to follow the selected project. A project's `+` and
   "New Conversation…" in its menu still preselect it.
-- **Plan isn't in Home's permissions chip.** It's in the conversation's chip, as before.
+- ~~Plan isn't in Home's permissions chip.~~ Added in phase 3 (§12).
 - **MCP tools in Build sessions ask in Read only.** They're reached through codemode, so `readOnlyHint` isn't seen
   there yet.
-- **With Build off,** Home starts folder conversations in Read only. The conversation's own chip still lists every mode.
+- **With Build off,** Home starts folder conversations in Read only, and (since phase 3) the conversation's chip greys
+  every mode but Read only.
 - **Checked in the app (2026-11-07,** scratch data, scripted model, driven by computer use**):**
   - From Home, with one Return each: a question in a documents folder, a change in a code folder, and a question
     with no project.
@@ -371,4 +371,39 @@ Acceptance:
 - Searching projects in the target menu.
 - Memory for folder projects (§9 Q1).
 - Old notebook data is left on disk, unread.
+
+## 12. Phase 3 as built (2026-11-07)
+
+**Turn into an agent (CF6):**
+- **Where:** the ··· menu of a conversation (with or without a folder) and of a Build session, and File › Turn
+  Conversation into Agent….
+- **The draft:** the engine (`sessions.agentDraft`) drafts from the active branch, and the Agent start page opens
+  with it filled in. Nothing is created until Create; templates, the schedule menu and the icon still work.
+  - **With a background model** (07 §1.3): it writes a short name, the instructions in the second person (with the
+    standing details the conversation settled), and a cron when the conversation said when.
+  - **Without one:** the user's messages become the instructions, and the name comes from the title, skipping a
+    leading schedule phrase.
+- **The schedule reader** understands phrases in English and Spanish ("every morning", "weekdays at 7:30", "cada lunes
+  a las 9", "todas las noches", "every hour"…). The model's cron is used only when it's valid; otherwise the user's
+  own words decide. The schedule menu shows any cron in words.
+
+**Gaps from phases 1 and 2, closed:**
+- **Home's target chip is a popover with search** over projects, folders on this Mac and agents. It also holds Open
+  folder…, New project… and Work on; Return picks the first match.
+- **Home's permissions chip has Plan.** The conversation then starts in Plan mode, and the line says "plans first;
+  changes only after you approve the plan".
+- **With Build off,** the conversation's mode chip greys every mode but Read only.
+- **`scripts/recovery-smoke.sh` passes:** a conversation in a project without a folder survives backup and restore,
+  and search finds it.
+
+**Checked in the app (scratch data, scripted model):**
+- Searching "kit" in the target popover and pressing Return chose Kitchen renovation.
+- "Every weekday at 7:30, check the weather in Valencia…", then File › Turn Conversation into Agent…, opened the
+  Agent start page with the instructions and "Weekdays · 07:30". Create made the agent, with "Weekdays at 7:30".
+
+**Still open:**
+- The location chip (CF7) waits for cloud agents.
+- In Read only, MCP tools in Build sessions always ask, because `readOnlyHint` isn't visible through codemode.
+- Memory for folder projects (§9 Q1).
+- Old notebook data stays in `spaces/`, unread.
 

@@ -100,6 +100,11 @@ struct ThreadView: View {
                 Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
                 Divider()
                 Button("Cost…") { showCosts = true }
+                if thread.debate == nil {
+                    Divider()
+                    Button("Turn into an Agent…") { run { try await engine.turnIntoAgent(summary.ref) } }
+                        .help("An agent that does this on its own, on a schedule or when you message it. You review it before it's created.")
+                }
             } label: {
                 Image(systemName: "ellipsis").accessibilityLabel("More")
             }

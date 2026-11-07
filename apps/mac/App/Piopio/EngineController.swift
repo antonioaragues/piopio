@@ -746,6 +746,20 @@ final class EngineController {
         try? await client?.call("aboutMe.get", Empty(), as: MemoryResult.self)
     }
 
+    /// Turn into an agent (docs/spec/18 phase 3): fills the Agent start page with a draft from the conversation and
+    /// opens it. Nothing is created until Create there.
+    func turnIntoAgent(_ ref: ContainerRef) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
+        let draft = try await client.call("sessions.agentDraft", RefParams(ref: ref), as: AgentDraftResult.self)
+        StartDrafts.shared.update(.agent) { d in
+            d.name = draft.name
+            d.text = draft.instructions
+            d.schedule = draft.schedule ?? ""
+            d.template = nil
+        }
+        NotificationCenter.default.post(name: .newAgent, object: nil)
+    }
+
     /// A conversation continues in a project folder (docs/spec/18 §5): a new conversation there, with this one's text
     /// and images as context. This one stays, linked to it.
     func continueIn(_ ref: ContainerRef, project: ProjectInfo) async throws -> ContainerRef {

@@ -14,6 +14,7 @@ import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
 import { attachmentsDir, copyAttachments, deleteAttachments } from "./attachment-files.js";
 import { projectExtension, type ProjectContext } from "./project-context.js";
+import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import type { TaskResult } from "@piopio/pi-extensions";
@@ -482,6 +483,26 @@ export class Sessions {
 	/** A project was removed: its conversations stay, with no project. */
 	async projectRemoved(id: string): Promise<void> {
 		for (const entry of [...this.entries.values()].filter((e) => e.projectId === id)) await this.setProject(entry.ref, null);
+	}
+
+	// ── Turn into an agent (docs/spec/18 phase 3) ────────────────────────────
+
+	/** A draft agent from a conversation: its active branch, written up by the background model when there is one. */
+	async agentDraft(ref: ContainerRef): Promise<AgentDraft> {
+		const entry = this.entry(ref);
+		if (entry.ref.kind !== "thread" && entry.ref.kind !== "build") throw new EngineError("INVALID", "Only conversations can become agents.");
+		const runtime = await this.runtime(ref);
+		const snapshot = runtime.snapshot();
+		const lines: { role: "user" | "assistant"; text: string }[] = [];
+		for (const i of snapshot.items) {
+			if (i.kind === "user" && i.text.trim()) lines.push({ role: "user", text: i.text });
+			if (i.kind === "assistant") {
+				const text = i.parts.filter((p) => p.type === "text").map((p) => p.text).join("").trim();
+				if (text) lines.push({ role: "assistant", text });
+			}
+		}
+		const model = snapshot.state.model ?? entry.model;
+		return draftAgent(entry.title, lines, (system, prompt) => this.hub.utility(system, prompt, ref.id, model ? { model } : {}));
 	}
 
 	// ── Continue in a project folder (docs/spec/18 §5) ───────────────────────

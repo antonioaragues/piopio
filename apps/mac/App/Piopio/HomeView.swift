@@ -159,6 +159,9 @@ struct AskBox: View {
     @State private var mode: ApprovalMode?
     @State private var workOn: WorkOnChoice = .folder
     @State private var recent: [RecentFolder] = []
+    @State private var picking = false
+    /// Start in Plan: the agent proposes a plan before it changes anything (folder projects).
+    @State private var plan = false
     private var target: Target {
         get {
             if targetRaw.hasPrefix("project:") { return .project(String(targetRaw.dropFirst(8))) }
@@ -251,7 +254,7 @@ struct AskBox: View {
             }
         }
         .onChange(of: text) { _, t in mention(t); saveHomeDraft() }
-        .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder }
+        .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder; plan = false }
         .onAppear {
             if let saved = DraftStore(home: engine.home).load("home") { text = saved.text; pendingChat = saved.destination }
             if case .project = target, project == nil { target = .chat }
@@ -267,76 +270,53 @@ struct AskBox: View {
 
     // MARK: Where it goes
 
+    /// Where this goes (docs/spec/18 §4): a popover with search over projects, folders on this Mac and agents.
     private var targetMenu: some View {
-        Menu {
-            Button { target = .chat } label: {
-                if target == .chat { Label("No project", systemImage: "checkmark") } else { Label("No project", systemImage: "bubble.left") }
-            }
-            if !engine.projects.isEmpty {
-                Section("Projects") {
-                    ForEach(engine.projects.filter { $0.missing != true }) { p in
-                        Button { target = .project(p.id) } label: {
-                            if project?.id == p.id { Label(p.name, systemImage: "checkmark") } else { Label(p.name, systemImage: p.hasFolder ? "folder" : "tray.full") }
-                        }
-                    }
-                }
-            }
-            if !recent.isEmpty {
-                Menu("Folders on this Mac") {
-                    ForEach(recent.prefix(12)) { folder in
-                        Button(folder.path) { Task { await use(folder.url) } }
-                    }
-                }
-            }
-            Button("Open folder…") { openFolder() }
-            Button("New project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
-            if let project, project.hasFolder, project.branch != nil {
-                Section("Work on") {
-                    ForEach(WorkOnChoice.allCases, id: \.self) { choice in
-                        Button { workOn = choice } label: {
-                            if workOn == choice { Label(choice.title, systemImage: "checkmark") } else { Text(choice.title) }
-                            Text(choice.summary)
-                        }
-                    }
-                }
-            }
-            if areas.contains(.agents), !engine.agents.isEmpty {
-                Section("Message an agent") {
-                    ForEach(engine.agents, id: \.ref.id) { a in
-                        Button { target = .agent(a.ref.id) } label: {
-                            if agent?.ref.id == a.ref.id { Label(a.title, systemImage: "checkmark") } else { Label(a.title, systemImage: "person.crop.circle") }
-                        }
-                    }
-                }
-            }
-        } label: {
+        Button { picking = true } label: {
             HStack(spacing: 5) {
                 Image(systemName: project.map { $0.hasFolder ? "folder" : "tray.full" } ?? (agent != nil ? "person.crop.circle" : "bubble.left")).font(.system(size: 11))
                 Text(targetLabel)
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
             }
         }
-        .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
-        .help("Where this goes: no project, a project folder, or an agent")
+        .buttonStyle(ChipStyle()).fixedSize()
+        .help("Where this goes: no project, a project, or an agent")
         .accessibilityLabel("Where this goes: \(targetLabel)")
+        .popover(isPresented: $picking, arrowEdge: .bottom) {
+            TargetPicker(engine: engine, recent: recent, current: target, workOn: project?.hasFolder == true && project?.branch != nil ? $workOn : nil) { choice in
+                picking = false
+                switch choice {
+                case .target(let t): target = t
+                case .folder(let url): Task { await use(url) }
+                case .openFolder: openFolder()
+                case .newProject: NotificationCenter.default.post(name: .newProject, object: nil)
+                }
+                focused = true
+            }
+        }
     }
 
     private var permissionsMenu: some View {
         Menu {
             ForEach(ApprovalMode.allCases) { m in
                 if m == .fullAuto { Divider() }
-                Button { mode = m } label: {
-                    if m == effectiveMode { Label(m.title, systemImage: "checkmark") } else { Text(m.title) }
+                Button { mode = m; plan = false } label: {
+                    if !plan && m == effectiveMode { Label(m.title, systemImage: "checkmark") } else { Text(m.title) }
                     Text(m.summary)
                 }
             }
-            if let project, effectiveMode != project.approvalMode {
+            Divider()
+            Button { plan = true } label: {
+                if plan { Label("Plan", systemImage: "checkmark") } else { Text("Plan") }
+                Text("Looks around and writes a plan for you to approve first")
+            }
+            if let project, !plan, effectiveMode != project.approvalMode {
                 Divider()
                 Button("Use “\(effectiveMode.title)” for new conversations in \(project.name)") {
                     Task { await engine.setApprovalMode(effectiveMode, for: project); mode = nil }
                 }
             }
-        } label: { Text(effectiveMode.title).foregroundStyle(effectiveMode == .fullAuto ? Color.accentColor : Color.dsFg2) }
+        } label: { Text(plan ? "Plan" : effectiveMode.title).foregroundStyle(!plan && effectiveMode == .fullAuto ? Color.accentColor : Color.dsFg2) }
             .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
             .help(effectiveMode.summary)
             .accessibilityLabel("Permissions: \(effectiveMode.title)")
@@ -352,7 +332,7 @@ struct AskBox: View {
         case .branch: " · on a new branch"
         case .worktree: " · in its own worktree"
         }
-        return "In \(project.name)\(place) · \(effectiveMode.line)"
+        return "In \(project.name)\(place) · \(plan ? "plans first; changes only after you approve the plan" : effectiveMode.line)"
     }
 
     private var targetLabel: String {
@@ -457,6 +437,7 @@ struct AskBox: View {
             sending = true
             let choice = workOn
             let chosenMode = effectiveMode
+            let startInPlan = plan
             Task {
                 defer { sending = false }
                 let place: WorkOn
@@ -471,6 +452,7 @@ struct AskBox: View {
                     let ref = try await engine.createBuildSession(in: project, workOn: place, mode: chosenMode, model: model)
                     let session = engine.thread(ref)
                     await session.open()
+                    if startInPlan { await session.setPlanMode(true) }
                     if await session.send(message, attachments: attachments.map(\.attachment)) {
                         text = ""; attachments = []; saveHomeDraft()
                     }
@@ -520,6 +502,86 @@ struct AskBox: View {
                 item = .chat(ref.id)
             } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
         }
+    }
+}
+
+/// The target popover (docs/spec/18 §4): search, then No project, projects (with and without a folder), folders on
+/// this Mac, Open folder…, New project…, where a git project works, and agents to message.
+struct TargetPicker: View {
+    enum Choice { case target(AskBox.Target), folder(URL), openFolder, newProject }
+    let engine: EngineController
+    let recent: [RecentFolder]
+    let current: AskBox.Target
+    var workOn: Binding<WorkOnChoice>?
+    let choose: (Choice) -> Void
+    @State private var query = ""
+    @FocusState private var searching: Bool
+
+    private func matches(_ name: String) -> Bool { query.isEmpty || name.localizedCaseInsensitiveContains(query) }
+
+    var body: some View {
+        let projects = engine.projects.filter { $0.missing != true && matches($0.name) }
+        let folders = recent.filter { matches($0.url.lastPathComponent) || matches($0.path) }.prefix(query.isEmpty ? 5 : 12)
+        let agents = Areas.shared.contains(.agents) ? engine.agents.filter { matches($0.title) } : []
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                TextField("Search projects and agents", text: $query).textFieldStyle(.plain).font(.system(size: 13)).focused($searching)
+                    .onSubmit { if let first = projects.first { choose(.target(.project(first.id))) } else if let a = agents.first { choose(.target(.agent(a.ref.id))) } }
+            }
+            .padding(.horizontal, 12).frame(height: 38)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if query.isEmpty { row("No project", symbol: "bubble.left", on: current == .chat) { choose(.target(.chat)) } }
+                    if !projects.isEmpty {
+                        header("Projects")
+                        ForEach(projects) { p in
+                            row(p.name, symbol: p.hasFolder ? "folder" : "tray.full", on: current == .project(p.id)) { choose(.target(.project(p.id))) }
+                        }
+                    }
+                    if !folders.isEmpty {
+                        header("Folders on this Mac")
+                        ForEach(Array(folders)) { f in row(f.url.lastPathComponent, detail: f.path, symbol: "folder.badge.plus", on: false) { choose(.folder(f.url)) } }
+                    }
+                    if !agents.isEmpty {
+                        header("Message an agent")
+                        ForEach(agents, id: \.ref.id) { a in row(a.title, symbol: "person.crop.circle", on: current == .agent(a.ref.id)) { choose(.target(.agent(a.ref.id))) } }
+                    }
+                    if let workOn, query.isEmpty {
+                        header("Work on")
+                        ForEach(WorkOnChoice.allCases, id: \.self) { c in row(c.title, detail: c.summary, symbol: "arrow.triangle.branch", on: workOn.wrappedValue == c) { workOn.wrappedValue = c } }
+                    }
+                    Divider().padding(.vertical, 4)
+                    row("Open folder…", symbol: "folder", on: false) { choose(.openFolder) }
+                    row("New project…", symbol: "plus", on: false) { choose(.newProject) }
+                }
+                .padding(.vertical, 4)
+            }
+            .frame(maxHeight: 380)
+        }
+        .frame(width: 320)
+        .onAppear { searching = true }
+    }
+
+    private func header(_ title: String) -> some View {
+        Text(title).font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color.dsFg3).padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 2)
+    }
+
+    private func row(_ title: String, detail: String? = nil, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                    if let detail { Text(detail).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle) }
+                }
+                Spacer()
+                if on { Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg2) }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 5).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

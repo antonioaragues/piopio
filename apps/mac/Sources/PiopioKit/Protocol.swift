@@ -940,6 +940,9 @@ public struct SettingsPatch: Encodable, Sendable {
 
 public struct TextParams: Encodable, Sendable { public var text: String; public init(text: String) { self.text = text } }
 public struct RevisionIdParams: Encodable, Sendable { public var revisionId: String; public init(revisionId: String) { self.revisionId = revisionId } }
+/// Turn into an agent (docs/spec/18 phase 3): a draft for the Agent start page.
+public struct AgentDraftResult: Decodable, Sendable { public var name: String; public var instructions: String; public var schedule: String? }
+
 public struct ContinueInParams: Encodable, Sendable {
     public var ref: ContainerRef; public var cwd: String
     public init(ref: ContainerRef, cwd: String) { self.ref = ref; self.cwd = cwd }

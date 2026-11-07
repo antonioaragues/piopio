@@ -518,18 +518,22 @@ struct EditModeChip: View {
 
     var body: some View {
         Menu {
+            // Without Build (the area is off), folders are Read only (docs/spec/18 §7): the other modes are greyed.
+            let buildOn = Areas.shared.contains(.build)
             ForEach(ApprovalMode.allCases) { mode in
                 if mode == .fullAuto { Divider() }
                 Button { set(mode) } label: {
                     if !thread.planMode && mode == thread.approvalMode { Label(mode.title, systemImage: "checkmark") } else { Text(mode.title) }
-                    Text(mode.summary)
+                    Text(buildOn || mode == .readOnly ? mode.summary : "Turn on Build in Settings › General to change files")
                 }
+                .disabled(!buildOn && mode != .readOnly)
             }
             Divider()
             Button { Task { await thread.setPlanMode(true) } } label: {
                 if thread.planMode { Label("Plan", systemImage: "checkmark") } else { Text("Plan") }
                 Text("Looks around and writes a plan for you to approve first")
             }
+            .disabled(!buildOn)
             if let project, !thread.planMode, project.approvalMode != thread.approvalMode {
                 Divider()
                 Button("Use “\(thread.approvalMode.title)” for new conversations in \(project.name)") { Task { await engine.setApprovalMode(thread.approvalMode, for: project) } }

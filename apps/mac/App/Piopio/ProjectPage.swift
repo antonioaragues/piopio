@@ -8,6 +8,8 @@ import SwiftUI
 extension Notification.Name {
     /// Opens the New project sheet.
     static let newProject = Notification.Name("piopio.newProject")
+    /// File › Turn Conversation into Agent… (the open conversation).
+    static let turnIntoAgent = Notification.Name("piopio.turnIntoAgent")
 }
 
 /// A project without a folder: what its conversations are told, its files, what it remembers, its conversations.

@@ -386,6 +386,15 @@ private struct StartSheets: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in item = .start(.agent) }
             .onReceive(NotificationCenter.default.publisher(for: .newProject)) { _ in newProject = true }
+            // File › Turn Conversation into Agent…: the open conversation (docs/spec/18 phase 3).
+            .onReceive(NotificationCenter.default.publisher(for: .turnIntoAgent)) { _ in
+                let ref: ContainerRef? = switch item {
+                case .chat(let id): ContainerRef(kind: .thread, id: id)
+                case .session(let id): ContainerRef(kind: .build, id: id)
+                default: nil
+                }
+                if let ref { run { try await engine.turnIntoAgent(ref) } }
+            }
             .sheet(isPresented: $newProject) {
                 NewProjectSheet(engine: engine) { project in
                     newProject = false
