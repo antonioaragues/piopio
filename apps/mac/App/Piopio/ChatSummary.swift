@@ -25,7 +25,7 @@ struct ChatSummaryPanel: View {
                     VStack(alignment: .leading, spacing: 9) {
                         GroupHeader("Setup") { EmptyView() }
                         UsesRow(engine: engine, thread: thread, summary: summary, web: true)
-                        KnowsRow(thread: thread)
+                        SkillsRow(thread: thread)
                     }
                     .padding(.vertical, 14)
                 }

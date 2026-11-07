@@ -14,6 +14,13 @@ import type { Result } from "@piopio/protocol";
 
 type SessionCommand = Result<"sessions.commands">["commands"][number];
 
+/** The folder a skill was found in, as people write it ("~/.agents/skills"): its own folder's parent. */
+export function skillSource(skill: Pick<Skill, "baseDir">): string {
+	const folder = resolve(skill.baseDir, "..");
+	const home = homedir();
+	return folder === home || folder.startsWith(`${home}/`) ? `~${folder.slice(home.length)}` : folder;
+}
+
 export const SKILLS_EXTENSION = "piopio-skills";
 const MAX_SKILL_CHARS = 60_000;
 
@@ -57,7 +64,7 @@ export class ChatResources {
 	commands(): SessionCommand[] {
 		return [
 			...this.templates.map((t) => ({ name: t.name, description: t.description, kind: "template" as const, ...(t.hint ? { hint: t.hint } : {}) })),
-			...this.skills.map((s) => ({ name: `skill:${s.name}`, description: s.description, kind: "skill" as const })),
+			...this.skills.map((s) => ({ name: `skill:${s.name}`, description: s.description, kind: "skill" as const, source: skillSource(s) })),
 		];
 	}
 

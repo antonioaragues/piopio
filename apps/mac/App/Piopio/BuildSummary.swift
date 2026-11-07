@@ -224,7 +224,7 @@ struct SessionSummaryPanel: View {
             }
             CardRow("Runs on") { Text("This Mac").font(.system(size: 13)) }
             UsesRow(engine: engine, thread: session, summary: summary)
-            KnowsRow(thread: session)
+            SkillsRow(thread: session)
         }
         .padding(.vertical, 14)
     }

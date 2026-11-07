@@ -1428,7 +1428,7 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		expect((await a.client.call("sessions.commands", { ref })).commands).toEqual(
 			expect.arrayContaining([
 				{ name: "summarize", description: "Summarize something briefly", kind: "template", hint: "<what> <words>" },
-				{ name: "skill:greet", description: "Greets people warmly in Valencian.", kind: "skill" },
+				{ name: "skill:greet", description: "Greets people warmly in Valencian.", kind: "skill", source: expect.any(String) },
 			]),
 		);
 		await a.client.call("sessions.submit", { ref, input: { text: "/summarize report 50" } });

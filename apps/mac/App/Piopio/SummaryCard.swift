@@ -241,40 +241,62 @@ struct UsesRow: View {
     }
 }
 
-/// Setup › Knows: the skills it can use (pi's folders and packages), unfolding into what each is for.
-struct KnowsRow: View {
+/// Setup › Skills: instructions the model can load when a task needs them (pi's skills: SKILL.md folders, found in
+/// pi's and the shared agent skill folders, and in pi packages). Folded, a count; open, each one with what it's for
+/// and where it comes from, so a skill installed by another tool (an "open-knowledge-…") isn't a mystery.
+struct SkillsRow: View {
     let thread: ThreadModel
     @State private var skills: [SessionCommand] = []
     @State private var open = false
 
+    private static let explanation = "Skills are instructions the model loads by itself when a task needs them, or that you call with / in the box. They come from skill folders on this Mac and from pi packages."
+
     var body: some View {
-        CardRow("Knows") {
+        CardRow("Skills") {
             if skills.isEmpty {
-                Text("No skills").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                SummaryLink("Add skills…") { ToolChoices.openSettings("Extensions") }
-                    .help("Skills, prompt templates and extensions in Settings")
+                HStack(spacing: 8) {
+                    Text("None").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                    SummaryLink("Add skills…") { ToolChoices.openSettings("Extensions") }
+                }
+                .help(Self.explanation)
             } else {
-                FoldButton(open: open, help: "What each skill is for") { open.toggle() } label: {
-                    Text(skills.prefix(3).map { Self.name($0) }.joined(separator: ", ") + (skills.count > 3 ? " and \(skills.count - 3) more" : ""))
-                        .font(.system(size: 13)).lineLimit(2).multilineTextAlignment(.leading)
+                FoldButton(open: open, help: open ? "Hide the skills" : "What each skill is for, and where it comes from") { open.toggle() } label: {
+                    Text("\(skills.count) skill\(skills.count == 1 ? "" : "s")").font(.system(size: 13))
                 }
-                if open {
-                    ForEach(skills) { skill in
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(Self.name(skill)).font(.system(size: 12.5))
-                            if !skill.description.isEmpty {
-                                Text(skill.description).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(2)
-                            }
-                        }
-                    }
-                    HStack(spacing: 8) {
-                        Text("Type / to use one.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                        SummaryLink("Add skills…") { ToolChoices.openSettings("Extensions") }
-                    }
-                }
+                .help(Self.explanation)
+                if open { list.padding(.top, 4) }
             }
         }
         .task(id: thread.ref.id) { skills = await thread.commands().filter { $0.kind == .skill } }
+    }
+
+    private var list: some View {
+        let sources = Set(skills.compactMap(\.source))
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(Self.explanation).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+            ForEach(skills) { skill in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(Self.name(skill)).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg)
+                    if !skill.description.isEmpty {
+                        Text(skill.description).font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                    }
+                    // Each skill's folder only when they come from different places; otherwise once, below.
+                    if sources.count > 1, let source = skill.source {
+                        Text(source).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle)
+                    }
+                }
+                .help("Type /\(skill.name) to use it")
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                if sources.count == 1, let source = sources.first {
+                    Text("From \(source)").font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle)
+                }
+                HStack(spacing: 8) {
+                    Text("Type / in the box to use one.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    SummaryLink("Manage…") { ToolChoices.openSettings("Extensions") }
+                }
+            }
+        }
     }
 
     /// pi names skill commands "skill:<name>"; the card shows the name.

@@ -1253,7 +1253,8 @@ export const methods = {
 	/** Build: what `/` offers besides Piopio's own commands: pi prompt templates, skills and extension commands. */
 	"sessions.commands": {
 		params: Type.Object({ ref: ContainerRef }),
-		result: Type.Object({ commands: Type.Array(Type.Object({ name: Type.String(), description: Type.String(), kind: literals("template", "skill", "extension"), hint: Type.Optional(Type.String()) })) }),
+		/** `source`: skills, the folder they were found in ("~/.agents/skills"), so the app can say where they come from. */
+		result: Type.Object({ commands: Type.Array(Type.Object({ name: Type.String(), description: Type.String(), kind: literals("template", "skill", "extension"), hint: Type.Optional(Type.String()), source: Type.Optional(Type.String()) })) }),
 	},
 	/** Build: pi's session tree, as your messages (BR6). `depth` grows at each branch point; `current` = on the active path. */
 	"sessions.tree": {

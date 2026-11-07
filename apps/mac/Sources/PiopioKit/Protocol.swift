@@ -1069,6 +1069,8 @@ public struct SessionCommand: Codable, Sendable, Hashable, Identifiable {
     public var description: String
     public var kind: Kind
     public var hint: String?
+    /// Skills: the folder they were found in ("~/.agents/skills").
+    public var source: String?
     public var id: String { name }
 }
 public struct CommandsResult: Decodable, Sendable { public var commands: [SessionCommand] }

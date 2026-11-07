@@ -23,6 +23,7 @@ import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage } from "../timeline/builder.js";
 import { SdkEventMapper } from "../timeline/pi-sdk.js";
 import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat-profile.js";
+import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { recorder } from "./recorder.js";
@@ -407,9 +408,9 @@ export class BuildRuntime implements Runtime {
 	// ── Composer and tree (docs/spec/05-build BR5, BR6) ─────────────────────
 
 	/** pi prompt templates, skills and extension commands, for `/`. */
-	commands(): { name: string; description: string; kind: "template" | "skill" | "extension"; hint?: string }[] {
+	commands(): { name: string; description: string; kind: "template" | "skill" | "extension"; hint?: string; source?: string }[] {
 		const templates = this.session.promptTemplates.map((t) => ({ name: t.name, description: t.description, kind: "template" as const, ...(t.argumentHint ? { hint: t.argumentHint } : {}) }));
-		const skills = this.session.resourceLoader.getSkills().skills.map((s) => ({ name: `skill:${s.name}`, description: s.description, kind: "skill" as const }));
+		const skills = this.session.resourceLoader.getSkills().skills.map((s) => ({ name: `skill:${s.name}`, description: s.description, kind: "skill" as const, source: skillSource(s) }));
 		const extensions = this.session.extensionRunner.getRegisteredCommands().map((c) => ({ name: c.invocationName, description: (c as { description?: string }).description ?? "", kind: "extension" as const }));
 		return [...templates, ...skills, ...extensions].sort((a, b) => a.name.localeCompare(b.name));
 	}
