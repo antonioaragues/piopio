@@ -7,9 +7,10 @@ import { EngineError } from "./models.js";
 import { newId } from "./sessions.js";
 
 type Lens = "build" | "chat";
+/** `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both; read once to migrate, then dropped. */
 type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[] };
 
-/** Files that make a folder a code project (04-chat P1); anything else opens in Chat. */
+/** Files that make a folder a code project (04-chat P1); anything else starts in Read only (18 §4). */
 const CODE_MARKERS = [".git", "package.json", "Package.swift", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt", "Gemfile", "pom.xml", "build.gradle", "Makefile", "CMakeLists.txt", "composer.json", "deno.json", "mix.exs"];
 
 export function detectLens(path: string): Lens {
@@ -29,6 +30,15 @@ export class Projects {
 	) {
 		if (existsSync(file)) this.entries = JSON.parse(readFileSync(file, "utf8")) as StoredProject[];
 		this.trust = new ProjectTrustStore(agentDir);
+		// Lenses are gone (docs/spec/18 §4): a folder only used to chat about keeps that, as Read only, so removing the
+		// lens never leaves a folder of documents ready to edit. Folders in Build keep their mode.
+		if (this.entries.some((p) => p.lenses)) {
+			for (const p of this.entries) {
+				if (p.lenses?.length === 1 && p.lenses[0] === "chat") p.approvalMode = "read_only";
+				delete p.lenses;
+			}
+			this.save();
+		}
 	}
 
 	list(): ProjectInfo[] {
@@ -53,7 +63,10 @@ export class Projects {
 		return entry && this.describe(entry);
 	}
 
-	/** Adds a folder. Adding the same folder again returns the existing project. */
+	/**
+	 * Adds a folder. Adding the same folder again returns the existing project. A folder without code starts in Read
+	 * only, as does one added to chat about (`lens: "chat"`, the old Chat lens).
+	 */
 	add(path: string, lens?: Lens): ProjectInfo {
 		if (!isAbsolute(path)) throw new EngineError("INVALID", "Project paths must be absolute.");
 		let real: string;
@@ -64,17 +77,9 @@ export class Projects {
 			throw new EngineError("INVALID", `Not a folder: ${path}`);
 		}
 		const existing = this.entries.find((p) => p.path === real);
-		if (existing) {
-			// Adding it from the other mode shows it there too.
-			const lenses = existing.lenses ?? [detectLens(existing.path)];
-			if (lens && !lenses.includes(lens)) {
-				existing.lenses = [...lenses, lens];
-				this.save();
-			}
-			return this.describe(existing);
-		}
-		const detected = detectLens(real);
-		const entry: StoredProject = { id: newId("prj"), path: real, name: basename(real), addedAt: new Date().toISOString(), lenses: lens && lens !== detected ? [detected, lens] : [detected] };
+		if (existing) return this.describe(existing);
+		const readOnly = lens === "chat" || detectLens(real) === "chat";
+		const entry: StoredProject = { id: newId("prj"), path: real, name: basename(real), addedAt: new Date().toISOString(), ...(readOnly ? { approvalMode: "read_only" as const } : {}) };
 		this.entries.push(entry);
 		this.save();
 		return this.describe(entry);
@@ -95,10 +100,6 @@ export class Projects {
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
 		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
 		if (change.trust !== undefined) this.trust.set(entry.path, change.trust);
-		if (change.lenses) {
-			if (change.lenses.length === 0) throw new EngineError("INVALID", "A project shows in Build, Chat or both.");
-			entry.lenses = [...new Set(change.lenses)];
-		}
 		this.save();
 		return this.describe(entry);
 	}
@@ -153,7 +154,8 @@ export class Projects {
 }
 
 function describe(stored: StoredProject): Omit<ProjectInfo, "trust" | "needsTrust"> {
-	const p = { ...stored, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [], lenses: stored.lenses ?? (existsSync(stored.path) ? [detectLens(stored.path)] : (["build"] as Lens[])) };
+	// `lenses` stays in the protocol for older apps: every project now does both (the permissions decide).
+	const p = { ...stored, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [], lenses: ["build", "chat"] as Lens[] };
 	if (!existsSync(p.path)) return { ...p, piConfig: false, missing: true };
 	const branch = gitBranch(p.path);
 	const contextFile = ["AGENTS.md", "CLAUDE.md"].find((name) => existsSync(join(p.path, name)));

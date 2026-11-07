@@ -55,5 +55,7 @@ been captured and inspected. This does not replace the real-provider, OS-permiss
 - Background model work (titles, summaries, suggestions, commit messages, learned facts) uses the provider each
   conversation already uses (local stays local, OpenRouter uses its small model). Settings › Models can pin another
   model, Apple's on-device model, or Off. Web search sends the search words to OpenRouter. See 07-shared §1.3.
+- Conversation first, phase 1 (spec 18): Home is the one start, with the project and permissions in the box; Read
+  only replaces the Chat lens (folders of documents start in it); a chat can continue in a project folder.
 - Agent definitions refuse fields that nothing runs yet (http_request, codemode, files, tools.mcp, channels) on save.
 - Cloud and channels remain separate roadmap work. See [09-roadmap.md](spec/09-roadmap.md) for historical milestones.

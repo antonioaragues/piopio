@@ -511,22 +511,11 @@ struct ComposerChipStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { ChipStyle().makeBody(configuration: configuration) }
 }
 
-/// "Ask before edits" (docs/design/grey 11g): how Build works on your files, as plain text. Each mode is described by
-/// what it lets the agent do. Full auto sits below a divider.
+/// What the conversation may do in its folder (docs/spec/18 §4): Read only, Ask, Auto-edit, Full auto (below a divider),
+/// and Plan. Switching into or out of Read only changes the tools live; the history stays.
 struct EditModeChip: View {
     let engine: EngineController
     let thread: ThreadModel
-
-    enum Mode: CaseIterable { case planOnly, askFirst, autoEdit, fullAuto }
-
-    private var current: Mode {
-        if thread.planMode { return .planOnly }
-        return switch thread.approvalMode {
-        case .ask: .askFirst
-        case .autoEdit: .autoEdit
-        case .fullAuto: .fullAuto
-        }
-    }
 
     private var project: ProjectInfo? {
         let cwd = engine.buildSessions.first { $0.ref.id == thread.ref.id }.flatMap { $0.projectPath ?? $0.cwd }
@@ -535,62 +524,36 @@ struct EditModeChip: View {
 
     var body: some View {
         Menu {
-            ForEach(Mode.allCases, id: \.self) { mode in
+            ForEach(ApprovalMode.allCases) { mode in
                 if mode == .fullAuto { Divider() }
                 Button { set(mode) } label: {
-                    if mode == current { Label(Self.title(mode), systemImage: "checkmark") } else { Text(Self.title(mode)) }
-                    Text(Self.summary(mode))
+                    if !thread.planMode && mode == thread.approvalMode { Label(mode.title, systemImage: "checkmark") } else { Text(mode.title) }
+                    Text(mode.summary)
                 }
             }
-            if let project, current != .planOnly, project.approvalMode != thread.approvalMode {
+            Divider()
+            Button { Task { await thread.setPlanMode(true) } } label: {
+                if thread.planMode { Label("Plan", systemImage: "checkmark") } else { Text("Plan") }
+                Text("Looks around and writes a plan for you to approve first")
+            }
+            if let project, !thread.planMode, project.approvalMode != thread.approvalMode {
                 Divider()
-                Button("Use “\(Self.title(current))” for new sessions in \(project.name)") { Task { await engine.setApprovalMode(thread.approvalMode, for: project) } }
+                Button("Use “\(thread.approvalMode.title)” for new conversations in \(project.name)") { Task { await engine.setApprovalMode(thread.approvalMode, for: project) } }
             }
         } label: {
-            Text(Self.title(current))
+            Text(thread.planMode ? "Plan" : thread.approvalMode.title)
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
         .buttonStyle(ComposerChipStyle())
         .fixedSize()
-        .help(Self.summary(current))
+        .help(thread.planMode ? "Plans first; changes after you approve" : thread.approvalMode.summary)
     }
 
-    private func set(_ mode: Mode) {
+    private func set(_ mode: ApprovalMode) {
         Task {
-            if mode == .planOnly {
-                await thread.setPlanMode(true)
-                return
-            }
             if thread.planMode { await thread.setPlanMode(false) }
-            await thread.setApprovalMode(mode == .askFirst ? .ask : mode == .autoEdit ? .autoEdit : .fullAuto)
-        }
-    }
-
-    static func title(_ mode: Mode) -> String {
-        switch mode {
-        case .planOnly: "Plan"
-        case .askFirst: "Ask before edits"
-        case .autoEdit: "Auto-edit"
-        case .fullAuto: "Full auto"
-        }
-    }
-
-    static func summary(_ mode: Mode) -> String {
-        switch mode {
-        case .planOnly: "Looks around and writes a plan for you to approve first"
-        case .askFirst: "Asks before each change or command"
-        case .autoEdit: "Edits files, still asks for commands"
-        case .fullAuto: "Only asks for risky commands and writes outside the project"
-        }
-    }
-
-    static func color(_ mode: Mode) -> Color {
-        switch mode {
-        case .planOnly: .dsFg3
-        case .askFirst: .dsAmber
-        case .autoEdit: .dsFg3
-        case .fullAuto: .accentColor
+            await thread.setApprovalMode(mode)
         }
     }
 }

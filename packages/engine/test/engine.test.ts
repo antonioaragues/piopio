@@ -361,6 +361,46 @@ describe("milestone 1.3", () => {
 	});
 });
 
+test("a chat continues in a project folder with its text and images; the chat stays, linked (docs/spec/18 §5)", async () => {
+	const a = await start();
+	const { ref: chat } = await a.client.call("sessions.create", { kind: "thread" });
+	await a.client.call("sessions.subscribe", { ref: chat });
+	const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+	await a.client.call("sessions.submit", { ref: chat, input: { text: "This screenshot shows the failing test", attachments: [{ kind: "image", name: "shot.png", mimeType: "image/png", data: png }] } });
+	for (let i = 0; i < 200; i++) {
+		const s: Snapshot = await a.client.call("sessions.open", { ref: chat });
+		if (s.state.status === "idle" && s.items.at(-1)?.kind === "assistant") break;
+		await new Promise((r) => setTimeout(r, 30));
+	}
+	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-continue-")));
+	writeFileSync(join(folder, "package.json"), "{}");
+	await a.client.call("projects.add", { path: folder });
+	const { ref } = await a.client.call("sessions.continueIn", { ref: chat, cwd: folder });
+	const sessions = (await a.client.call("sessions.list", {})).sessions as { ref: { id: string }; cwd?: string; continuedIn?: unknown; continuedFrom?: unknown; title: string }[];
+	const original = sessions.find((x) => x.ref.id === chat.id)!;
+	const next = sessions.find((x) => x.ref.id === ref.id)!;
+	expect(original.continuedIn).toEqual({ id: ref.id, title: original.title });
+	expect(next).toMatchObject({ cwd: folder, title: original.title, continuedFrom: { id: chat.id, title: original.title } });
+	const opened = (await a.client.call("sessions.open", { ref })) as Snapshot;
+	expect(opened.items).toEqual([expect.objectContaining({ kind: "system", text: `Continued from “${original.title}” · 2 messages` })]);
+	expect(opened.state.status).toBe("idle");
+	// The model reads it: the scripted model echoes the context it was given with the next message.
+	const sub = await a.client.call("sessions.subscribe", { ref });
+	await a.client.call("sessions.submit", { ref, input: { text: "What did the screenshot show?" } });
+	await a.client.waitFor(settled(sub.subscriptionId), 20_000);
+	// The pi session file holds the chat as context, with the image, before the new message.
+	const { readdirSync } = await import("node:fs");
+	const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? walk(join(dir, d.name)) : d.name.endsWith(".jsonl") ? [join(dir, d.name)] : []));
+	const lines = walk(a.home).map((f) => readFileSync(f, "utf8")).find((t) => t.includes("piopio.continued"))!.trim().split("\n").map((l) => JSON.parse(l));
+	const seeded = lines.find((l) => l.type === "custom_message" && l.customType === "piopio.continued");
+	expect(seeded.content[0].text).toContain("User: This screenshot shows the failing test\n[Attached: shot.png]");
+	expect(seeded.content[0].text).toContain("Assistant: Echo: This screenshot shows the failing test");
+	expect(seeded.content[1]).toEqual({ type: "image", data: png, mimeType: "image/png" });
+	// Before the new message, so the model reads it first.
+	expect(lines.indexOf(seeded)).toBeLessThan(lines.findIndex((l) => l.message?.role === "user"));
+	await expect(a.client.call("sessions.continueIn", { ref, cwd: folder })).rejects.toMatchObject({ data: { code: "INVALID" } });
+});
+
 test("where background work runs: the setting survives restarts; the on-device status explains itself", async () => {
 	const a = await start();
 	expect((await a.client.call("settings.get", {})).models).toBeUndefined();
@@ -526,6 +566,7 @@ describe("approvals and questions (docs/spec/05-build §6)", () => {
 
 	async function newProject(a: Ctx) {
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-approvals-")));
+		writeFileSync(join(folder, "package.json"), "{}"); // a code folder: Auto-edit (a folder of documents starts in Read only)
 		const { project } = await a.client.call("projects.add", { path: folder });
 		return { folder, project };
 	}
@@ -1106,18 +1147,31 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 });
 
 describe("projects in the Chat lens (milestone 3.1)", () => {
-	test("lenses are detected, and adding from the other mode shows the project in both", async () => {
+	test("a folder of documents starts in Read only, code in Auto-edit; projects only chatted about migrate to Read only", async () => {
 		const a = await start();
 		const code = realpathSync(mkdtempSync(join(tmpdir(), "piopio-code-")));
 		writeFileSync(join(code, "package.json"), "{}");
 		const notes = realpathSync(mkdtempSync(join(tmpdir(), "piopio-notes-")));
 		writeFileSync(join(notes, "ideas.md"), "# Ideas\n");
-		expect((await a.client.call("projects.add", { path: code })).project.lenses).toEqual(["build"]);
-		expect((await a.client.call("projects.add", { path: notes })).project.lenses).toEqual(["chat"]);
-		const both = (await a.client.call("projects.add", { path: code, lens: "chat" })).project;
-		expect(both.lenses).toEqual(["build", "chat"]);
-		expect((await a.client.call("projects.configure", { id: both.id, lenses: ["chat"] })).project.lenses).toEqual(["chat"]);
-		await expect(a.client.call("projects.configure", { id: both.id, lenses: [] })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		const codeProject = (await a.client.call("projects.add", { path: code })).project;
+		expect(codeProject.approvalMode).toBe("auto_edit");
+		expect((await a.client.call("projects.add", { path: notes })).project.approvalMode).toBe("read_only");
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: notes });
+		expect((await a.client.call("sessions.list", { kind: "build" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === ref.id)).toMatchObject({ approvalMode: "read_only", profile: "chat" });
+		await stop(a);
+
+		// Before docs/spec/18: lenses. A Build-only and a both-lens project keep their mode; a chat-only one is Read only.
+		const file = join(a.home, "projects.json");
+		const stored = JSON.parse(readFileSync(file, "utf8")) as { path: string; lenses?: string[]; approvalMode?: string }[];
+		const docs = realpathSync(mkdtempSync(join(tmpdir(), "piopio-docs-")));
+		stored.push({ id: "prj_old_chat", path: docs, name: "docs", addedAt: new Date().toISOString(), approvalMode: "full_auto", lenses: ["chat"] } as never);
+		for (const p of stored) if (p.path === code) Object.assign(p, { lenses: ["build", "chat"], approvalMode: "full_auto" });
+		writeFileSync(file, JSON.stringify(stored));
+		const b = await start(a.home);
+		const projects = (await b.client.call("projects.list", {})).projects as { path: string; approvalMode: string }[];
+		expect(projects.find((p) => p.path === docs)?.approvalMode).toBe("read_only");
+		expect(projects.find((p) => p.path === code)?.approvalMode).toBe("full_auto");
+		expect(JSON.parse(readFileSync(file, "utf8")).some((p: { lenses?: unknown }) => p.lenses)).toBe(false);
 	});
 
 	test("chat-profile sessions read, grep and fetch pages, but have no bash", async () => {
@@ -1149,6 +1203,47 @@ describe("projects in the Chat lens (milestone 3.1)", () => {
 		]);
 		expect((await a.client.call("projects.listDir", { cwd: notes, dir: "plans" })).entries).toEqual([{ name: "budget.md", path: "plans/budget.md", kind: "file" }]);
 	});
+
+	test("Read only switches live: no commands or edits, finders and the web; back to Full auto, commands again", async () => {
+		const a = await start();
+		const http = await import("node:http");
+		const server = http.createServer((_req, res) => res.end("<html><head><title>Page</title></head><body><p>Readable.</p></body></html>"));
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+		const port = (server.address() as { port: number }).port;
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-ro-")));
+		writeFileSync(join(folder, "notes.md"), "Budget: 12k\n");
+		await a.client.call("projects.add", { path: folder });
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: "full_auto" });
+		await a.client.call("sessions.subscribe", { ref });
+		const tools = async () => ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "tool" ? [i] : []));
+		/** Until `count` tool calls have finished and the session is idle. */
+		const finished = async (count: number) => {
+			for (let i = 0; i < 400; i++) {
+				const snap = (await a.client.call("sessions.open", { ref })) as Snapshot;
+				const done = snap.items.filter((x) => x.kind === "tool" && x.status !== "running" && x.status !== "pending_approval");
+				if (snap.state.status === "idle" && done.length >= count) return;
+				await new Promise((r) => setTimeout(r, 50));
+			}
+			const snap = (await a.client.call("sessions.open", { ref })) as Snapshot;
+			throw new Error(`fewer than ${count} tool calls finished: ${JSON.stringify({ state: snap.state.status, prompts: snap.state.prompts, tools: snap.items.filter((x) => x.kind === "tool").map((x) => [x.tool, x.status, (x.output ?? "").slice(0, 80)]) })}`);
+		};
+		await a.client.call("sessions.submit", { ref, input: { text: "$ echo before" } });
+		await finished(1);
+
+		await a.client.call("sessions.configure", { ref, approvalMode: "read_only" });
+		expect((await a.client.call("sessions.list", { kind: "build" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === ref.id)).toMatchObject({ approvalMode: "read_only", profile: "chat" });
+		await a.client.call("sessions.submit", { ref, input: { text: `$ echo during\ncall: write | {"path":"x.txt","content":"no"}\ncall: grep | {"pattern":"Budget","path":"."}\ncall: web_fetch | {"url":"http://127.0.0.1:${port}/"}` } });
+		await finished(5);
+		const during = (await tools()).slice(1);
+		expect(during.map((t) => `${t.tool}:${t.status}`)).toEqual(["bash:error", "write:error", "grep:done", "web_fetch:done"]);
+		expect(existsSync(join(folder, "x.txt"))).toBe(false);
+
+		await a.client.call("sessions.configure", { ref, approvalMode: "full_auto" });
+		await a.client.call("sessions.submit", { ref, input: { text: "$ echo after" } });
+		await finished(6);
+		server.close();
+		expect((await tools()).at(-1)).toMatchObject({ tool: "bash", status: "done", output: expect.stringContaining("after") });
+	}, 30_000);
 
 	test("a subagent of a chat-profile session keeps its profile and the tools turned off (no bash through a task)", async () => {
 		const a = await start();
@@ -1381,6 +1476,7 @@ describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () 
 
 	test("a thread is suggested for a Space topic, moves into it, and topics promote back out to threads", async () => {
 		const a = await start();
+		await a.client.call("settings.set", { chat: { suggestSpaces: true } }); // off by default since docs/spec/18 CF5
 		const { ref: space } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
 		await a.client.call("sessions.subscribe", { ref: space });
 		await a.client.call("sessions.submit", { ref: space, input: { text: "/new Kitchen cabinets\nOak or walnut?" } });
@@ -1427,7 +1523,7 @@ describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () 
 
 	test("About me: off by default, then shown and captured; MCP servers reach Threads and Spaces when allowed", async () => {
 		const a = await start();
-		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: true, followUps: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" }, memory: { providers: [] } });
+		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: false, followUps: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" }, memory: { providers: [] } });
 		const tools = (s: Snapshot) => s.items.flatMap((i) => (i.kind === "tool" ? [i] : []));
 
 		let t = await thread(a, 'call: remember_about_me | {"add":["Lives in Valencia"],"section":"Home"}');

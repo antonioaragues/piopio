@@ -366,6 +366,10 @@ export class Engine {
 				const p = params as Params<"sessions.list">;
 				return { sessions: this.sessions.list(p.kind) } satisfies Result<"sessions.list">;
 			}
+			case "sessions.continueIn": {
+				const p = params as Params<"sessions.continueIn">;
+				return { ref: await this.sessions.continueIn(p.ref, p.cwd) } satisfies Result<"sessions.continueIn">;
+			}
 			case "sessions.create": {
 				const p = params as Params<"sessions.create">;
 				return { ref: await this.sessions.create(p) } satisfies Result<"sessions.create">;

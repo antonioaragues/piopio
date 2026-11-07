@@ -253,9 +253,9 @@ struct MainSidebar: View {
         }
     }
 
-    /// New sessions are Build sessions: only for projects with the Build lens, with Build on.
+    /// A project's + starts a conversation in it (on Home, docs/spec/18 §4), unless its folder is gone.
     private func startsSessions(_ project: ProjectInfo) -> Bool {
-        areas.contains(.build) && project.lenses.contains(.build) && project.missing != true
+        project.missing != true
     }
 
     /// The project's sessions, nested under it on a hairline (docs/design/start-pages, addendum): a "New session ·
@@ -327,18 +327,15 @@ struct MainSidebar: View {
 
     private func projectRow(_ project: ProjectInfo) -> some View {
         let selected = item == .project(project.id)
-        // Build projects start a session; folders you only chat about start a chat in the folder.
-        let plus: ProjectRow.Plus? = startsSessions(project) ? .session : (areas.contains(.chat) && project.lenses.contains(.chat) && project.missing != true ? .chat : nil)
+        let plus: ProjectRow.Plus? = startsSessions(project) ? .session : nil
         let folded = collapsedProjects.contains(project.id)
         let hasSessions = !engine.sessions(in: project).filter { $0.parent == nil }.isEmpty
         return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil,
                           toggle: { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }) {
-            if plus == .session { item = .newSession(project.id) }
-            else { Task { await BuildActions.chat(in: project, engine: engine) { item = .session($0) } } }
+            NotificationCenter.default.post(name: .newBuildSession, object: project.id)
         }
         .contextMenu {
-            if areas.contains(.build) { Button("New Session…") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) } }
-            if areas.contains(.chat) { Button("New Chat in This Folder") { Task { await BuildActions.chat(in: project, engine: engine) { item = .session($0) } } } }
+            Button("New Conversation…") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
             pinButton(.project(project.id))
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)]) }
             Divider()
@@ -496,7 +493,7 @@ struct MainSidebar: View {
     @ViewBuilder private var chatsSection: some View {
         let threads = engine.threads
         let cap = Self.caps[.chats]!
-        header(.chats, total: threads.count, shown: min(cap, threads.count), add: { item = .start(.chat) }, addHelp: "New chat (⌘N)")
+        header(.chats, total: threads.count, shown: min(cap, threads.count), add: { NotificationCenter.default.post(name: .newChat, object: nil) }, addHelp: "New conversation (⌘N)")
         if !collapsed.contains(SidebarSection.chats.rawValue) {
             draftRow(.chat)
             draftRow(.debate)
@@ -587,10 +584,7 @@ struct NewMenu: View {
     let engine: EngineController
 
     static func help(_ areas: AreaSet) -> String {
-        var kinds: [String] = []
-        if areas.contains(.chat) { kinds.append("chat") }
-        if areas.contains(.build) { kinds.append("session") }
-        if areas.contains(.chat) { kinds.append("notebook") }
+        var kinds: [String] = ["conversation", "notebook"]
         if areas.contains(.agents) { kinds.append("agent") }
         return "New " + ListFormatter.localizedString(byJoining: kinds).replacingOccurrences(of: " and ", with: " or ") + " (⌘N)"
     }
@@ -598,17 +592,15 @@ struct NewMenu: View {
     var body: some View {
         let areas = Areas.shared.set
         Menu {
-            if areas.contains(.chat) {
-                Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: { Text("Chat"); Text("Saved under Chats") }
-            }
-            if areas.contains(.build) {
+            Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: { Text("Conversation"); Text("Choose a project in the box, or none") }
+            if !engine.projects.isEmpty {
                 Menu {
                     ForEach(engine.projects) { project in
                         Button(project.name) { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
                     }
                     if !engine.projects.isEmpty { Divider() }
                     Button("Open Folder…") { NotificationCenter.default.post(name: .openProject, object: nil) }
-                } label: { Text("Session in a project"); Text("Pick a folder") }
+                } label: { Text("Conversation in a project"); Text("Pick a folder") }
             }
             if areas.contains(.chat) {
                 Button { NotificationCenter.default.post(name: .newSpace, object: nil) } label: { Text("Notebook"); Text("Topics and memory") }
@@ -715,7 +707,7 @@ private struct ProjectRow: View {
             .buttonStyle(.plain)
             .help(folded == nil ? "" : folded == true ? "Show its sessions" : "Hide its sessions")
             .accessibilityValue(folded == nil ? "" : folded == true ? "Collapsed" : "Expanded")
-            .accessibilityAction(named: plus == .chat ? "New chat" : "New session") { if plus != nil { start() } }
+            .accessibilityAction(named: "New conversation") { if plus != nil { start() } }
             if plus != nil {
                 Button(action: start) {
                     Image(systemName: "plus").font(.system(size: 11, weight: .semibold))

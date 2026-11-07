@@ -7,9 +7,12 @@ import Testing
     #expect(AreaSet(stored: "agents, chat").stored == "chat,agents")
     #expect(AreaSet(stored: "chat,spaces").stored == "chat")
     #expect(AreaSet(stored: "nonsense") == .all)
+    // Chat is always on (docs/spec/18 §7), also for a set saved without it.
+    #expect(AreaSet(stored: "build").stored == "build,chat")
+    #expect(AreaSet.switchable == [.build, .agents])
 }
 
-@Test func theLastAreaCantBeTurnedOff() {
+@Test func chatCantBeTurnedOffTheOthersCan() {
     var set = AreaSet(stored: "chat,agents")
     let agentsOff = set.set(.agents, on: false)
     #expect(agentsOff)
@@ -29,11 +32,12 @@ import Testing
     #expect(chatOnly.showsSession(chatProfile: true) && !chatOnly.showsSession(chatProfile: false))
 
     let buildOnly = AreaSet(stored: "build")
-    #expect(buildOnly.showsProjects && !buildOnly.showsChats && !buildOnly.showsNotebooks && !buildOnly.showsAgents)
-    #expect(buildOnly.showsSession(chatProfile: false) && !buildOnly.showsSession(chatProfile: true))
+    #expect(buildOnly.showsProjects && buildOnly.showsChats && !buildOnly.showsAgents)
+    #expect(buildOnly.showsSession(chatProfile: false) && buildOnly.showsSession(chatProfile: true))
 
+    // Chat is always on, so projects (folders to read) and conversations show with Agents alone too.
     let agentsOnly = AreaSet(stored: "agents")
-    #expect(!agentsOnly.showsProjects && agentsOnly.showsAgents)
+    #expect(agentsOnly.showsProjects && agentsOnly.showsChats && agentsOnly.showsAgents)
 }
 
 @Test func theWelcomeShowsOnlyOnANewInstall() {

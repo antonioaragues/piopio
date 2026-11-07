@@ -141,7 +141,7 @@ struct ProjectsIndex: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("New Session…") { NotificationCenter.default.post(name: .newBuildSession, object: p.id) }
+            Button("New Conversation…") { NotificationCenter.default.post(name: .newBuildSession, object: p.id) }
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p.path)]) }
         }
     }
@@ -159,7 +159,7 @@ struct ProjectsIndex: View {
                 .padding(.leading, 58).frame(maxWidth: .infinity, alignment: .leading).frame(height: 30)
         }
         if list.isEmpty {
-            Button("Start a session in \(p.name)…") { NotificationCenter.default.post(name: .newBuildSession, object: p.id) }
+            Button("New conversation in \(p.name)…") { NotificationCenter.default.post(name: .newBuildSession, object: p.id) }
                 .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
                 .padding(.leading, 58).frame(maxWidth: .infinity, alignment: .leading).frame(height: 30)
         }

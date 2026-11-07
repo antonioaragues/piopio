@@ -2,8 +2,8 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// Home, the landing screen (docs/design/grey 14a): a greeting and the date, one box to ask, start a session or
-/// message an agent, then three short lists as plain rows: Needs you, Coming up and Recent. Empty lists are hidden.
+/// Home, the landing screen and the one start (docs/spec/18 §4): a greeting, the box where you write and choose where it
+/// goes, then three short lists as plain rows: Needs you, Coming up and Recent. Empty lists are hidden.
 struct HomeView: View {
     let engine: EngineController
     @Binding var item: SidebarItem
@@ -12,7 +12,7 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 greeting
-                if askable { AskBox(engine: engine, item: $item).padding(.top, 24) }
+                AskBox(engine: engine, item: $item).padding(.top, 24)
                 needsYou
                 comingUp
                 recent
@@ -23,12 +23,6 @@ struct HomeView: View {
             .frame(maxWidth: 704)
             .frame(maxWidth: .infinity)
         }
-    }
-
-    /// The Ask box needs somewhere to send: Chat, a project with Build on, or an agent with Agents on.
-    private var askable: Bool {
-        let areas = Areas.shared.set
-        return areas.contains(.chat) || (areas.contains(.build) && !engine.projects.isEmpty) || (areas.contains(.agents) && !engine.agents.isEmpty)
     }
 
     // MARK: Greeting
@@ -150,15 +144,21 @@ private struct HomeRow: View {
     }
 }
 
-/// One box for everything (1b): a new chat by default; "@project" starts a Build session there, "@agent" messages it.
+/// The one start (docs/spec/18 §4): write, and choose where it goes in the box itself. No project is a chat; a project
+/// with a folder is a conversation there, with permissions (Read only, Ask, Auto-edit, Full auto) said in a chip and in
+/// a line under the box; an agent gets the message. One Return sends it, whatever the target.
 struct AskBox: View {
     let engine: EngineController
     @Binding var item: SidebarItem
     @State private var text = ""
+    /// "chat", "project:<id>" or "agent:<id>"; routes that open Home with a project chosen set it (⌘O, a project's +).
     @AppStorage("homeTarget") private var targetRaw = "chat"
     @State private var pendingChat: ContainerRef?
     @State private var sending = false
     @State private var sendError: String?
+    @State private var mode: ApprovalMode?
+    @State private var workOn: WorkOnChoice = .folder
+    @State private var recent: [RecentFolder] = []
     private var target: Target {
         get {
             if targetRaw.hasPrefix("project:") { return .project(String(targetRaw.dropFirst(8))) }
@@ -183,91 +183,225 @@ struct AskBox: View {
 
     private var areas: AreaSet { Areas.shared.set }
 
-    /// "Ask anything, start a build session, or message an agent…", for the areas that are on.
-    private var placeholder: String {
-        var parts: [String] = []
-        if areas.contains(.chat) { parts.append("Ask anything") }
-        if areas.contains(.build) { parts.append(parts.isEmpty ? "Start a session" : "start a session") }
-        if areas.contains(.agents) { parts.append(parts.isEmpty ? "Message an agent" : "message an agent") }
-        return parts.count > 1 ? parts.dropLast().joined(separator: ", ") + ", or " + parts.last! + "…" : parts[0] + "…"
-    }
-
-    /// The first target the areas allow: a chat, a session in the first project, or the first agent.
-    private var defaultTarget: Target? {
-        if areas.contains(.chat) { return .chat }
-        if areas.contains(.build), let p = engine.projects.first { return .project(p.id) }
-        if areas.contains(.agents), let a = engine.agents.first { return .agent(a.ref.id) }
+    private var project: ProjectInfo? {
+        if case .project(let id) = target { return engine.projects.first { $0.id == id && $0.missing != true } }
         return nil
     }
 
+    private var agent: SessionSummary? {
+        if case .agent(let id) = target { return engine.agents.first { $0.ref.id == id } }
+        return nil
+    }
+
+    /// The permissions this conversation starts with: chosen here, else the project's own. Without Build (the area is
+    /// off), folders are Read only (18 §7).
+    private var buildOn: Bool { areas.contains(.build) }
+    private var effectiveMode: ApprovalMode { buildOn ? (mode ?? project?.approvalMode ?? .autoEdit) : .readOnly }
+
+    private var placeholder: String {
+        if let project { return "What should we do in \(project.name)?" }
+        if let agent { return "Message \(agent.title)…" }
+        return "Ask anything, or @ a project or an agent…"
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
-            TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3), axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .lineLimit(1...6)
-                .focused($focused)
-                .onSubmit(send)
-            if !attachments.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(attachments) { a in
-                            HStack(spacing: 6) {
-                                Text(a.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1)
-                                Button { attachments.removeAll { $0.id == a.id } } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3) }
-                                    .buttonStyle(.plain).accessibilityLabel("Remove attachment \(a.name)")
+        VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 10) {
+                if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
+                HStack(spacing: 4) {
+                    targetMenu
+                    Spacer()
+                }
+                .padding(.leading, -6)
+                TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .lineLimit(1...6)
+                    .focused($focused)
+                    .onSubmit(send)
+                if !attachments.isEmpty { attachmentTiles }
+                HStack(spacing: 4) {
+                    if agent == nil {
+                        Button(action: attach) { Image(systemName: "plus").font(.system(size: 13)) }
+                            .buttonStyle(IconButtonStyle(size: 26))
+                            .help("Attach images, PDFs or text files").accessibilityLabel("Attach files")
+                        Button { showModels = true } label: { Text(modelLabel) }
+                            .buttonStyle(ChipStyle())
+                            .popover(isPresented: $showModels, arrowEdge: .bottom) {
+                                ModelPicker(engine: engine, selected: model ?? defaultModel, role: project == nil ? .chat : .build) { m in model = m; showModels = false }
                             }
-                            .padding(.horizontal, 10).frame(height: 30)
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                        }
                     }
+                    Spacer()
+                    if project != nil {
+                        if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
+                    }
+                    SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: send)
+                        .accessibilityLabel(sendLabel)
+                        .keyboardShortcut(.return, modifiers: .command)
                 }
+                .padding(.leading, -6)
             }
-            HStack(spacing: 4) {
-                if target == .chat {
-                    Button(action: attach) { Image(systemName: "plus").font(.system(size: 13)) }
-                        .buttonStyle(IconButtonStyle(size: 26))
-                        .help("Attach images, PDFs or text files").accessibilityLabel("Attach files")
-                }
-                Menu {
-                    if areas.contains(.chat) { Button("New chat") { target = .chat } }
-                    if areas.contains(.build), !engine.projects.isEmpty {
-                        Section("Start a session in") {
-                            ForEach(engine.projects) { p in Button(p.name) { target = .project(p.id) } }
-                        }
-                    }
-                    if areas.contains(.agents), !engine.agents.isEmpty {
-                        Section("Message") {
-                            ForEach(engine.agents, id: \.ref.id) { a in Button(a.title) { target = .agent(a.ref.id) } }
-                        }
-                    }
-                } label: { Text(targetLabel) }
-                    .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
-                    .help("Where this goes: a new chat, a session in a project, or an agent")
-                Spacer()
-                if target == .chat {
-                    Button { showModels = true } label: { Text(modelLabel) }
-                        .buttonStyle(ChipStyle())
-                        .popover(isPresented: $showModels, arrowEdge: .bottom) {
-                            ModelPicker(engine: engine, selected: model ?? engine.preferredModel) { m in model = m; showModels = false }
-                        }
-                }
-                SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: send)
-                    .accessibilityLabel("Send to \(targetLabel)")
-                    .keyboardShortcut(.return, modifiers: .command)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .composerBox()
+            // Before Return: where it goes, and whether Piopio may change anything (18 §4). Nothing without a folder.
+            if let line = whereLine {
+                Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.leading, 14)
+                    .accessibilityLabel(line)
             }
-            .padding(.leading, -6)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .composerBox()
         .onChange(of: text) { _, t in mention(t); saveHomeDraft() }
-         .onAppear {
-            if target == .chat, let first = defaultTarget, first != .chat { target = first }
+        .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder }
+        .onAppear {
             if let saved = DraftStore(home: engine.home).load("home") { text = saved.text; pendingChat = saved.destination }
+            if case .project = target, project == nil { target = .chat }
+            if case .agent = target, agent == nil { target = .chat }
+            focused = true
         }
-        .onChange(of: areas) { _, _ in if let first = defaultTarget { target = first } }
+        .onReceive(NotificationCenter.default.publisher(for: .focusHome)) { _ in focused = true }
+        .task {
+            let known = Set(engine.projects.map(\.path))
+            recent = await Task.detached { RecentFolder.scan().filter { !known.contains($0.url.path) } }.value
+        }
+    }
+
+    // MARK: Where it goes
+
+    private var targetMenu: some View {
+        Menu {
+            Button { target = .chat } label: {
+                if target == .chat { Label("No project", systemImage: "checkmark") } else { Label("No project", systemImage: "bubble.left") }
+            }
+            if !engine.projects.isEmpty {
+                Section("Projects") {
+                    ForEach(engine.projects.filter { $0.missing != true }) { p in
+                        Button { target = .project(p.id) } label: {
+                            if project?.id == p.id { Label(p.name, systemImage: "checkmark") } else { Label(p.name, systemImage: "folder") }
+                        }
+                    }
+                }
+            }
+            if !recent.isEmpty {
+                Menu("Folders on this Mac") {
+                    ForEach(recent.prefix(12)) { folder in
+                        Button(folder.path) { Task { await use(folder.url) } }
+                    }
+                }
+            }
+            Button("Open folder…") { openFolder() }
+            if let project, project.branch != nil {
+                Section("Work on") {
+                    ForEach(WorkOnChoice.allCases, id: \.self) { choice in
+                        Button { workOn = choice } label: {
+                            if workOn == choice { Label(choice.title, systemImage: "checkmark") } else { Text(choice.title) }
+                            Text(choice.summary)
+                        }
+                    }
+                }
+            }
+            if areas.contains(.agents), !engine.agents.isEmpty {
+                Section("Message an agent") {
+                    ForEach(engine.agents, id: \.ref.id) { a in
+                        Button { target = .agent(a.ref.id) } label: {
+                            if agent?.ref.id == a.ref.id { Label(a.title, systemImage: "checkmark") } else { Label(a.title, systemImage: "person.crop.circle") }
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : "bubble.left").font(.system(size: 11))
+                Text(targetLabel)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
+            }
+        }
+        .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
+        .help("Where this goes: no project, a project folder, or an agent")
+        .accessibilityLabel("Where this goes: \(targetLabel)")
+    }
+
+    private var permissionsMenu: some View {
+        Menu {
+            ForEach(ApprovalMode.allCases) { m in
+                if m == .fullAuto { Divider() }
+                Button { mode = m } label: {
+                    if m == effectiveMode { Label(m.title, systemImage: "checkmark") } else { Text(m.title) }
+                    Text(m.summary)
+                }
+            }
+            if let project, effectiveMode != project.approvalMode {
+                Divider()
+                Button("Use “\(effectiveMode.title)” for new conversations in \(project.name)") {
+                    Task { await engine.setApprovalMode(effectiveMode, for: project); mode = nil }
+                }
+            }
+        } label: { Text(effectiveMode.title).foregroundStyle(effectiveMode == .fullAuto ? Color.accentColor : Color.dsFg2) }
+            .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
+            .help(effectiveMode.summary)
+            .accessibilityLabel("Permissions: \(effectiveMode.title)")
+    }
+
+    /// "In piopio · can edit files; asks before commands"; nothing with no project (it can't touch files).
+    private var whereLine: String? {
+        guard let project else { return nil }
+        let place = switch workOn {
+        case .folder: ""
+        case .branch: " · on a new branch"
+        case .worktree: " · in its own worktree"
+        }
+        return "In \(project.name)\(place) · \(effectiveMode.line)"
+    }
+
+    private var targetLabel: String {
+        if let project { return project.name }
+        if let agent { return agent.title }
+        return "No project"
+    }
+
+    private var sendLabel: String {
+        if let project { return "Start in \(project.name)" }
+        if let agent { return "Send to \(agent.title)" }
+        return "Send"
+    }
+
+    private var defaultModel: ModelRef? { project == nil ? engine.preferredModel : engine.model(for: .build) }
+
+    private var modelLabel: String {
+        let ref = model ?? defaultModel
+        return engine.model(ref).map(ModelChip.short) ?? ref?.id ?? "Model"
+    }
+
+    private func openFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Open"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await use(url) }
+    }
+
+    /// Adds a folder as a project (once) and chooses it. A folder of documents starts in Read only.
+    private func use(_ url: URL) async {
+        guard let added = await engine.addProject(url) else { sendError = "Couldn't open that folder."; return }
+        target = .project(added.id)
+        focused = true
+    }
+
+    private var attachmentTiles: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(attachments) { a in
+                    HStack(spacing: 6) {
+                        Text(a.name).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        Button { attachments.removeAll { $0.id == a.id } } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3) }
+                            .buttonStyle(.plain).accessibilityLabel("Remove attachment \(a.name)")
+                    }
+                    .padding(.horizontal, 10).frame(height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                }
+            }
+        }
     }
 
     private func attach() {
@@ -279,30 +413,11 @@ struct AskBox: View {
         }
     }
 
-    private var targetLabel: String {
-        switch target {
-        case .chat: "New chat"
-        case .project(let id): "Session in \(engine.projects.first { $0.id == id }?.name ?? "project")"
-        case .agent(let id): "Message \(engine.agents.first { $0.ref.id == id }?.title ?? "agent")"
-        }
-    }
-
-    private var modelLabel: String {
-        let ref = model ?? engine.preferredModel
-        return engine.model(ref).map(ModelChip.short) ?? ref?.id ?? "Model"
-    }
-
-    private var hint: String {
-        let p = areas.contains(.build) ? engine.projects.first?.name : nil
-        let a = areas.contains(.agents) ? engine.agents.first?.title : nil
-        return [p.map { "@\($0) starts a session" }, a.map { "@\($0) messages the agent" }].compactMap { $0 }.joined(separator: " · ")
-    }
-
     /// "@name " at the start picks a project or an agent.
     private func mention(_ t: String) {
         guard t.hasPrefix("@"), let space = t.firstIndex(of: " ") else { return }
         let name = String(t[t.index(after: t.startIndex)..<space]).lowercased()
-        if areas.contains(.build), let p = engine.projects.first(where: { $0.name.lowercased() == name }) {
+        if let p = engine.projects.first(where: { $0.name.lowercased() == name }) {
             target = .project(p.id)
             text = String(t[t.index(after: space)...])
         } else if areas.contains(.agents), let a = engine.agents.first(where: { $0.title.lowercased().replacingOccurrences(of: " ", with: "") == name.replacingOccurrences(of: " ", with: "") }) {
@@ -310,6 +425,8 @@ struct AskBox: View {
             text = String(t[t.index(after: space)...])
         }
     }
+
+    // MARK: Send
 
     private func send() {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -323,7 +440,7 @@ struct AskBox: View {
                 let destination: ContainerRef?
                 if let pendingChat { destination = pendingChat } else { destination = await engine.createThread(model: model) }
                 guard let ref = destination else {
-                    sendError = "Couldn't start a chat. Your draft is saved; try again when the engine is connected."
+                    sendError = "Couldn't start a conversation. Your draft is saved; try again when the engine is connected."
                     return
                 }
                 pendingChat = ref; saveHomeDraft()
@@ -335,9 +452,35 @@ struct AskBox: View {
                     item = .chat(ref.id)
                 } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
             }
-        case .project(let id):
-            guard let project = engine.projects.first(where: { $0.id == id }) else { sendError = "Choose an available project folder."; return }
-            NotificationCenter.default.post(name: .newBuildSession, object: project.id, userInfo: ["prompt": message])
+        case .project:
+            guard let project else { sendError = "Choose an available project folder."; return }
+            sending = true
+            let choice = workOn
+            let chosenMode = effectiveMode
+            Task {
+                defer { sending = false }
+                let place: WorkOn
+                switch choice {
+                case .folder: place = .current
+                case .branch, .worktree:
+                    let suggested = try? await engine.client?.call("git.suggestBranch", SuggestBranchParams(prompt: message), as: SuggestBranchResult.self).branch
+                    let name = suggested?.isEmpty == false ? suggested! : "piopio/session-\(Int(Date().timeIntervalSince1970))"
+                    place = choice == .branch ? .branch(name, base: nil) : .worktree(name, base: nil)
+                }
+                do {
+                    let ref = try await engine.createBuildSession(in: project, workOn: place, mode: chosenMode, model: model)
+                    let session = engine.thread(ref)
+                    await session.open()
+                    if await session.send(message, attachments: attachments.map(\.attachment)) {
+                        text = ""; attachments = []; mode = nil; workOn = .folder; saveHomeDraft()
+                        item = .session(ref.id)
+                    } else {
+                        item = .session(ref.id) // the conversation exists; its composer keeps the draft for a retry
+                    }
+                } catch {
+                    sendError = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was started, and your message is kept."
+                }
+            }
         case .agent(let id):
             sending = true
             Task {
@@ -352,7 +495,30 @@ struct AskBox: View {
             }
         }
     }
+}
 
+/// Where a conversation in a git project works (the old new-session page's choice, kept in Home's project menu).
+enum WorkOnChoice: String, CaseIterable {
+    case folder, branch, worktree
+    var title: String {
+        switch self {
+        case .folder: "In the folder"
+        case .branch: "New branch"
+        case .worktree: "Worktree"
+        }
+    }
+    var summary: String {
+        switch self {
+        case .folder: "Works on the folder as it is, on its current branch"
+        case .branch: "Switches the folder to a new branch first"
+        case .worktree: "A separate checkout, so your working copy isn't touched"
+        }
+    }
+}
+
+extension Notification.Name {
+    /// Puts the cursor in Home's box (⌘N, a project's +).
+    static let focusHome = Notification.Name("piopio.focusHome")
 }
 
 extension View {

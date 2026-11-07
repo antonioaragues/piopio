@@ -899,21 +899,8 @@ struct ApprovalModeMenu: View {
         .help(Self.summary(session.approvalMode))
     }
 
-    static func title(_ mode: ApprovalMode) -> String {
-        switch mode {
-        case .ask: "Ask before edits"
-        case .autoEdit: "Auto-edit"
-        case .fullAuto: "Full auto"
-        }
-    }
-
-    static func summary(_ mode: ApprovalMode) -> String {
-        switch mode {
-        case .ask: "Asks before every edit, command and web request. Reading is automatic."
-        case .autoEdit: "Edits files on its own. Asks before commands you haven't allowed."
-        case .fullAuto: "Doesn't ask, except for risky commands and writes outside the project."
-        }
-    }
+    static func title(_ mode: ApprovalMode) -> String { mode.title }
+    static func summary(_ mode: ApprovalMode) -> String { mode.summary }
 }
 
 extension CheckpointItem: @retroactive Identifiable {}

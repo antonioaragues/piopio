@@ -2,6 +2,10 @@
  * Approval policy for Build sessions (docs/spec/05-build §6): which tool calls run on their own and which
  * wait for the user, by mode, "always allow" rules and a deny-list that always asks.
  *
+ * Read only (docs/spec/18 §4): reads, search and the web run; tools that may change something ask (the session
+ * also drops bash, edit and write, so those ask only if an extension brings them back). `readOnlyTool` names the
+ * other tools known to only read: connectors' read capabilities, todos, plans, subagents (which inherit the mode).
+ *
  * | Mode      | read/grep/find/ls | write/edit in project | bash                  | network/other | outside project |
  * |-----------|-------------------|-----------------------|-----------------------|---------------|-----------------|
  * | ask       | auto              | ask                   | ask                   | ask           | ask             |
@@ -12,7 +16,7 @@ import { lstatSync, readlinkSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 
-export type ApprovalMode = "ask" | "auto_edit" | "full_auto";
+export type ApprovalMode = "read_only" | "ask" | "auto_edit" | "full_auto";
 export type RuleKind = "command" | "tool" | "path";
 export type Rule = { kind: RuleKind; pattern: string };
 export type Decision = { action: "allow" } | { action: "ask"; reason?: string; rule?: Rule };
@@ -24,7 +28,10 @@ const USER_TOOLS = new Set(["ask_user", "notify_user"]);
 /** Package runners and build tools: their rule keeps the subcommand ("pnpm vitest", "swift build"). */
 const RUNNERS = new Set(["npm", "pnpm", "yarn", "npx", "bun", "bunx", "deno", "node", "cargo", "go", "swift", "make", "python", "python3", "uv", "pip", "git", "docker", "xcodebuild", "gradle", "mvn", "dotnet", "bundle", "rake"]);
 
-export function decide(mode: ApprovalMode, tool: string, input: Record<string, unknown>, cwd: string, rules: readonly Rule[], home = homedir()): Decision {
+/** Tools that only read, whatever the session: allowed in Read only. */
+const READ_ONLY_TOOLS = new Set(["web_search", "web_fetch", "todo", "propose_plan", "read_skill", "task"]);
+
+export function decide(mode: ApprovalMode, tool: string, input: Record<string, unknown>, cwd: string, rules: readonly Rule[], home = homedir(), readOnlyTool: (tool: string) => boolean = () => false): Decision {
 	if (USER_TOOLS.has(tool)) return { action: "allow" };
 	const logical = typeof input.path === "string" ? resolve(cwd, expandHome(input.path, home)) : undefined;
 	// Where the file really is: symlinks inside the project can point anywhere (a cloned repo can ship them).
@@ -34,6 +41,12 @@ export function decide(mode: ApprovalMode, tool: string, input: Record<string, u
 
 	if (READ_TOOLS.has(tool)) {
 		return secret ? { action: "ask", reason: viaLink ? `${secret} (through a symlink)` : secret } : { action: "allow" };
+	}
+
+	if (mode === "read_only") {
+		if (WRITE_TOOLS.has(tool) || tool === "bash") return { action: "ask", reason: "Read only: choose Ask or Auto-edit to change files or run commands" };
+		if (READ_ONLY_TOOLS.has(tool) || readOnlyTool(tool) || rules.some((r) => r.kind === "tool" && r.pattern === tool)) return { action: "allow" };
+		return { action: "ask", reason: "Read only: this tool may change something", rule: { kind: "tool", pattern: tool } };
 	}
 
 	if (WRITE_TOOLS.has(tool)) {

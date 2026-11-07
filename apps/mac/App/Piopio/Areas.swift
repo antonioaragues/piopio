@@ -135,12 +135,12 @@ struct AreasCard: View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Areas").font(.system(size: 13, weight: .semibold))
-                Text("What Piopio is for you. Hiding an area keeps everything in it, and nothing that runs stops.")
+                Text("Conversations are always on. Build adds code tools to project folders (editing, commands, git, the terminal); without it, folders are Read only. Hiding an area keeps everything in it, and nothing that runs stops.")
                     .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
             ListCard {
-                ForEach(Area.allCases) { area in
-                    row(area, last: area == Area.allCases.last)
+                ForEach(AreaSet.switchable) { area in
+                    row(area, last: area == AreaSet.switchable.last)
                 }
             }
             Button("Run setup again…", action: rerunSetup)

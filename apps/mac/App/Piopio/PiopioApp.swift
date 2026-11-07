@@ -85,14 +85,7 @@ struct PiopioApp: App {
 }
 
 extension PiopioApp {
-    private var newTitle: String {
-        switch (areas.contains(.build), areas.contains(.chat)) {
-        case (true, true): "New Chat / Session"
-        case (true, false): "New Session"
-        case (false, true): "New Chat"
-        default: "New Agent"
-        }
-    }
+    private var newTitle: String { "New Conversation" }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {

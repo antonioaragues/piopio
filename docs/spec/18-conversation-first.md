@@ -1,6 +1,6 @@
 # 18 · Conversation first: one way to start, projects with or without a folder
 
-Status: decided 2026-11-07, not built. Phases in §8. It changes the start (X10), the Chat lens (C2), notebooks
+Status: decided 2026-11-07; **phase 1 built 2026-11-07** (§10). Phases in §8. It changes the start (X10), the Chat lens (C2), notebooks
 (C3, CQ1, CQ2, AQ13) and areas (15). Those docs stay as history and point here.
 
 **The idea:** you always start the same way, by writing. Where the conversation lives is a chip in the composer, not
@@ -265,3 +265,48 @@ Acceptance:
    AGENTS.md? Proposal: later, once phase 2 shows whether project memory is useful.
 2. **Debate inside a project:** today debates take no folder or attachments. It stays that way for now.
 3. **Agents in projects:** should an agent belong to a project and share its memory? Not now.
+
+## 10. Phase 1 as built (2026-11-07)
+
+**Engine:**
+- `read_only` is a fourth approval mode. A Build session's profile follows it:
+  - Read only drops `bash`, `edit` and `write`, and adds the finders and the web tools.
+  - It switches live with `setActiveToolsByName`, so the transcript and subscriptions stay.
+  - The knowledge prompt is added only while Read only.
+- **The policy in Read only:**
+  - These run: reads, web, todos, plans, subagents, and connectors' read capabilities.
+  - Anything else asks, with a tool rule to allow it.
+- **Projects:**
+  - New folders without code markers start in Read only.
+  - Projects saved with only the Chat lens migrate to it, and `lenses` is dropped from `projects.json`.
+- **Sessions:**
+  - Chat-profile sessions load as Read only.
+  - `sessions.continueIn` seeds a new Build session with a `piopio.continued` custom message (text and images),
+    shown as "Continued from “…” · N messages".
+- **S11's notebook suggestion is off by default.**
+
+**App:**
+- **Home's box is the start:** a target menu (No project, Projects, Folders on this Mac, Open folder…, Work on, Message
+  an agent), the permissions chip, and the line under the box.
+- **Routes:**
+  - The Chat and Project start pages and the new-session page are gone.
+  - Their routes, ⌘N, ⌘O and a project's `+` land on Home.
+  - The Debate page stays, as before.
+- **Conversations:**
+  - A conversation with no project has "Continue in a project" (its folder icon) and a "Continued in …" bar.
+  - The composer's mode chip has Read only.
+- **Areas:** the Chat area is always on, and its switch is gone.
+- **Sidebar:** "Chats" is "Conversations".
+
+**Different from §4–§8, for now:**
+- **The project chip is a menu, not a popover with search.** That's enough for a handful of projects; search can come
+  with phase 2.
+- **⌘N always opens Home with no project.** It used to follow the selected project. A project's `+` and
+  "New Conversation…" in its menu still preselect it.
+- **Plan isn't in Home's permissions chip.** It's in the conversation's chip, as before.
+- **MCP tools in Build sessions ask in Read only.** They're reached through codemode, so `readOnlyHint` isn't seen
+  there yet.
+- **With Build off,** Home starts folder conversations in Read only. The conversation's own chip still lists every mode.
+- **Not checked in the running app:** the display was locked, so there are no captures. The acceptance in §8 still
+  needs a person.
+

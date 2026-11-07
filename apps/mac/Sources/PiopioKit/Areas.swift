@@ -11,10 +11,16 @@ public struct AreaSet: Equatable, Sendable {
 
     public static let all = AreaSet(Set(Area.allCases))
 
-    /// An empty set means all of them (nothing chosen yet).
+    /// An empty set means all of them (nothing chosen yet). Chat is always on: conversations are where everything
+    /// starts (docs/spec/18 §7); Build and Agents are the switches.
     public init(_ areas: Set<Area>) {
-        self.areas = areas.isEmpty ? Set(Area.allCases) : areas
+        var on = areas.isEmpty ? Set(Area.allCases) : areas
+        on.insert(.chat)
+        self.areas = on
     }
+
+    /// The areas a person can turn on and off.
+    public static let switchable: [Area] = Area.allCases.filter { $0 != .chat }
 
     /// From the stored form, "build,chat,agents". Unknown names are ignored; missing or empty means all.
     public init(stored: String?) {
@@ -29,8 +35,8 @@ public struct AreaSet: Equatable, Sendable {
 
     public func contains(_ area: Area) -> Bool { areas.contains(area) }
 
-    /// False for the only area that's on.
-    public func canTurnOff(_ area: Area) -> Bool { areas != [area] }
+    /// Chat can't be turned off (18 §7); the others always can.
+    public func canTurnOff(_ area: Area) -> Bool { area != .chat }
 
     /// Turns an area on or off; turning off the last one does nothing. Returns whether anything changed.
     @discardableResult

@@ -48,6 +48,7 @@ struct ThreadView: View {
             if let suggestion = summary.suggestion {
                 SpaceSuggestionBanner(engine: engine, thread: summary, suggestion: suggestion)
             }
+            if let next = summary.continuedIn { continuedBanner(next) }
             ZStack(alignment: .bottom) {
                 TranscriptView(document: thread.document)
                 // The thread dissolves before it reaches the composer (chat v3).
@@ -114,8 +115,41 @@ struct ThreadView: View {
         }
     }
 
+    /// "Continued in piopio ›": this chat went on in a project folder (18 §5).
+    private func continuedBanner(_ next: SessionSummary.Link) -> some View {
+        let session = engine.buildSessions.first { $0.ref.id == next.id }
+        let place = session.flatMap { engine.project(of: $0)?.name } ?? "a project"
+        return HStack(spacing: 8) {
+            Image(systemName: "arrow.turn.down.right").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+            Text("Continued in \(place)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+            Spacer()
+            if session != nil {
+                Button("Open") { NotificationCenter.default.post(name: .selectBuildSession, object: next.id) }
+                    .buttonStyle(PillStyle(kind: .toolbar, compact: true))
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 8)
+        .background(Color.dsChip.opacity(0.5))
+    }
+
+    /// Where this chat can go (18 §5): continue in a project folder (a new conversation there with this one's history),
+    /// or, until notebooks become projects, move into a notebook.
     private var moveMenu: some View {
         Menu {
+            Section("Continue in a project") {
+                ForEach(engine.projects.filter { $0.missing != true }) { project in
+                    Button(project.name) { continueIn(project) }
+                }
+                Button("Open Folder…") {
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.prompt = "Continue Here"
+                    guard panel.runModal() == .OK, let url = panel.url else { return }
+                    Task { if let project = await engine.addProject(url) { continueIn(project) } }
+                }
+            }
+            Section("Move to a notebook") {
             ForEach(engine.spaces, id: \.ref.id) { space in
                 Button(space.title) {
                     run {
@@ -124,12 +158,19 @@ struct ThreadView: View {
                     }
                 }
             }
-            if !engine.spaces.isEmpty { Divider() }
             Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: summary.ref.id) }
-        } label: { Image(systemName: "book.closed") }
+            }
+        } label: { Image(systemName: "folder") }
             .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-            .accessibilityLabel("Move to a notebook")
-            .help("Move to a notebook: this chat becomes one of its topics")
+            .accessibilityLabel("Continue in a project")
+            .help("Continue in a project: a new conversation in its folder, with this one's messages and images")
+    }
+
+    private func continueIn(_ project: ProjectInfo) {
+        run {
+            let next = try await engine.continueIn(summary.ref, project: project)
+            NotificationCenter.default.post(name: .selectBuildSession, object: next.id)
+        }
     }
 
     /// Debates: stop it while it runs, add rounds once it ended, and show or hide the draft panel.

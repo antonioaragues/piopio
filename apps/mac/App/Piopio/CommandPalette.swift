@@ -16,7 +16,7 @@ struct CommandPalette: View {
     let openResult: (SearchResult) -> Void
     @State private var searchScope: SearchScope = .all
     enum SearchScope: String, CaseIterable {
-        case all = "Everything", build = "Build", chat = "Chats", notebooks = "Notebooks", agents = "Agents"
+        case all = "Everything", build = "Build", chat = "Conversations", notebooks = "Notebooks", agents = "Agents"
         var kind: ContainerKind? { switch self { case .all: nil; case .build: .build; case .chat: .thread; case .notebooks: .space; case .agents: .agent } }
     }
     @State var mode: Mode
@@ -197,7 +197,7 @@ struct CommandPalette: View {
         var rows: [Row] = []
         if areas.contains(.chat) {
             rows += [
-                Row(id: "c:new", icon: "square.and.pencil", title: "New Chat", trailing: "⌘N") { newThread(); close() },
+                Row(id: "c:new", icon: "square.and.pencil", title: "New Conversation", trailing: "⌘N") { newThread(); close() },
                 Row(id: "c:notebook", icon: "book.closed", title: "New Notebook", trailing: "⇧⌘N") { close(); NotificationCenter.default.post(name: .newSpace, object: nil) },
                 Row(id: "c:debate", icon: "person.2.wave.2", title: "New Debate", trailing: "⌥⌘N") { close(); NotificationCenter.default.post(name: .newDebate, object: nil) },
                 Row(id: "c:quick", icon: "bolt", title: "Quick Chat", trailing: QuickChatController.shortcutLabel) { QuickChatController.shared?.show(); close() },

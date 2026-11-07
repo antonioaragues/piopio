@@ -143,7 +143,7 @@ struct ChatFirstRun: View {
             VStack(spacing: 14) {
                 AskBox(engine: engine, item: $item)
                 HStack(spacing: 10) {
-                    tile("New chat", "⌘N", "bubble.left") { NotificationCenter.default.post(name: .newChat, object: nil) }
+                    tile("New conversation", "⌘N", "bubble.left") { NotificationCenter.default.post(name: .newChat, object: nil) }
                     tile("New debate", "⌥⌘N", "person.2.wave.2") { NotificationCenter.default.post(name: .newDebate, object: nil) }
                     tile("New notebook", "⌘⇧N", "book.closed") { NotificationCenter.default.post(name: .newSpace, object: nil) }
                 }

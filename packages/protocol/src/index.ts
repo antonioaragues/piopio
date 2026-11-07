@@ -375,7 +375,8 @@ export const ChangesSince = literals("session", "turn");
 export const SessionStatus = literals("idle", "running", "waiting_approval", "error");
 
 /** Build approval modes (docs/spec/05-build §6). */
-export const ApprovalMode = literals("ask", "auto_edit", "full_auto");
+/** How much a Build session may do on its own (05-build §6). `read_only`: reads and the web; no edits or commands (18 §4). */
+export const ApprovalMode = literals("read_only", "ask", "auto_edit", "full_auto");
 export type ApprovalMode = Static<typeof ApprovalMode>;
 
 /** "Always allow" rules, per project (AP2): a bash command prefix, a tool name, or a path glob. */
@@ -662,6 +663,9 @@ export const SessionSummary = Type.Object({
 	profile: Type.Optional(literals("build", "chat")),
 	/** A subagent's session: the parent session and the `task` call that started it. */
 	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
+	/** A chat continued in a project folder (18 §5): the new conversation, and in it, where it came from. */
+	continuedIn: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
+	continuedFrom: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
 	/** Spaces: the topics, newest activity first (Main is the Space itself). */
 	topics: Type.Optional(Type.Array(TopicInfo)),
 	/** Spaces: what every agent in the Space is told. */
@@ -918,6 +922,14 @@ export const methods = {
 	"sessions.list": {
 		params: Type.Object({ kind: Type.Optional(ContainerKind) }),
 		result: Type.Object({ sessions: Type.Array(SessionSummary) }),
+	},
+	/**
+	 * Continue a chat in a project folder (18 §5): a new conversation there that starts with the chat's active branch
+	 * (text, one line per tool call, images). The chat stays, linked to it. Nothing is sent to the model yet.
+	 */
+	"sessions.continueIn": {
+		params: Type.Object({ ref: ContainerRef, cwd: Type.String() }),
+		result: Type.Object({ ref: ContainerRef }),
 	},
 	"sessions.create": {
 		params: Type.Object({

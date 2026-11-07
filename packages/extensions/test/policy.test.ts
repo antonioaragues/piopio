@@ -6,7 +6,7 @@ import { decide, deniedCommand, physical, readOnlyCommand, suggestCommandRule, t
 
 const cwd = "/work/app";
 const home = "/Users/me";
-const run = (mode: "ask" | "auto_edit" | "full_auto", tool: string, input: Record<string, unknown>, rules: Rule[] = []) => decide(mode, tool, input, cwd, rules, home).action;
+const run = (mode: "read_only" | "ask" | "auto_edit" | "full_auto", tool: string, input: Record<string, unknown>, rules: Rule[] = []) => decide(mode, tool, input, cwd, rules, home).action;
 
 group("modes (docs/spec/05-build §6)", () => {
 	test("reads are automatic in every mode", () => {
@@ -132,5 +132,24 @@ group("symlinks: the policy decides on where a file really is", () => {
 		symlinkSync(project, alias);
 		expect(decide("auto_edit", "write", { path: "src/a.ts" }, alias, [], fakeHome).action).toBe("allow");
 		expect(physical(join(alias, "src/none/x.ts"))).toBe(join(project, "src/none/x.ts"));
+	});
+});
+
+group("read only (docs/spec/18 §4)", () => {
+	test("reads, search, the web, todos, plans and subagents run; changes ask", () => {
+		for (const [tool, input] of [["read", { path: "src/a.ts" }], ["grep", { pattern: "x" }], ["web_search", { query: "x" }], ["web_fetch", { url: "https://x" }], ["todo", {}], ["propose_plan", {}], ["task", {}], ["ask_user", {}]] as const) {
+			expect(run("read_only", tool, input), tool).toBe("allow");
+		}
+		expect(decide("read_only", "write", { path: "src/a.ts" }, cwd, [], home)).toEqual({ action: "ask", reason: "Read only: choose Ask or Auto-edit to change files or run commands" });
+		expect(decide("read_only", "bash", { command: "ls" }, cwd, [], home).action).toBe("ask");
+		expect(decide("read_only", "mcp__notion__create_page", {}, cwd, [], home)).toEqual({ action: "ask", reason: "Read only: this tool may change something", rule: { kind: "tool", pattern: "mcp__notion__create_page" } });
+		expect(decide("read_only", "codemode", {}, cwd, [], home).action).toBe("ask");
+	});
+	test("tools the session knows only read run, and a tool rule allows one", () => {
+		const readOnly = (t: string) => t === "calendar_events";
+		expect(decide("read_only", "calendar_events", {}, cwd, [], home, readOnly).action).toBe("allow");
+		expect(decide("read_only", "calendar_create_event", {}, cwd, [], home, readOnly).action).toBe("ask");
+		expect(decide("read_only", "mcp__notion__search", {}, cwd, [{ kind: "tool", pattern: "mcp__notion__search" }], home).action).toBe("allow");
+		expect(decide("read_only", "read", { path: "~/.ssh/id_rsa" }, cwd, [], home).action).toBe("ask");
 	});
 });

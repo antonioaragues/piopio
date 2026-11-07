@@ -12,7 +12,7 @@ import type { ApprovalMode, ApprovalRule, ContainerRef, DebateConfig, ModelRef, 
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
-import { copyAttachments, deleteAttachments } from "./attachment-files.js";
+import { attachmentsDir, copyAttachments, deleteAttachments } from "./attachment-files.js";
 import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import type { TaskResult } from "@piopio/pi-extensions";
@@ -123,7 +123,11 @@ export class Sessions {
 		this.search = new SearchIndex(join(paths.home, "search.db"));
 		this.checkpoints = new CheckpointStore(join(paths.home, "checkpoints"));
 		if (existsSync(paths.catalogIndex)) {
-			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) this.entries.set(e.ref.id, e);
+			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) {
+				// Chat-lens sessions are Read only now (docs/spec/18 §4): the profile follows the approval mode.
+				if (e.ref.kind === "build" && e.profile === "chat") e.approvalMode = "read_only";
+				this.entries.set(e.ref.id, e);
+			}
 		}
 	}
 
@@ -150,7 +154,10 @@ export class Sessions {
 
 	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean; approvalMode?: ApprovalMode; planMode?: boolean; toolsOff?: string[] }): Promise<void> {
 		const entry = this.entry(ref);
-		if (change.approvalMode) entry.approvalMode = change.approvalMode; // read by the runtime's approvals bridge
+		if (change.approvalMode) {
+			entry.approvalMode = change.approvalMode; // read by the runtime's approvals bridge
+			entry.profile = change.approvalMode === "read_only" ? "chat" : "build"; // the runtime switches its tools
+		}
 		if (change.planMode !== undefined) entry.planMode = change.planMode;
 		if (change.toolsOff) {
 			// Read live by the runtimes; chat MCP tools are reinstalled, connector tools follow on the next turn.
@@ -381,7 +388,7 @@ export class Sessions {
 			...(cwd ? { cwd } : {}),
 			...(worktree ? { projectPath: params.cwd!, worktree } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
-			...(params.kind === "build" ? { approvalMode: params.approvalMode ?? this.policy.modeFor(params.cwd!), profile: params.profile ?? "build" } : {}),
+			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
 			...(params.debate ? { debate: { config: params.debate, status: "running" as const, maxRounds: params.debate.maxRounds, endings: [] } } : {}),
 			...(params.kind === "space" ? { file: join(this.paths.spacesDir, `${ref.id}.sqlite`), topics: [], space: { costUsd: 0, files: 0, memoryLines: 0, memory: true, autoTidy: false }, ...(params.instructions?.trim() ? { instructions: params.instructions.trim() } : {}) } : {}),
@@ -448,6 +455,56 @@ export class Sessions {
 		this.changed(entry);
 	}
 
+	// ── Continue in a project folder (docs/spec/18 §5) ───────────────────────
+
+	/**
+	 * A chat continues in a folder: a Build session there whose first entry is the chat's active branch, as context the
+	 * model reads (user and assistant text, one line per tool call, the images attached). Thinking and other branches
+	 * stay behind. The chat stays where it was, with a link to the new conversation.
+	 */
+	async continueIn(from: ContainerRef, cwd: string): Promise<ContainerRef> {
+		const source = this.entry(from);
+		if (source.ref.kind !== "thread") throw new EngineError("INVALID", "Only a conversation without a project can continue in one.");
+		if (!existsSync(cwd)) throw new EngineError("NOT_FOUND", `No folder ${cwd}`);
+		const chat = await this.runtime(from);
+		const items = chat.snapshot().items;
+		const model = chat.snapshot().state.model ?? source.model;
+		const lines: string[] = [];
+		const images: { type: "image"; data: string; mimeType: string }[] = [];
+		let messages = 0;
+		for (const item of items) {
+			if (item.kind === "user") {
+				messages++;
+				const names = (item.attachments ?? []).map((a) => a.name);
+				lines.push(`User: ${item.text}${names.length ? `\n[Attached: ${names.join(", ")}]` : ""}`);
+				for (const a of item.attachments ?? []) {
+					if (a.kind !== "image" || !a.stored) continue;
+					const file = join(attachmentsDir(this.paths.home, from.id), a.stored);
+					if (existsSync(file)) images.push({ type: "image", data: readFileSync(file).toString("base64"), mimeType: a.mimeType ?? "image/png" });
+				}
+			} else if (item.kind === "assistant") {
+				const text = item.parts.filter((p) => p.type === "text").map((p) => p.text).join("").trim();
+				if (text) {
+					messages++;
+					lines.push(`Assistant: ${text}`);
+				}
+			} else if (item.kind === "tool") {
+				lines.push(`(tool ${item.tool}: ${item.status})`);
+			}
+		}
+		const ref = await this.create({ kind: "build", cwd, ...(model ? { model } : {}), title: source.title });
+		const child = this.entry(ref);
+		child.continuedFrom = { id: source.ref.id, title: source.title };
+		source.continuedIn = { id: ref.id, title: source.title };
+		const runtime = await this.build(ref);
+		const intro = `This conversation continues an earlier one, “${source.title}”, now in the folder ${cwd}. Here it is, so you know what was said:`;
+		await runtime.seed(`${intro}\n\n${lines.join("\n\n")}`, images, `Continued from “${source.title}” · ${messages} message${messages === 1 ? "" : "s"}`);
+		this.save();
+		this.changed(source);
+		this.changed(child);
+		return ref;
+	}
+
 	// ── Subagents (piopio-subagents) ─────────────────────────────────────────
 
 	private subagents = new Map<string, { running: number; waiting: (() => void)[] }>();
@@ -473,7 +530,7 @@ export class Sessions {
 		try {
 			// A child never gets more than its parent: the same profile (a Chat-lens parent has no bash) and the
 			// same tools turned off (see `toolsOff` in build(), which also follows later changes to the parent).
-			const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), profile: parent.profile ?? "build", title: task.description });
+			const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
 			const child = this.entry(ref);
 			child.parent = { id: parent.ref.id, callId: task.callId };
 			if (parent.toolsOff?.length) child.toolsOff = [...parent.toolsOff];
@@ -1340,7 +1397,6 @@ export class Sessions {
 				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
 			},
 			checkpoints: this.checkpoints,
-			profile: entry.profile ?? "build",
 			webOptions: this.webOptions,
 			...(entry.projectPath ? { trustPath: entry.projectPath } : {}),
 			plan: {
@@ -1420,4 +1476,9 @@ export function titleFrom(text: string): string {
 	const cut = plain.slice(0, 60);
 	const space = cut.lastIndexOf(" ");
 	return `${(space > 30 ? cut.slice(0, space) : cut).trim()}…`;
+}
+
+/** A Build session's approval mode, and the profile that goes with it: Read only is the chat profile (18 §4). */
+function buildMode(approvalMode: ApprovalMode): { approvalMode: ApprovalMode; profile: "build" | "chat" } {
+	return { approvalMode, profile: approvalMode === "read_only" ? "chat" : "build" };
 }

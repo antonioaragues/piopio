@@ -1,5 +1,6 @@
 /** Build runtime: one pi-coding-agent SDK session, persisted as a pi CLI-compatible JSONL file. */
 import { codingConnectorsExtension } from "../connectors/extension.js";
+import { groupOf } from "../connectors/permissions.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import {
 	createAgentSession,
@@ -21,7 +22,7 @@ import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage } from "../timeline/builder.js";
 import { SdkEventMapper } from "../timeline/pi-sdk.js";
-import { CHAT_TOOLS, chatProfileExtension } from "../tools/chat-profile.js";
+import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat-profile.js";
 import type { WebOptions } from "../tools/web.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { recorder } from "./recorder.js";
@@ -54,8 +55,6 @@ export type BuildOpenOptions = {
 	onAttention?: (kind: "waiting" | "notify", message: string) => void;
 	/** Plan mode (piopio-plan), kept by the catalog so it survives a reopen. */
 	plan: { active(): boolean; setActive(on: boolean): void };
-	/** "chat": the Chat lens profile (no bash, web tools, knowledge-assistant prompt; 04-chat §2). */
-	profile?: "build" | "chat";
 	webOptions?: WebOptions;
 	/** Where project trust is looked up (the project folder; differs from `cwd` for worktree sessions). */
 	trustPath?: string;
@@ -115,6 +114,8 @@ export class BuildRuntime implements Runtime {
 					mode: o.approvals.mode,
 					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),
 					addRule: o.approvals.addRule,
+					// Connectors' read capabilities (Read only lets them run; their own permissions still apply).
+					readOnlyTool: (tool) => groupOf(tool)?.access === "read",
 					ask: async (request, signal) => {
 						const response = await broker.ask(
 							{
@@ -132,7 +133,7 @@ export class BuildRuntime implements Runtime {
 						return { decision: response.decision ?? "deny", ...(response.text ? { note: response.text } : {}) };
 					},
 				}),
-				...(o.profile === "chat" ? [chatProfileExtension(o.hub, o.webOptions)] : []),
+				chatProfileExtension(o.hub, o.webOptions, () => o.approvals.mode() === "read_only"),
 				...(o.connectors
 					? [
 							codingConnectorsExtension(o.connectors, (callId, signal) => async (request) => {
@@ -193,13 +194,13 @@ export class BuildRuntime implements Runtime {
 			sessionManager,
 			settingsManager,
 			resourceLoader,
-			...(o.profile === "chat" ? { tools: CHAT_TOOLS } : {}),
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
 		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan);
 		broker.onAdded = (prompt) => o.onAttention?.("waiting", prompt.detail ? `${prompt.title}: ${prompt.detail}` : prompt.title);
 		const bound = runtime;
 		await session.bindExtensions({ mode: "rpc", uiContext: uiBridge(broker, (level, text) => bound.note(level, text)) });
+		runtime.applyMode();
 		runtime.attach();
 		return runtime;
 	}
@@ -367,8 +368,31 @@ export class BuildRuntime implements Runtime {
 		await this.session.abort();
 	}
 
+	/**
+	 * Context the model reads before the first message (docs/spec/18 §5, Continue in): a custom message in the pi
+	 * session, shown in the transcript as one line (`summary`). It doesn't start a turn.
+	 */
+	async seed(text: string, images: { type: "image"; data: string; mimeType: string }[], summary: string): Promise<void> {
+		await this.session.sendCustomMessage({ customType: "piopio.continued", content: [{ type: "text", text }, ...images], display: true, details: { summary } }, { triggerTurn: false });
+		this.emitter.emit(this.builder.flush());
+	}
+
+	/**
+	 * The tools for the approval mode (docs/spec/18 §4): Read only drops bash, edit and write and adds the finders and
+	 * the web tools; any other mode the other way round. Live: the next model request sees them (no reopen).
+	 */
+	applyMode(): void {
+		const readOnly = this.approvalMode() === "read_only";
+		const known = new Set(this.session.getAllTools().map((t) => t.name));
+		const active = new Set(this.session.getActiveToolNames());
+		for (const name of readOnly ? READ_ONLY_OFF : ["web_search", "web_fetch"]) active.delete(name);
+		for (const name of readOnly ? READ_ONLY_ON : READ_ONLY_OFF) if (known.has(name)) active.add(name);
+		this.session.setActiveToolsByName([...active]);
+	}
+
 	async configure(change: { model?: ModelRef; thinking?: string; approvalMode?: ApprovalMode; planMode?: boolean }): Promise<void> {
 		if (change.planMode !== undefined) this.plan.setActive(change.planMode);
+		if (change.approvalMode) this.applyMode();
 		if (change.model) {
 			const model = (await this.hub.buildRuntime()).getModel(change.model.provider, change.model.id);
 			if (!model) throw new EngineError("INVALID", `Unknown model ${change.model.provider}/${change.model.id}`);

@@ -79,7 +79,8 @@ enum StartKind: String, CaseIterable, Hashable {
 enum SidebarSection: String, CaseIterable, Identifiable {
     case pinned, projects, notebooks, agents, chats
     var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    /// "Chats" are "Conversations" (docs/spec/18 §6): the ones with no project.
+    var title: String { self == .chats ? "Conversations" : rawValue.capitalized }
 }
 
 extension EngineController {

@@ -76,34 +76,17 @@ struct RootView: View {
             }
         }
         .modifier(FileViewerSheet())
-        .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in
-            // ⌘N follows the selection: a session in its project, otherwise a chat (in the areas that are on).
-            let areas = Areas.shared.set
-            let inProject: Bool = { if case .session = item { true } else if case .project = item { true } else if case .newSession = item { true } else { false } }()
-            if areas.contains(.build), inProject || !areas.contains(.chat) { newBuildSession() }
-            else if areas.contains(.chat) { newChat() }
-            else { itemRaw = SidebarItem.start(.agent).raw }
-        }
+        // One start (docs/spec/18 §4): ⌘N and "New conversation" open Home with no project; a project's + (and ⌘O) open
+        // it with that project chosen.
+        .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in newChat() }
         .onReceive(NotificationCenter.default.publisher(for: .newChat)) { _ in newChat() }
         .onReceive(NotificationCenter.default.publisher(for: .newBuildSession)) { note in
-            // A prompt typed elsewhere (Home's box, a project's start screen) becomes the new session's draft.
             guard let id = note.object as? String, engine.projects.contains(where: { $0.id == id }) else { return }
-            let prompt = (note.userInfo?["prompt"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !prompt.isEmpty {
-                StartDrafts.shared.update(key: StartDrafts.sessionKey(id)) { $0.text = prompt }
-                if DraftStore(home: engine.home).load("home")?.text.trimmingCharacters(in: .whitespacesAndNewlines) == prompt {
-                    try? DraftStore(home: engine.home).save(ComposerDraft(), for: "home")
-                }
-            }
-            itemRaw = SidebarItem.newSession(id).raw
+            startHome(target: "project:" + id)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in
-            if let url = note.object as? URL {
-                Task { await BuildActions.add(url, engine: engine) { itemRaw = SidebarItem.session($0).raw } }
-            } else {
-                BuildActions.addProject(engine: engine) { itemRaw = SidebarItem.session($0).raw }
-            }
-        }
+        .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in openFolder(note.object as? URL) }
+        // The pages Home replaced: links and saved selections that still point at them land on Home.
+        .onChange(of: itemRaw, initial: true) { _, raw in redirectReplacedPages(raw) }
         .onReceive(NotificationCenter.default.publisher(for: .selectBuildSession)) { note in
             if let id = note.object as? String { itemRaw = SidebarItem.session(id).raw }
         }
@@ -244,8 +227,8 @@ struct RootView: View {
             }
         case .start(let kind):
             StartView(engine: engine, kind: kind, item: itemBinding)
-        case .newSession(let id):
-            NewSessionView(engine: engine, projectId: id, item: itemBinding)
+        case .newSession:
+            HomeView(engine: engine, item: itemBinding) // redirected to Home (docs/spec/18)
         }
     }
 
@@ -300,25 +283,41 @@ struct RootView: View {
         withAnimation(.easeOut(duration: 0.18)) { sidebarCollapsed.toggle() }
     }
 
-    /// ⌘N on a session or project: a new session in that project (or the first one).
-    private func newBuildSession() {
-        let project: ProjectInfo? = {
-            switch item {
-            case .session(let id): return engine.buildSessions.first { $0.ref.id == id }.flatMap { engine.project(of: $0) }
-            case .project(let id), .newSession(let id): return engine.projects.first { $0.id == id }
-            default: return nil
-            }
-        }()
-        if let project = project ?? engine.projects.first {
-            itemRaw = SidebarItem.newSession(project.id).raw
-        } else {
-            NotificationCenter.default.post(name: .openProject, object: nil)
+    /// ⌘O and Open Folder: adds the folder as a project (once) and opens Home with it chosen.
+    private func openFolder(_ given: URL?) {
+        var url = given
+        if url == nil {
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.allowsMultipleSelection = false
+            panel.prompt = "Open"
+            if panel.runModal() == .OK { url = panel.url }
+        }
+        guard let url else { return }
+        Task {
+            guard let project = await engine.addProject(url) else { return }
+            startHome(target: "project:" + project.id)
         }
     }
 
-    /// The chat start page: the chat is created with its first message.
-    private func newChat() {
-        itemRaw = SidebarItem.start(.chat).raw
+    private func redirectReplacedPages(_ raw: String) {
+        switch SidebarItem(raw: raw) {
+        case .start(.chat): startHome(target: "chat")
+        case .start(.project): startHome(target: UserDefaults.standard.string(forKey: "homeTarget") ?? "chat")
+        case .newSession(let id): startHome(target: "project:" + id)
+        default: break
+        }
+    }
+
+    /// A new conversation with no project: Home, with the cursor in its box.
+    private func newChat() { startHome(target: "chat") }
+
+    /// Home with `target` chosen in its box ("chat", "project:<id>").
+    private func startHome(target: String) {
+        UserDefaults.standard.set(target, forKey: "homeTarget")
+        if itemRaw != SidebarItem.home.raw { itemRaw = SidebarItem.home.raw }
+        DispatchQueue.main.async { NotificationCenter.default.post(name: .focusHome, object: nil) }
     }
 }
 

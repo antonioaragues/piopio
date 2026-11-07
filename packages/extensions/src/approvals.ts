@@ -23,6 +23,8 @@ export interface ApprovalBridge {
 	/** Waits for the user. Resolves "deny" when the run is stopped. */
 	ask(request: ApprovalRequest, signal: AbortSignal | undefined): Promise<ApprovalAnswer>;
 	addRule(rule: Rule): void;
+	/** Tools known to only read (Read only lets them run): connectors' read capabilities. */
+	readOnlyTool?(tool: string): boolean;
 }
 
 /** Blocked calls carry this, so the transcript can tell "denied" from "failed" (also after a reload). */
@@ -34,7 +36,7 @@ export function approvalsExtension(bridge?: ApprovalBridge): ExtensionFactory {
 		pi.on("tool_call", async (event, ctx) => {
 			const input = event.input as Record<string, unknown>;
 			const mode = bridge?.mode() ?? cliMode();
-			const decision = decide(mode, event.toolName, input, ctx.cwd, bridge?.rules() ?? sessionRules);
+			const decision = decide(mode, event.toolName, input, ctx.cwd, bridge?.rules() ?? sessionRules, undefined, (tool) => bridge?.readOnlyTool?.(tool) ?? false);
 			if (decision.action === "allow") return undefined;
 			const request: ApprovalRequest = {
 				callId: event.toolCallId,
@@ -92,5 +94,5 @@ export function describe(tool: string, input: Record<string, unknown>): { title:
 
 function cliMode(): ApprovalMode {
 	const mode = process.env.PIOPIO_APPROVAL_MODE;
-	return mode === "ask" || mode === "full_auto" ? mode : "auto_edit";
+	return mode === "ask" || mode === "full_auto" || mode === "read_only" ? mode : "auto_edit";
 }

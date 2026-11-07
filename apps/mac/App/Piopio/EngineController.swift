@@ -743,6 +743,15 @@ final class EngineController {
 
     /// Moves threads into a Space: each becomes a topic, or joins `topic`. Returns the topics' ids.
     @discardableResult
+    /// A conversation continues in a project folder (docs/spec/18 §5): a new conversation there, with this one's text
+    /// and images as context. This one stays, linked to it.
+    func continueIn(_ ref: ContainerRef, project: ProjectInfo) async throws -> ContainerRef {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
+        let next = try await client.call("sessions.continueIn", ContinueInParams(ref: ref, cwd: project.path), as: CreateSessionResult.self).ref
+        try? await refreshCatalog()
+        return next
+    }
+
     func importThreads(_ threads: [ContainerRef], into space: ContainerRef, topic: String? = nil, keep: Bool = false) async throws -> [String] {
         guard let client else { return [] }
         let ids = try await client.call("spaces.importThreads", ImportThreadsParams(ref: space, threads: threads, topicId: topic, keepThreads: keep), as: ImportThreadsResult.self).topicIds

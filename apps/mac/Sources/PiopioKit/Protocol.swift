@@ -543,6 +543,10 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// A subagent's session: the parent session and its `task` call.
     public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String }
     public var parent: Parent?
+    /// A chat continued in a project folder, and the conversation it continued from (18 §5).
+    public struct Link: Codable, Sendable, Hashable { public var id: String; public var title: String }
+    public var continuedIn: Link?
+    public var continuedFrom: Link?
     /// Project sessions: "build" (coding) or "chat" (knowledge assistant).
     public enum Profile: String, Codable, Sendable { case build, chat }
     public var profile: Profile?
@@ -933,6 +937,10 @@ public struct SettingsPatch: Encodable, Sendable {
 
 public struct TextParams: Encodable, Sendable { public var text: String; public init(text: String) { self.text = text } }
 public struct RevisionIdParams: Encodable, Sendable { public var revisionId: String; public init(revisionId: String) { self.revisionId = revisionId } }
+public struct ContinueInParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var cwd: String
+    public init(ref: ContainerRef, cwd: String) { self.ref = ref; self.cwd = cwd }
+}
 public struct ImportThreadsParams: Encodable, Sendable {
     public var ref: ContainerRef; public var threads: [ContainerRef]; public var topicId: String?; public var keepThreads: Bool?
     public init(ref: ContainerRef, threads: [ContainerRef], topicId: String? = nil, keepThreads: Bool? = nil) { self.ref = ref; self.threads = threads; self.topicId = topicId; self.keepThreads = keepThreads }
@@ -1482,8 +1490,9 @@ public struct ConfigureParams: Encodable, Sendable {
 
 // MARK: Approvals (Build)
 
+/// How much a Build session may do on its own (05-build §6); Read only reads files and the web (18 §4).
 public enum ApprovalMode: String, Codable, Sendable, CaseIterable, Identifiable {
-    case ask, autoEdit = "auto_edit", fullAuto = "full_auto"
+    case readOnly = "read_only", ask, autoEdit = "auto_edit", fullAuto = "full_auto"
     public var id: String { rawValue }
 }
 

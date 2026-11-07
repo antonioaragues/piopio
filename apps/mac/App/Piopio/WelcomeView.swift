@@ -160,7 +160,7 @@ struct WelcomeView: View {
                 Text("I can work with you in your code, talk through anything, and run small agents that keep going while you're away. Everything stays on this Mac or in your own accounts.\n\nWhat do you want me for? Keep what you'll use.")
             }
             HStack(alignment: .top, spacing: 12) {
-                ForEach(Area.allCases) { area in
+                ForEach(AreaSet.switchable) { area in
                     AreaChoiceCard(area: area, on: chosen.contains(area), locked: chosen.contains(area) && !chosen.canTurnOff(area)) {
                         withAnimation(.easeOut(duration: 0.15)) { chosen.set(area, on: !chosen.contains(area)) }
                     }
