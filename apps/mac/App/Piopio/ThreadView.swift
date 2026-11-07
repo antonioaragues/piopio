@@ -45,9 +45,6 @@ struct ThreadView: View {
     private var chatColumn: some View {
         VStack(spacing: 0) {
             header
-            if let suggestion = summary.suggestion {
-                SpaceSuggestionBanner(engine: engine, thread: summary, suggestion: suggestion)
-            }
             if let next = summary.continuedIn { continuedBanner(next) }
             ZStack(alignment: .bottom) {
                 TranscriptView(document: thread.document)
@@ -132,12 +129,22 @@ struct ThreadView: View {
         .background(Color.dsChip.opacity(0.5))
     }
 
-    /// Where this chat can go (18 §5): continue in a project folder (a new conversation there with this one's history),
-    /// or, until notebooks become projects, move into a notebook.
+    /// Where this conversation goes (18 §5): into a project without a folder (the same conversation moves), out of
+    /// it, or on in a project folder (a new conversation there with this one's history).
     private var moveMenu: some View {
-        Menu {
-            Section("Continue in a project") {
-                ForEach(engine.projects.filter { $0.missing != true }) { project in
+        let current = summary.projectId.flatMap { id in engine.projects.first { $0.id == id } }
+        return Menu {
+            Section("Move to a project") {
+                ForEach(engine.projects.filter { !$0.hasFolder }) { project in
+                    Button { run { try await engine.setProject(summary.ref, project: project) } } label: {
+                        if current?.id == project.id { Label(project.name, systemImage: "checkmark") } else { Text(project.name) }
+                    }
+                }
+                if current != nil { Button("No Project") { run { try await engine.setProject(summary.ref, project: nil) } } }
+                Button("New Project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
+            }
+            Section("Continue in a folder") {
+                ForEach(engine.projects.filter { $0.hasFolder && $0.missing != true }) { project in
                     Button(project.name) { continueIn(project) }
                 }
                 Button("Open Folder…") {
@@ -149,21 +156,15 @@ struct ThreadView: View {
                     Task { if let project = await engine.addProject(url) { continueIn(project) } }
                 }
             }
-            Section("Move to a notebook") {
-            ForEach(engine.spaces, id: \.ref.id) { space in
-                Button(space.title) {
-                    run {
-                        let ids = try await engine.importThreads([summary.ref], into: space.ref, topic: nil)
-                        if let id = ids.first { NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: space.ref.id, topicId: id, itemId: nil)) }
-                    }
-                }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: current == nil ? "folder" : "tray.full")
+                if let current { Text(current.name).font(.system(size: 12.5)) }
             }
-            Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: summary.ref.id) }
-            }
-        } label: { Image(systemName: "folder") }
+        }
             .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-            .accessibilityLabel("Continue in a project")
-            .help("Continue in a project: a new conversation in its folder, with this one's messages and images")
+            .accessibilityLabel(current.map { "In \($0.name). Move to a project" } ?? "Move to a project")
+            .help(current == nil ? "Move to a project (same conversation), or continue in a project folder" : "In \(current!.name): move to another project, out of it, or continue in a folder")
     }
 
     private func continueIn(_ project: ProjectInfo) {
@@ -187,7 +188,8 @@ struct ThreadView: View {
 
     private var subtitle: String {
         if let debate = thread.debate { return debateSubtitle(debate) }
-        var parts = ["Chat", BuildSessionView.relative(summary.updatedAt)]
+        let place = summary.projectId.flatMap { id in engine.projects.first { $0.id == id }?.name } ?? "Chat"
+        var parts = [place, BuildSessionView.relative(summary.updatedAt)]
         let files = thread.attachmentCount
         if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
         if thread.state?.status == .running { parts.append("answering…") }

@@ -116,23 +116,21 @@ struct MemoryPane: View {
                     Text("\(count(others.reduce(0) { $0 + $1.records }, "memory", plural: "memories")) left behind")
                 } trailing: { EmptyView() }
             }
-            RowDivider()
-            HStack(spacing: 12) {
-                MemoryTile(symbol: "book.closed.fill", color: .orange)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Notebooks").font(.system(size: 14, weight: .semibold))
-                    Text(banks.map { $0.notebooks == 0 ? "No notebooks yet. Each keeps its own memory document." : "\(count($0.notebooks, "notebook")), each with its own memory document. Edit it from the notebook." } ?? "Each keeps its own memory document")
-                        .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                }
-                Spacer()
+            // Projects without a folder: what their conversations saved (docs/spec/18 §3).
+            ForEach((banks?.banks ?? []).filter { $0.area == "project" }, id: \.bank) { b in
+                RowDivider()
+                SettingsListRow(name: b.label, open: { browsing = BrowseTarget(bank: b.bank) }) {
+                    MemoryTile(symbol: "tray.full.fill", color: .indigo)
+                } subtitle: {
+                    Text("\(count(b.facts, "fact")) · shared by the project's conversations")
+                } trailing: { SettingsBadge("Project") }
             }
-            .padding(.horizontal, 14).frame(minHeight: 62)
         }
     }
 
     private var shareLine: String {
         guard let a = settings?.aboutMe, a.enabled else { return "not shared" }
-        return a.inAgents == true ? "shared with chats, notebooks and agents" : "shared with chats and notebooks"
+        return a.inAgents == true ? "shared with conversations and agents" : "shared with conversations"
     }
 
     private func agentLine(_ agent: MemoryBanksResult.Agent, _ mine: [MemoryBanksResult.Bank]) -> String {
@@ -175,7 +173,7 @@ struct MemoryPane: View {
         let all = banks?.banks ?? []
         CardTitle("Your data")
         ListCard {
-            dataRow("Export built-in memory", "memory.json and memory.md: every fact and message Piopio's own memory keeps, and what replaced what. Not other providers or notebook memory; Settings › Backup & costs keeps everything.") {
+            dataRow("Export built-in memory", "memory.json and memory.md: every fact and message Piopio's own memory keeps, and what replaced what. Not other providers; Settings › Backup & costs keeps everything.") {
                 Button("Export…", action: export).buttonStyle(PillStyle(compact: true)).disabled(all.isEmpty)
             }
             RowDivider(inset: 14)

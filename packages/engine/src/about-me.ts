@@ -1,7 +1,7 @@
 /**
  * "About me" memory (07-shared §5, GM1–GM2), in a memory provider's "about-me" bank: one fact per record, tagged
  * with its section. The editor shows it as markdown (`## Section`, `- fact`), the history comes from the provider,
- * and Undo takes one change back. When on, it's shown to Threads and Spaces; with capture on, agents add facts with
+ * and Undo takes one change back. When on, it's shown to conversations; with capture on, agents add facts with
  * `remember_about_me`, and every write is a tool card in the conversation. An MCP memory provider that can't list
  * what it stored (07 §6.2 MM3) shows no text here; the agents then recall from it instead.
  */
@@ -11,7 +11,6 @@ import { defineExtension, defineTool, section } from "@earendil-works/pi-durable
 import type { BuiltinMemory, MemoryEvent, MemoryProvider, MemoryRecord } from "@piopio/runtime";
 import type { MemoryProviders } from "./memory.js";
 import { EngineError } from "./models.js";
-import { describe, memoryPrompt, type MemoryState } from "./runtimes/space-memory.js";
 import type { Settings } from "./settings.js";
 
 export const ABOUT_ME_EXTENSION = "piopio-about-me";
@@ -48,7 +47,7 @@ export class AboutMe {
 		if (!existsSync(this.legacyFile)) return;
 		const builtin = this.providers.builtin;
 		if (!(await builtin.list(ABOUT_ME_BANK, { limit: 1 })).records.length) {
-			const legacy = JSON.parse(readFileSync(this.legacyFile, "utf8")) as MemoryState;
+			const legacy = JSON.parse(readFileSync(this.legacyFile, "utf8")) as { text: string };
 			const batch = builtin.batch();
 			for (const f of parse(legacy.text)) await builtin.retain(ABOUT_ME_BANK, { content: f.text, kind: "fact", createdBy: "user", tags: [f.section] });
 			batch.end();
@@ -206,11 +205,11 @@ function render(facts: readonly Fact[]): string {
 	return [...sections].map(([name, items]) => `## ${name}\n${items.map((i) => `- ${i}`).join("\n")}`).join("\n\n");
 }
 
-/** The section and the capture tool, for Threads (`kind: "thread"`) and Spaces. */
-export function aboutMeExtension(store: AboutMe, settings: Settings, kind: "thread" | "space" | "agent") {
+/** The section and the capture tool, for conversations (`kind: "thread"`) and agents. */
+export function aboutMeExtension(store: AboutMe, settings: Settings, kind: "thread" | "agent") {
 	const applies = () => {
 		const s = settings.get().aboutMe;
-		return s.enabled && (kind === "thread" ? s.inThreads : kind === "space" ? s.inSpaces : s.inAgents === true);
+		return s.enabled && (kind === "thread" ? s.inThreads : s.inAgents === true);
 	};
 	const remember = defineTool({
 		name: "remember_about_me",
@@ -239,3 +238,22 @@ export function aboutMeExtension(store: AboutMe, settings: Settings, kind: "thre
 		],
 	});
 }
+
+/** "Added “x”; removed “y”": a change, said in a line. */
+export function describe(added: readonly string[], removed: readonly string[]): string {
+	const q = (s: string) => `“${s.length > 80 ? `${s.slice(0, 79)}…` : s}”`;
+	const parts = [...(added.length ? [`added ${added.map(q).join(", ")}`] : []), ...(removed.length ? [`removed ${removed.map(q).join(", ")}`] : [])];
+	const text = parts.join("; ");
+	return text ? text[0]!.toUpperCase() + text.slice(1) : "No change";
+}
+
+/** What the model reads of a memory text each request. */
+const PROMPT_CHARS = 4_000;
+
+/** Memory as the model sees it: the start of it, with a note when it is cut. */
+export function memoryPrompt(text: string, empty: string): string {
+	if (!text.trim()) return empty;
+	if (text.length <= PROMPT_CHARS) return text;
+	return `${text.slice(0, PROMPT_CHARS)}\n\n[… ${text.length - PROMPT_CHARS} more characters.]`;
+}
+

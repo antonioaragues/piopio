@@ -133,19 +133,19 @@ struct BuildFirstRun: View {
 
 // MARK: Chat (11b)
 
-/// No chats yet: ask something right here, or start a chat or a notebook.
+/// No conversations yet: ask something right here, or start a debate or a project.
 struct ChatFirstRun: View {
     let engine: EngineController
     @Binding var item: SidebarItem
 
     var body: some View {
-        HatchEmpty(title: "What's on your mind?", message: "Ask anything. Chats keep their own history; notebooks gather a subject's topics, files and memory in one place.") {
+        HatchEmpty(title: "What's on your mind?", message: "Ask anything. A project gathers a subject's conversations, files and memory in one place.") {
             VStack(spacing: 14) {
                 AskBox(engine: engine, item: $item)
                 HStack(spacing: 10) {
                     tile("New conversation", "⌘N", "bubble.left") { NotificationCenter.default.post(name: .newChat, object: nil) }
                     tile("New debate", "⌥⌘N", "person.2.wave.2") { NotificationCenter.default.post(name: .newDebate, object: nil) }
-                    tile("New notebook", "⌘⇧N", "book.closed") { NotificationCenter.default.post(name: .newSpace, object: nil) }
+                    tile("New project", "⌘⇧N", "tray.full") { NotificationCenter.default.post(name: .newProject, object: nil) }
                 }
                 Text("Tip: \(QuickChatShortcut.current.label) opens Quick Chat from any app.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }

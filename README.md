@@ -9,7 +9,7 @@
 
 <p align="center">
   <b>A native Mac app for AI agents.</b><br>
-  Build software, chat in notebooks and keep personal agents running, all on your Mac.
+  Build software, keep conversations in projects and keep personal agents running, all on your Mac.
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@
 Piopio is a front-end for the [pi](https://pi.dev) agent harnesses (`pi-coding-agent` and `pi-durable`). It brings coding sessions, everyday chat and long-running personal agents into one SwiftUI app, with conversations and memory stored on your Mac and credentials in the macOS Keychain.
 
 > [!NOTE]
-> **Personal alpha.** Build, Chat/Notebooks and local Agents are implemented (phases 1–4). Cloud is experimental. Real-provider compatibility, OS permissions and daily-use reliability still need broader validation. See [docs/status.md](docs/status.md) for what has and hasn't been checked.
+> **Personal alpha.** Build, conversations and projects, and local Agents are implemented (phases 1–4). Cloud is experimental. Real-provider compatibility, OS permissions and daily-use reliability still need broader validation. See [docs/status.md](docs/status.md) for what has and hasn't been checked.
 
 ## What it does
 
@@ -46,7 +46,7 @@ Piopio is a front-end for the [pi](https://pi.dev) agent harnesses (`pi-coding-a
     </td>
     <td width="33%" valign="top">
       <h3>💬 Chat</h3>
-      <p>Chats with attachments, branches and export, plus folders to chat about. <b>Notebooks</b> organize messages into topics that share files and memory.</p>
+      <p>Conversations with attachments, branches and export. <b>Projects</b> group them: a folder on your Mac, or a project without one whose conversations share instructions, files and memory.</p>
     </td>
     <td width="33%" valign="top">
       <h3>🐣 Agents</h3>

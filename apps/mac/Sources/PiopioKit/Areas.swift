@@ -51,7 +51,6 @@ public struct AreaSet: Equatable, Sendable {
 
     /// Projects are folders: Build sessions with Build, and folders to chat about with Chat.
     public var showsProjects: Bool { contains(.build) || contains(.chat) }
-    public var showsNotebooks: Bool { contains(.chat) }
     public var showsChats: Bool { contains(.chat) }
     public var showsAgents: Bool { contains(.agents) }
 

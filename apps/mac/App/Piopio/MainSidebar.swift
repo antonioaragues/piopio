@@ -3,7 +3,7 @@ import PiopioTranscript
 import SwiftUI
 
 /// The one sidebar (docs/design/grey 9a): a 52pt top bar (traffic lights, toggle, compose), Search ⌘K, Home and
-/// Needs you, then Pinned · Projects · Notebooks · Agents · Chats, and a footer with the cost today and Settings.
+/// Needs you, then Pinned · Projects · Agents · Conversations, and a footer with the cost today and Settings.
 /// Rows are plain: a 16pt outline glyph, the name, and status only as a blue dot (needs you) or a grey ring (running).
 /// Long lists show only what's live: a project's sessions that are running, waiting on you or touched in the last
 /// 3 days (the rest fold into "N earlier sessions"), and a few of each section ("N more ›" opens the full index).
@@ -21,7 +21,7 @@ struct MainSidebar: View {
     private var areas: AreaSet { Areas.shared.set }
 
     /// How many of each section show before "N more ›".
-    private static let caps: [SidebarSection: Int] = [.projects: 4, .notebooks: 4, .agents: 4, .chats: 6]
+    private static let caps: [SidebarSection: Int] = [.projects: 4, .agents: 4, .chats: 6]
     /// A session counts as live this long after its last activity.
     private static let liveWindow: TimeInterval = 3 * 86_400
 
@@ -37,7 +37,7 @@ struct MainSidebar: View {
             .frame(height: Shell.barHeight)
             .contentShape(Rectangle())
             .gesture(WindowDragGesture())
-            // Search, Home and Needs you first, then Pinned, Projects, Notebooks, Agents and Chats; all of it scrolls.
+            // Search, Home and Needs you first, then Pinned, Projects, Agents and Conversations; all of it scrolls.
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     searchRow
@@ -45,7 +45,6 @@ struct MainSidebar: View {
                     navRow(.needsYou, "Needs you", symbol: "tray", count: engine.needsYouCount)
                     pinnedSection
                     if areas.showsProjects { projectsSection }
-                    if areas.showsNotebooks { notebooksSection }
                     if areas.showsAgents { agentsSection }
                     if areas.showsChats { chatsSection }
                 }
@@ -199,7 +198,6 @@ struct MainSidebar: View {
         switch i {
         case .project(let id): engine.projects.contains { $0.id == id }
         case .session(let id): engine.buildSessions.contains { $0.ref.id == id }
-        case .notebook(let key): engine.space(String(key.split(separator: "/").first ?? "")) != nil
         case .agent(let id): engine.agents.contains { $0.ref.id == id }
         case .chat(let id): engine.threads.contains { $0.ref.id == id }
         default: false
@@ -210,7 +208,6 @@ struct MainSidebar: View {
         switch i {
         case .project(let id): if let p = engine.projects.first(where: { $0.id == id }) { projectRow(p) }
         case .session(let id): if let s = engine.buildSessions.first(where: { $0.ref.id == id }) { sessionRow(s, indent: false) }
-        case .notebook(let key): if let s = engine.space(String(key.split(separator: "/").first ?? "")) { notebookRow(s) }
         case .agent(let id): if let a = engine.agents.first(where: { $0.ref.id == id }) { agentRow(a) }
         case .chat(let id): if let t = engine.threads.first(where: { $0.ref.id == id }) { chatRow(t) }
         default: EmptyView()
@@ -225,7 +222,7 @@ struct MainSidebar: View {
     }
 
     private func latest(_ p: ProjectInfo) -> String {
-        engine.sessions(in: p).map(\.updatedAt).max() ?? p.addedAt
+        (p.hasFolder ? engine.sessions(in: p) : engine.conversations(in: p)).map(\.updatedAt).max() ?? p.addedAt
     }
 
     @ViewBuilder private var projectsSection: some View {
@@ -233,7 +230,7 @@ struct MainSidebar: View {
         let cap = Self.caps[.projects]!
         let pinnedHere = Set(pinned)
         let shown = Array(projects.prefix(cap))
-        header(.projects, total: projects.count, shown: shown.count, add: { item = .start(.project) }, addHelp: areas.contains(.build) ? "New project" : "Add a folder to chat about")
+        header(.projects, total: projects.count, shown: shown.count, add: { NotificationCenter.default.post(name: .newProject, object: nil) }, addHelp: "New project (⇧⌘N)")
         if !collapsed.contains(SidebarSection.projects.rawValue) {
             draftRow(.project)
             ForEach(shown) { project in
@@ -261,13 +258,16 @@ struct MainSidebar: View {
     /// The project's conversations, nested under it on a hairline: the live ones and "N earlier". Hidden while the
     /// project is folded.
     @ViewBuilder private func projectSessions(_ project: ProjectInfo) -> some View {
-        let all = engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
+        // A folder's Build sessions; a project without a folder, its conversations (docs/spec/18 §3).
+        let all = project.hasFolder ? engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) } : engine.conversations(in: project)
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
         // No draft row: new conversations start on Home now (docs/spec/18), which keeps its own draft.
         if !collapsedProjects.contains(project.id), !all.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
-                ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in sessionRow(s, indent: true) }
+                ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in
+                    if s.ref.kind == .thread { chatRow(s) } else { sessionRow(s, indent: true) }
+                }
                 if !earlier.isEmpty {
                     Button {
                         if showAll { showingEarlier.remove(project.id) } else { showingEarlier.insert(project.id) }
@@ -291,7 +291,7 @@ struct MainSidebar: View {
         let now = Date()
         let urgent = { (s: SessionSummary) in self.engine.liveStatus[s.ref.id] == .waitingApproval || self.engine.liveStatus[s.ref.id] == .running }
         let recent = { (s: SessionSummary) in now.timeIntervalSince(Self.date(s.updatedAt)) < Self.liveWindow }
-        let live = sessions.filter { urgent($0) || recent($0) || item == .session($0.ref.id) }
+        let live = sessions.filter { urgent($0) || recent($0) || item == .session($0.ref.id) || item == .chat($0.ref.id) }
             .sorted { (urgent($0) ? 0 : 1, $1.updatedAt) < (urgent($1) ? 0 : 1, $0.updatedAt) }
         let ids = Set(live.map(\.ref.id))
         return (live, sessions.filter { !ids.contains($0.ref.id) })
@@ -309,7 +309,15 @@ struct MainSidebar: View {
         let folded = collapsedProjects.contains(project.id)
         let hasSessions = !engine.sessions(in: project).filter { $0.parent == nil }.isEmpty
         return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil,
-                          toggle: { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }) {
+                          toggle: {
+                              // A project without a folder opens its page (instructions, files, memory); a folder folds.
+                              if !project.hasFolder {
+                                  item = .project(project.id)
+                                  if folded { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: false) } }
+                              } else {
+                                  withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) }
+                              }
+                          }) {
             NotificationCenter.default.post(name: .newBuildSession, object: project.id)
         }
         .contextMenu {
@@ -359,40 +367,6 @@ struct MainSidebar: View {
         case .waitingApproval?: .waiting
         case .error?: .failed
         default: Date().timeIntervalSince(Self.date(s.updatedAt)) < Self.liveWindow ? .done : .idle
-        }
-    }
-
-    // MARK: Notebooks
-
-    @ViewBuilder private var notebooksSection: some View {
-        let spaces = engine.spaces
-        let cap = Self.caps[.notebooks]!
-        header(.notebooks, total: spaces.count, shown: min(cap, spaces.count), add: { item = .start(.notebook) }, addHelp: "New notebook (⌘⇧N)")
-        if !collapsed.contains(SidebarSection.notebooks.rawValue) {
-            draftRow(.notebook)
-            ForEach(spaces.prefix(cap), id: \.ref.id) { notebookRow($0) }
-            if spaces.count > cap { more("\(spaces.count - cap) more", .index(.notebooks)) }
-        }
-    }
-
-    private func notebookRow(_ space: SessionSummary) -> some View {
-        let selected: Bool = { if case .notebook(let key) = item { return key.split(separator: "/").first.map(String.init) == space.ref.id } else { return false } }()
-        let unread = space.activeTopics.contains { $0.unread == true }
-        let running = space.activeTopics.contains { $0.running == true }
-        return Button { item = .notebook(space.ref.id) } label: {
-            HStack(spacing: 10) {
-                RowGlyph(symbol: "book.closed")
-                Text(space.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                Spacer(minLength: 4)
-                if running { SidebarDot(status: .running) } else if unread { SidebarDot(status: .waiting).help("New replies") }
-            }
-            .rowChrome(selected: selected)
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            pinButton(.notebook(space.ref.id))
-            Divider()
-            SpaceMenu(engine: engine, space: space, selection: chatSelection)
         }
     }
 
@@ -468,8 +442,9 @@ struct MainSidebar: View {
 
     // MARK: Chats
 
+    /// Conversations with no project (those in a project are listed under it).
     @ViewBuilder private var chatsSection: some View {
-        let threads = engine.threads
+        let threads = engine.threads.filter { $0.projectId == nil }
         let cap = Self.caps[.chats]!
         header(.chats, total: threads.count, shown: min(cap, threads.count), add: { NotificationCenter.default.post(name: .newChat, object: nil) }, addHelp: "New conversation (⌘N)")
         if !collapsed.contains(SidebarSection.chats.rawValue) {
@@ -496,7 +471,7 @@ struct MainSidebar: View {
             Button("Rename…") { newTitle = thread.title; renaming = thread }
             pinButton(.chat(thread.ref.id))
             Divider()
-            MoveToSpaceMenu(engine: engine, thread: thread)
+            MoveToProjectMenu(engine: engine, thread: thread)
             Divider()
             Button("Delete", role: .destructive) {
                 if selected { item = .home }
@@ -562,7 +537,7 @@ struct NewMenu: View {
     let engine: EngineController
 
     static func help(_ areas: AreaSet) -> String {
-        var kinds: [String] = ["conversation", "notebook"]
+        var kinds: [String] = ["conversation", "project"]
         if areas.contains(.agents) { kinds.append("agent") }
         return "New " + ListFormatter.localizedString(byJoining: kinds).replacingOccurrences(of: " and ", with: " or ") + " (⌘N)"
     }
@@ -581,7 +556,7 @@ struct NewMenu: View {
                 } label: { Text("Conversation in a project"); Text("Pick a folder") }
             }
             if areas.contains(.chat) {
-                Button { NotificationCenter.default.post(name: .newSpace, object: nil) } label: { Text("Notebook"); Text("Topics and memory") }
+                Button { NotificationCenter.default.post(name: .newProject, object: nil) } label: { Text("Project"); Text("Conversations with shared files and memory") }
                 Button { NotificationCenter.default.post(name: .newDebate, object: nil) } label: { Text("Debate"); Text("Two models work on it until they agree") }
             }
             if areas.contains(.agents) {
@@ -666,7 +641,7 @@ private struct ProjectRow: View {
         ZStack(alignment: .trailing) {
             Button(action: toggle) {
                 HStack(spacing: 10) {
-                    RowGlyph(symbol: "folder")
+                    RowGlyph(symbol: project.hasFolder ? "folder" : "tray.full")
                     Text(project.name).font(.system(size: 13, weight: isOpen ? .medium : .regular))
                         .foregroundStyle(project.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1)
                     if folded == true {

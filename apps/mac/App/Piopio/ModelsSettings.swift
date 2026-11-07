@@ -133,7 +133,7 @@ struct ModelsPane: View {
             .padding(.top, 22).padding(.bottom, 7)
             ListCard {
                 roleRow(.build, "Build sessions")
-                roleRow(.chat, "Chats and notebooks")
+                roleRow(.chat, "Conversations")
                 roleRow(.quick, "Quick Chat")
                 roleRow(.agent, "New agents", last: true)
             }
@@ -530,7 +530,7 @@ struct ProviderDetailView: View {
     private var rolesUsing: [EngineController.ModelRole] { EngineController.ModelRole.allCases.filter { engine.model(for: $0)?.provider == provider.id } }
 
     private var impact: String {
-        let names: [EngineController.ModelRole: String] = [.build: "Build sessions", .chat: "Chats and notebooks", .quick: "Quick Chat", .agent: "New agents"]
+        let names: [EngineController.ModelRole: String] = [.build: "Build sessions", .chat: "Conversations", .quick: "Quick Chat", .agent: "New agents"]
         let uses = rolesUsing.compactMap { names[$0] }
         guard !uses.isEmpty else { return "Nothing uses it as a default." }
         let fallback = engine.models.first { $0.provider != provider.id && $0.provider != "faux" }.map(ModelChip.short) ?? "another model"

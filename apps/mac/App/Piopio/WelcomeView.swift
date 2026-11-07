@@ -210,7 +210,7 @@ private struct AreaChoiceCard: View {
     private var holds: [String] {
         switch area {
         case .build: ["Projects", "Git", "Terminal"]
-        case .chat: ["Chats", "Notebooks", "Memory"]
+        case .chat: ["Conversations", "Projects", "Memory"]
         case .agents: ["Schedules", "Reminders", "Inbox"]
         }
     }

@@ -15,7 +15,6 @@ import { computeBranches, type ConversationNode, type ViewEntry } from "./branch
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 import { attachChatMcp, type ChatMcp } from "../tools/mcp-chat.js";
-import { exportConversation, importInto, type Portable } from "./transfer.js";
 import { CONNECTORS_EXTENSION, durableConnectorsExtension, waitFor, type CallSite } from "../connectors/extension.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import type { Confirm } from "../connectors/tools.js";
@@ -50,6 +49,8 @@ export type ThreadOpenOptions = {
 	connectors?: ConnectorHub;
 	/** Connectors and MCP servers this conversation turned off ("connector:<id>", "mcp:<server>"). */
 	toolsOff?: () => string[];
+	/** The project context (docs/spec/18 §3), on while the conversation is in a project without a folder. */
+	project?: { extension: Extension; active: () => boolean };
 };
 
 /** A filter for one kind of entry in a conversation's off-list. */
@@ -96,11 +97,13 @@ export class ThreadRuntime implements Runtime {
 		let runtime: ThreadRuntime | undefined;
 		const connectors = options.connectors ? (durableConnectorsExtension(options.connectors, "chat", (site) => runtime!.confirmFor(site), offFilter(options.toolsOff, "connector")) as unknown as Extension) : undefined;
 		if (connectors) registry.install(connectors as never);
+		if (options.project) registry.install(options.project.extension as never);
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
 		runtime = new ThreadRuntime(options.ref, options.hub, harness, options.model, options.thinking, options.branches, options.onBranchState, options.web ?? true, webExtension);
 		runtime.connectors = options.connectors;
 		runtime.connectorsOff = offFilter(options.toolsOff, "connector");
 		runtime.connectorsExtension = connectors;
+		runtime.project = options.project;
 		runtime.detachMcp = detachMcp;
 		runtime.expand = options.expand;
 		const root = await harness.root(ctx, { agent: runtime.agent() } as Parameters<Harness["root"]>[1]);
@@ -119,7 +122,11 @@ export class ThreadRuntime implements Runtime {
 	/** The thread's settings, applied to whichever branch is shown (branches made earlier may differ). */
 	private async applySettings(conversation: Conversation): Promise<void> {
 		this.appsOn = this.hasApps();
-		const remove = [...(this.web ? [] : [this.webExtension]), ...(this.connectorsExtension && !this.appsOn ? [this.connectorsExtension] : [])];
+		const remove = [
+			...(this.web ? [] : [this.webExtension]),
+			...(this.connectorsExtension && !this.appsOn ? [this.connectorsExtension] : []),
+			...(this.project && !this.project.active() ? [this.project.extension] : []),
+		];
 		await conversation.configure(
 			{
 				model: { provider: this.model.provider, modelId: this.model.id },
@@ -128,6 +135,14 @@ export class ThreadRuntime implements Runtime {
 			} as unknown as Parameters<Conversation["configure"]>[0],
 			ctx,
 		);
+	}
+
+	/** The project context, when the engine gives one (docs/spec/18 §3). */
+	project?: { extension: Extension; active: () => boolean };
+
+	/** The conversation moved into a project or out of one: its tools and section follow on the next turn. */
+	async projectChanged(): Promise<void> {
+		await this.applySettings(this.active);
 	}
 
 	// MARK: Connected apps
@@ -369,19 +384,6 @@ export class ThreadRuntime implements Runtime {
 
 	private detachMcp?: () => void;
 	private expand?: (text: string) => string | undefined;
-
-	// MARK: Moving (04-chat S5, S9)
-
-	/** The shown branch's messages, to move into a Space. */
-	exportEntries(): Promise<Portable[]> {
-		return exportConversation(this.active);
-	}
-
-	/** Appends copied messages (a promoted topic) and shows them. */
-	async importEntries(entries: readonly Portable[], from: { title: string }): Promise<void> {
-		await this.harness.commit((tx) => importInto(tx, this.active.id, entries, from), ctx);
-		await this.attach(this.active, true);
-	}
 
 	async close(): Promise<void> {
 		this.detachMcp?.();

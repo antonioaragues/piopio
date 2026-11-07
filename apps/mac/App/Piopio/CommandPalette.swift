@@ -16,8 +16,8 @@ struct CommandPalette: View {
     let openResult: (SearchResult) -> Void
     @State private var searchScope: SearchScope = .all
     enum SearchScope: String, CaseIterable {
-        case all = "Everything", build = "Build", chat = "Conversations", notebooks = "Notebooks", agents = "Agents"
-        var kind: ContainerKind? { switch self { case .all: nil; case .build: .build; case .chat: .thread; case .notebooks: .space; case .agents: .agent } }
+        case all = "Everything", build = "Build", chat = "Conversations", agents = "Agents"
+        var kind: ContainerKind? { switch self { case .all: nil; case .build: .build; case .chat: .thread; case .agents: .agent } }
     }
     @State var mode: Mode
     @State var query = ""
@@ -162,11 +162,7 @@ struct CommandPalette: View {
                 for s in engine.buildSessions { add("b:\(s.ref.id)", s.title, "Build", "chevron.left.forwardslash.chevron.right", .build) { openThread(s.ref.id, nil) } }
             }
             if areas.contains(.chat) {
-                for s in engine.threads { add("t:\(s.ref.id)", s.title, "Chat", "bubble.left", .thread) { openThread(s.ref.id, nil) } }
-                for s in engine.spaces {
-                    add("n:\(s.ref.id)", s.title, "Notebook", "book.closed", .space) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.notebook(s.ref.id).raw) }
-                    for topic in s.topics ?? [] { add("n:\(s.ref.id)/\(topic.id)", topic.title, s.title, "text.bubble", .space) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.notebook("\(s.ref.id)/\(topic.id)").raw) } }
-                }
+                for s in engine.threads { add("t:\(s.ref.id)", s.title, s.projectId.flatMap { id in engine.projects.first { $0.id == id }?.name } ?? "Conversation", "bubble.left", .thread) { openThread(s.ref.id, nil) } }
             }
             if areas.contains(.agents) { for s in engine.agents { add("a:\(s.ref.id)", s.title, "Agent", "bird", .agent) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.agent(s.ref.id).raw) } } }
             let goTo = Array(destinations.prefix(q.isEmpty ? 10 : 25))
@@ -198,7 +194,7 @@ struct CommandPalette: View {
         if areas.contains(.chat) {
             rows += [
                 Row(id: "c:new", icon: "square.and.pencil", title: "New Conversation", trailing: "⌘N") { newThread(); close() },
-                Row(id: "c:notebook", icon: "book.closed", title: "New Notebook", trailing: "⇧⌘N") { close(); NotificationCenter.default.post(name: .newSpace, object: nil) },
+                Row(id: "c:project", icon: "tray.full", title: "New Project", trailing: "⇧⌘N") { close(); NotificationCenter.default.post(name: .newProject, object: nil) },
                 Row(id: "c:debate", icon: "person.2.wave.2", title: "New Debate", trailing: "⌥⌘N") { close(); NotificationCenter.default.post(name: .newDebate, object: nil) },
                 Row(id: "c:quick", icon: "bolt", title: "Quick Chat", trailing: QuickChatController.shortcutLabel) { QuickChatController.shared?.show(); close() },
             ]

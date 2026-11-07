@@ -8,17 +8,17 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFi
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, ContainerRef, DebateConfig, ModelRef, PromptResponse, SessionSummary, SpaceSuggestion, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ContainerRef, DebateConfig, ModelRef, ProjectInfo, PromptResponse, SessionSummary, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
 import { attachmentsDir, copyAttachments, deleteAttachments } from "./attachment-files.js";
+import { projectExtension, type ProjectContext } from "./project-context.js";
 import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import type { TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
-import { SpaceRuntime, type SpaceStats, type TopicSummary } from "./runtimes/space.js";
 import { aboutMeExtension, type AboutMe } from "./about-me.js";
 import type { Settings } from "./settings.js";
 import type { ChatMcp } from "./tools/mcp-chat.js";
@@ -53,20 +53,8 @@ type CatalogEntry = SessionSummary & {
 	approvalMode?: ApprovalMode;
 	/** Build: plan mode (piopio-plan). */
 	planMode?: boolean;
-	/** Spaces: when you last looked at each topic (unread dots). */
-	readAt?: Record<string, string>;
-	/** Spaces: the topics as the runtime last reported them. */
-	topicState?: TopicSummary[];
-	/** Spaces: the organizer's model (default: `model`, the topics'), memory and auto-tidy (§3.6). */
-	organizerModel?: ModelRef;
-	memoryOff?: boolean;
-	autoTidy?: boolean;
-	stats?: SpaceStats;
 	/** Agents: the definition folder. */
 	agentFolder?: string;
-	/** Threads: Dismiss on a Space suggestion; and the exchanges a suggestion was already looked for at. */
-	suggestionDismissed?: boolean;
-	suggestChecked?: number[];
 	/** Debate threads (docs/spec/16-debate). */
 	debate?: DebateRecord;
 };
@@ -97,14 +85,14 @@ export class Sessions {
 	private indexedViews = new WeakSet<Runtime>();
 	readonly checkpoints: CheckpointStore;
 	policy: ApprovalPolicy = { projectFor: () => undefined, modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
-	/** Settings, About me and MCP for Threads and Spaces (set by the engine). */
+	/** Settings, About me and MCP for conversations (set by the engine). */
 	chat?: { settings: Settings; aboutMe: AboutMe; mcp: ChatMcp; resources: ChatResources };
 	/** Agent folders and memory (set by the engine). */
 	agentHost?: { files: AgentFiles; memory: MemoryProviders; app?: AppServices };
 	/** Each agent's last valid definition, as the runtime uses it. */
 	private definitions = new Map<string, { definition: AgentDefinition; instructions: string }>();
 	private skillsExtension?: Extension;
-	private aboutMeExtensions = new Map<"thread" | "space" | "agent", Extension>();
+	private aboutMeExtensions = new Map<"thread" | "agent", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
 	/** How long ask_agent waits (tests shorten it). */
@@ -126,6 +114,8 @@ export class Sessions {
 			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) {
 				// Chat-lens sessions are Read only now (docs/spec/18 §4): the profile follows the approval mode.
 				if (e.ref.kind === "build" && e.profile === "chat") e.approvalMode = "read_only";
+				// Notebooks are gone (docs/spec/18 CF8): their files stay in spaces/, they no longer show.
+				if ((e.ref.kind as string) === "space") continue;
 				this.entries.set(e.ref.id, e);
 			}
 		}
@@ -194,7 +184,7 @@ export class Sessions {
 		}).slice(0, Math.min(100, Math.max(1, limit)));
 	}
 
-	/** Index all active branches, including notebook topics and agent conversations. */
+	/** Index all active branches, including agent conversations. */
 	async backfillSearch(): Promise<number> {
 		let count = 0;
 		for (const entry of [...this.entries.values()]) {
@@ -225,7 +215,6 @@ export class Sessions {
 		const wasOpen = this.open.has(entry.ref.id);
 		const runtime = await this.runtime(entry.ref);
 		const refs: { ref: ContainerRef; title: string }[] = [{ ref: entry.ref, title: entry.title }];
-		if (entry.ref.kind === "space") for (const topic of entry.topics ?? []) refs.push({ ref: { ...entry.ref, conversationId: topic.id }, title: `${entry.title} › ${topic.title}` });
 		if (entry.ref.kind === "agent") {
 			for (const person of await this.agentConversations(entry.ref)) if (person.started && person.role !== "owner") refs.push({ ref: { ...entry.ref, conversationId: person.conversationId }, title: `${entry.title} › ${person.name}` });
 			for (const run of (await this.agentRuns(entry.ref)).runs) refs.push({ ref: { ...entry.ref, conversationId: `run:${run.id}` }, title: `${entry.title} › Run ${run.id}` });
@@ -336,7 +325,6 @@ export class Sessions {
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
 		if (entry.file) for (const suffix of ["", "-wal", "-shm"]) rmSync(entry.file + suffix, { force: true });
-		if (entry.ref.kind === "space") rmSync(join(this.paths.spacesDir, entry.ref.id), { recursive: true, force: true });
 		if (entry.sessionFile && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
 		if (entry.ref.kind === "agent") {
 			this.agentHost?.memory.builtin.dropBanks(`${entry.ref.id}/`);
@@ -357,13 +345,15 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build" | "space"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; profile?: "build" | "chat"; debate?: DebateConfig }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; profile?: "build" | "chat"; debate?: DebateConfig; projectId?: string }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
+		if (params.projectId && params.kind !== "thread") throw new EngineError("INVALID", "Only conversations without a folder go in a project this way.");
+		if (params.projectId) this.projectWithoutFolder(params.projectId);
 		if (params.debate && params.kind !== "thread") throw new EngineError("INVALID", "Only threads can be debates.");
 		if (params.debate) validateDebate(params.debate, this.hub);
 		const author = params.debate?.participants.find((p) => p.role === "author");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
-		const ref: ContainerRef = { kind: params.kind, id: newId(params.kind === "thread" ? "thr" : params.kind === "space" ? "spc" : "ses") };
+		const ref: ContainerRef = { kind: params.kind, id: newId(params.kind === "thread" ? "thr" : "ses") };
 		// Build: a new branch in the project, or a worktree of its own (BP5) under <data>/worktrees/<project>/<session>.
 		let cwd = params.cwd;
 		let worktree: CatalogEntry["worktree"];
@@ -381,7 +371,7 @@ export class Sessions {
 		const now = new Date().toISOString();
 		const entry: CatalogEntry = {
 			ref,
-			title: params.title?.trim() || (params.debate ? titleFrom(params.debate.goal) : "") || (params.kind === "thread" ? "New thread" : params.kind === "space" ? "New Notebook" : "New session"),
+			title: params.title?.trim() || (params.debate ? titleFrom(params.debate.goal) : "") || (params.kind === "thread" ? "New thread" : "New session"),
 			createdAt: now,
 			updatedAt: now,
 			model: author?.model ?? params.model ?? this.hub.defaultModel,
@@ -389,9 +379,8 @@ export class Sessions {
 			...(worktree ? { projectPath: params.cwd!, worktree } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
-			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
+			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`), ...(params.projectId ? { projectId: params.projectId } : {}) } : {}),
 			...(params.debate ? { debate: { config: params.debate, status: "running" as const, maxRounds: params.debate.maxRounds, endings: [] } } : {}),
-			...(params.kind === "space" ? { file: join(this.paths.spacesDir, `${ref.id}.sqlite`), topics: [], space: { costUsd: 0, files: 0, memoryLines: 0, memory: true, autoTidy: false }, ...(params.instructions?.trim() ? { instructions: params.instructions.trim() } : {}) } : {}),
 		};
 		this.entries.set(ref.id, entry);
 		this.save();
@@ -401,8 +390,7 @@ export class Sessions {
 
 	async runtime(ref: ContainerRef): Promise<Runtime> {
 		let view: Runtime | undefined;
-		if (ref.kind === "space" && ref.conversationId) view = await (await this.space(ref)).view(ref.conversationId);
-		else if (ref.kind === "agent" && ref.conversationId?.startsWith("run:")) view = await (await this.agent(ref)).runView(ref.conversationId.slice(4));
+		if (ref.kind === "agent" && ref.conversationId?.startsWith("run:")) view = await (await this.agent(ref)).runView(ref.conversationId.slice(4));
 		else if (ref.kind === "agent" && ref.conversationId?.startsWith("agent:")) view = await (await this.agent(ref)).peerView(ref.conversationId.slice(6));
 		else if (ref.kind === "agent" && ref.conversationId) view = await (await this.agent(ref)).view(ref.conversationId.replace(/^person:/, ""));
 		if (view) {
@@ -453,6 +441,47 @@ export class Sessions {
 		entry.updatedAt = new Date().toISOString();
 		this.save();
 		this.changed(entry);
+	}
+
+	// ── Projects without a folder (docs/spec/18 §3) ──────────────────────────
+
+	/** The projects (set by the engine): conversations in a project without a folder read its context. */
+	projects?: { get(id: string): ProjectInfo | undefined };
+
+	private projectWithoutFolder(id: string): ProjectInfo {
+		const project = this.projects?.get(id);
+		if (!project) throw new EngineError("NOT_FOUND", `No project ${id}`);
+		if (project.folder) throw new EngineError("INVALID", `${project.name} is a folder: continue the conversation there instead.`);
+		return project;
+	}
+
+	/** The project context a thread reads now (its project can change while it's open). */
+	private projectContext(entry: CatalogEntry): ProjectContext | undefined {
+		const project = entry.projectId ? this.projects?.get(entry.projectId) : undefined;
+		const memory = this.agentHost?.memory.builtin;
+		return project && !project.folder && memory ? { project, memory } : undefined;
+	}
+
+	/** Moves a conversation into a project without a folder, or out of one (`null`): same thread, same history. */
+	async setProject(ref: ContainerRef, projectId: string | null): Promise<void> {
+		const entry = this.entry(ref);
+		if (entry.ref.kind !== "thread") throw new EngineError("INVALID", "Only conversations without a folder move this way; folder conversations stay in their folder.");
+		if (entry.debate) throw new EngineError("INVALID", "Debates don't go in projects yet.");
+		if (projectId) this.projectWithoutFolder(projectId);
+		if (projectId) entry.projectId = projectId;
+		else delete entry.projectId;
+		entry.updatedAt = new Date().toISOString();
+		if (this.open.has(ref.id)) {
+			const runtime = await this.runtime(ref);
+			if (runtime instanceof ThreadRuntime) await runtime.projectChanged();
+		}
+		this.save();
+		this.changed(entry);
+	}
+
+	/** A project was removed: its conversations stay, with no project. */
+	async projectRemoved(id: string): Promise<void> {
+		for (const entry of [...this.entries.values()].filter((e) => e.projectId === id)) await this.setProject(entry.ref, null);
 	}
 
 	// ── Continue in a project folder (docs/spec/18 §5) ───────────────────────
@@ -827,7 +856,7 @@ export class Sessions {
 	}
 
 	/** Settings › Memory: the agents that use memory, their partitions' names, and whether they learn by themselves. */
-	memoryOwners(): { agents: { id: string; name: string; avatar?: string; learns: boolean; provider: string; partitions: { bank: string; label: string }[] }[]; notebooks: number } {
+	memoryOwners(): { agents: { id: string; name: string; avatar?: string; learns: boolean; provider: string; partitions: { bank: string; label: string }[] }[] } {
 		const agents = [...this.entries.values()]
 			.filter((e) => e.ref.kind === "agent")
 			.flatMap((e) => {
@@ -836,7 +865,7 @@ export class Sessions {
 				const { provider, partitions } = this.agentMemory(e.ref);
 				return [{ id: def.id, name: def.name, ...(def.avatar ? { avatar: def.avatar } : {}), learns: def.memory?.learn !== false, provider, partitions: partitions.map((p) => ({ bank: p.bank, label: p.label })) }];
 			});
-		return { agents, notebooks: [...this.entries.values()].filter((e) => e.ref.kind === "space").length };
+		return { agents };
 	}
 
 	/** Turns an agent's learned facts on or off (its definition's memory.learn), as a saved change in its history. */
@@ -890,73 +919,7 @@ export class Sessions {
 		};
 	}
 
-	// ── Spaces (docs/spec/04-chat §3) ─────────────────────────────────────────
-
-	async space(ref: ContainerRef): Promise<SpaceRuntime> {
-		const runtime = await this.runtime({ kind: "space", id: ref.id });
-		if (!(runtime instanceof SpaceRuntime)) throw new EngineError("INVALID", "Not a Notebook.");
-		return runtime;
-	}
-
-	/** You looked at a topic (or Main): its unread dot goes. */
-	markRead(ref: ContainerRef): void {
-		const entry = this.entry({ kind: "space", id: ref.id });
-		if (!ref.conversationId) return;
-		entry.readAt = { ...entry.readAt, [ref.conversationId]: new Date().toISOString() };
-		this.updateTopics(entry, entry.topicState ?? []);
-	}
-
-	async configureSpace(ref: ContainerRef, change: { instructions?: string; organizerModel?: ModelRef; topicModel?: ModelRef; memory?: boolean; autoTidy?: boolean }): Promise<void> {
-		const entry = this.entry({ kind: "space", id: ref.id });
-		for (const m of [change.organizerModel, change.topicModel]) {
-			if (m && !this.hub.models.getModel(m.provider, m.id)) throw new EngineError("INVALID", `Unknown model ${m.provider}/${m.id}`);
-		}
-		if (change.instructions !== undefined) {
-			if (change.instructions.trim()) entry.instructions = change.instructions.trim();
-			else delete entry.instructions;
-		}
-		if (change.memory !== undefined) entry.memoryOff = !change.memory;
-		if (change.autoTidy !== undefined) entry.autoTidy = change.autoTidy;
-		const open = this.open.has(ref.id) ? await this.space(ref) : undefined;
-		if (change.organizerModel) {
-			entry.organizerModel = change.organizerModel;
-			await open?.setOrganizerModel(change.organizerModel);
-		}
-		if (change.topicModel) {
-			entry.model = change.topicModel;
-			await open?.setTopicModel(change.topicModel);
-		}
-		this.setSpaceInfo(entry);
-		this.save();
-		this.changed(entry);
-	}
-
-	private setSpaceInfo(entry: CatalogEntry): void {
-		const stats = entry.stats ?? { costUsd: 0, files: 0, memoryLines: 0 };
-		entry.space = { ...stats, ...(entry.organizerModel ? { organizerModel: entry.organizerModel } : {}), memory: !entry.memoryOff, autoTidy: entry.autoTidy ?? false };
-	}
-
-	private updateTopics(entry: CatalogEntry, topics: TopicSummary[]): void {
-		entry.topicState = topics;
-		const read = entry.readAt ?? {};
-		entry.topics = topics.map((t) => ({
-			id: t.id,
-			title: t.title,
-			...(t.brief ? { brief: t.brief } : {}),
-			...(t.summary ? { summary: t.summary } : {}),
-			lastActiveAt: t.lastActiveAt,
-			...(t.archived ? { archived: true } : {}),
-			...(t.lastReplyAt && t.lastReplyAt > (read[t.id] ?? "") ? { unread: true } : {}),
-			...(t.running ? { running: true } : {}),
-		}));
-		this.setSpaceInfo(entry);
-		const latest = topics[0]?.lastActiveAt;
-		if (latest && latest > entry.updatedAt) entry.updatedAt = latest;
-		this.save();
-		this.changed(entry);
-	}
-
-	private aboutMeFor(kind: "thread" | "space" | "agent"): Extension | undefined {
+	private aboutMeFor(kind: "thread" | "agent"): Extension | undefined {
 		if (!this.chat) return undefined;
 		let aboutMe = this.aboutMeExtensions.get(kind);
 		if (!aboutMe) {
@@ -967,7 +930,7 @@ export class Sessions {
 	}
 
 	/** About me in an agent, when Settings › Chat shares it with agents. */
-	/** No em dashes, tables as Markdown tables (tools/writing.ts), in chats, notebooks and agents. */
+	/** No em dashes, tables as Markdown tables (tools/writing.ts), in conversations and agents. */
 	private writing?: Extension;
 
 	private agentExtras(): Extension[] {
@@ -977,7 +940,7 @@ export class Sessions {
 		return aboutMe ? [aboutMe, this.writing] : [this.writing];
 	}
 
-	private chatExtras(kind: "thread" | "space"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {
+	private chatExtras(kind: "thread"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {
 		if (!this.chat) return {};
 		const aboutMe = this.aboutMeFor(kind)!;
 		const resources = this.chat.resources;
@@ -986,61 +949,12 @@ export class Sessions {
 		return { extensions: [aboutMe, this.skillsExtension, this.writing], mcp: this.chat.mcp, expand: (text) => resources.expand(text) };
 	}
 
-	/** `/commands` of a Thread or Space: prompt templates and skills from pi's folder and packages. */
+	/** `/commands` of a conversation: prompt templates and skills from pi's folder and packages. */
 	async chatCommands() {
 		await this.chat?.resources.ready();
 		return this.chat?.resources.commands() ?? [];
 	}
 
-	// ── Moving threads and topics (04-chat S5, S9, S11) ─────────────────────
-
-	/** Each thread becomes a topic of the Space (or joins `topicId`); then it's deleted unless `keep`. */
-	async importThreads(spaceRef: ContainerRef, threads: ContainerRef[], options: { topicId?: string; keep: boolean }): Promise<string[]> {
-		const space = await this.space(spaceRef);
-		const ids: string[] = [];
-		for (const ref of threads) {
-			const entry = this.entry({ kind: "thread", id: ref.id });
-			const runtime = (await this.runtime(entry.ref)) as ThreadRuntime;
-			if (runtime.snapshot().state.status === "running") throw new EngineError("BUSY", `“${entry.title}” is still answering.`);
-			const entries = await runtime.exportEntries();
-			ids.push(await space.importTopic(options.topicId ? { topicId: options.topicId } : { title: entry.title, brief: `Moved here from the thread “${entry.title}”.` }, entries, { title: entry.title }));
-			if (options.keep) {
-				delete entry.suggestion;
-				entry.suggestionDismissed = true;
-				this.save();
-				this.changed(entry);
-			} else {
-				await this.delete(entry.ref);
-			}
-		}
-		return ids;
-	}
-
-	/** Promote to Thread: a new thread with a copy of the topic's messages. */
-	async promoteTopic(topicRef: ContainerRef): Promise<ContainerRef> {
-		if (!topicRef.conversationId) throw new EngineError("INVALID", "Give a topic.");
-		const spaceEntry = this.entry({ kind: "space", id: topicRef.id });
-		const { title, entries } = await (await this.space(topicRef)).exportTopic(topicRef.conversationId);
-		const ref = await this.create({ kind: "thread", title, ...(spaceEntry.model ? { model: spaceEntry.model } : {}) });
-		const thread = (await this.runtime(ref)) as ThreadRuntime;
-		await thread.importEntries(entries, { title: `${spaceEntry.title} › ${title}` });
-		this.entry(ref).suggestionDismissed = true; // it just came from a Space
-		this.touch(ref);
-		return ref;
-	}
-
-	dismissSuggestion(ref: ContainerRef): void {
-		const entry = this.entry(ref);
-		entry.suggestionDismissed = true;
-		delete entry.suggestion;
-		this.save();
-		this.changed(entry);
-	}
-
-	/**
-	 * Thread → Space suggestion (S11): after the first exchange, and again after the fifth (the subject may have
-	 * drifted), the utility model compares the thread with every Space's topics.
-	 */
 	/** After an answer: three short next messages (docs/design v2 "You could also"), from the utility model. */
 	private async suggestFollowUps(entry: CatalogEntry, runtime: Runtime): Promise<void> {
 		if (this.chat?.settings.get().chat.followUps === false) return;
@@ -1070,46 +984,6 @@ export class Sessions {
 		entry.followUps = followUps;
 		this.save();
 		this.changed(entry);
-	}
-
-	private async suggestSpace(entry: CatalogEntry, runtime: Runtime): Promise<void> {
-		if (!this.chat?.settings.get().chat.suggestSpaces || entry.suggestionDismissed || entry.suggestion) return;
-		const items = runtime.snapshot().items;
-		const exchanges = items.filter((i) => i.kind === "assistant" && i.status === "done").length;
-		const at = exchanges >= 5 ? 5 : exchanges >= 1 ? 1 : 0;
-		if (!at || entry.suggestChecked?.includes(at)) return;
-		entry.suggestChecked = [...(entry.suggestChecked ?? []), at];
-		this.save();
-		const spaces = [...this.entries.values()].filter((e) => e.ref.kind === "space");
-		if (!spaces.length) return;
-		const text = items
-			.flatMap((i) => (i.kind === "user" ? [`User: ${i.text}`] : i.kind === "assistant" ? [`Assistant: ${i.parts.filter((p) => p.type === "text").map((p) => p.text).join("")}`] : []))
-			.join("\n\n")
-			.slice(0, 6000);
-		const suggestion = (await this.askUtility(text, spaces, entry.ref.id, runtime.snapshot().state.model ?? entry.model).catch(() => undefined)) ?? keywordMatch(text, spaces);
-		if (!suggestion || !this.entries.has(entry.ref.id) || entry.suggestionDismissed) return;
-		entry.suggestion = suggestion;
-		this.save();
-		this.changed(entry);
-	}
-
-	private async askUtility(text: string, spaces: CatalogEntry[], scope: string, model?: ModelRef): Promise<SpaceSuggestion | undefined> {
-		const index = spaces
-			.map((s) => `Notebook ${s.ref.id} “${s.title}”${s.instructions ? ` (${s.instructions.slice(0, 200)})` : ""}\n${(s.topics ?? []).filter((t) => !t.archived).map((t) => `  - topic ${t.id} “${t.title}”: ${t.brief ?? ""} ${t.summary ?? ""}`.trimEnd()).join("\n") || "  (no topics)"}`)
-			.join("\n");
-		const reply = await this.hub.utility(
-			'You decide whether a chat thread belongs in one of the user\'s Notebooks (long-running areas of their life or work, split into topics). Answer with JSON only: {"space": "<notebook id or null>", "topic": "<topic id or null>", "confidence": <0..1>, "reason": "<one short line>"}. Pick a topic only when the thread continues its subject. Use null when nothing fits well.',
-			`Notebooks:\n${index}\n\nThread:\n${text}`,
-			scope,
-			model ? { model } : {},
-		);
-		if (reply === undefined) return undefined;
-		const json = /\{[\s\S]*\}/.exec(reply)?.[0];
-		const parsed = json ? (JSON.parse(json) as { space?: string | null; topic?: string | null; confidence?: number; reason?: string }) : undefined;
-		const space = spaces.find((s) => s.ref.id === parsed?.space);
-		if (!parsed || !space || (parsed.confidence ?? 0) < SUGGEST_CONFIDENCE) return undefined;
-		const topic = (space.topics ?? []).find((t) => t.id === parsed.topic && !t.archived);
-		return { spaceId: space.ref.id, spaceTitle: space.title, ...(topic ? { topicId: topic.id, topicTitle: topic.title } : {}), reason: parsed.reason?.trim() || "It looks like the same subject." };
 	}
 
 	/** Folders git may run in: a project, or a Build session's worktree. */
@@ -1293,7 +1167,6 @@ export class Sessions {
 				}
 			}
 			const idle = events.some((e) => e.type === "state" && e.state.status === "idle");
-			if (entry.ref.kind === "thread" && idle && !entry.debate) void this.suggestSpace(entry, runtime);
 			if ((entry.ref.kind === "thread" || entry.ref.kind === "build") && idle && !entry.debate) void this.suggestFollowUps(entry, runtime);
 		});
 		return runtime;
@@ -1322,27 +1195,6 @@ export class Sessions {
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {
 					if (approval.status === "pending") this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });
-				},
-			});
-		}
-		if (entry.ref.kind === "space") {
-			return SpaceRuntime.open({
-				ref: entry.ref,
-				file: entry.file!,
-				hub: this.hub,
-				model,
-				...(entry.organizerModel ? { organizerModel: entry.organizerModel } : {}),
-				filesDir: join(this.paths.spacesDir, entry.ref.id, "files"),
-				info: () => ({ name: entry.title, ...(entry.instructions ? { instructions: entry.instructions } : {}) }),
-				settings: () => ({ memory: !entry.memoryOff, autoTidy: entry.autoTidy ?? false }),
-				webOptions: this.webOptions,
-				...this.chatExtras("space"),
-				toolsOff: () => entry.toolsOff ?? [],
-				onTopics: (topics, stats) => {
-					if (!this.entries.has(entry.ref.id)) return;
-					if (JSON.stringify(topics) === JSON.stringify(entry.topicState) && JSON.stringify(stats) === JSON.stringify(entry.stats)) return;
-					entry.stats = stats;
-					this.updateTopics(entry, topics);
 				},
 			});
 		}
@@ -1381,6 +1233,7 @@ export class Sessions {
 				...this.chatExtras("thread"),
 				...(this.connectors ? { connectors: this.connectors } : {}),
 				toolsOff: () => entry.toolsOff ?? [],
+				...(entry.debate ? {} : { project: { extension: projectExtension(() => this.projectContext(entry)) as unknown as Extension, active: () => Boolean(this.projectContext(entry)) } }),
 			});
 		}
 		const runtime = await BuildRuntime.open({
@@ -1425,26 +1278,8 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, readAt: _r, topicState: _ts, organizerModel: _o, memoryOff: _m, autoTidy: _a, stats: _st, suggestionDismissed: _sd, suggestChecked: _sc, debate, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, debate, ...rest }: CatalogEntry): SessionSummary {
 	return { ...rest, ...(debate ? { debate: { status: debate.status } } : {}) };
-}
-
-/** The suggestion needs this much confidence from the utility model. */
-const SUGGEST_CONFIDENCE = 0.75;
-
-/**
- * Without a utility model (the scripted model): a topic whose title words (4+ letters) all appear in the thread,
- * else nothing. Cheap and conservative.
- */
-function keywordMatch(text: string, spaces: CatalogEntry[]): SpaceSuggestion | undefined {
-	const lower = text.toLowerCase();
-	for (const space of spaces) {
-		for (const topic of (space.topics ?? []).filter((t) => !t.archived)) {
-			const words = topic.title.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4);
-			if (words.length && words.every((w) => lower.includes(w))) return { spaceId: space.ref.id, spaceTitle: space.title, topicId: topic.id, topicTitle: topic.title, reason: `It mentions ${topic.title}.` };
-		}
-	}
-	return undefined;
 }
 
 /** What a subagent is doing, for its task card. */

@@ -38,6 +38,8 @@ import type { ToolItem } from "@piopio/protocol";
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered and plans (they read as part of the conversation). */
 const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "propose_plan";
 import { AppServices } from "./app-services.js";
+import { projectBank } from "./project-context.js";
+import { ProjectFiles } from "./project-files.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -147,7 +149,7 @@ export class Engine {
 		// A test agent folder: pi's own lookups (MCP config, codemode) read it from the environment.
 		if (options.piAgentDir) process.env.PI_CODING_AGENT_DIR = options.piAgentDir;
 		const agentDir = options.piAgentDir ?? getAgentDir();
-		this.projects = new Projects(options.paths.projectsIndex, agentDir);
+		this.projects = new Projects(options.paths.projectsIndex, agentDir, join(options.paths.home, "projects"));
 		this.mcp = new McpConfig(agentDir);
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
 		this.hub.utilityChoice = () => this.settings.get().models?.utility;
@@ -170,6 +172,7 @@ export class Engine {
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp || JSON.stringify(next.chat.mcpServers) !== JSON.stringify(previous.chat.mcpServers)) void this.chatMcp.reset();
 		});
+		this.sessions.projects = { get: (id) => this.projects.list().find((p) => p.id === id) };
 		this.sessions.policy = {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
 			modeFor: (cwd) => this.projects.modeFor(cwd),
@@ -211,7 +214,7 @@ export class Engine {
 		void this.sessions.startAgents(this.log);
 	}
 
-	/** Whether chats and notebooks use a global MCP server: chosen per server, else (before that) all that are on. */
+	/** Whether conversations use a global MCP server: chosen per server, else (before that) all that are on. */
 	private inChat(name: string, server: RawServer): boolean {
 		const chat = this.settings.get().chat;
 		return chat.mcpServers ? chat.mcpServers.includes(name) : chat.mcp && server.enabled !== false;
@@ -330,12 +333,6 @@ export class Engine {
 			protocolVersion: PROTOCOL_VERSION,
 			capabilities: { runtimes: ["thread", "build"], models: [`${this.hub.defaultModel.provider}/${this.hub.defaultModel.id}`] },
 		};
-	}
-
-	/** A topic's conversation id, from its ref. */
-	private topicOf(ref: Params<"sessions.open">["ref"]): string {
-		if (ref.kind !== "space" || !ref.conversationId) throw new EngineError("INVALID", "Give a topic (a Notebook ref with its conversationId).");
-		return ref.conversationId;
 	}
 
 	private async capability(ref: Params<"sessions.open">["ref"], name: "edit" | "regenerate" | "switchBranch" | "removeQueued" | "clearQueue"): Promise<Runtime> {
@@ -495,8 +492,29 @@ export class Engine {
 			}
 			case "projects.configure": {
 				const p = params as Params<"projects.configure">;
-				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}) };
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}), ...(p.name !== undefined ? { name: p.name } : {}), ...(p.instructions !== undefined ? { instructions: p.instructions } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
+			}
+			case "projects.create": {
+				const p = params as Params<"projects.create">;
+				return { project: this.projects.create(p.name, p.instructions) } satisfies Result<"projects.create">;
+			}
+			case "projects.addFile": {
+				const p = params as Params<"projects.addFile">;
+				new ProjectFiles(this.projects.withoutFolder(p.id).path).add({ name: p.name, ...(p.path ? { path: p.path } : {}), ...(p.text !== undefined ? { text: p.text } : {}), ...(p.extracted !== undefined ? { extracted: p.extracted } : {}) });
+				this.projects.touch();
+				return {};
+			}
+			case "projects.removeFile": {
+				const p = params as Params<"projects.removeFile">;
+				new ProjectFiles(this.projects.withoutFolder(p.id).path).remove(p.name);
+				this.projects.touch();
+				return {};
+			}
+			case "sessions.setProject": {
+				const p = params as Params<"sessions.setProject">;
+				await this.sessions.setProject(p.ref, p.projectId);
+				return {};
 			}
 			case "sessions.changes": {
 				const p = params as Params<"sessions.changes">;
@@ -775,16 +793,17 @@ export class Engine {
 				const labels = new Map(owners.agents.flatMap((a) => a.partitions.map((p) => [p.bank, { label: p.label, agent: a }] as const)));
 				const banks = this.memory.builtin.banks().map((b) => {
 					const owner = labels.get(b.bank);
-					const area = b.bank === ABOUT_ME_BANK ? "about-me" : owner ? "agent" : "other";
+					const project = b.bank.startsWith("project:") ? this.projects.list().find((p) => projectBank(p.id) === b.bank) : undefined;
+					const area = b.bank === ABOUT_ME_BANK ? "about-me" : owner ? "agent" : project ? "project" : "other";
 					return {
 						...b,
-						label: b.bank === ABOUT_ME_BANK ? "About me" : (owner?.label ?? b.bank),
+						label: b.bank === ABOUT_ME_BANK ? "About me" : (owner?.label ?? project?.name ?? b.bank),
 						area,
 						...(owner ? { agent: { id: owner.agent.id, name: owner.agent.name, ...(owner.agent.avatar ? { avatar: owner.agent.avatar } : {}), learns: owner.agent.learns } } : {}),
 					};
 				});
 				const bytes = ["memory.db", "memory.db-wal"].reduce((n, f) => n + (existsSync(join(this.options.paths.home, f)) ? statSync(join(this.options.paths.home, f)).size : 0), 0);
-				return { banks, agents: owners.agents.map(({ partitions: _p, ...a }) => a), notebooks: owners.notebooks, bytes } satisfies Result<"memory.banks">;
+				return { banks, agents: owners.agents.map(({ partitions: _p, ...a }) => a), bytes } satisfies Result<"memory.banks">;
 			}
 			case "memory.history": {
 				const p = params as Params<"memory.history">;
@@ -811,19 +830,6 @@ export class Engine {
 				const p = params as Params<"memory.recall">;
 				const hits = await this.memory.get(p.provider).recall([p.bank], p.query, { budgetTokens: 2000 });
 				return { hits: hits.map((h) => ({ id: h.id, text: h.text, score: h.score, ...(h.at ? { at: h.at } : {}) })) } satisfies Result<"memory.recall">;
-			}
-			case "threads.dismissSuggestion": {
-				const p = params as Params<"threads.dismissSuggestion">;
-				this.sessions.dismissSuggestion(p.ref);
-				return {};
-			}
-			case "spaces.importThreads": {
-				const p = params as Params<"spaces.importThreads">;
-				return { topicIds: await this.sessions.importThreads(p.ref, p.threads, { ...(p.topicId ? { topicId: p.topicId } : {}), keep: p.keepThreads ?? false }) } satisfies Result<"spaces.importThreads">;
-			}
-			case "spaces.topics.promote": {
-				const p = params as Params<"spaces.topics.promote">;
-				return { ref: await this.sessions.promoteTopic(p.ref) } satisfies Result<"spaces.topics.promote">;
 			}
 			case "sessions.finish": {
 				const p = params as Params<"sessions.finish">;
@@ -868,82 +874,15 @@ export class Engine {
 				await this.sessions.respond(p.ref, p.promptId, p.response);
 				return {};
 			}
-			case "spaces.reroute": {
-				const p = params as Params<"spaces.reroute">;
-				if (!p.toTopicId === !p.newTopic) throw new EngineError("INVALID", "Give a topic or a new topic's title.");
-				await (await this.sessions.space(p.ref)).moveRoute(p.itemId, { ...(p.toTopicId ? { topicId: p.toTopicId } : {}), ...(p.newTopic ? { newTopic: p.newTopic } : {}) });
-				return {};
-			}
-			case "spaces.markRead": {
-				const p = params as Params<"spaces.markRead">;
-				this.sessions.markRead(p.ref);
-				return {};
-			}
-			case "spaces.configure": {
-				const { ref, ...change } = params as Params<"spaces.configure">;
-				await this.sessions.configureSpace(ref, change);
-				return {};
-			}
-			case "spaces.memory.get": {
-				const p = params as Params<"spaces.memory.get">;
-				return (await this.sessions.space(p.ref)).memoryInfo() satisfies Result<"spaces.memory.get">;
-			}
-			case "spaces.memory.set": {
-				const p = params as Params<"spaces.memory.set">;
-				await (await this.sessions.space(p.ref)).setMemory(p.text);
-				return {};
-			}
-			case "spaces.memory.undo": {
-				const p = params as Params<"spaces.memory.undo">;
-				await (await this.sessions.space(p.ref)).undoMemory(p.revisionId);
-				return {};
-			}
-			case "spaces.memory.restore": {
-				const p = params as Params<"spaces.memory.restore">;
-				await (await this.sessions.space(p.ref)).restoreMemory(p.revisionId);
-				return {};
-			}
-			case "spaces.memory.decide": {
-				const p = params as Params<"spaces.memory.decide">;
-				await (await this.sessions.space(p.ref)).decideProposal(p.proposalId, p.accept);
-				return {};
-			}
-			case "spaces.topics.rename": {
-				const p = params as Params<"spaces.topics.rename">;
-				await (await this.sessions.space(p.ref)).renameTopic(this.topicOf(p.ref), p.title);
-				return {};
-			}
-			case "spaces.topics.archive": {
-				const p = params as Params<"spaces.topics.archive">;
-				await (await this.sessions.space(p.ref)).archiveTopic(this.topicOf(p.ref), p.archived);
-				return {};
-			}
-			case "spaces.topics.merge": {
-				const p = params as Params<"spaces.topics.merge">;
-				return { summary: await (await this.sessions.space(p.ref)).mergeTopics(this.topicOf(p.ref), p.into) } satisfies Result<"spaces.topics.merge">;
-			}
-			case "spaces.files.list": {
-				const p = params as Params<"spaces.files.list">;
-				return { files: (await this.sessions.space(p.ref)).files.list() } satisfies Result<"spaces.files.list">;
-			}
-			case "spaces.files.add": {
-				const { ref, ...file } = params as Params<"spaces.files.add">;
-				const space = await this.sessions.space(ref);
-				space.files.add(file);
-				space.filesChanged();
-				return {};
-			}
-			case "spaces.files.remove": {
-				const p = params as Params<"spaces.files.remove">;
-				const space = await this.sessions.space(p.ref);
-				space.files.remove(p.name);
-				space.filesChanged();
-				return {};
-			}
 			case "projects.remove": {
 				const p = params as Params<"projects.remove">;
 				const project = this.projects.remove(p.id);
-				await this.sessions.forgetFolder(project.path);
+				if (project.folder) await this.sessions.forgetFolder(project.path);
+				else {
+					// Its conversations stay, with no project; what it remembered goes with it.
+					await this.sessions.projectRemoved(project.id);
+					this.memory.builtin.wipe(projectBank(project.id));
+				}
 				return {};
 			}
 			case "catalog.search": {

@@ -44,7 +44,7 @@ struct PiopioApp: App {
                 Button(newTitle) { NotificationCenter.default.post(name: .newThread, object: nil) }
                     .keyboardShortcut("n")
                 if areas.contains(.chat) {
-                    Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: nil) }
+                    Button("New Project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
                         .keyboardShortcut("n", modifiers: [.command, .shift])
                     Button("New Debate…") { NotificationCenter.default.post(name: .newDebate, object: nil) }
                         .keyboardShortcut("n", modifiers: [.command, .option])

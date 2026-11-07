@@ -81,7 +81,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var recent: some View {
-        let all = (engine.spaces + engine.buildSessions.filter { $0.parent == nil } + engine.threads).filter { Areas.shared.set.shows($0) }
+        let all = (engine.buildSessions.filter { $0.parent == nil } + engine.threads).filter { Areas.shared.set.shows($0) }
         let items = Array(all.sorted { $0.updatedAt > $1.updatedAt }.prefix(4))
         if !items.isEmpty {
             sectionTitle("Recent")
@@ -93,9 +93,8 @@ struct HomeView: View {
 
     private func kind(_ s: SessionSummary) -> String {
         switch s.ref.kind {
-        case .space: "Notebook"
         case .build: engine.project(of: s)?.name ?? "Session"
-        default: s.debate != nil ? "Debate" : "Chat"
+        default: s.debate != nil ? "Debate" : s.projectId.flatMap { id in engine.projects.first { $0.id == id }?.name } ?? "Chat"
         }
     }
 
@@ -229,11 +228,11 @@ struct AskBox: View {
                         Button { showModels = true } label: { Text(modelLabel) }
                             .buttonStyle(ChipStyle())
                             .popover(isPresented: $showModels, arrowEdge: .bottom) {
-                                ModelPicker(engine: engine, selected: model ?? defaultModel, role: project == nil ? .chat : .build) { m in model = m; showModels = false }
+                                ModelPicker(engine: engine, selected: model ?? defaultModel, role: project?.hasFolder == true ? .build : .chat) { m in model = m; showModels = false }
                             }
                     }
                     Spacer()
-                    if project != nil {
+                    if let project, project.hasFolder {
                         if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
                     }
                     SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: send)
@@ -277,7 +276,7 @@ struct AskBox: View {
                 Section("Projects") {
                     ForEach(engine.projects.filter { $0.missing != true }) { p in
                         Button { target = .project(p.id) } label: {
-                            if project?.id == p.id { Label(p.name, systemImage: "checkmark") } else { Label(p.name, systemImage: "folder") }
+                            if project?.id == p.id { Label(p.name, systemImage: "checkmark") } else { Label(p.name, systemImage: p.hasFolder ? "folder" : "tray.full") }
                         }
                     }
                 }
@@ -290,7 +289,8 @@ struct AskBox: View {
                 }
             }
             Button("Open folder…") { openFolder() }
-            if let project, project.branch != nil {
+            Button("New project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
+            if let project, project.hasFolder, project.branch != nil {
                 Section("Work on") {
                     ForEach(WorkOnChoice.allCases, id: \.self) { choice in
                         Button { workOn = choice } label: {
@@ -311,7 +311,7 @@ struct AskBox: View {
             }
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : "bubble.left").font(.system(size: 11))
+                Image(systemName: project.map { $0.hasFolder ? "folder" : "tray.full" } ?? (agent != nil ? "person.crop.circle" : "bubble.left")).font(.system(size: 11))
                 Text(targetLabel)
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
             }
@@ -345,6 +345,8 @@ struct AskBox: View {
     /// "In piopio · can edit files; asks before commands"; nothing with no project (it can't touch files).
     private var whereLine: String? {
         guard let project else { return nil }
+        // A project without a folder: its files and memory, no files of yours to change (docs/spec/18 §3).
+        guard project.hasFolder else { return "In \(project.name) · reads its files and shares what it remembers with its other conversations" }
         let place = switch workOn {
         case .folder: ""
         case .branch: " · on a new branch"
@@ -365,7 +367,7 @@ struct AskBox: View {
         return "Send"
     }
 
-    private var defaultModel: ModelRef? { project == nil ? engine.preferredModel : engine.model(for: .build) }
+    private var defaultModel: ModelRef? { project?.hasFolder == true ? engine.model(for: .build) : engine.preferredModel }
 
     private var modelLabel: String {
         let ref = model ?? defaultModel
@@ -414,9 +416,21 @@ struct AskBox: View {
         }
     }
 
-    /// "@name " at the start picks a project or an agent.
+    /// "@name " at the start picks a project or an agent; names with spaces too ("@Kitchen renovation ").
     private func mention(_ t: String) {
-        guard t.hasPrefix("@"), let space = t.firstIndex(of: " ") else { return }
+        guard t.hasPrefix("@") else { return }
+        let rest = t.dropFirst().lowercased()
+        if let p = engine.projects.sorted(by: { $0.name.count > $1.name.count }).first(where: { rest.hasPrefix($0.name.lowercased() + " ") }) {
+            target = .project(p.id)
+            text = String(t.dropFirst(p.name.count + 2))
+            return
+        }
+        if areas.contains(.agents), let a = engine.agents.sorted(by: { $0.title.count > $1.title.count }).first(where: { rest.hasPrefix($0.title.lowercased() + " ") }) {
+            target = .agent(a.ref.id)
+            text = String(t.dropFirst(a.title.count + 2))
+            return
+        }
+        guard let space = t.firstIndex(of: " ") else { return }
         let name = String(t[t.index(after: t.startIndex)..<space]).lowercased()
         if let p = engine.projects.first(where: { $0.name.lowercased() == name }) {
             target = .project(p.id)
@@ -435,24 +449,9 @@ struct AskBox: View {
         sendError = nil
         switch target {
         case .chat:
-            sending = true
-            Task {
-                defer { sending = false }
-                let destination: ContainerRef?
-                if let pendingChat { destination = pendingChat } else { destination = await engine.createThread(model: model) }
-                guard let ref = destination else {
-                    sendError = "Couldn't start a conversation. Your draft is saved; try again when the engine is connected."
-                    return
-                }
-                pendingChat = ref; saveHomeDraft()
-                let thread = engine.thread(ref)
-                await thread.open()
-                if await thread.send(message, attachments: attachments.map(\.attachment)) {
-                    text = ""; pendingChat = nil; attachments = []; saveHomeDraft()
-                    try? await engine.refreshCatalog()
-                    item = .chat(ref.id)
-                } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
-            }
+            sendConversation(message, projectId: nil)
+        case .project where project?.hasFolder == false:
+            sendConversation(message, projectId: project?.id)
         case .project:
             guard let project else { sendError = "Choose an available project folder."; return }
             sending = true
@@ -496,6 +495,30 @@ struct AskBox: View {
                     item = .agent(id)
                 } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
             }
+        }
+    }
+
+    /// A conversation with no project, or in a project without a folder (a thread with its context).
+    private func sendConversation(_ message: String, projectId: String?) {
+        sending = true
+        Task {
+            defer { sending = false }
+            let destination: ContainerRef?
+            if let pendingChat { destination = pendingChat } else { destination = await engine.createThread(model: model, projectId: projectId) }
+            guard let ref = destination else {
+                sendError = "Couldn't start a conversation. Your draft is saved; try again when the engine is connected."
+                return
+            }
+            pendingChat = ref; saveHomeDraft()
+            let thread = engine.thread(ref)
+            await thread.open()
+            if await thread.send(message, attachments: attachments.map(\.attachment)) {
+                text = ""; attachments = []
+                target = .chat // Home starts clean next time (docs/spec/18 §4); this also forgets the pending chat
+                saveHomeDraft()
+                try? await engine.refreshCatalog()
+                item = .chat(ref.id)
+            } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
         }
     }
 }

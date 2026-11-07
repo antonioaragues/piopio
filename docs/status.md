@@ -6,7 +6,7 @@ they do not establish that every provider, OS permission flow or production serv
 | Area | Implemented | Acceptance still pending |
 |---|---|---|
 | Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations |
-| Chat | Streaming, attachments, branches, export, Quick Chat, notebooks/topics, memory, global search | A week of daily use; provider/web-search compatibility; routing on a real notebook; long conversation usability |
+| Chat | Streaming, attachments, branches, export, Quick Chat, projects without a folder (shared instructions, files, memory), global search | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability |
 | Local Agents | Definitions, conversations, memory, schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
 | Distribution | Bundled engine/Node, release scripts, background engine and update infrastructure | Developer ID/notarization/Gatekeeper validation and public distribution |
@@ -25,7 +25,7 @@ tests use temporary engine data, but launch a real native window and require a l
 
 ## Latest local verification
 
-The TypeScript suite passes (171 tests; three opt-in tests skipped), as do Swift package tests (39 tests).
+The TypeScript suite passes (178 tests; three opt-in tests skipped), as do Swift package tests (40 tests).
 The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draft recovery, offline backup and
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also
@@ -35,7 +35,7 @@ been captured and inspected. This does not replace the real-provider, OS-permiss
 
 - [ ] Build: complete one real change, approve/deny commands, inspect diffs, rewind chat and files, resume after restart.
 - [ ] Chat: send images/text/PDFs, edit/regenerate, switch away with a draft, reconnect after a failed send and retry once.
-- [ ] Notebooks: use 5+ topics; verify routing, shared memory/files, and search opening the exact topic/message.
+- [ ] Projects without a folder: 3+ conversations; verify instructions, files and shared memory, and moving a chat in and out.
 - [ ] Agents: run a real schedule, sleep/wake the Mac, close the window, quit with and without background mode, and inspect the next run.
 - [ ] Approvals: restart/reconnect while waiting and verify that the displayed decision matches the executed action.
 - [ ] Costs: compare provider billing with its stated scope; verify web/utility requests and unavailable pricing.
@@ -55,7 +55,8 @@ been captured and inspected. This does not replace the real-provider, OS-permiss
 - Background model work (titles, summaries, suggestions, commit messages, learned facts) uses the provider each
   conversation already uses (local stays local, OpenRouter uses its small model). Settings › Models can pin another
   model, Apple's on-device model, or Off. Web search sends the search words to OpenRouter. See 07-shared §1.3.
-- Conversation first, phase 1 (spec 18): Home is the one start, with the project and permissions in the box; Read
-  only replaces the Chat lens (folders of documents start in it); a chat can continue in a project folder.
+- Conversation first, phases 1 and 2 (spec 18): notebooks are gone; a project can have no folder.
+  Home is the one start, with the project and permissions in the box; Read only replaces the Chat lens (folders
+  of documents start in it); a chat can continue in a project folder or move into a project without one.
 - Agent definitions refuse fields that nothing runs yet (http_request, codemode, files, tools.mcp, channels) on save.
 - Cloud and channels remain separate roadmap work. See [09-roadmap.md](spec/09-roadmap.md) for historical milestones.

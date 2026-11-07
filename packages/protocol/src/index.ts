@@ -15,6 +15,7 @@ export const PROTOCOL_VERSION = "1.0";
 
 // ── Common ──────────────────────────────────────────────────────────────────
 
+/** `space`: a notebook, from before docs/spec/18 phase 2; none are created or shown any more. */
 export const ContainerKind = literals("build", "thread", "space", "agent");
 export type ContainerKind = Static<typeof ContainerKind>;
 
@@ -478,32 +479,6 @@ export const WorktreeInfo = Type.Object({
 });
 export type WorktreeInfo = Static<typeof WorktreeInfo>;
 
-/** A Space topic, for the sidebar (04-chat S6). */
-export const TopicInfo = Type.Object({
-	/** The topic's conversation id (`ContainerRef.conversationId`). */
-	id: Type.String(),
-	title: Type.String(),
-	brief: Type.Optional(Type.String()),
-	/** Where it stands, in a line (refreshed after each reply). */
-	summary: Type.Optional(Type.String()),
-	lastActiveAt: Type.String(),
-	archived: Type.Optional(Type.Boolean()),
-	/** A reply arrived since you last looked. */
-	unread: Type.Optional(Type.Boolean()),
-	running: Type.Optional(Type.Boolean()),
-});
-export type TopicInfo = Static<typeof TopicInfo>;
-
-export const SpaceInfo = Type.Object({
-	costUsd: Type.Number(),
-	files: Type.Number(),
-	memoryLines: Type.Number(),
-	organizerModel: Type.Optional(ModelRef),
-	memory: Type.Boolean(),
-	autoTidy: Type.Boolean(),
-});
-export type SpaceInfo = Static<typeof SpaceInfo>;
-
 /** One operation of an MCP memory provider: the tool, and its arguments with {placeholders} (07-shared §6.2 MM1). */
 export const McpMemoryMapping = Type.Object({ tool: Type.String(), args: Type.Record(Type.String(), Type.Unknown()) });
 /** A memory system reached through its MCP server: a server from mcp.json, or a URL. */
@@ -639,16 +614,6 @@ export type AgentInfo = Static<typeof AgentInfo>;
 
 export const DefinitionError = Type.Object({ path: Type.String(), message: Type.String() });
 
-/** Where a thread seems to belong (04-chat S11). */
-export const SpaceSuggestion = Type.Object({
-	spaceId: Type.String(),
-	spaceTitle: Type.String(),
-	topicId: Type.Optional(Type.String()),
-	topicTitle: Type.Optional(Type.String()),
-	reason: Type.String(),
-});
-export type SpaceSuggestion = Static<typeof SpaceSuggestion>;
-
 export const SessionSummary = Type.Object({
 	ref: ContainerRef,
 	title: Type.String(),
@@ -663,17 +628,11 @@ export const SessionSummary = Type.Object({
 	profile: Type.Optional(literals("build", "chat")),
 	/** A subagent's session: the parent session and the `task` call that started it. */
 	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
+	/** A conversation in a project without a folder (18 §3). */
+	projectId: Type.Optional(Type.String()),
 	/** A chat continued in a project folder (18 §5): the new conversation, and in it, where it came from. */
 	continuedIn: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
 	continuedFrom: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
-	/** Spaces: the topics, newest activity first (Main is the Space itself). */
-	topics: Type.Optional(Type.Array(TopicInfo)),
-	/** Spaces: what every agent in the Space is told. */
-	instructions: Type.Optional(Type.String()),
-	/** Spaces: the header's numbers and the settings (04-chat S7, §3.6). */
-	space: Type.Optional(SpaceInfo),
-	/** Threads: a Space it seems to belong in (S11), until moved or dismissed. */
-	suggestion: Type.Optional(SpaceSuggestion),
 	/** Agents. Refs to a person's conversation carry `conversationId: "person:<contactId>"`. */
 	agent: Type.Optional(AgentInfo),
 	/** Threads and sessions: next messages the utility model suggests after the latest answer (until you write). */
@@ -800,12 +759,19 @@ export const ConnectorInfo = Type.Object({
 });
 export type ConnectorInfo = Static<typeof ConnectorInfo>;
 
-/** A folder added in Build (docs/spec/05-build BP1). */
+/**
+ * A project (docs/spec/18 §3): a folder on the Mac (05-build BP1), or a project without one (`folder: false`), whose
+ * files Piopio keeps in `path` (its data folder) and whose conversations are threads with its instructions and memory.
+ */
 export const ProjectInfo = Type.Object({
 	id: Type.String(),
 	path: Type.String(),
 	name: Type.String(),
 	addedAt: Type.String(),
+	/** False: a project without a folder; `path` is where Piopio keeps the files you add. */
+	folder: Type.Boolean(),
+	/** Projects without a folder: what every conversation in it is told (folder projects use AGENTS.md). */
+	instructions: Type.Optional(Type.String()),
 	/** Current git branch; absent outside a git repo. */
 	branch: Type.Optional(Type.String()),
 	/** AGENTS.md or CLAUDE.md, when present. */
@@ -933,10 +899,8 @@ export const methods = {
 	},
 	"sessions.create": {
 		params: Type.Object({
-			kind: Type.Union([Type.Literal("thread"), Type.Literal("build"), Type.Literal("space")]),
+			kind: Type.Union([Type.Literal("thread"), Type.Literal("build")]),
 			cwd: Type.Optional(Type.String()),
-			/** Spaces: what every agent in the Space is told. */
-			instructions: Type.Optional(Type.String()),
 			/** Build: branch or worktree to work on (default: the project as it is). */
 			workOn: Type.Optional(WorkOn),
 			/** Project sessions: "build" (coding tools) or "chat" (knowledge assistant: no bash, web tools). */
@@ -945,6 +909,8 @@ export const methods = {
 			model: Type.Optional(ModelRef),
 			thinking: Type.Optional(Type.String()),
 			title: Type.Optional(Type.String()),
+			/** Threads: in this project without a folder (18 §3). */
+			projectId: Type.Optional(Type.String()),
 			/** Threads: start a debate between two models (docs/spec/16-debate). */
 			debate: Type.Optional(DebateConfig),
 		}),
@@ -1200,6 +1166,25 @@ export const methods = {
 		result: Type.Object({ projects: Type.Array(ProjectInfo) }),
 	},
 	/** Adds a folder (idempotent by real path) and imports its pi sessions. `lens`: also show it there. */
+	/** A project without a folder (18 §3): a name and what its conversations are told. */
+	"projects.create": {
+		params: Type.Object({ name: Type.String({ minLength: 1 }), instructions: Type.Optional(Type.String()) }),
+		result: Type.Object({ project: ProjectInfo }),
+	},
+	/** A file into a project without a folder: copied from `path`, or `text` as a new note; `extracted`: a document's text. */
+	"projects.addFile": {
+		params: Type.Object({ id: Type.String(), name: Type.String(), path: Type.Optional(Type.String()), text: Type.Optional(Type.String()), extracted: Type.Optional(Type.String()) }),
+		result: Type.Object({}),
+	},
+	"projects.removeFile": {
+		params: Type.Object({ id: Type.String(), name: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Move a conversation into a project without a folder, or out of it (`projectId: null`). Same thread, same history. */
+	"sessions.setProject": {
+		params: Type.Object({ ref: ContainerRef, projectId: Type.Union([Type.String(), Type.Null()]) }),
+		result: Type.Object({}),
+	},
 	"projects.add": {
 		params: Type.Object({ path: Type.String(), lens: Type.Optional(literals("build", "chat")) }),
 		result: Type.Object({ project: ProjectInfo }),
@@ -1212,6 +1197,9 @@ export const methods = {
 			removeRule: Type.Optional(Type.String()),
 			trust: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])),
 			lenses: Type.Optional(Type.Array(literals("build", "chat"))),
+			/** Projects without a folder: rename, and their instructions. */
+			name: Type.Optional(Type.String({ minLength: 1 })),
+			instructions: Type.Optional(Type.String()),
 		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},
@@ -1358,74 +1346,6 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef, promptId: Type.String(), response: PromptResponse }),
 		result: Type.Object({}),
 	},
-	/** Wrong topic: sends a routed message to another topic, or a new one, and teaches the organizer (04-chat S2). */
-	"spaces.reroute": {
-		params: Type.Object({ ref: ContainerRef, itemId: Type.String(), toTopicId: Type.Optional(Type.String()), newTopic: Type.Optional(Type.String()) }),
-		result: Type.Object({}),
-	},
-	/** You looked at a topic: clears its unread dot. */
-	"spaces.markRead": {
-		params: Type.Object({ ref: ContainerRef }),
-		result: Type.Object({}),
-	},
-	/** A Space's settings (§3.6). The topic model applies to new topics and every existing one. */
-	"spaces.configure": {
-		params: Type.Object({
-			ref: ContainerRef,
-			instructions: Type.Optional(Type.String()),
-			organizerModel: Type.Optional(ModelRef),
-			topicModel: Type.Optional(ModelRef),
-			memory: Type.Optional(Type.Boolean()),
-			autoTidy: Type.Optional(Type.Boolean()),
-		}),
-		result: Type.Object({}),
-	},
-	/** The memory and its history, newest first (S8). */
-	"spaces.memory.get": {
-		params: Type.Object({ ref: ContainerRef }),
-		result: Type.Object({
-			text: Type.String(),
-			revisions: Type.Array(
-				Type.Object({
-					id: Type.String(),
-					at: Type.String(),
-					by: Type.Object({ kind: literals("organizer", "topic", "user"), topicId: Type.Optional(Type.String()), title: Type.Optional(Type.String()) }),
-					summary: Type.String(),
-					added: Type.Array(Type.String()),
-					removed: Type.Array(Type.String()),
-					undone: Type.Optional(Type.Boolean()),
-				}),
-			),
-			/** Changes topics proposed that wait for you (docs/design v2 "Suggested by topics"). */
-			proposals: Type.Optional(
-				Type.Array(Type.Object({ id: Type.String(), at: Type.String(), topicId: Type.String(), title: Type.String(), added: Type.Array(Type.String()), removed: Type.Array(Type.String()), reason: Type.String() })),
-			),
-		}),
-	},
-	/** Your edit in the memory editor. */
-	"spaces.memory.set": { params: Type.Object({ ref: ContainerRef, text: Type.String() }), result: Type.Object({}) },
-	/** Undo on a memory card: takes that change back. */
-	"spaces.memory.undo": { params: Type.Object({ ref: ContainerRef, revisionId: Type.String() }), result: Type.Object({}) },
-	/** The memory as it was after a change in the history. */
-	"spaces.memory.restore": { params: Type.Object({ ref: ContainerRef, revisionId: Type.String() }), result: Type.Object({}) },
-	/** Save or Dismiss a topic's proposal. */
-	"spaces.memory.decide": { params: Type.Object({ ref: ContainerRef, proposalId: Type.String(), accept: Type.Boolean() }), result: Type.Object({}) },
-	/** Topic housekeeping (S9). `ref` is the topic's. */
-	"spaces.topics.rename": { params: Type.Object({ ref: ContainerRef, title: Type.String() }), result: Type.Object({}) },
-	"spaces.topics.archive": { params: Type.Object({ ref: ContainerRef, archived: Type.Boolean() }), result: Type.Object({}) },
-	/** Summarizes the topic into `into` (its brief) and archives it. */
-	"spaces.topics.merge": { params: Type.Object({ ref: ContainerRef, into: Type.String() }), result: Type.Object({ summary: Type.String() }) },
-	/** Space files: documents every topic can read. */
-	"spaces.files.list": {
-		params: Type.Object({ ref: ContainerRef }),
-		result: Type.Object({ files: Type.Array(Type.Object({ name: Type.String(), size: Type.Number(), addedAt: Type.String() })) }),
-	},
-	/** Copies a file in (`path`), or writes a note (`text`). `extracted`: a document's text, read by the client. */
-	"spaces.files.add": {
-		params: Type.Object({ ref: ContainerRef, name: Type.String(), path: Type.Optional(Type.String()), text: Type.Optional(Type.String()), extracted: Type.Optional(Type.String()) }),
-		result: Type.Object({}),
-	},
-	"spaces.files.remove": { params: Type.Object({ ref: ContainerRef, name: Type.String() }), result: Type.Object({}) },
 	"settings.get": { params: Type.Object({}), result: EngineSettings },
 	"settings.set": {
 		params: Type.Object({ models: Type.Optional(Type.Object({ utility: Type.Optional(UtilityChoice) })), chat: Type.Optional(Type.Partial(EngineSettings.properties.chat)), aboutMe: Type.Optional(Type.Partial(EngineSettings.properties.aboutMe)), memory: Type.Optional(Type.Partial(EngineSettings.properties.memory)) }),
@@ -1459,7 +1379,7 @@ export const methods = {
 					bank: Type.String(),
 					/** "About me", or the agent's partition: "Owner", "Shared", "María". */
 					label: Type.String(),
-					/** "about-me", "agent", or "other" (a bank whose agent was deleted). */
+					/** "about-me", "agent", "project" (a project without a folder), or "other" (its owner was deleted). */
 					area: Type.String(),
 					agent: Type.Optional(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), learns: Type.Boolean() })),
 					records: Type.Number(),
@@ -1471,7 +1391,6 @@ export const methods = {
 			),
 			/** Agents that use memory, with or without records yet (for the learning switches). */
 			agents: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), learns: Type.Boolean(), provider: Type.String() })),
-			notebooks: Type.Number(),
 			bytes: Type.Number(),
 		}),
 	},
@@ -1508,18 +1427,6 @@ export const methods = {
 		params: Type.Object({ provider: Type.String(), bank: Type.String(), query: Type.String() }),
 		result: Type.Object({ hits: Type.Array(Type.Object({ id: Type.String(), text: Type.String(), score: Type.Number(), at: Type.Optional(Type.String()) })) }),
 	},
-	/** Dismiss on a thread's Space suggestion: it won't be suggested again. */
-	"threads.dismissSuggestion": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({}) },
-	/**
-	 * Moves threads into a Space (S5, S11): each becomes a new topic named after it, or, with `topicId`, joins
-	 * that topic. The threads are deleted unless `keepThreads`.
-	 */
-	"spaces.importThreads": {
-		params: Type.Object({ ref: ContainerRef, threads: Type.Array(ContainerRef), topicId: Type.Optional(Type.String()), keepThreads: Type.Optional(Type.Boolean()) }),
-		result: Type.Object({ topicIds: Type.Array(Type.String()) }),
-	},
-	/** Promote to Thread (S9): copies a topic out into a new thread. The topic stays. */
-	"spaces.topics.promote": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({ ref: ContainerRef }) },
 	/** pi packages (Settings › Extensions). */
 	"packages.list": { params: Type.Object({}), result: Type.Object({ packages: Type.Array(PiPackage) }) },
 	"packages.install": { params: Type.Object({ source: Type.String() }), result: Type.Object({}) },

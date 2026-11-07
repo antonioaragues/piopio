@@ -258,7 +258,7 @@ struct ModelPicker: View {
     static func roleName(_ role: EngineController.ModelRole) -> String {
         switch role {
         case .build: "Build sessions"
-        case .chat: "chats and notebooks"
+        case .chat: "conversations"
         case .quick: "Quick Chat"
         case .agent: "new agents"
         }

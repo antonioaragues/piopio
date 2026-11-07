@@ -290,11 +290,11 @@ private struct McpServerDetail: View {
                         call("mcp.setEnabled", McpNameParams(scope: server.scope, cwd: entry.cwd, name: server.name, enabled: on))
                     }))
                     if entry.project == nil {
-                        ToggleRow(title: "Use in chats and notebooks", subtitle: "Tools run there without asking", subtitleColor: .dsAmber, last: true, isOn: Binding(get: { server.chat == true }, set: { on in
+                        ToggleRow(title: "Use in conversations", subtitle: "Tools run there without asking", subtitleColor: .dsAmber, last: true, isOn: Binding(get: { server.chat == true }, set: { on in
                             call("mcp.setChat", McpSetChatParams(name: server.name, chat: on))
                         }))
                     } else {
-                        ToggleRow(title: "Use in chats and notebooks", subtitle: "Project servers are for Build sessions in that project", last: true, isOn: .constant(false)).disabled(true)
+                        ToggleRow(title: "Use in conversations", subtitle: "Project servers are for Build sessions in that project", last: true, isOn: .constant(false)).disabled(true)
                     }
                 }
             }
@@ -571,9 +571,9 @@ struct AddMcpServerView: View {
             ListCard {
                 ToggleRow(title: "Use in Build sessions", subtitle: "Follows your Approvals settings", isOn: $build)
                 if oneProject {
-                    ToggleRow(title: "Use in chats and notebooks", subtitle: "Project servers are for Build sessions in that project", last: true, isOn: .constant(false)).disabled(true)
+                    ToggleRow(title: "Use in conversations", subtitle: "Project servers are for Build sessions in that project", last: true, isOn: .constant(false)).disabled(true)
                 } else {
-                    ToggleRow(title: "Use in chats and notebooks", subtitle: "Tools run there without asking", subtitleColor: .dsAmber, last: true, isOn: $chat)
+                    ToggleRow(title: "Use in conversations", subtitle: "Tools run there without asking", subtitleColor: .dsAmber, last: true, isOn: $chat)
                 }
             }
         }

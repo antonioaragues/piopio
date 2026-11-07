@@ -3,7 +3,7 @@ import PiopioTranscript
 import SwiftUI
 
 /// The main window (docs/design/grey 9a): a sidebar flush to the window edge (Search, Home, Needs you, Projects,
-/// Notebooks, Agents, Chats) that collapses, and the content for what it selects. The item's type decides the view.
+/// Agents, Conversations) that collapses, and the content for what it selects. The item's type decides the view.
 struct RootView: View {
     let engine: EngineController
     @AppStorage("sidebarItem") private var itemRaw = "home"
@@ -19,7 +19,6 @@ struct RootView: View {
     @Namespace private var composerSpace
     @State private var palette: CommandPalette.Mode?
     @State private var paletteQuery = ""
-    @State private var editingInstructions: SessionSummary?
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -90,7 +89,7 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .selectBuildSession)) { note in
             if let id = note.object as? String { itemRaw = SidebarItem.session(id).raw }
         }
-        .modifier(SpaceAndAgentSheets(engine: engine, item: itemBinding, editingInstructions: $editingInstructions))
+        .modifier(StartSheets(engine: engine, item: itemBinding))
         .onReceive(NotificationCenter.default.publisher(for: .selectThread)) { note in
             guard let id = note.object as? String else { return }
             itemRaw = (engine.item(for: id) ?? .chat(id)).raw
@@ -185,15 +184,15 @@ struct RootView: View {
         case .index(.projects):
             ProjectsIndex(engine: engine, item: itemBinding)
         case .project(let id):
-            ProjectsIndex(engine: engine, item: itemBinding, focus: id)
+            if let project = engine.projects.first(where: { $0.id == id }), !project.hasFolder {
+                ProjectPage(engine: engine, project: project, item: itemBinding).id(id)
+            } else {
+                ProjectsIndex(engine: engine, item: itemBinding, focus: id)
+            }
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.chats) where engine.threads.isEmpty:
             ChatFirstRun(engine: engine, item: itemBinding)
-        case .index(.notebooks) where engine.spaces.isEmpty:
-            HatchEmpty(title: "Start a notebook", message: "A notebook keeps one subject together: write in Main and it splits into topics that share files and memory.") {
-                Button("New Notebook ⌘⇧N") { NotificationCenter.default.post(name: .newSpace, object: nil) }.buttonStyle(PillStyle(kind: .primary))
-            }
         case .index(let section):
             SectionIndex(engine: engine, section: section, item: itemBinding)
         case .session(let id):
@@ -207,14 +206,6 @@ struct RootView: View {
             if let summary = engine.threads.first(where: { $0.ref.id == id }) {
                 ThreadView(engine: engine, thread: engine.thread(summary.ref), summary: summary)
                     .id(id)
-            } else {
-                missing
-            }
-        case .notebook(let key):
-            if let space = engine.space(String(key.split(separator: "/").first ?? "")) {
-                let topicId = key.split(separator: "/").dropFirst().first.map(String.init)
-                SpaceView(engine: engine, space: space, topicId: topicId, thread: engine.thread(space.ref(topic: topicId)), selection: chatSelection)
-                    .id(key)
             } else {
                 missing
             }
@@ -240,7 +231,7 @@ struct RootView: View {
 
     /// Anything that says this Mac used Piopio before: a model, or something made.
     private var hasHistory: Bool {
-        !engine.needsKey || !engine.projects.isEmpty || !engine.threads.isEmpty || !engine.spaces.isEmpty || !engine.agents.isEmpty
+        !engine.needsKey || !engine.projects.isEmpty || !engine.threads.isEmpty || !engine.agents.isEmpty
     }
 
     /// The item is gone (deleted elsewhere) or not in the catalog yet.
@@ -267,7 +258,7 @@ struct RootView: View {
         switch hit.ref.kind {
         case .thread: itemRaw = SidebarItem.chat(hit.ref.id).raw
         case .build: itemRaw = SidebarItem.session(hit.ref.id).raw
-        case .space: itemRaw = SidebarItem.notebook(hit.ref.key).raw
+        case .space: return // notebooks are gone (docs/spec/18 phase 2)
         case .agent: itemRaw = SidebarItem.agent(hit.ref.id).raw
         }
         if let found = hit.itemId { engine.thread(hit.ref).reveal(found) }
@@ -374,14 +365,13 @@ struct EngineBanner: View {
     }
 }
 
-/// The start pages, the notebook and trace sheets and their notifications (kept apart so the root view type-checks
-/// quickly). New debate, notebook and agent open their start pages (docs/design/start-pages); "New notebook" from a
-/// chat ticks that chat to bring in.
-private struct SpaceAndAgentSheets: ViewModifier {
+/// The start pages, New project and the trace sheet, with their notifications (kept apart so the root view
+/// type-checks quickly).
+private struct StartSheets: ViewModifier {
     let engine: EngineController
     @Binding var item: SidebarItem
-    @Binding var editingInstructions: SessionSummary?
     @State private var trace: TraceTarget?
+    @State private var newProject = false
 
     func body(content: Content) -> some View {
         content
@@ -395,23 +385,12 @@ private struct SpaceAndAgentSheets: ViewModifier {
                 if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
             }
             .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in item = .start(.agent) }
-            .onReceive(NotificationCenter.default.publisher(for: .newSpace)) { note in
-                if let thread = note.object as? String {
-                    StartDrafts.shared.update(.notebook) { if !$0.threads.contains(thread) { $0.threads.append(thread) } }
+            .onReceive(NotificationCenter.default.publisher(for: .newProject)) { _ in newProject = true }
+            .sheet(isPresented: $newProject) {
+                NewProjectSheet(engine: engine) { project in
+                    newProject = false
+                    if let project { item = .project(project.id) }
                 }
-                item = .start(.notebook)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .editSpaceInstructions)) { note in
-                editingInstructions = engine.space(note.object as? String ?? "")
-            }
-            .sheet(item: $editingInstructions) { space in
-                SpaceSettingsSheet(engine: engine, space: space)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openTopic)) { note in
-                guard let target = note.object as? TopicTarget else { return }
-                let ref = ContainerRef(kind: .space, id: target.spaceId, conversationId: target.topicId)
-                item = .notebook(ref.key)
-                if let found = target.itemId { engine.thread(ref).reveal(found) }
             }
     }
 }

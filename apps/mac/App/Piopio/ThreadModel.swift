@@ -270,14 +270,8 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .viewFile, object: url)
         case .revealFile(let path):
             NotificationCenter.default.post(name: .revealInInspector, object: RevealTarget(sessionId: ref.id, path: path))
-        case .openTopic(let topicId, let itemId):
-            NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: ref.id, topicId: topicId, itemId: itemId))
-        case .wrongTopic(let itemId):
-            chooseTopic(for: itemId)
-        case .undoMemory(let revisionId):
-            Task { do { try await engine?.spaceCall("spaces.memory.undo", RevisionParams(ref: spaceRef, revisionId: revisionId)) } catch { report(error) } }
-        case .decideMemory(let proposalId, let accept):
-            Task { do { try await engine?.spaceCall("spaces.memory.decide", DecideParams(ref: spaceRef, proposalId: proposalId, accept: accept)) } catch { report(error) } }
+        case .openTopic, .wrongTopic, .undoMemory, .decideMemory:
+            break // notebook cards (routing, notebook memory); notebooks are gone (docs/spec/18 phase 2)
         case .decideApproval(let approvalId, let approve):
             Task { do { try await engine?.decide(ref, approvalId: approvalId, approve: approve) } catch { report(error) } }
         case .allowAlways(let approvalId):
@@ -298,7 +292,7 @@ final class ThreadModel {
         }
     }
 
-    /// Where Remember this saves: About me in chats, notebooks and Build; in an agent, its memory of this person.
+    /// Where Remember this saves: About me in conversations; in an agent, its memory of this person.
     static func rememberDestination(_ ref: ContainerRef, engine: EngineController) -> String {
         guard ref.kind == .agent else { return "About me" }
         let name = engine.agents.first { $0.ref.id == ref.id }?.title ?? "the agent"
@@ -315,40 +309,6 @@ final class ThreadModel {
             try await engine.spaceCall("memory.add", MemoryAddParams(provider: provider, bank: bank, text: text))
         } else {
             try await engine.spaceCall("memory.add", MemoryAddParams(provider: engine.settings?.aboutMe.provider ?? "builtin", bank: "about-me", text: text))
-        }
-    }
-
-    /// The Space this conversation belongs to (memory belongs to the Space, not the topic).
-    private var spaceRef: ContainerRef { ContainerRef(kind: .space, id: ref.id) }
-
-    /// Wrong topic (04-chat S2): a menu of the other topics and New Topic…, at the pointer.
-    private func chooseTopic(for itemId: String) {
-        guard let engine, case .routing(let routing) = document.item(itemId) else { return }
-        let menu = NSMenu()
-        for topic in engine.space(ref.id)?.topics ?? [] where topic.id != routing.topicId {
-            menu.addItem(ClosureMenuItem(title: topic.title) { [weak self] in self?.reroute(itemId, toTopic: topic.id) })
-        }
-        if !menu.items.isEmpty { menu.addItem(.separator()) }
-        menu.addItem(ClosureMenuItem(title: "New Topic…") { [weak self] in
-            let alert = NSAlert()
-            alert.messageText = "Move to a new topic"
-            alert.informativeText = "The message goes to a new topic, and the organizer learns from the correction."
-            let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-            field.placeholderString = "Topic title"
-            alert.accessoryView = field
-            alert.addButton(withTitle: "Move")
-            alert.addButton(withTitle: "Cancel")
-            alert.window.initialFirstResponder = field
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-            let name = field.stringValue.trimmingCharacters(in: .whitespaces)
-            if !name.isEmpty { self?.reroute(itemId, newTopic: name) }
-        })
-        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-    }
-
-    private func reroute(_ itemId: String, toTopic: String? = nil, newTopic: String? = nil) {
-        Task {
-            do { try await engine?.reroute(ref, itemId: itemId, toTopic: toTopic, newTopic: newTopic) } catch { report(error) }
         }
     }
 

@@ -66,7 +66,7 @@ extension Area {
     var blurb: String {
         switch self {
         case .build: "Work in your code: sessions in your project folders, with diffs, git and a terminal."
-        case .chat: "Ask, draft and think things through. Notebooks keep personal projects together, with their files."
+        case .chat: "Ask, draft and think things through. Projects keep a subject's conversations, files and memory together."
         case .agents: "Small assistants that keep going while you're away: briefings, reminders, messages."
         }
     }
@@ -77,13 +77,13 @@ extension Area {
         case .session(let id):
             guard let s = engine.buildSessions.first(where: { $0.ref.id == id }) else { return nil }
             self = s.profile == .chat ? .chat : .build
-        case .chat, .notebook: self = .chat
+        case .chat: self = .chat
         case .agent, .start(.agent): self = .agents
         case .start(.project): self = Areas.shared.contains(.build) ? .build : .chat
         case .newSession: self = .build
         case .start: self = .chat
         case .index(.agents): self = .agents
-        case .index(.chats), .index(.notebooks): self = .chat
+        case .index(.chats): self = .chat
         case .index(.projects), .project: self = .build
         default: return nil
         }
@@ -204,7 +204,7 @@ struct AreasCard: View {
             let sessions = engine.buildSessions.filter { $0.profile != .chat && $0.parent == nil }.count
             return "\(n(engine.projects(in: .build).count, "project")) · \(n(sessions, "session"))"
         case .chat:
-            return "\(n(engine.threads.count, "chat")) · \(n(engine.spaces.count, "notebook"))"
+            return n(engine.threads.count, "conversation")
         case .agents:
             let scheduled = engine.agents.filter { $0.agent?.status?.nextRun != nil }.count
             return "\(n(engine.agents.count, "agent"))" + (scheduled > 0 ? " · \(scheduled) scheduled" : "")
@@ -275,14 +275,12 @@ extension AreaSet {
         case .index(let section): shows(section)
         case .project: showsProjects
         case .session(let id): engine.buildSessions.first { $0.ref.id == id }.map { showsSession(chatProfile: $0.profile == .chat) } ?? showsProjects
-        case .notebook: showsNotebooks
         case .chat: showsChats
         case .agent: showsAgents
         case .newSession: showsProjects
         case .start(let kind):
             switch kind {
             case .chat, .debate: showsChats
-            case .notebook: showsNotebooks
             case .agent: showsAgents
             case .project: showsProjects
             }
@@ -293,7 +291,6 @@ extension AreaSet {
         switch section {
         case .pinned: true
         case .projects: showsProjects
-        case .notebooks: showsNotebooks
         case .agents: showsAgents
         case .chats: showsChats
         }
@@ -303,7 +300,7 @@ extension AreaSet {
     func shows(_ summary: SessionSummary) -> Bool {
         switch summary.ref.kind {
         case .build: showsSession(chatProfile: summary.profile == .chat)
-        case .space: showsNotebooks
+        case .space: false // notebooks are gone (docs/spec/18 phase 2)
         case .agent: showsAgents
         default: showsChats
         }

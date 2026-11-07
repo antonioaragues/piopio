@@ -20,7 +20,7 @@ struct CostDetails: View {
                     LabeledContent(row.kind == "web_search" ? "Web search (\(row.calls))" : "Utility requests (\(row.calls))", value: money(row.knownUsd))
                 }
                 if extra.unknownCalls > 0 { Text("Cost unavailable for \(extra.unknownCalls) request(s). They are excluded from these amounts.").foregroundStyle(Color.dsAmber) }
-                if thread != nil { Text("Additional requests cover this whole chat, notebook or agent, including its branches and topics. Utility work without a conversation belongs to Piopio's app total.") }
+                if thread != nil { Text("Additional requests cover this whole conversation or agent, including its branches. Utility work without a conversation belongs to Piopio's app total.") }
                 else { Text("Additional requests across Piopio since tracking began. Conversation model estimates are shown in each conversation.") }
             } else if let error { Text(error).foregroundStyle(Color.dsFg2) }
             else { ProgressView().controlSize(.small) }

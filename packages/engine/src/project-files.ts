@@ -1,20 +1,20 @@
 /**
- * Space files (docs/spec/04-chat §3.2): knowledge files in `spaces/<id>/files/`, which the organizer and the topics
- * read through `space_files_*`. PDFs and other documents keep a text copy that the app extracted, next to them as
+ * Files of a project without a folder (docs/spec/18 §3), in `<home>/projects/<id>/files/`; its conversations read them
+ * with `read_project_file`. PDFs and other documents keep a text copy that the app extracted, next to them as
  * `.<name>.txt`.
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { EngineError } from "../models.js";
+import { EngineError } from "./models.js";
 
-export type SpaceFile = { name: string; size: number; addedAt: string };
+export type ProjectFile = { name: string; size: number; addedAt: string };
 
 const MAX_READ = 60_000;
 
-export class SpaceFiles {
+export class ProjectFiles {
 	constructor(private readonly dir: string) {}
 
-	list(): SpaceFile[] {
+	list(): ProjectFile[] {
 		if (!existsSync(this.dir)) return [];
 		return readdirSync(this.dir)
 			.filter((n) => !n.startsWith("."))
@@ -26,7 +26,7 @@ export class SpaceFiles {
 	}
 
 	/** Copies a file in (or writes `text` as a new note). `extracted` is the text of a document the app read. */
-	add(file: { name: string; path?: string; text?: string; extracted?: string }): SpaceFile {
+	add(file: { name: string; path?: string; text?: string; extracted?: string }): ProjectFile {
 		const name = basename(file.name).replace(/^\.+/, "").trim();
 		if (!name) throw new EngineError("INVALID", "The file needs a name.");
 		if (!file.path === (file.text === undefined)) throw new EngineError("INVALID", "Give a path or the text.");

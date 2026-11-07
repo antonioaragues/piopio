@@ -10,7 +10,7 @@ enum DebugAutomation {
     private static func seedMemory(_ engine: EngineController) async {
         guard let client = engine.client else { return }
         _ = try? await client.call("aboutMe.set", TextParams(text: "## Home\n- Lives in Madrid, in Chamberí\n- Partner: Sam, a sound engineer\n\n## Health\n- Allergic to cashews\n\n## Preferences\n- Prefers short answers"), as: Empty.self)
-        await engine.updateSettings(SettingsPatch(aboutMe: .init(enabled: true, capture: true, inThreads: true, inSpaces: true)))
+        await engine.updateSettings(SettingsPatch(aboutMe: .init(enabled: true, capture: true, inThreads: true)))
         guard let ref = try? await engine.createAgent(name: "Daily briefing", template: "daily-briefing", avatar: "☀️") else { return }
         let owner = "\(ref.id)/owner"
         let me = HomeView.firstName
@@ -231,39 +231,18 @@ enum DebugAutomation {
                 if env["PIOPIO_DEMO_INBOX"] == "1" { NotificationCenter.default.post(name: .openInbox, object: nil) }
             }
         }
-        // PIOPIO_DEMO_SPACE=<name>: a new Space; PIOPIO_DEMO_SPACE_MESSAGES: messages to Main, separated by "||",
-        // each sent once the previous settles; PIOPIO_DEMO_TOPIC=<title>: then open that topic.
-        if let name = env["PIOPIO_DEMO_SPACE"], engine.status == .ready {
+        // PIOPIO_DEMO_NOTES_PROJECT=<name>: a project without a folder (docs/spec/18 §3), with PIOPIO_DEMO_NOTES_INSTRUCTIONS
+        // and the files in PIOPIO_DEMO_NOTES_FILES ("|" between paths); then its page opens.
+        if let name = env["PIOPIO_DEMO_NOTES_PROJECT"], engine.status == .ready {
             Task {
-                guard let ref = await engine.createSpace(name: name, instructions: env["PIOPIO_DEMO_SPACE_INSTRUCTIONS"] ?? "") else { return }
-                NotificationCenter.default.post(name: .selectThread, object: ref.id)
-                let main = engine.thread(ref)
-                await main.open()
-                for message in (env["PIOPIO_DEMO_SPACE_MESSAGES"] ?? "").components(separatedBy: "||") where !message.isEmpty {
-                    await main.send(message.replacingOccurrences(of: "\\n", with: "\n"))
-                    for _ in 0..<60 {
-                        try? await Task.sleep(for: .milliseconds(100))
-                        if main.state?.status == .idle { break }
-                    }
-                    try? await Task.sleep(for: .milliseconds(1500))
+                let instructions = env["PIOPIO_DEMO_NOTES_INSTRUCTIONS"]
+                var found = engine.projects.first { $0.name == name && !$0.hasFolder }
+                if found == nil { found = try? await engine.createProject(name: name, instructions: instructions) }
+                guard let project = found else { return }
+                for path in (env["PIOPIO_DEMO_NOTES_FILES"] ?? "").split(separator: "|") {
+                    try? await engine.addProjectFile(project, url: URL(fileURLWithPath: String(path)))
                 }
-                // PIOPIO_DEMO_SPACE_THREAD=<text>: then a thread with this message (its Space suggestion shows).
-                if let text = env["PIOPIO_DEMO_SPACE_THREAD"], let thread = await engine.createThread() {
-                    try? await engine.refreshCatalog()
-                    NotificationCenter.default.post(name: .selectThread, object: thread.id)
-                    let model = engine.thread(thread)
-                    await model.open()
-                    await model.send(text)
-                    return
-                }
-                if let title = env["PIOPIO_DEMO_TOPIC"], let topic = engine.space(ref.id)?.topics?.first(where: { $0.title == title }) {
-                    NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: ref.id, topicId: topic.id, itemId: nil))
-                }
-                // PIOPIO_DEMO_SPACE_SETTINGS=1: then open its settings sheet; =picker also opens the topic model picker.
-                if env["PIOPIO_DEMO_SPACE_SETTINGS"] != nil {
-                    try? await Task.sleep(for: .seconds(1))
-                    NotificationCenter.default.post(name: .editSpaceInstructions, object: ref.id)
-                }
+                NotificationCenter.default.post(name: .selectItem, object: SidebarItem.project(project.id).raw)
             }
         }
         // PIOPIO_DEMO_CHAT_PROJECT: add this folder in Chat and open a chat-profile session; PIOPIO_DEMO_PREVIEW=<path>

@@ -11,8 +11,6 @@ final class EngineController {
 
     private(set) var status: Status = .starting
     private(set) var threads: [SessionSummary] = []
-    /// Chat: Spaces, with their topics (docs/spec/04-chat §3).
-    private(set) var spaces: [SessionSummary] = []
     /// Agents (docs/spec/06-agents).
     private(set) var agents: [SessionSummary] = []
     /// Build: folders added as projects, and their sessions (newest first).
@@ -407,11 +405,14 @@ final class EngineController {
 
     // MARK: Catalog
 
+    func loadProjects() async {
+        if let list = try? await client?.call("projects.list", Empty(), as: ProjectsListResult.self).projects { projects = list }
+    }
+
     func refreshCatalog() async throws {
         guard let client else { return }
         threads = try await client.call("sessions.list", ListSessionsParams(kind: .thread), as: ListSessionsResult.self).sessions
         buildSessions = try await client.call("sessions.list", ListSessionsParams(kind: .build), as: ListSessionsResult.self).sessions
-        spaces = try await client.call("sessions.list", ListSessionsParams(kind: .space), as: ListSessionsResult.self).sessions
         agents = try await client.call("sessions.list", ListSessionsParams(kind: .agent), as: ListSessionsResult.self).sessions
         if settings == nil { await loadSettings() }
         projects = try await client.call("projects.list", Empty(), as: ProjectsListResult.self).projects
@@ -428,7 +429,6 @@ final class EngineController {
         }
         threads = merged(threads, kind: .thread)
         buildSessions = merged(buildSessions, kind: .build)
-        spaces = merged(spaces, kind: .space)
         agents = merged(agents, kind: .agent)
         for id in removed { forget(id) }
     }
@@ -489,9 +489,50 @@ final class EngineController {
         try? await refreshCatalog()
     }
 
-    func createThread(model: ModelRef? = nil) async -> ContainerRef? {
+    /// A conversation with no project, or in a project without a folder (`projectId`, docs/spec/18 §3).
+    func createThread(model: ModelRef? = nil, projectId: String? = nil) async -> ContainerRef? {
         guard let client else { return nil }
-        return try? await client.call("sessions.create", CreateSessionParams(kind: .thread, model: model ?? preferredModel), as: CreateSessionResult.self).ref
+        return try? await client.call("sessions.create", CreateSessionParams(kind: .thread, model: model ?? preferredModel, projectId: projectId), as: CreateSessionResult.self).ref
+    }
+
+    // MARK: Projects without a folder (docs/spec/18 §3)
+
+    /// A project without a folder: a name, and what its conversations are told.
+    func createProject(name: String, instructions: String? = nil) async throws -> ProjectInfo {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
+        let project = try await client.call("projects.create", ProjectsCreateParams(name: name, instructions: instructions), as: ProjectsAddResult.self).project
+        await loadProjects()
+        return project
+    }
+
+    func configureProject(_ project: ProjectInfo, name: String? = nil, instructions: String? = nil) async throws {
+        guard let client else { return }
+        _ = try await client.call("projects.configure", ProjectsConfigureParams(id: project.id, name: name, instructions: instructions), as: ProjectsAddResult.self)
+        await loadProjects()
+    }
+
+    /// Copies a file in; PDFs and other documents go with their text, which the model reads.
+    func addProjectFile(_ project: ProjectInfo, url: URL) async throws {
+        guard let client else { return }
+        let extracted: String? = if url.pathExtension.lowercased() == "pdf", let loaded = try? AttachmentLoader.load(url), case .text(_, _, let text, _) = loaded.attachment { text } else { nil }
+        _ = try await client.call("projects.addFile", ProjectFileParams(id: project.id, name: url.lastPathComponent, path: url.path, extracted: extracted), as: Empty.self)
+    }
+
+    func removeProjectFile(_ project: ProjectInfo, name: String) async throws {
+        guard let client else { return }
+        _ = try await client.call("projects.removeFile", ProjectFileParams(id: project.id, name: name), as: Empty.self)
+    }
+
+    /// Moves a conversation into a project without a folder, or out of one (nil). Same conversation, same history.
+    func setProject(_ ref: ContainerRef, project: ProjectInfo?) async throws {
+        guard let client else { return }
+        _ = try await client.call("sessions.setProject", SetProjectParams(ref: ref, projectId: project?.id), as: Empty.self)
+        try? await refreshCatalog()
+    }
+
+    /// The conversations in a project without a folder, newest first.
+    func conversations(in project: ProjectInfo) -> [SessionSummary] {
+        threads.filter { $0.projectId == project.id }
     }
 
     func rename(_ ref: ContainerRef, to title: String) async {
@@ -523,7 +564,7 @@ final class EngineController {
         preferenceTick += 1
     }
 
-    /// The model new chats and notebooks start with.
+    /// The model new conversations start with.
     var preferredModel: ModelRef? { model(for: .chat) }
     func setPreferredModel(_ model: ModelRef) { setModel(model, for: .chat) }
 
@@ -564,7 +605,7 @@ final class EngineController {
         return t
     }
 
-    /// Drops the open models of a session (a Space's Main and all its topics).
+    /// Drops the open models of a session (and its agent conversations).
     private func forget(_ id: String) {
         for key in openThreads.keys where key == id || key.hasPrefix(id + "/") {
             openThreads[key]?.close()
@@ -572,46 +613,10 @@ final class EngineController {
         }
     }
 
-    // MARK: Spaces
-
-    func createSpace(name: String, instructions: String) async -> ContainerRef? {
-        guard let client else { return nil }
-        let ref = try? await client.call("sessions.create", CreateSessionParams(kind: .space, model: preferredModel, title: name, instructions: instructions.isEmpty ? nil : instructions), as: CreateSessionResult.self).ref
-        try? await refreshCatalog()
-        return ref
-    }
-
-    func space(_ id: String) -> SessionSummary? {
-        spaces.first { $0.ref.id == id }
-    }
-
-    /// Wrong topic: moves a routed message to another topic, or a new one.
-    func reroute(_ ref: ContainerRef, itemId: String, toTopic: String? = nil, newTopic: String? = nil) async throws {
-        guard let client else { return }
-        _ = try await client.call("spaces.reroute", RerouteParams(ref: ref, itemId: itemId, toTopicId: toTopic, newTopic: newTopic), as: Empty.self)
-    }
-
-    func markRead(_ ref: ContainerRef) {
-        guard ref.conversationId != nil, space(ref.id)?.topics?.first(where: { $0.id == ref.conversationId })?.unread == true else { return }
-        Task { _ = try? await client?.call("spaces.markRead", RefParams(ref: ref), as: Empty.self) }
-    }
-
-    func setInstructions(_ instructions: String, for space: ContainerRef) async {
-        _ = try? await client?.call("spaces.configure", SpaceConfigureParams(ref: space, instructions: instructions), as: Empty.self)
-    }
-
-    /// A Space method without a result (memory, topics, files, settings).
+    /// An engine method without a result.
     func spaceCall(_ method: String, _ params: some Encodable & Sendable) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         _ = try await client.call(method, params, as: Empty.self)
-    }
-
-    func memory(of space: ContainerRef) async -> MemoryResult? {
-        try? await client?.call("spaces.memory.get", RefParams(ref: space), as: MemoryResult.self)
-    }
-
-    func spaceFiles(_ space: ContainerRef) async -> [SpaceFile] {
-        (try? await client?.call("spaces.files.list", RefParams(ref: space), as: SpaceFilesResult.self).files) ?? []
     }
 
     // MARK: Agents
@@ -741,8 +746,6 @@ final class EngineController {
         try? await client?.call("aboutMe.get", Empty(), as: MemoryResult.self)
     }
 
-    /// Moves threads into a Space: each becomes a topic, or joins `topic`. Returns the topics' ids.
-    @discardableResult
     /// A conversation continues in a project folder (docs/spec/18 §5): a new conversation there, with this one's text
     /// and images as context. This one stays, linked to it.
     func continueIn(_ ref: ContainerRef, project: ProjectInfo) async throws -> ContainerRef {
@@ -750,33 +753,6 @@ final class EngineController {
         let next = try await client.call("sessions.continueIn", ContinueInParams(ref: ref, cwd: project.path), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return next
-    }
-
-    func importThreads(_ threads: [ContainerRef], into space: ContainerRef, topic: String? = nil, keep: Bool = false) async throws -> [String] {
-        guard let client else { return [] }
-        let ids = try await client.call("spaces.importThreads", ImportThreadsParams(ref: space, threads: threads, topicId: topic, keepThreads: keep), as: ImportThreadsResult.self).topicIds
-        if !keep { for t in threads { forget(t.id) } }
-        try? await refreshCatalog()
-        return ids
-    }
-
-    /// Promote to Thread: a copy of the topic as a new thread.
-    func promote(_ topic: ContainerRef) async throws -> ContainerRef? {
-        guard let client else { return nil }
-        let ref = try await client.call("spaces.topics.promote", RefParams(ref: topic), as: CreateSessionResult.self).ref
-        try? await refreshCatalog()
-        return ref
-    }
-
-    func dismissSuggestion(_ thread: ContainerRef) async {
-        _ = try? await client?.call("threads.dismissSuggestion", RefParams(ref: thread), as: Empty.self)
-    }
-
-    /// Merges a topic into another; returns the summary that joined it.
-    func merge(_ topic: ContainerRef, into: String) async throws -> String {
-        guard let client else { return "" }
-        struct Result: Decodable { var summary: String }
-        return try await client.call("spaces.topics.merge", TopicMergeParams(ref: topic, into: into), as: Result.self).summary
     }
 
     func subscribe(_ ref: ContainerRef, handler: @escaping ([SessionEvent]) -> Void) async throws -> SubscribeResult {
@@ -809,8 +785,7 @@ final class EngineController {
     func answerFinished(in thread: ThreadModel) {
         guard !(NSApp.isActive && selectedThreadId == thread.ref.key) else { return }
         guard case .assistant(let a)? = thread.document.lastItem else { return }
-        let space = space(thread.ref.id)
-        let title = thread.ref.conversationId.flatMap { id in space?.topics?.first { $0.id == id }?.title } ?? (threads + buildSessions + spaces).first { $0.ref.id == thread.ref.id }?.title ?? "Piopio"
+        let title = (threads + buildSessions).first { $0.ref.id == thread.ref.id }?.title ?? "Piopio"
         let failed = a.status == .error
         let body = failed ? (a.error ?? "The request failed.") : String(a.text.replacingOccurrences(of: "\n", with: " ").prefix(180))
         Notifier.shared.answer(ref: thread.ref, title: title, body: body, failed: failed)

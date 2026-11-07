@@ -213,8 +213,6 @@ struct Composer: View {
 
     /// Build sessions take files by path (the agent reads them) and have their own tools.
     private var isBuild: Bool { thread.ref.kind == .build }
-    /// A Space's Main: @topic and /new, /main (04-chat S3).
-    var isSpaceMain: Bool { thread.ref.kind == .space && thread.ref.conversationId == nil }
 
     private var canSend: Bool { !thread.isSubmitting && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -226,10 +224,6 @@ struct Composer: View {
         }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
-        if thread.ref.kind == .space, let space = engine.space(thread.ref.id) {
-            if let id = thread.ref.conversationId { return "Message \(space.topics?.first { $0.id == id }?.title ?? "this topic")…" }
-            return "Message \(space.title)…"
-        }
         if thread.document.lastItem != nil { return "Reply…" }
         if isBuild, engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.profile == .chat { return "Ask about these files, @mention one, or search the web…" }
         return isBuild ? "Ask, @mention files, or /command…" : "Message…"
@@ -283,7 +277,7 @@ struct Composer: View {
     /// This conversation's summary from the catalog (for what it turned off).
     private var summary: SessionSummary? {
         let id = thread.ref.id
-        return engine.threads.first { $0.ref.id == id } ?? engine.buildSessions.first { $0.ref.id == id } ?? engine.spaces.first { $0.ref.id == id }
+        return engine.threads.first { $0.ref.id == id } ?? engine.buildSessions.first { $0.ref.id == id }
     }
 
     /// The +: files and folders in one open panel. Build reads them itself, so they become @paths in the message;
@@ -565,24 +559,14 @@ enum Suggestion: Hashable, Identifiable {
     case file(FileMatch)
     case builtIn(BuiltInCommand)
     case command(SessionCommand)
-    /// A Space's Main: a topic to send to, or /new and /main.
-    case topic(TopicInfo)
-    case spaceCommand(name: String, summary: String)
 
     var id: String {
         switch self {
         case .file(let f): "file:\(f.path)"
         case .builtIn(let c): "piopio:\(c.name)"
         case .command(let c): "pi:\(c.name)"
-        case .topic(let t): "topic:\(t.id)"
-        case .spaceCommand(let name, _): "space:\(name)"
         }
     }
-
-    static let spaceCommands: [Suggestion] = [
-        .spaceCommand(name: "new", summary: "Start a topic: /new Title, then your message on the next line"),
-        .spaceCommand(name: "main", summary: "Answer here in Main instead of routing"),
-    ]
 }
 
 /// Commands the app handles itself (BR5: /plan, /compact, /model, /tree, plus review, commit, new).
@@ -624,24 +608,8 @@ extension Composer {
 
     func suggest(for value: String) {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
-        if isSpaceMain {
-            if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
-                let q = trimmed.dropFirst().lowercased()
-                suggestions = Suggestion.spaceCommands.filter { if case .spaceCommand(let name, _) = $0 { q.isEmpty || name.hasPrefix(q) } else { false } }
-                    + sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.prefix(10).map(Suggestion.command)
-            } else if trimmed.hasPrefix("@"), !value.contains("\n") {
-                let q = trimmed.dropFirst().lowercased()
-                let topics = engine.space(thread.ref.id)?.topics ?? []
-                // Stop suggesting once a whole title (and a space) was typed.
-                suggestions = topics.contains(where: { q.hasPrefix($0.title.lowercased() + " ") }) ? [] : topics.filter { q.isEmpty || $0.title.lowercased().hasPrefix(q) || $0.title.lowercased().contains(q) }.prefix(8).map(Suggestion.topic)
-            } else if !suggestions.isEmpty {
-                suggestions = []
-            }
-            highlighted = 0
-            return
-        }
         if !isBuild {
-            // Threads and topics: templates and skills after "/".
+            // Conversations: templates and skills after "/".
             if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
                 let q = trimmed.dropFirst().lowercased()
                 suggestions = Array(sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.prefix(12).map(Suggestion.command))
@@ -681,10 +649,6 @@ extension Composer {
             c.run(thread)
         case .command(let c):
             text = "/\(c.name) "
-        case .topic(let t):
-            text = "@\(t.title) "
-        case .spaceCommand(let name, _):
-            text = "/\(name) "
         }
         suggestions = []
     }
@@ -717,8 +681,6 @@ extension Composer {
         case .file(let f): f.path
         case .builtIn(let c): "/\(c.name)"
         case .command(let c): "/\(c.name)" + (c.hint.map { " \($0)" } ?? "")
-        case .topic(let t): "@\(t.title)"
-        case .spaceCommand(let name, _): "/\(name)"
         }
     }
 
@@ -727,8 +689,6 @@ extension Composer {
         case .file: ""
         case .builtIn(let c): c.summary
         case .command(let c): c.description.isEmpty ? (c.kind == .skill ? "Skill" : c.kind == .template ? "Prompt template" : "Extension command") : c.description
-        case .topic(let t): t.brief ?? ""
-        case .spaceCommand(_, let summary): summary
         }
     }
 
@@ -737,8 +697,6 @@ extension Composer {
         case .file(let f): f.kind == .folder ? "folder" : "doc"
         case .builtIn: "command"
         case .command(let c): c.kind == .skill ? "sparkles" : c.kind == .template ? "text.badge.plus" : "puzzlepiece.extension"
-        case .topic: "number"
-        case .spaceCommand: "command"
         }
         Image(systemName: name).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
     }

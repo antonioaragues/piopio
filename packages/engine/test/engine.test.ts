@@ -361,6 +361,65 @@ describe("milestone 1.3", () => {
 	});
 });
 
+test("a project without a folder: files, instructions and shared memory across its conversations; move in and out (docs/spec/18 phase 2)", async () => {
+	const a = await start();
+	const { project } = await a.client.call("projects.create", { name: "Kitchen renovation", instructions: "Answer in metric." });
+	expect(project).toMatchObject({ name: "Kitchen renovation", folder: false, instructions: "Answer in metric." });
+	expect(project.path).toContain(join(a.home, "projects", project.id));
+	await a.client.call("projects.addFile", { id: project.id, name: "budget.md", text: "Kitchen budget: 12k\n" });
+	const src = join(realpathSync(mkdtempSync(join(tmpdir(), "piopio-src-"))), "quote.pdf");
+	writeFileSync(src, "%PDF binary");
+	await a.client.call("projects.addFile", { id: project.id, name: "quote.pdf", path: src, extracted: "Quote: cabinets 4,200" });
+	expect((await a.client.call("projects.listDir", { cwd: project.path, dir: "" })).entries.map((e: { name: string }) => e.name)).toEqual(["budget.md", "quote.pdf"]);
+
+	/** A conversation in the project, after one message; its tool items. */
+	const ask = async (text: string, projectId?: string) => {
+		const { ref } = await a.client.call("sessions.create", { kind: "thread", ...(projectId ? { projectId } : {}) });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text } });
+		for (let i = 0; i < 300; i++) {
+			const s: Snapshot = await a.client.call("sessions.open", { ref });
+			if (s.state.status === "idle" && s.items.at(-1)?.kind === "assistant") return { ref, tools: s.items.flatMap((x) => (x.kind === "tool" ? [x] : [])) };
+			await new Promise((r) => setTimeout(r, 30));
+		}
+		throw new Error("no answer");
+	};
+	const one = await ask('call: read_project_file | {"name":"quote.pdf"}\ncall: remember_in_project | {"fact":"The sink moves 40 cm left."}', project.id);
+	expect(one.tools.map((t) => `${t.tool}:${t.status}`)).toEqual(["read_project_file:done", "remember_in_project:done"]);
+	expect(one.tools[0]!.output).toContain("Quote: cabinets 4,200");
+	const two = await ask('call: read_project_file | {"name":"budget.md"}', project.id);
+	expect(two.tools[0]!.output).toContain("Kitchen budget: 12k");
+	// What one saved is the project's: its bank, under the project's name in Settings › Memory.
+	const banks = (await a.client.call("memory.banks", {})).banks as { bank: string; label: string; area: string; facts: number }[];
+	expect(banks.find((b) => b.bank === `project:${project.id}`)).toMatchObject({ label: "Kitchen renovation", area: "project", facts: 1 });
+	const listed = (await a.client.call("sessions.list", { kind: "thread" })).sessions as { ref: { id: string }; projectId?: string }[];
+	expect(listed.filter((x) => x.projectId === project.id).length).toBe(2);
+
+	// A loose chat has no project tools; moved in, it has them and keeps its history; moved out, they go.
+	const loose = await ask('call: read_project_file | {"name":"budget.md"}');
+	expect(loose.tools).toEqual([]); // not offered outside a project
+	await a.client.call("sessions.setProject", { ref: loose.ref, projectId: project.id });
+	await a.client.call("sessions.submit", { ref: loose.ref, input: { text: 'call: read_project_file | {"name":"budget.md"}' } });
+	let snap: Snapshot = await a.client.call("sessions.open", { ref: loose.ref });
+	for (let i = 0; i < 300 && !(snap.state.status === "idle" && snap.items.filter((x) => x.kind === "assistant").length === 2); i++) {
+		await new Promise((r) => setTimeout(r, 30));
+		snap = await a.client.call("sessions.open", { ref: loose.ref });
+	}
+	const tools = snap.items.flatMap((x) => (x.kind === "tool" ? [x] : []));
+	expect(tools.map((t) => `${t.tool}:${t.status}`)).toEqual(["read_project_file:done"]);
+	expect(tools[0]!.output).toContain("Kitchen budget: 12k");
+	expect(snap.items.filter((x) => x.kind === "user").length).toBe(2);
+	await expect(a.client.call("sessions.setProject", { ref: loose.ref, projectId: "prj_nope" })).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
+
+	// Removing the project: its conversations stay, with no project; its files and memory go.
+	await a.client.call("projects.remove", { id: project.id });
+	const after = (await a.client.call("sessions.list", { kind: "thread" })).sessions as { projectId?: string }[];
+	expect(after.length).toBe(3);
+	expect(after.some((x) => x.projectId)).toBe(false);
+	expect(existsSync(join(a.home, "projects", project.id))).toBe(false);
+	expect(((await a.client.call("memory.banks", {})).banks as { bank: string }[]).some((b) => b.bank === `project:${project.id}`)).toBe(false);
+}, 30_000);
+
 test("a chat continues in a project folder with its text and images; the chat stays, linked (docs/spec/18 §5)", async () => {
 	const a = await start();
 	const { ref: chat } = await a.client.call("sessions.create", { kind: "thread" });
@@ -1264,198 +1323,7 @@ describe("projects in the Chat lens (milestone 3.1)", () => {
 	});
 });
 
-describe("Spaces (milestone 3.2)", () => {
-	type Routing = Extract<Snapshot["items"][number], { kind: "routing" }>;
-	const routings = (s: Snapshot) => s.items.filter((i): i is Routing => i.kind === "routing");
-	/** Polls `sessions.open` until `ready` holds (routing statuses settle in the background). */
-	async function until(ctx: Ctx, ref: unknown, ready: (s: Snapshot) => boolean, timeout = 8_000): Promise<Snapshot> {
-		const end = Date.now() + timeout;
-		for (;;) {
-			const snap: Snapshot = await ctx.client.call("sessions.open", { ref });
-			if (ready(snap)) return snap;
-			if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(snap.items)}`);
-			await new Promise((r) => setTimeout(r, 100));
-		}
-	}
-
-	test("the organizer creates and routes to topics; Main shows routing cards and the replies live in the topics", async () => {
-		const a = await start();
-		const { ref } = await a.client.call("sessions.create", { kind: "space", title: "Home renovation", instructions: "We're redoing the flat." });
-		expect(ref.kind).toBe("space");
-		await a.client.call("sessions.subscribe", { ref });
-		await a.client.call("sessions.submit", { ref, input: { text: 'call: create_topic | {"title":"Kitchen layout","brief":"Where things go in the kitchen","reason":"A new subject that will come back","message":"Can we fit a dishwasher?"}' } });
-		let main = await until(a, ref, (s) => routings(s)[0]?.status === "replied");
-		const [created] = routings(main);
-		expect(created).toMatchObject({ decision: "create", topicTitle: "Kitchen layout", reason: "A new subject that will come back", message: "Can we fit a dishwasher?", preview: "Echo: Can we fit a dishwasher?" });
-		expect(main.items.filter((i) => i.kind === "tool")).toEqual([]);
-		expect(main.state.model).toEqual({ provider: "faux", id: "faux-1" });
-
-		const topicRef = { ...ref, conversationId: created!.topicId };
-		const topic: Snapshot = await a.client.call("sessions.open", { ref: topicRef });
-		expect(texts(topic)).toEqual([
-			["user", "Can we fit a dishwasher?"],
-			["assistant", "Echo: Can we fit a dishwasher?"],
-		]);
-		expect(topic.items.find((i) => i.kind === "assistant")!.id).toBe(created!.replyItemId);
-		const search = await a.client.call("catalog.search", { query: "dishwasher", kind: "space" });
-		expect(search.results.some((hit: { ref: unknown; itemId?: string }) => JSON.stringify(hit.ref) === JSON.stringify(topicRef) && hit.itemId === created!.replyItemId)).toBe(true);
-
-		let [space] = (await a.client.call("sessions.list", { kind: "space" })).sessions;
-		expect(space).toMatchObject({ title: "Home renovation", instructions: "We're redoing the flat.", topics: [{ id: created!.topicId, title: "Kitchen layout", unread: true }] });
-		await a.client.call("spaces.markRead", { ref: topicRef });
-		[space] = (await a.client.call("sessions.list", { kind: "space" })).sessions;
-		expect(space!.topics![0]!.unread).toBeUndefined();
-
-		// Routing by title to the existing topic; a plain message is answered in Main.
-		await a.client.call("sessions.submit", { ref, input: { text: 'call: route_to_topic | {"topic":"kitchen layout","reason":"Continues the sink discussion","message":"And the sink?"}' } });
-		main = await until(a, ref, (s) => routings(s)[1]?.status === "replied");
-		expect(routings(main)[1]).toMatchObject({ decision: "route", topicId: created!.topicId, reason: "Continues the sink discussion", preview: "Echo: And the sink?" });
-		await a.client.call("sessions.submit", { ref, input: { text: "what's in this space?" } });
-		main = await until(a, ref, (s) => s.items.some((i) => i.kind === "assistant" && i.parts.some((p) => p.text === "Echo: what's in this space?")));
-		expect(texts(await a.client.call("sessions.open", { ref: topicRef })).length).toBe(4);
-	}, 40_000);
-
-	test("@topic, /new and /main decide for the organizer; Wrong topic moves a message; all of it survives a restart", async () => {
-		const a = await start();
-		const { ref } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
-		await a.client.call("sessions.subscribe", { ref });
-		await a.client.call("sessions.submit", { ref, input: { text: "/new Garden\nShould we plant tomatoes?" } });
-		await a.client.call("sessions.submit", { ref, input: { text: "@garden: how often do we water them?" } });
-		let main = await until(a, ref, (s) => routings(s).length === 2 && routings(s).every((r) => r.status === "replied"));
-		expect(routings(main).map((r) => [r.decision, r.topicTitle, r.message, r.forced])).toEqual([
-			["create", "Garden", "Should we plant tomatoes?", true],
-			["route", "Garden", "how often do we water them?", true],
-		]);
-		expect(main.items.filter((i) => i.kind === "user").map((i) => (i.kind === "user" ? i.text : ""))).toEqual(["/new Garden\nShould we plant tomatoes?", "@garden: how often do we water them?"]);
-
-		await a.client.call("sessions.submit", { ref, input: { text: "/main what topics do we have?" } });
-		main = await until(a, ref, (s) => s.items.some((i) => i.kind === "assistant" && i.status === "done"));
-		expect(main.items.filter((i) => i.kind === "user").at(-1)).toMatchObject({ text: "what topics do we have?" });
-
-		// Typing in the topic itself: a direct message.
-		const garden = { ...ref, conversationId: routings(main)[0]!.topicId };
-		await a.client.call("sessions.submit", { ref: garden, input: { text: "direct question" } });
-		const topic = await until(a, garden, (s) => s.items.filter((i) => i.kind === "assistant").length === 3);
-		expect(topic.items.filter((i) => i.kind === "user").map((i) => (i.kind === "user" ? [i.text, i.direct ?? false] : []))).toEqual([
-			["Should we plant tomatoes?", false],
-			["how often do we water them?", false],
-			["direct question", true],
-		]);
-
-		// Wrong topic: the watering question goes to a new topic.
-		const watering = routings(main)[1]!;
-		await a.client.call("spaces.reroute", { ref, itemId: watering.id, newTopic: "Watering" });
-		main = await until(a, ref, (s) => routings(s)[1]?.topicTitle === "Watering" && routings(s)[1]?.status === "replied");
-		expect(routings(main)[1]).toMatchObject({ movedFrom: "Garden", reason: "You moved this from Garden", preview: "Echo: how often do we water them?" });
-		const [space] = (await a.client.call("sessions.list", { kind: "space" })).sessions;
-		expect(space!.topics!.map((t) => t.title).sort()).toEqual(["Garden", "Watering"]);
-
-		await stop(a);
-		const b = await start(a.home);
-		const reopened = await until(b, ref, (s) => routings(s).length === 2 && routings(s).every((r) => r.status === "replied"));
-		expect(routings(reopened).map((r) => r.topicTitle)).toEqual(["Garden", "Watering"]);
-		expect(reopened.items.map((i) => i.id)).toEqual(main.items.map((i) => i.id));
-	}, 60_000);
-
-	test("memory: the organizer saves facts, Undo takes them back, topics propose, and the editor keeps a history (3.3)", async () => {
-		const a = await start();
-		const { ref } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
-		await a.client.call("sessions.subscribe", { ref });
-		const memoryCards = (s: Snapshot) => s.items.filter((i): i is Extract<Snapshot["items"][number], { kind: "memory" }> => i.kind === "memory");
-		await a.client.call("sessions.submit", { ref, input: { text: 'call: update_memory | {"add":["Budget is 30k"],"section":"Decisions"}' } });
-		let main = await until(a, ref, (s) => memoryCards(s)[0]?.status === "saved" && s.state.status === "idle");
-		const saved = memoryCards(main)[0]!;
-		expect(saved).toMatchObject({ action: "saved", added: ["Budget is 30k"], removed: [] });
-		let memory = await a.client.call("spaces.memory.get", { ref });
-		expect(memory.text).toBe("## Decisions\n- Budget is 30k");
-		expect(memory.revisions[0]).toMatchObject({ by: { kind: "organizer" }, summary: "Added “Budget is 30k”" });
-		expect((await a.client.call("sessions.list", { kind: "space" })).sessions[0]!.space).toMatchObject({ memoryLines: 1, memory: true, autoTidy: false });
-
-		await a.client.call("spaces.memory.undo", { ref, revisionId: saved.revisionId! });
-		main = await until(a, ref, (s) => memoryCards(s)[0]?.status === "undone");
-		expect((await a.client.call("spaces.memory.get", { ref })).text).not.toContain("Budget");
-
-		// A topic proposes; you save it.
-		await a.client.call("sessions.submit", { ref, input: { text: "/new Finishes\nWhat look do we want?" } });
-		await until(a, ref, (s) => routings(s)[0]?.status === "replied");
-		const topicRef = { ...ref, conversationId: (await a.client.call("sessions.list", { kind: "space" })).sessions[0]!.topics![0]!.id };
-		await a.client.call("sessions.subscribe", { ref: topicRef });
-		await a.client.call("sessions.submit", { ref: topicRef, input: { text: 'call: propose_memory | {"add":["Prefers matte finishes"],"reason":"A preference for every room"}' } });
-		let topic = await until(a, topicRef, (s) => memoryCards(s)[0]?.status === "pending" && s.state.status === "idle");
-		const proposal = memoryCards(topic)[0]!;
-		expect(proposal).toMatchObject({ action: "proposed", added: ["Prefers matte finishes"], reason: "A preference for every room" });
-		await a.client.call("spaces.memory.decide", { ref, proposalId: proposal.proposalId!, accept: true });
-		topic = await until(a, topicRef, (s) => memoryCards(s)[0]?.status === "saved");
-		memory = await a.client.call("spaces.memory.get", { ref });
-		expect(memory.text).toContain("- Prefers matte finishes");
-		expect(memory.revisions[0]).toMatchObject({ by: { kind: "topic", title: "Finishes" } });
-
-		// Your edits, and restoring an older version.
-		await a.client.call("spaces.memory.set", { ref, text: "## Notes\n- Edited by hand" });
-		memory = await a.client.call("spaces.memory.get", { ref });
-		expect(memory.revisions[0]).toMatchObject({ by: { kind: "user" }, added: ["Edited by hand"], removed: ["Prefers matte finishes"] });
-		await a.client.call("spaces.memory.restore", { ref, revisionId: memory.revisions[1]!.id });
-		expect((await a.client.call("spaces.memory.get", { ref })).text).toContain("Prefers matte finishes");
-	}, 60_000);
-
-	test("ask_topic, search_space, files, housekeeping, summaries and settings (3.3)", async () => {
-		const a = await start();
-		const { ref } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
-		await a.client.call("sessions.subscribe", { ref });
-		await a.client.call("sessions.submit", { ref, input: { text: "/new Kitchen\nThe sink is white" } });
-		await a.client.call("sessions.submit", { ref, input: { text: "/new Garden\nTomatoes or peppers?" } });
-		await until(a, ref, (s) => routings(s).length === 2 && routings(s).every((r) => r.status === "replied"));
-		const list = async () => (await a.client.call("sessions.list", { kind: "space" })).sessions[0]!;
-		const id = async (title: string) => (await list()).topics!.find((t) => t.title === title)!.id;
-		const kitchen = await id("Kitchen"), garden = await id("Garden");
-		// Summaries come after each reply (the scripted model has no utility model: the reply's first line).
-		for (let i = 0; i < 50 && !(await list()).topics!.every((t) => t.summary); i++) await new Promise((r) => setTimeout(r, 100));
-		expect((await list()).topics!.find((t) => t.id === kitchen)!.summary).toBe("Echo: The sink is white");
-
-		const tool = async (call: string) => {
-			const before = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.length;
-			await a.client.call("sessions.submit", { ref, input: { text: `call: ${call}` } });
-			const s = await until(a, ref, (s) => s.items.length > before + 2 && s.state.status === "idle");
-			return [...s.items].reverse().find((i) => i.kind === "tool") as Extract<Snapshot["items"][number], { kind: "tool" }>;
-		};
-		expect((await tool('ask_topic | {"topic":"Kitchen","question":"What color is the sink?"}')).output).toContain("“Kitchen” says:\nEcho: What color is the sink?");
-		expect(texts(await a.client.call("sessions.open", { ref: { ...ref, conversationId: kitchen } })).length).toBe(2);
-		expect((await tool('search_space | {"query":"tomatoes"}')).output).toContain("“Garden”");
-
-		await a.client.call("spaces.files.add", { ref, name: "notes.md", text: "Sink: 60 cm wide\nOven: 90 cm" });
-		const pdf = join(a.home, "quote.pdf");
-		writeFileSync(pdf, Buffer.from([0x25, 0x50, 0x44, 0x46, 0, 1, 2]));
-		await a.client.call("spaces.files.add", { ref, name: "quote.pdf", path: pdf, extracted: "Quote B: 14.2k" });
-		expect((await a.client.call("spaces.files.list", { ref })).files.map((f) => f.name)).toEqual(["notes.md", "quote.pdf"]);
-		expect((await tool('space_files_read | {"name":"quote.pdf"}')).output).toBe("Quote B: 14.2k");
-		expect((await tool('space_files_search | {"query":"oven"}')).output).toBe("notes.md:2: Oven: 90 cm");
-		for (let i = 0; i < 20 && (await list()).space!.files !== 2; i++) await new Promise((r) => setTimeout(r, 100));
-		expect((await list()).space!.files).toBe(2);
-
-		// The organizer only suggests tidying until auto-tidy is on.
-		expect((await tool('rename_topic | {"topic":"Garden","title":"Vegetable garden"}')).status).toBe("error");
-		await a.client.call("spaces.configure", { ref, autoTidy: true });
-		expect((await tool('rename_topic | {"topic":"Garden","title":"Vegetable garden"}')).output).toContain("Renamed “Garden” to “Vegetable garden”");
-		// Your own housekeeping.
-		await a.client.call("spaces.topics.rename", { ref: { ...ref, conversationId: garden }, title: "Veg garden" });
-		const { summary } = await a.client.call("spaces.topics.merge", { ref: { ...ref, conversationId: garden }, into: kitchen });
-		expect(summary).toContain("Tomatoes or peppers?");
-		let topics = (await list()).topics!;
-		expect(topics.find((t) => t.id === garden)).toMatchObject({ title: "Veg garden", archived: true });
-		expect(topics.find((t) => t.id === kitchen)!.brief).toContain("Merged from “Veg garden”");
-		await a.client.call("spaces.topics.archive", { ref: { ...ref, conversationId: garden }, archived: false });
-		topics = (await list()).topics!;
-		expect(topics.find((t) => t.id === garden)!.archived).toBeUndefined();
-
-		await a.client.call("spaces.configure", { ref, memory: false, organizerModel: { provider: "faux", id: "faux-1" } });
-		expect((await list()).space).toMatchObject({ memory: false, autoTidy: true, organizerModel: { provider: "faux", id: "faux-1" } });
-		await a.client.call("sessions.submit", { ref, input: { text: 'call: update_memory | {"add":["x"]}' } });
-		const off = await until(a, ref, (s) => s.items.some((i) => i.kind === "memory") && s.state.status === "idle");
-		expect(off.items.find((i) => i.kind === "memory")).toMatchObject({ status: "failed", reason: "Memory is off for this Notebook." });
-	}, 90_000);
-});
-
-describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () => {
+describe("Chat: About me and MCP (milestone 3.4)", () => {
 	async function idle(ctx: Ctx, ref: unknown, ready: (s: Snapshot) => boolean = (s) => s.state.status === "idle" && s.items.some((i) => i.kind === "assistant"), timeout = 10_000): Promise<Snapshot> {
 		const end = Date.now() + timeout;
 		for (;;) {
@@ -1474,54 +1342,7 @@ describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () 
 	};
 	const summaryOf = async (ctx: Ctx, id: string) => [...(await ctx.client.call("sessions.list", {})).sessions].find((s) => s.ref.id === id);
 
-	test("a thread is suggested for a Space topic, moves into it, and topics promote back out to threads", async () => {
-		const a = await start();
-		await a.client.call("settings.set", { chat: { suggestSpaces: true } }); // off by default since docs/spec/18 CF5
-		const { ref: space } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
-		await a.client.call("sessions.subscribe", { ref: space });
-		await a.client.call("sessions.submit", { ref: space, input: { text: "/new Kitchen cabinets\nOak or walnut?" } });
-		await idle(a, space, (s) => s.items.some((i) => i.kind === "routing" && i.status === "replied"));
-		const topicId = (await summaryOf(a, space.id))!.topics![0]!.id;
-
-		const t1 = await thread(a, "Which finish for the kitchen cabinets?");
-		for (let i = 0; i < 30 && !(await summaryOf(a, t1.id))?.suggestion; i++) await new Promise((r) => setTimeout(r, 100));
-		expect((await summaryOf(a, t1.id))!.suggestion).toMatchObject({ spaceId: space.id, spaceTitle: "Home", topicId, topicTitle: "Kitchen cabinets" });
-
-		// Move to topic: the thread's messages join the topic; the thread goes.
-		expect(await a.client.call("spaces.importThreads", { ref: space, threads: [t1], topicId })).toEqual({ topicIds: [topicId] });
-		const topicRef = { ...space, conversationId: topicId };
-		expect(texts(await a.client.call("sessions.open", { ref: topicRef }))).toEqual([
-			["user", "Oak or walnut?"],
-			["assistant", "Echo: Oak or walnut?"],
-			["user", "Which finish for the kitchen cabinets?"],
-			["assistant", "Echo: Which finish for the kitchen cabinets?"],
-		]);
-		expect(await summaryOf(a, t1.id)).toBeUndefined();
-
-		// Move as new topic, keeping the thread; Dismiss on another.
-		const t2 = await thread(a, "Paint colours for the hall");
-		const [newTopic] = (await a.client.call("spaces.importThreads", { ref: space, threads: [t2], keepThreads: true })).topicIds;
-		expect((await summaryOf(a, space.id))!.topics!.find((t) => t.id === newTopic)!.title).toBe("Paint colours for the hall");
-		expect(await summaryOf(a, t2.id)).toBeDefined();
-		const t3 = await thread(a, "More about kitchen cabinets hinges");
-		for (let i = 0; i < 30 && !(await summaryOf(a, t3.id))?.suggestion; i++) await new Promise((r) => setTimeout(r, 100));
-		await a.client.call("threads.dismissSuggestion", { ref: t3 });
-		expect((await summaryOf(a, t3.id))!.suggestion).toBeUndefined();
-
-		// Promote to Thread: a copy; the topic stays. The new thread goes on from there.
-		const { ref: promoted } = await a.client.call("spaces.topics.promote", { ref: topicRef });
-		expect((await summaryOf(a, promoted.id))!.title).toBe("Kitchen cabinets");
-		expect(texts(await a.client.call("sessions.open", { ref: promoted }))).toEqual(texts(await a.client.call("sessions.open", { ref: topicRef })));
-		await a.client.call("sessions.subscribe", { ref: promoted });
-		await a.client.call("sessions.submit", { ref: promoted, input: { text: "and the handles?" } });
-		await idle(a, promoted, (s) => s.items.filter((i) => i.kind === "assistant").length === 3 && s.state.status === "idle");
-
-		await stop(a);
-		const b = await start(a.home);
-		expect(texts(await b.client.call("sessions.open", { ref: topicRef })).length).toBe(4);
-	}, 60_000);
-
-	test("About me: off by default, then shown and captured; MCP servers reach Threads and Spaces when allowed", async () => {
+	test("About me: off by default, then shown and captured; MCP servers reach conversations when allowed", async () => {
 		const a = await start();
 		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: false, followUps: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" }, memory: { providers: [] } });
 		const tools = (s: Snapshot) => s.items.flatMap((i) => (i.kind === "tool" ? [i] : []));
@@ -1551,11 +1372,6 @@ describe("Chat: conversions, suggestions, About me and MCP (milestone 3.4)", () 
 		await a.client.call("settings.set", { chat: { mcp: true } });
 		t = await thread(a, 'call: mcp__test__echo | {"text":"hi"}');
 		expect(tools(await a.client.call("sessions.open", { ref: t }))[0]).toMatchObject({ tool: "mcp__test__echo", status: "done", output: "echo: hi" });
-		const { ref: space } = await a.client.call("sessions.create", { kind: "space", title: "Home" });
-		await a.client.call("sessions.subscribe", { ref: space });
-		await a.client.call("sessions.submit", { ref: space, input: { text: 'call: mcp__test__echo | {"text":"from main"}' } });
-		const main = await idle(a, space);
-		expect(tools(main)[0]).toMatchObject({ status: "done", output: "echo: from main" });
 	}, 60_000);
 });
 

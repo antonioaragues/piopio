@@ -28,7 +28,7 @@ import Testing
 
 @Test func sectionsFollowTheAreas() {
     let chatOnly = AreaSet(stored: "chat")
-    #expect(chatOnly.showsProjects && chatOnly.showsChats && chatOnly.showsNotebooks && !chatOnly.showsAgents)
+    #expect(chatOnly.showsProjects && chatOnly.showsChats && !chatOnly.showsAgents)
     #expect(chatOnly.showsSession(chatProfile: true) && !chatOnly.showsSession(chatProfile: false))
 
     let buildOnly = AreaSet(stored: "build")

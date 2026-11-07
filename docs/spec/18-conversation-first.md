@@ -1,6 +1,6 @@
 # 18 · Conversation first: one way to start, projects with or without a folder
 
-Status: decided 2026-11-07; **phase 1 built 2026-11-07** (§10). Phases in §8. It changes the start (X10), the Chat lens (C2), notebooks
+Status: decided 2026-11-07; **phases 1 and 2 built 2026-11-07** (§10, §11). Phases in §8. It changes the start (X10), the Chat lens (C2), notebooks
 (C3, CQ1, CQ2, AQ13) and areas (15). Those docs stay as history and point here.
 
 **The idea:** you always start the same way, by writing. Where the conversation lives is a chip in the composer, not
@@ -321,4 +321,54 @@ Acceptance:
     live.
 - **Home goes back to No project after each send** (decided 2026-11-07). A loose question never lands in the last
   project; a project's `+` or ⌘O preselect it again.
+
+## 11. Phase 2 as built (2026-11-07)
+
+**Engine:**
+- **Projects without a folder:** `projects.create` makes one, with a name and instructions.
+  - Its files live in `<home>/projects/<id>/files`, which is also its `path`, so the folder APIs list and show them.
+  - `projects.addFile` and `projects.removeFile` add and remove files; PDFs keep the text the app extracted.
+  - `projects.configure` renames it and sets its instructions.
+- **Its conversations:** threads with a `projectId`. The `piopio-project` extension is on only while the thread is in
+  a project, so the tools follow a move on the next turn. It gives them:
+  - a section with the instructions, the file list and the project's facts (up to about 1,500 tokens);
+  - `read_project_file`;
+  - `remember_in_project`, which writes to the bank `project:<id>` in the built-in memory.
+- **Moving:** `sessions.setProject` moves a conversation in or out; same thread, same history.
+- **Removing a project:** its conversations stay, with no project; its files and memory bank are deleted.
+- **Settings › Memory** lists each project's bank under its name.
+- **Notebooks removed:**
+  - The Space runtime, the organizer, routing, notebook memory, `spaces.*`, `threads.dismissSuggestion`, the
+    Thread → Notebook suggestion, `transfer.ts` and `scripts/routing-replay.mjs` are gone.
+  - The catalog skips `space` entries; their files stay in `spaces/` on disk (CF8).
+  - `ContainerKind` keeps `space` only to read old refs.
+
+**App:**
+- **Home:** the target menu lists both kinds of project, plus "New project…". A project without a folder has no
+  permissions chip; its line reads "reads its files and shares what it remembers…". `@Kitchen renovation`
+  (names with spaces) works too.
+- **New project (⇧⌘N, the Projects `+`, the palette):** a sheet with a name and instructions, or "Use a Folder
+  Instead…".
+- **The project page:**
+  - Clicking a project without a folder in the sidebar opens it.
+  - It holds the instructions (saved on demand), the files (add, open, remove), what it remembers (add, forget) and
+    its conversations.
+  - Rename and Remove are in its menu.
+- **Sidebar:** projects without a folder use a tray icon and nest their conversations; "Conversations" lists the
+  ones with no project. The Notebooks section, pages and menu items are gone.
+- **A conversation's folder button:** "Move to a project" (with No Project and New Project…) and "Continue in a
+  folder". Its header names the project.
+
+**Checked in the app (scratch data, scripted model):**
+- A project with instructions and two files.
+- Three conversations started from its page, its `+`, and `@Kitchen renovation` on Home; all three were listed under
+  it.
+- One saved "The sink moves 40 cm left.", which the page then showed under "What it remembers".
+- Another read `budget.md`, checked through the engine.
+- A loose chat moved in (through the engine call; background control can't open menus) and kept its history.
+
+**Not done:**
+- Searching projects in the target menu.
+- Memory for folder projects (§9 Q1).
+- Old notebook data is left on disk, unread.
 

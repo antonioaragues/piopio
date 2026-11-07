@@ -192,7 +192,7 @@ struct ProjectsIndex: View {
     }
 }
 
-/// The full list of notebooks, agents or chats ("N more ›").
+/// The full list of agents or conversations ("N more ›").
 struct SectionIndex: View {
     let engine: EngineController
     let section: SidebarSection
@@ -239,9 +239,8 @@ struct SectionIndex: View {
 
     private var rows: [SessionSummary] {
         switch section {
-        case .notebooks: engine.spaces
         case .agents: engine.agents
-        default: engine.threads
+        default: engine.threads.filter { $0.projectId == nil }
         }
     }
 
@@ -249,15 +248,13 @@ struct SectionIndex: View {
 
     private var newTitle: String {
         switch section {
-        case .notebooks: "New Notebook ⌘⇧N"
         case .agents: "New Agent"
-        default: "New Chat ⌘N"
+        default: "New Conversation ⌘N"
         }
     }
 
     private var newName: Notification.Name {
         switch section {
-        case .notebooks: .newSpace
         case .agents: .newAgent
         default: .newChat
         }
@@ -266,7 +263,6 @@ struct SectionIndex: View {
     private func row(_ s: SessionSummary) -> some View {
         Button {
             switch section {
-            case .notebooks: item = .notebook(s.ref.id)
             case .agents: item = .agent(s.ref.id)
             default: item = .chat(s.ref.id)
             }
@@ -274,7 +270,6 @@ struct SectionIndex: View {
             HStack(spacing: 10) {
                 switch section {
                 case .agents: AgentAvatar(summary: s, size: 26)
-                case .notebooks: InitialTile(name: s.title, size: 22)
                 default: Image(systemName: "bubble.left").font(.system(size: 12)).foregroundStyle(Color.dsFg3).frame(width: 22)
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -292,9 +287,6 @@ struct SectionIndex: View {
 
     private func subtitle(_ s: SessionSummary) -> String? {
         switch section {
-        case .notebooks:
-            let n = s.activeTopics.count
-            return "\(n) topic\(n == 1 ? "" : "s")"
         case .agents: return MainSidebar.agentLine(s)
         default: return nil
         }

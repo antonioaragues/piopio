@@ -12,7 +12,7 @@ struct DataPane: View {
             PaneTitle(title: "Backup & costs", subtitle: "Keep a recoverable copy of Piopio and understand what its requests cost.")
             VStack(alignment: .leading, spacing: 10) {
                 Text("Back up Piopio").font(.headline)
-                Text("Includes chats, notebooks, local agent data and definitions, Build conversation history, drafts, memory, and settings. External project folders and Keychain secrets stay where they are. Remote memory services need their own backup.")
+                Text("Includes conversations, projects without a folder, local agent data and definitions, Build conversation history, drafts, memory, and settings. External project folders and Keychain secrets stay where they are. Remote memory services need their own backup.")
                 Text("The backup is an unencrypted folder containing personal conversations and any secrets you put in files or settings. Keep it somewhere private. The engine stops briefly so its databases can be copied safely.")
                     .foregroundStyle(Color.dsFg2)
                 HStack {

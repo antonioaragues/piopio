@@ -93,7 +93,7 @@ struct ConnectorsPane: View {
     // c1
     private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsHeader(title: "Connectors", summary: "\(accounts.count) connected · used by chats, notebooks and agents") {
+            SettingsHeader(title: "Connectors", summary: "\(accounts.count) connected · used by conversations and agents") {
                 AddButton(title: "Add connector") { adding = .catalog }
             }
             CardTitle("Connected")
@@ -109,7 +109,7 @@ struct ConnectorsPane: View {
 
     // c0
     private var empty: some View {
-        SettingsEmpty(title: "Connect your apps", message: "Connect once and any chat, notebook or agent can use it. Reading runs on its own; changes ask you first.") {
+        SettingsEmpty(title: "Connect your apps", message: "Connect once and any conversation or agent can use it. Reading runs on its own; changes ask you first.") {
             ForEach(engine.connectors) { c in
                 HStack(spacing: 12) {
                     ConnectorTile(id: c.id, size: 34)
@@ -224,7 +224,7 @@ struct ConnectorDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 CardTitle("Where it's used")
                 ListCard {
-                    ToggleRow(title: "Chats, notebooks and Build", subtitle: "Agents can always use it", last: true, isOn: Binding(get: { connector.chats }, set: { on in
+                    ToggleRow(title: "Conversations", subtitle: "Agents can always use it", last: true, isOn: Binding(get: { connector.chats }, set: { on in
                         Task { try? await engine.configure(ConnectorConfigureParams(connector: connector.id, chats: on)) }
                     }))
                 }
@@ -260,7 +260,7 @@ struct ConnectorDetailView: View {
 
     private var impact: String {
         let what = [hasCalendar ? "calendar" : nil, connector.capabilities.contains { $0.id.hasPrefix("mail.") } ? "mail" : nil].compactMap { $0 }.joined(separator: " and ")
-        return "Disconnecting removes \(what.isEmpty ? "its" : what) access from chats, notebooks and agents."
+        return "Disconnecting removes \(what.isEmpty ? "its" : what) access from conversations and agents."
     }
 }
 

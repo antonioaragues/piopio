@@ -6,7 +6,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import type { EngineSettings } from "@piopio/protocol";
 
 export const DEFAULT_SETTINGS: EngineSettings = {
-	// suggestSpaces: off since docs/spec/18 CF5 (moving is manual first; notebooks become projects).
+	// suggestSpaces and aboutMe.inSpaces: kept for older apps; notebooks are gone (docs/spec/18 phase 2).
 	chat: { mcp: false, suggestSpaces: false, followUps: true },
 	aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" },
 	memory: { providers: [] },

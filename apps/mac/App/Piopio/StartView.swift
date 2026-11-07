@@ -13,15 +13,15 @@ import SwiftUI
     static let shared = StartDrafts()
 
     struct Draft: Codable, Equatable {
-        /// The message (chat), the question (debate), the first note (notebook) or the instructions (agent).
+        /// The message (chat), the question (debate) or the instructions (agent).
         var text = ""
-        /// A notebook's or an agent's name.
+        /// An agent's name.
         var name = ""
         var criteria = ""
         var instructions = ""
         var avatar = ""
         var template: String?
-        /// Chats to bring into a new notebook as topics.
+        /// Before docs/spec/18 phase 2: chats to bring into a new notebook (read from old drafts, unused).
         var threads: [String] = []
         /// An agent's schedule as a cron; empty for none.
         var schedule = ""
@@ -84,7 +84,7 @@ import SwiftUI
         return !(d.text + d.name + d.criteria + d.instructions).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// The draft row's title: the name typed so far, or "New notebook".
+    /// The draft row's title: the name typed so far, or the kind's.
     func title(_ kind: StartKind) -> String {
         let name = self[kind].name.trimmingCharacters(in: .whitespacesAndNewlines)
         return name.isEmpty ? kind.title : name
@@ -104,7 +104,6 @@ extension StartKind {
         switch self {
         case .chat: "New chat"
         case .debate: "New debate"
-        case .notebook: "New notebook"
         case .agent: "New agent"
         case .project: "New project"
         }
@@ -114,7 +113,6 @@ extension StartKind {
         switch self {
         case .chat: "bubble.left"
         case .debate: "person.2"
-        case .notebook: "book.closed"
         case .agent: "smallcircle.circle"
         case .project: "folder"
         }
@@ -190,10 +188,9 @@ struct StartView: View {
     @Binding var item: SidebarItem
 
     var body: some View {
-        StartColumn(top: kind == .agent || kind == .notebook ? 112 : 128) {
+        StartColumn(top: kind == .agent ? 112 : 128) {
             switch kind {
             case .chat, .debate: ChatStart(engine: engine, mode: kind, item: $item)
-            case .notebook: NotebookStart(engine: engine, item: $item)
             case .agent: AgentStart(engine: engine, item: $item)
             case .project: EmptyView() // Home is the start for projects now (docs/spec/18); RootView redirects
             }
@@ -268,7 +265,7 @@ private struct TitleText: View {
     }
 }
 
-/// A notebook's or an agent's name, typed in place as the title: no border, the placeholder in the same style.
+/// An agent's name, typed in place as the title: no border, the placeholder in the same style.
 private struct TitleField: View {
     let placeholder: String
     @Binding var text: String
@@ -522,7 +519,7 @@ private struct ChatStart: View {
     @State private var attachments: [PendingAttachment] = []
     @State private var model: ModelRef?
     @State private var showModels = false
-    /// What the chat is about: a project (a chat in its folder) or a notebook (the message goes to its Main).
+    /// What the chat is about: a project (a chat in its folder).
     @State private var context: Context?
     @State private var sending = false
     @State private var error: String?
@@ -536,7 +533,7 @@ private struct ChatStart: View {
     @State private var picking: DebateRole?
     @FocusState private var focus: StartField?
 
-    enum Context: Hashable { case project(String), notebook(String) }
+    enum Context: Hashable { case project(String) }
 
     private var debate: Bool { mode == .debate }
     private var text: String { drafts[mode].text }
@@ -546,7 +543,7 @@ private struct ChatStart: View {
     var body: some View {
         StartHeader(kind: mode, description: debate
             ? "One model answers, the other critiques it, round by round, until they agree. You get the agreed answer and any points they never settled."
-            : "A chat keeps its own history. Move it into a notebook whenever it grows into a subject.") {
+            : "A conversation keeps its own history. Move it into a project whenever it grows into a subject.") {
             TitleText(text: debate ? "What should they work out?" : "What's on your mind?")
         }
         VStack(alignment: .leading, spacing: 12) {
@@ -562,7 +559,7 @@ private struct ChatStart: View {
                 if debate {
                     MainAction(title: "Start debate ↩", busy: sending, enabled: canSend, action: send)
                 } else {
-                    if context.map({ if case .notebook = $0 { false } else { true } }) ?? true { modelSelector }
+                    modelSelector
                     sendButton
                 }
             }
@@ -624,22 +621,16 @@ private struct ChatStart: View {
         }
     }
 
-    /// Projects and notebooks to talk about, and a file to attach.
+    /// Projects to talk about, and a file to attach.
     @ViewBuilder private var contextSection: some View {
         let areas = Areas.shared.set
         let projects = areas.showsProjects ? Array(engine.projects.prefix(6)) : []
-        let notebooks = areas.showsNotebooks ? Array(engine.spaces.sorted { $0.updatedAt > $1.updatedAt }.prefix(6)) : []
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "Talk about something you already have")
             FlowLayout(spacing: 8) {
                 ForEach(projects) { p in
                     ContextChip(symbol: "folder", title: p.name, on: context == .project(p.id), help: "Chat in \(p.name): it can read the folder's files") {
                         context = context == .project(p.id) ? nil : .project(p.id)
-                    }
-                }
-                ForEach(notebooks, id: \.ref.id) { n in
-                    ContextChip(symbol: "book.closed", title: n.title, on: context == .notebook(n.ref.id), help: "Write in \(n.title)'s Main; the organizer files it under the right topic") {
-                        context = context == .notebook(n.ref.id) ? nil : .notebook(n.ref.id)
                     }
                 }
                 ContextChip(symbol: "paperclip", title: "Attach a file", on: false, dashed: true, help: "Images, PDFs or text files", action: attach)
@@ -651,7 +642,6 @@ private struct ChatStart: View {
     private func contextNote(_ context: Context) -> String {
         switch context {
         case .project(let id): "The chat opens in \(engine.projects.first { $0.id == id }?.name ?? "the project") and can read its files. It's listed under the project."
-        case .notebook(let id): "Your message goes to \(engine.space(id)?.title ?? "the notebook")'s Main, and the organizer files it under the right topic."
         }
     }
 
@@ -778,8 +768,6 @@ private struct ChatStart: View {
             case .project(let id):
                 guard let project = engine.projects.first(where: { $0.id == id }) else { error = "That project isn't available any more. Pick another, or none."; return }
                 created = try? await engine.createBuildSession(in: project, workOn: .current, mode: nil, model: model, profile: .chat)
-            case .notebook(let id):
-                created = ContainerRef(kind: .space, id: id)
             case nil:
                 created = await engine.createThread(model: model)
             }
@@ -797,7 +785,6 @@ private struct ChatStart: View {
         }
         try? await engine.refreshCatalog()
         switch ref.kind {
-        case .space: morph(to: .notebook(ref.id), $item)
         case .build: morph(to: .session(ref.id), $item)
         default: morph(to: .chat(ref.id), $item)
         }
@@ -1131,158 +1118,3 @@ private struct TemplateGrid: View {
     }
 }
 
-// MARK: Notebook
-
-/// New notebook (docs/spec/04 S5): the name as the title, an optional first note for Main, instructions inside the
-/// card, and chats to bring in as topics. The name is required.
-private struct NotebookStart: View {
-    let engine: EngineController
-    @Binding var item: SidebarItem
-    private var drafts: StartDrafts { .shared }
-    @State private var showInstructions = false
-    @State private var showAllChats = false
-    @State private var creating = false
-    @State private var error: String?
-    @FocusState private var focus: StartField?
-
-    private var draft: StartDrafts.Draft { drafts[.notebook] }
-    private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
-    /// Chats that can become topics: debates can't move into a notebook (docs/spec/16).
-    private var movable: [SessionSummary] { engine.threads.filter { $0.debate == nil }.sorted { $0.updatedAt > $1.updatedAt } }
-    /// Ticked chats that still exist.
-    private var picked: [String] { draft.threads.filter { id in movable.contains { $0.ref.id == id } } }
-
-    var body: some View {
-        StartHeader(kind: .notebook, description: "One subject, kept together. You write in Main; the organizer files each message under the right topic, or starts a new one.") {
-            TitleField(placeholder: "Name this notebook", text: drafts.binding(.notebook, \.name), focused: $focus) { focus = .text }
-        }
-        VStack(alignment: .leading, spacing: 12) {
-            ComposerCard {
-                AnyView(CardText(placeholder: "First note for Main (optional)…", text: drafts.binding(.notebook, \.text), focused: $focus, submit: create))
-            } extra: {
-                if showInstructions {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.horizontal, 20).padding(.top, 10)
-                        CardText(placeholder: "Who you are, what matters, how to answer. Every agent in the notebook is told this.", text: drafts.binding(.notebook, \.instructions), focused: $focus, field: .extra, submit: create)
-                    }
-                }
-            } leading: {
-                Button { withAnimation(.easeOut(duration: 0.15)) { showInstructions.toggle() } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(showInstructions ? 90 : 0))
-                        Text("Instructions for its agents").foregroundStyle(Color.dsFg2)
-                        Text("· optional").foregroundStyle(Color.dsFg3)
-                    }
-                    .font(.system(size: 13))
-                    .frame(height: 36)
-                }
-                .buttonStyle(SelectorStyle())
-                .accessibilityValue(showInstructions ? "Expanded" : "Collapsed")
-            } action: {
-                MainAction(title: picked.isEmpty ? "Create ⌘↩" : "Create with \(picked.count) topic\(picked.count == 1 ? "" : "s") ⌘↩", busy: creating, enabled: !name.isEmpty, action: create)
-                    .help(name.isEmpty ? "Name the notebook first" : "Create the notebook")
-            }
-            StartError(text: error)
-        }
-        chats
-        Color.clear.frame(height: 0)
-            .onAppear {
-                focus = name.isEmpty ? .name : .text
-                showInstructions = !draft.instructions.isEmpty
-            }
-    }
-
-    @ViewBuilder private var chats: some View {
-        let all = movable
-        if !all.isEmpty {
-            let selected = Set(picked)
-            let shown = showAllChats ? all : all.enumerated().filter { $0.offset < 8 || selected.contains($0.element.ref.id) }.map(\.element)
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Bring in chats as topics" + (selected.isEmpty ? "" : " · \(selected.count) selected")) {
-                    LinkButton(title: selected.count == all.count ? "Select none" : "Select all") {
-                        drafts.update(.notebook) { $0.threads = selected.count == all.count ? [] : all.map(\.ref.id) }
-                    }
-                }
-                CardList {
-                    ForEach(Array(shown.enumerated()), id: \.element.ref.id) { i, thread in
-                        TopicRow(thread: thread, on: selected.contains(thread.ref.id)) { toggle(thread.ref.id) }
-                        if i < shown.count - 1 { RowDivider(inset: 48) }
-                    }
-                }
-                if shown.count < all.count { LinkButton(title: "Show all \(all.count) chats") { showAllChats = true } }
-                Text("Each chat becomes a topic with its whole conversation, and moves out of Chats into the notebook.")
-                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-            }
-        }
-    }
-
-    private func toggle(_ id: String) {
-        drafts.update(.notebook) { d in
-            if let i = d.threads.firstIndex(of: id) { d.threads.remove(at: i) } else { d.threads.append(id) }
-        }
-    }
-
-    private func create() {
-        guard !name.isEmpty, !creating else { return }
-        creating = true
-        error = nil
-        let note = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let moving = movable.filter { picked.contains($0.ref.id) }.map(\.ref)
-        let title = name
-        Task {
-            defer { creating = false }
-            guard let ref = await engine.createSpace(name: title, instructions: draft.instructions.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-                error = "Couldn't create the notebook because the engine isn't connected. Nothing was created, and what you typed is kept."
-                return
-            }
-            var topics: [String] = []
-            do { if !moving.isEmpty { topics = try await engine.importThreads(moving, into: ref) } } catch {
-                // The notebook exists: stay here and say what didn't move.
-                drafts.clear(.notebook)
-                self.error = "“\(title)” was created, but the chats didn't move in: \((error as? EngineError)?.message ?? error.localizedDescription) They're still under Chats."
-                return
-            }
-            if !note.isEmpty {
-                let main = engine.thread(ContainerRef(kind: .space, id: ref.id))
-                await main.open()
-                _ = await main.send(note)
-            }
-            // Cleared only now, so the page doesn't flash empty while chats move in.
-            drafts.clear(.notebook)
-            morph(to: .notebook(note.isEmpty ? topics.first.map { ContainerRef(kind: .space, id: ref.id, conversationId: $0).key } ?? ref.id : ref.id), $item)
-        }
-    }
-}
-
-/// A 48pt row that is one control: a check box, the chat's kind, its title, and its kind and age.
-private struct TopicRow: View {
-    let thread: SessionSummary
-    let on: Bool
-    let toggle: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: toggle) {
-            HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(on ? Color.accentColor : Color.dsCard)
-                    .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(on ? Color.accentColor : Color.dsFg3, lineWidth: 1))
-                    .overlay { if on { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white) } }
-                    .frame(width: 16, height: 16)
-                Image(systemName: thread.debate != nil ? "person.2" : "bubble.left").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                Text(thread.title).font(.system(size: 14)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.tail)
-                Spacer(minLength: 12)
-                Text("\(thread.debate != nil ? "Debate" : "Chat") · \(age(thread.updatedAt))").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 48)
-            .background(hovering ? Color.dsChip.opacity(0.5) : .clear)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityLabel(thread.title)
-        .accessibilityValue(on ? "Selected" : "Not selected")
-        .accessibilityAddTraits(.isToggle)
-    }
-}

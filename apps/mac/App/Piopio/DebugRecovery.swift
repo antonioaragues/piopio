@@ -29,9 +29,10 @@ import PiopioKit
             try require(direct && thread.composerText == "Keep another draft", "Sending from another entry point preserves an existing draft")
             thread.composerText = ""; try await thread.flushDraft()
             _ = try await settled(engine, ref: chat)
-            guard let notebook = await engine.createSpace(name: "Recovery notebook", instructions: ""), let client = engine.client else { throw EngineError(code: "INTERNAL", message: "create notebook") }
-            _ = try await client.call("sessions.submit", SubmitParams(ref: notebook, text: "/new Recovery topic\nNotebook recovery marker"), as: SubmitResult.self)
-            _ = try await settled(engine, ref: notebook, routed: true)
+            let project = try await engine.createProject(name: "Recovery project")
+            guard let inProject = await engine.createThread(projectId: project.id), let client = engine.client else { throw EngineError(code: "INTERNAL", message: "create project conversation") }
+            _ = try await client.call("sessions.submit", SubmitParams(ref: inProject, text: "Project recovery marker"), as: SubmitResult.self)
+            _ = try await settled(engine, ref: inProject)
             let agent = try await engine.createAgent(name: "Recovery agent", template: "personal-assistant", avatar: "🐥")
             let agentThread = engine.thread(agent); await agentThread.open()
             _ = await agentThread.send("Agent recovery marker")
@@ -49,7 +50,7 @@ import PiopioKit
             _ = try BackupArchive.inspect(archive)
             let previous = try await engine.restoreBackup(from: archive, restorePreferences: false)
             try require(FileManager.default.fileExists(atPath: previous.path), "Restore retains the previous data folder")
-            for ref in [chat, notebook, agent, build] {
+            for ref in [chat, inProject, agent, build] {
                 guard let client = engine.client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "restore reconnect") }
                 let snapshot = try await client.call("sessions.open", RefParams(ref: ref), as: Snapshot.self)
                 try require(!snapshot.items.isEmpty, "Restores \(ref.kind.rawValue) history")
@@ -58,8 +59,8 @@ import PiopioKit
             try require(engine.buildSessions.count == 1, "Restored Build history is not duplicated by CLI discovery")
             try require(try String(contentsOf: projectFolder.appending(path: "keep.txt"), encoding: .utf8) == "Keep external project files", "Restore preserves external project files")
             guard let client = engine.client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "search reconnect") }
-            let hits = try await client.call("catalog.search", SearchParams(query: "Notebook recovery marker", kind: .space), as: SearchResults.self)
-            try require(hits.results.contains { $0.ref.conversationId != nil }, "Search opens restored notebook topic references")
+            let hits = try await client.call("catalog.search", SearchParams(query: "Project recovery marker", kind: .thread), as: SearchResults.self)
+            try require(hits.results.contains { $0.ref.id == inProject.id }, "Search finds a restored project conversation")
             try JSONSerialization.data(withJSONObject: ["ok": true, "checks": checks], options: [.prettyPrinted, .sortedKeys]).write(to: report, options: .atomic)
         } catch {
             try? JSONSerialization.data(withJSONObject: ["ok": false, "error": error.localizedDescription, "checks": checks], options: [.prettyPrinted, .sortedKeys]).write(to: report, options: .atomic)

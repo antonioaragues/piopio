@@ -3,78 +3,31 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-// Chat's cross-cutting pieces (milestone 3.4): moving threads into Spaces (04-chat S5, S11), the Thread → Space
-// suggestion banner, and Settings › Chat (the "About me" memory, 07-shared §5).
+// Conversations' cross-cutting pieces: moving one into a project without a folder (docs/spec/18 §5), and
+// Settings › Chat (the "About me" memory, 07-shared §5).
 
-/// "This looks like it belongs in Home › Kitchen layout" with Move to topic, Move as new topic and Dismiss (S11).
-struct SpaceSuggestionBanner: View {
-    let engine: EngineController
-    let thread: SessionSummary
-    let suggestion: SpaceSuggestion
-    @State private var moving = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "rectangle.stack").font(.system(size: 12)).foregroundStyle(Color.accentColor)
-            VStack(alignment: .leading, spacing: 1) {
-                (Text("This looks like it belongs in ") + Text(suggestion.spaceTitle).bold() + (suggestion.topicTitle.map { Text(" › ") + Text($0).bold() } ?? Text("")))
-                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
-                Text(suggestion.reason).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if let topic = suggestion.topicId {
-                Button("Move to topic") { move(topic: topic) }.buttonStyle(PillStyle(kind: .primary, compact: true)).disabled(moving)
-                Button("Move as new topic") { move(topic: nil) }.buttonStyle(PillStyle(compact: true)).disabled(moving)
-            } else {
-                Button("Move as new topic") { move(topic: nil) }.buttonStyle(PillStyle(kind: .primary, compact: true)).disabled(moving)
-            }
-            Button("Dismiss") { Task { await engine.dismissSuggestion(thread.ref) } }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.dsAccentSoft, in: RoundedRectangle(cornerRadius: 10))
-        .padding(.horizontal, 24)
-        .padding(.bottom, 6)
-    }
-
-    private func move(topic: String?) {
-        moving = true
-        let space = ContainerRef(kind: .space, id: suggestion.spaceId)
-        run {
-            defer { moving = false }
-            let ids = try await engine.importThreads([thread.ref], into: space, topic: topic)
-            if let id = ids.first { NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: space.id, topicId: id, itemId: nil)) }
-        }
-    }
-}
-
-/// A thread's "Move to Space" submenu: each Space, as a new topic (S5).
-struct MoveToSpaceMenu: View {
+/// A conversation's place (docs/spec/18 §5): move it into a project without a folder (same conversation), or out.
+struct MoveToProjectMenu: View {
     let engine: EngineController
     let thread: SessionSummary
 
     var body: some View {
-        Menu("Move to Notebook") {
-            ForEach(engine.spaces, id: \.ref.id) { space in
-                Menu(space.title) {
-                    Button("As a New Topic") { move(space, topic: nil) }
-                    let topics = space.activeTopics
-                    if !topics.isEmpty {
-                        Divider()
-                        ForEach(topics) { topic in Button("Into “\(topic.title)”") { move(space, topic: topic.id) } }
-                    }
+        let projects = engine.projects.filter { !$0.hasFolder }
+        Menu("Move to Project") {
+            ForEach(projects) { project in
+                Button { move(project) } label: {
+                    if thread.projectId == project.id { Label(project.name, systemImage: "checkmark") } else { Text(project.name) }
                 }
             }
-            if !engine.spaces.isEmpty { Divider() }
-            Button("New Notebook…") { NotificationCenter.default.post(name: .newSpace, object: thread.ref.id) }
+            if !projects.isEmpty { Divider() }
+            if thread.projectId != nil { Button("No Project") { move(nil) } }
+            Button("New Project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
         }
+        .disabled(thread.debate != nil)
     }
 
-    private func move(_ space: SessionSummary, topic: String?) {
-        run {
-            let ids = try await engine.importThreads([thread.ref], into: space.ref, topic: topic)
-            if let id = ids.first { NotificationCenter.default.post(name: .openTopic, object: TopicTarget(spaceId: space.ref.id, topicId: id, itemId: nil)) }
-        }
+    private func move(_ project: ProjectInfo?) {
+        run { try await engine.setProject(thread.ref, project: project) }
     }
 }
 
@@ -87,14 +40,11 @@ struct ChatPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsHeader(title: "Chat", summary: "Chats and notebooks")
+            SettingsHeader(title: "Chat", summary: "Conversations")
             CardTitle("Suggestions")
             ListCard {
-                ToggleRow(title: "Suggest follow-up messages", subtitle: "A few replies under each answer", isOn: Binding(get: { settings?.chat.followUps ?? true }, set: { v in
+                ToggleRow(title: "Suggest follow-up messages", subtitle: "A few replies under each answer", last: true, isOn: Binding(get: { settings?.chat.followUps ?? true }, set: { v in
                     Task { await engine.updateSettings(SettingsPatch(chat: .init(followUps: v))) }
-                }))
-                ToggleRow(title: "Suggest moving a chat into a notebook", subtitle: "When a conversation grows into a subject", last: true, isOn: Binding(get: { settings?.chat.suggestSpaces ?? true }, set: { v in
-                    Task { await engine.updateSettings(SettingsPatch(chat: .init(suggestSpaces: v))) }
                 }))
             }
             .padding(.bottom, 22)
@@ -114,7 +64,7 @@ struct ChatPane: View {
     }
 }
 
-/// About me (Settings › Memory): a list of facts (the notebook memory component) with who it's shared with,
+/// About me (Settings › Memory): a list of facts with who it's shared with,
 /// whether conversations add to it, and where it's stored.
 struct AboutMeEditor: View {
     let engine: EngineController
@@ -134,7 +84,7 @@ struct AboutMeEditor: View {
     enum Share: Hashable { case chats, agents, nobody }
 
     private var settings: EngineSettings? { engine.settings }
-    private var facts: [MemoryEditorSheet.Fact] { MemoryEditorSheet.facts(in: text) }
+    private var facts: [MemoryText.Fact] { MemoryText.facts(in: text) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -150,7 +100,7 @@ struct AboutMeEditor: View {
                         Text("Share with").font(.system(size: 13))
                         Spacer()
                         Picker("", selection: Binding(get: { share }, set: { setShare($0) })) {
-                            Text("Chats & notebooks").tag(Share.chats)
+                            Text("Conversations").tag(Share.chats)
                             Text("+ Agents").tag(Share.agents)
                             Text("Nobody").tag(Share.nobody)
                         }
@@ -213,7 +163,7 @@ struct AboutMeEditor: View {
         }
     }
 
-    private func factRow(_ fact: MemoryEditorSheet.Fact) -> some View {
+    private func factRow(_ fact: MemoryText.Fact) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(fact.label).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3).frame(width: 80, alignment: .leading).lineLimit(1)
             if editing == fact.line {
@@ -241,14 +191,14 @@ struct AboutMeEditor: View {
     }
 
     /// "You", or "Learned · 2 d ago" when a conversation added it.
-    private func source(_ fact: MemoryEditorSheet.Fact) -> String {
+    private func source(_ fact: MemoryText.Fact) -> String {
         guard let r = revisions.first(where: { r in r.undone != true && r.added.contains { $0 == fact.raw || $0.contains(fact.text) } }) else { return "You" }
         return r.by.kind == "user" ? "You" : "Learned · \(BuildSessionView.relative(r.at))"
     }
 
     private var lines: [String] { text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) }
 
-    private func replace(_ fact: MemoryEditorSheet.Fact, with value: String) {
+    private func replace(_ fact: MemoryText.Fact, with value: String) {
         let v = value.trimmingCharacters(in: .whitespaces)
         editing = nil
         guard !v.isEmpty, v != fact.raw else { return }
@@ -257,7 +207,7 @@ struct AboutMeEditor: View {
         save(l.joined(separator: "\n"))
     }
 
-    private func forget(_ fact: MemoryEditorSheet.Fact) {
+    private func forget(_ fact: MemoryText.Fact) {
         var l = lines
         l.remove(at: fact.line)
         save(l.joined(separator: "\n"))

@@ -749,10 +749,10 @@ nonisolated struct ItemRenderer: Sendable {
             return (running ? "Saving to About me" : failed ? "Not saved to About me" : "Saved to About me", facts)
         case "ask_topic":
             return (running ? "Asking \(t.args?["topic"]?.stringValue ?? "a topic")" : "Asked \(t.args?["topic"]?.stringValue ?? "a topic")", t.args?["question"]?.stringValue ?? "")
-        case "search_space":
-            return (running ? "Searching the Notebook" : "Searched the Notebook", t.args?["query"]?.stringValue ?? "")
-        case "space_files_list", "space_files_read", "space_files_search":
-            return (running ? "Reading the Notebook's files" : "Read the Notebook's files", t.args?["name"]?.stringValue ?? t.args?["query"]?.stringValue ?? "")
+        case "read_project_file":
+            return (running ? "Reading a project file" : "Read a project file", t.args?["name"]?.stringValue ?? "")
+        case "remember_in_project":
+            return (running ? "Saving to the project" : "Saved to the project", t.args?["fact"]?.stringValue ?? "")
         case "rename_topic", "archive_topic", "merge_topics":
             return (failed ? "Suggested tidying" : "Tidied topics", t.args?["topic"]?.stringValue ?? t.args?["from"]?.stringValue ?? "")
         case "ask_user":

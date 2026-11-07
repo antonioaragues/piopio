@@ -12,8 +12,6 @@ enum SidebarItem: Hashable {
     case project(String)
     /// A Build session or a project chat session.
     case session(String)
-    /// A notebook (a Space), or one of its topics: "spaceId" or "spaceId/topicId".
-    case notebook(String)
     case agent(String)
     case chat(String)
     /// A start page (docs/design/start-pages): what a sidebar + opens. Nothing exists until you start.
@@ -28,7 +26,6 @@ enum SidebarItem: Hashable {
         case .index(let s): "index:\(s.rawValue)"
         case .project(let id): "project:\(id)"
         case .session(let id): "session:\(id)"
-        case .notebook(let key): "notebook:\(key)"
         case .agent(let id): "agent:\(id)"
         case .chat(let id): "chat:\(id)"
         case .start(let kind): "start:\(kind.rawValue)"
@@ -44,7 +41,6 @@ enum SidebarItem: Hashable {
         case "index": self = SidebarSection(rawValue: value).map { .index($0) } ?? .home
         case "project": self = .project(value)
         case "session": self = .session(value)
-        case "notebook": self = .notebook(value)
         case "agent": self = .agent(value)
         case "chat": self = .chat(value)
         case "start": self = StartKind(rawValue: value).map { .start($0) } ?? .home
@@ -61,11 +57,10 @@ enum SidebarItem: Hashable {
         }
     }
 
-    /// The id the engine knows (a thread, session, Space key or agent), for "you're looking at it".
+    /// The id the engine knows (a thread, session or agent), for "you're looking at it".
     var engineId: String? {
         switch self {
         case .session(let id), .agent(let id), .chat(let id): id
-        case .notebook(let key): key
         default: nil
         }
     }
@@ -73,23 +68,22 @@ enum SidebarItem: Hashable {
 
 /// What a start page makes.
 enum StartKind: String, CaseIterable, Hashable {
-    case chat, debate, notebook, agent, project
+    case chat, debate, agent, project
 }
 
 enum SidebarSection: String, CaseIterable, Identifiable {
-    case pinned, projects, notebooks, agents, chats
+    case pinned, projects, agents, chats
     var id: String { rawValue }
     /// "Chats" are "Conversations" (docs/spec/18 §6): the ones with no project.
     var title: String { self == .chats ? "Conversations" : rawValue.capitalized }
 }
 
 extension EngineController {
-    /// Which kind of item an engine id is (threads, sessions, notebooks and their topics, agents).
+    /// Which kind of item an engine id is (conversations, sessions, agents, projects).
     func item(for id: String) -> SidebarItem? {
         if threads.contains(where: { $0.ref.id == id }) { return .chat(id) }
         if buildSessions.contains(where: { $0.ref.id == id }) { return .session(id) }
         if agents.contains(where: { $0.ref.id == id }) { return .agent(id) }
-        if space(String(id.split(separator: "/").first ?? "")) != nil { return .notebook(id) }
         if projects.contains(where: { $0.id == id }) { return .project(id) }
         return nil
     }
