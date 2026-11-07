@@ -32,39 +32,53 @@ console.log(JSON.stringify({ text: " on-device: " + prompt.slice(0, 40) + " " })
 	return { path, requests: () => { try { return readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } } };
 }
 
-const hubWith = (helper: string | undefined) => new ModelHub(new SecretBroker({}), { faux: true, onDevice: new OnDeviceModel(helper) });
+/** A hub on a scratch home: `openrouter` connected (by its index entry), a local endpoint, and a fake piopio-fm. */
+function hubWith(helper: string | undefined, connect: { openrouter?: boolean; local?: boolean } = {}) {
+	const home = mkdtempSync(join(tmpdir(), "piopio-hub-"));
+	if (connect.openrouter) writeFileSync(join(home, "credentials.json"), JSON.stringify({ openrouter: "api_key" }));
+	const hub = new ModelHub(new SecretBroker({}), { home, onDevice: new OnDeviceModel(helper) });
+	if (connect.local) hub.endpoints.save({ id: "lmstudio", name: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", keyless: true, models: [{ id: "qwen3-8b" }], addedAt: new Date().toISOString() });
+	return hub;
+}
 
-test("general utility work runs on this Mac by default; learned facts run nowhere until chosen", async () => {
+test("automatic: the conversation's own provider, its small model when it has one", async () => {
+	const hub = hubWith(undefined, { openrouter: true, local: true });
+	// A chat on a local model keeps its background work on that model.
+	expect(await hub.automaticUtility({ provider: "lmstudio", id: "qwen3-8b" })).toEqual({ provider: "lmstudio", id: "qwen3-8b" });
+	// A chat on OpenRouter uses OpenRouter's small model.
+	expect(await hub.automaticUtility({ provider: "openrouter", id: "openai/gpt-5.5" })).toEqual({ provider: "openrouter", id: "anthropic/claude-haiku-5.5" });
+	// No conversation (commit messages), or one on a provider that's gone: the default model's provider.
+	expect(await hub.automaticUtility()).toEqual({ provider: "openrouter", id: "anthropic/claude-haiku-5.5" });
+	expect(await hub.automaticUtility({ provider: "anthropic", id: "claude-opus-5-5" })).toEqual({ provider: "openrouter", id: "anthropic/claude-haiku-5.5" });
+	// Only a local model connected: that one.
+	expect(await hubWith(undefined, { local: true }).automaticUtility()).toMatchObject({ provider: "lmstudio" });
+	expect(await hubWith(undefined).automaticUtility()).toBeUndefined();
+});
+
+test("with nothing connected, automatic uses Apple's model when it's there; off and on-device are honored", async () => {
 	const fm = fakeHelper("available");
 	const hub = hubWith(fm.path);
 	expect(await hub.utility("Summarize.", "the sink moves 40 cm", "thread-a")).toBe("on-device: the sink moves 40 cm");
-	expect(await hub.utility("Extract facts.", "Alex lives in Valencia", "agent-a", { task: "learning" })).toBeUndefined();
-	expect(fm.requests()).toHaveLength(1);
 	expect(hub.extraCosts.summary("thread-a")).toMatchObject({ calls: 1, knownUsd: 0, unknownCalls: 0 });
-
-	hub.utilityChoices = () => ({ learning: "on_device" });
-	expect(await hub.utility("Extract facts.", "Alex lives in Valencia", "agent-a", { task: "learning" })).toBe("on-device: Alex lives in Valencia");
-	hub.utilityChoices = () => ({ utility: "off" });
+	hub.utilityChoice = () => "off";
 	expect(await hub.utility("Summarize.", "x")).toBeUndefined();
 	// An agent's own choice wins over the setting.
-	expect(await hub.utility("Extract facts.", "y", "agent-a", { task: "learning", ...agentUtility("on-device") })).toBe("on-device: y");
-	expect(fm.requests()).toHaveLength(3);
+	expect(await hub.utility("Extract facts.", "y", "agent-a", agentUtility("on-device"))).toBe("on-device: y");
+	expect(fm.requests()).toHaveLength(2);
+	expect(await hubWith(fakeHelper("unavailable").path).utility("Summarize.", "x")).toBeUndefined();
 });
 
-test("nothing falls back to another provider when the choice can't run", async () => {
-	const off = fakeHelper("unavailable");
-	const hub = hubWith(off.path);
+test("a picked model whose provider isn't connected is skipped; the scripted model has no utility model", async () => {
+	const hub = hubWith(undefined, { local: true });
+	hub.utilityChoice = () => ({ provider: "openrouter", id: "anthropic/claude-haiku-5.5" });
 	expect(await hub.utility("Summarize.", "x")).toBeUndefined();
-	expect(off.requests()).toHaveLength(0);
-	expect(await hub.onDevice.status()).toEqual({ available: false, reason: "Apple Intelligence is off." });
-	expect(await hubWith(undefined).onDevice.status()).toMatchObject({ available: false, reason: expect.stringContaining("Piopio app") });
-	// A picked model whose provider isn't connected: skipped too, not sent elsewhere.
-	hub.utilityChoices = () => ({ utility: { provider: "openrouter", id: "anthropic/claude-haiku-5.5" } });
-	expect(await hub.utility("Summarize.", "x")).toBeUndefined();
+	expect(await new ModelHub(new SecretBroker({}), { faux: true, onDevice: new OnDeviceModel(fakeHelper("available").path) }).utility("Summarize.", "x")).toBeUndefined();
+});
+
+test("Apple's model: status, failures, and input cut to fit its context", async () => {
+	expect(await new OnDeviceModel(fakeHelper("unavailable").path).status()).toEqual({ available: false, reason: "Apple Intelligence is off." });
+	expect(await new OnDeviceModel(undefined).status()).toMatchObject({ available: false, reason: expect.stringContaining("Piopio app") });
 	await expect(hubWith(fakeHelper("fails").path).utility("Summarize.", "x")).rejects.toMatchObject({ code: "MODEL_ERROR" });
-});
-
-test("long input is cut to fit the on-device model's context", async () => {
 	const fm = fakeHelper("available");
 	await hubWith(fm.path).utility("Summarize.", "a".repeat(20_000));
 	expect(fm.requests()[0]!.prompt.length).toBeLessThan(9_100);
@@ -72,6 +86,7 @@ test("long input is cut to fit the on-device model's context", async () => {
 
 test("an agent's models.utility", () => {
 	expect(agentUtility(undefined)).toEqual({});
+	expect(agentUtility("auto")).toEqual({});
 	expect(agentUtility("off")).toEqual({ choice: "off" });
 	expect(agentUtility("on-device")).toEqual({ choice: "on_device" });
 	expect(agentUtility("ollama:llama4")).toEqual({ choice: { provider: "ollama", id: "llama4" } });

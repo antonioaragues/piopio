@@ -40,7 +40,7 @@ export const AgentDefinition = Type.Object({
 	timezone: Type.Optional(Type.String()),
 	/** One line for the sidebar. */
 	description: Type.Optional(Type.String({ maxLength: 120 })),
-	/** `utility`: where this agent learns facts (07-shared §1.3): "on-device", "off" or a model id; unset follows Settings › Memory. */
+	/** `utility`: its background work, learned facts (07-shared §1.3): "auto", "on-device", "off" or a model id; unset follows Settings › Models. */
 	models: Type.Object({ default: Type.String({ minLength: 1 }), utility: Type.Optional(Type.String()) }),
 	thinking: Type.Optional(Type.Union([Type.Literal("off"), Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")])),
 	tools: Type.Object({
@@ -149,8 +149,8 @@ export function validate(value: unknown, options: { knownAgents?: readonly strin
 	if (options.unsupported) errors.push(...unsupported(def));
 	if (options.knownModels && !options.knownModels(def.models.default)) errors.push({ path: "/models/default", message: `Unknown model “${def.models.default}”.` });
 	const utility = def.models.utility;
-	if (utility && utility !== "on-device" && utility !== "off" && options.knownModels && !options.knownModels(utility)) {
-		errors.push({ path: "/models/utility", message: `Unknown model “${utility}”: use a model id, "on-device" or "off".` });
+	if (utility && !["auto", "on-device", "off"].includes(utility) && options.knownModels && !options.knownModels(utility)) {
+		errors.push({ path: "/models/utility", message: `Unknown model “${utility}”: use a model id, "auto", "on-device" or "off".` });
 	}
 	return errors;
 }

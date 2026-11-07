@@ -12,7 +12,7 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { ModelInfo, ModelRef, ProviderInfo } from "@piopio/protocol";
 import { credentialSecret, KeychainCredentialStore } from "./credentials.js";
 import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, type EndpointFormat, Endpoints, isEmbedding, isLocal } from "./endpoints.js";
-import { billingLabel, connectMethods, FEATURED, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, verifyKey } from "./providers.js";
+import { billingLabel, connectMethods, FEATURED, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, UTILITY_MODEL, verifyKey } from "./providers.js";
 import type { SecretBroker } from "./secrets.js";
 import { OpenRouterLive } from "./openrouter-live.js";
 
@@ -24,8 +24,6 @@ import { ExtraCosts } from "./costs.js";
 import { OnDeviceModel, OnDeviceUnavailable } from "./on-device.js";
 import type { UtilityChoice } from "@piopio/protocol";
 
-/** What a utility request is for: `learning` (learned facts) has its own choice, off by default. */
-export type UtilityTask = "general" | "learning";
 
 export class ModelHub {
 	readonly extraCosts: ExtraCosts;
@@ -40,8 +38,8 @@ export class ModelHub {
 	private connectedIds = new Set<string>();
 
 	readonly onDevice: OnDeviceModel;
-	/** The user's choices (Settings › Models and Memory); the server connects them to the settings file. */
-	utilityChoices: () => { utility?: UtilityChoice; learning?: UtilityChoice } = () => ({});
+	/** The user's choice (Settings › Models); the server connects it to the settings file. Unset: automatic. */
+	utilityChoice: () => UtilityChoice | undefined = () => undefined;
 
 	constructor(
 		private readonly secrets: SecretBroker,
@@ -361,40 +359,53 @@ export class ModelHub {
 	onProvidersChanged?: () => void;
 
 	/**
-	 * One-off request for background work (07-shared §1.3): titles, summaries, suggestions, commit messages and, as
-	 * `task: "learning"`, learned facts. It goes where the user chose, and only there: Apple's on-device model (the
-	 * default for general work), a model they picked, or nowhere (the default for learning). When the choice can't run
-	 * (Apple Intelligence off, the model's provider disconnected), it returns undefined and the caller does without:
-	 * nothing falls back to another provider. `choice` overrides the setting (an agent's own `models.utility`).
+	 * One-off request for background work (07-shared §1.3): titles, topic summaries, suggested replies, notebook
+	 * suggestions, commit messages and learned facts. Automatic by default: the provider the conversation already uses
+	 * (`model`), its small model when it has one (Haiku on OpenRouter), else that same model, so a chat on a local
+	 * model stays local and one on OpenRouter uses OpenRouter. Without a conversation (commit messages), the default
+	 * model's provider; with no provider connected, Apple's on-device model when it's there. The user can pin another
+	 * choice in Settings › Models (`choice` overrides it: an agent's own `models.utility`).
 	 */
-	async utility(systemPrompt: string, prompt: string, scope?: string, request: { task?: UtilityTask; choice?: UtilityChoice } = {}): Promise<string | undefined> {
-		const task = request.task ?? "general";
-		const choices = this.utilityChoices();
-		const choice = request.choice ?? (task === "learning" ? choices.learning ?? "off" : choices.utility ?? "on_device");
-		if (choice === "off") return undefined;
-		if (choice === "on_device") {
-			try {
-				const text = await this.onDevice.complete(systemPrompt, prompt);
-				this.extraCosts.record("utility", "apple/on-device", 0, scope);
-				return text;
-			} catch (error) {
-				if (error instanceof OnDeviceUnavailable) return undefined;
-				throw new EngineError("MODEL_ERROR", (error as Error).message);
-			}
-		}
-		// A model the user picked. The scripted model has no utility model (tests decide with their own hooks).
+	async utility(systemPrompt: string, prompt: string, scope?: string, request: { model?: ModelRef; choice?: UtilityChoice } = {}): Promise<string | undefined> {
 		if (this.faux) return undefined;
+		const choice = request.choice ?? this.utilityChoice() ?? "auto";
+		if (choice === "off") return undefined;
+		if (choice === "on_device") return this.onDeviceUtility(systemPrompt, prompt, scope);
+		const ref = choice === "auto" ? await this.automaticUtility(request.model) : choice;
+		if (!ref) return this.onDeviceUtility(systemPrompt, prompt, scope);
+		// A picked model whose provider was disconnected: skipped (titles and the like are optional work).
+		if (choice !== "auto" && !(await this.connected()).has(ref.provider)) return undefined;
 		const rt = await this.ready();
-		if (!(await this.connected()).has(choice.provider)) return undefined;
-		await this.ensureCredential(choice.provider);
-		const model = rt.getModel(choice.provider, choice.id);
-		if (!model) throw new EngineError("INVALID", `Unknown utility model ${choice.provider}/${choice.id}`);
+		await this.ensureCredential(ref.provider);
+		const model = rt.getModel(ref.provider, ref.id);
+		if (!model) throw new EngineError("INVALID", `Unknown utility model ${ref.provider}/${ref.id}`);
 		const reply = await rt.completeSimple(model, { systemPrompt, messages: [{ role: "user", content: prompt, timestamp: Date.now() }] });
 		const estimated = reply.usage?.cost?.total;
 		const hasPricing = Object.values(model.cost).some(value => typeof value === "number" && value > 0);
-		this.extraCosts.record("utility", `${choice.provider}/${choice.id}`, estimated === 0 && !hasPricing ? undefined : estimated, scope);
+		this.extraCosts.record("utility", `${ref.provider}/${ref.id}`, estimated === 0 && !hasPricing ? undefined : estimated, scope);
 		if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new EngineError("MODEL_ERROR", reply.errorMessage ?? "The utility model failed.");
 		return reply.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim();
+	}
+
+	/** Automatic: the conversation's provider (its small model, else the same model), else the default's; undefined with none connected. */
+	async automaticUtility(conversation?: ModelRef): Promise<ModelRef | undefined> {
+		const rt = await this.ready();
+		const ids = await this.connected();
+		const base = conversation && ids.has(conversation.provider) ? conversation : ids.size ? this.defaultModel : undefined;
+		if (!base) return undefined;
+		const small = UTILITY_MODEL[base.provider];
+		return small && rt.getModel(base.provider, small) ? { provider: base.provider, id: small } : base;
+	}
+
+	private async onDeviceUtility(systemPrompt: string, prompt: string, scope?: string): Promise<string | undefined> {
+		try {
+			const text = await this.onDevice.complete(systemPrompt, prompt);
+			this.extraCosts.record("utility", "apple/on-device", 0, scope);
+			return text;
+		} catch (error) {
+			if (error instanceof OnDeviceUnavailable) return undefined;
+			throw new EngineError("MODEL_ERROR", (error as Error).message);
+		}
 	}
 
 	/** Drops cached credentials after the app changed a secret itself (the OpenRouter key field). */

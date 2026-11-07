@@ -522,21 +522,19 @@ export const McpMemoryProvider = Type.Object({
 export type McpMemoryProvider = Static<typeof McpMemoryProvider>;
 
 /**
- * Where a utility task runs (07-shared §1.3): Apple's on-device model, a model you picked (a local endpoint or a
- * provider), or nowhere. Never a silent switch: when the choice can't run, the task is skipped.
+ * Where background model work runs (07-shared §1.3): "auto" (the default) uses the provider each conversation already
+ * uses; or Apple's on-device model, a model you picked, or nowhere.
  */
-export const UtilityChoice = Type.Union([Type.Literal("on_device"), Type.Literal("off"), ModelRef]);
+export const UtilityChoice = Type.Union([Type.Literal("auto"), Type.Literal("on_device"), Type.Literal("off"), ModelRef]);
 export type UtilityChoice = Static<typeof UtilityChoice>;
 
 /** Engine-wide settings (07-shared §5, §7). */
 export const EngineSettings = Type.Object({
-	/** Background model work (07-shared §1.3). Unset: `utility` on this Mac, `learning` off. */
+	/** Background model work (07-shared §1.3). Unset: automatic. */
 	models: Type.Optional(
 		Type.Object({
-			/** Titles, topic summaries, suggested replies, notebook suggestions, commit messages. */
+			/** Titles, topic summaries, suggested replies, notebook suggestions, commit messages, learned facts. */
 			utility: Type.Optional(UtilityChoice),
-			/** Learned facts: agents' memory (docs/spec/14 M2). An agent's `models.utility` overrides it. */
-			learning: Type.Optional(UtilityChoice),
 		}),
 	),
 	chat: Type.Object({
@@ -1418,7 +1416,7 @@ export const methods = {
 	"spaces.files.remove": { params: Type.Object({ ref: ContainerRef, name: Type.String() }), result: Type.Object({}) },
 	"settings.get": { params: Type.Object({}), result: EngineSettings },
 	"settings.set": {
-		params: Type.Object({ models: Type.Optional(Type.Object({ utility: Type.Optional(UtilityChoice), learning: Type.Optional(UtilityChoice) })), chat: Type.Optional(Type.Partial(EngineSettings.properties.chat)), aboutMe: Type.Optional(Type.Partial(EngineSettings.properties.aboutMe)), memory: Type.Optional(Type.Partial(EngineSettings.properties.memory)) }),
+		params: Type.Object({ models: Type.Optional(Type.Object({ utility: Type.Optional(UtilityChoice) })), chat: Type.Optional(Type.Partial(EngineSettings.properties.chat)), aboutMe: Type.Optional(Type.Partial(EngineSettings.properties.aboutMe)), memory: Type.Optional(Type.Partial(EngineSettings.properties.memory)) }),
 		result: EngineSettings,
 	},
 	/** The "About me" memory and its history, newest first. */

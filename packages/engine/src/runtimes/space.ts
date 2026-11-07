@@ -333,7 +333,7 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 			const transcript = lines.map((l) => `${l.role === "user" ? "User" : "Assistant"}: ${l.text}`).join("\n\n");
 			const summary =
 				(await this.options.hub
-					.utility("You summarize a conversation in one line for a sidebar: where it stands now, in at most 100 characters. No quotes, no preamble.", transcript)
+					.utility("You summarize a conversation in one line for a sidebar: where it stands now, in at most 100 characters. No quotes, no preamble.", transcript, this.ref.id, { model: this.model })
 					.catch(() => undefined)) ?? (lastReply.split("\n").find((l) => l.trim())?.trim() ?? "");
 			const line = summary.replace(/\s+/g, " ").trim().slice(0, 140);
 			if (!line || this.closed) return;
@@ -490,7 +490,7 @@ export class SpaceRuntime implements Runtime, SpaceHost {
 		const summary =
 			(transcript
 				? await this.options.hub
-						.utility("Summarize this conversation so another conversation can continue the subject: the decisions, facts and open questions, in at most 6 short bullet points. No preamble.", transcript)
+						.utility("Summarize this conversation so another conversation can continue the subject: the decisions, facts and open questions, in at most 6 short bullet points. No preamble.", transcript, this.ref.id, { model: this.model })
 						.catch(() => undefined)
 				: undefined) ??
 			[from.brief, from.summary].filter(Boolean).join(" ") ??

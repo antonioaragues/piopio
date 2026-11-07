@@ -143,27 +143,25 @@ struct ModelsPane: View {
             ListCard {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Titles, summaries and suggestions").font(.system(size: 13))
+                        Text("Titles, summaries, suggestions and learned facts").font(.system(size: 13))
                         Text(backgroundLine).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    UtilityChoicePicker(engine: engine, choice: engine.settings?.models?.utility ?? .onDevice, onDevice: onDevice) { choice in
+                    UtilityChoicePicker(engine: engine, choice: engine.settings?.models?.utility ?? .auto, onDevice: onDevice) { choice in
                         Task { await engine.updateSettings(SettingsPatch(models: .init(utility: choice))) }
                     }
                 }
                 .padding(.horizontal, 14).frame(minHeight: 54)
             }
-            FinePrint("If the choice can't run, the work is skipped. Piopio never switches to another provider by itself.").padding(.top, 8).padding(.bottom, 22)
-
-            DataRoutesCard(engine: engine, onDevice: onDevice)
         }
     }
 
     private var backgroundLine: String {
-        switch engine.settings?.models?.utility ?? .onDevice {
-        case .onDevice: onDevice?.available == false ? (onDevice?.reason ?? "Apple's model isn't available") + " Until then, this work is skipped." : "Apple's model, on this Mac: free, private, works offline"
-        case .off: "Off: chats get no summaries or suggested replies; commit messages list the files"
-        case .model(let ref): engine.providerPlace(ref.provider).local ? "A model on this Mac" : "Sent to \(engine.providerPlace(ref.provider).name), billed to your account"
+        switch engine.settings?.models?.utility ?? .auto {
+        case .auto: "The same provider as each conversation, on its smaller model when it has one"
+        case .onDevice: onDevice?.available == false ? (onDevice?.reason ?? "Apple's model isn't available.") + " Until then, this work is skipped." : "Apple's model, on this Mac: free and private, but less accurate"
+        case .off: "Off: no summaries, suggested replies or learned facts; commit messages list the files"
+        case .model(let ref): "Always \(engine.model(ref).map(ModelChip.short) ?? ref.id), whatever the conversation uses"
         }
     }
 

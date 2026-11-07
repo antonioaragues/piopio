@@ -997,6 +997,7 @@ export class Sessions {
 				'Suggest what the user might say next to the assistant: three short replies in the user\'s language, each under 7 words, concrete to this exchange (a next step, a check, a question). Answer with a JSON array of three strings only.',
 				`User: ${asked.text.slice(0, 1500)}\n\nAssistant: ${text}`,
 				entry.ref.id,
+				{ model: runtime.snapshot().state.model ?? entry.model },
 			)
 			.catch(() => undefined);
 		const list = reply ? (/\[[\s\S]*\]/.exec(reply)?.[0] ?? "") : "";
@@ -1028,14 +1029,14 @@ export class Sessions {
 			.flatMap((i) => (i.kind === "user" ? [`User: ${i.text}`] : i.kind === "assistant" ? [`Assistant: ${i.parts.filter((p) => p.type === "text").map((p) => p.text).join("")}`] : []))
 			.join("\n\n")
 			.slice(0, 6000);
-		const suggestion = (await this.askUtility(text, spaces, entry.ref.id).catch(() => undefined)) ?? keywordMatch(text, spaces);
+		const suggestion = (await this.askUtility(text, spaces, entry.ref.id, runtime.snapshot().state.model ?? entry.model).catch(() => undefined)) ?? keywordMatch(text, spaces);
 		if (!suggestion || !this.entries.has(entry.ref.id) || entry.suggestionDismissed) return;
 		entry.suggestion = suggestion;
 		this.save();
 		this.changed(entry);
 	}
 
-	private async askUtility(text: string, spaces: CatalogEntry[], scope: string): Promise<SpaceSuggestion | undefined> {
+	private async askUtility(text: string, spaces: CatalogEntry[], scope: string, model?: ModelRef): Promise<SpaceSuggestion | undefined> {
 		const index = spaces
 			.map((s) => `Notebook ${s.ref.id} “${s.title}”${s.instructions ? ` (${s.instructions.slice(0, 200)})` : ""}\n${(s.topics ?? []).filter((t) => !t.archived).map((t) => `  - topic ${t.id} “${t.title}”: ${t.brief ?? ""} ${t.summary ?? ""}`.trimEnd()).join("\n") || "  (no topics)"}`)
 			.join("\n");
@@ -1043,6 +1044,7 @@ export class Sessions {
 			'You decide whether a chat thread belongs in one of the user\'s Notebooks (long-running areas of their life or work, split into topics). Answer with JSON only: {"space": "<notebook id or null>", "topic": "<topic id or null>", "confidence": <0..1>, "reason": "<one short line>"}. Pick a topic only when the thread continues its subject. Use null when nothing fits well.',
 			`Notebooks:\n${index}\n\nThread:\n${text}`,
 			scope,
+			model ? { model } : {},
 		);
 		if (reply === undefined) return undefined;
 		const json = /\{[\s\S]*\}/.exec(reply)?.[0];

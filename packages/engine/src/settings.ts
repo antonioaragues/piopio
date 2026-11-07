@@ -19,7 +19,9 @@ export class Settings {
 
 	constructor(private readonly file: string) {
 		const saved = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as SettingsPatch) : {};
-		this.value = { ...(saved.models ? { models: saved.models } : {}), chat: { ...DEFAULT_SETTINGS.chat, ...saved.chat }, aboutMe: { ...DEFAULT_SETTINGS.aboutMe, ...saved.aboutMe }, memory: { ...DEFAULT_SETTINGS.memory, ...saved.memory } };
+		// Only `utility` (a `learning` choice existed for a day, 2026-11-06).
+		const models = saved.models?.utility ? { utility: saved.models.utility } : undefined;
+		this.value = { ...(models ? { models } : {}), chat: { ...DEFAULT_SETTINGS.chat, ...saved.chat }, aboutMe: { ...DEFAULT_SETTINGS.aboutMe, ...saved.aboutMe }, memory: { ...DEFAULT_SETTINGS.memory, ...saved.memory } };
 	}
 
 	get(): EngineSettings {

@@ -806,14 +806,14 @@ public struct MemoryStatus: Decodable, Sendable, Equatable {
 }
 
 /// Engine-wide settings (Settings › Chat, Settings › MCP servers).
-/// Where background model work runs (07-shared §1.3): Apple's on-device model, a picked model, or nowhere.
-/// On the wire: "on_device", "off", or a model ref.
+/// Where background model work runs (07-shared §1.3): automatic (each conversation's provider), Apple's on-device
+/// model, a picked model, or nowhere. On the wire: "auto", "on_device", "off", or a model ref.
 public enum UtilityChoice: Codable, Sendable, Hashable {
-    case onDevice, off, model(ModelRef)
+    case auto, onDevice, off, model(ModelRef)
 
     public init(from decoder: Decoder) throws {
         if let text = try? decoder.singleValueContainer().decode(String.self) {
-            self = text == "off" ? .off : .onDevice
+            self = text == "off" ? .off : text == "on_device" ? .onDevice : .auto
         } else {
             self = .model(try ModelRef(from: decoder))
         }
@@ -821,6 +821,7 @@ public enum UtilityChoice: Codable, Sendable, Hashable {
 
     public func encode(to encoder: Encoder) throws {
         switch self {
+        case .auto: var c = encoder.singleValueContainer(); try c.encode("auto")
         case .onDevice: var c = encoder.singleValueContainer(); try c.encode("on_device")
         case .off: var c = encoder.singleValueContainer(); try c.encode("off")
         case .model(let ref): try ref.encode(to: encoder)
@@ -831,11 +832,10 @@ public enum UtilityChoice: Codable, Sendable, Hashable {
 public struct OnDeviceStatus: Decodable, Sendable, Hashable { public var available: Bool; public var reason: String? }
 
 public struct EngineSettings: Codable, Sendable, Hashable {
-    /// Unset: general work on this Mac, learned facts off.
+    /// Unset: automatic.
     public struct Models: Codable, Sendable, Hashable {
         public var utility: UtilityChoice?
-        public var learning: UtilityChoice?
-        public init(utility: UtilityChoice? = nil, learning: UtilityChoice? = nil) { self.utility = utility; self.learning = learning }
+        public init(utility: UtilityChoice? = nil) { self.utility = utility }
     }
     public var models: Models?
     public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var suggestSpaces: Bool; public var followUps: Bool? }

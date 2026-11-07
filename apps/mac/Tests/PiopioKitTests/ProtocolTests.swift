@@ -66,13 +66,13 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
 }
 
 @Test func utilityChoicesMatchTheEngine() throws {
-    let s: EngineSettings = try decode(#"{"models":{"utility":"on_device","learning":{"provider":"ollama","id":"llama4"}},"chat":{"mcp":false,"suggestSpaces":true},"aboutMe":{"enabled":false,"capture":false,"inThreads":true,"inSpaces":true,"provider":"builtin"},"memory":{"providers":[]}}"#)
-    #expect(s.models?.utility == .onDevice)
-    #expect(s.models?.learning == .model(ModelRef(provider: "ollama", id: "llama4")))
-    let old: EngineSettings = try decode(#"{"chat":{"mcp":false,"suggestSpaces":true},"aboutMe":{"enabled":false,"capture":false,"inThreads":true,"inSpaces":true,"provider":"builtin"},"memory":{"providers":[]}}"#)
-    #expect(old.models == nil)
+    let base = #""chat":{"mcp":false,"suggestSpaces":true},"aboutMe":{"enabled":false,"capture":false,"inThreads":true,"inSpaces":true,"provider":"builtin"},"memory":{"providers":[]}"#
+    #expect(try decode("{\(base)}", as: EngineSettings.self).models == nil)
+    #expect(try decode(#"{"models":{"utility":"auto"},"# + base + "}", as: EngineSettings.self).models?.utility == .auto)
+    #expect(try decode(#"{"models":{"utility":"on_device"},"# + base + "}", as: EngineSettings.self).models?.utility == .onDevice)
+    #expect(try decode(#"{"models":{"utility":{"provider":"ollama","id":"llama4"}},"# + base + "}", as: EngineSettings.self).models?.utility == .model(ModelRef(provider: "ollama", id: "llama4")))
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys
-    let patch = String(decoding: try encoder.encode(SettingsPatch(models: .init(utility: .off, learning: .onDevice))), as: UTF8.self)
-    #expect(patch == #"{"models":{"learning":"on_device","utility":"off"}}"#)
+    #expect(String(decoding: try encoder.encode(SettingsPatch(models: .init(utility: .auto))), as: UTF8.self) == #"{"models":{"utility":"auto"}}"#)
+    #expect(String(decoding: try encoder.encode(SettingsPatch(models: .init(utility: .off))), as: UTF8.self) == #"{"models":{"utility":"off"}}"#)
 }

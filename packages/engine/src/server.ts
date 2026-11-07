@@ -150,7 +150,7 @@ export class Engine {
 		this.projects = new Projects(options.paths.projectsIndex, agentDir);
 		this.mcp = new McpConfig(agentDir);
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
-		this.hub.utilityChoices = () => this.settings.get().models ?? {};
+		this.hub.utilityChoice = () => this.settings.get().models?.utility;
 		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings, async (provider) => {
 			const credential = await this.hub.credentials.read(provider).catch(() => undefined);
 			return credential?.type === "api_key" ? credential.key : undefined;

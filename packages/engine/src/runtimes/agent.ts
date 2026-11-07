@@ -98,8 +98,11 @@ export class AgentRuntime implements Runtime {
 			...(options.peers ? { peers: options.peers } : {}),
 			...(options.askTimeoutMs ? { askTimeoutMs: options.askTimeoutMs } : {}),
 			// Learned facts (docs/spec/14-memory M2) on the utility model, after a conversation goes quiet.
-			// Where: the agent's own models.utility, else Settings › Memory's choice (off unless the user picked one).
-			learn: options.learn ?? ((system, prompt) => options.hub.utility(system, prompt, options.ref.id, { task: "learning", ...agentUtility(options.definition().models.utility) })),
+			// On the agent's own provider (automatic), unless its models.utility or Settings › Models says otherwise.
+			learn: options.learn ?? ((system, prompt) => {
+				const { provider, modelId } = modelOf(options.definition().models.default);
+				return options.hub.utility(system, prompt, options.ref.id, { model: { provider, id: modelId }, ...agentUtility(options.definition().models.utility) });
+			}),
 			// Web search and learned facts are recorded under this agent's id (scope): they count toward its budget.
 			extraSpend: (month) => options.hub.extraCosts.monthUsd(options.ref.id, month),
 			...(options.learnQuietMs ? { learnQuietMs: options.learnQuietMs } : {}),
@@ -625,9 +628,9 @@ function withConnectorApprovals(def: AgentDefinition, hub: ConnectorHub | undefi
 	return { ...def, policies: { ...def.policies, requireApproval: rules } };
 }
 
-/** An agent definition's `models.utility`: "on-device", "off", or a model id ("provider:model"). */
+/** An agent definition's `models.utility`: "auto", "on-device", "off", or a model id ("provider:model"). */
 export function agentUtility(value: string | undefined): { choice?: UtilityChoice } {
-	if (!value) return {};
+	if (!value || value === "auto") return {};
 	if (value === "on-device") return { choice: "on_device" };
 	if (value === "off") return { choice: "off" };
 	const { provider, modelId } = modelOf(value);
