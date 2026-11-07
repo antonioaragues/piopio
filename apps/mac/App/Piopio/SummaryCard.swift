@@ -168,16 +168,20 @@ struct ContextMeter: View {
                 Capsule().fill(fraction > 0.85 ? Color.dsFg : Color.dsFg2).frame(width: max(3, 40 * fraction))
             }
             .frame(width: 40, height: 3)
+            // One line whatever the panel's width: squeezed, it wrapped a letter per line ("1 / % / fu / ll").
             Text("\(Int((fraction * 100).rounded()))% full").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
+                .lineLimit(1).fixedSize()
             if compact, (context.tokens ?? 0) > 0 {
                 SummaryLink(compacting ? "Compacting…" : "Compact") {
                     compacting = true
                     Task { await thread.compact(); compacting = false }
                 }
+                .fixedSize()
                 .disabled(thread.isRunning || compacting)
                 .help("Summarize the conversation so far to free up room")
             }
         }
+        .fixedSize()
         .help("\(context.tokens.map { ContextRing.short($0) } ?? "–") of \(ContextRing.short(context.window)) tokens")
     }
 }
