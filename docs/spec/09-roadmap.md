@@ -306,6 +306,12 @@ GitHub PR/CI loop (G4–G8), worktrees UX, usage page, export everything, access
 ## Onboarding and areas (built 2026-10-25)
 A new first-run welcome asks what Piopio is for you (Build, Chat, Agents, or several). Areas you don't use are hidden from the sidebar, Home, menus and the palette, and can be turned on and off in Settings › General. Hiding stops and deletes nothing. See [15-onboarding-and-areas](15-onboarding-and-areas.md); the decisions are in §7 and what's built in §8.
 
+## Conversation first (2026-11-07)
+**Planned, see [18-conversation-first](18-conversation-first.md).** Phase 1: Home is the one start, with project and
+permissions chips; Read only replaces the Chat lens. Phase 2: projects without a folder replace notebooks. Phase 3:
+turn a conversation into an agent; the location chip. Next after the hardening and background-work changes of
+2026-11-06/07.
+
 ## Dispatch (2026-11-03)
 Planned in [17-dispatch.md](17-dispatch.md): DP1 Watchdog rules, DP2–DP3 Dispatch (engine, app), DP4 non-blocking subagents, DP5 PR events (after G6–G7), DP6 the off-track check. Open questions DPQ1–DPQ6 are there.
 

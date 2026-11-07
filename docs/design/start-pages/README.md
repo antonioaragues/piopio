@@ -1,5 +1,8 @@
 # Start pages
 
+> **2026-11-07:** [spec 18](../../spec/18-conversation-first.md) replaces the Chat, Project and Notebook pages with
+> Home's composer (project and permissions as chips). The Agent page stays.
+
 The + next to Projects, Chats, Agents and Notebooks opens a page in the main window instead of a sheet. First built
 on 2026-11-03 (spec decision X10), then redone the same day from a design handoff ("redesign of the + empty states")
 so all four follow one layout. `start-pages.html` is the first proposal; `app/` holds captures with the scripted

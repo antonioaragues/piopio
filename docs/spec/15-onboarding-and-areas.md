@@ -3,6 +3,9 @@
 Status: built 2026-10-25 (§8). The decisions are in §7. It changes the first-run welcome (docs/design v2, 12b) and
 adds a setting to General; the sidebar, Home, menus and the command palette follow it.
 
+> **2026-11-07:** [18-conversation-first §7](18-conversation-first.md#7-what-goes-away) drops the Chat switch
+> (conversations are always on); Build and Agents stay.
+
 **The idea:** Piopio has three areas: **Build** (code), **Chat** (chats and notebooks) and **Agents**. Not everyone
 wants all three. On first run you say which ones you want, and the app shows only those. You can turn areas on and
 off later in Settings › General. Turning an area off hides it: nothing is deleted, and nothing that's running
