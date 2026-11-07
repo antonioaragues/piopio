@@ -319,6 +319,6 @@ Acceptance:
     could linger.
   - Not clicked: the menus themselves (target, permissions, mode chip). The engine tests cover switching Read only
     live.
-- **Home keeps the last target.** After a send it stays on that project; the line under the box says so. New
-  Conversation and ⌘N reset it to No project.
+- **Home goes back to No project after each send** (decided 2026-11-07). A loose question never lands in the last
+  project; a project's `+` or ⌘O preselect it again.
 

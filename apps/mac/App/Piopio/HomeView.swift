@@ -152,6 +152,7 @@ struct AskBox: View {
     @Binding var item: SidebarItem
     @State private var text = ""
     /// "chat", "project:<id>" or "agent:<id>"; routes that open Home with a project chosen set it (⌘O, a project's +).
+    /// Back to "chat" (no project) after each send, so a loose question never lands in the last project.
     @AppStorage("homeTarget") private var targetRaw = "chat"
     @State private var pendingChat: ContainerRef?
     @State private var sending = false
@@ -472,11 +473,12 @@ struct AskBox: View {
                     let session = engine.thread(ref)
                     await session.open()
                     if await session.send(message, attachments: attachments.map(\.attachment)) {
-                        text = ""; attachments = []; mode = nil; workOn = .folder; saveHomeDraft()
-                        item = .session(ref.id)
-                    } else {
-                        item = .session(ref.id) // the conversation exists; its composer keeps the draft for a retry
+                        text = ""; attachments = []; saveHomeDraft()
                     }
+                    // Either way the conversation exists (on failure its composer keeps the draft for a retry). Home
+                    // starts clean next time: no project (docs/spec/18 §4); a project's + preselects it again.
+                    target = .chat
+                    item = .session(ref.id)
                 } catch {
                     sendError = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was started, and your message is kept."
                 }
@@ -489,6 +491,7 @@ struct AskBox: View {
                 await thread.open()
                 if await thread.send(message) {
                     text = ""; saveHomeDraft()
+                    target = .chat
                     UserDefaults.standard.set("Chat", forKey: "agentTab")
                     item = .agent(id)
                 } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
