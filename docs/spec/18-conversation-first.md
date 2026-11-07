@@ -34,9 +34,9 @@ their own section. Notebooks stop being their own kind: a notebook is a project 
 |---|---|
 | CF1 | **One start: "New conversation".** Home is that page: a greeting and the composer, with Needs you, Coming up and Recent below. It replaces the Chat, Project and Notebook start pages and the project "new session" page. The Agent start page stays. |
 | CF2 | **The project is a chip in the composer:** No project, a project with a folder, or a project without one. |
-| CF3 | **Permissions are a chip too**, in conversations with a folder: Read only, Ask, Auto-edit, Full auto, plus Plan. **Read only replaces the Chat lens.** |
+| CF3 | **Permissions are a chip too**, in conversations with a folder: Read only, Ask, Auto-edit, Full auto, plus Plan. **Read only replaces the Chat lens**, and it's the default for folders of documents. Before you press Return, the composer says where the message goes and whether Piopio may change files. |
 | CF4 | **A notebook is a project without a folder:** shared instructions, memory and files; its conversations are ordinary conversations. The Notebook kind, Main and the organizer's routing go away. |
-| CF5 | **Routing becomes a suggestion.** A conversation with no project may get "This looks like Kitchen renovation. Move it there?" (S11's suggestion, aimed at projects). Nothing files your messages without asking. |
+| CF5 | **Moving is manual first.** You start where you are and take the conversation to a project later: "Move to" for a project without a folder, "Continue in" for one with a folder. Automatic suggestions ("This looks like Kitchen renovation") wait until a week of use shows conversations left loose by forgetting. Nothing files your messages without asking. |
 | CF6 | **Agents keep their own section and start page.** Later, a conversation can also become an agent ("Turn into an agent"). |
 | CF7 | **Location is a chip once the cloud exists** (This Mac / Cloud). Until then it isn't shown. |
 | CF8 | **No migration of notebooks:** there's no real notebook data (2026-11-07). Existing notebook folders stay on disk but stop showing once phase 2 lands. |
@@ -73,10 +73,25 @@ Glossary changes (01-product §4):
 ┌──────────────────────────────────────────────────────────┐
 │ No project ▾                                              │
 │ Ask anything, @ to mention, / for commands                │
-│ +   Claude Opus 5.5 ▾                  Auto-edit ▾     ↑  │
+│ +   Claude Opus 5.5 ▾                                  ↑  │
 └──────────────────────────────────────────────────────────┘
   Needs you · Coming up · Recent
 ```
+
+With a folder chosen, the permissions chip appears and the line under the box says what that means:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ▣ piopio ▾                                                │
+│ Fix the failing test in the policy package                │
+│ +   Claude Opus 5.5 ▾                     Auto-edit ▾  ↑  │
+└──────────────────────────────────────────────────────────┘
+  In piopio · can edit files; asks before commands
+```
+
+**The rule for phase 1:** before pressing Return you can see where the message goes (the project chip) and whether
+Piopio may change anything (the permissions chip and the line under the box). With no project there's no chip and no
+line: a conversation without a folder can't touch your files.
 
 **Project ▾**, a popover with search:
 - **Recent:** the last projects you used, with and without folders.
@@ -86,9 +101,15 @@ Glossary changes (01-product §4):
   phase 2 adds folder-less ones.
 - **No project ✓.**
 
-**Permissions ▾**, shown only with a folder. The default is the project's approval mode (today's
-`ProjectInfo.approvalMode`), and the chip can change it for new conversations in that project ("Use … for new
-conversations here", as `EditModeChip` does today).
+**Permissions ▾**, shown only with a folder.
+- **The default is the project's own**, `ProjectInfo.approvalMode`, which gains `read_only`. The chip can change it
+  for new conversations in that project ("Use … for new conversations here", as `EditModeChip` does today).
+- **New folders:** a folder without code markers (`detectLens` today: no package.json, .git, Cargo.toml…) starts
+  in **Read only**; a code repository starts in Auto-edit, as now.
+- **Existing projects (migration):**
+  - Lenses `["chat"]` only: `read_only`.
+  - `["build"]` or both: they keep their mode.
+  - Then `lenses` is no longer read. No folder of documents silently becomes editable.
 
 | Mode | Reads, search, web | Edits | Commands |
 |---|---|---|---|
@@ -101,6 +122,11 @@ conversations here", as `EditModeChip` does today).
 Read only differs from today's Chat lens:
 - **It can't write files.** The lens could when asked; choose Ask for that.
 - **What it keeps from the lens:** the knowledge-assistant prompt and the web tools.
+- **It covers more than files.** Connected apps and MCP tools ask before every change:
+  - connectors already know which of their tools read and which write;
+  - MCP tools are trusted only when the server marks them `readOnlyHint`.
+
+  So "Read only" holds for your calendar and your MCP servers too (audit F15).
 
 **The rest of the composer:**
 - **Model, `+` and Debate don't change.** `+` is files, folder, commands, web search, extensions. Debate is `/debate`
@@ -121,15 +147,24 @@ Read only differs from today's Chat lens:
   - Between Ask, Auto-edit, Full auto and Plan: as today.
   - Into or out of Read only: the engine reopens the session with the other tool set, same history (pi session file).
     A note in the transcript says so.
-- **Moving a conversation:**
-  - **No project → a project without a folder:** a re-tag; same thread, same runtime (phase 2).
-  - **No project → a project with a folder:** a new conversation in that folder that starts with the old one's
-    history, copied as `transfer.ts` copies threads today. The old one shows "Continued in …" with a link.
+- **Taking a conversation somewhere else:** manual, from the conversation's project chip (CF5). The verb says what
+  happens:
+  - **Move to <project without a folder>** (phase 2): the same conversation changes project. Same thread, same
+    runtime, all its branches and attachments.
+  - **Continue in <project with a folder>** (phase 1): a new conversation in that folder, because folder
+    conversations run on the other runtime. The original stays where it was, and ends with "Continued in …",
+    linking to the new one.
+    - **What arrives:** the active branch only. User and assistant text, and one line per tool call (tool and
+      result status). Thinking and other branches stay behind.
+    - **Attachments:** images go along; other attached files arrive as their names, since the folder already holds
+      the files that matter there.
+    - **How it looks:** the new conversation opens with a folded "Continued from <title>" block holding that history,
+      and the model reads it as context. Nothing is sent until you write.
   - **Out of a folder project:** not offered. Copy the text, or export.
-- **The suggestion (CF5):** after a no-project conversation's first exchange, and again after its fifth, the
-  background model compares it with your projects' names, instructions and recent conversation titles. Above 0.75
-  it offers "Move to <project>" or "Not now". It's S11's code and thresholds, aimed at projects; dismissals are
-  remembered.
+- **Suggestions (later, CF5):**
+  - S11's code (after the first and fifth exchange, above 0.75 confidence) can be aimed at projects.
+  - It's turned on only if, after the week of use, conversations stay loose because people forget to move them.
+  - Until then, S11's notebook suggestion is off: it targets notebooks, which phase 2 removes.
 
 ## 6. The sidebar
 
@@ -159,8 +194,8 @@ Conversations             +
 | Goes away | Replaced by |
 |---|---|
 | Chat, Project and Notebook start pages; the "new session" page | Home's composer (CF1) |
-| Lenses (`ProjectInfo.lenses`, "Use as: Code / Documents") | The permissions chip; Read only (CF3) |
-| Notebook kind, Main, the organizer, routing cards, topic merge | Projects without a folder; the move suggestion (CF4, CF5) |
+| Lenses (`ProjectInfo.lenses`, "Use as: Code / Documents") | The permissions chip; Read only as the default for documents (CF3) |
+| Notebook kind, Main, the organizer, routing cards, topic merge, the Thread → Notebook suggestion | Projects without a folder; moving by hand (CF4, CF5) |
 | Notebook memory (markdown in pi-durable) | The project's memory bank (built-in provider) |
 | The Ask box's targets on Home | The project chip and `@agent` |
 | Areas: the Chat switch (15) | Conversations are always on. Build and Agents stay as switches: Build off hides folder projects' code tools (terminal, git, edit modes); folders can still be read in Read only |
@@ -169,23 +204,37 @@ Conversations             +
 
 ### Phase 1: one start, with chips
 Engine:
-- `profile` can change on an open Build session: `sessions.configure({ profile })` reopens it.
-- The chat profile removes `edit` and `write` too: Read only.
-- Projects keep `lenses` in the file but stop using them.
+- **Read only:**
+  - `ProjectInfo.approvalMode` gains `read_only`.
+  - New folders get it when they have no code markers.
+  - Existing chat-only projects are migrated to it (§4).
+  - The chat profile also removes `edit` and `write`.
+  - In Read only, connector writes and MCP tools without `readOnlyHint` ask.
+- **Switching an open Build session:** `sessions.configure({ profile })` reopens it with the other tool set.
+- **Continue in a folder:** `sessions.continueIn({ ref, projectId })` creates a Build session whose first context is
+  the original's active branch (§5), and links the two.
+- **The suggestion:** S11's Thread → Notebook suggestion is off by default.
 
 App:
-- Home becomes the start page: the project chip, the permissions chip, `@agent`, drafts.
-- Remove the Chat, Project and new-session pages, and their routes and menu items. ⌘N and ⌘O go to Home as in §4.
-- Sidebar: "Chats" becomes "Conversations"; folder conversations in Read only are listed under their project like
-  other sessions.
-- Settings: remove lens switches. The areas switch for Chat goes.
+- **Home becomes the start page:** the project chip, the permissions chip and the line under the box, `@agent`,
+  drafts.
+- **Pages:** remove the Chat, Project and new-session pages, and their routes and menu items. ⌘N and ⌘O go to Home
+  (§4).
+- **Continue in…:** the project chip on an open conversation with no project offers it.
+- **Sidebar:** "Chats" becomes "Conversations". Folder conversations in Read only are listed under their project
+  like other sessions.
+- **Settings:** remove the lens switches and the areas switch for Chat.
 
-Acceptance:
-- From Home you can start a chat, a Read only conversation in a folder, and an Auto-edit one, without opening
-  another page.
-- A project's `+` and ⌘O land on Home with the project chosen.
-- Switching Read only ↔ Auto-edit in a running conversation keeps its history.
-- A week of daily use before phase 2 (status.md checklist: Build and Chat rows).
+Acceptance, the test of the whole simplification:
+- **From Home, with one Return each:** ask a question, look something up in a folder, and ask for a change.
+  - Before pressing Return, each time, you can tell where the message goes and whether Piopio may change files.
+- **Other ways in:** a project's `+` and ⌘O land on Home with the project chosen.
+- **Defaults and switching:**
+  - A folder of documents starts in Read only.
+  - Switching Read only ↔ Auto-edit in a running conversation keeps its history.
+- **Continue in:** a chat that turns out to be about a repo continues there with its text and images.
+- **Then a week of daily use** (status.md, Build and Chat rows). Note how often conversations stay loose: that
+  decides the suggestions.
 
 ### Phase 2: projects without a folder; notebooks go
 Engine:
@@ -193,7 +242,6 @@ Engine:
   `project:<id>`.
 - Threads take a `projectId`. Their system section gets the project's instructions and memory recall (as agents
   get theirs), plus the files tools (`space-files.ts` reused).
-- The S11 suggestion targets projects.
 - Remove the Space runtime, its protocol methods and the notebook memory.
 
 App:
@@ -204,7 +252,7 @@ App:
 Acceptance:
 - Make a "Kitchen renovation" project, add two files and instructions, and start three conversations.
 - Each one knows the instructions, can read the files, and remembers what another one saved.
-- A no-project chat about kitchens gets the move suggestion, and moving it keeps its history.
+- "Move to Kitchen renovation" on a no-project chat keeps its whole history, branches and attachments.
 
 ### Phase 3: from conversation to agent
 - **Turn into an agent:** "Turn into an agent" on a conversation opens the Agent start page with a draft: the name,
