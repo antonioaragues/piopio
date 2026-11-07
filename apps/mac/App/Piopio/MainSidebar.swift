@@ -258,23 +258,21 @@ struct MainSidebar: View {
         project.missing != true
     }
 
-    /// The project's sessions, nested under it on a hairline (docs/design/start-pages, addendum): a "New session ·
-    /// Draft" row first while one is being written, the live sessions and "N earlier". Hidden while the project is
-    /// folded.
+    /// The project's conversations, nested under it on a hairline: the live ones and "N earlier". Hidden while the
+    /// project is folded.
     @ViewBuilder private func projectSessions(_ project: ProjectInfo) -> some View {
         let all = engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
-        let drafting = item == .newSession(project.id) || StartDrafts.shared.hasContent(key: StartDrafts.sessionKey(project.id))
-        if !collapsedProjects.contains(project.id), drafting || !all.isEmpty {
+        // No draft row: new conversations start on Home now (docs/spec/18), which keeps its own draft.
+        if !collapsedProjects.contains(project.id), !all.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
-                if drafting { sessionDraftRow(project) }
                 ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in sessionRow(s, indent: true) }
                 if !earlier.isEmpty {
                     Button {
                         if showAll { showingEarlier.remove(project.id) } else { showingEarlier.insert(project.id) }
                     } label: {
-                        Text(showAll ? "Hide earlier sessions" : "\(earlier.count) earlier session\(earlier.count == 1 ? "" : "s")")
+                        Text(showAll ? "Hide earlier conversations" : "\(earlier.count) earlier conversation\(earlier.count == 1 ? "" : "s")")
                             .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
                             .padding(.leading, 8).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     }
@@ -285,26 +283,6 @@ struct MainSidebar: View {
             .overlay(alignment: .leading) { Rectangle().fill(Color.dsLine).frame(width: 1) }
             .padding(.leading, 17)
             .padding(.bottom, 4)
-        }
-    }
-
-    /// "New session · Draft", highlighted while its page is open.
-    private func sessionDraftRow(_ project: ProjectInfo) -> some View {
-        let selected = item == .newSession(project.id)
-        return Button { item = .newSession(project.id) } label: {
-            HStack(spacing: 8) {
-                Text("New session").font(.system(size: 13)).foregroundStyle(Color.dsFg2).lineLimit(1)
-                Spacer(minLength: 4)
-                Text("Draft").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            }
-            .rowChrome(selected: selected, height: 30)
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button("Discard Draft", role: .destructive) {
-                StartDrafts.shared.clear(key: StartDrafts.sessionKey(project.id))
-                if selected { item = .home }
-            }
         }
     }
 
@@ -682,7 +660,7 @@ private struct ProjectRow: View {
     @FocusState private var plusFocused: Bool
 
     private var showsPlus: Bool { plus != nil && (isOpen || hovering || plusFocused) }
-    private var plusLabel: String { plus == .chat ? "New chat in \(project.name)" : "New session in \(project.name)" }
+    private var plusLabel: String { "New conversation in \(project.name)" }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -720,7 +698,7 @@ private struct ProjectRow: View {
                 .focused($plusFocused)
                 .opacity(showsPlus ? 1 : 0)
                 .padding(.trailing, 2)
-                .help(plus == .chat ? "New chat in this folder" : "New session ⌘N")
+                .help("New conversation in this folder")
                 .accessibilityLabel(plusLabel)
             }
         }

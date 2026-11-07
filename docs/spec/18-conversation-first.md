@@ -307,6 +307,18 @@ Acceptance:
 - **MCP tools in Build sessions ask in Read only.** They're reached through codemode, so `readOnlyHint` isn't seen
   there yet.
 - **With Build off,** Home starts folder conversations in Read only. The conversation's own chip still lists every mode.
-- **Not checked in the running app:** the display was locked, so there are no captures. The acceptance in §8 still
-  needs a person.
+- **Checked in the app (2026-11-07,** scratch data, scripted model, driven by computer use**):**
+  - From Home, with one Return each: a question in a documents folder, a change in a code folder, and a question
+    with no project.
+  - Before Return, each showed where it goes and what it may do: "Read only · reads files and the web; can't change
+    anything", "Auto-edit · can edit files; asks before commands", and nothing with no project.
+  - A project's `+` and File › New Conversation land on Home with the right choice.
+  - "Continue in" (triggered through the engine; background control can't open menus) showed "Continued in … · Open"
+    on the chat, and "Continued from … · 2 messages" in the new conversation.
+  - Fixed after the check: the project `+` label said "New session", and an old "New session · Draft" sidebar row
+    could linger.
+  - Not clicked: the menus themselves (target, permissions, mode chip). The engine tests cover switching Read only
+    live.
+- **Home keeps the last target.** After a send it stays on that project; the line under the box says so. New
+  Conversation and ⌘N reset it to No project.
 
