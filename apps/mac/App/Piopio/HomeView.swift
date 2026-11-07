@@ -209,7 +209,7 @@ struct AskBox: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                 HStack(spacing: 4) {
                     targetMenu
@@ -223,30 +223,33 @@ struct AskBox: View {
                     .focused($focused)
                     .onSubmit(send)
                 if !attachments.isEmpty { attachmentTiles }
-                HStack(spacing: 4) {
+                // The same footer as a conversation's composer (Composer.box): attach and permissions on the left,
+                // the model and send on the right, so the box reads the same before and after it starts.
+                HStack(spacing: 2) {
+                    if agent == nil { AttachButton(pick: attach, help: "Add files, photos or PDFs (⌘U)") }
+                    if let project, project.hasFolder {
+                        if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
+                    }
+                    Spacer(minLength: 6)
                     if agent == nil {
-                        Button(action: attach) { Image(systemName: "plus").font(.system(size: 13)) }
-                            .buttonStyle(IconButtonStyle(size: 26))
-                            .help("Attach images, PDFs or text files").accessibilityLabel("Attach files")
                         Button { showModels = true } label: { Text(modelLabel) }
-                            .buttonStyle(ChipStyle())
+                            .buttonStyle(ComposerChipStyle())
                             .popover(isPresented: $showModels, arrowEdge: .bottom) {
                                 ModelPicker(engine: engine, selected: model ?? defaultModel, role: project?.hasFolder == true ? .build : .chat) { m in model = m; showModels = false }
                             }
-                    }
-                    Spacer()
-                    if let project, project.hasFolder {
-                        if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
                     }
                     SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: send)
                         .accessibilityLabel(sendLabel)
                         .keyboardShortcut(.return, modifiers: .command)
                 }
-                .padding(.leading, -6)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+            .padding(.leading, 14)
+            .padding(.trailing, 12)
+            .padding(.bottom, 10)
             .composerBox()
+            // Sending moves this box into the conversation's composer (the same morph the start pages used).
+            .composerMorph()
             // Before Return: where it goes, and whether Piopio may change anything (18 §4). Nothing without a folder.
             if let line = whereLine {
                 Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.leading, 14)
@@ -349,9 +352,10 @@ struct AskBox: View {
 
     private var defaultModel: ModelRef? { project?.hasFolder == true ? engine.model(for: .build) : engine.preferredModel }
 
+    /// As the conversation's model chip says it (ModelChip.label).
     private var modelLabel: String {
         let ref = model ?? defaultModel
-        return engine.model(ref).map(ModelChip.short) ?? ref?.id ?? "Model"
+        return engine.model(ref).map { ModelChip.label($0, engine: engine) } ?? ref?.id ?? "Model"
     }
 
     private func openFolder() {
@@ -459,7 +463,7 @@ struct AskBox: View {
                     // Either way the conversation exists (on failure its composer keeps the draft for a retry). Home
                     // starts clean next time: no project (docs/spec/18 §4); a project's + preselects it again.
                     target = .chat
-                    item = .session(ref.id)
+                    withAnimation(StartMotion.morph) { item = .session(ref.id) }
                 } catch {
                     sendError = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was started, and your message is kept."
                 }
@@ -474,7 +478,7 @@ struct AskBox: View {
                     text = ""; saveHomeDraft()
                     target = .chat
                     UserDefaults.standard.set("Chat", forKey: "agentTab")
-                    item = .agent(id)
+                    withAnimation(StartMotion.morph) { item = .agent(id) }
                 } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
             }
         }
@@ -499,7 +503,7 @@ struct AskBox: View {
                 target = .chat // Home starts clean next time (docs/spec/18 §4); this also forgets the pending chat
                 saveHomeDraft()
                 try? await engine.refreshCatalog()
-                item = .chat(ref.id)
+                withAnimation(StartMotion.morph) { item = .chat(ref.id) }
             } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
         }
     }
