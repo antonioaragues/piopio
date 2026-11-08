@@ -134,7 +134,7 @@ Read only differs from today's Chat lens:
 - **Return sends.** Nothing exists until then; the draft is kept as start drafts are today
   (`<home>/drafts/start.json`).
 
-**Other ways in, all to this page:**
+**Other ways in,** each to a centered start page with this same box (§14), not to Home:
 - **⌘N, "New conversation" and the sidebar's `+`:** no project.
 - **A project row's `+`:** that project preselected.
 - **⌘O:** opens a folder and preselects it.
@@ -224,7 +224,7 @@ App:
 Acceptance, the test of the whole simplification:
 - **From Home, with one Return each:** ask a question, look something up in a folder, and ask for a change.
   - Before pressing Return, each time, you can tell where the message goes and whether Piopio may change files.
-- **Other ways in:** a project's `+` and ⌘O land on Home with the project chosen.
+- **Other ways in:** a project's `+` and ⌘O open the start page with the project chosen (§14).
 - **Defaults and switching:**
   - A folder of documents starts in Read only.
   - Switching Read only ↔ Auto-edit in a running conversation keeps its history.
@@ -433,8 +433,8 @@ pi CLI works there too.
 
 **App:**
 - **New project** (⇧⌘N, the Projects `+`, Home's target popover, the palette): a name and optional instructions; the
-  sheet says which folder it makes. "Open a Folder Instead…" adds one you have. Once made, Home opens with the new
-  project chosen.
+  page says which folder it makes. "Open a folder instead…" adds one you have. Once made, its new conversation page
+  opens (§14).
 - **Continue in** replaces "Move to a project": the conversation's folder button and its sidebar menu list the
   projects, Open Folder… and New Project…, which makes the folder and continues there.
 - **Removed:** the project page, the tray icon, project rows in Settings › Memory, and the folder-less branches on
@@ -444,4 +444,22 @@ pi CLI works there too.
 **Not done:**
 - A summary view of NOTES.md in the app; it's a file, opened like any other.
 - Agents don't read a project's NOTES.md (§9 Q3).
+
+## 14. Start pages again (2026-11-08)
+
+**Why:** phase 1 sent every `+` to Home. Home is a landing page, with Needs you, Coming up and Recent under the box,
+and a `+` that lands there reads as "nothing happened". New project had become a sheet. The `+` buttons open a
+centered start page in the main window again, as they did before phase 1.
+
+**App:**
+- **New conversation** (⌘N, Conversations' `+`, File › New Conversation, `/new`): the start page with Home's box and no
+  project, under "What's on your mind?". Its sidebar row is "New conversation · Draft".
+- **A project's `+`** (and its "New Conversation…", ⌘O, Open folder): the same page with that project chosen, its name
+  over "New conversation", and the project's row marked in the sidebar. Choosing another target in the box keeps the
+  page and what's typed; the sidebar follows.
+- **New project** (⇧⌘N, the Projects `+`, the box's popover, the palette, Continue in › New Project…): a start page with
+  the name as the title, optional instructions and the folder it makes (§13). Create opens the new project's
+  conversation page; from Continue in, the conversation continues in the new folder. Back or Esc returns.
+- **Kept:** the box is Home's (`AskBox`), so Plan, permissions, Work on, `@` and the morph into the conversation's
+  composer work the same from both. Home keeps its box too.
 

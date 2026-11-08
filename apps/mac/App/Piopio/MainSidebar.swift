@@ -250,7 +250,7 @@ struct MainSidebar: View {
         }
     }
 
-    /// A project's + starts a conversation in it (on Home, docs/spec/18 §4), unless its folder is gone.
+    /// A project's + opens its new conversation page (docs/spec/18 §4), unless its folder is gone.
     private func startsSessions(_ project: ProjectInfo) -> Bool {
         project.missing != true
     }
@@ -261,7 +261,7 @@ struct MainSidebar: View {
         let all = engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
-        // No draft row: new conversations start on Home now (docs/spec/18), which keeps its own draft.
+        // No draft row: the project's row is marked while its new conversation page is open.
         if !collapsedProjects.contains(project.id), !all.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in

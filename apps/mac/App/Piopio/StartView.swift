@@ -102,7 +102,7 @@ import SwiftUI
 extension StartKind {
     var title: String {
         switch self {
-        case .chat: "New chat"
+        case .chat: "New conversation"
         case .debate: "New debate"
         case .agent: "New agent"
         case .project: "New project"
@@ -192,15 +192,58 @@ struct StartView: View {
             switch kind {
             case .chat, .debate: ChatStart(engine: engine, mode: kind, item: $item)
             case .agent: AgentStart(engine: engine, item: $item)
-            case .project: EmptyView() // Home is the start for projects now (docs/spec/18); RootView redirects
+            case .project: EmptyView() // RootView shows NewProjectPage, with the conversation it continues
             }
         }
         .id(kind == .debate ? StartKind.chat : kind)
     }
 }
 
+/// A new conversation (docs/spec/18 §4): the centered start page with Home's box. ⌘N and Conversations' + open it with
+/// no project, a project's + with that project chosen; the box's chip can still change where it goes. One page for
+/// both, so changing the chip keeps what's typed and attached.
+struct ConversationStart: View {
+    let engine: EngineController
+    @Binding var item: SidebarItem
+    /// The box's own target ("chat", "project:<id>", "agent:<id>"), so the header and the sidebar follow the chip.
+    @AppStorage("homeTarget") private var targetRaw = "chat"
+    @Environment(\.startBack) private var back
+
+    private var project: ProjectInfo? {
+        guard targetRaw.hasPrefix("project:") else { return nil }
+        let id = String(targetRaw.dropFirst(8))
+        return engine.projects.first { $0.id == id && $0.missing != true }
+    }
+
+    var body: some View {
+        StartColumn(top: 128) {
+            VStack(alignment: .leading, spacing: 12) {
+                Group {
+                    if let project { KindLabel(symbol: StartKind.project.symbol, text: project.name) } else { KindLabel(kind: .chat) }
+                }
+                .padding(.bottom, 4)
+                TitleText(text: project == nil ? "What's on your mind?" : "New conversation")
+                Text(project == nil
+                    ? "A conversation keeps its own history. Continue it in a project whenever it grows into a subject."
+                    : "It works in the project's folder, with its instructions and the notes its conversations share.")
+                    .font(.system(size: 15)).lineSpacing(4.5).foregroundStyle(Color.dsFg2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            AskBox(engine: engine, item: $item)
+        }
+        .onExitCommand { back?() }
+        // The sidebar marks where it goes: the project's row, or Conversations. Not once it has started (the box
+        // resets its chip to no project as it opens the new conversation).
+        .onChange(of: targetRaw) { _, raw in
+            guard item == .start(.chat) || { if case .newSession = item { true } else { false } }() else { return }
+            let next: SidebarItem = raw.hasPrefix("project:") ? .newSession(String(raw.dropFirst(8))) : .start(.chat)
+            if next != item { item = next }
+        }
+    }
+}
+
 /// The one centered column every start page uses: 720 wide, 28 between blocks.
-private struct StartColumn<Content: View>: View {
+struct StartColumn<Content: View>: View {
     let top: CGFloat
     @ViewBuilder var content: Content
 
@@ -237,7 +280,7 @@ private struct KindLabel: View {
 }
 
 /// The kind, the title (text or the name field) and the one-sentence description.
-private struct StartHeader<Title: View>: View {
+struct StartHeader<Title: View>: View {
     let kind: StartKind
     let description: String
     @ViewBuilder var title: Title
@@ -266,7 +309,7 @@ private struct TitleText: View {
 }
 
 /// An agent's name, typed in place as the title: no border, the placeholder in the same style.
-private struct TitleField: View {
+struct TitleField: View {
     let placeholder: String
     @Binding var text: String
     var focused: FocusState<StartField?>.Binding
@@ -354,7 +397,7 @@ private struct CardText: View {
 }
 
 /// The page's main action: dark, 36pt, radius 10, the label with its shortcut. Grey while it can't run yet.
-private struct MainAction: View {
+struct MainAction: View {
     let title: String
     var busy = false
     let enabled: Bool
@@ -470,7 +513,7 @@ private struct Hints: View {
 }
 
 /// What went wrong, and that nothing was lost.
-private struct StartError: View {
+struct StartError: View {
     let text: String?
     var body: some View {
         if let text {

@@ -15,6 +15,8 @@ struct RootView: View {
     @State private var showOnboarding = false
     /// Where you were before a start page, for Esc.
     @State private var previousRaw = "home"
+    /// The conversation that asked for New project (Continue in › New Project…): it continues in the new folder.
+    @State private var continuing: ContainerRef?
     /// Shared by the start pages' card and the conversations' composer (the move into place when starting).
     @Namespace private var composerSpace
     @State private var palette: CommandPalette.Mode?
@@ -75,21 +77,29 @@ struct RootView: View {
             }
         }
         .modifier(FileViewerSheet())
-        // One start (docs/spec/18 §4): ⌘N and "New conversation" open Home with no project; a project's + (and ⌘O) open
-        // it with that project chosen.
+        // The conversation start page (docs/spec/18 §4): ⌘N and Conversations' + open it with no project; a project's +
+        // (and ⌘O) open it with that project chosen.
         .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in newChat() }
         .onReceive(NotificationCenter.default.publisher(for: .newChat)) { _ in newChat() }
         .onReceive(NotificationCenter.default.publisher(for: .newBuildSession)) { note in
             guard let id = note.object as? String, engine.projects.contains(where: { $0.id == id }) else { return }
-            startHome(target: "project:" + id)
+            startConversation(target: "project:" + id)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in openFolder(note.object as? URL) }
-        // The pages Home replaced: links and saved selections that still point at them land on Home.
-        .onChange(of: itemRaw, initial: true) { _, raw in redirectReplacedPages(raw) }
+        // The conversation start page's box follows the page (also from a link or a saved selection): a project's has that
+        // project chosen, the plain one no project.
+        .onChange(of: itemRaw, initial: true) { _, raw in
+            let target = UserDefaults.standard.string(forKey: "homeTarget") ?? "chat"
+            switch SidebarItem(raw: raw) {
+            case .newSession(let id): UserDefaults.standard.set("project:" + id, forKey: "homeTarget")
+            case .start(.chat) where target.hasPrefix("project:"): UserDefaults.standard.set("chat", forKey: "homeTarget")
+            default: break
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .selectBuildSession)) { note in
             if let id = note.object as? String { itemRaw = SidebarItem.session(id).raw }
         }
-        .modifier(StartSheets(engine: engine, item: itemBinding))
+        .modifier(StartSheets(engine: engine, item: itemBinding, continuing: $continuing))
         .onReceive(NotificationCenter.default.publisher(for: .selectThread)) { note in
             guard let id = note.object as? String else { return }
             itemRaw = (engine.item(for: id) ?? .chat(id)).raw
@@ -212,10 +222,24 @@ struct RootView: View {
             } else {
                 missing
             }
+        // One case for both, so choosing another project in the box keeps the page (and what's typed).
+        case .start(.chat), .newSession:
+            ConversationStart(engine: engine, item: itemBinding)
+        case .start(.project):
+            NewProjectPage(engine: engine, continuing: continuing) { project in
+                let from = continuing
+                continuing = nil
+                guard let project else { itemRaw = previousRaw; return }
+                if let from {
+                    // Back to that conversation; it moves on to the new folder's once that has started.
+                    itemRaw = (engine.item(for: from.id) ?? .chat(from.id)).raw
+                    ContinueInMenu<EmptyView>.continueIn(engine, from, project)
+                }
+                // Its first conversation: the start page with the new project chosen.
+                else { startConversation(target: "project:" + project.id) }
+            }
         case .start(let kind):
             StartView(engine: engine, kind: kind, item: itemBinding)
-        case .newSession:
-            HomeView(engine: engine, item: itemBinding) // redirected to Home (docs/spec/18)
         }
     }
 
@@ -270,7 +294,7 @@ struct RootView: View {
         withAnimation(.easeOut(duration: 0.18)) { sidebarCollapsed.toggle() }
     }
 
-    /// ⌘O and Open Folder: adds the folder as a project (once) and opens Home with it chosen.
+    /// ⌘O and Open Folder: adds the folder as a project (once) and opens its new conversation page.
     private func openFolder(_ given: URL?) {
         var url = given
         if url == nil {
@@ -284,26 +308,18 @@ struct RootView: View {
         guard let url else { return }
         Task {
             guard let project = await engine.addProject(url) else { return }
-            startHome(target: "project:" + project.id)
+            startConversation(target: "project:" + project.id)
         }
     }
 
-    private func redirectReplacedPages(_ raw: String) {
-        switch SidebarItem(raw: raw) {
-        case .start(.chat): startHome(target: "chat")
-        case .start(.project): startHome(target: UserDefaults.standard.string(forKey: "homeTarget") ?? "chat")
-        case .newSession(let id): startHome(target: "project:" + id)
-        default: break
-        }
-    }
+    /// A new conversation with no project, with the cursor in its box.
+    private func newChat() { startConversation(target: "chat") }
 
-    /// A new conversation with no project: Home, with the cursor in its box.
-    private func newChat() { startHome(target: "chat") }
-
-    /// Home with `target` chosen in its box ("chat", "project:<id>").
-    private func startHome(target: String) {
+    /// The conversation start page with `target` chosen in its box ("chat", "project:<id>").
+    private func startConversation(target: String) {
         UserDefaults.standard.set(target, forKey: "homeTarget")
-        if itemRaw != SidebarItem.home.raw { itemRaw = SidebarItem.home.raw }
+        let page: SidebarItem = target.hasPrefix("project:") ? .newSession(String(target.dropFirst(8))) : .start(.chat)
+        if itemRaw != page.raw { itemRaw = page.raw }
         DispatchQueue.main.async { NotificationCenter.default.post(name: .focusHome, object: nil) }
     }
 }
@@ -361,14 +377,13 @@ struct EngineBanner: View {
     }
 }
 
-/// The start pages, New project and the trace sheet, with their notifications (kept apart so the root view
+/// The start pages and the trace sheet, with their notifications (kept apart so the root view
 /// type-checks quickly).
 private struct StartSheets: ViewModifier {
     let engine: EngineController
     @Binding var item: SidebarItem
+    @Binding var continuing: ContainerRef?
     @State private var trace: TraceTarget?
-    @State private var newProject = false
-    @State private var continuing: ContainerRef?
 
     func body(content: Content) -> some View {
         content
@@ -382,8 +397,11 @@ private struct StartSheets: ViewModifier {
                 if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
             }
             .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in item = .start(.agent) }
-            // Its object, when a conversation asked (Continue in › New Project…): continue that one in the new folder.
-            .onReceive(NotificationCenter.default.publisher(for: .newProject)) { note in continuing = note.object as? ContainerRef; newProject = true }
+            // New project is a start page too; its object, when a conversation asked, is that conversation.
+            .onReceive(NotificationCenter.default.publisher(for: .newProject)) { note in
+                continuing = note.object as? ContainerRef
+                item = .start(.project)
+            }
             // File › Turn Conversation into Agent…: the open conversation (docs/spec/18 phase 3).
             .onReceive(NotificationCenter.default.publisher(for: .turnIntoAgent)) { _ in
                 let ref: ContainerRef? = switch item {
@@ -392,15 +410,6 @@ private struct StartSheets: ViewModifier {
                 default: nil
                 }
                 if let ref { run { try await engine.turnIntoAgent(ref) } }
-            }
-            .sheet(isPresented: $newProject) {
-                NewProjectSheet(engine: engine) { project in
-                    newProject = false
-                    guard let project else { return }
-                    if let continuing { ContinueInMenu<EmptyView>.continueIn(engine, continuing, project) }
-                    // Home, with the new project chosen in its box: the next step is its first conversation.
-                    else { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
-                }
             }
     }
 }

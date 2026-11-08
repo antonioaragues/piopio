@@ -150,7 +150,7 @@ struct AskBox: View {
     let engine: EngineController
     @Binding var item: SidebarItem
     @State private var text = ""
-    /// "chat", "project:<id>" or "agent:<id>"; routes that open Home with a project chosen set it (⌘O, a project's +).
+    /// "chat", "project:<id>" or "agent:<id>"; the start routes set it (⌘N, ⌘O, a project's +).
     /// Back to "chat" (no project) after each send, so a loose question never lands in the last project.
     @AppStorage("homeTarget") private var targetRaw = "chat"
     @State private var pendingChat: ContainerRef?
@@ -604,7 +604,7 @@ enum WorkOnChoice: String, CaseIterable {
 }
 
 extension Notification.Name {
-    /// Puts the cursor in Home's box (⌘N, a project's +).
+    /// Puts the cursor in the box (⌘N, a project's +).
     static let focusHome = Notification.Name("piopio.focusHome")
 }
 

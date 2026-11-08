@@ -232,7 +232,7 @@ enum DebugAutomation {
             }
         }
         // PIOPIO_DEMO_NEW_PROJECT=<name>: New project (a folder in ~/Piopio with AGENTS.md and NOTES.md, docs/spec/18 CF4),
-        // with PIOPIO_DEMO_NEW_PROJECT_INSTRUCTIONS; then Home, with it chosen.
+        // with PIOPIO_DEMO_NEW_PROJECT_INSTRUCTIONS; then its new conversation page.
         if let name = env["PIOPIO_DEMO_NEW_PROJECT"], engine.status == .ready {
             Task {
                 var found = engine.projects.first { $0.name == name }
