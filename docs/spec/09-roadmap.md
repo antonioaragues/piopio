@@ -312,6 +312,9 @@ permissions chips; Read only replaces the Chat lens. Phase 2: projects replace n
 turn a conversation into an agent; the location chip. Next after the hardening and background-work changes of
 2026-11-06/07.
 
+## From deepseek-harness (built 2026-11-08)
+Sandbox for Build's commands, the model's clock, repeated-call nudge, oversized-result trim, pi-ai streaming patch, `/goal`, `present_files`, earlier conversations (tools and `@conversation`), auto review, Claude Code / Codex as subagents. See [docs/research/deepseek-harness.md](../research/deepseek-harness.md#as-built-2026-11-08); goals are the round driver Dispatch workers (DP2–DP4) can use. The sandbox replaces "OS sandbox for Build" in Later.
+
 ## Dispatch (2026-11-03)
 Planned in [17-dispatch.md](17-dispatch.md): DP1 Watchdog rules, DP2–DP3 Dispatch (engine, app), DP4 non-blocking subagents, DP5 PR events (after G6–G7), DP6 the off-track check. Open questions DPQ1–DPQ6 are there.
 
@@ -370,7 +373,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - Q4 · **Where things run.** Claude and Codex let you pick, per chat, whether it runs on this Mac or in the cloud. Research per kind: Build sessions (this Mac, a worktree, or a cloud machine from the GitHub repo), chats and notebooks (this Mac or the cloud engine), agents (this Mac or a Durable Object, Phase 5). Decide whether the choice lives in the composer, the new-session sheet, or per project/agent, and how a running item moves between them. Related: "cloud Threads/Spaces" and "cloud Build sessions" in Later.
 
 ## Later (unordered)
-Mac Bridge · cloud Threads/Spaces · iOS companion · direct providers + local models + subscription logins · artifacts/canvas · code execution in Chat · email/Slack/Discord channels · group chats & agent rooms · cloud Build sessions · web preview · semantic search · OS sandbox for Build.
+Mac Bridge · cloud Threads/Spaces · iOS companion · direct providers + local models + subscription logins · artifacts/canvas · code execution in Chat · email/Slack/Discord channels · group chats & agent rooms · cloud Build sessions · web preview · semantic search.
 
 ---
 

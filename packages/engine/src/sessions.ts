@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFi
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, ContainerRef, DebateConfig, ModelRef, ProjectInfo, PromptResponse, SessionSummary, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ContainerRef, DebateConfig, ModelRef, ProjectInfo, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
@@ -16,7 +16,7 @@ import { attachmentsDir, copyAttachments, deleteAttachments } from "./attachment
 import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
-import type { TaskResult } from "@piopio/pi-extensions";
+import { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
 import { aboutMeExtension, type AboutMe } from "./about-me.js";
@@ -35,6 +35,8 @@ import { DebateRuntime, validateDebate, type DebateRecord } from "./runtimes/deb
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
+import { historyExtension, type HistoryBridge } from "./tools/history.js";
+import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { SdkEventMapper } from "./timeline/pi-sdk.js";
 import type { SessionEvent } from "@piopio/protocol";
@@ -95,6 +97,13 @@ export class Sessions {
 	private aboutMeExtensions = new Map<"thread" | "agent", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
+	/** Tests: where the Claude Code / Codex CLIs are (default: PATH and the usual folders). */
+	findExternal: (agent: ExternalAgent) => string | undefined = (agent) => findAgent(agent);
+	private externalAgents(): ExternalAgent[] {
+		return installedAgents((agent) => this.findExternal(agent));
+	}
+	/** Tests: a scripted auto reviewer (system prompt, prompt → its reply). */
+	reviewer?: (system: string, prompt: string) => Promise<string | undefined>;
 	/** How long ask_agent waits (tests shorten it). */
 	agentAskTimeoutMs?: number;
 	/** Tests: a scripted utility model for learned facts, a short quiet time, and a hook when learning ends. */
@@ -184,6 +193,57 @@ export class Sessions {
 			return entry && this.entries.has(entry.ref.id) && (!kind || entry.ref.kind === kind)
 				? [{ ref: entry.ref, title: entry.title, ...(hit.itemId ? { itemId: hit.itemId } : {}), kind: hit.kind, snippet: hit.snippet, at: hit.at }] : [];
 		}).slice(0, Math.min(100, Math.max(1, limit)));
+	}
+
+	/**
+	 * What a conversation may look into with search_conversations / read_conversation (tools/history.ts): a Build
+	 * session, the other sessions of its project; a chat without a project, the other chats without one. Not agents
+	 * or debates.
+	 */
+	historyBridge(entry: CatalogEntry): HistoryBridge | undefined {
+		const scopeOf = (e: CatalogEntry) => (e.ref.kind === "build" ? `build:${e.projectPath ?? e.cwd}` : e.ref.kind === "thread" && !e.projectPath && !e.debate ? "chats" : undefined);
+		const scope = scopeOf(entry);
+		if (!scope) return undefined;
+		const mine = (id: string) => {
+			const e = this.entries.get(id);
+			return e && id !== entry.ref.id && scopeOf(e) === scope ? e : undefined;
+		};
+		return {
+			scope: entry.ref.kind === "build" ? "this project" : "the user's other chats",
+			search: async (query, limit) => {
+				const seen = new Set<string>();
+				const out: { id: string; title: string; at: string; snippet?: string }[] = [];
+				for (const hit of await this.find(query, 100)) {
+					const e = !hit.ref.conversationId ? mine(hit.ref.id) : undefined;
+					if (!e || seen.has(e.ref.id)) continue;
+					seen.add(e.ref.id);
+					out.push({ id: e.ref.id, title: e.title, at: e.updatedAt, ...(hit.kind !== "title" ? { snippet: hit.snippet } : {}) });
+					if (out.length >= limit) break;
+				}
+				return out;
+			},
+			read: async (id) => {
+				const e = mine(id);
+				return e ? { title: e.title, at: e.updatedAt, items: await this.itemsOf(e) } : undefined;
+			},
+		};
+	}
+
+	/** A conversation's items without keeping it open: Build history straight from its file (no extensions, no key). */
+	private async itemsOf(entry: CatalogEntry): Promise<readonly TimelineItem[]> {
+		const open = this.open.get(entry.ref.id);
+		if (open) return (await open).snapshot().items;
+		if (entry.ref.kind === "build") {
+			if (!entry.sessionFile || !existsSync(entry.sessionFile)) return [];
+			const builder = new TimelineBuilder(entry.ref);
+			builder.reset(SessionManager.open(entry.sessionFile).buildSessionContext().messages as unknown as PiMessage[], (index) => SdkEventMapper.idOf(index), false);
+			return builder.snapshot().items;
+		}
+		const runtime = await this.runtime(entry.ref);
+		const items = runtime.snapshot().items;
+		this.open.delete(entry.ref.id);
+		await runtime.close();
+		return items;
 	}
 
 	/** Index all active branches, including agent conversations. */
@@ -525,7 +585,7 @@ export class Sessions {
 	 */
 	private async runTask(
 		parent: CatalogEntry,
-		task: { callId: string; description: string; prompt: string },
+		task: { callId: string; description: string; prompt: string; agent?: string },
 		signal: AbortSignal | undefined,
 		onStart: (sessionId: string) => void,
 		onProgress: (line: string) => void,
@@ -538,6 +598,12 @@ export class Sessions {
 		}
 		slot.running++;
 		try {
+			// Claude Code / Codex (external-agents.ts): the user's own CLI, in this folder, with the session's mode.
+			if (task.agent === "claude" || task.agent === "codex") {
+				const path = this.findExternal(task.agent);
+				if (!path) return { text: `${AGENT_NAMES[task.agent]} isn't installed on this Mac.`, sessionId: "", costUsd: 0, status: "error" };
+				return await runExternalAgent(task.agent, { path, cwd: parent.cwd!, prompt: task.prompt, mode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), ...(signal ? { signal } : {}), onProgress });
+			}
 			// A child never gets more than its parent: the same profile (a Chat-lens parent has no bash) and the
 			// same tools turned off (see `toolsOff` in build(), which also follows later changes to the parent).
 			const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
@@ -1212,6 +1278,7 @@ export class Sessions {
 				web: entry.web ?? true,
 				webOptions: this.webOptions,
 				...this.chatExtras("thread"),
+				extensions: [...(this.chatExtras("thread").extensions ?? []), ...(this.historyBridge(entry) ? [historyExtension(this.historyBridge(entry)!) as unknown as Extension] : [])],
 				...(this.connectors ? { connectors: this.connectors } : {}),
 				toolsOff: () => entry.toolsOff ?? [],
 			});
@@ -1232,6 +1299,13 @@ export class Sessions {
 			checkpoints: this.checkpoints,
 			webOptions: this.webOptions,
 			sandbox: () => this.chat?.settings.get().build?.sandbox !== false,
+			// Auto review on the session's own model (Settings › Approvals; off by default).
+			review: async (command, request) => {
+				if (this.chat?.settings.get().build?.autoReview !== true) return undefined;
+				const ask = this.reviewer ?? ((system: string, prompt: string) => this.hub.utility(system, prompt, entry.ref.id, { choice: entry.model ?? model }));
+				return parseVerdict(await ask(REVIEW_SYSTEM, reviewPrompt(command, entry.cwd!, request)));
+			},
+			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
 			...(entry.projectPath ? { trustPath: entry.projectPath } : {}),
 			plan: {
 				active: () => entry.planMode ?? false,
@@ -1240,7 +1314,7 @@ export class Sessions {
 					this.save();
 				},
 			},
-			...(entry.parent ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress) }),
+			...(entry.parent ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			toolsOff: () => [...new Set([...(entry.toolsOff ?? []), ...((entry.parent && this.entries.get(entry.parent.id)?.toolsOff) || [])])],

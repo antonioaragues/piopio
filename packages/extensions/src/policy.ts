@@ -21,10 +21,11 @@ export type RuleKind = "command" | "tool" | "path";
 export type Rule = { kind: RuleKind; pattern: string };
 export type Decision = { action: "allow" } | { action: "ask"; reason?: string; rule?: Rule };
 
-const READ_TOOLS = new Set(["read", "grep", "find", "ls"]);
+/** Reading the user's other conversations (engine tools/history.ts) is a read too. */
+const READ_TOOLS = new Set(["read", "grep", "find", "ls", "search_conversations", "read_conversation"]);
 const WRITE_TOOLS = new Set(["edit", "write"]);
 /** Talking to the user is never something to approve. */
-const USER_TOOLS = new Set(["ask_user", "notify_user"]);
+const USER_TOOLS = new Set(["ask_user", "notify_user", "present_files", "update_goal"]);
 /** Package runners and build tools: their rule keeps the subcommand ("pnpm vitest", "swift build"). */
 const RUNNERS = new Set(["npm", "pnpm", "yarn", "npx", "bun", "bunx", "deno", "node", "cargo", "go", "swift", "make", "python", "python3", "uv", "pip", "git", "docker", "xcodebuild", "gradle", "mvn", "dotnet", "bundle", "rake"]);
 
@@ -41,6 +42,11 @@ export function decide(mode: ApprovalMode, tool: string, input: Record<string, u
 
 	if (READ_TOOLS.has(tool)) {
 		return secret ? { action: "ask", reason: viaLink ? `${secret} (through a symlink)` : secret } : { action: "allow" };
+	}
+
+	// Another agent (Claude Code, Codex) changes files on its own, so Ask asks first; the other modes map onto its own.
+	if (tool === "task" && typeof input.agent === "string" && input.agent !== "piopio" && mode === "ask") {
+		return { action: "ask", reason: "Hands the task to another agent, which changes files without asking" };
 	}
 
 	if (mode === "read_only") {

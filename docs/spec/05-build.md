@@ -47,6 +47,11 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
 | `piopio-todos` | Todo list tool. Shown in the inspector and as a progress card. |
 | `piopio-subagents` | `task` tool to spawn child sessions (shown as nested `task` items, openable). Children inherit the parent's approval mode and count toward its cost. Default max 3 concurrent children per session. |
 | `piopio-notify` | `notify_user(message)` / `ask_user(question, options)` for agent-initiated questions. Surfaced as a "waiting for you" state. |
+| `piopio-sandbox` | Runs `bash` inside macOS's sandbox (AP5). Built 2026-11-08. |
+| `piopio-present` | `present_files(files)`: the files the agent made for you, as a card per file that opens in the viewer. Kept out of the folded activity line. Built 2026-11-08. |
+| `piopio-goal` | `/goal <what done looks like>`: the session gets another turn ("round") each time it finishes until the agent calls `update_goal` with "done" or "blocked", up to 25 rounds. Stop pauses it; `/goal continue` resumes (with more rounds when they ran out); `/goal off` clears it. Each round shows as "Goal · round n of 25". Kept in the session file. Built 2026-11-08. |
+
+The engine adds three more (not pi extensions of this package): the **context guards** (the model's clock and the repeated-call nudge, `tools/guards.ts`), **earlier conversations** (`search_conversations` / `read_conversation` and `@conversation:<id>` mentions, `tools/history.ts`), and **Claude Code / Codex** as `task` backends (`external-agents.ts`). See [docs/research/deepseek-harness.md § As built](../research/deepseek-harness.md#as-built-2026-11-08).
 
 All of them SHOULD also work in the pi CLI (graceful TUI fallback), so they can be published as a pi package `@piopio/pi-extensions`.
 
@@ -80,7 +85,9 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 - **AP2** Rules: command prefix patterns (`npm test`, `git status`, `swift build`), tool names, path globs. Stored per project in `catalog.db` and exportable to `.pi/` if the user wants them shared with the CLI.
 - **AP3** Built-in **deny-list** that always asks even in Full auto: `rm -rf` outside worktree, `git push --force`, `sudo`, writes to `~/.ssh`, `~/.aws`, keychain tools, `curl … | sh`.
 - **AP4** Approvals time out? **No** by default. The session waits ("waiting for you").
-- **Later:** an OS sandbox (Seatbelt profile restricting writes to the project/worktree + temp, and network on/off).
+- **AP5** **Sandbox** (built 2026-11-08, Settings › Approvals, default on): in Ask and Auto-edit, `bash` runs through `sandbox-exec` with a Seatbelt profile that allows everything except writes outside the project (or worktree, plus the repository's git folder), temporary folders, `/dev` and package/build caches (`~/Library/Caches`, `~/.npm`, `~/.cargo/registry`, DerivedData, …). Reads and the network are not restricted. A blocked write tells the model it can run the command again with `outside_project: true`, which always asks (deny-list rules and Always allow don't skip it). If the sandbox can't start, nothing runs. Full auto runs commands unconfined, as before. Not covered: `edit`/`write` (they keep the path checks above), MCP servers and the terminal tab.
+- **AP6** **Auto review** (built 2026-11-08, Settings › Approvals, default off): in Auto-edit, a command that would ask is first judged by the session's own model (`REVIEW_SYSTEM` in `review.ts`). "allow" runs it (sandboxed) and leaves a note "Auto review ran …: reason"; "ask" shows the usual card with "Auto review: reason". Deny-list commands, writes outside the project and `outside_project` never go to the reviewer. Costs one request per reviewed command.
+- **AP7** A `task` for Claude Code or Codex asks first in Ask mode (they change files without asking); in the other modes their own permission setting follows the session's mode (external-agents.ts).
 
 ## 7. Checkpoints (B5)
 

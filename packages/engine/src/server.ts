@@ -35,8 +35,8 @@ import { groupSteps, StepsView } from "./timeline/steps.js";
 import type { ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
-/** Tools that stay their own item when steps fold: subagent tasks, questions you answered and plans (they read as part of the conversation). */
-const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "propose_plan";
+/** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans and files handed over (they read as part of the conversation). */
+const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
 import { TEMPLATES } from "@piopio/runtime";
 

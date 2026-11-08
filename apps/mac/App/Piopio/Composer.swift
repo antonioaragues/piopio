@@ -561,12 +561,15 @@ struct EditModeChip: View {
 /// A row of the suggestion list: a file or folder to mention, or a command.
 enum Suggestion: Hashable, Identifiable {
     case file(FileMatch)
+    /// Another session of the project, mentioned as background (`@conversation:<id>`, engine tools/history.ts).
+    case conversation(id: String, title: String)
     case builtIn(BuiltInCommand)
     case command(SessionCommand)
 
     var id: String {
         switch self {
         case .file(let f): "file:\(f.path)"
+        case .conversation(let id, _): "conversation:\(id)"
         case .builtIn(let c): "piopio:\(c.name)"
         case .command(let c): "pi:\(c.name)"
         }
@@ -635,10 +638,17 @@ extension Composer {
             if !suggestions.isEmpty { suggestions = [] }
             return
         }
+        // The project's other sessions whose title matches, after the files.
+        let here = engine.buildSessions.first { $0.ref.id == thread.ref.id }
+        let project = here?.projectPath ?? here?.cwd
+        let conversations = query.count < 2 || project == nil ? [] : engine.buildSessions
+            .filter { $0.ref.id != thread.ref.id && ($0.projectPath ?? $0.cwd) == project && $0.title.localizedCaseInsensitiveContains(query) }
+            .prefix(4)
+            .map { Suggestion.conversation(id: $0.ref.id, title: $0.title) }
         Task {
             let files = await thread.files(matching: query)
             guard mentionQuery == query else { return } // typing moved on
-            suggestions = files.map(Suggestion.file)
+            suggestions = Array((files.map(Suggestion.file) + conversations).prefix(12))
             highlighted = 0
         }
     }
@@ -648,6 +658,9 @@ extension Composer {
         case .file(let f):
             if let query = mentionQuery { text.removeLast(query.count + 1) }
             text += "@\(f.path)\(f.kind == .folder ? "/" : "") "
+        case .conversation(let id, _):
+            if let query = mentionQuery { text.removeLast(query.count + 1) }
+            text += "@conversation:\(id) "
         case .builtIn(let c):
             text = ""
             c.run(thread)
@@ -683,6 +696,7 @@ extension Composer {
     private func title(_ s: Suggestion) -> String {
         switch s {
         case .file(let f): f.path
+        case .conversation(_, let title): title
         case .builtIn(let c): "/\(c.name)"
         case .command(let c): "/\(c.name)" + (c.hint.map { " \($0)" } ?? "")
         }
@@ -691,6 +705,7 @@ extension Composer {
     private func subtitle(_ s: Suggestion) -> String {
         switch s {
         case .file: ""
+        case .conversation: "Conversation in this project, read as background"
         case .builtIn(let c): c.summary
         case .command(let c): c.description.isEmpty ? (c.kind == .skill ? "Skill" : c.kind == .template ? "Prompt template" : "Extension command") : c.description
         }
@@ -699,6 +714,7 @@ extension Composer {
     @ViewBuilder private func icon(_ s: Suggestion) -> some View {
         let name: String = switch s {
         case .file(let f): f.kind == .folder ? "folder" : "doc"
+        case .conversation: "bubble.left.and.text.bubble.right"
         case .builtIn: "command"
         case .command(let c): c.kind == .skill ? "sparkles" : c.kind == .template ? "text.badge.plus" : "puzzlepiece.extension"
         }

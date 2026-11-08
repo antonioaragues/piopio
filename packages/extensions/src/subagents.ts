@@ -11,12 +11,16 @@ export type TaskResult = { text: string; sessionId: string; costUsd: number; sta
 export interface SubagentBridge {
 	/** Runs the task to completion. `onStart` gives the child session id early; `onProgress`, a line of what it's doing. */
 	run(
-		task: { callId: string; description: string; prompt: string },
+		task: { callId: string; description: string; prompt: string; agent?: string },
 		signal: AbortSignal | undefined,
 		onStart: (sessionId: string) => void,
 		onProgress: (line: string) => void,
 	): Promise<TaskResult>;
+	/** Other agents a task can go to, by CLI name ("claude", "codex"), when installed. */
+	agents?: readonly string[];
 }
+
+const AGENT_LABELS: Record<string, string> = { claude: "Claude Code", codex: "OpenAI Codex" };
 
 export function subagentsExtension(bridge?: SubagentBridge): ExtensionFactory {
 	return (pi) => {
@@ -31,12 +35,21 @@ export function subagentsExtension(bridge?: SubagentBridge): ExtensionFactory {
 				parameters: Type.Object({
 					description: Type.String({ description: "A short title (3–6 words)." }),
 					prompt: Type.String({ description: "The full task: goal, relevant files, constraints, and what to report back." }),
+					...(bridge.agents?.length
+						? {
+								agent: Type.Optional(
+									Type.Union([Type.Literal("piopio"), ...bridge.agents.map((a) => Type.Literal(a))], {
+										description: `Who does it. "piopio" (the default): a Piopio subagent you can follow. ${bridge.agents.map((a) => `"${a}": ${AGENT_LABELS[a] ?? a} on the user's own account, unattended in this folder`).join("; ")}. Use another agent only when the user asks for it or a second opinion helps.`,
+									}),
+								),
+							}
+						: {}),
 				}),
 				async execute(toolCallId, params, signal, onUpdate) {
 					let sessionId = "";
 					const update = (line: string) => onUpdate?.({ content: [{ type: "text", text: line }], details: { sessionId } });
 					const result = await bridge.run(
-						{ callId: toolCallId, description: params.description, prompt: params.prompt },
+						{ callId: toolCallId, description: params.description, prompt: params.prompt, ...((params as { agent?: string }).agent && (params as { agent?: string }).agent !== "piopio" ? { agent: (params as { agent?: string }).agent } : {}) },
 						signal,
 						(id) => {
 							sessionId = id;

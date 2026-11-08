@@ -57,6 +57,11 @@ export const ToolDetails = Type.Union([
 	Type.Object({ type: Type.Literal("todos"), items: Type.Array(Type.Object({ text: Type.String(), status: literals("pending", "in_progress", "done") })) }),
 	/** A subagent (piopio-subagents): its child session, once started, and the outcome. */
 	Type.Object({ type: Type.Literal("task"), sessionId: Type.Optional(Type.String()), status: Type.Optional(literals("done", "error", "stopped")), costUsd: Type.Optional(Type.Number()) }),
+	/** Files the agent handed over (piopio-present): where they are, what they are, and which ones don't exist. */
+	Type.Object({
+		type: Type.Literal("files"),
+		files: Type.Array(Type.Object({ path: Type.String(), name: Type.String(), description: Type.Optional(Type.String()), size: Type.Optional(Type.Number()), missing: Type.Optional(Type.Boolean()) })),
+	}),
 	/** A proposed plan (piopio-plan): what it says, and how you answered (approved, with your edits, or sent back). */
 	Type.Object({
 		type: Type.Literal("plan"),

@@ -59,6 +59,12 @@ nonisolated struct ItemRenderer: Sendable {
             return questionCard(t)
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
+        case .tool(let t) where t.tool == "present_files" && t.status == .done:
+            // Files the agent handed over: a card per file that opens it (piopio-present).
+            guard case .files(let files)? = t.typedDetails, !files.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+            let out = NSMutableAttributedString()
+            for file in files { out.append(attachmentParagraph(DisclosureAttachment(card: Self.fileCard(file, root: root)))) }
+            return out
         case .tool(let t):
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root)))
         case .system(let s):
@@ -679,6 +685,16 @@ nonisolated struct ItemRenderer: Sendable {
         return card
     }
 
+    /// A file the agent handed over: its name and what it is, opening in the viewer; a missing one says so.
+    static func fileCard(_ file: PresentedFile, root: String?) -> DisclosureCard {
+        let size = file.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? ""
+        let card = DisclosureCard(tool: file.name, detail: file.description ?? relative(file.path, root: root), trailing: file.missing ? "not found" : size, content: .text(relative(file.path, root: root)))
+        card.glyph = "doc.richtext"
+        card.failed = file.missing
+        if !file.missing { card.action = ("Open", .openFile(path: file.path, line: nil)) }
+        return card
+    }
+
     /// A step's icon in the activity log.
     static func glyph(_ tool: String) -> String {
         switch tool {
@@ -691,6 +707,9 @@ nonisolated struct ItemRenderer: Sendable {
         case "todo": "checklist"
         case "task": "person.2"
         case "propose_plan": "list.number"
+        case "present_files": "doc.richtext"
+        case "search_conversations", "read_conversation": "bubble.left.and.text.bubble.right"
+        case "update_goal": "flag.checkered"
         case let name where name.hasPrefix("calendar"): "calendar"
         case let name where name.hasPrefix("mail"): "envelope"
         default: "wrench.and.screwdriver"
@@ -730,10 +749,23 @@ nonisolated struct ItemRenderer: Sendable {
             return (running ? "Listing" : "Listed", path.isEmpty ? "." : path)
         case "todo":
             return (running ? "Updating the checklist" : "Checklist", "")
+        case "task" where t.args?["agent"]?.stringValue == "claude" || t.args?["agent"]?.stringValue == "codex":
+            let who = t.args?["agent"]?.stringValue == "claude" ? "Claude Code" : "Codex"
+            return (running ? "\(who) working" : who, t.args?["description"]?.stringValue ?? "")
         case "task":
             return (running ? "Subagent working" : "Subagent", t.args?["description"]?.stringValue ?? "")
         case "propose_plan":
             return (running ? "Proposed a plan" : "Plan", t.args?["summary"]?.stringValue ?? "")
+        case "present_files":
+            let names = t.args?["files"]?.arrayValue?.compactMap { $0["path"]?.stringValue.map { ($0 as NSString).lastPathComponent } }.joined(separator: ", ") ?? ""
+            return (running ? "Handing over files" : failed ? "Files not found" : "Files for you", names)
+        case "search_conversations":
+            return (running ? "Searching your conversations" : "Searched your conversations", t.args?["query"]?.stringValue ?? "")
+        case "read_conversation":
+            return (running ? "Reading a conversation" : failed ? "Couldn't read a conversation" : "Read a conversation", t.args?["query"]?.stringValue ?? "")
+        case "update_goal":
+            let status = t.args?["status"]?.stringValue
+            return (status == "done" ? "Goal done" : status == "blocked" ? "Goal blocked" : "Goal", t.args?["note"]?.stringValue ?? "")
         case "codemode":
             let script = t.args?["code"]?.stringValue ?? t.args?["script"]?.stringValue ?? ""
             return (running ? "Running a script" : "Ran a script", script.split(separator: "\n").first.map(String.init) ?? "")

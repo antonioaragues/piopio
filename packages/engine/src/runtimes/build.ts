@@ -15,7 +15,7 @@ import {
 	type AgentSession,
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
-import { approvalsExtension, checkpointsExtension, notifyExtension, planExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge } from "@piopio/pi-extensions";
+import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
 import type { ApprovalRule, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -27,6 +27,7 @@ import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat
 import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
 import { guardsExtension } from "../tools/guards.js";
+import { formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
@@ -61,8 +62,14 @@ export type BuildOpenOptions = {
 	webOptions?: WebOptions;
 	/** Where project trust is looked up (the project folder; differs from `cwd` for worktree sessions). */
 	trustPath?: string;
+	/** Auto review (Settings › Approvals): judges a command before you're asked; undefined when it's off or unsure. */
+	review?: (command: string, request: string | undefined, signal: AbortSignal | undefined) => Promise<Verdict | undefined>;
+	/** The project's other sessions, for search_conversations / read_conversation (tools/history.ts). */
+	history?: HistoryBridge;
 	/** Shell commands run in macOS's sandbox (piopio-sandbox); read on every command. Default on. */
 	sandbox?: () => boolean;
+	/** Claude Code / Codex CLIs a task can go to (external-agents.ts). */
+	externalAgents?: readonly string[];
 	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
 	runTask?: SubagentBridge["run"];
 };
@@ -126,6 +133,17 @@ export class BuildRuntime implements Runtime {
 					// Connectors' read capabilities (Read only lets them run; their own permissions still apply).
 					readOnlyTool: (tool) => groupOf(tool)?.access === "read",
 					ask: async (request, signal) => {
+						let reason = request.reason;
+						// Auto review (extensions review.ts): only a plain command that Auto-edit would ask about.
+						if (o.review && o.approvals.mode() === "auto_edit" && request.tool === "bash" && !request.reason && request.input.outside_project !== true) {
+							const command = String(request.input.command ?? "");
+							const verdict = await o.review(command, runtime?.lastUserText(), signal).catch(() => undefined);
+							if (verdict?.verdict === "allow") {
+								runtime?.note("info", `Auto review ran “${command.split("\n")[0]!.slice(0, 80)}”: ${verdict.reason}`);
+								return { decision: "allow" };
+							}
+							if (verdict) reason = `Auto review: ${verdict.reason}`;
+						}
 						const response = await broker.ask(
 							{
 								kind: "approval",
@@ -133,7 +151,7 @@ export class BuildRuntime implements Runtime {
 								detail: request.detail,
 								tool: request.tool,
 								callId: request.callId,
-								...(request.reason ? { reason: request.reason } : {}),
+								...(reason ? { reason } : {}),
 								...(request.rule ? { rule: request.rule } : {}),
 							},
 							signal,
@@ -152,6 +170,9 @@ export class BuildRuntime implements Runtime {
 						]
 					: []),
 				todosExtension(),
+				presentExtension(),
+				goalExtension(),
+				...(o.history ? [historySdkExtension(o.history)] : []),
 				planExtension({
 					active: o.plan.active,
 					setActive: (on) => {
@@ -169,7 +190,7 @@ export class BuildRuntime implements Runtime {
 						};
 					},
 				}),
-				subagentsExtension(o.runTask ? { run: o.runTask } : undefined),
+				subagentsExtension(o.runTask ? { run: o.runTask, ...(o.externalAgents?.length ? { agents: o.externalAgents } : {}) } : undefined),
 				notifyExtension({
 					ask: async (question, signal) => {
 						const response = await broker.ask({ kind: "question", title: question.question, callId: question.callId, ...(question.options ? { options: question.options } : {}) }, signal);
@@ -206,12 +227,19 @@ export class BuildRuntime implements Runtime {
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
 		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan);
+		if (o.history) runtime.history = o.history;
 		broker.onAdded = (prompt) => o.onAttention?.("waiting", prompt.detail ? `${prompt.title}: ${prompt.detail}` : prompt.title);
 		const bound = runtime;
 		await session.bindExtensions({ mode: "rpc", uiContext: uiBridge(broker, (level, text) => bound.note(level, text)) });
 		runtime.applyMode();
 		runtime.attach();
 		return runtime;
+	}
+
+	/** What you last asked, for auto review. */
+	lastUserText(): string | undefined {
+		const last = [...(this.session.messages as PiMessage[])].reverse().find((m) => m.role === "user");
+		return last ? contentText((last as { content: string | PiContentBlock[] }).content).trim() || undefined : undefined;
 	}
 
 	/** A note in the transcript (notify_user, extension notifications). */
@@ -354,9 +382,33 @@ export class BuildRuntime implements Runtime {
 		return this.emitter.on(listener);
 	}
 
-	async submit(text: string, options: SubmitOptions) {
+	/** The project's other sessions (tools/history.ts), for `@conversation:<id>` mentions. */
+	history?: HistoryBridge;
+
+	/**
+	 * `@conversation:<id>` (the composer's @ list): a bounded, read-only snapshot of that session goes into this one first,
+	 * as a displayed note marked as background, and the mention reads as its title. Kept in the session file, so the
+	 * model sees the same thing after a reload.
+	 */
+	private async expandReferences(text: string): Promise<string> {
+		const ids = [...new Set([...text.matchAll(/@conversation:([A-Za-z0-9_-]+)/g)].map((m) => m[1]!))];
+		if (ids.length === 0 || !this.history) return text;
+		let out = text;
+		for (const id of ids) {
+			const c = await this.history.read(id).catch(() => undefined);
+			if (c) {
+				await this.session.sendCustomMessage({ customType: "piopio.reference", content: formatConversation(id, c), display: true, details: { summary: `Included “${c.title}” as background` } }, { triggerTurn: false });
+				out = out.replaceAll(`@conversation:${id}`, `“${c.title}” (the conversation included above)`);
+			} else out = out.replaceAll(`@conversation:${id}`, `@conversation:${id} (not found in this project)`);
+		}
+		this.emitter.emit(this.builder.flush());
+		return out;
+	}
+
+	async submit(raw: string, options: SubmitOptions) {
 		if (options.attachments?.length) throw new EngineError("INVALID", "Build sessions don't take attachments yet; mention files with @ instead.");
 		await this.hub.ensureCredential(this.model.provider);
+		const text = await this.expandReferences(raw);
 		if (this.session.isStreaming) {
 			if (options.whenBusy === "reject") throw new EngineError("BUSY", "The session is busy.");
 			if (options.whenBusy === "steer") await this.session.steer(text);

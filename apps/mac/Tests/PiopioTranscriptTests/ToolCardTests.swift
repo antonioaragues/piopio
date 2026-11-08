@@ -55,3 +55,22 @@ import Testing
     #expect(parts.map(\.text) == ["Thought for 4s", "ran a command (it failed)", "read"])
     #expect(parts[2].chip == "notes.md")
 }
+
+@Test func handedOverFilesOpenAndMissingOnesSaySo() {
+    let item = ToolItem(id: "t9", at: "", callId: "c9", tool: "present_files", args: .object(["files": .array([.object(["path": .string("out/report.pdf")])])]), status: .done,
+                        details: .object(["type": .string("files"), "files": .array([
+                            .object(["path": .string("/p/out/report.pdf"), "name": .string("report.pdf"), "description": .string("The weekly report"), "size": .number(2048)]),
+                            .object(["path": .string("/p/gone.csv"), "name": .string("gone.csv"), "missing": .bool(true)]),
+                        ])]))
+    guard case .files(let files)? = item.typedDetails else { Issue.record("no files"); return }
+    #expect(files.map(\.name) == ["report.pdf", "gone.csv"])
+    let card = ItemRenderer.fileCard(files[0], root: "/p")
+    #expect(card.title == "report.pdf")
+    #expect(card.detail == "The weekly report")
+    #expect(card.action?.1 == .openFile(path: "/p/out/report.pdf", line: nil))
+    let missing = ItemRenderer.fileCard(files[1], root: "/p")
+    #expect(missing.failed && missing.trailing == "not found" && missing.action == nil)
+    #expect(ItemRenderer.toolTitle(item) == ("Files for you", "report.pdf"))
+    let claude = ToolItem(id: "t10", at: "", callId: "c10", tool: "task", args: .object(["description": .string("Fix tests"), "agent": .string("claude")]), status: .running)
+    #expect(ItemRenderer.toolTitle(claude) == ("Claude Code working", "Fix tests"))
+}

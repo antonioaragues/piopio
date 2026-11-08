@@ -1,11 +1,11 @@
 # Current status — personal alpha
 
-Updated 2026-11-06. This is a personal-use application. Implementation milestones describe available code;
+Updated 2026-11-08. This is a personal-use application. Implementation milestones describe available code;
 they do not establish that every provider, OS permission flow or production service has been validated.
 
 | Area | Implemented | Acceptance still pending |
 |---|---|---|
-| Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations |
+| Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents, sandboxed commands, `/goal`, auto review, Claude Code/Codex tasks | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations; installs and builds inside the sandbox; a real Claude Code/Codex task |
 | Chat | Streaming, attachments, branches, export, Quick Chat, New project makes a folder in ~/Piopio (AGENTS.md, shared NOTES.md), global search | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability |
 | Local Agents | Definitions, conversations, memory, schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
@@ -25,7 +25,7 @@ tests use temporary engine data, but launch a real native window and require a l
 
 ## Latest local verification
 
-The TypeScript suite passes (183 tests; three opt-in tests skipped), as do Swift package tests (40 tests).
+The TypeScript suite passes (203 tests; opt-in tests skipped), as do Swift package tests (41 tests).
 The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draft recovery, offline backup and
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also
@@ -44,9 +44,11 @@ been captured and inspected. This does not replace the real-provider, OS-permiss
 
 ## Boundaries
 
-- Build policy is an approval aid, not an OS sandbox. File paths are judged where they really are (symlinks resolved),
-  and subagents keep their parent's profile and tools turned off. Unknown shell syntax asks again; arbitrary approved
-  executables can still do arbitrary work.
+- Build policy is an approval aid. In Ask and Auto-edit, `bash` also runs in macOS's sandbox (Settings › Approvals,
+  default on): an approved command can read and use the network but only write in the project, temp folders and package
+  caches; `outside_project` asks. Full auto, `edit`/`write` (path checks only), MCP servers and the terminal tab aren't
+  sandboxed. File paths are judged where they really are (symlinks resolved), and subagents keep their parent's
+  profile and tools turned off. Unknown shell syntax asks again.
 - Search covers active conversation branches. It is not a source-code index or an index of every historical branch.
 - Agents on this Mac cannot run while it is asleep/off. Mac-app tools need the native app and OS permissions.
 - Additional request costs are recorded from this version onward. Unknown pricing is excluded, not treated as free.

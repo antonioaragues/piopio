@@ -27,6 +27,8 @@ export function startDetails(tool: string, args: unknown): ToolDetails | undefin
 			return Array.isArray(a.items) ? { type: "todos", items: a.items as { text: string; status: "pending" | "in_progress" | "done" }[] } : undefined;
 		case "task":
 			return { type: "task" };
+		case "present_files":
+			return Array.isArray(a.files) ? { type: "files", files: (a.files as { path?: unknown; description?: unknown }[]).flatMap((f) => (typeof f?.path === "string" ? [{ path: f.path, name: f.path.split("/").pop() || f.path, ...(typeof f.description === "string" ? { description: f.description } : {}) }] : [])) } : undefined;
 		case "propose_plan": {
 			const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 			const files = strings(a.files);
@@ -57,6 +59,11 @@ export function endDetails(tool: string, args: unknown, result: PiToolResult | u
 			...(d.edited ? { edited: true } : {}),
 			...(d.note ? { note: d.note } : {}),
 		};
+	}
+	if (tool === "present_files") {
+		// The engine's view: absolute paths, sizes and which files were missing (persisted with the result).
+		const files = (result?.details as { files?: unknown } | undefined)?.files;
+		return Array.isArray(files) ? { type: "files", files: files as Extract<ToolDetails, { type: "files" }>["files"] } : start;
 	}
 	if (tool === "edit" && start.type === "diff") {
 		const patch = (result?.details as { patch?: unknown } | undefined)?.patch;

@@ -229,6 +229,19 @@ private struct ApprovalsPane: View {
 
     var body: some View {
         PaneTitle(title: "Approvals", subtitle: "What Build sessions may do without asking. Risky commands and writes outside the project always ask.")
+        VStack(alignment: .leading, spacing: 6) {
+            SectionLabel("All projects")
+            ListCard {
+                ToggleRow(title: "Keep commands inside the project", subtitle: "Commands run in macOS's sandbox: they can read and use the network, but only write in the project, temporary folders and package caches. To write elsewhere they ask you first. Full access runs them as before.", isOn: Binding(get: { engine.settings?.build?.sandbox ?? true }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(build: .init(sandbox: v))) }
+                }))
+                ToggleRow(title: "Auto review", subtitle: "In Auto-edit, before asking you about a command, the session's own model looks at it and runs the clearly safe ones. It costs a request per command and can be wrong; risky commands still ask.", last: true, isOn: Binding(get: { engine.settings?.build?.autoReview ?? false }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(build: .init(autoReview: v))) }
+                }))
+            }
+        }
+        .padding(.bottom, 18)
+        .task { if engine.settings == nil { await engine.loadSettings() } }
         if engine.projects.isEmpty {
             Text("Add a project in Build to set its approvals.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
         }

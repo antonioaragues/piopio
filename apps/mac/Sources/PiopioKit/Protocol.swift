@@ -198,6 +198,17 @@ public enum ToolDetails: Sendable, Hashable {
     case task(sessionId: String?, status: String?, costUsd: Double?)
     /// A proposed plan and how you answered it.
     case plan(PlanDetails)
+    /// Files the agent handed over (piopio-present).
+    case files([PresentedFile])
+}
+
+/// A file the agent handed over: where it is, what it is, and whether it was there.
+public struct PresentedFile: Sendable, Hashable {
+    public var path: String
+    public var name: String
+    public var description: String?
+    public var size: Int?
+    public var missing: Bool
 }
 
 /// A plan (piopio-plan): what it says, and the answer — approved (perhaps with your edits), sent back, or none yet.
@@ -243,6 +254,16 @@ extension ToolItem {
             var edited = false
             if case .bool(let e)? = d["edited"] { edited = e }
             return .plan(PlanDetails(summary: d["summary"]?.stringValue ?? "", steps: strings("steps"), files: strings("files"), risks: strings("risks"), outcome: d["outcome"]?.stringValue, edited: edited, note: d["note"]?.stringValue))
+        case "files":
+            guard case .array(let files)? = d["files"] else { return nil }
+            return .files(files.compactMap { f in
+                guard let path = f["path"]?.stringValue else { return nil }
+                var size: Int?
+                if case .number(let n)? = f["size"] { size = Int(n) }
+                var missing = false
+                if case .bool(let m)? = f["missing"] { missing = m }
+                return PresentedFile(path: path, name: f["name"]?.stringValue ?? (path as NSString).lastPathComponent, description: f["description"]?.stringValue, size: size, missing: missing)
+            })
         case "terminal":
             guard let command = d["command"]?.stringValue else { return nil }
             if case .number(let code)? = d["exitCode"] { return .terminal(command: command, exitCode: Int(code)) }
@@ -852,6 +873,13 @@ public struct EngineSettings: Codable, Sendable, Hashable {
         public var localOnly: Bool?
         public var searchesByMeaning: Bool { localOnly != true && (semantic ?? false) }
     }
+    /// Build sessions: the sandbox for commands (default on) and auto review (default off).
+    public struct Build: Codable, Sendable, Hashable {
+        public var sandbox: Bool?
+        public var autoReview: Bool?
+        public init(sandbox: Bool? = nil, autoReview: Bool? = nil) { self.sandbox = sandbox; self.autoReview = autoReview }
+    }
+    public var build: Build?
     public var chat: Chat
     public var aboutMe: AboutMe
     public var memory: Memory
@@ -930,10 +958,11 @@ public struct SettingsPatch: Encodable, Sendable {
         public init(providers: [McpMemoryProvider]? = nil, semantic: Bool? = nil, localOnly: Bool? = nil) { self.providers = providers; self.semantic = semantic; self.localOnly = localOnly }
     }
     public var models: EngineSettings.Models?
+    public var build: EngineSettings.Build?
     public var chat: Chat?
     public var aboutMe: AboutMe?
     public var memory: Memory?
-    public init(models: EngineSettings.Models? = nil, chat: Chat? = nil, aboutMe: AboutMe? = nil, memory: Memory? = nil) { self.models = models; self.chat = chat; self.aboutMe = aboutMe; self.memory = memory }
+    public init(models: EngineSettings.Models? = nil, build: EngineSettings.Build? = nil, chat: Chat? = nil, aboutMe: AboutMe? = nil, memory: Memory? = nil) { self.models = models; self.build = build; self.chat = chat; self.aboutMe = aboutMe; self.memory = memory }
 }
 
 public struct TextParams: Encodable, Sendable { public var text: String; public init(text: String) { self.text = text } }

@@ -534,6 +534,46 @@
 									"type": "object",
 									"required": [
 										"type",
+										"files"
+									],
+									"properties": {
+										"type": {
+											"type": "string",
+											"const": "files"
+										},
+										"files": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"path",
+													"name"
+												],
+												"properties": {
+													"path": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"description": {
+														"type": "string"
+													},
+													"size": {
+														"type": "number"
+													},
+													"missing": {
+														"type": "boolean"
+													}
+												}
+											}
+										}
+									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"type",
 										"summary",
 										"steps"
 									],
@@ -1090,6 +1130,46 @@
 													},
 													"costUsd": {
 														"type": "number"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"files"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "files"
+													},
+													"files": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"path",
+																"name"
+															],
+															"properties": {
+																"path": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																},
+																"description": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"missing": {
+																	"type": "boolean"
+																}
+															}
+														}
 													}
 												}
 											},
@@ -2663,6 +2743,46 @@
 													"type": "object",
 													"required": [
 														"type",
+														"files"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "files"
+														},
+														"files": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"required": [
+																	"path",
+																	"name"
+																],
+																"properties": {
+																	"path": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"description": {
+																		"type": "string"
+																	},
+																	"size": {
+																		"type": "number"
+																	},
+																	"missing": {
+																		"type": "boolean"
+																	}
+																}
+															}
+														}
+													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
 														"summary",
 														"steps"
 													],
@@ -3219,6 +3339,46 @@
 																	},
 																	"costUsd": {
 																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"files"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "files"
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"path",
+																				"name"
+																			],
+																			"properties": {
+																				"path": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"description": {
+																					"type": "string"
+																				},
+																				"size": {
+																					"type": "number"
+																				},
+																				"missing": {
+																					"type": "boolean"
+																				}
+																			}
+																		}
 																	}
 																}
 															},
@@ -4283,6 +4443,46 @@
 													"type": "object",
 													"required": [
 														"type",
+														"files"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "files"
+														},
+														"files": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"required": [
+																	"path",
+																	"name"
+																],
+																"properties": {
+																	"path": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"description": {
+																		"type": "string"
+																	},
+																	"size": {
+																		"type": "number"
+																	},
+																	"missing": {
+																		"type": "boolean"
+																	}
+																}
+															}
+														}
+													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
 														"summary",
 														"steps"
 													],
@@ -4839,6 +5039,46 @@
 																	},
 																	"costUsd": {
 																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"files"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "files"
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"path",
+																				"name"
+																			],
+																			"properties": {
+																				"path": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"description": {
+																					"type": "string"
+																				},
+																				"size": {
+																					"type": "number"
+																				},
+																				"missing": {
+																					"type": "boolean"
+																				}
+																			}
+																		}
 																	}
 																}
 															},
@@ -5883,6 +6123,46 @@
 													"type": "object",
 													"required": [
 														"type",
+														"files"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "files"
+														},
+														"files": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"required": [
+																	"path",
+																	"name"
+																],
+																"properties": {
+																	"path": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"description": {
+																		"type": "string"
+																	},
+																	"size": {
+																		"type": "number"
+																	},
+																	"missing": {
+																		"type": "boolean"
+																	}
+																}
+															}
+														}
+													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
 														"summary",
 														"steps"
 													],
@@ -6439,6 +6719,46 @@
 																	},
 																	"costUsd": {
 																		"type": "number"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"files"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "files"
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"path",
+																				"name"
+																			],
+																			"properties": {
+																				"path": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"description": {
+																					"type": "string"
+																				},
+																				"size": {
+																					"type": "number"
+																				},
+																				"missing": {
+																					"type": "boolean"
+																				}
+																			}
+																		}
 																	}
 																}
 															},
@@ -8070,6 +8390,46 @@
 																"type": "object",
 																"required": [
 																	"type",
+																	"files"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "files"
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"path",
+																				"name"
+																			],
+																			"properties": {
+																				"path": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"description": {
+																					"type": "string"
+																				},
+																				"size": {
+																					"type": "number"
+																				},
+																				"missing": {
+																					"type": "boolean"
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
 																	"summary",
 																	"steps"
 																],
@@ -8626,6 +8986,46 @@
 																				},
 																				"costUsd": {
 																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"files"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "files"
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"path",
+																							"name"
+																						],
+																						"properties": {
+																							"path": {
+																								"type": "string"
+																							},
+																							"name": {
+																								"type": "string"
+																							},
+																							"description": {
+																								"type": "string"
+																							},
+																							"size": {
+																								"type": "number"
+																							},
+																							"missing": {
+																								"type": "boolean"
+																							}
+																						}
+																					}
 																				}
 																			}
 																		},
@@ -10238,6 +10638,46 @@
 												"type": "object",
 												"required": [
 													"type",
+													"files"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "files"
+													},
+													"files": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"path",
+																"name"
+															],
+															"properties": {
+																"path": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																},
+																"description": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"missing": {
+																	"type": "boolean"
+																}
+															}
+														}
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
 													"summary",
 													"steps"
 												],
@@ -10794,6 +11234,46 @@
 																},
 																"costUsd": {
 																	"type": "number"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"files"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "files"
+																},
+																"files": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"path",
+																			"name"
+																		],
+																		"properties": {
+																			"path": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"description": {
+																				"type": "string"
+																			},
+																			"size": {
+																				"type": "number"
+																			},
+																			"missing": {
+																				"type": "boolean"
+																			}
+																		}
+																	}
 																}
 															}
 														},
@@ -12687,6 +13167,46 @@
 																"type": "object",
 																"required": [
 																	"type",
+																	"files"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "files"
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"path",
+																				"name"
+																			],
+																			"properties": {
+																				"path": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"description": {
+																					"type": "string"
+																				},
+																				"size": {
+																					"type": "number"
+																				},
+																				"missing": {
+																					"type": "boolean"
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
 																	"summary",
 																	"steps"
 																],
@@ -13243,6 +13763,46 @@
 																				},
 																				"costUsd": {
 																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"files"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "files"
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"path",
+																							"name"
+																						],
+																						"properties": {
+																							"path": {
+																								"type": "string"
+																							},
+																							"name": {
+																								"type": "string"
+																							},
+																							"description": {
+																								"type": "string"
+																							},
+																							"size": {
+																								"type": "number"
+																							},
+																							"missing": {
+																								"type": "boolean"
+																							}
+																						}
+																					}
 																				}
 																			}
 																		},
@@ -14307,6 +14867,46 @@
 																"type": "object",
 																"required": [
 																	"type",
+																	"files"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "files"
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"path",
+																				"name"
+																			],
+																			"properties": {
+																				"path": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"description": {
+																					"type": "string"
+																				},
+																				"size": {
+																					"type": "number"
+																				},
+																				"missing": {
+																					"type": "boolean"
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
 																	"summary",
 																	"steps"
 																],
@@ -14863,6 +15463,46 @@
 																				},
 																				"costUsd": {
 																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"files"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "files"
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"path",
+																							"name"
+																						],
+																						"properties": {
+																							"path": {
+																								"type": "string"
+																							},
+																							"name": {
+																								"type": "string"
+																							},
+																							"description": {
+																								"type": "string"
+																							},
+																							"size": {
+																								"type": "number"
+																							},
+																							"missing": {
+																								"type": "boolean"
+																							}
+																						}
+																					}
 																				}
 																			}
 																		},
@@ -15907,6 +16547,46 @@
 																"type": "object",
 																"required": [
 																	"type",
+																	"files"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "files"
+																	},
+																	"files": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"path",
+																				"name"
+																			],
+																			"properties": {
+																				"path": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"description": {
+																					"type": "string"
+																				},
+																				"size": {
+																					"type": "number"
+																				},
+																				"missing": {
+																					"type": "boolean"
+																				}
+																			}
+																		}
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
 																	"summary",
 																	"steps"
 																],
@@ -16463,6 +17143,46 @@
 																				},
 																				"costUsd": {
 																					"type": "number"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"files"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "files"
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"path",
+																							"name"
+																						],
+																						"properties": {
+																							"path": {
+																								"type": "string"
+																							},
+																							"name": {
+																								"type": "string"
+																							},
+																							"description": {
+																								"type": "string"
+																							},
+																							"size": {
+																								"type": "number"
+																							},
+																							"missing": {
+																								"type": "boolean"
+																							}
+																						}
+																					}
 																				}
 																			}
 																		},
@@ -18094,6 +18814,46 @@
 																			"type": "object",
 																			"required": [
 																				"type",
+																				"files"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "files"
+																				},
+																				"files": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"path",
+																							"name"
+																						],
+																						"properties": {
+																							"path": {
+																								"type": "string"
+																							},
+																							"name": {
+																								"type": "string"
+																							},
+																							"description": {
+																								"type": "string"
+																							},
+																							"size": {
+																								"type": "number"
+																							},
+																							"missing": {
+																								"type": "boolean"
+																							}
+																						}
+																					}
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
 																				"summary",
 																				"steps"
 																			],
@@ -18650,6 +19410,46 @@
 																							},
 																							"costUsd": {
 																								"type": "number"
+																							}
+																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"files"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "files"
+																							},
+																							"files": {
+																								"type": "array",
+																								"items": {
+																									"type": "object",
+																									"required": [
+																										"path",
+																										"name"
+																									],
+																									"properties": {
+																										"path": {
+																											"type": "string"
+																										},
+																										"name": {
+																											"type": "string"
+																										},
+																										"description": {
+																											"type": "string"
+																										},
+																										"size": {
+																											"type": "number"
+																										},
+																										"missing": {
+																											"type": "boolean"
+																										}
+																									}
+																								}
 																							}
 																						}
 																					},
@@ -21555,6 +22355,46 @@
 												"type": "object",
 												"required": [
 													"type",
+													"files"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "files"
+													},
+													"files": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"path",
+																"name"
+															],
+															"properties": {
+																"path": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																},
+																"description": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"missing": {
+																	"type": "boolean"
+																}
+															}
+														}
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
 													"summary",
 													"steps"
 												],
@@ -22111,6 +22951,46 @@
 																},
 																"costUsd": {
 																	"type": "number"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"files"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "files"
+																},
+																"files": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"path",
+																			"name"
+																		],
+																		"properties": {
+																			"path": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"description": {
+																				"type": "string"
+																			},
+																			"size": {
+																				"type": "number"
+																			},
+																			"missing": {
+																				"type": "boolean"
+																			}
+																		}
+																	}
 																}
 															}
 														},
@@ -23775,6 +24655,46 @@
 														"type": "object",
 														"required": [
 															"type",
+															"files"
+														],
+														"properties": {
+															"type": {
+																"type": "string",
+																"const": "files"
+															},
+															"files": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"path",
+																		"name"
+																	],
+																	"properties": {
+																		"path": {
+																			"type": "string"
+																		},
+																		"name": {
+																			"type": "string"
+																		},
+																		"description": {
+																			"type": "string"
+																		},
+																		"size": {
+																			"type": "number"
+																		},
+																		"missing": {
+																			"type": "boolean"
+																		}
+																	}
+																}
+															}
+														}
+													},
+													{
+														"type": "object",
+														"required": [
+															"type",
 															"summary",
 															"steps"
 														],
@@ -24331,6 +25251,46 @@
 																		},
 																		"costUsd": {
 																			"type": "number"
+																		}
+																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"files"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "files"
+																		},
+																		"files": {
+																			"type": "array",
+																			"items": {
+																				"type": "object",
+																				"required": [
+																					"path",
+																					"name"
+																				],
+																				"properties": {
+																					"path": {
+																						"type": "string"
+																					},
+																					"name": {
+																						"type": "string"
+																					},
+																					"description": {
+																						"type": "string"
+																					},
+																					"size": {
+																						"type": "number"
+																					},
+																					"missing": {
+																						"type": "boolean"
+																					}
+																				}
+																			}
 																		}
 																	}
 																},

@@ -1,5 +1,7 @@
 # DeepSeek Harness: what Piopio could take (2026-11-08)
 
+**Built on 2026-11-08:** everything in §1 and §2; see [As built](#as-built-2026-11-08) at the end.
+
 A read of [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`, MIT, commit `fcc0ad46` of 2026-11-04), looking for things to bring into Piopio. Their *Exploring Super-agent Design* article already became [17-dispatch](../spec/17-dispatch.md); this note covers the code.
 
 ## What it is
@@ -95,3 +97,20 @@ The patch does two things:
 2. The time fix (§1.4) and the repeat reminder (§1.2), each a short task.
 3. The pi-ai streaming patch, after checking that nothing uses partial arguments (§1.3).
 4. Goals (§2.1), designed as part of Dispatch DP2–DP4.
+
+## As built (2026-11-08)
+
+| Idea | What Piopio does now | Where |
+|---|---|---|
+| §1.1 Sandbox | Build's `bash` runs in a Seatbelt profile in Ask and Auto-edit: writes only in the project/worktree, its git folder, temp folders, `/dev` and package caches. A blocked write tells the model about `outside_project: true`, which always asks. Fails loud. Settings › Approvals › "Keep commands inside the project" (default on). | `extensions/src/sandbox.ts`, spec 05 AP5 |
+| §1.2 Repeat nudge | 3rd, 5th, 8th identical call since your last message: a note on that result. Chats, agents and Build. | `runtime/src/context/repeats.ts` |
+| §1.3 pi-ai patch | Per-chunk re-parse of tool-call JSON removed (Anthropic, OpenAI completions/responses, Bedrock, Mistral, pi-messages). The Gemini `thought_signature` part was left out (no route uses it). | `patches/`, `pnpm-workspace.yaml` |
+| §1.4 Clock | A user message after a 15-minute pause, on a new local day, hourly, or the first one, starts with `[Sent Sun 8 Nov 2026, 14:05 (Europe/Madrid), 3 days after the previous message]`, worked out from timestamps (no new state; cache-stable). "Today is" now uses the local date. Build had no date before. | `runtime/src/context/clock.ts` |
+| §2.1 Goals | `/goal`, `update_goal`, rounds as their own runs (pi's `agent_settled` + a displayed custom message), 25 rounds, Stop pauses. Build only. | `extensions/src/goal.ts` |
+| §2.2 Earlier conversations | `search_conversations` / `read_conversation` (Build: the same project; chats without a project: each other; agents: none), framed as untrusted background. In Build, `@` also suggests the project's sessions; `@conversation:<id>` adds a bounded snapshot as a displayed note kept in the session. | `engine/src/tools/history.ts`, `Composer.swift` |
+| §2.3 Auto review | Auto-edit only, commands only, session's own model, default off. | `extensions/src/review.ts`, spec 05 AP6 |
+| §2.4 Claude Code / Codex | `task` takes `agent: "claude" | "codex"` when the CLI is found; Claude Code through `-p --output-format stream-json`, Codex through `exec --output-last-message`; their permission mode follows the session's. | `engine/src/external-agents.ts`, spec 05 AP7 |
+| §2.5 Deliverables | `present_files` in Build: a card per file that opens in the viewer; missing files say so. | `extensions/src/present.ts`, `ItemRenderer.fileCard` |
+| §2.6 Oversized output | Chats and agents: a result over 40,000 characters or 1,800 lines keeps its start and end (pi-durable alone kept only the start). Build already had pi's bound with a full-output file. | `runtime/src/context/spill.ts` |
+
+**Not verified:** a real Claude Code run (the arguments match `claude --help` 2.1; the tests use a stand-in), any Codex run (not installed here), auto review with a real model, and the sandbox against real installs and builds (npm, pnpm, cargo, xcodebuild) beyond the cache folders listed. **Not done:** goals, `present_files` and `@conversation` in chats and agents; a goal indicator outside the transcript.
