@@ -453,10 +453,9 @@ struct AskBox: View {
                     place = choice == .branch ? .branch(name, base: nil) : .worktree(name, base: nil)
                 }
                 do {
-                    let ref = try await engine.createBuildSession(in: project, workOn: place, mode: chosenMode, model: model)
+                    let ref = try await engine.createBuildSession(in: project, workOn: place, mode: chosenMode, model: model, planMode: startInPlan)
                     let session = engine.thread(ref)
                     await session.open()
-                    if startInPlan { await session.setPlanMode(true) }
                     if await session.send(message, attachments: attachments.map(\.attachment)) {
                         text = ""; attachments = []; saveHomeDraft()
                     }

@@ -894,7 +894,7 @@ export const methods = {
 	 * (text, one line per tool call, images). The chat stays, linked to it. Nothing is sent to the model yet.
 	 */
 	"sessions.continueIn": {
-		params: Type.Object({ ref: ContainerRef, cwd: Type.String() }),
+		params: Type.Object({ ref: ContainerRef, cwd: Type.String(), approvalMode: Type.Optional(ApprovalMode) }),
 		result: Type.Object({ ref: ContainerRef }),
 	},
 	"sessions.create": {
@@ -906,6 +906,7 @@ export const methods = {
 			/** Project sessions: "build" (coding tools) or "chat" (knowledge assistant: no bash, web tools). */
 			profile: Type.Optional(literals("build", "chat")),
 			approvalMode: Type.Optional(ApprovalMode),
+			planMode: Type.Optional(Type.Boolean()),
 			model: Type.Optional(ModelRef),
 			thinking: Type.Optional(Type.String()),
 			title: Type.Optional(Type.String()),

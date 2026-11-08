@@ -365,7 +365,7 @@ export class Engine {
 			}
 			case "sessions.continueIn": {
 				const p = params as Params<"sessions.continueIn">;
-				return { ref: await this.sessions.continueIn(p.ref, p.cwd) } satisfies Result<"sessions.continueIn">;
+				return { ref: await this.sessions.continueIn(p.ref, p.cwd, p.approvalMode) } satisfies Result<"sessions.continueIn">;
 			}
 			case "sessions.create": {
 				const p = params as Params<"sessions.create">;

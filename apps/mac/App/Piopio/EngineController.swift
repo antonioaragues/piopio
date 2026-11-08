@@ -473,9 +473,10 @@ final class EngineController {
     }
 
     /// A Build session on the project as it is, a new branch, or its own worktree (docs/design 7a).
-    func createBuildSession(in project: ProjectInfo, workOn: WorkOn, mode: ApprovalMode?, model: ModelRef?, profile: SessionSummary.Profile = .build) async throws -> ContainerRef {
+    /// Without Build (the area is off), folders are Read only (docs/spec/18 §7). `planMode`: start in Plan.
+    func createBuildSession(in project: ProjectInfo, workOn: WorkOn, mode: ApprovalMode?, model: ModelRef?, planMode: Bool = false, profile: SessionSummary.Profile = .build) async throws -> ContainerRef {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
-        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: model ?? self.model(for: .build), workOn: workOn, approvalMode: mode, profile: profile), as: CreateSessionResult.self).ref
+        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: model ?? self.model(for: .build), workOn: workOn, planMode: planMode ? true : nil, approvalMode: Areas.shared.contains(.build) ? mode : .readOnly, profile: profile), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return ref
     }
@@ -764,7 +765,7 @@ final class EngineController {
     /// and images as context. This one stays, linked to it.
     func continueIn(_ ref: ContainerRef, project: ProjectInfo) async throws -> ContainerRef {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
-        let next = try await client.call("sessions.continueIn", ContinueInParams(ref: ref, cwd: project.path), as: CreateSessionResult.self).ref
+        let next = try await client.call("sessions.continueIn", ContinueInParams(ref: ref, cwd: project.path, approvalMode: Areas.shared.contains(.build) ? nil : .readOnly), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return next
     }

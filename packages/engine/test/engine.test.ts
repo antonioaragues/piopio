@@ -476,6 +476,9 @@ test("a chat continues in a project folder with its text and images; the chat st
 	// Before the new message, so the model reads it first.
 	expect(lines.indexOf(seeded)).toBeLessThan(lines.findIndex((l) => l.message?.role === "user"));
 	await expect(a.client.call("sessions.continueIn", { ref, cwd: folder })).rejects.toMatchObject({ data: { code: "INVALID" } });
+	const readOnly = await a.client.call("sessions.continueIn", { ref: chat, cwd: folder, approvalMode: "read_only" });
+	expect((await a.client.call("sessions.open", { ref: readOnly.ref })).state.approvalMode).toBe("read_only");
+	expect((await a.client.call("sessions.open", { ref })).state.approvalMode).toBe("auto_edit");
 });
 
 test("where background work runs: the setting survives restarts; the on-device status explains itself", async () => {
@@ -948,11 +951,11 @@ describe("git and worktrees (docs/spec/05-build §8, BP5)", () => {
 
 describe("composer and extensions (milestone 2.5)", () => {
 	type State = Snapshot["state"];
-	async function session(a: Ctx, mode: "full_auto" | "auto_edit" = "full_auto") {
+	async function session(a: Ctx, mode: "full_auto" | "auto_edit" = "full_auto", planMode = false) {
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-25-")));
 		writeFileSync(join(folder, "a.txt"), "one\n");
 		await a.client.call("projects.add", { path: folder });
-		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: mode });
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: mode, planMode });
 		const sub = await a.client.call("sessions.subscribe", { ref });
 		return { folder, ref, sub: sub.subscriptionId as string };
 	}
@@ -986,9 +989,8 @@ describe("composer and extensions (milestone 2.5)", () => {
 
 	test("plan mode refuses changes, lets read-only commands run, and approving the plan turns it off", async () => {
 		const a = await start();
-		const s = await session(a);
-		await a.client.call("sessions.configure", { ref: s.ref, planMode: true });
-		expect((await stateWhere(a, s.sub, (st) => st.planMode === true)).planMode).toBe(true);
+		const s = await session(a, "full_auto", true);
+		expect((await a.client.call("sessions.open", { ref: s.ref })).state.planMode).toBe(true);
 		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "$ cat a.txt\nedit: a.txt | one | two\n$ touch b.txt\nplan: Change one to two | Edit a.txt | Run the tests" } });
 		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
 		expect(waiting.prompts![0]).toMatchObject({ kind: "plan", title: "Change one to two", steps: ["Edit a.txt", "Run the tests"] });

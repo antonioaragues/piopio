@@ -346,8 +346,9 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; profile?: "build" | "chat"; debate?: DebateConfig; projectId?: string }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; debate?: DebateConfig; projectId?: string }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
+		if (params.planMode && params.kind !== "build") throw new EngineError("INVALID", "Only folder conversations support Plan mode.");
 		if (params.projectId && params.kind !== "thread") throw new EngineError("INVALID", "Only conversations without a folder go in a project this way.");
 		if (params.projectId) this.projectWithoutFolder(params.projectId);
 		if (params.debate && params.kind !== "thread") throw new EngineError("INVALID", "Only threads can be debates.");
@@ -379,6 +380,7 @@ export class Sessions {
 			...(cwd ? { cwd } : {}),
 			...(worktree ? { projectPath: params.cwd!, worktree } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
+			...(params.planMode ? { planMode: true } : {}),
 			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`), ...(params.projectId ? { projectId: params.projectId } : {}) } : {}),
 			...(params.debate ? { debate: { config: params.debate, status: "running" as const, maxRounds: params.debate.maxRounds, endings: [] } } : {}),
@@ -512,7 +514,7 @@ export class Sessions {
 	 * model reads (user and assistant text, one line per tool call, the images attached). Thinking and other branches
 	 * stay behind. The chat stays where it was, with a link to the new conversation.
 	 */
-	async continueIn(from: ContainerRef, cwd: string): Promise<ContainerRef> {
+	async continueIn(from: ContainerRef, cwd: string, approvalMode?: ApprovalMode): Promise<ContainerRef> {
 		const source = this.entry(from);
 		if (source.ref.kind !== "thread") throw new EngineError("INVALID", "Only a conversation without a project can continue in one.");
 		if (!existsSync(cwd)) throw new EngineError("NOT_FOUND", `No folder ${cwd}`);
@@ -542,7 +544,7 @@ export class Sessions {
 				lines.push(`(tool ${item.tool}: ${item.status})`);
 			}
 		}
-		const ref = await this.create({ kind: "build", cwd, ...(model ? { model } : {}), title: source.title });
+		const ref = await this.create({ kind: "build", cwd, ...(approvalMode ? { approvalMode } : {}), ...(model ? { model } : {}), title: source.title });
 		const child = this.entry(ref);
 		child.continuedFrom = { id: source.ref.id, title: source.title };
 		source.continuedIn = { id: ref.id, title: source.title };

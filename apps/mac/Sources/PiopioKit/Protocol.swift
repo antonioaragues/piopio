@@ -945,7 +945,9 @@ public struct AgentDraftResult: Decodable, Sendable { public var name: String; p
 
 public struct ContinueInParams: Encodable, Sendable {
     public var ref: ContainerRef; public var cwd: String
-    public init(ref: ContainerRef, cwd: String) { self.ref = ref; self.cwd = cwd }
+    /// Read only when Build is off (docs/spec/18 §7); nil: the project's own mode.
+    public var approvalMode: ApprovalMode?
+    public init(ref: ContainerRef, cwd: String, approvalMode: ApprovalMode? = nil) { self.ref = ref; self.cwd = cwd; self.approvalMode = approvalMode }
 }
 public struct ImportThreadsParams: Encodable, Sendable {
     public var ref: ContainerRef; public var threads: [ContainerRef]; public var topicId: String?; public var keepThreads: Bool?
@@ -1051,13 +1053,15 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var thinking: String?
     public var title: String?
     public var workOn: WorkOn?
+    /// Build: start in Plan mode.
+    public var planMode: Bool?
     public var approvalMode: ApprovalMode?
     public var profile: SessionSummary.Profile?
     public var debate: DebateConfig?
     /// Conversations in a project without a folder (18 §3).
     public var projectId: String?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, debate: DebateConfig? = nil, projectId: String? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.approvalMode = approvalMode; self.profile = profile; self.debate = debate; self.projectId = projectId
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, debate: DebateConfig? = nil, projectId: String? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile; self.debate = debate; self.projectId = projectId
     }
 }
 
