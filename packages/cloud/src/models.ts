@@ -42,7 +42,9 @@ function installEcho(faux: ReturnType<typeof fauxProvider>): void {
 	const step = (context: { messages: readonly { role: string; content: unknown }[] }) => {
 		faux.appendResponses([step]);
 		const last = [...context.messages].reverse().find((m) => m.role === "user");
-		const text = typeof last?.content === "string" ? last.content : Array.isArray(last?.content) ? (last.content as { type: string; text?: string }[]).map((b) => b.text ?? "").join("") : "";
+		const raw = typeof last?.content === "string" ? last.content : Array.isArray(last?.content) ? (last.content as { type: string; text?: string }[]).map((b) => b.text ?? "").join("") : "";
+		// Without the clock line the agent's context guards add (@piopio/runtime context/clock).
+		const text = raw.replace(/^\[Sent [^\]\n]*\](\n\n)?/, "");
 		return fauxAssistantMessage([fauxText(`Echo: ${text}`)]);
 	};
 	faux.setResponses([step]);

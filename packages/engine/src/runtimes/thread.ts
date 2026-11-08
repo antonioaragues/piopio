@@ -3,6 +3,7 @@
  * the active branch; edits and regenerations fork new conversations (see branches.ts).
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { contextGuardsExtension } from "@piopio/runtime";
 import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { Attachment, ContainerRef, ModelRef, Snapshot } from "@piopio/protocol";
@@ -91,6 +92,8 @@ export class ThreadRuntime implements Runtime {
 		const webExtension = createWebExtension(options.hub, { ...options.webOptions, scope: options.ref.id }) as unknown as Extension;
 		registry.install(webExtension as never);
 		for (const e of options.extensions ?? []) registry.install(e as never);
+		// The clock, the repeated-call nudge and the trim of oversized results (@piopio/runtime context/).
+		registry.install(contextGuardsExtension() as never);
 		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp, offFilter(options.toolsOff, "mcp")) : undefined;
 		let runtime: ThreadRuntime | undefined;
 		const connectors = options.connectors ? (durableConnectorsExtension(options.connectors, "chat", (site) => runtime!.confirmFor(site), offFilter(options.toolsOff, "connector")) as unknown as Extension) : undefined;

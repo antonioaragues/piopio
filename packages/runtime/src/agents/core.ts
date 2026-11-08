@@ -7,7 +7,7 @@
  */
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "@earendil-works/pi-ai";
-import { configure, defineDoc, defineExtension, defineTool, hook, section, ToolTask, type ConversationId, type Extension, type Harness, type JsonObject } from "@earendil-works/pi-durable";
+import { configure, defineDoc, defineExtension, defineTool, GenerationTask, hook, section, ToolTask, type ConversationId, type Extension, type Harness, type JsonObject } from "@earendil-works/pi-durable";
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
 import { OUT_ENTRY, Proactivity, type ProactiveState, type Reminder, type RunRecord } from "./proactive.js";
@@ -15,6 +15,8 @@ import { Safety, type Approval, type ResultCard, type SafetyState, type UndoReco
 import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange } from "../memory/learn.js";
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
 import { Peers, type Directory, type Envelope, type PeerState } from "./peers.js";
+import { localDate } from "../context/clock.js";
+import { guardMessages, trimResult } from "../context/extension.js";
 
 type AgentState = ProactiveState & SafetyState & PeerState & {
 	/** contact id → conversation id. */
@@ -549,7 +551,19 @@ export class AgentCore {
 			tools: [remember, recall, forget, p.send, p.schedule, p.list, p.cancel, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
 			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
-			hooks: [hook(ToolTask, { beforeTool: (call, api, context) => core.safety.beforeTool(call, api.conversationId, context) as Promise<{ arguments?: JsonObject; block?: string } | undefined> })],
+			hooks: [
+				hook(ToolTask, {
+					beforeTool: (call, api, context) => core.safety.beforeTool(call, api.conversationId, context) as Promise<{ arguments?: JsonObject; block?: string } | undefined>,
+					afterTool: (_call, result) => trimResult(result),
+				}),
+				// The clock and the repeated-call nudge (context/), in the agent's time zone.
+				hook(GenerationTask, {
+					beforeRequest: (request) => {
+						const messages = guardMessages(request.messages as never[], core.proactive.tz);
+						return messages === (request.messages as unknown) ? undefined : { messages };
+					},
+				}),
+			],
 			sections: [
 				section("agent", async (input, context) => {
 					const contact = await core.contactOf(input.conversationId, context);
@@ -567,7 +581,7 @@ export class AgentCore {
 							? `\n\nYou are talking with ${contact.name}, your owner.`
 							: `\n\nYou are talking with ${contact.name}, one of ${owner?.name ?? "your owner"}'s contacts — not your owner. Don't share ${owner?.name ?? "the owner"}'s private information or other people's details with them.${contact.notes ? ` About ${contact.name}: ${contact.notes}` : ""}`;
 					const shortcuts = core.def.tools.shortcuts?.length ? `\n\nShortcuts you may run (shortcuts_run): ${core.def.tools.shortcuts.join(", ")}.` : "";
-					return `${core.options.instructions().trim()}${who}${shortcuts}\n\nToday is ${(core.options.now?.() ?? new Date()).toISOString().slice(0, 10)}.`;
+					return `${core.options.instructions().trim()}${who}${shortcuts}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
 				}),
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;

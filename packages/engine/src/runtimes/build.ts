@@ -15,7 +15,7 @@ import {
 	type AgentSession,
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
-import { approvalsExtension, checkpointsExtension, notifyExtension, planExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge } from "@piopio/pi-extensions";
+import { approvalsExtension, checkpointsExtension, notifyExtension, planExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge } from "@piopio/pi-extensions";
 import type { ApprovalRule, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -26,6 +26,7 @@ import { SdkEventMapper } from "../timeline/pi-sdk.js";
 import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat-profile.js";
 import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
+import { guardsExtension } from "../tools/guards.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
@@ -60,6 +61,8 @@ export type BuildOpenOptions = {
 	webOptions?: WebOptions;
 	/** Where project trust is looked up (the project folder; differs from `cwd` for worktree sessions). */
 	trustPath?: string;
+	/** Shell commands run in macOS's sandbox (piopio-sandbox); read on every command. Default on. */
+	sandbox?: () => boolean;
 	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
 	runTask?: SubagentBridge["run"];
 };
@@ -113,6 +116,9 @@ export class BuildRuntime implements Runtime {
 				// Before approvals: a server turned off here is refused without asking.
 				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
 				notesExtension(o.cwd),
+				guardsExtension(),
+				// Full access runs commands as before; otherwise they write only inside the project.
+				sandboxExtension({ enabled: () => (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" }, { shellPath: () => settingsManager.getShellPath() }),
 				approvalsExtension({
 					mode: o.approvals.mode,
 					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),

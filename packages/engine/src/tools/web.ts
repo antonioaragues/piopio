@@ -11,6 +11,7 @@ import { Readable } from "node:stream";
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { ModelHub } from "../models.js";
+import { localDate, localZone } from "@piopio/runtime";
 import { htmlToMarkdown } from "./html.js";
 
 export const WEB_EXTENSION = "piopio-web";
@@ -59,7 +60,7 @@ export function createWebExtension(hub: ModelHub, options: WebOptions = {}) {
 
 /** System prompt note for the web tools. */
 export const webSection = () =>
-	`You can search the web with web_search and read pages with web_fetch. Use them when the answer depends on current or specific information, and link the sources you used. Today is ${new Date().toISOString().slice(0, 10)}.`;
+	`You can search the web with web_search and read pages with web_fetch. Use them when the answer depends on current or specific information, and link the sources you used. Today is ${localDate(Date.now(), localZone())}.`;
 
 export type WebResult = { text: string; isError?: boolean; details?: Record<string, unknown> };
 

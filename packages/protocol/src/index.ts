@@ -523,6 +523,15 @@ export const EngineSettings = Type.Object({
 		/** After an answer, suggest a few next messages (docs/design v2 "You could also"). */
 		followUps: Type.Optional(Type.Boolean()),
 	}),
+	/** Build sessions (docs/research/deepseek-harness.md). Absent fields: their defaults. */
+	build: Type.Optional(
+		Type.Object({
+			/** Shell commands run in macOS's sandbox and write only inside the project (default on; Full access runs them as before). */
+			sandbox: Type.Optional(Type.Boolean()),
+			/** Auto-edit: before asking you about a command, the session's model judges it and runs the clearly safe ones (default off). */
+			autoReview: Type.Optional(Type.Boolean()),
+		}),
+	),
 	aboutMe: Type.Object({
 		/** Shown to the agents. */
 		enabled: Type.Boolean(),

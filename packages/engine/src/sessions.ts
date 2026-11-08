@@ -1231,6 +1231,7 @@ export class Sessions {
 			},
 			checkpoints: this.checkpoints,
 			webOptions: this.webOptions,
+			sandbox: () => this.chat?.settings.get().build?.sandbox !== false,
 			...(entry.projectPath ? { trustPath: entry.projectPath } : {}),
 			plan: {
 				active: () => entry.planMode ?? false,

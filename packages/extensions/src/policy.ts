@@ -64,6 +64,8 @@ export function decide(mode: ApprovalMode, tool: string, input: Record<string, u
 		const danger = deniedCommand(command, cwd, home);
 		if (danger) return { action: "ask", reason: danger };
 		if (mode === "full_auto") return { action: "allow" };
+		// piopio-sandbox: leaving the sandbox always asks, rules or not.
+		if (input.outside_project === true) return { action: "ask", reason: "Runs outside the sandbox, so it can write anywhere" };
 		const parsed = parseCommands(command);
 		const segments = parsed ?? [];
 		const commandRules = rules.filter((r) => r.kind === "command");

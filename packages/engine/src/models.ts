@@ -464,7 +464,9 @@ function installEcho(faux: FauxHandle): void {
 		faux.appendResponses([step]);
 		const lastUser = context.messages.map((m) => m.role).lastIndexOf("user");
 		const last = context.messages[lastUser];
-		const text = typeof last?.content === "string" ? last.content : Array.isArray(last?.content) ? (last.content as { type: string; text?: string }[]).map((b) => b.text ?? "").join("") : "";
+		const raw = typeof last?.content === "string" ? last.content : Array.isArray(last?.content) ? (last.content as { type: string; text?: string }[]).map((b) => b.text ?? "").join("") : "";
+		// What the user typed, without the clock line the context guards add (@piopio/runtime context/clock).
+		const text = raw.replace(/^\[Sent [^\]\n]*\](\n\n)?/, "");
 		const script = scriptedTools(text);
 		const done = context.messages.slice(lastUser + 1).filter((m) => m.role === "toolResult").length;
 		const next = script[done];

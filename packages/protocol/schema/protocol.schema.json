@@ -30450,6 +30450,17 @@
 						}
 					}
 				},
+				"build": {
+					"type": "object",
+					"properties": {
+						"sandbox": {
+							"type": "boolean"
+						},
+						"autoReview": {
+							"type": "boolean"
+						}
+					}
+				},
 				"aboutMe": {
 					"type": "object",
 					"required": [
@@ -30945,6 +30956,17 @@
 							"type": "boolean"
 						},
 						"followUps": {
+							"type": "boolean"
+						}
+					}
+				},
+				"build": {
+					"type": "object",
+					"properties": {
+						"sandbox": {
+							"type": "boolean"
+						},
+						"autoReview": {
 							"type": "boolean"
 						}
 					}

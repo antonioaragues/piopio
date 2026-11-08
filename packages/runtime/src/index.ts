@@ -10,3 +10,7 @@ export * from "./agents/safety.js";
 export * from "./agents/apple.js";
 export * from "./agents/peers.js";
 export * from "./agents/time.js";
+export * from "./context/clock.js";
+export * from "./context/repeats.js";
+export * from "./context/spill.js";
+export * from "./context/extension.js";

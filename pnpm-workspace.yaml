@@ -9,3 +9,8 @@ allowBuilds:
   # wrangler/Miniflare (packages/cloud) need their platform binaries.
   esbuild: true
   workerd: true
+
+# pi-ai re-parsed a tool call's whole JSON on every streamed chunk (quadratic for a large `write`); the
+# arguments are parsed once at the end anyway. From deepseek-harness's patch (docs/research/deepseek-harness.md §1.3).
+patchedDependencies:
+  '@earendil-works/pi-ai@1.4.0': patches/@earendil-works__pi-ai@1.4.0.patch
