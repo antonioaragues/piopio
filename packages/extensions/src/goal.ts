@@ -112,7 +112,7 @@ export function goalExtension(): ExtensionFactory {
 					return;
 				}
 				save({ objective: text, status: "active", rounds: 1, maxRounds: MAX_ROUNDS });
-				note(`Goal set: ${text}. Piopio keeps it going for up to ${MAX_ROUNDS} rounds, until it's done or needs you.`);
+				note(`Goal set: ${text.replace(/[.!\s]+$/, "")}. Piopio keeps it going for up to ${MAX_ROUNDS} rounds, until it's done or needs you.`);
 				pi.sendUserMessage(`My goal for this session: ${text}`);
 			},
 		});

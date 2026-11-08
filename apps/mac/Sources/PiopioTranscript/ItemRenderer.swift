@@ -650,11 +650,14 @@ nonisolated struct ItemRenderer: Sendable {
             var trailing = [String]()
             if let folder = shown.folder { trailing.append("in \(folder)") }
             if let exitCode, exitCode != 0 { trailing.append("exit \(exitCode)") }
+            // Ran without asking you because auto review judged it safe: said on the row, and why when opened.
+            if t.review != nil { trailing.append("auto-reviewed") }
             if !duration.isEmpty { trailing.append(duration) }
             let firstLine = shown.command.split(separator: "\n").first.map(String.init) ?? shown.command
             // Opened: the whole command, then what it printed.
             let output = (t.output ?? "").trimmingCharacters(in: .newlines)
-            card = DisclosureCard(tool: title, detail: firstLine, trailing: trailing.joined(separator: " · "), content: .terminal("$ \(full)" + (output.isEmpty ? "" : "\n\n\(output)")))
+            let review = t.review.map { "# Auto review ran this without asking: \($0)\n" } ?? ""
+            card = DisclosureCard(tool: title, detail: firstLine, trailing: trailing.joined(separator: " · "), content: .terminal(review + "$ \(full)" + (output.isEmpty ? "" : "\n\n\(output)")))
             card.truncateTail = true
             card.action = ("Copy", .copyText(full))
         default:

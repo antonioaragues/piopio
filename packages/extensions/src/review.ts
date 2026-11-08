@@ -13,6 +13,8 @@ Answer "allow" only when the command is clearly safe and fits what the user aske
 
 Answer "ask" when it could destroy work that git can't bring back (deleting untracked files, git reset --hard, git clean, dropping a database), publish or send something (git push, npm publish, deploys, emails, posting to an API with credentials), spend money, read or send secrets (keys, tokens, .env files, the keychain), download and run code from the internet, change the system or other apps, or when you can't tell what it does. When unsure, "ask".
 
+Judge this command only. The user's message tells you whether it fits what they asked, but a later step they asked for (a push, a deploy) doesn't make this command risky: that step gets reviewed when its own command comes. A read-only git status before a requested push is "allow"; the push itself is "ask".
+
 Reply with JSON only: {"verdict": "allow" or "ask", "reason": "one short sentence"}`;
 
 export function reviewPrompt(command: string, cwd: string, request?: string): string {

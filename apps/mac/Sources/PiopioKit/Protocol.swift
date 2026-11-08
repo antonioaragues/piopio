@@ -182,9 +182,11 @@ public struct ToolItem: Codable, Sendable, Hashable {
     public var details: JSONValue?
     public var durationMs: Double?
     public var parentCallId: String?
-    public init(id: String, at: String, callId: String, tool: String, args: JSONValue? = nil, status: Status, output: String? = nil, details: JSONValue? = nil, durationMs: Double? = nil, parentCallId: String? = nil) {
+    /// Auto review let this command run without asking (Build, Auto-edit): its reason.
+    public var review: String?
+    public init(id: String, at: String, callId: String, tool: String, args: JSONValue? = nil, status: Status, output: String? = nil, details: JSONValue? = nil, durationMs: Double? = nil, parentCallId: String? = nil, review: String? = nil) {
         self.id = id; self.at = at; self.callId = callId; self.tool = tool; self.args = args; self.status = status
-        self.output = output; self.details = details; self.durationMs = durationMs; self.parentCallId = parentCallId
+        self.output = output; self.details = details; self.durationMs = durationMs; self.parentCallId = parentCallId; self.review = review
     }
 }
 

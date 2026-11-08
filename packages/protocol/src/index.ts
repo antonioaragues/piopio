@@ -208,6 +208,8 @@ export const ToolItem = Type.Object({
 	details: Type.Optional(ToolDetails),
 	durationMs: Type.Optional(Type.Number()),
 	parentCallId: Type.Optional(Type.String()),
+	/** Auto review let this command run without asking you (Build, Auto-edit): its reason. */
+	review: Type.Optional(Type.String()),
 });
 export const SystemItem = Type.Object({
 	kind: Type.Literal("system"),

@@ -74,3 +74,14 @@ import Testing
     let claude = ToolItem(id: "t10", at: "", callId: "c10", tool: "task", args: .object(["description": .string("Fix tests"), "agent": .string("claude")]), status: .running)
     #expect(ItemRenderer.toolTitle(claude) == ("Claude Code working", "Fix tests"))
 }
+
+@Test func aCommandAutoReviewRanSaysSoAndWhy() {
+    let item = ToolItem(id: "t11", at: "", callId: "c11", tool: "bash", args: .object(["command": .string("pnpm test")]), status: .done, output: "ok",
+                        details: .object(["type": .string("terminal"), "command": .string("pnpm test"), "exitCode": .number(0)]), review: "Runs the project's tests.")
+    let card = ItemRenderer.toolCard(item)
+    #expect(card.trailing.contains("auto-reviewed"))
+    #expect(card.body.hasPrefix("# Auto review ran this without asking: Runs the project's tests.\n$ pnpm test"))
+    var plain = item
+    plain.review = nil
+    #expect(!ItemRenderer.toolCard(plain).trailing.contains("auto-reviewed"))
+}

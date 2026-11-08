@@ -159,6 +159,8 @@ test("titles are plain text", () => {
 	expect(titleFrom("```ts\nconst a = 1\n```\nWhy?")).toBe("Why?");
 	expect(titleFrom("Explain this:\n\n| Col | Val |\n|---|---|\n| x | 1 |")).toBe("Explain this:");
 	expect(titleFrom("a ".repeat(50)).length).toBeLessThanOrEqual(61);
+	expect(titleFrom("/goal Add tests for keepEnds")).toBe("Add tests for keepEnds");
+	expect(titleFrom("/goal")).toBe("/goal");
 });
 
 describe("thread branches", () => {

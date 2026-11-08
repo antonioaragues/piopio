@@ -5,7 +5,7 @@ they do not establish that every provider, OS permission flow or production serv
 
 | Area | Implemented | Acceptance still pending |
 |---|---|---|
-| Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents, sandboxed commands, `/goal`, auto review, Claude Code/Codex tasks | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations; cargo inside the sandbox; a real Claude Code/Codex task |
+| Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents, sandboxed commands, `/goal`, auto review, Claude Code/Codex tasks | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations; cargo inside the sandbox; a real Claude Code/Codex task (the CLI here isn't signed in) |
 | Chat | Streaming, attachments, branches, export, Quick Chat, New project makes a folder in ~/Piopio (AGENTS.md, shared NOTES.md), global search | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability |
 | Local Agents | Definitions, conversations, memory, schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
@@ -25,7 +25,7 @@ tests use temporary engine data, but launch a real native window and require a l
 
 ## Latest local verification
 
-The TypeScript suite passes (206 tests; opt-in tests skipped), as do Swift package tests (41 tests).
+The TypeScript suite passes (212 tests; opt-in tests skipped), as do Swift package tests (42 tests).
 The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draft recovery, offline backup and
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also

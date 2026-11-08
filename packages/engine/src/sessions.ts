@@ -1356,6 +1356,8 @@ function moveToTrash(file: string, trash: string): void {
 /** A short plain-text title from a first message: markdown markup removed, first line, ≤ 60 chars. */
 export function titleFrom(text: string): string {
 	const plain = text
+		// "/goal Add tests…": the command's words, not its name.
+		.replace(/^\s*\/[\w:-]+\s+(?=\S)/, "")
 		.replace(/```[\s\S]*?(```|$)/g, " ")
 		.replace(/^\s*\|.*$/gm, " ")
 		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")

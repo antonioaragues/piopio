@@ -4,6 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Snapshot } from "@piopio/protocol";
 import { afterEach, describe, expect, test } from "vitest";
+import { agentEnv, failureText } from "../src/external-agents.js";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
 import { TestClient } from "./client.js";
@@ -285,7 +286,9 @@ describe("auto review", () => {
 		await stateWhere(a, sub, (st) => st.status === "idle" || st.status === "waiting_approval");
 		const s = await idle(a, ref, 2);
 		expect(s.state.status).toBe("idle");
-		expect(s.items.some((i) => i.kind === "system" && i.text.startsWith("Auto review ran “echo safe”: Prints text."))).toBe(true);
+		// The reason is on the command's card, not a note between steps.
+		expect(s.items.find((i) => i.kind === "tool" && (i.args as { command?: string }).command === "echo safe")).toMatchObject({ review: "Prints text." });
+		expect(s.items.some((i) => i.kind === "system" && i.text.startsWith("Auto review"))).toBe(false);
 		expect(asked[0]).toContain("Command:\necho safe");
 
 		await a.client.call("sessions.submit", { ref, input: { text: "$ git clean -fdx" } });
@@ -296,6 +299,18 @@ describe("auto review", () => {
 });
 
 describe("Claude Code and Codex as subagents", () => {
+	test("started from inside a Claude Code session, Piopio doesn't pass that session's sign-in on", () => {
+		const inside = agentEnv({ PATH: "/bin", HOME: "/h", ANTHROPIC_API_KEY: "k", CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s", CLAUDE_CODE_OAUTH_SCOPES: "x", CLAUDE_AGENT_SDK_VERSION: "1", ANTHROPIC_BASE_URL: "https://proxy" });
+		expect(inside).toEqual({ PATH: "/bin", HOME: "/h", ANTHROPIC_API_KEY: "k" });
+		const outside = { PATH: "/bin", ANTHROPIC_BASE_URL: "https://mine" };
+		expect(agentEnv(outside)).toBe(outside);
+	});
+
+	test("a CLI that isn't signed in says how to fix it", () => {
+		expect(failureText("claude", "OAuth session expired and could not be refreshed")).toContain("run `claude` in Terminal and sign in with /login");
+		expect(failureText("codex", "boom")).toBe("boom");
+	});
+
 	/** Stand-ins for the CLIs: they report the arguments they got. */
 	function fakeAgents(): string {
 		const dir = mkdtempSync(join(tmpdir(), "piopio-agents-"));

@@ -259,6 +259,14 @@ export class TimelineBuilder {
 		this.pending.push({ type: "item.updated", item: structuredClone(item) });
 	}
 
+	/** Auto review let this call run without asking: its reason, shown on the card. */
+	toolReview(callId: string, reason: string, emit = true): void {
+		const item = this.get(`tool:${callId}`) as ToolItem | undefined;
+		if (!item || item.review === reason) return;
+		item.review = reason;
+		if (emit) this.pending.push({ type: "item.updated", item: structuredClone(item) });
+	}
+
 	/** A subagent's child session, known once it starts (shown on the task card, openable). */
 	toolSession(callId: string, sessionId: string): void {
 		const item = this.get(`tool:${callId}`) as ToolItem | undefined;

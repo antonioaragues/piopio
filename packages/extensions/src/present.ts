@@ -26,6 +26,19 @@ export function presentedFiles(cwd: string, files: readonly { path: string; desc
 	});
 }
 
+/**
+ * The same, after a short wait for files that aren't there yet: models often write a file and hand it over in the
+ * same step, and those tools run side by side, so the write may still be finishing (seen on a real run, 2026-11-08).
+ */
+export async function presentedFilesSettled(cwd: string, files: readonly { path: string; description?: string }[], waitMs = 3_000, signal?: AbortSignal): Promise<PresentedFile[]> {
+	let out = presentedFiles(cwd, files);
+	for (const end = Date.now() + waitMs; out.some((f) => f.missing) && Date.now() < end && !signal?.aborted; ) {
+		await new Promise((r) => setTimeout(r, 100));
+		out = presentedFiles(cwd, files);
+	}
+	return out;
+}
+
 export function presentExtension(): ExtensionFactory {
 	return (pi) => {
 		pi.registerTool(
@@ -44,8 +57,8 @@ export function presentExtension(): ExtensionFactory {
 						{ minItems: 1, maxItems: MAX_PRESENTED },
 					),
 				}),
-				async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-					const files = presentedFiles(ctx.cwd, params.files);
+				async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+					const files = await presentedFilesSettled(ctx.cwd, params.files, 3_000, signal);
 					const missing = files.filter((f) => f.missing);
 					const shown = files.filter((f) => !f.missing);
 					const lines = [

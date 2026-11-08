@@ -69,6 +69,28 @@ export function claudeProgress(event: unknown): string | undefined {
 	return undefined;
 }
 
+/**
+ * The environment for an agent's CLI. When Piopio itself was started from inside a Claude Code session (a terminal
+ * there, or a script it ran), that session's variables are left out: with them, `claude` takes itself for a child of
+ * that session and uses its sign-in, which fails ("OAuth session expired"; seen on a real run, 2026-11-08).
+ */
+export function agentEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+	if (!env.CLAUDECODE && !env.CLAUDE_CODE_SESSION_ID) return env;
+	const out: NodeJS.ProcessEnv = {};
+	for (const [k, v] of Object.entries(env)) {
+		if (k === "CLAUDECODE" || k === "CLAUDE_PID" || k === "CLAUDE_EFFORT" || k === "ANTHROPIC_BASE_URL" || k.startsWith("CLAUDE_CODE_") || k.startsWith("CLAUDE_AGENT_SDK_")) continue;
+		out[k] = v;
+	}
+	return out;
+}
+
+/** What a failed run says, plus how to fix it when the CLI isn't signed in (its own sign-in, apart from any app's). */
+export function failureText(agent: ExternalAgent, text: string): string {
+	if (!/oauth|not logged in|log ?in|sign ?in|authenticat|api key/i.test(text)) return text;
+	const how = agent === "claude" ? "run `claude` in Terminal and sign in with /login" : "run `codex login` in Terminal";
+	return `${text}\n\n[${AGENT_NAMES[agent]} isn't signed in on this Mac. Tell the user: ${how}, then try again.]`;
+}
+
 export type ExternalRun = { cwd: string; prompt: string; mode: ApprovalMode; signal?: AbortSignal; onProgress: (line: string) => void; path: string };
 
 /** Runs the CLI to the end. Never rejects: failures come back as an "error" result the model reads. */
@@ -87,7 +109,7 @@ export function runExternalAgent(agent: ExternalAgent, run: ExternalRun): Promis
 		};
 		let child: ReturnType<typeof spawn>;
 		try {
-			child = spawn(run.path, args, { cwd: run.cwd, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+			child = spawn(run.path, args, { cwd: run.cwd, env: agentEnv(), stdio: ["ignore", "pipe", "pipe"] });
 		} catch (error) {
 			finish({ text: `${name} couldn't start: ${error instanceof Error ? error.message : String(error)}`, sessionId: "", costUsd: 0, status: "error" });
 			return;
@@ -130,7 +152,7 @@ export function runExternalAgent(agent: ExternalAgent, run: ExternalRun): Promis
 		child.on("close", (code) => {
 			run.signal?.removeEventListener("abort", stop);
 			if (run.signal?.aborted) return finish({ text: "", sessionId: "", costUsd: 0, status: "stopped" });
-			if (agent === "claude" && result) return finish({ text: result.text, sessionId: "", costUsd: result.cost, status: result.error ? "error" : "done" });
+			if (agent === "claude" && result) return finish({ text: result.error ? failureText(agent, result.text) : result.text, sessionId: "", costUsd: result.cost, status: result.error ? "error" : "done" });
 			if (agent === "codex" && code === 0) {
 				let text = lastText;
 				try {
@@ -140,7 +162,7 @@ export function runExternalAgent(agent: ExternalAgent, run: ExternalRun): Promis
 				}
 				return finish({ text, sessionId: "", costUsd: 0, status: "done" });
 			}
-			finish({ text: `${name} exited with code ${code}${stderr.trim() ? `: ${stderr.trim().split("\n").slice(-5).join("\n")}` : ""}`, sessionId: "", costUsd: 0, status: "error" });
+			finish({ text: failureText(agent, `${name} exited with code ${code}${stderr.trim() ? `: ${stderr.trim().split("\n").slice(-5).join("\n")}` : ""}`), sessionId: "", costUsd: 0, status: "error" });
 		});
 	});
 }

@@ -34,6 +34,8 @@ import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
 /** pi session entry type for checkpoints (kept in the session file, not sent to the model). */
 const CHECKPOINT_ENTRY = "piopio.checkpoint";
+/** pi session entry type for auto review's reason on a command it let run (shown on the command's card). */
+const REVIEW_ENTRY = "piopio.review";
 
 export type BuildOpenOptions = {
 	/** Connected apps: their tools, asking through Build's approval prompt before a change. */
@@ -139,7 +141,7 @@ export class BuildRuntime implements Runtime {
 							const command = String(request.input.command ?? "");
 							const verdict = await o.review(command, runtime?.lastUserText(), signal).catch(() => undefined);
 							if (verdict?.verdict === "allow") {
-								runtime?.note("info", `Auto review ran “${command.split("\n")[0]!.slice(0, 80)}”: ${verdict.reason}`);
+								runtime?.reviewed(request.callId, verdict.reason);
 								return { decision: "allow" };
 							}
 							if (verdict) reason = `Auto review: ${verdict.reason}`;
@@ -243,6 +245,14 @@ export class BuildRuntime implements Runtime {
 	}
 
 	/** A note in the transcript (notify_user, extension notifications). */
+	/** Auto review let a command run: its reason goes on the command's card, and stays in the session file. */
+	reviewed(callId: string | undefined, reason: string): void {
+		if (!callId) return;
+		this.session.sessionManager.appendCustomEntry(REVIEW_ENTRY, { callId, reason });
+		this.builder.toolReview(callId, reason);
+		this.emitter.emit(this.builder.flush());
+	}
+
 	note(level: "info" | "warn" | "error", text: string): void {
 		this.builder.system(`sys:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`, level, text);
 		this.emitter.emit(this.builder.flush());
@@ -329,6 +339,11 @@ export class BuildRuntime implements Runtime {
 		const messages = this.session.messages as unknown as PiMessage[];
 		this.builder.reset(messages, (i) => SdkEventMapper.idOf(i), false);
 		for (const entry of this.session.sessionManager.getBranch()) {
+			if (entry.type === "custom" && entry.customType === REVIEW_ENTRY) {
+				const { callId, reason } = entry.data as { callId: string; reason: string };
+				this.builder.toolReview(callId, reason, false);
+				continue;
+			}
 			if (entry.type !== "custom" || entry.customType !== CHECKPOINT_ENTRY) continue;
 			const { beforeCallId, ...item } = entry.data as CheckpointItem & { beforeCallId?: string };
 			this.builder.checkpoint(item, beforeCallId ? `tool:${beforeCallId}` : this.builder.firstAfter(item.at), false);
