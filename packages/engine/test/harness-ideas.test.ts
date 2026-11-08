@@ -96,7 +96,7 @@ describe("the sandbox for Build's commands", () => {
 			expect(tool && tool.kind === "tool" && tool.output).toContain("Operation not permitted");
 			expect(tool && tool.kind === "tool" && tool.output).toContain("outside_project: true");
 
-			// Turned off in Settings › Build: commands run as before.
+			// Turned off in Settings › Approvals: commands run as before.
 			await a.client.call("settings.set", { build: { sandbox: false } });
 			await a.client.call("sessions.submit", { ref: s.ref, input: { text: `$ echo out > ${away}` } });
 			const again = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
@@ -106,6 +106,19 @@ describe("the sandbox for Build's commands", () => {
 		} finally {
 			rmSync(away, { force: true });
 		}
+	}, 30_000);
+
+	test.skipIf(process.platform !== "darwin")("a tool starting its own sandbox is told how to get past it, not to leave Piopio's", async () => {
+		const a = await start();
+		const s = await project(a);
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: `$ /usr/bin/sandbox-exec -p '(version 1)(allow default)' /usr/bin/true` } });
+		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
+		await a.client.call("sessions.respond", { ref: s.ref, promptId: waiting.prompts![0]!.id, response: { decision: "allow" } });
+		await stateWhere(a, s.sub, (st) => st.status === "idle");
+		const tool = ((await a.client.call("sessions.open", { ref: s.ref })) as Snapshot).items.find((i) => i.kind === "tool");
+		const output = tool && tool.kind === "tool" ? tool.output : "";
+		expect(output).toContain("its own macOS sandbox");
+		expect(output).not.toContain("outside_project: true");
 	}, 30_000);
 
 	test("leaving the sandbox always asks, with its own title, even when a rule allows the command", async () => {
