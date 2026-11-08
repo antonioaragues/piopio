@@ -1,11 +1,11 @@
-# 18 · Conversation first: one way to start, projects with or without a folder
+# 18 · Conversation first: one way to start, projects are folders
 
-Status: decided 2026-11-07; **phases 1–3 built 2026-11-07** (§10–§12). The location chip waits for cloud agents (CF7). It changes the start (X10), the Chat lens (C2), notebooks
+Status: decided 2026-11-07; **phases 1–3 built 2026-11-07** (§10–§12); **CF4 revised 2026-11-08: a project is always a folder** (§13). The location chip waits for cloud agents (CF7). It changes the start (X10), the Chat lens (C2), notebooks
 (C3, CQ1, CQ2, AQ13) and areas (15). Those docs stay as history and point here.
 
 **The idea:** you always start the same way, by writing. Where the conversation lives is a chip in the composer, not
-a choice you make before you can type: no project, a project with a folder, or a project without one. Agents keep
-their own section. Notebooks stop being their own kind: a notebook is a project without a folder.
+a choice you make before you can type: no project, or a project. A project is always a folder on the Mac; New project
+makes one in ~/Piopio. Agents keep their own section. Notebooks stop being their own kind: a notebook is a project.
 
 ## 1. Why
 
@@ -33,10 +33,10 @@ their own section. Notebooks stop being their own kind: a notebook is a project 
 | ID | Decision |
 |---|---|
 | CF1 | **One start: "New conversation".** Home is that page: a greeting and the composer, with Needs you, Coming up and Recent below. It replaces the Chat, Project and Notebook start pages and the project "new session" page. The Agent start page stays. |
-| CF2 | **The project is a chip in the composer:** No project, a project with a folder, or a project without one. |
+| CF2 | **The project is a chip in the composer:** No project, or a project (a folder). |
 | CF3 | **Permissions are a chip too**, in conversations with a folder: Read only, Ask, Auto-edit, Full auto, plus Plan. **Read only replaces the Chat lens**, and it's the default for folders of documents. Before you press Return, the composer says where the message goes and whether Piopio may change files. |
-| CF4 | **A notebook is a project without a folder:** shared instructions, memory and files; its conversations are ordinary conversations. The Notebook kind, Main and the organizer's routing go away. |
-| CF5 | **Moving is manual first.** You start where you are and take the conversation to a project later: "Move to" for a project without a folder, "Continue in" for one with a folder. Automatic suggestions ("This looks like Kitchen renovation") wait until a week of use shows conversations left loose by forgetting. Nothing files your messages without asking. |
+| CF4 | **A notebook is a project, and a project is always a folder** (revised 2026-11-08, §13). New project makes a folder in ~/Piopio. Its instructions are AGENTS.md, its shared memory is NOTES.md, its files are the folder's files: plain files you can open in Finder, that pi reads as it always does. The Notebook kind, Main and the organizer's routing go away. Phase 2 first built projects *without* a folder (§11); two kinds under one word confused more than they helped. |
+| CF5 | **Moving is manual first.** You start where you are and take the conversation to a project later with "Continue in": a new conversation in the project's folder, with this one's history (§5). Automatic suggestions ("This looks like Kitchen renovation") wait until a week of use shows conversations left loose by forgetting. Nothing files your messages without asking. |
 | CF6 | **Agents keep their own section and start page.** Later, a conversation can also become an agent ("Turn into an agent"). |
 | CF7 | **Location is a chip once the cloud exists** (This Mac / Cloud). Until then it isn't shown. |
 | CF8 | **No migration of notebooks:** there's no real notebook data (2026-11-07). Existing notebook folders stay on disk but stop showing once phase 2 lands. |
@@ -46,20 +46,19 @@ their own section. Notebooks stop being their own kind: a notebook is a project 
 | Thing | What it is | Runtime (unchanged; never shown) |
 |---|---|---|
 | **Conversation, no project** | Today's chat | pi-durable thread |
-| **Conversation in a project with a folder** | Today's Build session; Read only is today's Chat lens | pi-coding-agent |
-| **Conversation in a project without a folder** | Today's notebook topic, as a plain conversation | pi-durable thread with the project's context |
-| **Project** | A group of conversations with shared context: a name, instructions, memory, files, and an optional folder | — |
+| **Conversation in a project** | Today's Build session; Read only is today's Chat lens | pi-coding-agent |
+| **Project** | A folder and its conversations: instructions in AGENTS.md, shared notes in NOTES.md, its files | — |
 | **Agent** | A conversation that lives on its own: identity, contacts, schedules, channels, memory | pi-durable agent |
 
-Projects with and without a folder:
+A project, whether you opened the folder or New project made it:
 
-| | With a folder | Without a folder |
-|---|---|---|
-| Instructions | AGENTS.md / CLAUDE.md, as pi reads them | Written in the project page |
-| Files | The folder | Files you add (kept in Piopio's data) |
-| Memory | Later (§9) | A built-in memory bank per project, the same provider as agents and About me |
-| Edits, terminal, git, worktrees | Yes, as permissions allow | No |
-| Its conversations | pi-coding-agent sessions | Threads |
+| | |
+|---|---|
+| Instructions | AGENTS.md / CLAUDE.md, as pi reads them. New project writes AGENTS.md from what you type. |
+| Files | The folder |
+| Memory | NOTES.md, when the folder has one: every turn reads it, and the model adds what later conversations need (§13) |
+| Edits, terminal, git, worktrees | As permissions allow. New project's folders start in Auto-edit (so the notes can be kept); folders of documents you open start in Read only. |
+| Its conversations | pi-coding-agent sessions |
 
 Glossary changes (01-product §4):
 - **Thread → Conversation** in the app. The protocol keeps `kind: "thread"`.
@@ -147,11 +146,8 @@ Read only differs from today's Chat lens:
   - Between Ask, Auto-edit, Full auto and Plan: as today.
   - Into or out of Read only: the engine reopens the session with the other tool set, same history (pi session file).
     A note in the transcript says so.
-- **Taking a conversation somewhere else:** manual, from the conversation's project chip (CF5). The verb says what
-  happens:
-  - **Move to <project without a folder>** (phase 2): the same conversation changes project. Same thread, same
-    runtime, all its branches and attachments.
-  - **Continue in <project with a folder>** (phase 1): a new conversation in that folder, because folder
+- **Taking a conversation somewhere else:** manual, from the conversation's folder button or its sidebar menu (CF5):
+  - **Continue in <project>** (phase 1): a new conversation in that folder, because folder
     conversations run on the other runtime. The original stays where it was, and ends with "Continued in …",
     linking to the new one.
     - **What arrives:** the active branch only. User and assistant text, and one line per tool call (tool and
@@ -261,8 +257,7 @@ Acceptance:
 
 ## 9. Open questions
 
-1. **Memory for folder projects:** the same project bank as folder-less ones (recall in Build sessions too), or only
-   AGENTS.md? Proposal: later, once phase 2 shows whether project memory is useful.
+1. **Memory for folder projects:** answered by CF4's revision (§13): NOTES.md, a plain file in the folder.
 2. **Debate inside a project:** today debates take no folder or attachments. It stays that way for now.
 3. **Agents in projects:** should an agent belong to a project and share its memory? Not now.
 
@@ -323,6 +318,10 @@ Acceptance:
   project; a project's `+` or ⌘O preselect it again.
 
 ## 11. Phase 2 as built (2026-11-07)
+
+> **Superseded on 2026-11-08 (§13):** projects without a folder were replaced by folders New project makes. What
+> follows about them (their files in Piopio's data, `projects.addFile`, `sessions.setProject`, the project page, the
+> `piopio-project` extension and its bank) is history. The notebook removal stands.
 
 **Engine:**
 - **Projects without a folder:** `projects.create` makes one, with a name and instructions.
@@ -406,4 +405,43 @@ Acceptance:
 - In Read only, MCP tools in Build sessions always ask, because `readOnlyHint` isn't visible through codemode.
 - Memory for folder projects (§9 Q1).
 - Old notebook data stays in `spaces/`, unread.
+
+## 13. Projects are folders (CF4 revised, 2026-11-08)
+
+**Why:** phase 2 gave the word "project" two kinds. One had a folder, Build sessions and AGENTS.md. The other kept its
+files in Piopio's data, used threads, had its instructions in a page and its memory in a bank. They behaved
+differently, and the same menu said "Move to" for one and "Continue in" for the other. A folder Piopio makes gives the
+same things with nothing new to learn: you can see the files in Finder, edit the instructions in any editor, and the
+pi CLI works there too.
+
+**Engine:**
+- **`projects.create(name, instructions?)`** makes `~/Piopio/<name>` (then `<name> 2`, …; a `/` becomes `-`), with:
+  - `AGENTS.md`: a heading and the instructions (or a comment saying what goes there);
+  - `NOTES.md`: a heading and a comment.
+  It's added as an ordinary project in Auto-edit. A test copy (another `PIOPIO_HOME`) makes them in
+  `<home>/Piopio`; `PIOPIO_PROJECTS_DIR` overrides both.
+- **NOTES.md in every turn:** Build sessions in a folder with a `NOTES.md` get it in the system prompt (up to about
+  1,500 tokens; the rest stays in the file), with the request to add a short line for what later conversations will
+  need, when the session can edit files. Any folder can have one.
+- **Removed:** `projects.addFile`, `projects.removeFile`, `sessions.setProject`, `sessions.create`'s `projectId`,
+  `projects.configure`'s `name` and `instructions`, `ProjectInfo.folder` and `instructions`,
+  `SessionSummary.projectId`, the `piopio-project` extension, `ProjectFiles` and the `project` memory area.
+- **Migration:** a project without a folder in projects.json becomes a folder in ~/Piopio on the next start. Its files
+  move there, its instructions become AGENTS.md, its saved facts are appended to NOTES.md and its bank is wiped.
+  Its conversations stay, as conversations with no project. Old threads reopen without the extension; pi-durable skips
+  extension names it doesn't know.
+
+**App:**
+- **New project** (⇧⌘N, the Projects `+`, Home's target popover, the palette): a name and optional instructions; the
+  sheet says which folder it makes. "Open a Folder Instead…" adds one you have. Once made, Home opens with the new
+  project chosen.
+- **Continue in** replaces "Move to a project": the conversation's folder button and its sidebar menu list the
+  projects, Open Folder… and New Project…, which makes the folder and continues there.
+- **Removed:** the project page, the tray icon, project rows in Settings › Memory, and the folder-less branches on
+  Home (its line, its model role) and in the sidebar.
+- Old conversations still label `read_project_file` and `remember_in_project` calls.
+
+**Not done:**
+- A summary view of NOTES.md in the app; it's a file, opened like any other.
+- Agents don't read a project's NOTES.md (§9 Q3).
 

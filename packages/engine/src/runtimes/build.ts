@@ -17,7 +17,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { approvalsExtension, checkpointsExtension, notifyExtension, planExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge } from "@piopio/pi-extensions";
 import type { ApprovalRule, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage } from "../timeline/builder.js";
@@ -111,6 +112,7 @@ export class BuildRuntime implements Runtime {
 				checkpointsExtension({ snapshot: async (callId) => void (await runtime?.takeCheckpoint(callId)) }),
 				// Before approvals: a server turned off here is refused without asking.
 				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
+				notesExtension(o.cwd),
 				approvalsExtension({
 					mode: o.approvals.mode,
 					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),
@@ -524,6 +526,34 @@ export class BuildRuntime implements Runtime {
 		this.unsubscribe?.();
 		this.session.dispose();
 	}
+}
+
+/** The notes file New project makes (projects.ts). */
+export const NOTES_FILE = "NOTES.md";
+
+/** About 1,500 tokens of notes in every turn; the rest is in the file. */
+const MAX_NOTES = 6_000;
+
+/**
+ * A project's shared notes (docs/spec/18 CF4): when the folder has a NOTES.md, every turn reads it, and the model is
+ * asked to add what later conversations need. A plain file: the user reads and edits it in Finder or any editor.
+ */
+export function notesExtension(cwd: string): ExtensionFactory {
+	const file = join(cwd, NOTES_FILE);
+	return (pi) => {
+		pi.on("before_agent_start", (event) => {
+			let notes: string;
+			try {
+				notes = readFileSync(file, "utf8").trim();
+			} catch {
+				return undefined;
+			}
+			const shown = notes.length > MAX_NOTES ? `${notes.slice(0, MAX_NOTES)}\n\n[… the rest is in ${NOTES_FILE}]` : notes;
+			return {
+				systemPrompt: `${event.systemPrompt}\n\nThis project keeps shared notes in ${NOTES_FILE}, read by every conversation here. When something comes up that later conversations will need (a decision, a number, a date, a preference), add it to ${NOTES_FILE} as one short line, if you can edit files. The notes now:\n\n${shown}`,
+			};
+		});
+	};
 }
 
 /**

@@ -184,11 +184,7 @@ struct RootView: View {
         case .index(.projects):
             ProjectsIndex(engine: engine, item: itemBinding)
         case .project(let id):
-            if let project = engine.projects.first(where: { $0.id == id }), !project.hasFolder {
-                ProjectPage(engine: engine, project: project, item: itemBinding).id(id)
-            } else {
-                ProjectsIndex(engine: engine, item: itemBinding, focus: id)
-            }
+            ProjectsIndex(engine: engine, item: itemBinding, focus: id)
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.chats) where engine.threads.isEmpty:
@@ -372,6 +368,7 @@ private struct StartSheets: ViewModifier {
     @Binding var item: SidebarItem
     @State private var trace: TraceTarget?
     @State private var newProject = false
+    @State private var continuing: ContainerRef?
 
     func body(content: Content) -> some View {
         content
@@ -385,7 +382,8 @@ private struct StartSheets: ViewModifier {
                 if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
             }
             .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in item = .start(.agent) }
-            .onReceive(NotificationCenter.default.publisher(for: .newProject)) { _ in newProject = true }
+            // Its object, when a conversation asked (Continue in › New Project…): continue that one in the new folder.
+            .onReceive(NotificationCenter.default.publisher(for: .newProject)) { note in continuing = note.object as? ContainerRef; newProject = true }
             // File › Turn Conversation into Agent…: the open conversation (docs/spec/18 phase 3).
             .onReceive(NotificationCenter.default.publisher(for: .turnIntoAgent)) { _ in
                 let ref: ContainerRef? = switch item {
@@ -398,7 +396,10 @@ private struct StartSheets: ViewModifier {
             .sheet(isPresented: $newProject) {
                 NewProjectSheet(engine: engine) { project in
                     newProject = false
-                    if let project { item = .project(project.id) }
+                    guard let project else { return }
+                    if let continuing { ContinueInMenu<EmptyView>.continueIn(engine, continuing, project) }
+                    // Home, with the new project chosen in its box: the next step is its first conversation.
+                    else { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
                 }
             }
     }

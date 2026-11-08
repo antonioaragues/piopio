@@ -547,8 +547,6 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public struct Link: Codable, Sendable, Hashable { public var id: String; public var title: String }
     public var continuedIn: Link?
     public var continuedFrom: Link?
-    /// A conversation in a project without a folder (18 §3).
-    public var projectId: String?
     /// Project sessions: "build" (coding) or "chat" (knowledge assistant).
     public enum Profile: String, Codable, Sendable { case build, chat }
     public var profile: Profile?
@@ -1058,10 +1056,8 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var approvalMode: ApprovalMode?
     public var profile: SessionSummary.Profile?
     public var debate: DebateConfig?
-    /// Conversations in a project without a folder (18 §3).
-    public var projectId: String?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, debate: DebateConfig? = nil, projectId: String? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile; self.debate = debate; self.projectId = projectId
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, debate: DebateConfig? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile; self.debate = debate
     }
 }
 
@@ -1564,10 +1560,8 @@ public struct ProjectsConfigureParams: Encodable, Sendable {
     public var removeRule: String?
     public var trust: Bool?
     public var lenses: [ProjectInfo.Lens]?
-    public var name: String?
-    public var instructions: String?
-    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, lenses: [ProjectInfo.Lens]? = nil, name: String? = nil, instructions: String? = nil) {
-        self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust; self.lenses = lenses; self.name = name; self.instructions = instructions
+    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, lenses: [ProjectInfo.Lens]? = nil) {
+        self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust; self.lenses = lenses
     }
 }
 
@@ -1594,7 +1588,7 @@ public struct RenameParams: Encodable, Sendable {
 public struct SecretChangedParams: Encodable, Sendable { public var name: String; public init(name: String) { self.name = name } }
 public struct UnsubscribeParams: Encodable, Sendable { public var subscriptionId: String; public init(subscriptionId: String) { self.subscriptionId = subscriptionId } }
 
-/// A folder added in Build.
+/// A project: a folder on this Mac, opened or made by New project in ~/Piopio (docs/spec/18 CF4).
 public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public var id: String
     public var path: String
@@ -1613,33 +1607,13 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public enum Lens: String, Codable, Sendable { case build, chat }
     public var lenses: [Lens]
     public var missing: Bool?
-    /// False: a project without a folder (docs/spec/18 §3); `path` is where Piopio keeps its files. Absent: a folder.
-    public var folder: Bool?
-    /// Projects without a folder: what every conversation in it is told.
-    public var instructions: String?
-    public var hasFolder: Bool { folder != false }
 }
 
+/// New project: a folder in ~/Piopio with AGENTS.md (`instructions`) and NOTES.md.
 public struct ProjectsCreateParams: Encodable, Sendable {
     public var name: String; public var instructions: String?
     public init(name: String, instructions: String? = nil) { self.name = name; self.instructions = instructions }
 }
-public struct ProjectFileParams: Encodable, Sendable {
-    public var id: String; public var name: String; public var path: String?; public var text: String?; public var extracted: String?
-    public init(id: String, name: String, path: String? = nil, text: String? = nil, extracted: String? = nil) { self.id = id; self.name = name; self.path = path; self.text = text; self.extracted = extracted }
-}
-public struct SetProjectParams: Encodable, Sendable {
-    public var ref: ContainerRef; public var projectId: String?
-    public init(ref: ContainerRef, projectId: String?) { self.ref = ref; self.projectId = projectId }
-    // `projectId: null` takes the conversation out of its project, so it's always sent.
-    enum CodingKeys: String, CodingKey { case ref, projectId }
-    public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(ref, forKey: .ref)
-        if let projectId { try c.encode(projectId, forKey: .projectId) } else { try c.encodeNil(forKey: .projectId) }
-    }
-}
-
 public struct ProjectsChanged: Decodable, Sendable { public var projects: [ProjectInfo] }
 public struct ProjectsListResult: Decodable, Sendable { public var projects: [ProjectInfo] }
 public struct ProjectsAddParams: Encodable, Sendable {

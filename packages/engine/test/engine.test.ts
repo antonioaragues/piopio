@@ -361,64 +361,48 @@ describe("milestone 1.3", () => {
 	});
 });
 
-test("a project without a folder: files, instructions and shared memory across its conversations; move in and out (docs/spec/18 phase 2)", async () => {
+test("New project makes a folder with AGENTS.md and NOTES.md, in Auto-edit (docs/spec/18 CF4)", async () => {
 	const a = await start();
 	const { project } = await a.client.call("projects.create", { name: "Kitchen renovation", instructions: "Answer in metric." });
-	expect(project).toMatchObject({ name: "Kitchen renovation", folder: false, instructions: "Answer in metric." });
-	expect(project.path).toContain(join(a.home, "projects", project.id));
-	await a.client.call("projects.addFile", { id: project.id, name: "budget.md", text: "Kitchen budget: 12k\n" });
-	const src = join(realpathSync(mkdtempSync(join(tmpdir(), "piopio-src-"))), "quote.pdf");
-	writeFileSync(src, "%PDF binary");
-	await a.client.call("projects.addFile", { id: project.id, name: "quote.pdf", path: src, extracted: "Quote: cabinets 4,200" });
-	expect((await a.client.call("projects.listDir", { cwd: project.path, dir: "" })).entries.map((e: { name: string }) => e.name)).toEqual(["budget.md", "quote.pdf"]);
-
-	/** A conversation in the project, after one message; its tool items. */
-	const ask = async (text: string, projectId?: string) => {
-		const { ref } = await a.client.call("sessions.create", { kind: "thread", ...(projectId ? { projectId } : {}) });
-		await a.client.call("sessions.subscribe", { ref });
-		await a.client.call("sessions.submit", { ref, input: { text } });
-		for (let i = 0; i < 300; i++) {
-			const s: Snapshot = await a.client.call("sessions.open", { ref });
-			if (s.state.status === "idle" && s.items.at(-1)?.kind === "assistant") return { ref, tools: s.items.flatMap((x) => (x.kind === "tool" ? [x] : [])) };
-			await new Promise((r) => setTimeout(r, 30));
-		}
-		throw new Error("no answer");
-	};
-	const one = await ask('call: read_project_file | {"name":"quote.pdf"}\ncall: remember_in_project | {"fact":"The sink moves 40 cm left."}', project.id);
-	expect(one.tools.map((t) => `${t.tool}:${t.status}`)).toEqual(["read_project_file:done", "remember_in_project:done"]);
-	expect(one.tools[0]!.output).toContain("Quote: cabinets 4,200");
-	const two = await ask('call: read_project_file | {"name":"budget.md"}', project.id);
-	expect(two.tools[0]!.output).toContain("Kitchen budget: 12k");
-	// What one saved is the project's: its bank, under the project's name in Settings › Memory.
-	const banks = (await a.client.call("memory.banks", {})).banks as { bank: string; label: string; area: string; facts: number }[];
-	expect(banks.find((b) => b.bank === `project:${project.id}`)).toMatchObject({ label: "Kitchen renovation", area: "project", facts: 1 });
-	const listed = (await a.client.call("sessions.list", { kind: "thread" })).sessions as { ref: { id: string }; projectId?: string }[];
-	expect(listed.filter((x) => x.projectId === project.id).length).toBe(2);
-
-	// A loose chat has no project tools; moved in, it has them and keeps its history; moved out, they go.
-	const loose = await ask('call: read_project_file | {"name":"budget.md"}');
-	expect(loose.tools).toEqual([]); // not offered outside a project
-	await a.client.call("sessions.setProject", { ref: loose.ref, projectId: project.id });
-	await a.client.call("sessions.submit", { ref: loose.ref, input: { text: 'call: read_project_file | {"name":"budget.md"}' } });
-	let snap: Snapshot = await a.client.call("sessions.open", { ref: loose.ref });
-	for (let i = 0; i < 300 && !(snap.state.status === "idle" && snap.items.filter((x) => x.kind === "assistant").length === 2); i++) {
-		await new Promise((r) => setTimeout(r, 30));
-		snap = await a.client.call("sessions.open", { ref: loose.ref });
-	}
-	const tools = snap.items.flatMap((x) => (x.kind === "tool" ? [x] : []));
-	expect(tools.map((t) => `${t.tool}:${t.status}`)).toEqual(["read_project_file:done"]);
-	expect(tools[0]!.output).toContain("Kitchen budget: 12k");
-	expect(snap.items.filter((x) => x.kind === "user").length).toBe(2);
-	await expect(a.client.call("sessions.setProject", { ref: loose.ref, projectId: "prj_nope" })).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
-
-	// Removing the project: its conversations stay, with no project; its files and memory go.
+	expect(project).toMatchObject({ name: "Kitchen renovation", approvalMode: "auto_edit", contextFile: "AGENTS.md" });
+	expect(project.path).toBe(join(realpathSync(a.home), "Piopio", "Kitchen renovation"));
+	expect(readFileSync(join(project.path, "AGENTS.md"), "utf8")).toBe("# Kitchen renovation\n\nAnswer in metric.\n");
+	expect(readFileSync(join(project.path, "NOTES.md"), "utf8")).toContain("# Notes");
+	// The same name again is a folder of its own; a name with a slash still makes one folder.
+	expect((await a.client.call("projects.create", { name: "Kitchen renovation" })).project.name).toBe("Kitchen renovation 2");
+	expect((await a.client.call("projects.create", { name: "Q3/Q4 plan" })).project.name).toBe("Q3-Q4 plan");
+	// Its conversations run in the folder; removing the project leaves the folder.
+	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: project.path });
+	expect(((await a.client.call("sessions.list", { kind: "build" })).sessions as { ref: { id: string }; approvalMode?: string }[]).find((x) => x.ref.id === ref.id)?.approvalMode).toBe("auto_edit");
 	await a.client.call("projects.remove", { id: project.id });
-	const after = (await a.client.call("sessions.list", { kind: "thread" })).sessions as { projectId?: string }[];
-	expect(after.length).toBe(3);
-	expect(after.some((x) => x.projectId)).toBe(false);
-	expect(existsSync(join(a.home, "projects", project.id))).toBe(false);
-	expect(((await a.client.call("memory.banks", {})).banks as { bank: string }[]).some((b) => b.bank === `project:${project.id}`)).toBe(false);
-}, 30_000);
+	expect(existsSync(join(project.path, "NOTES.md"))).toBe(true);
+});
+
+test("a project without a folder (before CF4) becomes a folder: its files, instructions and memory (docs/spec/18 CF4)", async () => {
+	const home = mkdtempSync(join(tmpdir(), "piopio-test-"));
+	const first = await start(home);
+	await first.client.call("memory.add", { provider: "builtin", bank: "project:prj_old", text: "The sink moves 40 cm left." });
+	await stop(first);
+	const files = join(home, "projects", "prj_old", "files");
+	mkdirSync(files, { recursive: true });
+	writeFileSync(join(files, "budget.md"), "Kitchen budget: 12k\n");
+	writeFileSync(join(home, "projects.json"), JSON.stringify([{ id: "prj_old", path: files, name: "Kitchen", addedAt: "2026-11-07T10:00:00.000Z", folder: false, instructions: "Answer in metric." }]));
+	writeFileSync(join(home, "sessions.json"), JSON.stringify([{ ref: { kind: "thread", id: "thr_old" }, title: "Sink", createdAt: "2026-11-07T10:00:00.000Z", updatedAt: "2026-11-07T10:00:00.000Z", model: { provider: "faux", id: "faux-1" }, file: join(home, "threads", "thr_old.sqlite"), projectId: "prj_old" }]));
+	const a = await start(home);
+	const [project] = (await a.client.call("projects.list", {})).projects;
+	expect(project).toMatchObject({ id: "prj_old", name: "Kitchen", approvalMode: "auto_edit" });
+	expect(project.path).toBe(join(realpathSync(home), "Piopio", "Kitchen"));
+	expect(readFileSync(join(project.path, "budget.md"), "utf8")).toBe("Kitchen budget: 12k\n");
+	expect(readFileSync(join(project.path, "AGENTS.md"), "utf8")).toContain("Answer in metric.");
+	expect(existsSync(join(home, "projects", "prj_old"))).toBe(false);
+	for (let i = 0; i < 100 && !readFileSync(join(project.path, "NOTES.md"), "utf8").includes("sink"); i++) await new Promise((r) => setTimeout(r, 30));
+	expect(readFileSync(join(project.path, "NOTES.md"), "utf8")).toContain("- The sink moves 40 cm left.");
+	expect(((await a.client.call("memory.banks", {})).banks as { bank: string }[]).some((b) => b.bank === "project:prj_old")).toBe(false);
+	// Its conversation stays, as a conversation.
+	const [thread] = (await a.client.call("sessions.list", { kind: "thread" })).sessions as { title: string; projectId?: string }[];
+	expect(thread).toMatchObject({ title: "Sink" });
+	expect(thread!.projectId).toBeUndefined();
+});
 
 test("turn into an agent: a draft from the conversation, with the schedule it said (docs/spec/18 phase 3)", async () => {
 	const a = await start();

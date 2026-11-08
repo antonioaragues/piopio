@@ -94,7 +94,7 @@ struct HomeView: View {
     private func kind(_ s: SessionSummary) -> String {
         switch s.ref.kind {
         case .build: engine.project(of: s)?.name ?? "Session"
-        default: s.debate != nil ? "Debate" : s.projectId.flatMap { id in engine.projects.first { $0.id == id }?.name } ?? "Chat"
+        default: s.debate != nil ? "Debate" : "Chat"
         }
     }
 
@@ -227,7 +227,7 @@ struct AskBox: View {
                 // the model and send on the right, so the box reads the same before and after it starts.
                 HStack(spacing: 2) {
                     if agent == nil { AttachButton(pick: attach, help: "Add files, photos or PDFs (⌘U)") }
-                    if let project, project.hasFolder {
+                    if project != nil {
                         if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
                     }
                     Spacer(minLength: 6)
@@ -235,7 +235,7 @@ struct AskBox: View {
                         Button { showModels = true } label: { Text(modelLabel) }
                             .buttonStyle(ComposerChipStyle())
                             .popover(isPresented: $showModels, arrowEdge: .bottom) {
-                                ModelPicker(engine: engine, selected: model ?? defaultModel, role: project?.hasFolder == true ? .build : .chat) { m in model = m; showModels = false }
+                                ModelPicker(engine: engine, selected: model ?? defaultModel, role: project != nil ? .build : .chat) { m in model = m; showModels = false }
                             }
                     }
                     SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: send)
@@ -277,7 +277,7 @@ struct AskBox: View {
     private var targetMenu: some View {
         Button { picking = true } label: {
             HStack(spacing: 5) {
-                Image(systemName: project.map { $0.hasFolder ? "folder" : "tray.full" } ?? (agent != nil ? "person.crop.circle" : "bubble.left")).font(.system(size: 11))
+                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : "bubble.left").font(.system(size: 11))
                 Text(targetLabel)
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
             }
@@ -286,7 +286,7 @@ struct AskBox: View {
         .help("Where this goes: no project, a project, or an agent")
         .accessibilityLabel("Where this goes: \(targetLabel)")
         .popover(isPresented: $picking, arrowEdge: .bottom) {
-            TargetPicker(engine: engine, recent: recent, current: target, workOn: project?.hasFolder == true && project?.branch != nil ? $workOn : nil) { choice in
+            TargetPicker(engine: engine, recent: recent, current: target, workOn: project?.branch != nil ? $workOn : nil) { choice in
                 picking = false
                 switch choice {
                 case .target(let t): target = t
@@ -328,8 +328,6 @@ struct AskBox: View {
     /// "In piopio · can edit files; asks before commands"; nothing with no project (it can't touch files).
     private var whereLine: String? {
         guard let project else { return nil }
-        // A project without a folder: its files and memory, no files of yours to change (docs/spec/18 §3).
-        guard project.hasFolder else { return "In \(project.name) · reads its files and shares what it remembers with its other conversations" }
         let place = switch workOn {
         case .folder: ""
         case .branch: " · on a new branch"
@@ -350,7 +348,7 @@ struct AskBox: View {
         return "Send"
     }
 
-    private var defaultModel: ModelRef? { project?.hasFolder == true ? engine.model(for: .build) : engine.preferredModel }
+    private var defaultModel: ModelRef? { project != nil ? engine.model(for: .build) : engine.preferredModel }
 
     /// As the conversation's model chip says it (ModelChip.label).
     private var modelLabel: String {
@@ -433,9 +431,7 @@ struct AskBox: View {
         sendError = nil
         switch target {
         case .chat:
-            sendConversation(message, projectId: nil)
-        case .project where project?.hasFolder == false:
-            sendConversation(message, projectId: project?.id)
+            sendConversation(message)
         case .project:
             guard let project else { sendError = "Choose an available project folder."; return }
             sending = true
@@ -483,13 +479,13 @@ struct AskBox: View {
         }
     }
 
-    /// A conversation with no project, or in a project without a folder (a thread with its context).
-    private func sendConversation(_ message: String, projectId: String?) {
+    /// A conversation with no project.
+    private func sendConversation(_ message: String) {
         sending = true
         Task {
             defer { sending = false }
             let destination: ContainerRef?
-            if let pendingChat { destination = pendingChat } else { destination = await engine.createThread(model: model, projectId: projectId) }
+            if let pendingChat { destination = pendingChat } else { destination = await engine.createThread(model: model) }
             guard let ref = destination else {
                 sendError = "Couldn't start a conversation. Your draft is saved; try again when the engine is connected."
                 return
@@ -508,7 +504,7 @@ struct AskBox: View {
     }
 }
 
-/// The target popover (docs/spec/18 §4): search, then No project, projects (with and without a folder), folders on
+/// The target popover (docs/spec/18 §4): search, then No project, projects, folders on
 /// this Mac, Open folder…, New project…, where a git project works, and agents to message.
 struct TargetPicker: View {
     enum Choice { case target(AskBox.Target), folder(URL), openFolder, newProject }
@@ -540,7 +536,7 @@ struct TargetPicker: View {
                     if !projects.isEmpty {
                         header("Projects")
                         ForEach(projects) { p in
-                            row(p.name, symbol: p.hasFolder ? "folder" : "tray.full", on: current == .project(p.id)) { choose(.target(.project(p.id))) }
+                            row(p.name, symbol: "folder", on: current == .project(p.id)) { choose(.target(.project(p.id))) }
                         }
                     }
                     if !folders.isEmpty {

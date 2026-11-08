@@ -231,18 +231,14 @@ enum DebugAutomation {
                 if env["PIOPIO_DEMO_INBOX"] == "1" { NotificationCenter.default.post(name: .openInbox, object: nil) }
             }
         }
-        // PIOPIO_DEMO_NOTES_PROJECT=<name>: a project without a folder (docs/spec/18 §3), with PIOPIO_DEMO_NOTES_INSTRUCTIONS
-        // and the files in PIOPIO_DEMO_NOTES_FILES ("|" between paths); then its page opens.
-        if let name = env["PIOPIO_DEMO_NOTES_PROJECT"], engine.status == .ready {
+        // PIOPIO_DEMO_NEW_PROJECT=<name>: New project (a folder in ~/Piopio with AGENTS.md and NOTES.md, docs/spec/18 CF4),
+        // with PIOPIO_DEMO_NEW_PROJECT_INSTRUCTIONS; then Home, with it chosen.
+        if let name = env["PIOPIO_DEMO_NEW_PROJECT"], engine.status == .ready {
             Task {
-                let instructions = env["PIOPIO_DEMO_NOTES_INSTRUCTIONS"]
-                var found = engine.projects.first { $0.name == name && !$0.hasFolder }
-                if found == nil { found = try? await engine.createProject(name: name, instructions: instructions) }
+                var found = engine.projects.first { $0.name == name }
+                if found == nil { found = try? await engine.createProject(name: name, instructions: env["PIOPIO_DEMO_NEW_PROJECT_INSTRUCTIONS"]) }
                 guard let project = found else { return }
-                for path in (env["PIOPIO_DEMO_NOTES_FILES"] ?? "").split(separator: "|") {
-                    try? await engine.addProjectFile(project, url: URL(fileURLWithPath: String(path)))
-                }
-                NotificationCenter.default.post(name: .selectItem, object: SidebarItem.project(project.id).raw)
+                NotificationCenter.default.post(name: .newBuildSession, object: project.id)
             }
         }
         // PIOPIO_DEMO_CHAT_PROJECT: add this folder in Chat and open a chat-profile session; PIOPIO_DEMO_PREVIEW=<path>

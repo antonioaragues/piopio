@@ -13,7 +13,6 @@ import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
 import { attachmentsDir, copyAttachments, deleteAttachments } from "./attachment-files.js";
-import { projectExtension, type ProjectContext } from "./project-context.js";
 import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
@@ -117,6 +116,8 @@ export class Sessions {
 				if (e.ref.kind === "build" && e.profile === "chat") e.approvalMode = "read_only";
 				// Notebooks are gone (docs/spec/18 CF8): their files stay in spaces/, they no longer show.
 				if ((e.ref.kind as string) === "space") continue;
+				// Projects without a folder are folders now (CF4); their conversations stay, as conversations.
+				delete (e as { projectId?: string }).projectId;
 				this.entries.set(e.ref.id, e);
 			}
 		}
@@ -346,11 +347,9 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; debate?: DebateConfig; projectId?: string }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; debate?: DebateConfig }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.planMode && params.kind !== "build") throw new EngineError("INVALID", "Only folder conversations support Plan mode.");
-		if (params.projectId && params.kind !== "thread") throw new EngineError("INVALID", "Only conversations without a folder go in a project this way.");
-		if (params.projectId) this.projectWithoutFolder(params.projectId);
 		if (params.debate && params.kind !== "thread") throw new EngineError("INVALID", "Only threads can be debates.");
 		if (params.debate) validateDebate(params.debate, this.hub);
 		const author = params.debate?.participants.find((p) => p.role === "author");
@@ -382,7 +381,7 @@ export class Sessions {
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.planMode ? { planMode: true } : {}),
 			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
-			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`), ...(params.projectId ? { projectId: params.projectId } : {}) } : {}),
+			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
 			...(params.debate ? { debate: { config: params.debate, status: "running" as const, maxRounds: params.debate.maxRounds, endings: [] } } : {}),
 		};
 		this.entries.set(ref.id, entry);
@@ -444,47 +443,6 @@ export class Sessions {
 		entry.updatedAt = new Date().toISOString();
 		this.save();
 		this.changed(entry);
-	}
-
-	// ── Projects without a folder (docs/spec/18 §3) ──────────────────────────
-
-	/** The projects (set by the engine): conversations in a project without a folder read its context. */
-	projects?: { get(id: string): ProjectInfo | undefined };
-
-	private projectWithoutFolder(id: string): ProjectInfo {
-		const project = this.projects?.get(id);
-		if (!project) throw new EngineError("NOT_FOUND", `No project ${id}`);
-		if (project.folder) throw new EngineError("INVALID", `${project.name} is a folder: continue the conversation there instead.`);
-		return project;
-	}
-
-	/** The project context a thread reads now (its project can change while it's open). */
-	private projectContext(entry: CatalogEntry): ProjectContext | undefined {
-		const project = entry.projectId ? this.projects?.get(entry.projectId) : undefined;
-		const memory = this.agentHost?.memory.builtin;
-		return project && !project.folder && memory ? { project, memory } : undefined;
-	}
-
-	/** Moves a conversation into a project without a folder, or out of one (`null`): same thread, same history. */
-	async setProject(ref: ContainerRef, projectId: string | null): Promise<void> {
-		const entry = this.entry(ref);
-		if (entry.ref.kind !== "thread") throw new EngineError("INVALID", "Only conversations without a folder move this way; folder conversations stay in their folder.");
-		if (entry.debate) throw new EngineError("INVALID", "Debates don't go in projects yet.");
-		if (projectId) this.projectWithoutFolder(projectId);
-		if (projectId) entry.projectId = projectId;
-		else delete entry.projectId;
-		entry.updatedAt = new Date().toISOString();
-		if (this.open.has(ref.id)) {
-			const runtime = await this.runtime(ref);
-			if (runtime instanceof ThreadRuntime) await runtime.projectChanged();
-		}
-		this.save();
-		this.changed(entry);
-	}
-
-	/** A project was removed: its conversations stay, with no project. */
-	async projectRemoved(id: string): Promise<void> {
-		for (const entry of [...this.entries.values()].filter((e) => e.projectId === id)) await this.setProject(entry.ref, null);
 	}
 
 	// ── Turn into an agent (docs/spec/18 phase 3) ────────────────────────────
@@ -1256,7 +1214,6 @@ export class Sessions {
 				...this.chatExtras("thread"),
 				...(this.connectors ? { connectors: this.connectors } : {}),
 				toolsOff: () => entry.toolsOff ?? [],
-				...(entry.debate ? {} : { project: { extension: projectExtension(() => this.projectContext(entry)) as unknown as Extension, active: () => Boolean(this.projectContext(entry)) } }),
 			});
 		}
 		const runtime = await BuildRuntime.open({

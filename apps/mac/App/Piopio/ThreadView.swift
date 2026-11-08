@@ -134,49 +134,12 @@ struct ThreadView: View {
         .background(Color.dsChip.opacity(0.5))
     }
 
-    /// Where this conversation goes (18 §5): into a project without a folder (the same conversation moves), out of
-    /// it, or on in a project folder (a new conversation there with this one's history).
+    /// Continue in a project (18 §5): a new conversation in its folder, with this one's history.
     private var moveMenu: some View {
-        let current = summary.projectId.flatMap { id in engine.projects.first { $0.id == id } }
-        return Menu {
-            Section("Move to a project") {
-                ForEach(engine.projects.filter { !$0.hasFolder }) { project in
-                    Button { run { try await engine.setProject(summary.ref, project: project) } } label: {
-                        if current?.id == project.id { Label(project.name, systemImage: "checkmark") } else { Text(project.name) }
-                    }
-                }
-                if current != nil { Button("No Project") { run { try await engine.setProject(summary.ref, project: nil) } } }
-                Button("New Project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
-            }
-            Section("Continue in a folder") {
-                ForEach(engine.projects.filter { $0.hasFolder && $0.missing != true }) { project in
-                    Button(project.name) { continueIn(project) }
-                }
-                Button("Open Folder…") {
-                    let panel = NSOpenPanel()
-                    panel.canChooseDirectories = true
-                    panel.canChooseFiles = false
-                    panel.prompt = "Continue Here"
-                    guard panel.runModal() == .OK, let url = panel.url else { return }
-                    Task { if let project = await engine.addProject(url) { continueIn(project) } }
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: current == nil ? "folder" : "tray.full")
-                if let current { Text(current.name).font(.system(size: 12.5)) }
-            }
-        }
+        ContinueInMenu(engine: engine, ref: summary.ref) { Image(systemName: "folder") }
             .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-            .accessibilityLabel(current.map { "In \($0.name). Move to a project" } ?? "Move to a project")
-            .help(current == nil ? "Move to a project (same conversation), or continue in a project folder" : "In \(current!.name): move to another project, out of it, or continue in a folder")
-    }
-
-    private func continueIn(_ project: ProjectInfo) {
-        run {
-            let next = try await engine.continueIn(summary.ref, project: project)
-            NotificationCenter.default.post(name: .selectBuildSession, object: next.id)
-        }
+            .accessibilityLabel("Continue in a project")
+            .help("Continue in a project: a new conversation in its folder, with this one's history")
     }
 
     /// Debates: stop it while it runs, add rounds once it ended, and show or hide the draft panel.
@@ -193,7 +156,7 @@ struct ThreadView: View {
 
     private var subtitle: String {
         if let debate = thread.debate { return debateSubtitle(debate) }
-        let place = summary.projectId.flatMap { id in engine.projects.first { $0.id == id }?.name } ?? "Chat"
+        let place = "Chat"
         var parts = [place, BuildSessionView.relative(summary.updatedAt)]
         let files = thread.attachmentCount
         if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }

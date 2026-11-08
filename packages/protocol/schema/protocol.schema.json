@@ -1723,6 +1723,10 @@
 					"anyOf": [
 						{
 							"type": "string",
+							"const": "read_only"
+						},
+						{
+							"type": "string",
 							"const": "ask"
 						},
 						{
@@ -7081,6 +7085,10 @@
 									"anyOf": [
 										{
 											"type": "string",
+											"const": "read_only"
+										},
+										{
+											"type": "string",
 											"const": "ask"
 										},
 										{
@@ -9252,6 +9260,10 @@
 											"anyOf": [
 												{
 													"type": "string",
+													"const": "read_only"
+												},
+												{
+													"type": "string",
 													"const": "ask"
 												},
 												{
@@ -11416,6 +11428,10 @@
 							"anyOf": [
 								{
 									"type": "string",
+									"const": "read_only"
+								},
+								{
+									"type": "string",
 									"const": "ask"
 								},
 								{
@@ -11973,109 +11989,32 @@
 						}
 					}
 				},
-				"topics": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"title",
-							"lastActiveAt"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"title": {
-								"type": "string"
-							},
-							"brief": {
-								"type": "string"
-							},
-							"summary": {
-								"type": "string"
-							},
-							"lastActiveAt": {
-								"type": "string"
-							},
-							"archived": {
-								"type": "boolean"
-							},
-							"unread": {
-								"type": "boolean"
-							},
-							"running": {
-								"type": "boolean"
-							}
+				"continuedIn": {
+					"type": "object",
+					"required": [
+						"id",
+						"title"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"title": {
+							"type": "string"
 						}
 					}
 				},
-				"instructions": {
-					"type": "string"
-				},
-				"space": {
+				"continuedFrom": {
 					"type": "object",
 					"required": [
-						"costUsd",
-						"files",
-						"memoryLines",
-						"memory",
-						"autoTidy"
+						"id",
+						"title"
 					],
 					"properties": {
-						"costUsd": {
-							"type": "number"
-						},
-						"files": {
-							"type": "number"
-						},
-						"memoryLines": {
-							"type": "number"
-						},
-						"organizerModel": {
-							"type": "object",
-							"required": [
-								"provider",
-								"id"
-							],
-							"properties": {
-								"provider": {
-									"type": "string"
-								},
-								"id": {
-									"type": "string"
-								}
-							}
-						},
-						"memory": {
-							"type": "boolean"
-						},
-						"autoTidy": {
-							"type": "boolean"
-						}
-					}
-				},
-				"suggestion": {
-					"type": "object",
-					"required": [
-						"spaceId",
-						"spaceTitle",
-						"reason"
-					],
-					"properties": {
-						"spaceId": {
+						"id": {
 							"type": "string"
 						},
-						"spaceTitle": {
-							"type": "string"
-						},
-						"topicId": {
-							"type": "string"
-						},
-						"topicTitle": {
-							"type": "string"
-						},
-						"reason": {
+						"title": {
 							"type": "string"
 						}
 					}
@@ -17170,6 +17109,10 @@
 												"anyOf": [
 													{
 														"type": "string",
+														"const": "read_only"
+													},
+													{
+														"type": "string",
 														"const": "ask"
 													},
 													{
@@ -19341,6 +19284,10 @@
 														"anyOf": [
 															{
 																"type": "string",
+																"const": "read_only"
+															},
+															{
+																"type": "string",
 																"const": "ask"
 															},
 															{
@@ -19987,109 +19934,32 @@
 									}
 								}
 							},
-							"topics": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"required": [
-										"id",
-										"title",
-										"lastActiveAt"
-									],
-									"properties": {
-										"id": {
-											"type": "string"
-										},
-										"title": {
-											"type": "string"
-										},
-										"brief": {
-											"type": "string"
-										},
-										"summary": {
-											"type": "string"
-										},
-										"lastActiveAt": {
-											"type": "string"
-										},
-										"archived": {
-											"type": "boolean"
-										},
-										"unread": {
-											"type": "boolean"
-										},
-										"running": {
-											"type": "boolean"
-										}
+							"continuedIn": {
+								"type": "object",
+								"required": [
+									"id",
+									"title"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
 									}
 								}
 							},
-							"instructions": {
-								"type": "string"
-							},
-							"space": {
+							"continuedFrom": {
 								"type": "object",
 								"required": [
-									"costUsd",
-									"files",
-									"memoryLines",
-									"memory",
-									"autoTidy"
+									"id",
+									"title"
 								],
 								"properties": {
-									"costUsd": {
-										"type": "number"
-									},
-									"files": {
-										"type": "number"
-									},
-									"memoryLines": {
-										"type": "number"
-									},
-									"organizerModel": {
-										"type": "object",
-										"required": [
-											"provider",
-											"id"
-										],
-										"properties": {
-											"provider": {
-												"type": "string"
-											},
-											"id": {
-												"type": "string"
-											}
-										}
-									},
-									"memory": {
-										"type": "boolean"
-									},
-									"autoTidy": {
-										"type": "boolean"
-									}
-								}
-							},
-							"suggestion": {
-								"type": "object",
-								"required": [
-									"spaceId",
-									"spaceTitle",
-									"reason"
-								],
-								"properties": {
-									"spaceId": {
+									"id": {
 										"type": "string"
 									},
-									"spaceTitle": {
-										"type": "string"
-									},
-									"topicId": {
-										"type": "string"
-									},
-									"topicTitle": {
-										"type": "string"
-									},
-									"reason": {
+									"title": {
 										"type": "string"
 									}
 								}
@@ -20570,109 +20440,32 @@
 									}
 								}
 							},
-							"topics": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"required": [
-										"id",
-										"title",
-										"lastActiveAt"
-									],
-									"properties": {
-										"id": {
-											"type": "string"
-										},
-										"title": {
-											"type": "string"
-										},
-										"brief": {
-											"type": "string"
-										},
-										"summary": {
-											"type": "string"
-										},
-										"lastActiveAt": {
-											"type": "string"
-										},
-										"archived": {
-											"type": "boolean"
-										},
-										"unread": {
-											"type": "boolean"
-										},
-										"running": {
-											"type": "boolean"
-										}
+							"continuedIn": {
+								"type": "object",
+								"required": [
+									"id",
+									"title"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
 									}
 								}
 							},
-							"instructions": {
-								"type": "string"
-							},
-							"space": {
+							"continuedFrom": {
 								"type": "object",
 								"required": [
-									"costUsd",
-									"files",
-									"memoryLines",
-									"memory",
-									"autoTidy"
+									"id",
+									"title"
 								],
 								"properties": {
-									"costUsd": {
-										"type": "number"
-									},
-									"files": {
-										"type": "number"
-									},
-									"memoryLines": {
-										"type": "number"
-									},
-									"organizerModel": {
-										"type": "object",
-										"required": [
-											"provider",
-											"id"
-										],
-										"properties": {
-											"provider": {
-												"type": "string"
-											},
-											"id": {
-												"type": "string"
-											}
-										}
-									},
-									"memory": {
-										"type": "boolean"
-									},
-									"autoTidy": {
-										"type": "boolean"
-									}
-								}
-							},
-							"suggestion": {
-								"type": "object",
-								"required": [
-									"spaceId",
-									"spaceTitle",
-									"reason"
-								],
-								"properties": {
-									"spaceId": {
+									"id": {
 										"type": "string"
 									},
-									"spaceTitle": {
-										"type": "string"
-									},
-									"topicId": {
-										"type": "string"
-									},
-									"topicTitle": {
-										"type": "string"
-									},
-									"reason": {
+									"title": {
 										"type": "string"
 									}
 								}
@@ -20823,6 +20616,116 @@
 				}
 			}
 		},
+		"sessions.continueIn.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"cwd"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"cwd": {
+					"type": "string"
+				},
+				"approvalMode": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "read_only"
+						},
+						{
+							"type": "string",
+							"const": "ask"
+						},
+						{
+							"type": "string",
+							"const": "auto_edit"
+						},
+						{
+							"type": "string",
+							"const": "full_auto"
+						}
+					]
+				}
+			}
+		},
+		"sessions.continueIn.result": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
 		"sessions.create.params": {
 			"type": "object",
 			"required": [
@@ -20838,17 +20741,10 @@
 						{
 							"type": "string",
 							"const": "build"
-						},
-						{
-							"type": "string",
-							"const": "space"
 						}
 					]
 				},
 				"cwd": {
-					"type": "string"
-				},
-				"instructions": {
 					"type": "string"
 				},
 				"workOn": {
@@ -20921,6 +20817,10 @@
 					"anyOf": [
 						{
 							"type": "string",
+							"const": "read_only"
+						},
+						{
+							"type": "string",
 							"const": "ask"
 						},
 						{
@@ -20932,6 +20832,9 @@
 							"const": "full_auto"
 						}
 					]
+				},
+				"planMode": {
+					"type": "boolean"
 				},
 				"model": {
 					"type": "object",
@@ -22840,6 +22743,10 @@
 						},
 						"approvalMode": {
 							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
 								{
 									"type": "string",
 									"const": "ask"
@@ -25058,6 +24965,10 @@
 									"anyOf": [
 										{
 											"type": "string",
+											"const": "read_only"
+										},
+										{
+											"type": "string",
 											"const": "ask"
 										},
 										{
@@ -26299,6 +26210,10 @@
 					"anyOf": [
 						{
 							"type": "string",
+							"const": "read_only"
+						},
+						{
+							"type": "string",
 							"const": "ask"
 						},
 						{
@@ -26715,6 +26630,24 @@
 							"type": "null"
 						}
 					]
+				}
+			}
+		},
+		"models.onDevice.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"models.onDevice.result": {
+			"type": "object",
+			"required": [
+				"available"
+			],
+			"properties": {
+				"available": {
+					"type": "boolean"
+				},
+				"reason": {
+					"type": "string"
 				}
 			}
 		},
@@ -27952,6 +27885,10 @@
 								"anyOf": [
 									{
 										"type": "string",
+										"const": "read_only"
+									},
+									{
+										"type": "string",
 										"const": "ask"
 									},
 									{
@@ -28045,6 +27982,232 @@
 				}
 			}
 		},
+		"projects.create.params": {
+			"type": "object",
+			"required": [
+				"name"
+			],
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1
+				},
+				"instructions": {
+					"type": "string"
+				}
+			}
+		},
+		"projects.create.result": {
+			"type": "object",
+			"required": [
+				"project"
+			],
+			"properties": {
+				"project": {
+					"type": "object",
+					"required": [
+						"id",
+						"path",
+						"name",
+						"addedAt",
+						"piConfig",
+						"approvalMode",
+						"rules",
+						"trust",
+						"needsTrust",
+						"lenses"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"path": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"addedAt": {
+							"type": "string"
+						},
+						"branch": {
+							"type": "string"
+						},
+						"contextFile": {
+							"type": "string"
+						},
+						"piConfig": {
+							"type": "boolean"
+						},
+						"approvalMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"rules": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"kind",
+									"pattern",
+									"createdAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "command"
+											},
+											{
+												"type": "string",
+												"const": "tool"
+											},
+											{
+												"type": "string",
+												"const": "path"
+											}
+										]
+									},
+									"pattern": {
+										"type": "string"
+									},
+									"createdAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"trust": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "trusted"
+								},
+								{
+									"type": "string",
+									"const": "untrusted"
+								},
+								{
+									"type": "string",
+									"const": "undecided"
+								}
+							]
+						},
+						"needsTrust": {
+							"type": "boolean"
+						},
+						"lenses": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "build"
+									},
+									{
+										"type": "string",
+										"const": "chat"
+									}
+								]
+							}
+						},
+						"missing": {
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
+		"sessions.agentDraft.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.agentDraft.result": {
+			"type": "object",
+			"required": [
+				"name",
+				"instructions",
+				"schedule"
+			],
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"instructions": {
+					"type": "string"
+				},
+				"schedule": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					]
+				}
+			}
+		},
 		"projects.add.params": {
 			"type": "object",
 			"required": [
@@ -28112,6 +28275,10 @@
 						},
 						"approvalMode": {
 							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
 								{
 									"type": "string",
 									"const": "ask"
@@ -28219,6 +28386,10 @@
 					"anyOf": [
 						{
 							"type": "string",
+							"const": "read_only"
+						},
+						{
+							"type": "string",
 							"const": "ask"
 						},
 						{
@@ -28305,6 +28476,10 @@
 						},
 						"approvalMode": {
 							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
 								{
 									"type": "string",
 									"const": "ask"
@@ -29156,6 +29331,9 @@
 								]
 							},
 							"hint": {
+								"type": "string"
+							},
+							"source": {
 								"type": "string"
 							}
 						}
@@ -30200,917 +30378,6 @@
 			"type": "object",
 			"properties": {}
 		},
-		"spaces.reroute.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"itemId"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"itemId": {
-					"type": "string"
-				},
-				"toTopicId": {
-					"type": "string"
-				},
-				"newTopic": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.reroute.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.markRead.params": {
-			"type": "object",
-			"required": [
-				"ref"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"spaces.markRead.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.configure.params": {
-			"type": "object",
-			"required": [
-				"ref"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"instructions": {
-					"type": "string"
-				},
-				"organizerModel": {
-					"type": "object",
-					"required": [
-						"provider",
-						"id"
-					],
-					"properties": {
-						"provider": {
-							"type": "string"
-						},
-						"id": {
-							"type": "string"
-						}
-					}
-				},
-				"topicModel": {
-					"type": "object",
-					"required": [
-						"provider",
-						"id"
-					],
-					"properties": {
-						"provider": {
-							"type": "string"
-						},
-						"id": {
-							"type": "string"
-						}
-					}
-				},
-				"memory": {
-					"type": "boolean"
-				},
-				"autoTidy": {
-					"type": "boolean"
-				}
-			}
-		},
-		"spaces.configure.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.memory.get.params": {
-			"type": "object",
-			"required": [
-				"ref"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"spaces.memory.get.result": {
-			"type": "object",
-			"required": [
-				"text",
-				"revisions"
-			],
-			"properties": {
-				"text": {
-					"type": "string"
-				},
-				"revisions": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"at",
-							"by",
-							"summary",
-							"added",
-							"removed"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"at": {
-								"type": "string"
-							},
-							"by": {
-								"type": "object",
-								"required": [
-									"kind"
-								],
-								"properties": {
-									"kind": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "organizer"
-											},
-											{
-												"type": "string",
-												"const": "topic"
-											},
-											{
-												"type": "string",
-												"const": "user"
-											}
-										]
-									},
-									"topicId": {
-										"type": "string"
-									},
-									"title": {
-										"type": "string"
-									}
-								}
-							},
-							"summary": {
-								"type": "string"
-							},
-							"added": {
-								"type": "array",
-								"items": {
-									"type": "string"
-								}
-							},
-							"removed": {
-								"type": "array",
-								"items": {
-									"type": "string"
-								}
-							},
-							"undone": {
-								"type": "boolean"
-							}
-						}
-					}
-				},
-				"proposals": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"at",
-							"topicId",
-							"title",
-							"added",
-							"removed",
-							"reason"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"at": {
-								"type": "string"
-							},
-							"topicId": {
-								"type": "string"
-							},
-							"title": {
-								"type": "string"
-							},
-							"added": {
-								"type": "array",
-								"items": {
-									"type": "string"
-								}
-							},
-							"removed": {
-								"type": "array",
-								"items": {
-									"type": "string"
-								}
-							},
-							"reason": {
-								"type": "string"
-							}
-						}
-					}
-				}
-			}
-		},
-		"spaces.memory.set.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"text"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"text": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.memory.set.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.memory.undo.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"revisionId"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"revisionId": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.memory.undo.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.memory.restore.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"revisionId"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"revisionId": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.memory.restore.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.memory.decide.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"proposalId",
-				"accept"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"proposalId": {
-					"type": "string"
-				},
-				"accept": {
-					"type": "boolean"
-				}
-			}
-		},
-		"spaces.memory.decide.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.topics.rename.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"title"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"title": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.topics.rename.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.topics.archive.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"archived"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"archived": {
-					"type": "boolean"
-				}
-			}
-		},
-		"spaces.topics.archive.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.topics.merge.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"into"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"into": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.topics.merge.result": {
-			"type": "object",
-			"required": [
-				"summary"
-			],
-			"properties": {
-				"summary": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.files.list.params": {
-			"type": "object",
-			"required": [
-				"ref"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"spaces.files.list.result": {
-			"type": "object",
-			"required": [
-				"files"
-			],
-			"properties": {
-				"files": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"name",
-							"size",
-							"addedAt"
-						],
-						"properties": {
-							"name": {
-								"type": "string"
-							},
-							"size": {
-								"type": "number"
-							},
-							"addedAt": {
-								"type": "string"
-							}
-						}
-					}
-				}
-			}
-		},
-		"spaces.files.add.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"name"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"name": {
-					"type": "string"
-				},
-				"path": {
-					"type": "string"
-				},
-				"text": {
-					"type": "string"
-				},
-				"extracted": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.files.add.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.files.remove.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"name"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"name": {
-					"type": "string"
-				}
-			}
-		},
-		"spaces.files.remove.result": {
-			"type": "object",
-			"properties": {}
-		},
 		"settings.get.params": {
 			"type": "object",
 			"properties": {}
@@ -31123,6 +30390,42 @@
 				"memory"
 			],
 			"properties": {
+				"models": {
+					"type": "object",
+					"properties": {
+						"utility": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "auto"
+								},
+								{
+									"type": "string",
+									"const": "on_device"
+								},
+								{
+									"type": "string",
+									"const": "off"
+								},
+								{
+									"type": "object",
+									"required": [
+										"provider",
+										"id"
+									],
+									"properties": {
+										"provider": {
+											"type": "string"
+										},
+										"id": {
+											"type": "string"
+										}
+									}
+								}
+							]
+						}
+					}
+				},
 				"chat": {
 					"type": "object",
 					"required": [
@@ -31341,6 +30644,42 @@
 		"settings.set.params": {
 			"type": "object",
 			"properties": {
+				"models": {
+					"type": "object",
+					"properties": {
+						"utility": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "auto"
+								},
+								{
+									"type": "string",
+									"const": "on_device"
+								},
+								{
+									"type": "string",
+									"const": "off"
+								},
+								{
+									"type": "object",
+									"required": [
+										"provider",
+										"id"
+									],
+									"properties": {
+										"provider": {
+											"type": "string"
+										},
+										"id": {
+											"type": "string"
+										}
+									}
+								}
+							]
+						}
+					}
+				},
 				"chat": {
 					"type": "object",
 					"properties": {
@@ -31550,6 +30889,42 @@
 				"memory"
 			],
 			"properties": {
+				"models": {
+					"type": "object",
+					"properties": {
+						"utility": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "auto"
+								},
+								{
+									"type": "string",
+									"const": "on_device"
+								},
+								{
+									"type": "string",
+									"const": "off"
+								},
+								{
+									"type": "object",
+									"required": [
+										"provider",
+										"id"
+									],
+									"properties": {
+										"provider": {
+											"type": "string"
+										},
+										"id": {
+											"type": "string"
+										}
+									}
+								}
+							]
+						}
+					}
+				},
 				"chat": {
 					"type": "object",
 					"required": [
@@ -31925,7 +31300,6 @@
 			"required": [
 				"banks",
 				"agents",
-				"notebooks",
 				"bytes"
 			],
 			"properties": {
@@ -32020,9 +31394,6 @@
 							}
 						}
 					}
-				},
-				"notebooks": {
-					"type": "number"
 				},
 				"bytes": {
 					"type": "number"
@@ -32288,241 +31659,6 @@
 							"at": {
 								"type": "string"
 							}
-						}
-					}
-				}
-			}
-		},
-		"threads.dismissSuggestion.params": {
-			"type": "object",
-			"required": [
-				"ref"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"threads.dismissSuggestion.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"spaces.importThreads.params": {
-			"type": "object",
-			"required": [
-				"ref",
-				"threads"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				},
-				"threads": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"kind",
-							"id"
-						],
-						"properties": {
-							"kind": {
-								"anyOf": [
-									{
-										"type": "string",
-										"const": "build"
-									},
-									{
-										"type": "string",
-										"const": "thread"
-									},
-									{
-										"type": "string",
-										"const": "space"
-									},
-									{
-										"type": "string",
-										"const": "agent"
-									}
-								]
-							},
-							"id": {
-								"type": "string"
-							},
-							"conversationId": {
-								"type": "string"
-							}
-						}
-					}
-				},
-				"topicId": {
-					"type": "string"
-				},
-				"keepThreads": {
-					"type": "boolean"
-				}
-			}
-		},
-		"spaces.importThreads.result": {
-			"type": "object",
-			"required": [
-				"topicIds"
-			],
-			"properties": {
-				"topicIds": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
-				}
-			}
-		},
-		"spaces.topics.promote.params": {
-			"type": "object",
-			"required": [
-				"ref"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"spaces.topics.promote.result": {
-			"type": "object",
-			"required": [
-				"ref"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
 						}
 					}
 				}

@@ -3,31 +3,40 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-// Conversations' cross-cutting pieces: moving one into a project without a folder (docs/spec/18 §5), and
-// Settings › Chat (the "About me" memory, 07-shared §5).
+// Conversations' cross-cutting pieces: continuing one in a project (docs/spec/18 §5, CF4), and Settings › Chat (the
+// "About me" memory, 07-shared §5).
 
-/// A conversation's place (docs/spec/18 §5): move it into a project without a folder (same conversation), or out.
-struct MoveToProjectMenu: View {
+/// Continue in a project (18 §5): a new conversation in the project's folder that starts from this one's history.
+/// New Project… makes the folder first (the sheet continues there once it's made).
+struct ContinueInMenu<Label: View>: View {
     let engine: EngineController
-    let thread: SessionSummary
+    let ref: ContainerRef
+    @ViewBuilder let label: () -> Label
 
     var body: some View {
-        let projects = engine.projects.filter { !$0.hasFolder }
-        Menu("Move to Project") {
-            ForEach(projects) { project in
-                Button { move(project) } label: {
-                    if thread.projectId == project.id { Label(project.name, systemImage: "checkmark") } else { Text(project.name) }
+        Menu {
+            Section("Continue in a project") {
+                ForEach(engine.projects.filter { $0.missing != true }) { project in
+                    Button(project.name) { Self.continueIn(engine, ref, project) }
                 }
+                Button("Open Folder…") {
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.prompt = "Continue Here"
+                    guard panel.runModal() == .OK, let url = panel.url else { return }
+                    Task { if let project = await engine.addProject(url) { Self.continueIn(engine, ref, project) } }
+                }
+                Button("New Project…") { NotificationCenter.default.post(name: .newProject, object: ref) }
             }
-            if !projects.isEmpty { Divider() }
-            if thread.projectId != nil { Button("No Project") { move(nil) } }
-            Button("New Project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
-        }
-        .disabled(thread.debate != nil)
+        } label: { label() }
     }
 
-    private func move(_ project: ProjectInfo?) {
-        run { try await engine.setProject(thread.ref, project: project) }
+    static func continueIn(_ engine: EngineController, _ ref: ContainerRef, _ project: ProjectInfo) {
+        run {
+            let next = try await engine.continueIn(ref, project: project)
+            NotificationCenter.default.post(name: .selectBuildSession, object: next.id)
+        }
     }
 }
 

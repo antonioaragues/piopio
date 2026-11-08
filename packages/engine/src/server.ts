@@ -2,7 +2,7 @@
 import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { existsSync, unlinkSync, chmodSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, unlinkSync, chmodSync, statSync } from "node:fs";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
@@ -38,8 +38,6 @@ import type { ToolItem } from "@piopio/protocol";
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered and plans (they read as part of the conversation). */
 const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "propose_plan";
 import { AppServices } from "./app-services.js";
-import { projectBank } from "./project-context.js";
-import { ProjectFiles } from "./project-files.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -149,7 +147,7 @@ export class Engine {
 		// A test agent folder: pi's own lookups (MCP config, codemode) read it from the environment.
 		if (options.piAgentDir) process.env.PI_CODING_AGENT_DIR = options.piAgentDir;
 		const agentDir = options.piAgentDir ?? getAgentDir();
-		this.projects = new Projects(options.paths.projectsIndex, agentDir, join(options.paths.home, "projects"));
+		this.projects = new Projects(options.paths.projectsIndex, agentDir, options.paths.projectsRoot, join(options.paths.home, "projects"));
 		this.mcp = new McpConfig(agentDir);
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
 		this.hub.utilityChoice = () => this.settings.get().models?.utility;
@@ -159,6 +157,7 @@ export class Engine {
 		});
 		// Records written before semantic search (or while offline) get their vectors in the background.
 		setTimeout(() => this.memory.fill(), 15_000).unref();
+		void this.notesFromMemory();
 		this.aboutMe = new AboutMe(this.memory, this.settings, join(options.paths.home, "about-me.json"));
 		this.chatMcp = new ChatMcp(this.mcp, (name, server) => this.inChat(name, server));
 		this.packages = new Packages(agentDir);
@@ -172,7 +171,6 @@ export class Engine {
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp || JSON.stringify(next.chat.mcpServers) !== JSON.stringify(previous.chat.mcpServers)) void this.chatMcp.reset();
 		});
-		this.sessions.projects = { get: (id) => this.projects.list().find((p) => p.id === id) };
 		this.sessions.policy = {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
 			modeFor: (cwd) => this.projects.modeFor(cwd),
@@ -215,6 +213,16 @@ export class Engine {
 	}
 
 	/** Whether conversations use a global MCP server: chosen per server, else (before that) all that are on. */
+	/** Projects without a folder became folders (CF4): what they remembered goes into their NOTES.md. */
+	private async notesFromMemory(): Promise<void> {
+		for (const { id, notes } of this.projects.migrated) {
+			const bank = `project:${id}`;
+			const facts = (await this.memory.builtin.list(bank, { kinds: ["fact"], limit: 500 }).catch(() => undefined))?.records ?? [];
+			if (facts.length) appendFileSync(notes, `\n${facts.map((f) => `- ${f.text}`).join("\n")}\n`);
+			this.memory.builtin.wipe(bank);
+		}
+	}
+
 	private inChat(name: string, server: RawServer): boolean {
 		const chat = this.settings.get().chat;
 		return chat.mcpServers ? chat.mcpServers.includes(name) : chat.mcp && server.enabled !== false;
@@ -492,33 +500,16 @@ export class Engine {
 			}
 			case "projects.configure": {
 				const p = params as Params<"projects.configure">;
-				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}), ...(p.name !== undefined ? { name: p.name } : {}), ...(p.instructions !== undefined ? { instructions: p.instructions } : {}) };
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
 			}
 			case "projects.create": {
 				const p = params as Params<"projects.create">;
 				return { project: this.projects.create(p.name, p.instructions) } satisfies Result<"projects.create">;
 			}
-			case "projects.addFile": {
-				const p = params as Params<"projects.addFile">;
-				new ProjectFiles(this.projects.withoutFolder(p.id).path).add({ name: p.name, ...(p.path ? { path: p.path } : {}), ...(p.text !== undefined ? { text: p.text } : {}), ...(p.extracted !== undefined ? { extracted: p.extracted } : {}) });
-				this.projects.touch();
-				return {};
-			}
-			case "projects.removeFile": {
-				const p = params as Params<"projects.removeFile">;
-				new ProjectFiles(this.projects.withoutFolder(p.id).path).remove(p.name);
-				this.projects.touch();
-				return {};
-			}
 			case "sessions.agentDraft": {
 				const p = params as Params<"sessions.agentDraft">;
 				return (await this.sessions.agentDraft(p.ref)) satisfies Result<"sessions.agentDraft">;
-			}
-			case "sessions.setProject": {
-				const p = params as Params<"sessions.setProject">;
-				await this.sessions.setProject(p.ref, p.projectId);
-				return {};
 			}
 			case "sessions.changes": {
 				const p = params as Params<"sessions.changes">;
@@ -797,11 +788,10 @@ export class Engine {
 				const labels = new Map(owners.agents.flatMap((a) => a.partitions.map((p) => [p.bank, { label: p.label, agent: a }] as const)));
 				const banks = this.memory.builtin.banks().map((b) => {
 					const owner = labels.get(b.bank);
-					const project = b.bank.startsWith("project:") ? this.projects.list().find((p) => projectBank(p.id) === b.bank) : undefined;
-					const area = b.bank === ABOUT_ME_BANK ? "about-me" : owner ? "agent" : project ? "project" : "other";
+					const area = b.bank === ABOUT_ME_BANK ? "about-me" : owner ? "agent" : "other";
 					return {
 						...b,
-						label: b.bank === ABOUT_ME_BANK ? "About me" : (owner?.label ?? project?.name ?? b.bank),
+						label: b.bank === ABOUT_ME_BANK ? "About me" : (owner?.label ?? b.bank),
 						area,
 						...(owner ? { agent: { id: owner.agent.id, name: owner.agent.name, ...(owner.agent.avatar ? { avatar: owner.agent.avatar } : {}), learns: owner.agent.learns } } : {}),
 					};
@@ -881,12 +871,7 @@ export class Engine {
 			case "projects.remove": {
 				const p = params as Params<"projects.remove">;
 				const project = this.projects.remove(p.id);
-				if (project.folder) await this.sessions.forgetFolder(project.path);
-				else {
-					// Its conversations stay, with no project; what it remembered goes with it.
-					await this.sessions.projectRemoved(project.id);
-					this.memory.builtin.wipe(projectBank(project.id));
-				}
+				await this.sessions.forgetFolder(project.path);
 				return {};
 			}
 			case "catalog.search": {

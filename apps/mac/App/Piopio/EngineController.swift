@@ -490,50 +490,18 @@ final class EngineController {
         try? await refreshCatalog()
     }
 
-    /// A conversation with no project, or in a project without a folder (`projectId`, docs/spec/18 §3).
-    func createThread(model: ModelRef? = nil, projectId: String? = nil) async -> ContainerRef? {
+    /// A conversation with no folder.
+    func createThread(model: ModelRef? = nil) async -> ContainerRef? {
         guard let client else { return nil }
-        return try? await client.call("sessions.create", CreateSessionParams(kind: .thread, model: model ?? preferredModel, projectId: projectId), as: CreateSessionResult.self).ref
+        return try? await client.call("sessions.create", CreateSessionParams(kind: .thread, model: model ?? preferredModel), as: CreateSessionResult.self).ref
     }
 
-    // MARK: Projects without a folder (docs/spec/18 §3)
-
-    /// A project without a folder: a name, and what its conversations are told.
+    /// New project (docs/spec/18 CF4): a folder in ~/Piopio named after it, with AGENTS.md (`instructions`) and NOTES.md.
     func createProject(name: String, instructions: String? = nil) async throws -> ProjectInfo {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
         let project = try await client.call("projects.create", ProjectsCreateParams(name: name, instructions: instructions), as: ProjectsAddResult.self).project
         await loadProjects()
         return project
-    }
-
-    func configureProject(_ project: ProjectInfo, name: String? = nil, instructions: String? = nil) async throws {
-        guard let client else { return }
-        _ = try await client.call("projects.configure", ProjectsConfigureParams(id: project.id, name: name, instructions: instructions), as: ProjectsAddResult.self)
-        await loadProjects()
-    }
-
-    /// Copies a file in; PDFs and other documents go with their text, which the model reads.
-    func addProjectFile(_ project: ProjectInfo, url: URL) async throws {
-        guard let client else { return }
-        let extracted: String? = if url.pathExtension.lowercased() == "pdf", let loaded = try? AttachmentLoader.load(url), case .text(_, _, let text, _) = loaded.attachment { text } else { nil }
-        _ = try await client.call("projects.addFile", ProjectFileParams(id: project.id, name: url.lastPathComponent, path: url.path, extracted: extracted), as: Empty.self)
-    }
-
-    func removeProjectFile(_ project: ProjectInfo, name: String) async throws {
-        guard let client else { return }
-        _ = try await client.call("projects.removeFile", ProjectFileParams(id: project.id, name: name), as: Empty.self)
-    }
-
-    /// Moves a conversation into a project without a folder, or out of one (nil). Same conversation, same history.
-    func setProject(_ ref: ContainerRef, project: ProjectInfo?) async throws {
-        guard let client else { return }
-        _ = try await client.call("sessions.setProject", SetProjectParams(ref: ref, projectId: project?.id), as: Empty.self)
-        try? await refreshCatalog()
-    }
-
-    /// The conversations in a project without a folder, newest first.
-    func conversations(in project: ProjectInfo) -> [SessionSummary] {
-        threads.filter { $0.projectId == project.id }
     }
 
     func rename(_ ref: ContainerRef, to title: String) async {

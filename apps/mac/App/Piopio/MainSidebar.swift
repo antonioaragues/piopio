@@ -222,7 +222,7 @@ struct MainSidebar: View {
     }
 
     private func latest(_ p: ProjectInfo) -> String {
-        (p.hasFolder ? engine.sessions(in: p) : engine.conversations(in: p)).map(\.updatedAt).max() ?? p.addedAt
+        engine.sessions(in: p).map(\.updatedAt).max() ?? p.addedAt
     }
 
     @ViewBuilder private var projectsSection: some View {
@@ -258,8 +258,7 @@ struct MainSidebar: View {
     /// The project's conversations, nested under it on a hairline: the live ones and "N earlier". Hidden while the
     /// project is folded.
     @ViewBuilder private func projectSessions(_ project: ProjectInfo) -> some View {
-        // A folder's Build sessions; a project without a folder, its conversations (docs/spec/18 §3).
-        let all = project.hasFolder ? engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) } : engine.conversations(in: project)
+        let all = engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
         // No draft row: new conversations start on Home now (docs/spec/18), which keeps its own draft.
@@ -309,15 +308,7 @@ struct MainSidebar: View {
         let folded = collapsedProjects.contains(project.id)
         let hasSessions = !engine.sessions(in: project).filter { $0.parent == nil }.isEmpty
         return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil,
-                          toggle: {
-                              // A project without a folder opens its page (instructions, files, memory); a folder folds.
-                              if !project.hasFolder {
-                                  item = .project(project.id)
-                                  if folded { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: false) } }
-                              } else {
-                                  withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) }
-                              }
-                          }) {
+                          toggle: { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }) {
             NotificationCenter.default.post(name: .newBuildSession, object: project.id)
         }
         .contextMenu {
@@ -444,7 +435,7 @@ struct MainSidebar: View {
 
     /// Conversations with no project (those in a project are listed under it).
     @ViewBuilder private var chatsSection: some View {
-        let threads = engine.threads.filter { $0.projectId == nil }
+        let threads = engine.threads
         let cap = Self.caps[.chats]!
         header(.chats, total: threads.count, shown: min(cap, threads.count), add: { NotificationCenter.default.post(name: .newChat, object: nil) }, addHelp: "New conversation (⌘N)")
         if !collapsed.contains(SidebarSection.chats.rawValue) {
@@ -471,7 +462,7 @@ struct MainSidebar: View {
             Button("Rename…") { newTitle = thread.title; renaming = thread }
             pinButton(.chat(thread.ref.id))
             Divider()
-            MoveToProjectMenu(engine: engine, thread: thread)
+            if thread.debate == nil { ContinueInMenu(engine: engine, ref: thread.ref) { Text("Continue in") } }
             Divider()
             Button("Delete", role: .destructive) {
                 if selected { item = .home }
@@ -556,7 +547,7 @@ struct NewMenu: View {
                 } label: { Text("Conversation in a project"); Text("Pick a folder") }
             }
             if areas.contains(.chat) {
-                Button { NotificationCenter.default.post(name: .newProject, object: nil) } label: { Text("Project"); Text("Conversations with shared files and memory") }
+                Button { NotificationCenter.default.post(name: .newProject, object: nil) } label: { Text("Project"); Text("A folder with shared instructions and notes") }
                 Button { NotificationCenter.default.post(name: .newDebate, object: nil) } label: { Text("Debate"); Text("Two models work on it until they agree") }
             }
             if areas.contains(.agents) {
@@ -641,7 +632,7 @@ private struct ProjectRow: View {
         ZStack(alignment: .trailing) {
             Button(action: toggle) {
                 HStack(spacing: 10) {
-                    RowGlyph(symbol: project.hasFolder ? "folder" : "tray.full")
+                    RowGlyph(symbol: "folder")
                     Text(project.name).font(.system(size: 13, weight: isOpen ? .medium : .regular))
                         .foregroundStyle(project.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1)
                     if folded == true {

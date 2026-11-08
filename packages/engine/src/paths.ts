@@ -12,10 +12,14 @@ export type EnginePaths = {
 	projectsIndex: string;
 	threadsDir: string;
 	logsDir: string;
+	/** Where New project makes its folders (docs/spec/18 CF4): ~/Piopio, or inside `home` when it isn't the default. */
+	projectsRoot: string;
 };
 
+const DEFAULT_HOME = join(homedir(), "Library", "Application Support", "Piopio");
+
 /** `PIOPIO_HOME` overrides the data folder (dev, tests). */
-export function enginePaths(home = process.env.PIOPIO_HOME ?? join(homedir(), "Library", "Application Support", "Piopio")): EnginePaths {
+export function enginePaths(home = process.env.PIOPIO_HOME ?? DEFAULT_HOME): EnginePaths {
 	return {
 		home,
 		socket: join(home, "engine.sock"),
@@ -25,6 +29,8 @@ export function enginePaths(home = process.env.PIOPIO_HOME ?? join(homedir(), "L
 		projectsIndex: join(home, "projects.json"),
 		threadsDir: join(home, "threads"),
 		logsDir: join(home, "logs"),
+		// A test copy (another PIOPIO_HOME) keeps its project folders with its data, not in the user's ~/Piopio.
+		projectsRoot: process.env.PIOPIO_PROJECTS_DIR ?? (home === DEFAULT_HOME ? join(homedir(), "Piopio") : join(home, "Piopio")),
 	};
 }
 

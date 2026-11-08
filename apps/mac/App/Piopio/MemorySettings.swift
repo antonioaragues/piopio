@@ -116,15 +116,6 @@ struct MemoryPane: View {
                     Text("\(count(others.reduce(0) { $0 + $1.records }, "memory", plural: "memories")) left behind")
                 } trailing: { EmptyView() }
             }
-            // Projects without a folder: what their conversations saved (docs/spec/18 §3).
-            ForEach((banks?.banks ?? []).filter { $0.area == "project" }, id: \.bank) { b in
-                RowDivider()
-                SettingsListRow(name: b.label, open: { browsing = BrowseTarget(bank: b.bank) }) {
-                    MemoryTile(symbol: "tray.full.fill", color: .indigo)
-                } subtitle: {
-                    Text("\(count(b.facts, "fact")) · shared by the project's conversations")
-                } trailing: { SettingsBadge("Project") }
-            }
         }
     }
 

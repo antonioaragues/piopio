@@ -628,8 +628,6 @@ export const SessionSummary = Type.Object({
 	profile: Type.Optional(literals("build", "chat")),
 	/** A subagent's session: the parent session and the `task` call that started it. */
 	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
-	/** A conversation in a project without a folder (18 §3). */
-	projectId: Type.Optional(Type.String()),
 	/** A chat continued in a project folder (18 §5): the new conversation, and in it, where it came from. */
 	continuedIn: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
 	continuedFrom: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
@@ -760,18 +758,14 @@ export const ConnectorInfo = Type.Object({
 export type ConnectorInfo = Static<typeof ConnectorInfo>;
 
 /**
- * A project (docs/spec/18 §3): a folder on the Mac (05-build BP1), or a project without one (`folder: false`), whose
- * files Piopio keeps in `path` (its data folder) and whose conversations are threads with its instructions and memory.
+ * A project (docs/spec/18 §3, CF4): a folder on the Mac. One the user opened (05-build BP1), or one New project made in
+ * ~/Piopio with an AGENTS.md and a NOTES.md.
  */
 export const ProjectInfo = Type.Object({
 	id: Type.String(),
 	path: Type.String(),
 	name: Type.String(),
 	addedAt: Type.String(),
-	/** False: a project without a folder; `path` is where Piopio keeps the files you add. */
-	folder: Type.Boolean(),
-	/** Projects without a folder: what every conversation in it is told (folder projects use AGENTS.md). */
-	instructions: Type.Optional(Type.String()),
 	/** Current git branch; absent outside a git repo. */
 	branch: Type.Optional(Type.String()),
 	/** AGENTS.md or CLAUDE.md, when present. */
@@ -910,8 +904,6 @@ export const methods = {
 			model: Type.Optional(ModelRef),
 			thinking: Type.Optional(Type.String()),
 			title: Type.Optional(Type.String()),
-			/** Threads: in this project without a folder (18 §3). */
-			projectId: Type.Optional(Type.String()),
 			/** Threads: start a debate between two models (docs/spec/16-debate). */
 			debate: Type.Optional(DebateConfig),
 		}),
@@ -1167,19 +1159,13 @@ export const methods = {
 		result: Type.Object({ projects: Type.Array(ProjectInfo) }),
 	},
 	/** Adds a folder (idempotent by real path) and imports its pi sessions. `lens`: also show it there. */
-	/** A project without a folder (18 §3): a name and what its conversations are told. */
+	/**
+	 * New project (18 CF4): a folder in ~/Piopio named after it, with AGENTS.md (`instructions`, what every conversation
+	 * there is told) and NOTES.md (what they keep for each other). Starts in Auto-edit.
+	 */
 	"projects.create": {
 		params: Type.Object({ name: Type.String({ minLength: 1 }), instructions: Type.Optional(Type.String()) }),
 		result: Type.Object({ project: ProjectInfo }),
-	},
-	/** A file into a project without a folder: copied from `path`, or `text` as a new note; `extracted`: a document's text. */
-	"projects.addFile": {
-		params: Type.Object({ id: Type.String(), name: Type.String(), path: Type.Optional(Type.String()), text: Type.Optional(Type.String()), extracted: Type.Optional(Type.String()) }),
-		result: Type.Object({}),
-	},
-	"projects.removeFile": {
-		params: Type.Object({ id: Type.String(), name: Type.String() }),
-		result: Type.Object({}),
 	},
 	/**
 	 * Turn into an agent (18 phase 3): a draft for the Agent start page from a conversation's active branch: a name,
@@ -1188,11 +1174,6 @@ export const methods = {
 	"sessions.agentDraft": {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({ name: Type.String(), instructions: Type.String(), schedule: Type.Union([Type.String(), Type.Null()]) }),
-	},
-	/** Move a conversation into a project without a folder, or out of it (`projectId: null`). Same thread, same history. */
-	"sessions.setProject": {
-		params: Type.Object({ ref: ContainerRef, projectId: Type.Union([Type.String(), Type.Null()]) }),
-		result: Type.Object({}),
 	},
 	"projects.add": {
 		params: Type.Object({ path: Type.String(), lens: Type.Optional(literals("build", "chat")) }),
@@ -1206,9 +1187,6 @@ export const methods = {
 			removeRule: Type.Optional(Type.String()),
 			trust: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])),
 			lenses: Type.Optional(Type.Array(literals("build", "chat"))),
-			/** Projects without a folder: rename, and their instructions. */
-			name: Type.Optional(Type.String({ minLength: 1 })),
-			instructions: Type.Optional(Type.String()),
 		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},

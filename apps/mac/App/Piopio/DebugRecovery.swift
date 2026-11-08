@@ -29,8 +29,8 @@ import PiopioKit
             try require(direct && thread.composerText == "Keep another draft", "Sending from another entry point preserves an existing draft")
             thread.composerText = ""; try await thread.flushDraft()
             _ = try await settled(engine, ref: chat)
-            let project = try await engine.createProject(name: "Recovery project")
-            guard let inProject = await engine.createThread(projectId: project.id), let client = engine.client else { throw EngineError(code: "INTERNAL", message: "create project conversation") }
+            let made = try await engine.createProject(name: "Recovery project")
+            guard let inProject = await engine.createBuildSession(in: made), let client = engine.client else { throw EngineError(code: "INTERNAL", message: "create project conversation") }
             _ = try await client.call("sessions.submit", SubmitParams(ref: inProject, text: "Project recovery marker"), as: SubmitResult.self)
             _ = try await settled(engine, ref: inProject)
             let agent = try await engine.createAgent(name: "Recovery agent", template: "personal-assistant", avatar: "🐥")
@@ -56,10 +56,10 @@ import PiopioKit
                 try require(!snapshot.items.isEmpty, "Restores \(ref.kind.rawValue) history")
             }
             try await engine.refreshCatalog()
-            try require(engine.buildSessions.count == 1, "Restored Build history is not duplicated by CLI discovery")
+            try require(engine.buildSessions.count == 2, "Restored Build history is not duplicated by CLI discovery")
             try require(try String(contentsOf: projectFolder.appending(path: "keep.txt"), encoding: .utf8) == "Keep external project files", "Restore preserves external project files")
             guard let client = engine.client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "search reconnect") }
-            let hits = try await client.call("catalog.search", SearchParams(query: "Project recovery marker", kind: .thread), as: SearchResults.self)
+            let hits = try await client.call("catalog.search", SearchParams(query: "Project recovery marker", kind: .build), as: SearchResults.self)
             try require(hits.results.contains { $0.ref.id == inProject.id }, "Search finds a restored project conversation")
             try JSONSerialization.data(withJSONObject: ["ok": true, "checks": checks], options: [.prettyPrinted, .sortedKeys]).write(to: report, options: .atomic)
         } catch {

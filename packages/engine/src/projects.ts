@@ -1,17 +1,27 @@
 /**
- * Projects (docs/spec/18 §3): folders the user added (05-build BP1), and projects without a folder, whose files Piopio
- * keeps in `<home>/projects/<id>/files` (that folder is their `path`). Kept in projects.json.
+ * Projects (docs/spec/18 §3, CF4): folders on the Mac. Ones the user opened (05-build BP1), and ones New project made
+ * in ~/Piopio, with an AGENTS.md (what every conversation there is told) and a NOTES.md (what they keep for each
+ * other). Kept in projects.json.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "@earendil-works/pi-coding-agent";
 import type { ApprovalMode, ApprovalRule, ProjectInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
+import { NOTES_FILE } from "./runtimes/build.js";
 import { newId } from "./sessions.js";
 
 type Lens = "build" | "chat";
-/** `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both; read once to migrate, then dropped. */
+/**
+ * `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both. `folder: false` and `instructions`:
+ * a project without a folder, before CF4. Both are read once to migrate, then dropped.
+ */
 type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string };
+
+
+const AGENTS_TEMPLATE = (name: string, instructions?: string) =>
+	`# ${name}\n\n${instructions?.trim() || "<!-- What every conversation in this project should know: what it's about, what matters, how to answer. -->"}\n`;
+const NOTES_TEMPLATE = "# Notes\n\n<!-- Decisions, numbers and dates this project's conversations keep for each other. -->\n";
 
 /** Files that make a folder a code project (04-chat P1); anything else starts in Read only (18 §4). */
 const CODE_MARKERS = [".git", "package.json", "Package.swift", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt", "Gemfile", "pom.xml", "build.gradle", "Makefile", "CMakeLists.txt", "composer.json", "deno.json", "mix.exs"];
@@ -30,8 +40,10 @@ export class Projects {
 	constructor(
 		private readonly file: string,
 		agentDir: string,
-		/** Where projects without a folder keep their files (`<home>/projects`). */
-		private readonly dataDir?: string,
+		/** Where New project makes its folders (~/Piopio). */
+		private readonly root?: string,
+		/** Where projects without a folder kept their files before CF4 (`<home>/projects`), to move them out. */
+		oldDataDir?: string,
 	) {
 		if (existsSync(file)) this.entries = JSON.parse(readFileSync(file, "utf8")) as StoredProject[];
 		this.trust = new ProjectTrustStore(agentDir);
@@ -44,6 +56,56 @@ export class Projects {
 			}
 			this.save();
 		}
+		if (this.entries.some((p) => p.folder === false)) this.migrateWithoutFolder(oldDataDir);
+	}
+
+	/** Projects without a folder that became folders (CF4): their old id, and where their notes go. */
+	readonly migrated: { id: string; notes: string }[] = [];
+
+	/** A project without a folder becomes a folder in ~/Piopio: its files, AGENTS.md from its instructions, NOTES.md. */
+	private migrateWithoutFolder(oldDataDir?: string): void {
+		for (const p of this.entries.filter((e) => e.folder === false)) {
+			if (!this.root) break;
+			try {
+				const target = this.newFolder(p.name);
+				if (existsSync(p.path)) {
+					try {
+						renameSync(p.path, target);
+					} catch {
+						cpSync(p.path, target, { recursive: true });
+						rmSync(p.path, { recursive: true, force: true });
+					}
+				}
+				mkdirSync(target, { recursive: true });
+				this.seed(target, p.name, p.instructions);
+				if (oldDataDir) rmSync(join(oldDataDir, p.id), { recursive: true, force: true });
+				p.path = realpathSync(target);
+				p.name = basename(target);
+				p.approvalMode ??= "auto_edit";
+				delete p.folder;
+				delete p.instructions;
+				this.migrated.push({ id: p.id, notes: join(p.path, NOTES_FILE) });
+			} catch {
+				// Left as it was; tried again next time.
+			}
+		}
+		this.save();
+	}
+
+	/** A new folder in ~/Piopio named after the project ("Kitchen renovation", then "Kitchen renovation 2"). */
+	private newFolder(name: string): string {
+		if (!this.root) throw new EngineError("INVALID", "New projects need a folder to go in.");
+		mkdirSync(this.root, { recursive: true });
+		const base = name.replace(/[/:\\]/g, "-").replace(/^[.\s]+/, "").trim().slice(0, 80) || "Project";
+		let target = join(this.root, base);
+		for (let n = 2; existsSync(target); n++) target = join(this.root, `${base} ${n}`);
+		return target;
+	}
+
+	/** AGENTS.md and NOTES.md, unless the folder has them. */
+	private seed(folder: string, name: string, instructions?: string): void {
+		if (!existsSync(join(folder, "AGENTS.md"))) writeFileSync(join(folder, "AGENTS.md"), AGENTS_TEMPLATE(name, instructions));
+		if (!existsSync(join(folder, NOTES_FILE))) writeFileSync(join(folder, NOTES_FILE), NOTES_TEMPLATE);
 	}
 
 	list(): ProjectInfo[] {
@@ -90,39 +152,34 @@ export class Projects {
 		return this.describe(entry);
 	}
 
-	/** A project without a folder (18 §3): its files live in Piopio's data. */
+	/**
+	 * New project (CF4): a folder in ~/Piopio, with AGENTS.md (the instructions) and NOTES.md. It starts in Auto-edit,
+	 * so its conversations can keep the notes; a folder of documents you open starts in Read only (`add`).
+	 */
 	create(name: string, instructions?: string): ProjectInfo {
-		if (!this.dataDir) throw new EngineError("INVALID", "Projects without a folder need a data folder.");
-		const id = newId("prj");
-		const path = join(this.dataDir, id, "files");
-		mkdirSync(path, { recursive: true });
-		const entry: StoredProject = { id, path: realpathSync(path), name: name.trim(), addedAt: new Date().toISOString(), folder: false, ...(instructions?.trim() ? { instructions: instructions.trim() } : {}) };
+		const trimmed = name.trim();
+		if (!trimmed) throw new EngineError("INVALID", "The project needs a name.");
+		const folder = this.newFolder(trimmed);
+		mkdirSync(folder, { recursive: true });
+		this.seed(folder, trimmed, instructions);
+		const entry: StoredProject = { id: newId("prj"), path: realpathSync(folder), name: basename(folder), addedAt: new Date().toISOString(), approvalMode: "auto_edit" };
 		this.entries.push(entry);
 		this.save();
 		return this.describe(entry);
 	}
 
-	/** Removes a project from Piopio. A folder stays on disk; a project without one loses its files (its data). */
+	/** Removes a project from Piopio. Its folder stays on disk. */
 	remove(id: string): ProjectInfo {
 		const project = this.get(id);
 		this.entries = this.entries.filter((p) => p.id !== id);
-		if (!project.folder && this.dataDir && project.path.includes(id)) rmSync(join(this.dataDir, id), { recursive: true, force: true });
 		this.save();
 		return project;
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; lenses?: Lens[]; name?: string; instructions?: string }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; lenses?: Lens[] }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
-		if (change.name !== undefined || change.instructions !== undefined) {
-			if (entry.folder !== false) throw new EngineError("INVALID", "A folder's name and instructions come from the folder (AGENTS.md).");
-			if (change.name?.trim()) entry.name = change.name.trim();
-			if (change.instructions !== undefined) {
-				if (change.instructions.trim()) entry.instructions = change.instructions.trim();
-				else delete entry.instructions;
-			}
-		}
 		if (change.approvalMode) entry.approvalMode = change.approvalMode;
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
 		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
@@ -135,13 +192,6 @@ export class Projects {
 	touch(): void {
 		const projects = this.list();
 		for (const l of this.listeners) l(projects);
-	}
-
-	/** A project without a folder, for its conversations (throws for folders and unknown ids). */
-	withoutFolder(id: string): ProjectInfo {
-		const project = this.get(id);
-		if (project.folder) throw new EngineError("INVALID", `${project.name} is a folder: conversations there run in the folder.`);
-		return project;
 	}
 
 	/** The project that contains `cwd`. */
@@ -189,10 +239,9 @@ export class Projects {
 
 function describe(stored: StoredProject): Omit<ProjectInfo, "trust" | "needsTrust"> {
 	// `lenses` stays in the protocol for older apps: every project now does both (the permissions decide).
-	const { folder: _f, ...rest } = stored;
-	const p = { ...rest, folder: stored.folder !== false, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [], lenses: ["build", "chat"] as Lens[] };
+	const { folder: _f, instructions: _i, lenses: _l, ...rest } = stored;
+	const p = { ...rest, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [], lenses: ["build", "chat"] as Lens[] };
 	if (!existsSync(p.path)) return { ...p, piConfig: false, missing: true };
-	if (!p.folder) return { ...p, piConfig: false };
 	const branch = gitBranch(p.path);
 	const contextFile = ["AGENTS.md", "CLAUDE.md"].find((name) => existsSync(join(p.path, name)));
 	return {

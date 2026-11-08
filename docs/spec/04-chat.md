@@ -53,7 +53,7 @@ A free-standing conversation. Backed by **one pi-durable session** (`threads/<id
 ---
 
 > **2026-11-07:** [18-conversation-first](18-conversation-first.md) replaces the Chat lens with the Read only
-> permission (§2 here) and notebooks with projects without a folder (§3 here). These sections stay as history.
+> permission (§2 here) and notebooks with projects, which are always folders since 2026-11-08 (§3 here). These sections stay as history.
 
 ## 2. Projects in the Chat lens
 

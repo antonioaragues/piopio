@@ -145,7 +145,7 @@ struct ChatFirstRun: View {
                 HStack(spacing: 10) {
                     tile("New conversation", "⌘N", "bubble.left") { NotificationCenter.default.post(name: .newChat, object: nil) }
                     tile("New debate", "⌥⌘N", "person.2.wave.2") { NotificationCenter.default.post(name: .newDebate, object: nil) }
-                    tile("New project", "⌘⇧N", "tray.full") { NotificationCenter.default.post(name: .newProject, object: nil) }
+                    tile("New project", "⌘⇧N", "folder.badge.plus") { NotificationCenter.default.post(name: .newProject, object: nil) }
                 }
                 Text("Tip: \(QuickChatShortcut.current.label) opens Quick Chat from any app.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }

@@ -6,7 +6,7 @@ they do not establish that every provider, OS permission flow or production serv
 | Area | Implemented | Acceptance still pending |
 |---|---|---|
 | Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations |
-| Chat | Streaming, attachments, branches, export, Quick Chat, projects without a folder (shared instructions, files, memory), global search | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability |
+| Chat | Streaming, attachments, branches, export, Quick Chat, New project makes a folder in ~/Piopio (AGENTS.md, shared NOTES.md), global search | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability |
 | Local Agents | Definitions, conversations, memory, schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
 | Distribution | Bundled engine/Node, release scripts, background engine and update infrastructure | Developer ID/notarization/Gatekeeper validation and public distribution |
@@ -35,7 +35,7 @@ been captured and inspected. This does not replace the real-provider, OS-permiss
 
 - [ ] Build: complete one real change, approve/deny commands, inspect diffs, rewind chat and files, resume after restart.
 - [ ] Chat: send images/text/PDFs, edit/regenerate, switch away with a draft, reconnect after a failed send and retry once.
-- [ ] Projects without a folder: 3+ conversations; verify instructions, files and shared memory, and moving a chat in and out.
+- [ ] A New project folder: 3+ conversations; verify they follow AGENTS.md, keep NOTES.md and read what another one noted; Continue in from a loose chat.
 - [ ] Agents: run a real schedule, sleep/wake the Mac, close the window, quit with and without background mode, and inspect the next run.
 - [ ] Approvals: restart/reconnect while waiting and verify that the displayed decision matches the executed action.
 - [ ] Costs: compare provider billing with its stated scope; verify web/utility requests and unavailable pricing.

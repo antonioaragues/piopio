@@ -749,6 +749,7 @@ nonisolated struct ItemRenderer: Sendable {
             return (running ? "Saving to About me" : failed ? "Not saved to About me" : "Saved to About me", facts)
         case "ask_topic":
             return (running ? "Asking \(t.args?["topic"]?.stringValue ?? "a topic")" : "Asked \(t.args?["topic"]?.stringValue ?? "a topic")", t.args?["question"]?.stringValue ?? "")
+        // Projects without a folder, before docs/spec/18 CF4: their tools still show in old conversations.
         case "read_project_file":
             return (running ? "Reading a project file" : "Read a project file", t.args?["name"]?.stringValue ?? "")
         case "remember_in_project":

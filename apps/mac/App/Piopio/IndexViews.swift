@@ -240,7 +240,7 @@ struct SectionIndex: View {
     private var rows: [SessionSummary] {
         switch section {
         case .agents: engine.agents
-        default: engine.threads.filter { $0.projectId == nil }
+        default: engine.threads
         }
     }
 
