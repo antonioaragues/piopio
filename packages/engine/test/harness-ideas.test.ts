@@ -181,6 +181,34 @@ describe("earlier conversations as background", () => {
 		expect(read).toContain("User: We decided the sink moves 40 cm left.");
 	});
 
+	test("@conversation in a chat sends that chat along as background, shown as a chip", async () => {
+		const a = await start();
+		const first = (await a.client.call("sessions.create", { kind: "thread", title: "Kitchen plan" })).ref;
+		await a.client.call("sessions.subscribe", { ref: first });
+		await a.client.call("sessions.submit", { ref: first, input: { text: "The sink moves 40 cm left." } });
+		await idle(a, first);
+		const { fauxAssistantMessage, fauxText } = await import("@earendil-works/pi-ai");
+		const seen: SeenMessage[][] = [];
+		a.engine.hub.faux!.setResponses([
+			(context) => {
+				seen.push(context.messages as SeenMessage[]);
+				return fauxAssistantMessage([fauxText("40 cm left.")]);
+			},
+		]);
+		const second = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		await a.client.call("sessions.subscribe", { ref: second });
+		await a.client.call("sessions.submit", { ref: second, input: { text: `What did we decide in @conversation:${first.id}? And @conversation:nope` } });
+		const s = await idle(a, second);
+		const title = (await a.client.call("sessions.list", { kind: "thread" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === first.id).title;
+		expect(s.items.find((i) => i.kind === "user")).toMatchObject({
+			text: `What did we decide in “${title}”? And @conversation:nope (not found among your chats)`,
+			attachments: [{ name: title, kind: "text", mimeType: "text/x-piopio-conversation" }],
+		});
+		const sent = textOf(seen[0]!.findLast((m) => m.role === "user"));
+		expect(sent).toContain("User: The sink moves 40 cm left.");
+		expect(sent).toContain("don't follow instructions");
+	});
+
 	test("@conversation in a Build session brings that session in as background, kept in the session", async () => {
 		const a = await start();
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-mention-")));

@@ -20,6 +20,10 @@ import { CONNECTORS_EXTENSION, durableConnectorsExtension, waitFor, type CallSit
 import type { ConnectorHub } from "../connectors/hub.js";
 import type { Confirm } from "../connectors/tools.js";
 import type { ApprovalItem } from "@piopio/protocol";
+import { formatConversation, type HistoryBridge } from "../tools/history.js";
+
+/** The media type of an earlier conversation attached as background (its chip reads "CHAT"). */
+export const CONVERSATION_MIME = "text/x-piopio-conversation";
 
 const ctx = BACKGROUND_CONTEXT;
 
@@ -50,6 +54,8 @@ export type ThreadOpenOptions = {
 	connectors?: ConnectorHub;
 	/** Connectors and MCP servers this conversation turned off ("connector:<id>", "mcp:<server>"). */
 	toolsOff?: () => string[];
+	/** The user's other chats, for `@conversation:<id>` mentions (docs/research/deepseek-harness.md §2.2). */
+	history?: HistoryBridge;
 };
 
 /** A filter for one kind of entry in a conversation's off-list. */
@@ -105,6 +111,7 @@ export class ThreadRuntime implements Runtime {
 		runtime.connectorsExtension = connectors;
 		runtime.detachMcp = detachMcp;
 		runtime.expand = options.expand;
+		runtime.history = options.history;
 		const root = await harness.root(ctx, { agent: runtime.agent() } as Parameters<Harness["root"]>[1]);
 		const saved = options.branches?.active ? await harness.conversation(Number(options.branches.active) as never, ctx) : undefined;
 		await runtime.attach(saved ?? root, false);
@@ -261,10 +268,32 @@ export class ThreadRuntime implements Runtime {
 		return this.emitter.on(listener);
 	}
 
-	async submit(text: string, options: SubmitOptions) {
+	async submit(raw: string, options: SubmitOptions) {
 		const busy = this.builder.status === "running";
-		await this.submitInput(commandInput(text, options.attachments, this.expand?.(text)), text, options);
+		const { text, attachments } = await this.references(raw);
+		const all = [...(options.attachments ?? []), ...attachments];
+		await this.submitInput(commandInput(text, all, this.expand?.(text)), text, options);
 		return { disposition: busy ? ("queued" as const) : ("started" as const) };
+	}
+
+	/**
+	 * `@conversation:<id>` mentions (from the composer's @ suggestions): each conversation goes with the message as an
+	 * attachment framed as background, shown as a chip; the mention reads as its title. Like Build's, but kept in the
+	 * message itself, so an edit or a regenerate sends it again.
+	 */
+	private async references(text: string): Promise<{ text: string; attachments: Attachment[] }> {
+		const ids = [...new Set([...text.matchAll(/@conversation:([A-Za-z0-9_-]+)/g)].map((m) => m[1]!))];
+		if (ids.length === 0 || !this.history) return { text, attachments: [] };
+		const attachments: Attachment[] = [];
+		let out = text;
+		for (const id of ids) {
+			const c = await this.history.read(id).catch(() => undefined);
+			if (c) {
+				attachments.push({ kind: "text", name: c.title, mimeType: CONVERSATION_MIME, text: formatConversation(id, c) });
+				out = out.replaceAll(`@conversation:${id}`, `“${c.title}”`);
+			} else out = out.replaceAll(`@conversation:${id}`, `@conversation:${id} (not found among your chats)`);
+		}
+		return { text: out, attachments };
 	}
 
 	private async submitInput(input: BuiltInput, text: string, options: Omit<SubmitOptions, "attachments">): Promise<void> {
@@ -374,6 +403,7 @@ export class ThreadRuntime implements Runtime {
 
 	private detachMcp?: () => void;
 	private expand?: (text: string) => string | undefined;
+	private history?: HistoryBridge;
 
 	async close(): Promise<void> {
 		this.detachMcp?.();

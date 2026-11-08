@@ -482,7 +482,8 @@ nonisolated struct ItemRenderer: Sendable {
         let m = NSMutableAttributedString()
         for (i, f) in files.enumerated() {
             if i > 0 { m.append(NSAttributedString(string: "   ", attributes: [.font: small])) }
-            let icon = f.kind == .image ? "▣" : (f.mimeType == "application/pdf" ? "PDF" : "TXT")
+            // An earlier chat sent along with @ reads CHAT.
+            let icon = f.kind == .image ? "▣" : f.mimeType == "application/pdf" ? "PDF" : f.mimeType == "text/x-piopio-conversation" ? "CHAT" : "TXT"
             let start = m.length
             m.append(NSAttributedString(string: "\u{2009}\u{2009}\(icon)  ", attributes: [.font: NSFont.systemFont(ofSize: 9.5, weight: .bold), .foregroundColor: f.mimeType == "application/pdf" ? DS.red : DS.fg3, .piopioPill: PillStyle.file.rawValue]))
             m.append(NSAttributedString(string: f.name + "\u{2009}\u{2009}", attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .medium), .foregroundColor: DS.fg, .piopioPill: PillStyle.file.rawValue]))

@@ -315,6 +315,8 @@ turn a conversation into an agent; the location chip. Next after the hardening a
 ## From deepseek-harness (built 2026-11-08)
 Sandbox for Build's commands, the model's clock, repeated-call nudge, oversized-result trim, pi-ai streaming patch, `/goal`, `present_files`, earlier conversations (tools and `@conversation`), auto review, Claude Code / Codex as subagents. See [docs/research/deepseek-harness.md](../research/deepseek-harness.md#as-built-2026-11-08); goals are the round driver Dispatch workers (DP2–DP4) can use. The sandbox replaces "OS sandbox for Build" in Later.
 
+- Loose chats: `@conversation` mentions (the chat goes along as a background attachment, CHAT chip). Open: goals in loose chats and agents; `present_files` there once they can make files.
+
 ## Dispatch (2026-11-03)
 Planned in [17-dispatch.md](17-dispatch.md): DP1 Watchdog rules, DP2–DP3 Dispatch (engine, app), DP4 non-blocking subagents, DP5 PR events (after G6–G7), DP6 the off-track check. Open questions DPQ1–DPQ6 are there.
 

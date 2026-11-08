@@ -620,6 +620,9 @@ extension Composer {
             if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
                 let q = trimmed.dropFirst().lowercased()
                 suggestions = Array(sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.prefix(12).map(Suggestion.command))
+            } else if let query = mentionQuery, query.count >= 2, !chatMentions(query).isEmpty {
+                // A chat outside projects: your other such chats whose title matches, sent along as background.
+                suggestions = chatMentions(query)
             } else if !suggestions.isEmpty {
                 suggestions = []
             }
@@ -651,6 +654,16 @@ extension Composer {
             suggestions = Array((files.map(Suggestion.file) + conversations).prefix(12))
             highlighted = 0
         }
+    }
+
+    /// Loose chats only (not in a project, not agents): the others whose title matches.
+    private func chatMentions(_ query: String) -> [Suggestion] {
+        guard thread.ref.kind == .thread,
+              engine.threads.first(where: { $0.ref.id == thread.ref.id })?.projectPath == nil else { return [] }
+        return engine.threads
+            .filter { $0.ref.id != thread.ref.id && $0.projectPath == nil && $0.title.localizedCaseInsensitiveContains(query) }
+            .prefix(6)
+            .map { Suggestion.conversation(id: $0.ref.id, title: $0.title) }
     }
 
     func accept(_ suggestion: Suggestion) {
@@ -705,7 +718,7 @@ extension Composer {
     private func subtitle(_ s: Suggestion) -> String {
         switch s {
         case .file: ""
-        case .conversation: "Conversation in this project, read as background"
+        case .conversation: isBuild ? "Conversation in this project, read as background" : "Another chat, sent along as background"
         case .builtIn(let c): c.summary
         case .command(let c): c.description.isEmpty ? (c.kind == .skill ? "Skill" : c.kind == .template ? "Prompt template" : "Extension command") : c.description
         }

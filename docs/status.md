@@ -25,7 +25,7 @@ tests use temporary engine data, but launch a real native window and require a l
 
 ## Latest local verification
 
-The TypeScript suite passes (212 tests; opt-in tests skipped), as do Swift package tests (42 tests).
+The TypeScript suite passes (213 tests; opt-in tests skipped), as do Swift package tests (42 tests).
 The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draft recovery, offline backup and
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also

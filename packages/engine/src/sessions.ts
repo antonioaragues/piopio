@@ -1279,6 +1279,7 @@ export class Sessions {
 				webOptions: this.webOptions,
 				...this.chatExtras("thread"),
 				extensions: [...(this.chatExtras("thread").extensions ?? []), ...(this.historyBridge(entry) ? [historyExtension(this.historyBridge(entry)!) as unknown as Extension] : [])],
+				...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
 				...(this.connectors ? { connectors: this.connectors } : {}),
 				toolsOff: () => entry.toolsOff ?? [],
 			});
