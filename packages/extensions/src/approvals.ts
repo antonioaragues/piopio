@@ -87,6 +87,10 @@ export function describe(tool: string, input: Record<string, unknown>): { title:
 			return { title: "Open a web page", detail: String(input.url ?? "") };
 		case "web_search":
 			return { title: "Search the web", detail: String(input.query ?? "") };
+		case "task": {
+			const agent = input.agent === "claude" ? "Claude Code" : input.agent === "codex" ? "Codex" : undefined;
+			return { title: agent ? `Hand a task to ${agent}` : "Start a subagent", detail: String(input.description ?? input.prompt ?? "").slice(0, 200) };
+		}
 		default:
 			return { title: `Use ${tool}`, detail: JSON.stringify(input).slice(0, 200) };
 	}

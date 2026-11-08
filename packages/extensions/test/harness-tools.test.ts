@@ -12,3 +12,9 @@ test("a file still being written in the same step is waited for, a wrong path is
 	expect(files[0]!.missing).toBeUndefined();
 	expect(files[1]).toMatchObject({ name: "nope.md", missing: true });
 });
+
+test("handing a task to another agent says which one on the approval card", async () => {
+	const { describe: describeCall } = await import("../src/approvals.js");
+	expect(describeCall("task", { agent: "claude", description: "Fix the tests", prompt: "…" })).toEqual({ title: "Hand a task to Claude Code", detail: "Fix the tests" });
+	expect(describeCall("task", { description: "Look around" })).toEqual({ title: "Start a subagent", detail: "Look around" });
+});

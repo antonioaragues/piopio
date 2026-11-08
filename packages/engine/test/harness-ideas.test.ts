@@ -4,7 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Snapshot } from "@piopio/protocol";
 import { afterEach, describe, expect, test } from "vitest";
-import { agentEnv, failureText } from "../src/external-agents.js";
+import { agentEnv, failureText, onClaudePlan } from "../src/external-agents.js";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
 import { TestClient } from "./client.js";
@@ -332,6 +332,12 @@ describe("Claude Code and Codex as subagents", () => {
 		expect(inside).toEqual({ PATH: "/bin", HOME: "/h", ANTHROPIC_API_KEY: "k" });
 		const outside = { PATH: "/bin", ANTHROPIC_BASE_URL: "https://mine" };
 		expect(agentEnv(outside)).toBe(outside);
+	});
+
+	test("on a Claude plan, Claude Code's estimate at API prices isn't counted as spending", () => {
+		expect(onClaudePlan('{"loggedIn": true, "authMethod": "claude.ai"}')).toBe(true);
+		expect(onClaudePlan('{"loggedIn": true, "authMethod": "api_key"}')).toBe(false);
+		expect(onClaudePlan("Claude did it with auth status")).toBe(false);
 	});
 
 	test("a CLI that isn't signed in says how to fix it", () => {

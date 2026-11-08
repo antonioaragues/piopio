@@ -14,7 +14,7 @@
  *
  * Found on PATH or in the usual install folders (an app-launched engine has a short PATH). Nothing is bundled.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { accessSync, constants, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -82,6 +82,31 @@ export function agentEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
 		out[k] = v;
 	}
 	return out;
+}
+
+/** Whether `claude auth status` says it's signed in with a Claude plan (claude.ai), not billed per use. */
+export function onClaudePlan(status: string): boolean {
+	try {
+		const s = JSON.parse(status) as { loggedIn?: boolean; authMethod?: string };
+		return s.loggedIn === true && s.authMethod === "claude.ai";
+	} catch {
+		return false;
+	}
+}
+
+const plans = new Map<string, boolean>();
+
+/**
+ * Claude Code reports a cost at API prices even when it runs on the user's Claude plan, where nothing is charged per
+ * use (seen on a real run, 2026-11-08: $0.14 for a short task). Only a per-use sign-in (an API key) counts toward the
+ * session's spending. Asked once per CLI path.
+ */
+function billedPerUse(path: string): boolean {
+	if (!plans.has(path)) {
+		const r = spawnSync(path, ["auth", "status"], { encoding: "utf8", timeout: 10_000, env: agentEnv() });
+		plans.set(path, onClaudePlan(r.stdout ?? ""));
+	}
+	return !plans.get(path);
 }
 
 /** What a failed run says, plus how to fix it when the CLI isn't signed in (its own sign-in, apart from any app's). */
@@ -152,7 +177,7 @@ export function runExternalAgent(agent: ExternalAgent, run: ExternalRun): Promis
 		child.on("close", (code) => {
 			run.signal?.removeEventListener("abort", stop);
 			if (run.signal?.aborted) return finish({ text: "", sessionId: "", costUsd: 0, status: "stopped" });
-			if (agent === "claude" && result) return finish({ text: result.error ? failureText(agent, result.text) : result.text, sessionId: "", costUsd: result.cost, status: result.error ? "error" : "done" });
+			if (agent === "claude" && result) return finish({ text: result.error ? failureText(agent, result.text) : result.text, sessionId: "", costUsd: result.cost && billedPerUse(run.path) ? result.cost : 0, status: result.error ? "error" : "done" });
 			if (agent === "codex" && code === 0) {
 				let text = lastText;
 				try {
