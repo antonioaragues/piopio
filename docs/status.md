@@ -26,9 +26,10 @@ tests use temporary engine data, but launch a real native window and require a l
 ## Latest local verification
 
 The TypeScript suite passes (212 tests, 2 opt-in tests skipped), as do Swift package tests (42 tests) and the app
-build. Two failures that only appeared on Linux CI are fixed: the sandbox is macOS-only, so Build's approvals tests
-run commands without it elsewhere, and `packages.remove`/`update` resolved a relative local package against the wrong
-folder. The next push on `main` confirms both in the hosted job.
+build. Three things only the Linux job caught are fixed: Build's commands run without the sandbox where
+`sandbox-exec` can't exist (instead of refusing every command there), `packages.remove`/`update` no longer resolve a
+relative local package against the wrong folder, and a git process closing its input early no longer crashes the
+engine (EPIPE).
 The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draft recovery, offline backup and
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also

@@ -200,6 +200,10 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 				if (outside || !bridge.enabled()) return plain.execute(toolCallId, input as never, signal, onUpdate, ctx);
 				const unavailable = sandboxUnavailable();
 				if (unavailable) {
+					// Elsewhere there is no sandbox to fall back from (the app ships on macOS; the suites run on Linux CI), and
+					// refusing every command would only make the engine unusable there. On a Mac whose sandbox is broken, keep
+					// stopping: running unsandboxed is not what the setting promised.
+					if (process.platform !== "darwin") return plain.execute(toolCallId, input as never, signal, onUpdate, ctx);
 					return { content: [{ type: "text", text: `Nothing ran: Piopio's sandbox can't start on this Mac (${unavailable}). Tell the user; they can turn the sandbox off in Settings › Approvals, or you can ask to run this with ${OUTSIDE_PROJECT}: true.` }], details: {}, isError: true } as never;
 				}
 				const result = await confined.execute(toolCallId, input as never, signal, onUpdate, ctx);

@@ -23,10 +23,6 @@ async function start(home = mkdtempSync(join(tmpdir(), "piopio-test-")), faux = 
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0", services: ["secrets.set"] });
-	// piopio-sandbox is macOS-only (packages/extensions/src/sandbox.ts), and it's on by default: elsewhere every
-	// `bash` call would stop with "Piopio's sandbox can't start". Its own tests are macOS-only already, so the
-	// rest of the suite runs commands plainly on Linux CI instead of each test turning it off.
-	if (process.platform !== "darwin") await client.call("settings.set", { build: { sandbox: false } });
 	const ctx = { home, engine, client };
 	open.push(ctx);
 	return ctx;

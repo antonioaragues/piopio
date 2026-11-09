@@ -40,6 +40,9 @@ export async function git(cwd: string, args: string[], options: { stdin?: string
 			if (code === 0) resolve(out);
 			else reject(new EngineError("INVALID", friendly(args[0] ?? "git", (err || out).trim(), code)));
 		});
+		// git can exit before reading its input; the write then fails with EPIPE, and an unhandled 'error' on the stream
+		// crashed the engine. The exit code is what tells the story.
+		child.stdin.on("error", () => {});
 		child.stdin.end(options.stdin ?? "");
 	});
 }
