@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import PiopioKit
+import PiopioTranscript
 import ServiceManagement
 
 /// Owns the Local Engine: starts it (or attaches to a running one), answers its secret requests from the
@@ -807,6 +808,7 @@ final class EngineController {
         guard let client else { return }
         let list = try await client.call("models.list", ModelsListParams(), as: ModelsListResult.self)
         models = list.models.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        ModelNames.set(models.map { ($0.provider, $0.id, ModelChip.short($0).replacingOccurrences(of: "Claude ", with: "")) })
         defaultModel = list.defaultModel
     }
 

@@ -658,6 +658,7 @@ public final class TranscriptDocument {
         storage.enumerateAttribute(.attachment, in: range) { value, _, _ in
             (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
             (value as? DisclosureAttachment)?.card.onAction = { [weak self] action in self?.handle(action) }
+            (value as? FileCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             if let row = (value as? ActionsAttachment)?.actions {
                 row.document = self
                 actionRows[row.itemId] = row

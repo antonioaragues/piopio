@@ -63,7 +63,7 @@ nonisolated struct ItemRenderer: Sendable {
             // Files the agent handed over: a card per file that opens it (piopio-present).
             guard case .files(let files)? = t.typedDetails, !files.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
             let out = NSMutableAttributedString()
-            for file in files { out.append(attachmentParagraph(DisclosureAttachment(card: Self.fileCard(file, root: root)))) }
+            for file in files { out.append(attachmentParagraph(FileCardAttachment(model: FileCardModel(file: file, shownPath: Self.relative(file.path, root: root))), spacing: 8)) }
             return out
         case .tool(let t):
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root)))
@@ -257,7 +257,7 @@ nonisolated struct ItemRenderer: Sendable {
     }
 
     /// A turn's activity as one quiet line (chat v3, 14a): "Thought for 3s, edited RESUMEN.md +13 ›", or what's running
-    /// now ("Running pnpm test…"). It opens to the thought and each step's card.
+    /// now ("Running a command…", "Editing RESUMEN.md…"). It opens to the thought and each step's card.
     static func stepsCard(_ s: StepsItem, root: String? = nil) -> DisclosureCard {
         let running = s.tools.first { $0.status == .running }
         let waiting = s.tools.contains { $0.status == .pendingApproval }
@@ -274,10 +274,13 @@ nonisolated struct ItemRenderer: Sendable {
         card.failed = s.tools.contains { $0.status == .error }
         if waiting {
             card.title = "Waiting for you"
+        } else if let running, running.tool == "bash" {
+            // Commands are often long chains ("cd … && export … && pnpm test"): the line just says one is running, and
+            // opening it shows the command in full.
+            card.title = "Running a command…"
         } else if let running {
             let (verb, raw) = toolTitle(running)
-            let detail = running.tool == "bash" ? displayCommand(raw, root: root).command : relative(raw, root: root)
-            card.title = detail.isEmpty ? "\(verb)…" : "\(verb) \(detail)…"
+            card.title = relative(raw, root: root).isEmpty ? "\(verb)…" : "\(verb) \(relative(raw, root: root))…"
         } else {
             card.parts = activityParts(s, root: root)
             card.title = card.parts.map { [$0.text, $0.chip].compactMap { $0 }.joined(separator: " ") }.joined(separator: ", ")
@@ -878,6 +881,7 @@ nonisolated struct ItemRenderer: Sendable {
 
     /// "anthropic/claude-haiku-5.5" → "Haiku 5.5"; other ids lose only their provider.
     static func modelName(_ id: String) -> String {
+        if let known = ModelNames.name(for: id) { return known }
         var name = id.split(separator: "/").last.map(String.init) ?? id
         if name.hasPrefix("claude-") {
             name = name.dropFirst(7).replacingOccurrences(of: "-", with: " ")
@@ -1024,11 +1028,11 @@ nonisolated struct ItemRenderer: Sendable {
         return m
     }
 
-    private func attachmentParagraph(_ attachment: NSTextAttachment) -> NSAttributedString {
+    private func attachmentParagraph(_ attachment: NSTextAttachment, spacing: CGFloat = 12) -> NSAttributedString {
         let s = NSMutableAttributedString(attachment: attachment)
         s.append(NSAttributedString(string: "\n"))
         let p = NSMutableParagraphStyle()
-        p.paragraphSpacing = 12
+        p.paragraphSpacing = spacing
         p.paragraphSpacingBefore = 2
         s.addAttribute(.paragraphStyle, value: p, range: NSRange(location: 0, length: s.length))
         return s
@@ -1048,3 +1052,26 @@ nonisolated struct ItemRenderer: Sendable {
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
+
+/// What the app calls each model ("DeepSeek V4.1 Flash 1017" for "deepseek-v4.1-flash-1017"), so a message's footer names
+/// it as the composer's chip does. The app fills it from the engine's catalog; unknown ids fall back to the id.
+public enum ModelNames {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var names: [String: String] = [:]
+
+    /// `models`: (provider, id, name) from the catalog.
+    public static func set(_ models: [(provider: String, id: String, name: String)]) {
+        var table: [String: String] = [:]
+        for m in models {
+            for key in [m.id, "\(m.provider)/\(m.id)", m.id.split(separator: "/").last.map(String.init) ?? m.id] where table[key] == nil {
+                table[key] = m.name
+            }
+        }
+        lock.withLock { names = table }
+    }
+
+    static func name(for id: String) -> String? {
+        lock.withLock { names[id] ?? id.split(separator: "/").last.flatMap { names[String($0)] } }
+    }
+}
+

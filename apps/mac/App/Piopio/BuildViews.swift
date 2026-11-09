@@ -280,7 +280,7 @@ struct BuildSessionView: View {
     }
 
     /// The toolbar (docs/design/session-panel): the title (it opens the session tree) and "project · branch", then the
-    /// views as icons (Summary, Changes, Files, Terminal), a divider, Open in and ···. Git lives in Summary's branch
+    /// views as icons (Summary, Changes, Files, Terminal), a divider and ··· (with Open in <editor>). Git lives in Summary's branch
     /// row. Status and cost aren't here: status is in the sidebar, cost in the column's footer.
     private var header: some View {
         PageHeader {
@@ -303,12 +303,12 @@ struct BuildSessionView: View {
                 }
             }
             ToolbarDivider()
-            if let cwd = summary.cwd { OpenMenu(path: cwd, iconOnly: true) }
             Menu {
                 Button("Session Tree") { session.showTree = true }
                 Button("Review All Changes") { review(nil) }
                 if let cwd = summary.cwd {
                     Divider()
+                    if let editor = Editor.preferred { Button("Open in \(editor.name)") { editor.open(cwd) } }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) }
                     Button("Copy Path") {
                         NSPasteboard.general.clearContents()
@@ -320,7 +320,7 @@ struct BuildSessionView: View {
             } label: { Image(systemName: "ellipsis") }
                 .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
                 .accessibilityLabel("More")
-                .help("Session tree, review, Finder")
+                .help("Session tree, review, open in an editor or Finder")
             Button("") { toggleInspector() }.keyboardShortcut("i", modifiers: [.command, .shift]).hidden().frame(width: 0)
         }
         .background {

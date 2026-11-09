@@ -72,9 +72,6 @@ struct Composer: View {
             }
             if !suggestions.isEmpty { suggestionList }
             box
-            if thread.isRunning {
-                Text(thread.debate?.status == .running ? "esc to stop the debate" : text.isEmpty ? "esc to stop" : "↩ to queue · ⌥↩ to steer now · esc to stop").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity)
-            }
         }
         .onChange(of: text) { _, value in
             suggest(for: value)
@@ -185,6 +182,11 @@ struct Composer: View {
                     ModelChip(engine: engine, thread: thread)
                 }
                 let stopping = thread.isRunning && text.isEmpty
+                // While it works, the keys next to the button that uses them: esc stops it, ⌥↩ steers with what you typed.
+                if thread.isRunning {
+                    KeyHint(keys: stopping ? "esc" : "⌥↩", label: stopping ? "to stop" : "to steer")
+                        .help(stopping ? "Esc or ⌘. stops it" : "↩ queues it after this answer; ⌥↩ sends it now")
+                }
                 Button { stopping ? stop() : send(steer: false) } label: {
                     Image(systemName: stopping ? "stop.fill" : "arrow.up")
                         .font(.system(size: stopping ? 9 : 12, weight: .semibold))
@@ -756,3 +758,21 @@ struct AttachButton: View {
         .accessibilityLabel("Add files or folders")
     }
 }
+
+/// A key in a small keycap and what it does ("esc to stop"), quiet, beside the control it belongs to.
+struct KeyHint: View {
+    let keys: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(keys).font(.system(size: 10.5, weight: .medium)).foregroundStyle(Color.dsFg2)
+                .padding(.horizontal, 4).frame(height: 16)
+                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+            Text(label).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+        }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+

@@ -14,7 +14,8 @@ struct GroupHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            SectionLabel(title).accessibilityAddTraits(.isHeader)
+            // The group's title over its rows' grey labels: fg and semibold, so the card reads as sections.
+            Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.dsFg).accessibilityAddTraits(.isHeader)
             Spacer(minLength: 4)
             trailing
         }
@@ -139,12 +140,13 @@ struct NowGroup: View {
     let detail: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
-                StatusDot(status: waiting ? .waiting : .running)
+        // The dot in its own column, so the detail ("Step 1 of 4") starts where the title does.
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            StatusDot(status: waiting ? .waiting : .running).frame(width: 10)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(waiting ? "Waiting for you" : title).font(.system(size: 14, weight: .semibold)).lineLimit(2)
+                if let detail { Text(detail).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3) }
             }
-            if let detail { Text(detail).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3) }
         }
         .summaryGroup()
         .accessibilityElement(children: .combine)

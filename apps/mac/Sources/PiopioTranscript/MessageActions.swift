@@ -82,38 +82,32 @@ struct ActionsRow: View {
     let actions: MessageActions
     @State private var rewinding = false
 
+    /// The same shape under every message: the icon buttons, then a quiet line with who and when. Yours sit on the
+    /// right, under your bubble; answers on the left.
     var body: some View {
         HStack(spacing: 0) {
-            if actions.role == .user {
-                Spacer(minLength: 0)
-                if actions.visible {
-                    HStack(spacing: 5) {
-                        ReadMark(read: actions.readBy != nil).help(actions.readBy.map { "Read by \($0)" } ?? "Sent")
-                        if let at = actions.at { MessageTime(date: at) }
-                        Text("·").foregroundStyle(Color(nsColor: DS.fg3))
-                    }
-                    .font(.system(size: 11.5))
-                    .padding(.trailing, 4)
-                    .transition(.opacity)
-                }
-            }
+            if actions.role == .user { Spacer(minLength: 0) }
             if actions.visible || actions.copied { buttons.transition(.opacity) }
-            if actions.role == .answer {
-                if actions.visible {
-                    HStack(spacing: 5) {
-                        if !actions.meta.isEmpty { Text(actions.meta).foregroundStyle(Color(nsColor: DS.fg3)).help(actions.metaHelp ?? "") }
-                        if !actions.meta.isEmpty, actions.at != nil { Text("·").foregroundStyle(Color(nsColor: DS.fg3)) }
-                        if let at = actions.at { MessageTime(date: at) }
-                    }
-                    .font(.system(size: 11.5))
-                    .padding(.leading, 6)
-                    .transition(.opacity)
-                }
-                Spacer(minLength: 0)
-            }
+            if actions.visible { info.padding(.leading, 6).transition(.opacity) }
+            if actions.role == .answer { Spacer(minLength: 0) }
         }
         .frame(height: MessageActions.height)
         .animation(.easeOut(duration: 0.12), value: actions.visible)
+    }
+
+    /// "✓ · 3 min ago" under yours (✓✓ once read); "Haiku 5.5 · 3 min ago" under an answer.
+    private var info: some View {
+        HStack(spacing: 5) {
+            if actions.role == .user {
+                ReadMark(read: actions.readBy != nil).help(actions.readBy.map { "Read by \($0)" } ?? "Sent")
+            } else if !actions.meta.isEmpty {
+                Text(actions.meta).foregroundStyle(Color(nsColor: DS.fg3)).help(actions.metaHelp ?? "")
+            }
+            if actions.at != nil, actions.role == .user || !actions.meta.isEmpty { Text("·").foregroundStyle(Color(nsColor: DS.fg3)) }
+            if let at = actions.at { MessageTime(date: at) }
+        }
+        .font(.system(size: 11.5))
+        .lineLimit(1)
     }
 
     @ViewBuilder private var buttons: some View {
@@ -123,13 +117,8 @@ struct ActionsRow: View {
         if actions.role == .user {
             if actions.canEdit { IconButton(symbol: "pencil", help: actions.canRewind ? "Edit: rewinds the chat to here and puts your message in the composer" : "Edit and resend (keeps this version)") { act(.edit(itemId: actions.itemId)) } }
             if actions.canRewind {
-                Button { rewinding = true } label: {
-                    Label("Rewind to here", systemImage: "arrow.uturn.backward").font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg2))
-                        .padding(.horizontal, 9).frame(height: 24).background(Color(nsColor: DS.chip), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .padding(.leading, 4)
-                .help("Go back to before this message")
+                IconButton(symbol: "arrow.uturn.backward", help: "Rewind to here: go back to before this message") { rewinding = true }
+                .accessibilityLabel("Rewind to here")
                 .popover(isPresented: $rewinding, arrowEdge: .bottom) {
                     RewindPopover(itemId: actions.itemId, document: actions.document) { rewinding = false }
                 }
