@@ -13,7 +13,7 @@ Piopio is a native macOS app on top of the **pi** agent harnesses (`pi-coding-ag
 | [06-agents.md](06-agents.md) | Agents mode: definitions, channels, scheduling, agent-to-agent, cloud deploy |
 | [07-shared-resources.md](07-shared-resources.md) | Models, keys, skills, MCP, memory, extensions, settings |
 | [08-app-shell.md](08-app-shell.md) | Window, navigation, transcript, composer, notifications, shortcuts |
-| [09-roadmap.md](09-roadmap.md) | Phases, spikes, milestones and acceptance criteria |
+| [09-roadmap.md](09-roadmap.md) | Phases, acceptance criteria, backlog, Later and open questions ([what each milestone delivered](../history/milestones.md)) |
 | [10-model-providers.md](10-model-providers.md) | Multi-provider model support: requirements, inspection and what's built |
 | [11-computer-use.md](11-computer-use.md) | Computer use spike: models, open-source projects, recommendation |
 | [12-connectors.md](12-connectors.md) | Connectors: connect an app once, use it in any chat; first Google Calendar and Outlook |

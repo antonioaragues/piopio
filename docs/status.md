@@ -14,24 +14,29 @@ they do not establish that every provider, OS permission flow or production serv
 
 ## Automated checks
 
-`.github/workflows/checks.yml` runs TypeScript builds, type checking and scripted tests on Linux.
-Swift tests and the app build require an Apple-silicon runner with macOS 27, Xcode 27 and XcodeGen. Register a
-self-hosted runner with `piopio-macos-27`, `macOS` and `ARM64` labels and set the repository variable
-`PIOPIO_SWIFT_CI=true` to enable that job on pushes/manual runs. Pull requests run the hosted TypeScript job; unreviewed pull-request code never runs on the personal Mac runner. Until configured, Swift CI is explicitly skipped; local checks remain
-`scripts/swift-test.sh` and `scripts/build-app.sh`.
+`.github/workflows/checks.yml` runs TypeScript builds, type checking and scripted tests on Linux, and `swift`
+(`scripts/swift-test.sh`) plus `app` (`scripts/build-app.sh`) jobs on a self-hosted Apple-silicon runner with macOS 27,
+Xcode 27 and XcodeGen. The Swift jobs are skipped until a runner is registered with the `piopio-macos-27` label **and**
+the repository variable `PIOPIO_SWIFT_CI=true` is set; pull requests never run them, because that runner is the personal
+Mac and pull-request code is unreviewed. Registration, enabling and what CI doesn't cover: [ci.md](ci.md).
 
 The scripted suites don't need provider keys. Live-provider and fixture-recording tests are opt-in. App smoke
 tests use temporary engine data, but launch a real native window and require a logged-in macOS GUI session.
 
 ## Latest local verification
 
-The TypeScript suite passes (216 tests; opt-in tests skipped), as do Swift package tests (42 tests).
+The TypeScript suite passes (212 tests, 2 opt-in tests skipped), as do Swift package tests (42 tests) and the app
+build. Two failures that only appeared on Linux CI are fixed: the sandbox is macOS-only, so Build's approvals tests
+run commands without it elsewhere, and `packages.remove`/`update` resolved a relative local package against the wrong
+folder. The next push on `main` confirms both in the hosted job.
 The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draft recovery, offline backup and
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also
 been captured and inspected. This does not replace the real-provider, OS-permission or VoiceOver checks below.
 
 ## Personal acceptance checklist
+
+Steps, pass criteria, evidence and a results table for each item: [acceptance.md](acceptance.md).
 
 - [ ] Build: complete one real change, approve/deny commands, inspect diffs, rewind chat and files, resume after restart.
 - [ ] Chat: send images/text/PDFs, edit/regenerate, switch away with a draft, reconnect after a failed send and retry once.
@@ -62,4 +67,6 @@ been captured and inspected. This does not replace the real-provider, OS-permiss
   Home is the one start, with the project and permissions in the box; Read only replaces the Chat lens (folders
   of documents start in it); a chat can continue in a project folder or move into a project without one.
 - Agent definitions refuse fields that nothing runs yet (http_request, codemode, files, tools.mcp, channels) on save.
-- Cloud and channels remain separate roadmap work. See [09-roadmap.md](spec/09-roadmap.md) for historical milestones.
+- Cloud and channels remain separate roadmap work. The phases and what each one still needs are in
+  [09-roadmap.md](spec/09-roadmap.md); what each milestone delivered, with dates, is in
+  [history/milestones.md](history/milestones.md).

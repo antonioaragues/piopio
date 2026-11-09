@@ -106,6 +106,8 @@ On first launch the app lets you choose areas, connect a model provider and set 
 <summary><b>Tests, demos and releases</b></summary>
 
 ```bash
+# CI runs these three, and the Swift ones below, on every push (docs/ci.md).
+pnpm build && pnpm typecheck
 pnpm test          # engine, runtime, policy and cloud tests (scripted model; no key needed)
 pnpm test:swift    # PiopioKit and PiopioTranscript tests
 pnpm demo:s1       # Swift CLI ↔ engine, both runtimes, scripted model
@@ -139,7 +141,8 @@ OpenRouter usage totals cover the API key, may include other apps and exclude ot
 
 - [Product specification](docs/spec/README.md): product, architecture, engine protocol and each area
 - [Current status](docs/status.md): what is implemented and what still needs acceptance
-- [Releasing](docs/releasing.md) and [backup](docs/backup.md)
+- [Releasing](docs/releasing.md), [backup](docs/backup.md) and [continuous integration](docs/ci.md)
+- [Acceptance pass](docs/acceptance.md): the eight real-model scenarios, with steps, pass criteria and evidence
 
 ## License
 
