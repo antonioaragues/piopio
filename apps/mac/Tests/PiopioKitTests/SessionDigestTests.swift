@@ -40,3 +40,16 @@ import Testing
     #expect(inputs.read == ["README.md", "src/app.swift"])
     #expect(inputs.commands == 1)
 }
+
+@Test func editedFilesAreOnlyWhatItsOwnToolsChanged() {
+    let items: [TimelineItem] = [
+        .tool(ToolItem(id: "t1", at: "", callId: "c1", tool: "edit", args: .object(["path": .string("/p/src/a.swift")]), status: .done)),
+        .steps(StepsItem(id: "s1", at: "", tools: [
+            ToolItem(id: "t2", at: "", callId: "c2", tool: "write", args: .object(["path": .string("docs/new.md")]), status: .done),
+            ToolItem(id: "t3", at: "", callId: "c3", tool: "edit", args: .object(["path": .string("src/a.swift")]), status: .done),
+            ToolItem(id: "t4", at: "", callId: "c4", tool: "edit", args: .object(["path": .string("src/failed.swift")]), status: .error),
+            ToolItem(id: "t5", at: "", callId: "c5", tool: "bash", args: .object(["command": .string("git commit -am x")]), status: .done),
+        ])),
+    ]
+    #expect(SessionDigest.inputs(items: items, cwd: "/p", exists: { _ in true }).edited == ["src/a.swift", "docs/new.md"])
+}

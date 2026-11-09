@@ -22,6 +22,9 @@ The handoff is in [README.md](README.md); the canvas is `Harness Panel Proposals
 - **Files** (`FilesPanel.swift`):
   - At the top: the filter (the same file search as @), and All or Touched.
   - The tree marks files N (new), M (changed) or R (read), and folders with a dot when something inside was touched.
+  - **Touched** is what this agent did with its own tools: the files it read and the ones it wrote or edited. It isn't
+    everything that changed in the folder since the session started, which in a long session also counts your
+    commits, other agents' work and what commands changed. The Changes tab shows all of that.
   - At the bottom, the legend.
   - Clicking a file shows its preview in the panel: Diff or File, Open in editor, Mention in chat.
 - **Engine:**
@@ -51,8 +54,8 @@ The handoff is in [README.md](README.md); the canvas is `Harness Panel Proposals
   - the Changes tab with Not saved yet and two commits;
   - Files with Touched;
   - a modified file's preview, which opens on Diff.
+- **Seen later the same day:** the no-plan state; All with the project's tree; Touched with only N, M and R files.
 - **Not seen yet:**
-  - the no-plan state;
   - "6 earlier commits";
   - a session without git;
   - light mode.

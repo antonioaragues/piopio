@@ -46,6 +46,8 @@ public enum SessionDigest {
         public var mentions: [String] = []
         /// Files it read itself, relative to the project, first read first.
         public var read: [String] = []
+        /// Files it wrote or edited with its own tools (not through commands), relative to the project.
+        public var edited: [String] = []
         /// Commands it ran (denied ones and those waiting for you don't count).
         public var commands = 0
         public init() {}
@@ -56,13 +58,17 @@ public enum SessionDigest {
     ///   - exists: whether a path (relative to `cwd`, or absolute) is a file or folder; mentions that aren't are prose.
     public static func inputs(items: [TimelineItem], cwd: String?, exists: (String) -> Bool) -> Inputs {
         var out = Inputs()
-        var seenNames = Set<String>(), seenMentions = Set<String>(), seenRead = Set<String>()
+        var seenNames = Set<String>(), seenMentions = Set<String>(), seenRead = Set<String>(), seenEdited = Set<String>()
         func tool(_ t: ToolItem) {
             switch t.tool {
             case "read":
                 guard let raw = t.args?["path"]?.stringValue, t.status != .denied else { return }
                 let path = relative(raw, cwd: cwd)
                 if seenRead.insert(path).inserted { out.read.append(path) }
+            case "edit", "write":
+                guard t.status == .done, let raw = t.args?["path"]?.stringValue else { return }
+                let path = relative(raw, cwd: cwd)
+                if seenEdited.insert(path).inserted { out.edited.append(path) }
             case "bash":
                 if t.status != .denied && t.status != .pendingApproval { out.commands += 1 }
             default: break

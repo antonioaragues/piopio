@@ -32,11 +32,14 @@ struct FilesPanel: View {
     @State private var matches: [FileMatch] = []
     @FocusState private var searching: Bool
 
+    /// What this agent touched: the files it read and the ones it wrote or edited with its tools. Not everything that
+    /// changed in the folder since the session started, which also counts your commits and other agents' work.
     private var marks: [String: TouchMark] {
         var out: [String: TouchMark] = [:]
-        let read = SessionDigest.inputs(items: session.document.items, cwd: cwd, exists: { _ in true }).read
-        for path in read where !path.hasPrefix("/") { out[path] = .read }
-        for change in changes { out[change.path] = change.status == .added ? .new : .changed }
+        let inputs = SessionDigest.inputs(items: session.document.items, cwd: cwd, exists: { _ in true })
+        for path in inputs.read where !path.hasPrefix("/") { out[path] = .read }
+        let added = Set(changes.filter { $0.status == .added }.map(\.path))
+        for path in inputs.edited where !path.hasPrefix("/") { out[path] = added.contains(path) ? .new : .changed }
         return out
     }
 
@@ -165,7 +168,8 @@ struct LazyFileTree: View {
     @State private var expanded: Set<String> = []
 
     var body: some View {
-        rows(dir: "", depth: 0)
+        // In a stack: an empty ForEach never appears, so a task on it alone never loaded the first level.
+        VStack(alignment: .leading, spacing: 1) { rows(dir: "", depth: 0) }
             .task(id: cwd) { children[""] = await engine.listDir(cwd, "") }
     }
 

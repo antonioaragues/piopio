@@ -140,7 +140,8 @@ struct BuildSessionView: View {
             }
         }
         .onChange(of: hasChanges) { _, changed in
-            if changed, Self.inspectorChoice(summary.ref.id) == nil {
+            // Opens on the Inspector the first time a turn changes files; a panel you already have open stays as it is.
+            if changed, !showInspector, Self.inspectorChoice(summary.ref.id) == nil {
                 inspectorTab = .inspector
                 withAnimation(.easeOut(duration: 0.15)) { showInspector = true }
             }
