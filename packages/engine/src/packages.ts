@@ -133,12 +133,24 @@ export class Packages {
 
 	remove(source: string): Promise<void> {
 		return this.run(async () => {
-			if (!(await this.manager().packages.removeAndPersist(source))) throw new EngineError("NOT_FOUND", `No package ${source}`);
+			if (!(await this.manager().packages.removeAndPersist(this.absolute(source)))) throw new EngineError("NOT_FOUND", `No package ${source}`);
 		});
 	}
 
 	update(source?: string): Promise<void> {
-		return this.run(() => this.manager().packages.update(source));
+		return this.run(() => this.manager().packages.update(source === undefined ? undefined : this.absolute(source)));
+	}
+
+	/**
+	 * pi keeps a local package's path relative to its agent dir and `list()` gives it back that way, but it matches an
+	 * input path against the package manager's cwd. Passing the listed source back made `remove` and `update` fail for
+	 * any local package whose source is relative (one inside or near the home), which is how a folder in ~/Piopio broke.
+	 * Hand pi an absolute path so both sides resolve to the same one.
+	 */
+	private absolute(source: string): string {
+		if (kindOf(source) !== "local") return source;
+		const path = source.replace(/^~(?=\/|$)/, homedir());
+		return isAbsolute(path) ? path : resolve(this.agentDir, path);
 	}
 
 	/** On or off, for the whole package or some kinds of resources (`kinds` omitted: all of them). */

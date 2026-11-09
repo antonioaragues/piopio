@@ -164,6 +164,9 @@ function gitRunner(gitDir: string, workTree: string): Git {
 			child.stderr.setEncoding("utf8").on("data", (d: string) => (err += d));
 			child.on("error", reject);
 			child.on("close", (code) => (code === 0 ? resolve(out) : reject(new Error(`git ${args[0]}: ${err.trim() || `exit ${code}`}`))));
+			// git can exit before reading its input (`git hash-object` on a bad path); the write then fails with EPIPE.
+			// The exit code is what matters, and an unhandled 'error' on the stream crashed the engine.
+			child.stdin.on("error", () => {});
 			child.stdin.end(stdin ?? "");
 		});
 }
