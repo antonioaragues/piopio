@@ -1,6 +1,6 @@
 # 19 — Agent teams
 
-Draft, 2026-11-09; the main choices are decided (§8). Nothing here is built unless it says so. It ties together 06-agents (personal
+Draft, 2026-11-09; the choices are decided (§8). Nothing here is built unless it says so. It ties together 06-agents (personal
 agents), 13-cloud-engine (Durable Objects, Telegram, WhatsApp), 17-dispatch (a coordinator for Build) and 18 phase 3
 (turn a conversation into an agent), which today are four separate ideas.
 
@@ -16,6 +16,25 @@ agents), 13-cloud-engine (Durable Objects, Telegram, WhatsApp), 17-dispatch (a c
    the app, on Telegram or on WhatsApp, and they can come to you.
 5. **You stay in charge.** Every agent has a budget, every irreversible step asks you, and you can open any piece of
    work and take over.
+
+### Simple first (non-negotiable)
+
+Teams are a layer on top. What you get without asking for any of it stays as simple as Grok Bot
+(docs/research/grok-bot.md):
+
+- **S1 An agent is a contact.** Agents are a list like a messaging app's: avatar, name, last line, unread dot. Each
+  has one conversation with you. A team is an agent too; its board is one more tab on its page.
+- **S2 You set it up by talking.** A new agent interviews you with two or three question cards and drafts itself
+  (AD5). The definition and forms are for later edits, never the first step.
+- **S3 Proactive by asking.** "Every weekday at 8, …", "When an email from my bank arrives, …", "If nothing happened
+  by Friday, remind me". Each one becomes a **routine** the agent creates itself. The trigger is a time, an event (a
+  webhook, a new email or calendar event from a connected app, a file in a folder) or a check (the heartbeat). The
+  agent page lists the routines; it has no form for them (UI8).
+- **S4 Telegram in a minute, without the cloud.** Make a bot with @BotFather and paste its token in the chat. The
+  agent answers on Telegram right away, from the Mac, by polling Telegram (no webhook, tunnel or Cloudflare
+  account). Moving the agent to the cloud later makes it answer with the Mac off.
+- **S5 Nothing extra to learn for one agent.** Boards, roles, workplaces and budgets per task appear only once an
+  agent leads a team. One agent with routines and Telegram needs none of them.
 
 ### Three examples
 
@@ -172,6 +191,9 @@ You ─▶ Lead ── plan ──▶ Board (tasks) ──▶ members work in pa
 
 - **CH-T1 A team answers through its lead.** A channel can point at an agent or at a team. A team's channel reaches
   its lead.
+- **CH-T0 Telegram on the Mac** (S4): the engine polls Telegram (`getUpdates`) for each local agent's bot while the Mac
+  is awake, so no webhook or public address is needed. On deploy, the cloud registers the webhook and the Mac stops
+  polling that bot, so there's never two receivers.
 - **CH-T2 One front door per number.** Telegram gets a bot per agent or per team (AQ1); WhatsApp gets one number with
   one front agent (AQ2), which routes to agents and teams with `ask_agent` or by opening a task.
 - **CH-T3 Long work in chat apps.** Over a channel, the lead answers within seconds with a plan line ("On it: 3
@@ -184,28 +206,24 @@ Each phase ends with something usable every day.
 
 | Phase | Scope | Acceptance |
 |---|---|---|
-| **T0 · One agent model** | Leads, specialists and role cards are agents (T1, T7). "Turn into an agent" as an interview card in the conversation (AD5). The default role cards. | Make three agents from conversations without touching the form. |
-| **T1 · Teams on this Mac** | Teams, the board (TC1), non-blocking tasks (TC2), reports (TC3), hire and keep (T2, T6), guards (TC5), the team page. "Make a team for this". | A Research team runs a weekly brief from a schedule; a Writing team turns notes into a post with a review loop. |
-| **T2 · Teams that build** | Tasks with a folder workplace run as Build sessions in worktrees (T3). Dispatch becomes the default team (T5), and 17's Watchdog and PR events come with it. | Build a small feature with a lead, a builder and a reviewer; merge from the result card. |
-| **T3 · In the cloud** | 13's milestones 5.1–5.4: deploy agents and teams, the Mac Bridge for build tasks and Apple apps, cross-engine messages (R2). | A cloud lead takes a task with the Mac off and finishes it when the Mac wakes. |
-| **T4 · Channels** | Telegram first, then WhatsApp (13 §5.3, §5.5), with teams reachable through their lead (§6). | The landing-page example (§0), end to end, from WhatsApp. |
+| **T0 · Simple agents** | The single-agent path (S1–S5): set up by talking (interview cards in the conversation, AD5); "Turn into an agent" as a card in the conversation; routines by asking, with time, webhook, connected-app and folder triggers (S3); **Telegram from the Mac by polling** (S4); leads, specialists and role cards are agents (T1, T7). | Make three agents by talking, without touching a form. One messages you on Telegram every morning; another answers when an email from a given sender arrives. |
+| **T1 · Teams on this Mac** | Teams, the board as a kanban (TC1, TD5), non-blocking tasks (TC2), reports (TC3), hire and keep (T2, T6, TD6), guards (TC5), the team folder (TD7), the team page. "Make a team for this". | A Research team runs a weekly brief from a routine; a Writing team turns notes into a post with a review loop. |
+| **T2 · Teams that build** | Tasks with a folder workplace run as Build sessions in worktrees (T3). Dispatch becomes the default team (T5, TD2), with 17's Watchdog and PR events. | Build a small feature with a lead, a builder and a reviewer; merge from the result card. |
+| **T3 · In the cloud** | 13's milestones 5.1–5.4: deploy agents and teams, Telegram by webhook from the cloud (always on), the Mac Bridge for build tasks and Apple apps, cross-engine messages (R2). | A Telegram agent answers with the Mac off; a cloud lead takes a build task and finishes it when the Mac wakes. |
+| **T4 · WhatsApp** | 13 §5.5, with teams reachable through their lead (§6). | The landing-page example (§0), end to end, from WhatsApp. |
 | **T5 · Later** | Cloud sandboxes (R3), rooms where several agents and you talk (06 §7 Later), side-by-side agents (UI3). | — |
 
-## 8. Decisions and open questions
+## 8. Decisions
 
-**Decided (2026-11-09):**
+All decided with the user on 2026-11-09.
 
 | # | Decision |
 |---|---|
 | TD1 | **Specialists are helpers by default** (T2): hired from a role card for one task, and kept as a saved agent only when you say so. |
 | TD2 | **Dispatch is the default team** (T5): one coordination model for Build and Agents. 17-dispatch is built as phase T2 of this spec. |
 | TD3 | **Builders wait for the Mac** (R2): a cloud lead's build task waits as "Waiting for the Mac". Cloud sandboxes (R3) are later. |
-| TD4 | **Telegram first**, then WhatsApp (§6, phase T4). |
-
-**Open:**
-
-| # | Question | Leaning |
-|---|---|---|
-| Q3 | Is the board visible and editable by you (a real kanban), or an internal tool you see only in the trace? | Visible and editable (06 §12.1). |
-| Q6 | May a lead hire helpers on its own, or does each hire ask you? | On its own within the team's budget and role cards; a new kind of role asks. |
-| Q7 | How does a team share knowledge: a team NOTES.md in its workplace (like projects, CF4), a shared memory bank, or both? | A team folder with NOTES.md first. |
+| TD4 | **Telegram first**, then WhatsApp (§6). Telegram arrives in T0 from the Mac and in T3 from the cloud; WhatsApp in T4. |
+| TD5 | **The board is a real kanban** you see and edit (06 §12.1): columns To do, Doing, Review, Done; you can add, reorder and reassign cards. |
+| TD6 | **A lead hires helpers on its own**, within the team's budget and from existing role cards. A new kind of role asks you first. |
+| TD7 | **A team shares knowledge through a team folder** with NOTES.md, like a project (CF4). A shared memory bank can come later if notes aren't enough. |
+| TD8 | **Simple first** (S1–S5): the single agent stays the default path. Telegram works from the Mac by polling, before the cloud exists. |
