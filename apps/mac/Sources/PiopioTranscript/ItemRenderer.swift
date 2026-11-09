@@ -977,13 +977,16 @@ nonisolated struct ItemRenderer: Sendable {
         }
         for range in spans.reversed() {
             let text = (m.string as NSString).substring(with: range)
-            let full = Self.absolute(text, root: root)
+            // "src/app.ts:42" (or ":42:5"): the file, opened at that line.
+            let (name, line) = Self.splitLine(text)
+            let full = Self.absolute(name, root: root)
             var attrs: [NSAttributedString.Key: Any] = [.font: chipFont, .foregroundColor: DS.fg, .piopioPill: PillStyle.code.rawValue]
             if let full {
-                attrs[.toolTip] = full
-                attrs[.link] = TranscriptAction.revealFile(path: full).url
+                attrs[.toolTip] = line.map { "\(full), line \($0)" } ?? full
+                attrs[.link] = (line.map { TranscriptAction.openFile(path: full, line: $0) } ?? TranscriptAction.revealFile(path: full)).url
             }
-            m.replaceCharacters(in: range, with: NSAttributedString(string: "\u{2009}\(Self.relative(full ?? text, root: root))\u{2009}", attributes: attrs))
+            let shown = full.map { Self.relative($0, root: root) + (line.map { ":\($0)" } ?? "") } ?? text
+            m.replaceCharacters(in: range, with: NSAttributedString(string: "\u{2009}\(shown)\u{2009}", attributes: attrs))
         }
         // Bare absolute paths in the prose.
         guard let root, !root.isEmpty else { return m }
@@ -999,6 +1002,14 @@ nonisolated struct ItemRenderer: Sendable {
             ]))
         }
         return m
+    }
+
+    /// "path:42" or "path:42:5" → ("path", 42); anything else → (text, nil).
+    static func splitLine(_ text: String) -> (String, Int?) {
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count >= 2, parts.count <= 3, !parts[0].isEmpty, parts.dropFirst().allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }),
+              let line = Int(parts[1]), line > 0 else { return (text, nil) }
+        return (String(parts[0]), line)
     }
 
     /// A code span that names something in the project: its absolute path (it may already be relative).

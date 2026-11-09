@@ -26,6 +26,7 @@ import { SdkEventMapper } from "../timeline/pi-sdk.js";
 import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat-profile.js";
 import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
+import { buildPromptExtension } from "../tools/build-prompt.js";
 import { guardsExtension } from "../tools/guards.js";
 import { formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
@@ -122,6 +123,8 @@ export class BuildRuntime implements Runtime {
 				{ name: "mcp", factory: createMcpExtension(), replaceable: true, builtin: true },
 				// First, so the snapshot is taken before anything else can change files.
 				checkpointsExtension({ snapshot: async (callId) => void (await runtime?.takeCheckpoint(callId)) }),
+				// Piopio's prompt in place of pi's preamble and docs, before the extensions that add to the prompt.
+				buildPromptExtension(),
 				// Before approvals: a server turned off here is refused without asking.
 				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
 				notesExtension(o.cwd),

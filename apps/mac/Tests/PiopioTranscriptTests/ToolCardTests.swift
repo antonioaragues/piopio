@@ -85,3 +85,12 @@ import Testing
     plain.review = nil
     #expect(!ItemRenderer.toolCard(plain).trailing.contains("auto-reviewed"))
 }
+
+@Test func codeSpanPathsWithALineOpenAtThatLine() {
+    #expect(ItemRenderer.splitLine("src/app.ts:42") == ("src/app.ts", 42))
+    #expect(ItemRenderer.splitLine("src/app.ts:42:5") == ("src/app.ts", 42))
+    #expect(ItemRenderer.splitLine("src/app.ts") == ("src/app.ts", nil))
+    #expect(ItemRenderer.splitLine("localhost:8080:x") == ("localhost:8080:x", nil))
+    #expect(ItemRenderer.splitLine("a:b") == ("a:b", nil))
+    #expect(ItemRenderer.splitLine(":12") == (":12", nil))
+}

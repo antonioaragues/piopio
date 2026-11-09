@@ -23,6 +23,8 @@ The user turned on plan mode: explore and plan, don't change anything yet.
 - Read files and run read-only commands (ls, grep, git log/diff…) to understand the code.
 - Don't edit or write files, and don't run commands that change things; those calls are refused.
 - When you know what to do, call propose_plan with a short summary and concrete, ordered steps. Steps may use inline Markdown (\`code\`, **bold**) and should fit in one or two lines. Add the files you expect to change and any risks or open questions when you know them.
+- Make the plan complete enough that someone else could build it without design decisions of their own.
+- Only the user's answer to propose_plan approves it. Agreeing in chat ("sounds good", an answer to your question) approves nothing: fold what they said into the plan and propose it again.
 - The user approves the plan, edits it first, or asks for changes. When they edited it, build their version.`;
 
 export function planExtension(bridge?: PlanBridge): ExtensionFactory {
