@@ -85,4 +85,30 @@
 - **Plan mode:** a plan complete enough for someone else to build; only the answer to `propose_plan` approves it.
 - **Transcript:** a code span `path:42` (or `path:42:5`) for a file in the project opens it at that line.
 - **Size:** a Build session in plan mode now sends about 5.9 KB of system prompt with no AGENTS.md or notes.
-- **Not yet checked with a real model.**
+
+**Real-model check (2026-11-09):** the Debug app with a temporary data folder, through OpenRouter, Full auto, one fresh
+Build session per run, 6 runs, about $0.01 in all.
+- **The setup:** a small Node repo (`src/cart.js`, `src/dates.js`, `node:test`) with an unrelated bug: `isWeekend`
+  compares the day to 7, so its test fails.
+- **"haz push en main" runs:** the repo had an uncommitted change and a local bare remote.
+
+| Scenario | DeepSeek V4.1 Flash | Claude Haiku 5.5 |
+|---|---|---|
+| "haz push en main" | Committed the change, pushed once, stopped. Named the failing test and its cause as `path:line` without fixing them, and offered to. Spanish. 9 calls, 33 s. | Saw nothing to push, didn't commit the uncommitted change, and asked (`ask_user`) whether to commit and push it. 3 calls. |
+| "Add a discount(total, percent) function to src/cart.js, with a test." | Read with `read`, edited, ran the tests, mentioned the dates bug instead of fixing it, offered to. 7 calls, 20 s. | Same result. It checked that the dates test failed before its change with `git stash` / `stash pop`. 7 calls, 18 s. |
+| "¿Dónde se calcula el total del carrito y qué pasa si un precio es negativo?" | Looked first and asked nothing. Answered in Spanish with `src/cart.js:2-4`, ran the function with negative prices, offered validation. 4 calls. | Same, in Spanish, `src/cart.js:2-4`. 2 calls. |
+
+- **What held, on both models:**
+  - stop when done, and push only once;
+  - mention unrelated bugs without fixing them;
+  - look before asking;
+  - the user's language;
+  - `path:line`;
+  - follow-ups as offers.
+- **Not comparable with the 7-minute run:** that run had CI to watch, and this repo has none.
+- **Rules both models still bent:**
+  - **Reading with bash:** both read files with `cat` in bash some of the time, despite pi's rule and ours.
+  - **`git stash`:** Haiku's `stash` / `stash pop` touches the working tree, and with someone else's changes in it
+    that's a risk. If it shows up again, add it to the list of history-changing commands.
+- **Uncommitted work and "push":** the two models handled it differently, and both are defensible. Asking is the
+  safer one.
