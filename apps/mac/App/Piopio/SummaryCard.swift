@@ -306,3 +306,77 @@ struct SkillsRow: View {
         skill.name.hasPrefix("skill:") ? String(skill.name.dropFirst(6)) : skill.name
     }
 }
+
+// MARK: Made
+
+/// A part of Made ("Changed · 27"): a small label over its rows, which get the card's full width.
+struct MadeSection<Content: View>: View {
+    let label: String
+    let count: Int
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                Text(label).foregroundStyle(Color.dsFg3)
+                if count > 1 { Text("\(count)").foregroundStyle(Color.dsFg3).monospacedDigit() }
+            }
+            .font(.system(size: 11.5, weight: .medium))
+            .accessibilityAddTraits(.isHeader)
+            content
+        }
+    }
+}
+
+/// A changed file: its name, its folder in grey, and the lines added and removed. Opens its diff.
+struct ChangedRow: View {
+    let file: FileChange
+    let action: () -> Void
+
+    private var folder: String {
+        let dir = (file.path as NSString).deletingLastPathComponent
+        return dir == "." ? "" : dir
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(URL(fileURLWithPath: file.path).lastPathComponent).font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                    .lineLimit(1).truncationMode(.middle).layoutPriority(1)
+                if !folder.isEmpty {
+                    Text(folder).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.head)
+                }
+                Spacer(minLength: 6)
+                if file.status == .deleted { Text("deleted").font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize() }
+                if file.added > 0 { Text("+\(file.added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsGreen).fixedSize() }
+                if file.removed > 0 { Text("−\(file.removed)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsRed).fixedSize() }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(file.path): review the diff")
+    }
+}
+
+/// A commit made in this session: its subject in full (up to two lines) and when. Clicking copies its hash.
+struct CommitRow: View {
+    let commit: GitCommit
+
+    var body: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(commit.hash, forType: .string)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(commit.subject).font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 6)
+                Text(BuildSessionView.relative(commit.at)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Commit \(commit.hash.prefix(7)): click to copy its hash")
+    }
+}
+

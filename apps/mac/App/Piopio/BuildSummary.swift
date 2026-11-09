@@ -21,8 +21,10 @@ struct SessionSummaryPanel: View {
     @State private var commits: [GitCommit] = []
     @State private var open: Set<Fold> = []
 
-    private enum Fold: Hashable { case changed, gave, read }
+    private enum Fold: Hashable { case wrote, changed, saved, plan, gave, read }
     private static let shortList = 6
+    private static let changedList = 5
+    private static let commitList = 3
 
     var body: some View {
         let made = SessionDigest.split(files)
@@ -64,45 +66,43 @@ struct SessionSummaryPanel: View {
     @ViewBuilder private func madeGroup(_ made: (wrote: [FileChange], changed: [FileChange])) -> some View {
         let ahead = chatLens ? 0 : git?.status?.ahead ?? 0
         if !made.wrote.isEmpty || !made.changed.isEmpty || !commits.isEmpty || ahead > 0 {
-            VStack(alignment: .leading, spacing: 9) {
-                GroupHeader("Made") {
-                    if !files.isEmpty { SummaryLink("Review all") { onReview(nil) }.help("Every change, as a diff") }
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    GroupHeader("Made") {
+                        if !files.isEmpty { SummaryLink("Review all") { onReview(nil) }.help("Every change, as a diff") }
+                    }
+                    madeLine
                 }
+                // Each kind under its own small label, the names at full width (a long session changes dozens of files).
                 if !made.wrote.isEmpty {
-                    CardRow("Wrote") {
-                        ForEach(made.wrote) { file in
+                    MadeSection(label: "Wrote", count: made.wrote.count) {
+                        ForEach(shown(made.wrote, .wrote, limit: Self.shortList)) { file in
                             ItemButton(title: Self.name(file.path), help: "Open \(file.path)") { onOpen(file.path) } trailing: {
                                 Text(SessionDigest.kind(of: file.path) ?? "").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                             }
                         }
+                        more(made.wrote.count, fold: .wrote, limit: Self.shortList)
                     }
                 }
                 if !made.changed.isEmpty {
-                    CardRow("Changed") {
-                        let all = open.contains(.changed)
-                        ForEach(all ? made.changed : Array(made.changed.prefix(Self.shortList))) { file in
-                            ItemButton(title: Self.name(file.path), help: "\(file.path): review the diff") { onReview(file.path) } trailing: {
-                                if file.status == .deleted { Text("deleted").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                                if file.added > 0 { Text("+\(file.added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsGreen) }
-                                if file.removed > 0 { Text("−\(file.removed)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsRed) }
-                            }
+                    // The biggest changes first; the folder tells same-named files apart (four vitest.config.ts).
+                    let sorted = made.changed.sorted { ($0.added + $0.removed, $1.path) > ($1.added + $1.removed, $0.path) }
+                    MadeSection(label: "Changed", count: made.changed.count) {
+                        ForEach(shown(sorted, .changed, limit: Self.changedList)) { file in
+                            ChangedRow(file: file) { onReview(file.path) }
                         }
-                        more(made.changed.count, fold: .changed)
+                        more(sorted.count, fold: .changed, limit: Self.changedList)
                     }
                 }
                 if !commits.isEmpty || ahead > 0 {
-                    CardRow("Saved") {
-                        ForEach(commits) { commit in
-                            ItemButton(title: commit.subject, help: "Commit \(commit.hash.prefix(7)): click to copy its hash") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(commit.hash, forType: .string)
-                            } trailing: {
-                                Text(String(commit.hash.prefix(7))).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3)
-                            }
+                    MadeSection(label: "Saved", count: commits.count) {
+                        ForEach(shown(commits, .saved, limit: Self.commitList)) { commit in
+                            CommitRow(commit: commit)
                         }
+                        more(commits.count, fold: .saved, limit: Self.commitList)
                         if ahead > 0, let git {
                             HStack(spacing: 8) {
-                                Text("\(ahead) to push").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                                Text("\(ahead) not pushed").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                                 SummaryLink("Push") { Task { await git.sync(.push) } }
                             }
                         }
@@ -113,28 +113,55 @@ struct SessionSummaryPanel: View {
         }
     }
 
+    /// "31 files · +412 −98 · 8 commits": the size of it at a glance.
+    @ViewBuilder private var madeLine: some View {
+        let added = files.reduce(0) { $0 + $1.added }, removed = files.reduce(0) { $0 + $1.removed }
+        HStack(spacing: 5) {
+            if !files.isEmpty { Text(files.count == 1 ? "1 file" : "\(files.count) files").foregroundStyle(Color.dsFg2) }
+            if added > 0 { Text("+\(added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsGreen) }
+            if removed > 0 { Text("−\(removed)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsRed) }
+            if !files.isEmpty, !commits.isEmpty { Text("·").foregroundStyle(Color.dsFg3) }
+            if !commits.isEmpty { Text(commits.count == 1 ? "1 commit" : "\(commits.count) commits").foregroundStyle(Color.dsFg2) }
+        }
+        .font(.system(size: 12))
+    }
+
+    private func shown<T>(_ items: [T], _ fold: Fold, limit: Int) -> [T] {
+        open.contains(fold) ? items : Array(items.prefix(limit))
+    }
+
     // MARK: Plan
 
     @ViewBuilder private var plan: some View {
         let todos = session.todos
         if !todos.isEmpty {
+            let doneCount = todos.filter { $0.status == .done }.count
+            // A finished plan folds to one line once the session stops: it's history, not what's happening.
+            let finished = doneCount == todos.count && session.state?.status != .running
             VStack(alignment: .leading, spacing: 6) {
                 GroupHeader("Plan") {
-                    Text("\(todos.filter { $0.status == .done }.count) of \(todos.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+                    Text("\(doneCount) of \(todos.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
                 }
                 .padding(.bottom, 3)
-                ForEach(Array(todos.enumerated()), id: \.offset) { _, todo in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Image(systemName: todo.status == .done ? "circle.fill" : "circle")
-                            .font(.system(size: 9, weight: todo.status == .inProgress ? .bold : .regular))
-                            .foregroundStyle(todo.status == .inProgress ? Color.dsFg : todo.status == .done ? Color.dsFg2 : Color.dsFg3)
-                            .frame(width: 11)
-                        Text(todo.text).font(.system(size: 12.5))
-                            .foregroundStyle(todo.status == .done ? Color.dsFg3 : todo.status == .inProgress ? Color.dsFg : Color.dsFg2)
-                            .fixedSize(horizontal: false, vertical: true)
+                if finished {
+                    FoldButton(open: open.contains(.plan), help: "The steps it followed") { toggle(.plan) } label: {
+                        Text(todos.count == 1 ? "Its step is done" : "All \(todos.count) steps done").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityValue(todo.status == .done ? "Done" : todo.status == .inProgress ? "In progress" : "To do")
+                }
+                if !finished || open.contains(.plan) {
+                    ForEach(Array(todos.enumerated()), id: \.offset) { _, todo in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: todo.status == .done ? "circle.fill" : "circle")
+                                .font(.system(size: 9, weight: todo.status == .inProgress ? .bold : .regular))
+                                .foregroundStyle(todo.status == .inProgress ? Color.dsFg : todo.status == .done ? Color.dsFg2 : Color.dsFg3)
+                                .frame(width: 11)
+                            Text(todo.text).font(.system(size: 12.5))
+                                .foregroundStyle(todo.status == .done ? Color.dsFg3 : todo.status == .inProgress ? Color.dsFg : Color.dsFg2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityValue(todo.status == .done ? "Done" : todo.status == .inProgress ? "In progress" : "To do")
+                    }
                 }
             }
             .summaryGroup()
@@ -249,9 +276,9 @@ struct SessionSummaryPanel: View {
 
     // MARK: Helpers
 
-    @ViewBuilder private func more(_ count: Int, fold: Fold) -> some View {
-        if count > Self.shortList {
-            SummaryLink(open.contains(fold) ? "Show fewer" : "and \(count - Self.shortList) more") {
+    @ViewBuilder private func more(_ count: Int, fold: Fold, limit: Int = shortList) -> some View {
+        if count > limit {
+            SummaryLink(open.contains(fold) ? "Show fewer" : "Show all \(count)") {
                 withAnimation(.easeOut(duration: 0.15)) { toggle(fold) }
             }
         }

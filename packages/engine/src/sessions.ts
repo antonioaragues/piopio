@@ -1002,7 +1002,11 @@ export class Sessions {
 		return this.chat?.resources.commands() ?? [];
 	}
 
-	/** After an answer: three short next messages (docs/design v2 "You could also"), from the utility model. */
+	/**
+	 * After an answer: up to three short next messages (docs/design v2 "You could also"), from the utility model, only
+	 * when the answer invites a reply (it asks something, offers options or a next step). A finished task, a fact or a
+	 * confirmation gets none: suggestions under every answer were noise.
+	 */
 	private async suggestFollowUps(entry: CatalogEntry, runtime: Runtime): Promise<void> {
 		if (this.chat?.settings.get().chat.followUps === false) return;
 		const items = runtime.snapshot().items;
@@ -1012,19 +1016,15 @@ export class Sessions {
 		const text = answer.parts.filter((p) => p.type === "text").map((p) => p.text).join("").slice(0, 4000);
 		const reply = await this.hub
 			.utility(
-				'Suggest what the user might say next to the assistant: three short replies in the user\'s language, each under 7 words, concrete to this exchange (a next step, a check, a question). Answer with a JSON array of three strings only.',
+				FOLLOW_UPS_PROMPT,
 				`User: ${asked.text.slice(0, 1500)}\n\nAssistant: ${text}`,
 				entry.ref.id,
 				{ model: runtime.snapshot().state.model ?? entry.model },
 			)
 			.catch(() => undefined);
 		const list = reply ? (/\[[\s\S]*\]/.exec(reply)?.[0] ?? "") : "";
-		let followUps: string[] = [];
-		try {
-			followUps = (JSON.parse(list) as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 3);
-		} catch {
-			return;
-		}
+		const followUps = parseFollowUps(list);
+		if (!followUps) return;
 		// Still the latest answer, and nobody wrote meanwhile.
 		const latest = [...runtime.snapshot().items].reverse().find((i) => i.kind === "assistant");
 		if (!followUps.length || latest?.id !== answer.id || !this.entries.has(entry.ref.id)) return;
@@ -1375,3 +1375,19 @@ export function titleFrom(text: string): string {
 function buildMode(approvalMode: ApprovalMode): { approvalMode: ApprovalMode; profile: "build" | "chat" } {
 	return { approvalMode, profile: approvalMode === "read_only" ? "chat" : "build" };
 }
+
+/** What the utility model is asked after an answer (suggestFollowUps). Empty when nothing calls for a reply. */
+export const FOLLOW_UPS_PROMPT =
+	"Decide whether the assistant's last answer calls for a quick reply from the user: it asks the user something, offers options, or proposes a next step the user would confirm. If it does, give up to three short replies the user might send, in the user's language, each under 7 words, concrete to this exchange. If the answer is complete and expects nothing (a finished task, a plain fact, a confirmation, a report), give none. Answer with a JSON array of strings only, [] for none.";
+
+/** The replies in the utility model's answer (at most three), [] when it gave none, undefined when it isn't a list. */
+export function parseFollowUps(list: string): string[] | undefined {
+	try {
+		const parsed = JSON.parse(list) as unknown;
+		if (!Array.isArray(parsed)) return undefined;
+		return parsed.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 3);
+	} catch {
+		return undefined;
+	}
+}
+
