@@ -65,11 +65,10 @@ struct BuildSessionView: View {
     /// The right column (docs/design/session-panel): closed by default; opens on Summary the first time a turn changes
     /// files; your toggle is then kept per session.
     @State private var showInspector = false
-    @AppStorage("inspectorTab") private var inspectorTab = SessionPanel.summary
+    @AppStorage("sessionPanel") private var inspectorTab = SessionPanel.inspector
+    /// The file the Files panel shows in place of its tree (a path chip, a file card, Read).
     @State private var previewing: String?
-    /// The file preview's width, dragged from its left edge (kept across sessions).
-    @AppStorage("previewWidth") private var previewWidth: Double = 440
-    @State private var dragStartWidth: Double?
+    @State private var filesFilter = FilesFilter.all
     @State private var reviewing = false
     @State private var reviewFile: String?
     @State private var git: GitModel?
@@ -109,40 +108,40 @@ struct BuildSessionView: View {
                         .padding(.bottom, 8)
                 }
             }
-            if !reviewing, let path = previewing, let cwd = summary.cwd {
-                FilePreview(engine: engine, cwd: cwd, path: path) { previewing = nil }
-                    .frame(width: previewWidth)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.panel))
-                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.panel).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                    .overlay(alignment: .leading) { resizeHandle }
-                    .padding(.vertical, 8)
-            }
             if showInspector && !reviewing {
                 VStack(spacing: 0) {
                     switch inspectorTab {
                     case .files:
                         if let cwd = summary.cwd {
-                            FileBrowser(engine: engine, cwd: cwd, selected: $previewing, mention: { path in
-                                let current = session.draft ?? ""
-                                session.draft = current + (current.isEmpty || current.hasSuffix(" ") ? "" : " ") + "@\(path) "
-                            })
+                            FilesPanel(engine: engine, session: session, summary: summary, cwd: cwd, filter: $filesFilter, preview: $previewing, mention: mention)
                         }
-                    case .changes:
-                        BuildInspector(session: session, commit: canCommit ? { committing = true } : nil, checklist: false, onReview: review)
-                    case .summary:
-                        SessionSummaryPanel(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
-                                            committing: $committing, onReview: review, onOpen: { previewing = $0 })
+                    case .inspector:
+                        InspectorPanel(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
+                                       committing: $committing, onReview: review, onRead: {
+                                           filesFilter = .touched
+                                           previewing = nil
+                                           inspectorTab = .files
+                                       })
                     }
                 }
-                .frame(width: 290)
+                .frame(width: 300)
                 .sidePanel()
             }
         }
         .task { await session.open() }
-        .task(id: summary.ref.id) { showInspector = Self.inspectorChoice(summary.ref.id) ?? hasChanges }
+        .task(id: summary.ref.id) {
+            showInspector = Self.inspectorChoice(summary.ref.id) ?? hasChanges
+            // PIOPIO_DEMO_PANEL=files | files:touched | files:<path> | inspector: captures open on that panel.
+            if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_PANEL"] {
+                let parts = demo.split(separator: ":", maxSplits: 1).map(String.init)
+                inspectorTab = parts[0] == "files" ? .files : .inspector
+                if parts.count == 2 { if parts[1] == "touched" { filesFilter = .touched } else { previewing = parts[1] } }
+                showInspector = true
+            }
+        }
         .onChange(of: hasChanges) { _, changed in
             if changed, Self.inspectorChoice(summary.ref.id) == nil {
-                inspectorTab = .summary
+                inspectorTab = .inspector
                 withAnimation(.easeOut(duration: 0.15)) { showInspector = true }
             }
         }
@@ -172,7 +171,7 @@ struct BuildSessionView: View {
             if note.object as? String == session.ref.id { committing = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .previewFile)) { note in
-            if chatLens, let path = note.object as? String { previewing = path }
+            if chatLens, let path = note.object as? String { openFile(path) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showReview)) { note in
             if note.object as? String == session.ref.id { reviewing = true }
@@ -183,26 +182,6 @@ struct BuildSessionView: View {
         .sheet(item: Binding(get: { session.editingPlan }, set: { session.editingPlan = $0 })) { prompt in
             PlanEditorSheet(session: session, prompt: prompt)
         }
-    }
-
-    /// The preview's left edge: drag to resize (280–900 pt), double-click for the default width.
-    private var resizeHandle: some View {
-        Color.clear
-            .frame(width: 8)
-            .contentShape(Rectangle())
-            .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
-            .gesture(
-                DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                    .onChanged { value in
-                        let start = dragStartWidth ?? previewWidth
-                        dragStartWidth = start
-                        previewWidth = min(900, max(280, start - value.translation.width))
-                    }
-                    .onEnded { _ in dragStartWidth = nil }
-            )
-            .onTapGesture(count: 2) { withAnimation(.easeOut(duration: 0.15)) { previewWidth = 440 } }
-            .offset(x: -4)
-            .help("Drag to resize")
     }
 
     private var conversation: some View {
@@ -248,11 +227,6 @@ struct BuildSessionView: View {
         (UserDefaults.standard.dictionary(forKey: "inspectorOpen") as? [String: Bool])?[id]
     }
 
-    private func toggleInspector() {
-        withAnimation(.easeOut(duration: 0.15)) { showInspector.toggle() }
-        rememberInspector()
-    }
-
     /// A toolbar view icon: opens the column on that view, or closes it when that view is already showing.
     private func show(_ view: SessionPanel) {
         withAnimation(.easeOut(duration: 0.15)) {
@@ -267,6 +241,20 @@ struct BuildSessionView: View {
         UserDefaults.standard.set(all, forKey: "inspectorOpen")
     }
 
+    /// A file in the Files panel, in place of the tree.
+    private func openFile(_ path: String) {
+        previewing = path
+        inspectorTab = .files
+        withAnimation(.easeOut(duration: 0.15)) { showInspector = true }
+        rememberInspector()
+    }
+
+    /// Mention in chat: "@path " at the end of the draft.
+    private func mention(_ path: String) {
+        let current = session.draft ?? ""
+        session.draft = current + (current.isEmpty || current.hasSuffix(" ") ? "" : " ") + "@\(path) "
+    }
+
     private var canCommit: Bool { !chatLens && git?.status?.repo == true && (git?.changedCount ?? 0) > 0 }
 
     private func review(_ file: String?) {
@@ -276,7 +264,17 @@ struct BuildSessionView: View {
 
     private func viewButton(_ view: SessionPanel) -> some View {
         let on = showInspector && inspectorTab == view
+        // A blue dot on Inspector while something waits on you (an approval, a question, a command the sandbox stopped).
+        let needsYou = view == .inspector && session.state?.status == .waitingApproval
         return ToolbarIcon(symbol: view.symbol, label: view.rawValue, on: on, help: on ? "Hide \(view.rawValue.lowercased())" : view.help) { show(view) }
+            .overlay(alignment: .topTrailing) {
+                if needsYou {
+                    Circle().fill(Color.accentColor).frame(width: 7, height: 7)
+                        .overlay(Circle().strokeBorder(Color.dsWin, lineWidth: 1.5))
+                        .offset(x: -4, y: 3)
+                        .accessibilityLabel("Needs you")
+                }
+            }
     }
 
     /// The toolbar (docs/design/session-panel): the title (it opens the session tree) and "project · branch", then the
@@ -292,8 +290,7 @@ struct BuildSessionView: View {
                 }
         } actions: {
             HStack(spacing: 2) {
-                viewButton(.summary)
-                viewButton(.changes)
+                viewButton(.inspector)
                 viewButton(.files)
                 if !chatLens {
                     Button { showTerminal.toggle() } label: { Image(systemName: "apple.terminal") }
@@ -321,7 +318,11 @@ struct BuildSessionView: View {
                 .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
                 .accessibilityLabel("More")
                 .help("Session tree, review, open in an editor or Finder")
-            Button("") { toggleInspector() }.keyboardShortcut("i", modifiers: [.command, .shift]).hidden().frame(width: 0)
+            Button("") { show(.inspector) }.keyboardShortcut("i", modifiers: .command).hidden().frame(width: 0)
+            Button("") {
+                if showInspector && inspectorTab == .files { NotificationCenter.default.post(name: .focusFileFilter, object: nil) } else { show(.files) }
+            }
+            .keyboardShortcut("p", modifiers: .command).hidden().frame(width: 0)
         }
         .background {
             Button("") { if !chatLens { showTerminal.toggle() } }.keyboardShortcut("`", modifiers: .control).hidden()
@@ -347,23 +348,21 @@ struct BuildSessionView: View {
 }
 
 
-/// The right column's views, each an icon in the session toolbar (docs/design/session-panel).
+/// The right column's panels, each an icon in the session toolbar (docs/design/inspector, option 5a).
 enum SessionPanel: String, CaseIterable {
-    case summary = "Summary", changes = "Changes", files = "Files"
+    case inspector = "Inspector", files = "Files"
 
     var symbol: String {
         switch self {
-        case .summary: "list.bullet.rectangle"
-        case .changes: "plus.forwardslash.minus"
+        case .inspector: "sidebar.right"
         case .files: "folder"
         }
     }
 
     var help: String {
         switch self {
-        case .summary: "Summary: where it runs, context, checklist and results (⌘⇧I)"
-        case .changes: "What this session changed, and its turns"
-        case .files: "The project's files"
+        case .inspector: "Inspector: the session and its changes (⌘I)"
+        case .files: "Files: the project, with what it touched (⌘P)"
         }
     }
 }

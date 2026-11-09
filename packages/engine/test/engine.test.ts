@@ -872,7 +872,7 @@ describe("git and worktrees (docs/spec/05-build §8, BP5)", () => {
 		expect(readFileSync(join(worktree, "a.txt"), "utf8")).toBe("two\n");
 		expect(readFileSync(join(dir, "a.txt"), "utf8")).toBe("one\n");
 
-		expect((await a.client.call("git.status", { cwd: worktree })).files).toEqual([{ path: "a.txt", status: "modified", staged: false }]);
+		expect((await a.client.call("git.status", { cwd: worktree })).files).toEqual([{ path: "a.txt", status: "modified", staged: false, added: 1, removed: 1 }]);
 		await expect(a.client.call("sessions.finish", { ref, action: "merge" })).rejects.toMatchObject({ data: { code: "CONFLICT" } });
 		const { message } = await a.client.call("git.message", { cwd: worktree });
 		expect(message).toBe("Update a.txt"); // the scripted model has no utility model: a plain summary
@@ -922,7 +922,7 @@ describe("git and worktrees (docs/spec/05-build §8, BP5)", () => {
 		await a.client.call("git.commit", { cwd: dir, message: "Add b", paths: ["b.txt"] });
 		expect(sh(dir, "show", "--name-only", "--format=", "HEAD")).toBe("b.txt");
 		const log = (await a.client.call("git.log", { cwd: dir, limit: 1 })).commits;
-		expect(log).toEqual([{ hash: expect.stringMatching(/^[0-9a-f]{40}$/), subject: "Add b", at: expect.any(String) }]);
+		expect(log).toEqual([{ hash: expect.stringMatching(/^[0-9a-f]{40}$/), subject: "Add b", at: expect.any(String), files: [{ path: "b.txt", added: expect.any(Number), removed: 0 }] }]);
 		expect((await a.client.call("git.log", { cwd: dir, since: new Date(Date.now() + 3_600_000).toISOString() })).commits).toEqual([]);
 		expect((await a.client.call("git.status", { cwd: dir })).files.map((f: { path: string }) => f.path)).toEqual(["a.txt"]);
 

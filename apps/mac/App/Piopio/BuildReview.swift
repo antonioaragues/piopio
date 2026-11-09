@@ -4,250 +4,7 @@ import PiopioTranscript
 import SwiftUI
 
 // Review in Build (docs/spec/05-build §5 BR2–BR3, §7; docs/design 2a inspector, 4c diff review):
-// what the session changed, its checkpoints, the context meter and spend; a diff review with line comments.
-
-/// The right-hand inspector of a Build session (docs/design chat v3): what the session changed, its turns (each with
-/// Rewind on hover), the context and spend.
-struct BuildInspector: View {
-    let session: ThreadModel
-    /// Opens the commit sheet; nil when there's nothing to commit (or no git).
-    let commit: (() -> Void)?
-    /// The agent's checklist; off in the Changes view, where Summary shows it.
-    var checklist = true
-    let onReview: (String?) -> Void
-    @State private var files: [FileChange] = []
-    @State private var reverting: FileChange?
-    /// Your messages, newest first: what each turn changed.
-    @State private var turns: [Turn] = []
-
-    struct Turn: Identifiable {
-        let id: String
-        let number: Int
-        let text: String
-        let at: String
-        var files = 0
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    if checklist, !session.todos.isEmpty { ChecklistSection(todos: session.todos) }
-                    changes
-                    turnList
-                }
-                .padding(.horizontal, 16).padding(.vertical, 14)
-            }
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            footer.padding(.horizontal, 16).padding(.vertical, 12)
-        }
-        .task(id: session.revision / 4) { await refresh() } // event batches arrive quickly while working
-        .task(id: session.revision) { turns = Self.turns(session.document.items) }
-        .onChange(of: session.state?.status) { _, _ in Task { await refresh() } }
-        .alert(item: $reverting) { file in
-            Alert(
-                title: Text("Revert \(file.path)?"),
-                message: Text(file.status == .added ? "The session created it; reverting removes it." : "It goes back to how it was when the session started. The current version is checkpointed first."),
-                primaryButton: .destructive(Text("Revert")) { Task { await revert(file) } },
-                secondaryButton: .cancel()
-            )
-        }
-    }
-
-    /// Plain rows (docs/design/grey 9a): path, +N −N; then Review diff and Commit… as text.
-    private var changes: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if files.isEmpty {
-                Text("No changes yet.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-            }
-            ForEach(files) { file in ChangeRow(file: file, open: { onReview(file.path) }, revert: { reverting = file }) }
-            if !files.isEmpty || commit != nil {
-                HStack(spacing: 14) {
-                    Button("Review diff") { onReview(nil) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor).disabled(files.isEmpty)
-                    if let commit { Button("Commit…", action: commit).buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
-                }
-                .padding(.top, 8)
-            }
-        }
-    }
-
-    /// One row per message you sent, newest first; hover one to rewind.
-    private var turnList: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            SectionLabel("Turns").padding(.bottom, 4)
-            if turns.isEmpty { Text("Your messages show up here.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
-            ForEach(turns) { turn in TurnRow(session: session, turn: turn, current: turn.id == turns.first?.id) }
-        }
-    }
-
-    /// A turn per message you sent: its words, when, how many files it edited.
-    static func turns(_ items: [TimelineItem]) -> [Turn] {
-        var out: [Turn] = []
-        for item in items {
-            switch item {
-            case .user(let u): out.append(Turn(id: u.id, number: out.count + 1, text: u.text.replacingOccurrences(of: "\n", with: " "), at: u.at))
-            case .tool(let t) where !out.isEmpty && (t.tool == "edit" || t.tool == "write") && t.status == .done: out[out.count - 1].files += 1
-            case .steps(let s) where !out.isEmpty: out[out.count - 1].files += Set(s.tools.filter { ($0.tool == "edit" || $0.tool == "write") && $0.status == .done }.compactMap { $0.args?["path"]?.stringValue }).count
-            default: break
-            }
-        }
-        return out.reversed()
-    }
-
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let context = session.state?.context {
-                HStack {
-                    Text("Context").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                    Spacer()
-                    Text("\(context.tokens.map { ContextRing.short($0) } ?? "–") of \(ContextRing.short(context.window))").font(.system(size: 12).monospacedDigit())
-                }
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.dsLine)
-                        let fraction = min(1, (context.tokens ?? 0) / max(1, context.window))
-                        Capsule().fill(Color.dsFg2).frame(width: max(3, geo.size.width * fraction))
-                    }
-                }
-                .frame(height: 3)
-            }
-            HStack {
-                Text("This session").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                Spacer()
-                let cost = session.state?.usage.costUsd ?? 0
-                Text(cost > 0 && cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)).font(.system(size: 12).monospacedDigit())
-            }
-        }
-    }
-
-    private func refresh() async {
-        files = await session.changes(since: .session)
-    }
-
-    private func revert(_ file: FileChange) async {
-        guard let start = session.checkpoints.first else { return }
-        _ = try? await session.restore(start, paths: [file.path], dryRun: false)
-        await refresh()
-    }
-}
-
-/// A turn: its number (the current one dark), its first words, what it changed or when; Rewind on hover.
-private struct TurnRow: View {
-    let session: ThreadModel
-    let turn: BuildInspector.Turn
-    let current: Bool
-    @State private var hovering = false
-    @State private var rewinding = false
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text("\(turn.number)").font(.system(size: 12).monospacedDigit())
-                .foregroundStyle(Color.dsFg3)
-                .frame(width: 14, alignment: .leading)
-            Text(turn.text).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.tail)
-            Spacer(minLength: 4)
-            if hovering || rewinding {
-                Button { rewinding = true } label: { Image(systemName: "arrow.uturn.backward").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Color.dsFg2) }
-                    .buttonStyle(.plain)
-                    .help("Rewind to before this message")
-                    .disabled(session.isRunning)
-                    .popover(isPresented: $rewinding, arrowEdge: .leading) {
-                        RewindPopover(itemId: turn.id, preview: { await session.rewindPreview($0) }, perform: { await session.rewind($0, files: $1) }) { rewinding = false }
-                    }
-            } else {
-                Text(turn.files > 0 ? (turn.files == 1 ? "1 file" : "\(turn.files) files") : Self.age(turn.at)).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            }
-        }
-        .padding(.horizontal, 6)
-        .frame(height: 26)
-        .background(hovering ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-        .padding(.horizontal, -6)
-        .onHover { hovering = $0 }
-    }
-
-    /// "3 d", "5 h", "now".
-    static func age(_ iso: String) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return "" }
-        let s = Date().timeIntervalSince(date)
-        if s < 60 { return "now" }
-        if s < 3600 { return "\(Int(s / 60)) min" }
-        if s < 86_400 { return "\(Int(s / 3600)) h" }
-        return "\(Int(s / 86_400)) d"
-    }
-}
-
-private struct ChangeRow: View {
-    let file: FileChange
-    let open: () -> Void
-    let revert: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Button(action: open) {
-                HStack {
-                    Text(file.path).font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.head).foregroundStyle(Color.dsFg)
-                    Spacer(minLength: 4)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            if hovering {
-                Button(action: revert) { Image(systemName: "arrow.uturn.backward").font(.system(size: 10, weight: .semibold)) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.dsFg2)
-                    .help("Revert this file")
-            }
-            if file.added > 0 { Text("+\(file.added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsGreen) }
-            if file.removed > 0 { Text("−\(file.removed)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsRed) }
-        }
-        .padding(.horizontal, 6)
-        .frame(height: 26)
-        .background(hovering ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-        .padding(.horizontal, -6)
-        .help("\(file.status.badge == "M" ? "Modified" : file.status.badge == "NEW" ? "New file" : "Deleted"): \(file.path)")
-        .onHover { hovering = $0 }
-    }
-}
-
-extension FileChange.Status {
-    /// NEW / M / D (chat v3 inspector).
-    var badge: String {
-        switch self {
-        case .added: "NEW"
-        case .modified: "M"
-        case .deleted: "D"
-        }
-    }
-
-    var letter: String {
-        switch self {
-        case .added: "A"
-        case .modified: "M"
-        case .deleted: "D"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .added: .dsFg3
-        case .modified: .dsFg3
-        case .deleted: .dsFg3
-        }
-    }
-
-    var verb: String {
-        switch self {
-        case .added: "removed"
-        case .modified: "reverted"
-        case .deleted: "brought back"
-        }
-    }
-}
-
-// MARK: Restore
+// restoring a checkpoint, and a diff review with line comments. The Inspector (Inspector.swift) shows the changes.
 
 /// "Restore to here": lists exactly what changes, then restores (the engine checkpoints the current state first).
 struct RestoreSheet: View {
@@ -529,29 +286,37 @@ struct DiffReview: View {
     }
 }
 
-// MARK: Summary (docs/design/session-panel)
+extension FileChange.Status {
+    /// NEW / M / D (chat v3 inspector).
+    var badge: String {
+        switch self {
+        case .added: "NEW"
+        case .modified: "M"
+        case .deleted: "D"
+        }
+    }
 
-/// The agent's checklist (piopio-todos), latest version: shared by Summary and the Changes view.
-struct ChecklistSection: View {
-    let todos: [Todo]
+    var letter: String {
+        switch self {
+        case .added: "A"
+        case .modified: "M"
+        case .deleted: "D"
+        }
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                SectionLabel("Checklist")
-                Spacer()
-                Text("\(todos.filter { $0.status == .done }.count) / \(todos.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
-            }
-            ForEach(Array(todos.enumerated()), id: \.offset) { _, todo in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: todo.status == .done ? "checkmark.circle.fill" : todo.status == .inProgress ? "circle.dotted.circle" : "circle")
-                        .font(.system(size: 11))
-                        .foregroundStyle(todo.status == .inProgress ? Color.dsFg : Color.dsFg3)
-                    Text(todo.text).font(.system(size: 12.5)).foregroundStyle(todo.status == .done ? Color.dsFg3 : Color.dsFg)
-                        .strikethrough(todo.status == .done, color: Color.dsFg3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+    var color: Color {
+        switch self {
+        case .added: .dsFg3
+        case .modified: .dsFg3
+        case .deleted: .dsFg3
+        }
+    }
+
+    var verb: String {
+        switch self {
+        case .added: "removed"
+        case .modified: "reverted"
+        case .deleted: "brought back"
         }
     }
 }

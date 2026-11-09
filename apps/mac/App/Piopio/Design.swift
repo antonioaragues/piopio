@@ -23,6 +23,12 @@ extension Color {
     /// Warnings read in ink, not amber (docs/design/grey principle 3).
     static let dsAmber = Color(nsColor: DS.fg2)
     static let dsRed = Color(nsColor: DS.red)
+    /// Changed or not saved yet (the Inspector's timeline and Files' "M").
+    static let dsWarn = Color(nsColor: DS.amber)
+    /// Read by the agent (Files' "R").
+    static let dsRead = Color(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(srgbRed: 0.48, green: 0.65, blue: 0.90, alpha: 1) : NSColor(srgbRed: 0.25, green: 0.44, blue: 0.72, alpha: 1)
+    })
     static let dsAccentSoft = Color(nsColor: DS.accentSoft)
     static let dsAccentLine = Color(nsColor: DS.accentLine)
     static let dsYolk = Color(nsColor: DS.yolk)

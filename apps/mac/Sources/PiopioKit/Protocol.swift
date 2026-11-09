@@ -1193,7 +1193,8 @@ public struct McpDetectResult: Decodable, Sendable {
 }
 public struct McpListParams: Encodable, Sendable { public var cwd: String?; public init(cwd: String? = nil) { self.cwd = cwd } }
 /// A commit on the current branch (`git.log`): a session's results.
-public struct GitCommit: Decodable, Sendable, Hashable, Identifiable { public var hash, subject, at: String; public var id: String { hash } }
+public struct GitCommitFile: Decodable, Sendable, Hashable, Identifiable { public var path: String; public var added, removed: Int; public var id: String { path } }
+public struct GitCommit: Decodable, Sendable, Hashable, Identifiable { public var hash, subject, at: String; public var files: [GitCommitFile]?; public var id: String { hash } }
 public struct GitLogParams: Encodable, Sendable {
     public var cwd: String; public var since: String?; public var limit: Int?
     public init(cwd: String, since: String? = nil, limit: Int? = nil) { self.cwd = cwd; self.since = since; self.limit = limit }
@@ -1246,6 +1247,9 @@ public struct GitFile: Codable, Sendable, Hashable, Identifiable {
     public var status: Status
     public var staged: Bool
     public var from: String?
+    /// Lines added and removed against HEAD (untracked: the file's lines); nil for binary files.
+    public var added: Int?
+    public var removed: Int?
     public var id: String { path }
 }
 

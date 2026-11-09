@@ -845,6 +845,9 @@ export const GitFile = Type.Object({
 	status: literals("added", "modified", "deleted", "renamed", "conflicted", "untracked"),
 	staged: Type.Boolean(),
 	from: Type.Optional(Type.String()),
+	/** Lines added and removed against HEAD (untracked: the file's lines); absent for binary files. */
+	added: Type.Optional(Type.Number()),
+	removed: Type.Optional(Type.Number()),
 });
 export type GitFile = Static<typeof GitFile>;
 
@@ -861,8 +864,10 @@ export type GitStatus = Static<typeof GitStatus>;
 
 export const GitBranch = Type.Object({ name: Type.String(), upstream: Type.Optional(Type.String()), lastCommitAt: Type.Optional(Type.String()), current: Type.Boolean() });
 export type GitBranch = Static<typeof GitBranch>;
-/** A commit on the current branch (a session's results: what was committed since it started). */
-export const GitCommit = Type.Object({ hash: Type.String(), subject: Type.String(), at: Type.String() });
+export const GitCommitFile = Type.Object({ path: Type.String(), added: Type.Number(), removed: Type.Number() });
+export type GitCommitFile = Static<typeof GitCommitFile>;
+/** A commit on the current branch (a session's results: what was committed since it started), with the files it touched. */
+export const GitCommit = Type.Object({ hash: Type.String(), subject: Type.String(), at: Type.String(), files: Type.Optional(Type.Array(GitCommitFile)) });
 export type GitCommit = Static<typeof GitCommit>;
 
 /** Where a new Build session works: the project as it is, a new branch in it, or a new worktree. */

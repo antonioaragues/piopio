@@ -5,7 +5,8 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { EngineError } from "./models.js";
 
 export type GitFile = {
@@ -15,10 +16,13 @@ export type GitFile = {
 	staged: boolean;
 	/** Renames: the old path. */
 	from?: string;
+	/** Lines added and removed against HEAD (untracked: the file's lines); absent for binary files. */
+	added?: number;
+	removed?: number;
 };
 export type GitStatus = { repo: boolean; branch?: string; detached?: boolean; upstream?: string; ahead: number; behind: number; files: GitFile[] };
 export type GitBranch = { name: string; upstream?: string; lastCommitAt?: string; current: boolean };
-export type GitCommit = { hash: string; subject: string; at: string };
+export type GitCommit = { hash: string; subject: string; at: string; files?: { path: string; added: number; removed: number }[] };
 
 export async function git(cwd: string, args: string[], options: { stdin?: string; timeoutMs?: number } = {}): Promise<string> {
 	return new Promise((resolve, reject) => {
@@ -82,7 +86,58 @@ export async function status(cwd: string): Promise<GitStatus> {
 		else if (r.startsWith("? ")) result.files.push({ path: r.slice(2), status: "untracked", staged: false });
 	}
 	result.files.sort((a, b) => a.path.localeCompare(b.path));
+	await addLineCounts(cwd, result.files);
 	return result;
+}
+
+/** +/− per uncommitted file (the Inspector's "Not saved yet"): numstat against HEAD; an untracked file counts its lines. */
+async function addLineCounts(cwd: string, files: GitFile[]): Promise<void> {
+	if (files.length === 0) return;
+	let out = "";
+	try {
+		out = await git(cwd, ["diff", "--numstat", "--no-renames", "HEAD", "--"]);
+	} catch {
+		out = ""; // no commits yet: every file is untracked or newly added
+	}
+	const counts = parseNumstat(out);
+	for (const file of files) {
+		const c = counts.get(file.path);
+		if (c) {
+			if (c.added !== undefined) file.added = c.added;
+			if (c.removed !== undefined) file.removed = c.removed;
+		} else if (file.status === "untracked" || file.status === "added") {
+			const lines = await textLines(join(cwd, file.path));
+			if (lines !== undefined) {
+				file.added = lines;
+				file.removed = 0;
+			}
+		}
+	}
+}
+
+/** "12\t3\tpath" lines; binary files ("-\t-") have no counts. */
+export function parseNumstat(out: string): Map<string, { added?: number; removed?: number }> {
+	const map = new Map<string, { added?: number; removed?: number }>();
+	for (const line of out.split("\n")) {
+		const m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line);
+		if (!m) continue;
+		map.set(m[3]!, m[1] === "-" ? {} : { added: Number(m[1]), removed: Number(m[2]) });
+	}
+	return map;
+}
+
+/** A text file's line count (up to 2 MB), or undefined for binary or unreadable files. */
+async function textLines(path: string): Promise<number | undefined> {
+	try {
+		const info = await stat(path);
+		if (!info.isFile() || info.size > 2_000_000) return undefined;
+		const data = await readFile(path);
+		if (data.includes(0)) return undefined;
+		const text = data.toString("utf8");
+		return text.length === 0 ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+	} catch {
+		return undefined;
+	}
 }
 
 /** Local branches, most recently committed first. */
@@ -104,16 +159,23 @@ export async function log(cwd: string, since?: string, limit = 20): Promise<GitC
 	const from = since && !Number.isNaN(Date.parse(since)) ? `${new Date(since).toISOString().replace("T", " ").slice(0, 19)} +0000` : undefined;
 	let out: string;
 	try {
-		out = await git(cwd, ["log", `-n${n}`, "--format=%H%x1f%s%x1f%cI", ...(from ? [`--since=${from}`] : [])]);
+		// Each commit starts with \x1e; its numstat lines follow (the Inspector's timeline shows them per commit).
+		out = await git(cwd, ["log", `-n${n}`, "--no-renames", "--numstat", "--format=%x1e%H%x1f%s%x1f%cI", ...(from ? [`--since=${from}`] : [])]);
 	} catch {
 		return []; // no commits yet
 	}
+	return parseLog(out);
+}
+
+export function parseLog(out: string): GitCommit[] {
 	return out
-		.split("\n")
-		.filter(Boolean)
-		.map((line) => {
-			const [hash, subject, at] = line.split("\x1f");
-			return { hash: hash!, subject: subject ?? "", at: at ?? "" };
+		.split("\x1e")
+		.filter((chunk) => chunk.trim())
+		.map((chunk) => {
+			const [head, ...rest] = chunk.split("\n");
+			const [hash, subject, at] = head!.split("\x1f");
+			const files = [...parseNumstat(rest.join("\n"))].map(([path, c]) => ({ path, added: c.added ?? 0, removed: c.removed ?? 0 }));
+			return { hash: hash!, subject: subject ?? "", at: at ?? "", files };
 		});
 }
 

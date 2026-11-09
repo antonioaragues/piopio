@@ -30036,6 +30036,12 @@
 							},
 							"from": {
 								"type": "string"
+							},
+							"added": {
+								"type": "number"
+							},
+							"removed": {
+								"type": "number"
 							}
 						}
 					}
@@ -30126,6 +30132,28 @@
 							},
 							"at": {
 								"type": "string"
+							},
+							"files": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"path",
+										"added",
+										"removed"
+									],
+									"properties": {
+										"path": {
+											"type": "string"
+										},
+										"added": {
+											"type": "number"
+										},
+										"removed": {
+											"type": "number"
+										}
+									}
+								}
 							}
 						}
 					}

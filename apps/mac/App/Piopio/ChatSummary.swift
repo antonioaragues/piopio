@@ -31,7 +31,8 @@ struct ChatSummaryPanel: View {
                 }
                 .padding(.horizontal, 16)
             }
-            SummaryFooter(label: "This chat", cost: thread.state?.usage.costUsd ?? 0)
+            // Context and cost live in the footer every panel shares (docs/design/inspector §4).
+            InspectorFooter(thread: thread)
         }
     }
 
@@ -68,12 +69,9 @@ struct ChatSummaryPanel: View {
     // MARK: Context
 
     @ViewBuilder private func contextGroup(_ found: ChatResults) -> some View {
-        let context = thread.state?.context
-        if context != nil || !found.files.isEmpty || !found.pages.isEmpty {
+        if !found.files.isEmpty || !found.pages.isEmpty {
             VStack(alignment: .leading, spacing: 9) {
-                GroupHeader("Context") {
-                    if let context { ContextMeter(thread: thread, context: context) }
-                }
+                GroupHeader("Context") { EmptyView() }
                 if !found.files.isEmpty {
                     CardRow("You gave") {
                         ForEach(found.files, id: \.name) { file in

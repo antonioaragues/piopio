@@ -2,9 +2,9 @@ import AppKit
 import PiopioKit
 import SwiftUI
 
-// The parts of a Summary column (docs/design/summary/ia.html), style A: groups in order of attention (Now, Made, Plan,
-// Context, Setup), each a card with the verb on the left in grey and what it answers on the right, like the agent's
-// info panel. Shared by Build sessions and chats.
+// The parts of the chat and agent summary columns (docs/design/summary/ia.html), style A: groups in order of attention,
+// each a card with the verb on the left in grey and what it answers on the right. Build's right-hand panels are the
+// Inspector and Files (Inspector.swift, FilesPanel.swift); context and cost are in their shared footer.
 
 /// A group's heading: 12pt grey, with what belongs on its right (a count, a link, the context meter).
 struct GroupHeader<Trailing: View>: View {
@@ -113,24 +113,6 @@ extension View {
     }
 }
 
-/// The column's footer: what this conversation cost.
-struct SummaryFooter: View {
-    let label: String
-    let cost: Double
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            HStack {
-                Text(label).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                Spacer()
-                Text(cost > 0 && cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)).font(.system(size: 12).monospacedDigit())
-            }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-        }
-    }
-}
-
 // MARK: Now
 
 /// The Now group, only while it works or waits on you: a bold line and a grey one.
@@ -150,41 +132,6 @@ struct NowGroup: View {
         }
         .summaryGroup()
         .accessibilityElement(children: .combine)
-    }
-}
-
-// MARK: Context
-
-/// The Context group's header: how full, the tokens in the tooltip, and Compact where the conversation can.
-struct ContextMeter: View {
-    let thread: ThreadModel
-    let context: SessionState.Context
-    var compact = false
-    @State private var compacting = false
-
-    var body: some View {
-        let fraction = min(1, (context.tokens ?? 0) / max(1, context.window))
-        HStack(spacing: 7) {
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.dsLine)
-                Capsule().fill(fraction > 0.85 ? Color.dsFg : Color.dsFg2).frame(width: max(3, 40 * fraction))
-            }
-            .frame(width: 40, height: 3)
-            // One line whatever the panel's width: squeezed, it wrapped a letter per line ("1 / % / fu / ll").
-            Text("\(Int((fraction * 100).rounded()))% full").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
-                .lineLimit(1).fixedSize()
-            if compact, (context.tokens ?? 0) > 0 {
-                SummaryLink(compacting ? "Compacting…" : "Compact") {
-                    compacting = true
-                    Task { await thread.compact(); compacting = false }
-                }
-                .fixedSize()
-                .disabled(thread.isRunning || compacting)
-                .help("Summarize the conversation so far to free up room")
-            }
-        }
-        .fixedSize()
-        .help("\(context.tokens.map { ContextRing.short($0) } ?? "–") of \(ContextRing.short(context.window)) tokens")
     }
 }
 
@@ -306,77 +253,3 @@ struct SkillsRow: View {
         skill.name.hasPrefix("skill:") ? String(skill.name.dropFirst(6)) : skill.name
     }
 }
-
-// MARK: Made
-
-/// A part of Made ("Changed · 27"): a small label over its rows, which get the card's full width.
-struct MadeSection<Content: View>: View {
-    let label: String
-    let count: Int
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-                Text(label).foregroundStyle(Color.dsFg3)
-                if count > 1 { Text("\(count)").foregroundStyle(Color.dsFg3).monospacedDigit() }
-            }
-            .font(.system(size: 11.5, weight: .medium))
-            .accessibilityAddTraits(.isHeader)
-            content
-        }
-    }
-}
-
-/// A changed file: its name, its folder in grey, and the lines added and removed. Opens its diff.
-struct ChangedRow: View {
-    let file: FileChange
-    let action: () -> Void
-
-    private var folder: String {
-        let dir = (file.path as NSString).deletingLastPathComponent
-        return dir == "." ? "" : dir
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(URL(fileURLWithPath: file.path).lastPathComponent).font(.system(size: 13)).foregroundStyle(Color.dsFg)
-                    .lineLimit(1).truncationMode(.middle).layoutPriority(1)
-                if !folder.isEmpty {
-                    Text(folder).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.head)
-                }
-                Spacer(minLength: 6)
-                if file.status == .deleted { Text("deleted").font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize() }
-                if file.added > 0 { Text("+\(file.added)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsGreen).fixedSize() }
-                if file.removed > 0 { Text("−\(file.removed)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsRed).fixedSize() }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("\(file.path): review the diff")
-    }
-}
-
-/// A commit made in this session: its subject in full (up to two lines) and when. Clicking copies its hash.
-struct CommitRow: View {
-    let commit: GitCommit
-
-    var body: some View {
-        Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(commit.hash, forType: .string)
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(commit.subject).font(.system(size: 13)).foregroundStyle(Color.dsFg)
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 6)
-                Text(BuildSessionView.relative(commit.at)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Commit \(commit.hash.prefix(7)): click to copy its hash")
-    }
-}
-
