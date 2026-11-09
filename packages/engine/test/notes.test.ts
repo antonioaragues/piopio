@@ -22,3 +22,14 @@ test("a folder's NOTES.md is read every turn, and the model is asked to keep it 
 	writeFileSync(join(dir, "NOTES.md"), "x".repeat(10_000));
 	expect(beforeStart(dir)({ systemPrompt: "" })!.systemPrompt).toContain("[… the rest is in NOTES.md]");
 });
+
+test("Build's working rules are in every turn's system prompt: stop when done, push only what's asked, don't wait on timers", async () => {
+	const { guardsExtension, WORKING_RULES } = await import("../src/tools/guards.js");
+	let handler: ((event: { systemPrompt: string }) => { systemPrompt: string } | undefined) | undefined;
+	guardsExtension()({ on: (name: string, fn: typeof handler) => void (name === "before_agent_start" && (handler = fn)) } as never);
+	const prompt = handler!({ systemPrompt: "Base" })!.systemPrompt;
+	expect(prompt).toBe(`Base\n\n${WORKING_RULES}`);
+	expect(WORKING_RULES).toContain("then stop and report");
+	expect(WORKING_RULES).toContain("another push needs their go-ahead");
+	expect(WORKING_RULES).toContain("gh run watch");
+});
