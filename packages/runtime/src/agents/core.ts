@@ -581,7 +581,14 @@ export class AgentCore {
 							? `\n\nYou are talking with ${contact.name}, your owner.`
 							: `\n\nYou are talking with ${contact.name}, one of ${owner?.name ?? "your owner"}'s contacts — not your owner. Don't share ${owner?.name ?? "the owner"}'s private information or other people's details with them.${contact.notes ? ` About ${contact.name}: ${contact.notes}` : ""}`;
 					const shortcuts = core.def.tools.shortcuts?.length ? `\n\nShortcuts you may run (shortcuts_run): ${core.def.tools.shortcuts.join(", ")}.` : "";
-					return `${core.options.instructions().trim()}${who}${shortcuts}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
+					// Telegram from the Mac (docs/spec/19 S4): how to connect it, or that it's connected.
+					const telegram =
+						contact?.role !== "owner"
+							? ""
+							: core.def.channels?.telegram
+								? "\n\nYou're also on Telegram: the owner's messages there come to this same conversation, and your answers go back there."
+								: "\n\nIf the owner wants to talk with you on Telegram: they make a bot with @BotFather (/newbot) and paste the token it gives them in this chat. Piopio connects it and sends them a link; you never see the token.";
+					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
 				}),
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;

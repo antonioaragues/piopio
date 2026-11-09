@@ -38,6 +38,7 @@ import type { ToolItem } from "@piopio/protocol";
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans and files handed over (they read as part of the conversation). */
 const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
+import { TelegramChannels } from "./channels/manager.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -65,6 +66,8 @@ export type EngineOptions = {
 	allowPrivateFetch?: boolean;
 	/** Where connected apps sign in and call their APIs (tests point them at a fake server). */
 	connectorEndpoints?: ConnectorEndpoints;
+	/** Telegram's API (tests: a fake one) and how long a poll waits. */
+	telegram?: { fetch?: typeof fetch; pollSeconds?: number; retryMs?: number };
 	log?: (line: string) => void;
 };
 
@@ -88,6 +91,7 @@ export class Engine {
 	readonly chatResources: ChatResources;
 	readonly memory: MemoryProviders;
 	readonly hooks: Hooks;
+	readonly telegram: TelegramChannels;
 	readonly app = new AppServices();
 	private usageCache?: { at: number; value: Result<"usage.summary"> };
 	private server?: Server;
@@ -167,6 +171,24 @@ export class Engine {
 		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory, app: this.app };
 		if (options.agentAskTimeoutMs) this.sessions.agentAskTimeoutMs = options.agentAskTimeoutMs;
 		if (options.agentLearn) this.sessions.agentLearn = options.agentLearn;
+		// Agents on Telegram from this Mac (docs/spec/19 S4): polling, so no webhook or cloud.
+		this.telegram = new TelegramChannels({
+			agents: () => this.sessions.agentList(),
+			definition: (id) => this.sessions.agentList().find((a) => a.id === id)?.definition,
+			save: (id, change, message) => this.sessions.changeAgent(id, change, message),
+			submit: async (id, contactId, text) => {
+				const view = await (await this.sessions.agent({ kind: "agent", id })).view(contactId);
+				await view.submit(text, { whenBusy: "followUp" });
+			},
+			notice: async (id, text) => (await this.sessions.agent({ kind: "agent", id })).notice(text),
+			secrets: this.secrets,
+			stateDir: join(options.paths.home, "channels", "telegram"),
+			log: this.log,
+			...(options.telegram?.fetch ? { fetch: options.telegram.fetch } : {}),
+			...(options.telegram?.pollSeconds !== undefined ? { pollSeconds: options.telegram.pollSeconds } : {}),
+			...(options.telegram?.retryMs !== undefined ? { retryMs: options.telegram.retryMs } : {}),
+		});
+		this.sessions.telegram = this.telegram;
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp || JSON.stringify(next.chat.mcpServers) !== JSON.stringify(previous.chat.mcpServers)) void this.chatMcp.reset();
@@ -260,6 +282,7 @@ export class Engine {
 	}
 
 	async stop(): Promise<void> {
+		this.telegram?.stop();
 		for (const conn of this.authed) conn.close();
 		await this.backfill;
 		for (const off of this.subscriptions.values()) off();

@@ -37,6 +37,7 @@ import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
 import { historyExtension, type HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
+import type { TelegramChannels } from "./channels/manager.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { SdkEventMapper } from "./timeline/pi-sdk.js";
 import type { SessionEvent } from "@piopio/protocol";
@@ -110,6 +111,8 @@ export class Sessions {
 	agentLearn?: Pick<AgentOpenOptions, "learn" | "learnQuietMs" | "onLearned">;
 	/** The Inbox changed (badges), with the approval an agent just asked for (notifications). */
 	onInbox?: (change: { count: number; approval?: { agent: ContainerRef; agentName: string; approvalId: string; title: string } }) => void;
+	/** Agents on Telegram from this Mac (channels/manager.ts), set by the engine. */
+	telegram?: TelegramChannels;
 
 	constructor(
 		private readonly paths: EnginePaths,
@@ -717,6 +720,7 @@ export class Sessions {
 		this.save();
 		this.changed(entry);
 		if (this.open.has(ref.id)) await (await this.agent(ref)).reconfigure();
+		await this.telegram?.sync();
 		return { errors: [], saved };
 	}
 
@@ -749,6 +753,29 @@ export class Sessions {
 			await this.agent(entry.ref).catch((error: unknown) => log(`Agent ${entry.title}: couldn't start: ${(error as Error).message}`));
 			await this.agentStatus(entry);
 		}
+		await this.telegram?.sync().catch((error: unknown) => log(`Telegram: ${(error as Error).message}`));
+	}
+
+	/** Local agents and their definitions (channels). */
+	agentList(): { id: string; name: string; definition: AgentDefinition }[] {
+		return [...this.entries.values()]
+			.filter((e) => e.ref.kind === "agent")
+			.flatMap((e) => {
+				try {
+					return [{ id: e.ref.id, name: e.title, definition: this.agentDefinition(e.ref.id).definition }];
+				} catch {
+					return [];
+				}
+			});
+	}
+
+	/** Changes an agent's definition in code (channels pairing), saved like an edit. */
+	async changeAgent(id: string, change: (def: AgentDefinition) => void, message: string): Promise<void> {
+		const { definition, instructions } = this.agentDefinition(id);
+		const next = structuredClone(definition);
+		change(next);
+		const result = await this.saveAgent({ kind: "agent", id }, next, instructions, message);
+		if (!result.saved && result.errors.length) throw new EngineError("INVALID", result.errors.map((e) => e.message).join(" "));
 	}
 
 	/** Agents reaching each other in this engine (06 §7 AA7): who they are, delivery, a trace's cost, shared memory. */
@@ -1242,7 +1269,11 @@ export class Sessions {
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {
 					if (approval.status === "pending") this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });
+					if (approval.status === "pending") this.telegram?.approval(id, approval.title);
 				},
+				onAnswer: (contactId, said, answer) => this.telegram?.answered(id, contactId, said, answer),
+				onOutbound: (to, text) => this.telegram?.outbound(id, to, text),
+				...(this.telegram ? { connectTelegram: (token: string) => this.telegram!.connect(id, token) } : {}),
 			});
 		}
 		if (entry.ref.kind === "thread" && entry.debate) {

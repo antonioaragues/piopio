@@ -15,6 +15,7 @@ import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEvent
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem, UtilityChoice } from "@piopio/protocol";
 import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
+import { BOT_TOKEN } from "../channels/telegram.js";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder } from "../timeline/builder.js";
@@ -45,6 +46,12 @@ export type AgentOpenOptions = {
 	onStatus?: () => void;
 	/** An approval was asked or answered (notifications). */
 	onApproval?: (approval: Approval) => void;
+	/** A person's turn ended with this answer (channels send it back where the message came from). */
+	onAnswer?: (contactId: string, said: string, answer: string) => void;
+	/** The agent sent a message on its own (channels deliver it). */
+	onOutbound?: (to: string, text: string, from: string) => void;
+	/** The owner pasted a Telegram bot token in the chat: connect it and say what happened (docs/spec/19 S4). */
+	connectTelegram?: (token: string) => Promise<string>;
 	/** Apple app tools through the Mac app (06 §4.1). */
 	appTool?: AgentCoreOptions["appTool"];
 	/** The other agents (06 §7). */
@@ -109,7 +116,10 @@ export class AgentRuntime implements Runtime {
 			...(options.onLearned ? { onLearned: options.onLearned } : {}),
 			onPeerLog: () => options.onActivity?.(),
 			onRun: () => options.onActivity?.(),
-			onOutbound: () => options.onActivity?.(),
+			onOutbound: (to, text, from) => {
+				options.onActivity?.();
+				options.onOutbound?.(to, text, from);
+			},
 			onApproval: (approval) => {
 				for (const view of runtime?.live ?? []) if (view.conversationId === approval.conversationId) view.approval(approval);
 				options.onApproval?.(approval);
@@ -247,6 +257,19 @@ export class AgentRuntime implements Runtime {
 
 	activity(): void {
 		this.options.onActivity?.();
+	}
+
+	answered(contactId: string, said: string, answer: string): void {
+		this.options.onAnswer?.(contactId, said, answer);
+	}
+
+	/** A note in the owner's conversation, from the app (not the agent, not seen by the model). */
+	notice(text: string): Promise<void> {
+		return this.core.proactive.notice(text);
+	}
+
+	connectTelegram(token: string): Promise<string> | undefined {
+		return this.options.connectTelegram?.(token);
 	}
 
 	watch(conversation: Conversation): Promise<AgentEventStream> {
@@ -542,6 +565,7 @@ export class AgentView implements Runtime {
 		const items = this.builder.snapshot().items.slice(turn.itemCount);
 		const answer = [...items].reverse().find((i) => i.kind === "assistant" && i.parts.some((p) => p.type === "text" && p.text.trim()));
 		const text = answer?.kind === "assistant" ? answer.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
+		this.agent.answered(this.contactId, turn.said, text);
 		await this.agent.core.afterTurn(this.contactId, turn.said, text, { ref: `person:${this.contactId}`, ...(answer ? { itemId: answer.id } : {}) }).catch(() => undefined);
 		await this.agent.core.safety.checkBudget().catch(() => undefined);
 		this.agent.activity();
@@ -557,6 +581,16 @@ export class AgentView implements Runtime {
 
 	async submit(text: string, options: SubmitOptions) {
 		if (!this.contactId) throw new EngineError("INVALID", this.peer ? "A conversation between agents is read-only." : "A run's conversation is read-only.");
+		// A Telegram bot token pasted by the owner never reaches the model or the transcript (docs/spec/19 S4).
+		const token = BOT_TOKEN.exec(text)?.[1];
+		if (token && this.contactId === ownerOf(this.agent.definition())) {
+			const said = await this.agent.connectTelegram(token);
+			if (said) {
+				await this.agent.notice(said);
+				this.agent.activity();
+				return { disposition: "started" as const };
+			}
+		}
 		// /pause, /resume, and messages while paused or out of budget (06 §9 AS3–AS4) don't start a turn.
 		if (await this.agent.core.intercept(this.contactId, text)) {
 			this.agent.activity();

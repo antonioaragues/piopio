@@ -110,7 +110,8 @@ export function unsupported(def: AgentDefinition): DefinitionError[] {
 		if (t === "http_request" || t === "codemode" || t === "files") errors.push({ path: `/tools/builtin/${i}`, message: `“${t}” isn't available yet: remove it.` });
 	});
 	if (def.tools.mcp?.length) errors.push({ path: "/tools/mcp", message: "MCP servers for agents aren't available yet: remove tools.mcp." });
-	if (def.channels?.telegram || def.channels?.whatsapp) errors.push({ path: "/channels", message: "Telegram and WhatsApp come with cloud agents: remove channels for now." });
+	// Telegram works from the Mac by polling (docs/spec/19 S4); WhatsApp needs the cloud (13 §5.5).
+	if (def.channels?.whatsapp) errors.push({ path: "/channels/whatsapp", message: "WhatsApp comes with cloud agents: remove it for now." });
 	return errors;
 }
 
