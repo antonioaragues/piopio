@@ -10,29 +10,47 @@ concurrency:
   cancel-in-progress: true
 jobs:
   typescript:
+    # Engine, runtime, extensions and cloud tests with the scripted model: no provider keys, no macOS.
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version-file: .node-version
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
       - run: corepack pnpm build
       - run: corepack pnpm typecheck
       - run: corepack pnpm test
+
+  # The Swift side needs Xcode 27 on macOS 27, so it runs on the author's own Mac (docs/ci.md).
+  # Off by default: without a runner registered with these labels the job would queue forever.
+  # `workflow_dispatch` runs it anyway, to try the setup without enabling it for every push.
   swift:
-    # The app requires Xcode 27/macOS 27. Enable only after registering this runner.
-    if: ${{ vars.PIOPIO_SWIFT_CI == 'true' && github.event_name != 'pull_request' }}
+    if: ${{ vars.PIOPIO_SWIFT_CI == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: [self-hosted, macOS, ARM64, piopio-macos-27]
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcodegen --version || { echo "::error::XcodeGen is missing on the runner (brew install xcodegen)."; exit 1; }
+      - run: scripts/swift-test.sh
+
+  app:
+    # The whole app: engine bundle, generated Xcode project and Piopio.app. Same runner; the .app is
+    # left in apps/mac/App/build/Build/Products/Debug/ on that Mac, ready to open.
+    if: ${{ vars.PIOPIO_SWIFT_CI == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: [self-hosted, macOS, ARM64, piopio-macos-27]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version-file: .node-version
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
-      - run: corepack pnpm test:swift
       - run: scripts/build-app.sh
