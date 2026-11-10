@@ -566,6 +566,9 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// A subagent's session: the parent session and its `task` call.
     public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String }
     public var parent: Parent?
+    /// A team's session (docs/spec/19): its lead, or a member working a task.
+    public struct Team: Codable, Sendable, Hashable { public var id: String; public var role: String; public var kind: String; public var taskId: String? }
+    public var team: Team?
     /// A chat continued in a project folder, and the conversation it continued from (18 §5).
     public struct Link: Codable, Sendable, Hashable { public var id: String; public var title: String }
     public var continuedIn: Link?
@@ -666,6 +669,71 @@ public struct AgentPerson: Decodable, Sendable, Hashable, Identifiable {
 }
 public struct AgentPeopleResult: Decodable, Sendable { public var people: [AgentPerson] }
 /// The Runs tab (06-agents §6): runs newest first, messages held by quiet hours or the daily limit, what fires next.
+// MARK: Teams (docs/spec/19)
+
+public struct TeamRole: Codable, Sendable, Hashable, Identifiable {
+    public var id, name, kind, responsibility: String
+    public var done: String?
+    public var model: String?
+}
+
+public struct TeamTask: Codable, Sendable, Hashable, Identifiable {
+    public var id, title, brief, role, state, by: String
+    public var done: String?
+    public var sessionId: String?
+    public var reviewSessionId: String?
+    public var branch: String?
+    public var report: String?
+    public var review: String?
+    public var attempts: Int
+    public var blocked: String?
+    public var createdAt, updatedAt: String
+}
+
+public struct TeamInfo: Codable, Sendable, Hashable, Identifiable {
+    public struct Git: Codable, Sendable, Hashable { public var base, branch, integration: String }
+    public var id, name, slug, template, style, cwd, folder: String
+    public var roles: [TeamRole]
+    public var git: Git?
+    public var leadSessionId: String?
+    public var memberMode: String
+    public var maxParallel: Int
+    public var testCommand: String?
+    public var goal: String?
+    public var tasks: [TeamTask]
+}
+
+public struct TeamTemplate: Decodable, Sendable, Hashable, Identifiable {
+    public var id, name, description, workplace: String
+    public var roles: [TeamRole]
+}
+
+public struct TeamTemplatesResult: Decodable, Sendable { public var templates: [TeamTemplate] }
+public struct TeamsListResult: Decodable, Sendable { public var teams: [TeamInfo] }
+public struct TeamResult: Decodable, Sendable { public var team: TeamInfo }
+public struct TeamIdParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
+public struct CreateTeamParams: Encodable, Sendable {
+    public var name, template: String
+    public var cwd: String?
+    public var goal: String?
+    public var testCommand: String?
+    public var model: ModelRef?
+    public init(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, model: ModelRef?) {
+        self.name = name; self.template = template; self.cwd = cwd; self.goal = goal; self.testCommand = testCommand; self.model = model
+    }
+}
+public struct AddTeamTaskParams: Encodable, Sendable {
+    public var id, title, brief: String
+    public var role: String?
+    public init(id: String, title: String, brief: String, role: String?) { self.id = id; self.title = title; self.brief = brief; self.role = role }
+}
+public struct UpdateTeamTaskParams: Encodable, Sendable {
+    public var id, taskId: String
+    public var state: String?
+    public var role: String?
+    public init(id: String, taskId: String, state: String? = nil, role: String? = nil) { self.id = id; self.taskId = taskId; self.state = state; self.role = role }
+}
+
 public struct AgentRunsResult: Decodable, Sendable {
     public struct Run: Decodable, Sendable, Hashable, Identifiable {
         public var id, kind, source, prompt, firedAt, status: String
@@ -1464,7 +1532,7 @@ public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
     public init(type: String, message: String? = nil) { self.type = type; self.message = message }
 }
 public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
-public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, teamsChanged }
 
 // MARK: Connected apps (docs/spec/12-connectors)
 

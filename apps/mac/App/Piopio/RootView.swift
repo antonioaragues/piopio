@@ -223,6 +223,10 @@ struct RootView: View {
                 missing
             }
         // One case for both, so choosing another project in the box keeps the page (and what's typed).
+        case .team(let id):
+            TeamPage(engine: engine, teamId: id, item: itemBinding)
+        case .start(.team):
+            TeamStart(engine: engine, item: itemBinding)
         case .start(.chat), .newSession:
             ConversationStart(engine: engine, item: itemBinding)
         case .start(.project):

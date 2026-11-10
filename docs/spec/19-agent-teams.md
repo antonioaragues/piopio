@@ -278,3 +278,43 @@ From the user, to adjust together before T1 starts:
 | Shared memory | TD7 | Choices per team: folder notes, a shared bank, or both |
 | A team per project | §2 Workplace, T3; Dispatch as default team (TD2) | The project picks its team; Build sessions there go through it |
 
+## 11. Teams as built (2026-11-10)
+
+The first version of T1 and T2, from §10's development team.
+
+- **Templates** (`engine/src/teams/templates.ts`). A role card is a responsibility, what "done" means, what it may do
+  (`lead`, `write`, `review`, `integrate`) and optionally its own model.
+  - **Development:** tech lead, builder, QA, CI. It works in a project.
+  - **Research:** lead, researchers, editor. It works in its own folder.
+  - **Writing:** editor in chief, writer, editor. It works in its own folder.
+- **The lead** is a Build session in Read only with `create_task`, `list_tasks` and `message_task`, and its team's
+  brief in every turn. `[Board]` messages tell it when a task is done, sent back or blocked.
+- **The board** (`engine/src/teams/runner.ts`, `teams.json` in the engine's home). Tasks go To do → Doing → Review →
+  (Integrating) → Done, or Blocked.
+  - **Parallel builders:** at most `maxParallel` run at once (3). In a git project the team has its own branch and
+    worktree, and each task branches from it, so builders work in parallel.
+  - **Review:** a finished task is committed on its branch and goes to review (QA, the editor), which ends with
+    `verdict`. A failed review sends it back with the notes; three rounds and it's blocked.
+  - **CI:** merges approved branches into the team's branch, then runs the test command. A conflict or a failing
+    check sends the task back with the output. The project's own branch is never touched.
+- **Shared knowledge:** the team folder's NOTES.md (`~/Piopio/Teams/<name>`). Every member is told to read it and add
+  to it.
+- **The app:**
+  - **Sidebar:** a **Teams** section under Agents, with + and a dot while tasks run.
+  - **The start page:** pick the kind of team, a name, the project and checks (development), and an optional goal.
+  - **The team page:**
+    - **Lead:** the lead's conversation, where you give and adjust the goal.
+    - **Board:** the kanban. Click a card to open its session. From a card's menu you move it back, stop it, mark it
+      done or give it to another role. + adds a task of yours.
+    - **Members:** the role cards.
+  - **Session lists:** team sessions don't show in the projects' lists.
+
+**Not yet:**
+- Choosing a team when you make a project.
+- Merging the team's branch from the app: today you merge `team/<name>` yourself.
+- Editing roles or adding your own templates.
+- Collaboration styles other than "a lead and the rest follow".
+- A shared memory bank.
+- Budgets per team.
+- **Not seen with a real model.**
+

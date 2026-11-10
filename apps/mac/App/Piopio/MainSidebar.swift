@@ -46,6 +46,7 @@ struct MainSidebar: View {
                     pinnedSection
                     if areas.showsProjects { projectsSection }
                     if areas.showsAgents { agentsSection }
+                    if areas.showsAgents { teamsSection }
                     if areas.showsChats { chatsSection }
                 }
                 .padding(.horizontal, 8)
@@ -258,7 +259,7 @@ struct MainSidebar: View {
     /// The project's conversations, nested under it on a hairline: the live ones and "N earlier". Hidden while the
     /// project is folded.
     @ViewBuilder private func projectSessions(_ project: ProjectInfo) -> some View {
-        let all = engine.sessions(in: project).filter { $0.parent == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
+        let all = engine.sessions(in: project).filter { $0.parent == nil && $0.team == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
         // No draft row: the project's row is marked while its new conversation page is open.
@@ -306,7 +307,7 @@ struct MainSidebar: View {
         let selected = item == .project(project.id)
         let plus: ProjectRow.Plus? = startsSessions(project) ? .session : nil
         let folded = collapsedProjects.contains(project.id)
-        let hasSessions = !engine.sessions(in: project).filter { $0.parent == nil }.isEmpty
+        let hasSessions = !engine.sessions(in: project).filter { $0.parent == nil && $0.team == nil }.isEmpty
         return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil,
                           toggle: { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }) {
             NotificationCenter.default.post(name: .newBuildSession, object: project.id)
@@ -367,6 +368,30 @@ struct MainSidebar: View {
     }
 
     // MARK: Agents
+
+    /// Teams (docs/spec/19): each opens its page; a dot while any of its tasks is running.
+    @ViewBuilder private var teamsSection: some View {
+        let teams = engine.teams
+        header(.teams, total: teams.count, shown: teams.count, add: { item = .start(.team) }, addHelp: "New team")
+        if !collapsed.contains(SidebarSection.teams.rawValue) {
+            if item == .start(.team) { draftRow(.team) }
+            ForEach(teams) { team in
+                let selected = item == .team(team.id)
+                let working = team.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
+                Button { item = .team(team.id) } label: {
+                    HStack(spacing: 10) {
+                        RowGlyph(symbol: "person.3")
+                        Text(team.name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        Spacer(minLength: 4)
+                        if working > 0 { SidebarDot(status: .running).help("\(working) task\(working == 1 ? "" : "s") in progress") }
+                        else if team.tasks.contains(where: { $0.state == "blocked" }) { SidebarDot(status: .waiting).help("A task is blocked") }
+                    }
+                    .rowChrome(selected: selected)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
 
     @ViewBuilder private var agentsSection: some View {
         let agents = engine.agents

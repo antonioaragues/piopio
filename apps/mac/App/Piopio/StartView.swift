@@ -106,6 +106,7 @@ extension StartKind {
         case .debate: "New debate"
         case .agent: "New agent"
         case .project: "New project"
+        case .team: "New team"
         }
     }
 
@@ -115,6 +116,7 @@ extension StartKind {
         case .debate: "person.2"
         case .agent: "smallcircle.circle"
         case .project: "folder"
+        case .team: "person.3"
         }
     }
 }
@@ -193,6 +195,7 @@ struct StartView: View {
             case .chat, .debate: ChatStart(engine: engine, mode: kind, item: $item)
             case .agent: AgentStart(engine: engine, item: $item)
             case .project: EmptyView() // RootView shows NewProjectPage, with the conversation it continues
+            case .team: EmptyView() // RootView shows TeamStart
             }
         }
         .id(kind == .debate ? StartKind.chat : kind)

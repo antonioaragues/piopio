@@ -744,7 +744,7 @@ export class Engine {
 			}
 			case "teams.create": {
 				const p = params as Params<"teams.create">;
-				const slug = (p.name.trim() || "team").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
+				const slug = (p.name.trim() || TEAM_TEMPLATES.find((t) => t.id === p.template)?.name || "team").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
 				let folder = join(this.teamsDir, slug);
 				for (let n = 2; existsSync(folder); n++) folder = join(this.teamsDir, `${slug}-${n}`);
 				const team = await this.teams.create({

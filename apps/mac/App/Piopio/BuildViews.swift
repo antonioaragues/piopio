@@ -417,7 +417,7 @@ struct BuildEmptyState: View {
                 Text("What do you want to build?").font(.system(size: 22, weight: .bold)).foregroundStyle(Color.dsFg).padding(.top, 6)
                 Text("Describe a task; a session starts in the project, on its current branch or a new one.").font(.system(size: 13)).foregroundStyle(Color.dsFg2).padding(.top, 4)
                 promptCard.padding(.top, 18)
-                let recent = Array(engine.buildSessions.filter { $0.parent == nil }.sorted { $0.updatedAt > $1.updatedAt }.prefix(6))
+                let recent = Array(engine.buildSessions.filter { $0.parent == nil && $0.team == nil }.sorted { $0.updatedAt > $1.updatedAt }.prefix(6))
                 if !recent.isEmpty {
                     Text("RECENT").font(.system(size: 10.5, weight: .semibold)).tracking(0.4).foregroundStyle(Color.dsFg3).padding(.top, 28).padding(.bottom, 6)
                     VStack(spacing: 2) { ForEach(recent, id: \.ref.id) { recentRow($0) } }

@@ -14,6 +14,8 @@ final class EngineController {
     private(set) var threads: [SessionSummary] = []
     /// Agents (docs/spec/06-agents).
     private(set) var agents: [SessionSummary] = []
+    /// Teams (docs/spec/19): a lead, members and a board.
+    private(set) var teams: [TeamInfo] = []
     /// Build: folders added as projects, and their sessions (newest first).
     private(set) var projects: [ProjectInfo] = []
     private(set) var buildSessions: [SessionSummary] = []
@@ -314,6 +316,7 @@ final class EngineController {
             }
         }
         Task { [weak self] in await self?.loadInbox() }
+        Task { [weak self] in await self?.loadTeams() }
         Task { [weak self] in
             for await note in client.providerEvents {
                 guard let self else { return }
@@ -325,6 +328,8 @@ final class EngineController {
                     if self.login?.loginId == auth.loginId { self.login?.apply(auth.event) }
                 case .connectorsChanged:
                     await self.loadConnectors()
+                case .teamsChanged:
+                    await self.loadTeams()
                 case .connectorAuth(let auth):
                     if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
                     if auth.event.type == "done" { await self.loadConnectors() }
@@ -590,6 +595,36 @@ final class EngineController {
     }
 
     // MARK: Agents
+
+    // MARK: Teams (docs/spec/19)
+
+    func loadTeams() async {
+        if let list = try? await client?.call("teams.list", Empty(), as: TeamsListResult.self).teams { teams = list }
+    }
+
+    func teamTemplates() async -> [TeamTemplate] {
+        (try? await client?.call("teams.templates", Empty(), as: TeamTemplatesResult.self).templates) ?? []
+    }
+
+    func createTeam(name: String, template: String, cwd: String?, goal: String?, testCommand: String?) async throws -> TeamInfo {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build)), as: TeamResult.self).team
+        await loadTeams()
+        try? await refreshCatalog()
+        return team
+    }
+
+    func addTeamTask(_ team: TeamInfo, title: String, brief: String, role: String?) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.addTask", AddTeamTaskParams(id: team.id, title: title, brief: brief, role: role), as: Empty.self)
+        await loadTeams()
+    }
+
+    func updateTeamTask(_ team: TeamInfo, _ task: TeamTask, state: String? = nil, role: String? = nil) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.updateTask", UpdateTeamTaskParams(id: team.id, taskId: task.id, state: state, role: role), as: Empty.self)
+        await loadTeams()
+    }
 
     func agentTemplates() async -> [AgentTemplate] {
         (try? await client?.call("agents.templates", Empty(), as: AgentTemplatesResult.self).templates) ?? []

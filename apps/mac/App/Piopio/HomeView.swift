@@ -81,7 +81,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var recent: some View {
-        let all = (engine.buildSessions.filter { $0.parent == nil } + engine.threads).filter { Areas.shared.set.shows($0) }
+        let all = (engine.buildSessions.filter { $0.parent == nil && $0.team == nil } + engine.threads).filter { Areas.shared.set.shows($0) }
         let items = Array(all.sorted { $0.updatedAt > $1.updatedAt }.prefix(4))
         if !items.isEmpty {
             sectionTitle("Recent")

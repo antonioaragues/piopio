@@ -258,6 +258,16 @@ enum DebugAutomation {
                 if let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] { await session.send(prompt) }
             }
         }
+        // PIOPIO_DEMO_TEAM=<template>[:<folder>]: a team (docs/spec/19), with PIOPIO_DEMO_TEAM_GOAL for its lead and
+        // PIOPIO_DEMO_TEAM_TEST as its checks; then its page (the tab from PIOPIO_DEMO_TEAM_TAB: lead, board, members).
+        if let spec = env["PIOPIO_DEMO_TEAM"], engine.status == .ready {
+            Task {
+                let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
+                if let tab = env["PIOPIO_DEMO_TEAM_TAB"] { UserDefaults.standard.set(tab, forKey: "teamTab") }
+                guard let team = try? await engine.createTeam(name: "", template: parts[0], cwd: parts.count > 1 ? parts[1] : nil, goal: env["PIOPIO_DEMO_TEAM_GOAL"], testCommand: env["PIOPIO_DEMO_TEAM_TEST"]) else { return }
+                NotificationCenter.default.post(name: .selectItem, object: SidebarItem.team(team.id).raw)
+            }
+        }
         // PIOPIO_DEMO_PROJECT: add this folder in Build and open a session there; PIOPIO_DEMO_BUILD_PROMPT: send it.
         if let folder = env["PIOPIO_DEMO_PROJECT"], engine.status == .ready {
             Task {
