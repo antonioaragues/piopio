@@ -569,6 +569,9 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// A team's session (docs/spec/19): its lead, or a member working a task.
     public struct Team: Codable, Sendable, Hashable { public var id: String; public var role: String; public var kind: String; public var taskId: String? }
     public var team: Team?
+    /// Listed with the project's conversations: yours and the team lead's (docs/spec/20 PT4); members' sessions are
+    /// reached from their tasks.
+    public var listed: Bool { parent == nil && (team == nil || team?.kind == "lead") }
     /// A chat continued in a project folder, and the conversation it continued from (18 §5).
     public struct Link: Codable, Sendable, Hashable { public var id: String; public var title: String }
     public var continuedIn: Link?
@@ -679,6 +682,8 @@ public struct TeamRole: Codable, Sendable, Hashable, Identifiable {
 
 public struct TeamTask: Codable, Sendable, Hashable, Identifiable {
     public var id, title, brief, role, state, by: String
+    /// The lead conversation that made it (docs/spec/20 PT6).
+    public var conversationId: String?
     public var done: String?
     public var sessionId: String?
     public var reviewSessionId: String?
@@ -1203,8 +1208,10 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var approvalMode: ApprovalMode?
     public var profile: SessionSummary.Profile?
     public var debate: DebateConfig?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, debate: DebateConfig? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile; self.debate = debate
+    /// A conversation with this team's lead, in its project (docs/spec/20 PT4).
+    public var team: String?
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, debate: DebateConfig? = nil, team: String? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile; self.debate = debate; self.team = team
     }
 }
 

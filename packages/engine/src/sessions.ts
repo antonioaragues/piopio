@@ -421,7 +421,10 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; debate?: DebateConfig }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; debate?: DebateConfig; team?: string }): Promise<ContainerRef> {
+		// A conversation with a team's lead (docs/spec/20 PT4): in its project, with the board's tools.
+		const lead = params.team ? this.teams?.leadRole(params.team) : undefined;
+		if (params.team && (params.kind !== "build" || !lead)) throw new EngineError("INVALID", "A team's conversation is a folder conversation in its project.");
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.planMode && params.kind !== "build") throw new EngineError("INVALID", "Only folder conversations support Plan mode.");
 		if (params.debate && params.kind !== "thread") throw new EngineError("INVALID", "Only threads can be debates.");
@@ -457,6 +460,7 @@ export class Sessions {
 			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
 			...(params.debate ? { debate: { config: params.debate, status: "running" as const, maxRounds: params.debate.maxRounds, endings: [] } } : {}),
+			...(params.team && lead ? { team: { id: params.team, role: lead.id, kind: "lead" as const } } : {}),
 		};
 		this.entries.set(ref.id, entry);
 		this.save();
@@ -1121,16 +1125,16 @@ export class Sessions {
 			kind: entry.team!.kind,
 			brief: () => teams.leadBrief(team()),
 			createTask: async (task) => {
-				const t = await teams.createTask(team().id, task);
+				const t = await teams.createTask(team().id, task, "lead", entry.ref.id);
 				return `Added ${t.id} “${t.title}” for ${t.role}: ${t.state === "doing" ? "started" : "waits for a free slot"}.`;
 			},
-			board: () => teams.board(team().id),
+			board: () => teams.board(team().id, entry.ref.id),
 			message: (taskId, text) => teams.message(team().id, taskId, text),
 			verdict: (pass, notes) => teams.verdict(entry.ref.id, pass, notes),
 			addRoutine: async (input) => {
 				const r = await teams.addRoutine(team().id, input, "lead");
 				const url = r.on === "webhook" ? teams.hookUrl?.(team().id, r.id) : undefined;
-				return `Set ${r.id}: ${routineLabel(r)}${r.next ? `, first ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}.${url ? ` Its URL (POST, from this Mac): ${url}` : ""} The user sees it on the team page.`;
+				return `Set ${r.id}: ${routineLabel(r)}${r.next ? `, first ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}.${url ? ` Its URL (POST, from this Mac): ${url}` : ""} The user sees it in the project.`;
 			},
 			routines: () => teams.routineList(team().id),
 			cancelRoutine: async (id) => {

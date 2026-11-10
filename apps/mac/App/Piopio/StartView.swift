@@ -236,7 +236,7 @@ struct ConversationStart: View {
                 .padding(.bottom, 4)
                 TitleText(text: team != nil ? "What should the team do?" : project == nil ? "What's on your mind?" : "New conversation")
                 Text(team != nil
-                    ? "Its lead plans it and hands the tasks to the team, who work in parallel; you follow it on the board. To work on your own instead, pick the project in the box."
+                    ? "A conversation with its lead: it does small things itself and puts bigger work on the board, where the team works in parallel. To work without the team, pick the project in the box."
                     : project == nil
                     ? "A conversation keeps its own history. Continue it in a project whenever it grows into a subject."
                     : "It works in the project's folder, with its instructions and the notes its conversations share.")

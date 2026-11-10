@@ -161,11 +161,35 @@ struct TeamPage: View {
         return "\(kind) · \(place)"
     }
 
+    /// Conversations with the lead (docs/spec/20 PT6): each conversation in the project is one. They live with the
+    /// project's conversations; this lists them until the project page takes over (P2).
     @ViewBuilder private func lead(_ team: TeamInfo) -> some View {
-        if let id = team.leadSessionId, let summary = engine.buildSessions.first(where: { $0.ref.id == id }) {
-            BuildSessionView(engine: engine, session: engine.thread(summary.ref), summary: summary).id(id)
-        } else {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        let conversations = engine.buildSessions.filter { $0.team?.id == team.id && $0.team?.kind == "lead" }.sorted { $0.updatedAt > $1.updatedAt }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Every conversation in \(URL(fileURLWithPath: team.cwd).lastPathComponent) is with the lead. Start one from the project's +.")
+                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+                if conversations.isEmpty { Text("No conversations yet.").font(.system(size: 13)).foregroundStyle(Color.dsFg3) }
+                ForEach(conversations) { s in
+                    Button { item = .session(s.ref.id) } label: {
+                        HStack {
+                            Text(s.title).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Color.dsFg)
+                            Spacer()
+                            let tasks = team.tasks.filter { $0.conversationId == s.ref.id }
+                            if !tasks.isEmpty { Text("\(tasks.count) task\(tasks.count == 1 ? "" : "s")").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                            Text(BuildSessionView.relative(s.updatedAt)).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                        }
+                        .padding(12)
+                        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
     }
 }

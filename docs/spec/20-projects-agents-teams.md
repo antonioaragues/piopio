@@ -147,3 +147,25 @@ folder becomes a project at that folder. Boards, branches and routines move with
 - **An agent as "who works here"** (one agent, no team): the same pattern with no board. Worth it from P2, or later?
 - **Cost guard:** a lead per conversation means more lead sessions; budgets per project or per team (19, "Not yet")
   may be needed sooner.
+
+## 10. P1 as built (2026-11-10)
+
+- **Every team works in a project** (PT2): `teams.create` adds the folder you chose as a project, or makes a new one
+  named after the team. At start, a team that worked in its own folder gets that folder as a project.
+- **One team per project** (PT3): a second team for the same folder is refused.
+- **A lead per conversation** (PT4, PT6):
+  - `sessions.create` takes `team`: a Build conversation in the team's project, with the lead's role and the board's
+    tools. The app's "send to a team" now starts one and opens it; it shows with the project's conversations.
+  - A task records the conversation that made it (`conversationId`); its `[Board]` updates go there. Tasks you add on
+    the Board go to the first lead conversation, when there is one.
+  - The lead's board marks the tasks that are this conversation's ("yours").
+  - Creating a team no longer opens a lead conversation; with a goal, the first one starts on it.
+- **The lead edits** (PT5): its conversations take the permission you choose (members' mode for those the engine
+  starts), no longer Read only. Its brief says it does small things itself and puts bigger or parallel work on the
+  board.
+- **Notes:** prompts point at the project's NOTES.md (this project) and the team's NOTES.md (how the team works).
+- **Routines** fire into a new lead conversation in the project, titled after the routine; its id is the run's.
+- **CI merges one task at a time per team.** Two tasks approved together used to merge into the shared worktree at
+  once, and git's lock sent one back.
+- **Not yet (P2):** the team row under the project, the team page's tabs, task cards and event rows in the
+  conversation, the "Who" choice. Until then the team page's Lead tab lists the lead conversations.

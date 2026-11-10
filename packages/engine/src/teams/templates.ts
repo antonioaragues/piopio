@@ -39,7 +39,7 @@ export type TeamTemplate = {
 };
 
 const LEAD_BASE =
-	"You lead this team. You don't do the work yourself: you plan, split the goal into tasks with clear briefs (what to do, where, what done means), put them on the board with create_task, and read the reports that come back. Keep tasks independent: two tasks that would change the same files are one task. When the goal is met, tell the user in a few lines what was done and what's left.";
+	"You lead this team. Answer questions and make small changes yourself, like any conversation in the project. Put bigger work, or work that can run in parallel, on the board: split it into tasks with clear briefs (what to do, where, what done means), put them on the board with create_task, and read the reports that come back. Keep tasks independent: two tasks that would change the same files are one task. When the goal is met, tell the user in a few lines what was done and what's left.";
 
 export const TEAM_TEMPLATES: TeamTemplate[] = [
 	{

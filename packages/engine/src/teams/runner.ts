@@ -27,6 +27,8 @@ export type TeamTask = {
 	state: TaskState;
 	/** Who added it: the lead or you (the board is yours to edit too). */
 	by: "lead" | "you";
+	/** The lead conversation that made it (docs/spec/20 PT6): its updates go there. */
+	conversationId?: string;
 	sessionId?: string;
 	reviewSessionId?: string;
 	branch?: string;
@@ -74,6 +76,8 @@ export type Team = {
 	/** The team's folder: NOTES.md (what members keep for each other, TD7). */
 	folder: string;
 	git?: { base: string; branch: string; integration: string };
+	/** The first lead conversation (from the goal), kept for tasks you add on the Board. Each conversation in the
+	 * project is a lead of its own (docs/spec/20 PT6). */
 	leadSessionId?: string;
 	model?: string;
 	memberMode: ApprovalMode;
@@ -112,6 +116,11 @@ export type TeamHost = {
 };
 
 const MAX_ATTEMPTS = 3;
+/** A conversation's title from a request: its first line, at most 60 characters. */
+const titleOf = (text: string) => {
+	const line = text.trim().split("\n")[0]!.replace(/\s+/g, " ");
+	return line.length > 60 ? `${line.slice(0, 59).trimEnd()}…` : line || "Team";
+};
 /** States still on the board's way to done. */
 const OPEN = new Set<TaskState>(["todo", "doing", "review", "integrating"]);
 const iso = () => new Date().toISOString();
@@ -125,6 +134,8 @@ export class TeamRunner {
 	/** Review verdicts given in a turn that hasn't settled yet, by review session. */
 	private readonly verdicts = new Map<string, { pass: boolean; notes: string }>();
 	private timer?: NodeJS.Timeout;
+	/** Each team's merges, in turn. */
+	private readonly merging = new Map<string, Promise<void>>();
 	private stopped = false;
 	/** A webhook routine's URL (the hooks endpoint), set by the engine. */
 	hookUrl?: (teamId: string, routineId: string) => string | undefined;
@@ -182,8 +193,10 @@ export class TeamRunner {
 		mkdirSync(params.folder, { recursive: true });
 		const notes = join(params.folder, "NOTES.md");
 		if (!existsSync(notes)) writeFileSync(notes, `# ${name}: notes\n\n<!-- What the team keeps for each other: decisions, conventions, how to run things. -->\n`);
-		// A folder team can work in a project too (a writing project); otherwise in its own folder.
+		// Every team works in a project (docs/spec/20 PT2); the engine makes one when none is given.
 		const cwd = params.cwd ?? params.folder;
+		const taken = this.teams.find((x) => x.cwd === cwd);
+		if (taken) throw new EngineError("INVALID", `This project already has a team, ${taken.name}. A project has one team (docs/spec/20 PT3).`);
 		const id = `team_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const team: Team = {
 			id,
@@ -221,19 +234,33 @@ export class TeamRunner {
 		}
 		this.teams.push(team);
 		this.save(team);
-		const lead = team.roles.find((r) => r.kind === "lead")!;
-		team.leadSessionId = await this.host.createSession({ cwd, title: `${name} · ${lead.name}`, ...(team.model ? { model: team.model } : {}), approvalMode: "read_only", team: { id, role: lead.id, kind: "lead" } });
-		this.save(team);
-		if (team.goal) await this.host.submit(team.leadSessionId, team.goal);
+		// With a goal, its first conversation with the lead starts on it.
+		if (team.goal) {
+			team.leadSessionId = await this.newLead(team, titleOf(team.goal));
+			this.save(team);
+			await this.host.submit(team.leadSessionId, team.goal);
+		}
 		return team;
+	}
+
+	/** The lead role, for a conversation in the team's project. */
+	leadRole(teamId: string): Role {
+		return this.get(teamId).roles.find((r) => r.kind === "lead")!;
+	}
+
+	/** A new conversation with the lead in the team's project (a routine's run, or the goal). It edits like any
+	 * conversation there (PT5). */
+	async newLead(team: Team, title: string): Promise<string> {
+		const lead = team.roles.find((r) => r.kind === "lead")!;
+		return this.host.createSession({ cwd: team.cwd, title, ...(team.model ? { model: team.model } : {}), approvalMode: team.memberMode, team: { id: team.id, role: lead.id, kind: "lead" } });
 	}
 
 	/** What the lead is told about its team, each turn (system prompt). */
 	leadBrief(team: Team): string {
 		const lead = team.roles.find((r) => r.kind === "lead")!;
 		const members = team.roles.filter((r) => r.kind !== "lead").map((r) => `- ${r.name} (role id "${r.id}", ${r.kind === "write" ? "does tasks; several can work at once" : r.kind === "review" ? "reviews every finished task; a failed review sends it back" : "merges approved work into the team branch and runs the checks"}): ${r.responsibility}`);
-		const where = team.git ? `Each task gets its own branch from ${team.git.branch}; approved work is merged into ${team.git.branch}, which starts from ${team.git.base}. You don't merge into ${team.git.base}: when the board is clear, tell the user the work is ready; they merge it, or push it for a pull request, from the team's Board.` : `Everyone works in the team folder, ${team.folder}.`;
-		return `${lead.responsibility}\n\n${team.style}\n\nYour team (${team.name}):\n${members.join("\n")}\n\n${where} At most ${team.maxParallel} tasks run at once; the rest wait their turn. Team notes: ${join(team.folder, "NOTES.md")}.\n\nMessages that start with [Board] are updates from the board, not from the user. Messages that start with [Routine] are one of the team's routines firing: plan them as you would the user's request.\n\nWhen the user wants work to start on its own (every Monday, when a file arrives, when an email comes), set a routine: schedule for times, watch for events. list_routines shows them; cancel_routine removes one.`;
+		const where = team.git ? `Each task gets its own branch from ${team.git.branch}; approved work is merged into ${team.git.branch}, which starts from ${team.git.base}. You don't merge into ${team.git.base}: when the board is clear, tell the user the work is ready; they merge it, or push it for a pull request, from the project's Board.` : `Everyone works in the project's folder, ${team.cwd}.`;
+		return `${lead.responsibility}\n\n${team.style}\n\nYour team (${team.name}):\n${members.join("\n")}\n\n${where} At most ${team.maxParallel} tasks run at once; the rest wait their turn. Notes: ${join(team.cwd, "NOTES.md")} is about this project; ${join(team.folder, "NOTES.md")} is how the team works, across projects.\n\nThis is one of several conversations in the project; each has its own tasks, and the board shows them all. Updates on the tasks you made come here.\n\nMessages that start with [Board] are updates from the board, not from the user. Messages that start with [Routine] are one of the team's routines firing: plan them as you would the user's request.\n\nWhen the user wants work to start on its own (every Monday, when a file arrives, when an email comes), set a routine: schedule for times, watch for events. list_routines shows them; cancel_routine removes one.`;
 	}
 
 	// ── Routines ──
@@ -263,7 +290,6 @@ export class TeamRunner {
 		team.routines = [...(team.routines ?? []), routine];
 		this.save(team);
 		this.routinesChanged();
-		if (by === "you") await this.tellLead(team, `You were given a routine: ${routineLabel(routine)}: ${prompt}`);
 		return routine;
 	}
 
@@ -274,7 +300,6 @@ export class TeamRunner {
 		team.routines = team.routines!.filter((r) => r.id !== routineId);
 		this.save(team);
 		this.routinesChanged();
-		if (by === "you") await this.tellLead(team, `The user removed the routine ${routineLabel(routine)}: ${routine.prompt}`);
 		return routine;
 	}
 
@@ -303,21 +328,24 @@ export class TeamRunner {
 			.filter((x) => x.watches.length);
 	}
 
-	/** A routine fires: the lead gets it as a `[Routine]` message. `key` keeps an event from firing twice. */
+	/** A routine fires: a new conversation with the lead in the project, titled after it, gets it as a `[Routine]`
+	 * message (docs/spec/20 §4). `key` keeps an event from firing twice. The run's id is that conversation's. */
 	async fireRoutine(teamId: string, routineId: string, happened?: string, key?: string): Promise<{ runId: string }> {
 		const team = this.get(teamId);
 		const routine = team.routines?.find((r) => r.id === routineId);
 		if (!routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
 		const dedupe = key ? `${routine.id}:${key}` : undefined;
-		if (dedupe && team.fired?.includes(dedupe)) return { runId: `${routine.id}-${routine.runs}` };
+		if (dedupe && team.fired?.includes(dedupe)) return { runId: routine.lastConversation ?? routine.id };
 		if (dedupe) team.fired = [...(team.fired ?? []), dedupe].slice(-200);
 		routine.runs++;
 		routine.lastRun = new Date(this.now()).toISOString();
 		this.save(team);
 		const what = happened?.trim() ? `\n\nWhat happened:\n${quote(happened.trim().slice(0, 4000))}` : "";
-		if (!team.leadSessionId) throw new EngineError("INVALID", "The team has no lead yet.");
-		await this.host.submit(team.leadSessionId, `[Routine] ${routineLabel(routine)}: ${routine.prompt}${what}`);
-		return { runId: `${routine.id}-${routine.runs}` };
+		const conversation = await this.newLead(team, titleOf(routine.prompt));
+		routine.lastConversation = conversation;
+		this.save(team);
+		await this.host.submit(conversation, `[Routine] ${routineLabel(routine)}: ${routine.prompt}${what}`);
+		return { runId: conversation };
 	}
 
 	private routinesChanged(): void {
@@ -355,15 +383,15 @@ export class TeamRunner {
 
 	// ── The board ──
 
-	async createTask(teamId: string, task: { title: string; brief: string; done?: string; role?: string }, by: "lead" | "you" = "lead"): Promise<TeamTask> {
+	async createTask(teamId: string, task: { title: string; brief: string; done?: string; role?: string }, by: "lead" | "you" = "lead", conversationId?: string): Promise<TeamTask> {
 		const team = this.get(teamId);
 		const writers = team.roles.filter((r) => r.kind === "write");
 		const role = task.role ? team.roles.find((r) => r.id === task.role || r.name.toLowerCase() === task.role!.toLowerCase()) : writers[0];
 		if (!role || role.kind !== "write") throw new EngineError("INVALID", `Tasks go to ${writers.map((r) => `“${r.id}”`).join(" or ")}.`);
-		const t: TeamTask = { id: `T${team.nextTask++}`, title: task.title.trim(), brief: task.brief.trim(), ...(task.done?.trim() ? { done: task.done.trim() } : {}), role: role.id, state: "todo", by, attempts: 0, createdAt: iso(), updatedAt: iso() };
+		const t: TeamTask = { id: `T${team.nextTask++}`, title: task.title.trim(), brief: task.brief.trim(), ...(task.done?.trim() ? { done: task.done.trim() } : {}), role: role.id, state: "todo", by, ...(conversationId ? { conversationId } : {}), attempts: 0, createdAt: iso(), updatedAt: iso() };
 		team.tasks.push(t);
 		this.save(team);
-		if (by === "you" && team.leadSessionId) await this.host.submit(team.leadSessionId, `[Board] You were given a task on the board: ${t.id} “${t.title}”.`);
+		if (by === "you") await this.tellLead(team, `You were given a task on the board: ${t.id} “${t.title}”.`, t);
 		await this.pump(team);
 		return t;
 	}
@@ -387,7 +415,7 @@ export class TeamRunner {
 		}
 		t.updatedAt = iso();
 		this.save(team);
-		if (team.leadSessionId) await this.host.submit(team.leadSessionId, `[Board] You changed ${t.id} “${t.title}”: now ${t.state}${change.role ? `, for ${change.role}` : ""}.`);
+		await this.tellLead(team, `The user changed ${t.id} “${t.title}”: now ${t.state}${change.role ? `, for ${change.role}` : ""}.`, t);
 		await this.pump(team);
 	}
 
@@ -405,10 +433,10 @@ export class TeamRunner {
 		await this.host.submit(t.sessionId, text);
 	}
 
-	board(teamId: string): string {
+	board(teamId: string, conversationId?: string): string {
 		const team = this.get(teamId);
 		if (!team.tasks.length) return "The board is empty.";
-		return team.tasks.map((t) => `${t.id} [${t.state}] ${t.title} (${t.role})${t.blocked ? ` — blocked: ${t.blocked}` : ""}${t.report && t.state === "done" ? `\n  Report: ${t.report.replace(/\s+/g, " ").slice(0, 300)}` : ""}`).join("\n");
+		return team.tasks.map((t) => `${t.id} [${t.state}] ${t.title} (${t.role}${conversationId && t.conversationId === conversationId ? ", yours" : ""})${t.blocked ? ` — blocked: ${t.blocked}` : ""}${t.report && t.state === "done" ? `\n  Report: ${t.report.replace(/\s+/g, " ").slice(0, 300)}` : ""}`).join("\n");
 	}
 
 	/** A reviewer's verdict (the `verdict` tool); acted on when its turn ends. */
@@ -453,12 +481,12 @@ export class TeamRunner {
 	}
 
 	private workPrompt(team: Team, t: TeamTask, role: Role): string {
-		const where = team.git ? `You work on your own branch, ${t.branch}, in this folder; other members work on theirs at the same time. Don't switch branches.` : `You work in the team folder, ${team.folder}, alongside other members: only change the files your task is about.`;
+		const where = team.git ? `You work on your own branch, ${t.branch}, in this folder; other members work on theirs at the same time. Don't switch branches.` : `You work in the project's folder, ${team.cwd}, alongside other members: only change the files your task is about.`;
 		return [
 			`You're the ${role.name} on ${team.name}. ${role.responsibility}`,
 			`Your task, ${t.id}: ${t.title}\n\n${t.brief}`,
 			t.done ?? role.done ? `Done means: ${t.done ?? role.done}` : "",
-			`${where} Team notes: ${join(team.folder, "NOTES.md")}. Read them first, and add a line for what your teammates will need.`,
+			`${where} Read the notes first: ${join(team.cwd, "NOTES.md")} (this project) and ${join(team.folder, "NOTES.md")} (how the team works). Add a line where it belongs for what your teammates will need.`,
 			"When you finish, end with a short report: what you did, which files, how you checked it, and anything left open.",
 		]
 			.filter(Boolean)
@@ -501,7 +529,7 @@ export class TeamRunner {
 	private async startReview(team: Team, t: TeamTask, reviewer: Role): Promise<void> {
 		t.state = "review";
 		this.save(team);
-		const diff = team.git ? `The task's changes are on ${t.branch}: see them with \`git diff ${team.git.branch}...HEAD\`.` : `The task's files are in ${team.folder}.`;
+		const diff = team.git ? `The task's changes are on ${t.branch}: see them with \`git diff ${team.git.branch}...HEAD\`.` : `The task's files are in ${team.cwd}.`;
 		const prompt = [
 			`You're the ${reviewer.name} on ${team.name}. ${reviewer.responsibility}`,
 			`Review ${t.id}: ${t.title}\n\n${t.brief}`,
@@ -543,7 +571,7 @@ export class TeamRunner {
 		t.state = "doing";
 		t.updatedAt = iso();
 		this.save(team);
-		await this.tellLead(team, `${t.id} “${t.title}” went back to its ${team.roles.find((r) => r.id === t.role)?.name ?? "writer"} (${by}, round ${t.attempts}).`);
+		await this.tellLead(team, `${t.id} “${t.title}” went back to its ${team.roles.find((r) => r.id === t.role)?.name ?? "writer"} (${by}, round ${t.attempts}).`, t);
 		await this.host.submit(t.sessionId!, message);
 	}
 
@@ -554,8 +582,17 @@ export class TeamRunner {
 		return this.complete(team, t, "");
 	}
 
-	/** CI: merge the task's branch into the team's, then the checks. A conflict or a failing check goes back. */
-	private async integrate(team: Team, t: TeamTask): Promise<void> {
+	/** CI, one task at a time per team: they share the team's worktree, and two merges at once trip git's lock. */
+	private integrate(team: Team, t: TeamTask): Promise<void> {
+		t.state = "integrating";
+		this.save(team);
+		const turn = (this.merging.get(team.id) ?? Promise.resolve()).then(() => this.integrateNow(team, t));
+		this.merging.set(team.id, turn.catch(() => undefined));
+		return turn;
+	}
+
+	/** Merge the task's branch into the team's, then the checks. A conflict or a failing check goes back. */
+	private async integrateNow(team: Team, t: TeamTask): Promise<void> {
 		const git = team.git!;
 		t.state = "integrating";
 		this.save(team);
@@ -580,7 +617,7 @@ export class TeamRunner {
 		t.state = "done";
 		t.updatedAt = iso();
 		this.save(team);
-		await this.tellLead(team, `${t.id} “${t.title}” is done.${extra}\n\nReport:\n${quote(t.report || "(none)")}${await this.readyNote(team)}`);
+		await this.tellLead(team, `${t.id} “${t.title}” is done.${extra}\n\nReport:\n${quote(t.report || "(none)")}${await this.readyNote(team)}`, t);
 		await this.pump(team);
 	}
 
@@ -590,6 +627,12 @@ export class TeamRunner {
 		const landing = await this.landing(team.id).catch(() => undefined);
 		if (!landing?.ahead) return "";
 		return `\n\nThe board is clear: ${landing.branch} has ${landing.tasks.length === 1 ? "1 task" : `${landing.tasks.length} tasks`} ready for ${landing.base} (${landing.files.length === 1 ? "1 file" : `${landing.files.length} files`}${team.testCommand ? ", checks passed" : ""}). Tell the user it's ready: they merge it into ${landing.base}, or push it for a pull request, from the team's Board.`;
+	}
+
+	/** One task per conversation among these, so each conversation hears once. */
+	private firstOfEach(team: Team, ids: string[]): TeamTask[] {
+		const seen = new Set<string>();
+		return team.tasks.filter((t) => ids.includes(t.id) && !seen.has(t.conversationId ?? "") && seen.add(t.conversationId ?? ""));
 	}
 
 	// ── Landing: the team's branch into the project's ──
@@ -641,7 +684,7 @@ export class TeamRunner {
 		if (action === "push") {
 			if (!landing.remote) throw new EngineError("INVALID", "This project has no remote to push to.");
 			const output = await this.host.git(integration, ["push", "-u", landing.remote, branch]);
-			await this.tellLead(team, `The user pushed ${branch} to ${landing.remote} for a pull request into ${base}.`);
+			for (const t of this.firstOfEach(team, landing.tasks.map((x) => x.id))) await this.tellLead(team, `The user pushed ${branch} to ${landing.remote} for a pull request into ${base}.`, t);
 			return { output, ...(landing.compareUrl ? { compareUrl: landing.compareUrl } : {}) };
 		}
 		const ids = landing.tasks.map((t) => t.id);
@@ -670,7 +713,7 @@ export class TeamRunner {
 			if (t.branch) await this.host.git(team.cwd, ["branch", "-D", t.branch]).catch(() => undefined);
 		}
 		this.save(team);
-		await this.tellLead(team, `The user merged ${branch} into ${base} (${commit}): ${ids.length ? ids.join(", ") : "the team's work"}. New tasks start from there.`);
+		for (const t of this.firstOfEach(team, ids)) await this.tellLead(team, `The user merged ${branch} into ${base} (${commit}): ${ids.length ? ids.join(", ") : "the team's work"}. New tasks start from there.`, t);
 		return { commit };
 	}
 
@@ -679,12 +722,14 @@ export class TeamRunner {
 		t.blocked = why;
 		t.updatedAt = iso();
 		this.save(team);
-		await this.tellLead(team, `${t.id} “${t.title}” is blocked: ${why}`);
+		await this.tellLead(team, `${t.id} “${t.title}” is blocked: ${why}`, t);
 		await this.pump(team);
 	}
 
-	private async tellLead(team: Team, text: string): Promise<void> {
-		if (team.leadSessionId) await this.host.submit(team.leadSessionId, `[Board] ${text}`).catch((error: unknown) => this.host.log(`Team ${team.name}: ${(error as Error).message}`));
+	/** A board update, to the conversation that made the task (PT6); without one, to the first lead conversation. */
+	private async tellLead(team: Team, text: string, t?: TeamTask): Promise<void> {
+		const to = t?.conversationId ?? team.leadSessionId;
+		if (to) await this.host.submit(to, `[Board] ${text}`).catch((error: unknown) => this.host.log(`Team ${team.name}: ${(error as Error).message}`));
 	}
 
 	/** After a restart: watch running tasks again, and settle those whose turn ended meanwhile. */

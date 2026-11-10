@@ -81,7 +81,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var recent: some View {
-        let all = (engine.buildSessions.filter { $0.parent == nil && $0.team == nil } + engine.threads).filter { Areas.shared.set.shows($0) }
+        let all = (engine.buildSessions.filter { $0.listed } + engine.threads).filter { Areas.shared.set.shows($0) }
         let items = Array(all.sorted { $0.updatedAt > $1.updatedAt }.prefix(4))
         if !items.isEmpty {
             sectionTitle("Recent")
@@ -211,7 +211,7 @@ struct AskBox: View {
     private var placeholder: String {
         if let project { return "What should we do in \(project.name)?" }
         if let agent { return "Message \(agent.title)…" }
-        if let team { return "What should \(team.name) do? Its lead plans it and hands out the tasks." }
+        if let team { return "What should \(team.name) do?" }
         return "Ask anything, or @ a project or an agent…"
     }
 
@@ -335,7 +335,7 @@ struct AskBox: View {
 
     /// "In piopio · can edit files; asks before commands"; nothing with no project (it can't touch files).
     private var whereLine: String? {
-        if let team { return "To \(team.name)'s lead · it plans the work, hands tasks to the team, and you follow it on the board" }
+        if let team { return "A new conversation with \(team.name)'s lead in \(URL(fileURLWithPath: team.cwd).lastPathComponent) · it does small things itself and puts bigger work on the board" }
         guard let project else { return nil }
         let place = switch workOn {
         case .folder: ""
@@ -474,19 +474,25 @@ struct AskBox: View {
                     sendError = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was started, and your message is kept."
                 }
             }
-        case .team(let id):
-            guard let lead = team?.leadSessionId else { sendError = "That team isn't ready."; return }
+        case .team:
+            // A new conversation with the lead, in the team's project (docs/spec/20 PT4); it shows with the project's.
+            guard let team else { sendError = "That team isn't there any more."; return }
             sending = true
+            let chosenMode = effectiveMode
             Task {
                 defer { sending = false }
-                let thread = engine.thread(ContainerRef(kind: .build, id: lead))
-                await thread.open()
-                if await thread.send(message, attachments: attachments.map(\.attachment)) {
-                    text = ""; attachments = []; saveHomeDraft()
+                do {
+                    let ref = try await engine.createTeamConversation(team, mode: chosenMode, model: model)
+                    let session = engine.thread(ref)
+                    await session.open()
+                    if await session.send(message, attachments: attachments.map(\.attachment)) {
+                        text = ""; attachments = []; saveHomeDraft()
+                    }
                     target = .chat
-                    UserDefaults.standard.set("lead", forKey: "teamTab")
-                    withAnimation(StartMotion.morph) { item = .team(id) }
-                } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
+                    withAnimation(StartMotion.morph) { item = .session(ref.id) }
+                } catch {
+                    sendError = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was started, and your message is kept."
+                }
             }
         case .agent(let id):
             sending = true

@@ -60,7 +60,7 @@ struct ProjectsIndex: View {
     }
 
     private var subtitle: String {
-        let sessions = engine.buildSessions.filter { $0.parent == nil && $0.team == nil }
+        let sessions = engine.buildSessions.filter { $0.listed }
         let waiting = sessions.filter { engine.liveStatus[$0.ref.id] == .waitingApproval }.count
         var parts = ["\(engine.projects.count) project\(engine.projects.count == 1 ? "" : "s")", "\(sessions.count) session\(sessions.count == 1 ? "" : "s")"]
         if waiting > 0 { parts.append("\(waiting) need\(waiting == 1 ? "s" : "") you") }
@@ -68,7 +68,7 @@ struct ProjectsIndex: View {
     }
 
     private func sessions(_ p: ProjectInfo) -> [SessionSummary] {
-        let all = engine.sessions(in: p).filter { $0.parent == nil && $0.team == nil }
+        let all = engine.sessions(in: p).filter { $0.listed }
         let now = Date()
         let scoped = all.filter { s in
             let age = now.timeIntervalSince(MainSidebar.date(s.updatedAt))
@@ -119,7 +119,7 @@ struct ProjectsIndex: View {
 
     private func projectRow(_ p: ProjectInfo) -> some View {
         let open = expanded.contains(p.id)
-        let count = engine.sessions(in: p).filter { $0.parent == nil && $0.team == nil }.count
+        let count = engine.sessions(in: p).filter { $0.listed }.count
         return Button {
             if open { expanded.remove(p.id) } else { expanded.insert(p.id) }
         } label: {

@@ -259,7 +259,7 @@ struct MainSidebar: View {
     /// The project's conversations, nested under it on a hairline: the live ones and "N earlier". Hidden while the
     /// project is folded.
     @ViewBuilder private func projectSessions(_ project: ProjectInfo) -> some View {
-        let all = engine.sessions(in: project).filter { $0.parent == nil && $0.team == nil && areas.showsSession(chatProfile: $0.profile == .chat) }
+        let all = engine.sessions(in: project).filter { $0.listed && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
         // No draft row: the project's row is marked while its new conversation page is open.
@@ -310,7 +310,7 @@ struct MainSidebar: View {
         let selected = item == .project(project.id)
         let plus: ProjectRow.Plus? = startsSessions(project) ? .session : nil
         let folded = collapsedProjects.contains(project.id)
-        let hasSessions = !engine.sessions(in: project).filter { $0.parent == nil && $0.team == nil }.isEmpty
+        let hasSessions = !engine.sessions(in: project).filter { $0.listed }.isEmpty
         return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil,
                           toggle: { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }) {
             NotificationCenter.default.post(name: .newBuildSession, object: project.id)

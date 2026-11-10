@@ -487,6 +487,15 @@ final class EngineController {
         return ref
     }
 
+    /// A conversation with a team's lead in its project (docs/spec/20 PT4): a Build conversation there, with the
+    /// board's tools.
+    func createTeamConversation(_ team: TeamInfo, mode: ApprovalMode?, model: ModelRef?) async throws -> ContainerRef {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
+        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: team.cwd, model: model ?? self.model(for: .build), approvalMode: Areas.shared.contains(.build) ? mode : .readOnly, team: team.id), as: CreateSessionResult.self).ref
+        try? await refreshCatalog()
+        return ref
+    }
+
     /// Worktree sessions: merge into the base branch, or discard.
     func finish(_ ref: ContainerRef, _ action: FinishParams.Action) async throws {
         guard let client else { return }

@@ -875,6 +875,7 @@ export const TeamTask = Type.Object({
 	role: Type.String(),
 	state: literals("todo", "doing", "review", "integrating", "done", "blocked"),
 	by: literals("lead", "you"),
+	conversationId: Type.Optional(Type.String({ description: "The lead conversation that made it" })),
 	sessionId: Type.Optional(Type.String()),
 	reviewSessionId: Type.Optional(Type.String()),
 	branch: Type.Optional(Type.String()),
@@ -918,6 +919,7 @@ export const TeamRoutine = Type.Object({
 	next: Type.Optional(Type.Number({ description: "time: the next fire, epoch ms" })),
 	lastRun: Type.Optional(Type.String()),
 	runs: Type.Number(),
+	lastConversation: Type.Optional(Type.String()),
 	label: Type.Optional(Type.String({ description: "“Every Monday at 09:00”, “When a file appears in ~/Inbox”" })),
 	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
 });
@@ -1011,6 +1013,8 @@ export const methods = {
 			title: Type.Optional(Type.String()),
 			/** Threads: start a debate between two models (docs/spec/16-debate). */
 			debate: Type.Optional(DebateConfig),
+			/** A conversation with this team's lead, in its project (docs/spec/20 PT4). */
+			team: Type.Optional(Type.String()),
 		}),
 		result: Type.Object({ ref: ContainerRef }),
 	},

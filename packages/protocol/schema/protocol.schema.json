@@ -21939,6 +21939,9 @@
 							"type": "number"
 						}
 					}
+				},
+				"team": {
+					"type": "string"
 				}
 			}
 		},
@@ -34180,6 +34183,10 @@
 												}
 											]
 										},
+										"conversationId": {
+											"type": "string",
+											"description": "The lead conversation that made it"
+										},
 										"sessionId": {
 											"type": "string"
 										},
@@ -34301,6 +34308,9 @@
 										},
 										"runs": {
 											"type": "number"
+										},
+										"lastConversation": {
+											"type": "string"
 										},
 										"label": {
 											"type": "string",
@@ -34557,6 +34567,10 @@
 											}
 										]
 									},
+									"conversationId": {
+										"type": "string",
+										"description": "The lead conversation that made it"
+									},
 									"sessionId": {
 										"type": "string"
 									},
@@ -34678,6 +34692,9 @@
 									},
 									"runs": {
 										"type": "number"
+									},
+									"lastConversation": {
+										"type": "string"
 									},
 									"label": {
 										"type": "string",
@@ -34990,6 +35007,10 @@
 											}
 										]
 									},
+									"conversationId": {
+										"type": "string",
+										"description": "The lead conversation that made it"
+									},
 									"sessionId": {
 										"type": "string"
 									},
@@ -35111,6 +35132,9 @@
 									},
 									"runs": {
 										"type": "number"
+									},
+									"lastConversation": {
+										"type": "string"
 									},
 									"label": {
 										"type": "string",
@@ -35235,6 +35259,10 @@
 									"const": "you"
 								}
 							]
+						},
+						"conversationId": {
+							"type": "string",
+							"description": "The lead conversation that made it"
 						},
 						"sessionId": {
 							"type": "string"
@@ -35407,6 +35435,9 @@
 						},
 						"runs": {
 							"type": "number"
+						},
+						"lastConversation": {
+							"type": "string"
 						},
 						"label": {
 							"type": "string",

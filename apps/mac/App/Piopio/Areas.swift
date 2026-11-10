@@ -201,7 +201,7 @@ struct AreasCard: View {
         func n(_ count: Int, _ noun: String) -> String { "\(count) \(noun)\(count == 1 ? "" : "s")" }
         switch area {
         case .build:
-            let sessions = engine.buildSessions.filter { $0.profile != .chat && $0.parent == nil && $0.team == nil }.count
+            let sessions = engine.buildSessions.filter { $0.profile != .chat && $0.listed }.count
             return "\(n(engine.projects(in: .build).count, "project")) · \(n(sessions, "session"))"
         case .chat:
             return n(engine.threads.count, "conversation")

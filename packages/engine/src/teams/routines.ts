@@ -24,6 +24,8 @@ export type TeamRoutine = {
 	next?: number;
 	lastRun?: string;
 	runs: number;
+	/** The conversation its last run started. */
+	lastConversation?: string;
 };
 
 export const systemZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";

@@ -270,6 +270,15 @@ export class Engine {
 		// Agents: webhook triggers, then every agent's schedules (they run with the app closed).
 		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
 		void this.sessions.startAgents(this.log);
+		// Teams that worked in their own folder become projects there (docs/spec/20 PT2).
+		for (const team of this.teams.list()) {
+			if (this.projects.projectFor(team.cwd)) continue;
+			try {
+				this.projects.add(team.cwd);
+			} catch (error) {
+				this.log(`Team ${team.name}: its folder couldn't become a project: ${(error as Error).message}`);
+			}
+		}
 		void this.teams.resume().catch((error: unknown) => this.log(`Teams: ${(error as Error).message}`));
 	}
 
@@ -765,11 +774,14 @@ export class Engine {
 				const slug = (p.name.trim() || TEAM_TEMPLATES.find((t) => t.id === p.template)?.name || "team").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
 				let folder = join(this.teamsDir, slug);
 				for (let n = 2; existsSync(folder); n++) folder = join(this.teamsDir, `${slug}-${n}`);
+				// Every team works in a project (docs/spec/20 PT2): the folder you chose, or a new one named after the team.
+				const project = p.cwd ? this.projects.add(p.cwd) : this.projects.create(p.name.trim() || TEAM_TEMPLATES.find((t) => t.id === p.template)?.name || "Team");
+				await this.sessions.syncFolder(project.path);
 				const team = await this.teams.create({
 					name: p.name,
 					template: p.template,
 					folder,
-					...(p.cwd ? { cwd: p.cwd } : {}),
+					cwd: project.path,
 					...(p.goal ? { goal: p.goal } : {}),
 					...(p.testCommand ? { testCommand: p.testCommand } : {}),
 					...(p.memberMode ? { memberMode: p.memberMode } : {}),
