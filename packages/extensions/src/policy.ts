@@ -25,7 +25,7 @@ export type Decision = { action: "allow" } | { action: "ask"; reason?: string; r
 const READ_TOOLS = new Set(["read", "grep", "find", "ls", "search_conversations", "read_conversation"]);
 const WRITE_TOOLS = new Set(["edit", "write"]);
 /** Talking to the user is never something to approve. */
-const USER_TOOLS = new Set(["ask_user", "notify_user", "present_files", "update_goal"]);
+const USER_TOOLS = new Set(["ask_user", "notify_user", "present_files", "update_goal", "create_task", "list_tasks", "message_task", "verdict"]);
 /** Package runners and build tools: their rule keeps the subcommand ("pnpm vitest", "swift build"). */
 const RUNNERS = new Set(["npm", "pnpm", "yarn", "npx", "bun", "bunx", "deno", "node", "cargo", "go", "swift", "make", "python", "python3", "uv", "pip", "git", "docker", "xcodebuild", "gradle", "mvn", "dotnet", "bundle", "rake"]);
 

@@ -644,6 +644,8 @@ export const SessionSummary = Type.Object({
 	profile: Type.Optional(literals("build", "chat")),
 	/** A subagent's session: the parent session and the `task` call that started it. */
 	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
+	/** A team's session (docs/spec/19): its lead, or a member working a task. */
+	team: Type.Optional(Type.Object({ id: Type.String(), role: Type.String(), kind: literals("lead", "write", "review", "integrate"), taskId: Type.Optional(Type.String()) })),
 	/** A chat continued in a project folder (18 §5): the new conversation, and in it, where it came from. */
 	continuedIn: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
 	continuedFrom: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
@@ -861,6 +863,51 @@ export const GitStatus = Type.Object({
 	files: Type.Array(GitFile),
 });
 export type GitStatus = Static<typeof GitStatus>;
+
+/** Teams (docs/spec/19): a role card, a task on the board, a team. */
+export const TeamRole = Type.Object({ id: Type.String(), name: Type.String(), kind: literals("lead", "write", "review", "integrate"), responsibility: Type.String(), done: Type.Optional(Type.String()), model: Type.Optional(Type.String()) });
+export type TeamRole = Static<typeof TeamRole>;
+export const TeamTask = Type.Object({
+	id: Type.String(),
+	title: Type.String(),
+	brief: Type.String(),
+	done: Type.Optional(Type.String()),
+	role: Type.String(),
+	state: literals("todo", "doing", "review", "integrating", "done", "blocked"),
+	by: literals("lead", "you"),
+	sessionId: Type.Optional(Type.String()),
+	reviewSessionId: Type.Optional(Type.String()),
+	branch: Type.Optional(Type.String()),
+	cwd: Type.Optional(Type.String()),
+	report: Type.Optional(Type.String()),
+	review: Type.Optional(Type.String()),
+	attempts: Type.Number(),
+	blocked: Type.Optional(Type.String()),
+	createdAt: Type.String(),
+	updatedAt: Type.String(),
+});
+export type TeamTask = Static<typeof TeamTask>;
+export const TeamInfo = Type.Object({
+	id: Type.String(),
+	name: Type.String(),
+	slug: Type.String(),
+	template: Type.String(),
+	roles: Type.Array(TeamRole),
+	style: Type.String(),
+	cwd: Type.String(),
+	folder: Type.String(),
+	git: Type.Optional(Type.Object({ base: Type.String(), branch: Type.String(), integration: Type.String() })),
+	leadSessionId: Type.Optional(Type.String()),
+	model: Type.Optional(Type.String()),
+	memberMode: ApprovalMode,
+	maxParallel: Type.Number(),
+	testCommand: Type.Optional(Type.String()),
+	goal: Type.Optional(Type.String()),
+	tasks: Type.Array(TeamTask),
+	nextTask: Type.Number(),
+	createdAt: Type.String(),
+});
+export type TeamInfo = Static<typeof TeamInfo>;
 
 export const GitBranch = Type.Object({ name: Type.String(), upstream: Type.Optional(Type.String()), lastCommitAt: Type.Optional(Type.String()), current: Type.Boolean() });
 export type GitBranch = Static<typeof GitBranch>;
@@ -1510,6 +1557,22 @@ export const methods = {
 			),
 		}),
 	},
+	/** Team templates (docs/spec/19): development, research, writing. */
+	"teams.templates": {
+		params: Type.Object({}),
+		result: Type.Object({ templates: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), description: Type.String(), workplace: literals("project", "folder"), roles: Type.Array(TeamRole) })) }),
+	},
+	"teams.list": { params: Type.Object({}), result: Type.Object({ teams: Type.Array(TeamInfo) }) },
+	"teams.get": { params: Type.Object({ id: Type.String() }), result: Type.Object({ team: TeamInfo }) },
+	/** A team from a template; `cwd` is its project (development). With a goal, its lead starts on it. */
+	"teams.create": {
+		params: Type.Object({ name: Type.String(), template: Type.String(), cwd: Type.Optional(Type.String()), goal: Type.Optional(Type.String()), testCommand: Type.Optional(Type.String()), memberMode: Type.Optional(ApprovalMode), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })), model: Type.Optional(ModelRef) }),
+		result: Type.Object({ team: TeamInfo }),
+	},
+	/** You add a card to the board (TD5). */
+	"teams.addTask": { params: Type.Object({ id: Type.String(), title: Type.String(), brief: Type.String(), done: Type.Optional(Type.String()), role: Type.Optional(Type.String()) }), result: Type.Object({ task: TeamTask }) },
+	/** You move, reassign or edit a card. */
+	"teams.updateTask": { params: Type.Object({ id: Type.String(), taskId: Type.String(), state: Type.Optional(literals("todo", "blocked", "done")), role: Type.Optional(Type.String()), title: Type.Optional(Type.String()), brief: Type.Optional(Type.String()) }), result: Type.Object({}) },
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */
 	"agents.runs": {
 		params: Type.Object({ ref: ContainerRef }),
@@ -1701,6 +1764,8 @@ export const notifications = {
 	"connectors.changed": Type.Object({}),
 	/** Providers or their models changed (connected, disconnected, needs attention): list them again. */
 	"providers.changed": Type.Object({}),
+	/** A team or its board changed (docs/spec/19). */
+	"teams.changed": Type.Object({ id: Type.String() }),
 	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
 } satisfies Record<string, TSchema>;
 

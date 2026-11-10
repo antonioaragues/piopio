@@ -27,6 +27,7 @@ import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat
 import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
 import { buildPromptExtension } from "../tools/build-prompt.js";
+import { teamExtension, type TeamBridge } from "../teams/extension.js";
 import { guardsExtension } from "../tools/guards.js";
 import { formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
@@ -75,6 +76,8 @@ export type BuildOpenOptions = {
 	externalAgents?: readonly string[];
 	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
 	runTask?: SubagentBridge["run"];
+	/** A team's session: the lead's board tools, or a reviewer's verdict (docs/spec/19). */
+	team?: TeamBridge;
 };
 
 export class BuildRuntime implements Runtime {
@@ -129,6 +132,7 @@ export class BuildRuntime implements Runtime {
 				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
 				notesExtension(o.cwd),
 				guardsExtension(),
+				...(o.team ? [teamExtension(o.team)] : []),
 				// Full access runs commands as before; otherwise they write only inside the project.
 				sandboxExtension({ enabled: () => (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" }, { shellPath: () => settingsManager.getShellPath() }),
 				approvalsExtension({

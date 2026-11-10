@@ -12529,6 +12529,45 @@
 						}
 					}
 				},
+				"team": {
+					"type": "object",
+					"required": [
+						"id",
+						"role",
+						"kind"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"role": {
+							"type": "string"
+						},
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "lead"
+								},
+								{
+									"type": "string",
+									"const": "write"
+								},
+								{
+									"type": "string",
+									"const": "review"
+								},
+								{
+									"type": "string",
+									"const": "integrate"
+								}
+							]
+						},
+						"taskId": {
+							"type": "string"
+						}
+					}
+				},
 				"continuedIn": {
 					"type": "object",
 					"required": [
@@ -20834,6 +20873,45 @@
 									}
 								}
 							},
+							"team": {
+								"type": "object",
+								"required": [
+									"id",
+									"role",
+									"kind"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"role": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"taskId": {
+										"type": "string"
+									}
+								}
+							},
 							"continuedIn": {
 								"type": "object",
 								"required": [
@@ -21336,6 +21414,45 @@
 										"type": "string"
 									},
 									"callId": {
+										"type": "string"
+									}
+								}
+							},
+							"team": {
+								"type": "object",
+								"required": [
+									"id",
+									"role",
+									"kind"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"role": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"taskId": {
 										"type": "string"
 									}
 								}
@@ -33740,6 +33857,1149 @@
 					}
 				}
 			}
+		},
+		"teams.templates.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"teams.templates.result": {
+			"type": "object",
+			"required": [
+				"templates"
+			],
+			"properties": {
+				"templates": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"description",
+							"workplace",
+							"roles"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"workplace": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "project"
+									},
+									{
+										"type": "string",
+										"const": "folder"
+									}
+								]
+							},
+							"roles": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"name",
+										"kind",
+										"responsibility"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string"
+										},
+										"kind": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "lead"
+												},
+												{
+													"type": "string",
+													"const": "write"
+												},
+												{
+													"type": "string",
+													"const": "review"
+												},
+												{
+													"type": "string",
+													"const": "integrate"
+												}
+											]
+										},
+										"responsibility": {
+											"type": "string"
+										},
+										"done": {
+											"type": "string"
+										},
+										"model": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"teams.list.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"teams.list.result": {
+			"type": "object",
+			"required": [
+				"teams"
+			],
+			"properties": {
+				"teams": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"slug",
+							"template",
+							"roles",
+							"style",
+							"cwd",
+							"folder",
+							"memberMode",
+							"maxParallel",
+							"tasks",
+							"nextTask",
+							"createdAt"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"slug": {
+								"type": "string"
+							},
+							"template": {
+								"type": "string"
+							},
+							"roles": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"name",
+										"kind",
+										"responsibility"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string"
+										},
+										"kind": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "lead"
+												},
+												{
+													"type": "string",
+													"const": "write"
+												},
+												{
+													"type": "string",
+													"const": "review"
+												},
+												{
+													"type": "string",
+													"const": "integrate"
+												}
+											]
+										},
+										"responsibility": {
+											"type": "string"
+										},
+										"done": {
+											"type": "string"
+										},
+										"model": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"style": {
+								"type": "string"
+							},
+							"cwd": {
+								"type": "string"
+							},
+							"folder": {
+								"type": "string"
+							},
+							"git": {
+								"type": "object",
+								"required": [
+									"base",
+									"branch",
+									"integration"
+								],
+								"properties": {
+									"base": {
+										"type": "string"
+									},
+									"branch": {
+										"type": "string"
+									},
+									"integration": {
+										"type": "string"
+									}
+								}
+							},
+							"leadSessionId": {
+								"type": "string"
+							},
+							"model": {
+								"type": "string"
+							},
+							"memberMode": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "read_only"
+									},
+									{
+										"type": "string",
+										"const": "ask"
+									},
+									{
+										"type": "string",
+										"const": "auto_edit"
+									},
+									{
+										"type": "string",
+										"const": "full_auto"
+									}
+								]
+							},
+							"maxParallel": {
+								"type": "number"
+							},
+							"testCommand": {
+								"type": "string"
+							},
+							"goal": {
+								"type": "string"
+							},
+							"tasks": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"title",
+										"brief",
+										"role",
+										"state",
+										"by",
+										"attempts",
+										"createdAt",
+										"updatedAt"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"title": {
+											"type": "string"
+										},
+										"brief": {
+											"type": "string"
+										},
+										"done": {
+											"type": "string"
+										},
+										"role": {
+											"type": "string"
+										},
+										"state": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "todo"
+												},
+												{
+													"type": "string",
+													"const": "doing"
+												},
+												{
+													"type": "string",
+													"const": "review"
+												},
+												{
+													"type": "string",
+													"const": "integrating"
+												},
+												{
+													"type": "string",
+													"const": "done"
+												},
+												{
+													"type": "string",
+													"const": "blocked"
+												}
+											]
+										},
+										"by": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "lead"
+												},
+												{
+													"type": "string",
+													"const": "you"
+												}
+											]
+										},
+										"sessionId": {
+											"type": "string"
+										},
+										"reviewSessionId": {
+											"type": "string"
+										},
+										"branch": {
+											"type": "string"
+										},
+										"cwd": {
+											"type": "string"
+										},
+										"report": {
+											"type": "string"
+										},
+										"review": {
+											"type": "string"
+										},
+										"attempts": {
+											"type": "number"
+										},
+										"blocked": {
+											"type": "string"
+										},
+										"createdAt": {
+											"type": "string"
+										},
+										"updatedAt": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"nextTask": {
+								"type": "number"
+							},
+							"createdAt": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"teams.get.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.get.result": {
+			"type": "object",
+			"required": [
+				"team"
+			],
+			"properties": {
+				"team": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"slug",
+						"template",
+						"roles",
+						"style",
+						"cwd",
+						"folder",
+						"memberMode",
+						"maxParallel",
+						"tasks",
+						"nextTask",
+						"createdAt"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"slug": {
+							"type": "string"
+						},
+						"template": {
+							"type": "string"
+						},
+						"roles": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"kind",
+									"responsibility"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"responsibility": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"model": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"style": {
+							"type": "string"
+						},
+						"cwd": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"git": {
+							"type": "object",
+							"required": [
+								"base",
+								"branch",
+								"integration"
+							],
+							"properties": {
+								"base": {
+									"type": "string"
+								},
+								"branch": {
+									"type": "string"
+								},
+								"integration": {
+									"type": "string"
+								}
+							}
+						},
+						"leadSessionId": {
+							"type": "string"
+						},
+						"model": {
+							"type": "string"
+						},
+						"memberMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"maxParallel": {
+							"type": "number"
+						},
+						"testCommand": {
+							"type": "string"
+						},
+						"goal": {
+							"type": "string"
+						},
+						"tasks": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"title",
+									"brief",
+									"role",
+									"state",
+									"by",
+									"attempts",
+									"createdAt",
+									"updatedAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"brief": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"role": {
+										"type": "string"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "todo"
+											},
+											{
+												"type": "string",
+												"const": "doing"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrating"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "blocked"
+											}
+										]
+									},
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"sessionId": {
+										"type": "string"
+									},
+									"reviewSessionId": {
+										"type": "string"
+									},
+									"branch": {
+										"type": "string"
+									},
+									"cwd": {
+										"type": "string"
+									},
+									"report": {
+										"type": "string"
+									},
+									"review": {
+										"type": "string"
+									},
+									"attempts": {
+										"type": "number"
+									},
+									"blocked": {
+										"type": "string"
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"updatedAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"nextTask": {
+							"type": "number"
+						},
+						"createdAt": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"teams.create.params": {
+			"type": "object",
+			"required": [
+				"name",
+				"template"
+			],
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"template": {
+					"type": "string"
+				},
+				"cwd": {
+					"type": "string"
+				},
+				"goal": {
+					"type": "string"
+				},
+				"testCommand": {
+					"type": "string"
+				},
+				"memberMode": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "read_only"
+						},
+						{
+							"type": "string",
+							"const": "ask"
+						},
+						{
+							"type": "string",
+							"const": "auto_edit"
+						},
+						{
+							"type": "string",
+							"const": "full_auto"
+						}
+					]
+				},
+				"maxParallel": {
+					"type": "number",
+					"minimum": 1,
+					"maximum": 8
+				},
+				"model": {
+					"type": "object",
+					"required": [
+						"provider",
+						"id"
+					],
+					"properties": {
+						"provider": {
+							"type": "string"
+						},
+						"id": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"teams.create.result": {
+			"type": "object",
+			"required": [
+				"team"
+			],
+			"properties": {
+				"team": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"slug",
+						"template",
+						"roles",
+						"style",
+						"cwd",
+						"folder",
+						"memberMode",
+						"maxParallel",
+						"tasks",
+						"nextTask",
+						"createdAt"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"slug": {
+							"type": "string"
+						},
+						"template": {
+							"type": "string"
+						},
+						"roles": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"kind",
+									"responsibility"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"responsibility": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"model": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"style": {
+							"type": "string"
+						},
+						"cwd": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"git": {
+							"type": "object",
+							"required": [
+								"base",
+								"branch",
+								"integration"
+							],
+							"properties": {
+								"base": {
+									"type": "string"
+								},
+								"branch": {
+									"type": "string"
+								},
+								"integration": {
+									"type": "string"
+								}
+							}
+						},
+						"leadSessionId": {
+							"type": "string"
+						},
+						"model": {
+							"type": "string"
+						},
+						"memberMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"maxParallel": {
+							"type": "number"
+						},
+						"testCommand": {
+							"type": "string"
+						},
+						"goal": {
+							"type": "string"
+						},
+						"tasks": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"title",
+									"brief",
+									"role",
+									"state",
+									"by",
+									"attempts",
+									"createdAt",
+									"updatedAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"brief": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"role": {
+										"type": "string"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "todo"
+											},
+											{
+												"type": "string",
+												"const": "doing"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrating"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "blocked"
+											}
+										]
+									},
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"sessionId": {
+										"type": "string"
+									},
+									"reviewSessionId": {
+										"type": "string"
+									},
+									"branch": {
+										"type": "string"
+									},
+									"cwd": {
+										"type": "string"
+									},
+									"report": {
+										"type": "string"
+									},
+									"review": {
+										"type": "string"
+									},
+									"attempts": {
+										"type": "number"
+									},
+									"blocked": {
+										"type": "string"
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"updatedAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"nextTask": {
+							"type": "number"
+						},
+						"createdAt": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"teams.addTask.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"title",
+				"brief"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"title": {
+					"type": "string"
+				},
+				"brief": {
+					"type": "string"
+				},
+				"done": {
+					"type": "string"
+				},
+				"role": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.addTask.result": {
+			"type": "object",
+			"required": [
+				"task"
+			],
+			"properties": {
+				"task": {
+					"type": "object",
+					"required": [
+						"id",
+						"title",
+						"brief",
+						"role",
+						"state",
+						"by",
+						"attempts",
+						"createdAt",
+						"updatedAt"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"title": {
+							"type": "string"
+						},
+						"brief": {
+							"type": "string"
+						},
+						"done": {
+							"type": "string"
+						},
+						"role": {
+							"type": "string"
+						},
+						"state": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "todo"
+								},
+								{
+									"type": "string",
+									"const": "doing"
+								},
+								{
+									"type": "string",
+									"const": "review"
+								},
+								{
+									"type": "string",
+									"const": "integrating"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "blocked"
+								}
+							]
+						},
+						"by": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "lead"
+								},
+								{
+									"type": "string",
+									"const": "you"
+								}
+							]
+						},
+						"sessionId": {
+							"type": "string"
+						},
+						"reviewSessionId": {
+							"type": "string"
+						},
+						"branch": {
+							"type": "string"
+						},
+						"cwd": {
+							"type": "string"
+						},
+						"report": {
+							"type": "string"
+						},
+						"review": {
+							"type": "string"
+						},
+						"attempts": {
+							"type": "number"
+						},
+						"blocked": {
+							"type": "string"
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"updatedAt": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"teams.updateTask.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"taskId"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"taskId": {
+					"type": "string"
+				},
+				"state": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "todo"
+						},
+						{
+							"type": "string",
+							"const": "blocked"
+						},
+						{
+							"type": "string",
+							"const": "done"
+						}
+					]
+				},
+				"role": {
+					"type": "string"
+				},
+				"title": {
+					"type": "string"
+				},
+				"brief": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.updateTask.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"agents.runs.params": {
 			"type": "object",

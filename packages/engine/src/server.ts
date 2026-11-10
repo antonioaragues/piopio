@@ -3,6 +3,7 @@ import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { appendFileSync, existsSync, unlinkSync, chmodSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
@@ -40,6 +41,8 @@ const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask
 import { AppServices } from "./app-services.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
+import { TeamRunner } from "./teams/runner.js";
+import { TEAM_TEMPLATES } from "./teams/templates.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -67,6 +70,8 @@ export type EngineOptions = {
 	allowPrivateFetch?: boolean;
 	/** Where connected apps sign in and call their APIs (tests point them at a fake server). */
 	connectorEndpoints?: ConnectorEndpoints;
+	/** Where teams keep their folders (NOTES.md, a non-software team's work); default ~/Piopio/Teams or PIOPIO_TEAMS_DIR. */
+	teamsDir?: string;
 	/** Event routines (tests: check mail and settle folders sooner). */
 	watchers?: { mailEveryMs?: number; settleMs?: number };
 	/** Telegram's API (tests: a fake one) and how long a poll waits. */
@@ -96,6 +101,8 @@ export class Engine {
 	readonly hooks: Hooks;
 	readonly telegram: TelegramChannels;
 	readonly watchers: AgentWatchers;
+	readonly teams: TeamRunner;
+	private readonly teamsDir: string;
 	readonly app = new AppServices();
 	private usageCache?: { at: number; value: Result<"usage.summary"> };
 	private server?: Server;
@@ -148,6 +155,9 @@ export class Engine {
 		});
 		this.sessions.onInbox = (change) => {
 			for (const conn of this.authed) conn.notify("inbox.changed", change);
+		};
+		this.sessions.onTeams = (id) => {
+			for (const conn of this.authed) conn.notify("teams.changed", { id });
 		};
 		this.sessions.onAttention = (change) => {
 			for (const conn of this.authed) conn.notify("session.attention", change);
@@ -204,6 +214,10 @@ export class Engine {
 			...(options.watchers?.settleMs !== undefined ? { settleMs: options.watchers.settleMs } : {}),
 		});
 		this.sessions.watchers = this.watchers;
+		// Teams (docs/spec/19): a lead and members working through a board.
+		this.teamsDir = options.teamsDir ?? process.env.PIOPIO_TEAMS_DIR ?? join(homedir(), "Piopio", "Teams");
+		this.teams = new TeamRunner(this.sessions.teamHost({ stateFile: join(options.paths.home, "teams.json"), worktreesDir: join(options.paths.home, "worktrees", "teams"), log: this.log }));
+		this.sessions.teams = this.teams;
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
 		this.sessions.hookUrl = (agent, trigger) => this.hooks.url(agent, trigger);
 		this.settings.onChange((next, previous) => {
@@ -248,6 +262,7 @@ export class Engine {
 		// Agents: webhook triggers, then every agent's schedules (they run with the app closed).
 		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
 		void this.sessions.startAgents(this.log);
+		void this.teams.resume().catch((error: unknown) => this.log(`Teams: ${(error as Error).message}`));
 	}
 
 	/** Whether conversations use a global MCP server: chosen per server, else (before that) all that are on. */
@@ -300,6 +315,7 @@ export class Engine {
 	async stop(): Promise<void> {
 		this.telegram?.stop();
 		this.watchers?.stop();
+		this.teams?.stop();
 		for (const conn of this.authed) conn.close();
 		await this.backfill;
 		for (const off of this.subscriptions.values()) off();
@@ -717,6 +733,42 @@ export class Engine {
 			case "agents.conversations": {
 				const p = params as Params<"agents.conversations">;
 				return { people: await this.sessions.agentConversations(p.ref) } satisfies Result<"agents.conversations">;
+			}
+			case "teams.templates":
+				return { templates: TEAM_TEMPLATES.map((t) => ({ id: t.id, name: t.name, description: t.description, workplace: t.workplace, roles: t.roles })) } satisfies Result<"teams.templates">;
+			case "teams.list":
+				return { teams: this.teams.list() } satisfies Result<"teams.list">;
+			case "teams.get": {
+				const p = params as Params<"teams.get">;
+				return { team: this.teams.get(p.id) } satisfies Result<"teams.get">;
+			}
+			case "teams.create": {
+				const p = params as Params<"teams.create">;
+				const slug = (p.name.trim() || "team").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
+				let folder = join(this.teamsDir, slug);
+				for (let n = 2; existsSync(folder); n++) folder = join(this.teamsDir, `${slug}-${n}`);
+				const team = await this.teams.create({
+					name: p.name,
+					template: p.template,
+					folder,
+					...(p.cwd ? { cwd: p.cwd } : {}),
+					...(p.goal ? { goal: p.goal } : {}),
+					...(p.testCommand ? { testCommand: p.testCommand } : {}),
+					...(p.memberMode ? { memberMode: p.memberMode } : {}),
+					...(p.maxParallel ? { maxParallel: p.maxParallel } : {}),
+					...(p.model ? { model: p.model.provider === "openrouter" ? p.model.id : `${p.model.provider}:${p.model.id}` } : {}),
+				});
+				return { team } satisfies Result<"teams.create">;
+			}
+			case "teams.addTask": {
+				const p = params as Params<"teams.addTask">;
+				const task = await this.teams.createTask(p.id, { title: p.title, brief: p.brief, ...(p.done ? { done: p.done } : {}), ...(p.role ? { role: p.role } : {}) }, "you");
+				return { task } satisfies Result<"teams.addTask">;
+			}
+			case "teams.updateTask": {
+				const p = params as Params<"teams.updateTask">;
+				await this.teams.updateTask(p.id, p.taskId, { ...(p.state ? { state: p.state } : {}), ...(p.role ? { role: p.role } : {}), ...(p.title ? { title: p.title } : {}), ...(p.brief ? { brief: p.brief } : {}) });
+				return {} satisfies Result<"teams.updateTask">;
 			}
 			case "agents.runs": {
 				const p = params as Params<"agents.runs">;

@@ -14,7 +14,7 @@ import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
 import { attachmentsDir, copyAttachments, deleteAttachments } from "./attachment-files.js";
 import { draftAgent, type AgentDraft } from "./agent-draft.js";
-import { addWorktree, checkout, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
+import { addWorktree, checkout, git as runGit, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
@@ -39,6 +39,8 @@ import { historyExtension, type HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
+import { runCommand, type TeamHost, type TeamRunner } from "./teams/runner.js";
+import type { TeamBridge } from "./teams/extension.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { SdkEventMapper } from "./timeline/pi-sdk.js";
 import type { SessionEvent } from "@piopio/protocol";
@@ -114,6 +116,10 @@ export class Sessions {
 	onInbox?: (change: { count: number; approval?: { agent: ContainerRef; agentName: string; approvalId: string; title: string } }) => void;
 	/** Agents on Telegram from this Mac (channels/manager.ts), set by the engine. */
 	telegram?: TelegramChannels;
+	/** Teams (docs/spec/19): their boards, set by the engine. */
+	teams?: TeamRunner;
+	/** A team changed (the app refreshes its board). */
+	onTeams?: (id: string) => void;
 	/** Event routines on this Mac (watchers.ts), and a webhook's local URL; set by the engine. */
 	watchers?: AgentWatchers;
 	hookUrl?: (agentId: string, triggerId: string) => string;
@@ -1104,6 +1110,76 @@ export class Sessions {
 		return Boolean(this.policy.projectFor(cwd)) || [...this.entries.values()].some((e) => e.ref.kind === "build" && e.cwd === cwd);
 	}
 
+	// ── Teams (docs/spec/19) ─────────────────────────────────────────────
+
+	/** The board's tools for a team's session: the lead's, or a reviewer's verdict. */
+	private teamBridge(entry: CatalogEntry): TeamBridge {
+		const teams = this.teams!;
+		const team = () => teams.get(entry.team!.id);
+		return {
+			kind: entry.team!.kind,
+			brief: () => teams.leadBrief(team()),
+			createTask: async (task) => {
+				const t = await teams.createTask(team().id, task);
+				return `Added ${t.id} “${t.title}” for ${t.role}: ${t.state === "doing" ? "started" : "waits for a free slot"}.`;
+			},
+			board: () => teams.board(team().id),
+			message: (taskId, text) => teams.message(team().id, taskId, text),
+			verdict: (pass, notes) => teams.verdict(entry.ref.id, pass, notes),
+		};
+	}
+
+	/** What the team runner needs from the catalog: sessions, their turns, git and the checks. */
+	teamHost(options: { stateFile: string; worktreesDir: string; log: (line: string) => void }): TeamHost {
+		const answerOf = (runtime: Runtime) => {
+			const last = [...runtime.snapshot().items].reverse().find((i) => i.kind === "assistant");
+			return last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
+		};
+		return {
+			createSession: async ({ cwd, title, model, approvalMode, team }) => {
+				const ref = await this.create({ kind: "build", cwd, title, approvalMode, ...(model ? { model: model.includes(":") ? { provider: model.split(":")[0]!, id: model.split(":").slice(1).join(":") } : { provider: "openrouter", id: model } } : {}) });
+				const entry = this.entry(ref);
+				entry.team = { id: team.id, role: team.role, kind: team.kind, ...(team.taskId ? { taskId: team.taskId } : {}) };
+				this.save();
+				this.changed(entry);
+				return ref.id;
+			},
+			submit: async (id, text) => {
+				const runtime = await this.runtime({ kind: "build", id });
+				await runtime.submit(text, { whenBusy: "followUp" });
+				this.touch({ kind: "build", id });
+			},
+			onSettled: async (id, settled) => {
+				const runtime = await this.runtime({ kind: "build", id });
+				let running = runtime.snapshot().state.status === "running";
+				return runtime.onEvents((events) => {
+					for (const e of events) {
+						if (e.type !== "state") continue;
+						if (e.state.status === "running") running = true;
+						else if (e.state.status === "idle" && running) {
+							running = false;
+							settled(answerOf(runtime));
+						}
+					}
+				});
+			},
+			peek: async (id) => {
+				const runtime = await this.runtime({ kind: "build", id });
+				return { idle: runtime.snapshot().state.status === "idle", answer: answerOf(runtime) };
+			},
+			git: (cwd, args) => runGit(cwd, args),
+			isRepo: async (cwd) => (await gitStatus(cwd)).repo,
+			branchOf: async (cwd) => (await gitStatus(cwd)).branch,
+			addWorktree: (repo, path, branch, base) => addWorktree(repo, path, branch, base),
+			removeWorktree: (repo, path, branch, force) => removeWorktree(repo, path, branch, force),
+			run: (cwd, command) => runCommand(cwd, command),
+			worktreesDir: options.worktreesDir,
+			stateFile: options.stateFile,
+			changed: (id) => this.onTeams?.(id),
+			log: options.log,
+		};
+	}
+
 	/** A Build session's runtime (checkpoints, approvals). */
 	async build(ref: ContainerRef): Promise<BuildRuntime> {
 		const runtime = await this.runtime(ref);
@@ -1388,7 +1464,8 @@ export class Sessions {
 					this.save();
 				},
 			},
-			...(entry.parent ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
+			...(entry.parent || entry.team ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
+			...(entry.team && this.teams ? { team: this.teamBridge(entry) } : {}),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			toolsOff: () => [...new Set([...(entry.toolsOff ?? []), ...((entry.parent && this.entries.get(entry.parent.id)?.toolsOff) || [])])],
