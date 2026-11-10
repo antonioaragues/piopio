@@ -4,6 +4,10 @@ Draft, 2026-11-09; the choices are decided (§8). Nothing here is built unless i
 agents), 13-cloud-engine (Durable Objects, Telegram, WhatsApp), 17-dispatch (a coordinator for Build) and 18 phase 3
 (turn a conversation into an agent), which today are four separate ideas.
 
+**2026-11-10: [20-projects-agents-teams.md](20-projects-agents-teams.md) reorganizes what's built here.** A team becomes
+a definition, work always happens in a project, and each conversation in a project with a team is a conversation with
+its lead. It replaces §4.2 and the team page of §11.
+
 ## 0. The vision
 
 1. **You make agents by talking.** Any conversation can become an agent, or a team of agents, once it's clear what
