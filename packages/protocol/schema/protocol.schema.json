@@ -34558,6 +34558,10 @@
 							"type": "string"
 						}
 					}
+				},
+				"initGit": {
+					"type": "boolean",
+					"description": "A new project's folder: make it a git repo first, so tasks get branches"
 				}
 			}
 		},

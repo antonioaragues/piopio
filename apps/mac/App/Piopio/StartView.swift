@@ -211,6 +211,8 @@ struct ConversationStart: View {
     /// The box's own target ("chat", "project:<id>", "agent:<id>"), so the header and the sidebar follow the chip.
     @AppStorage("homeTarget") private var targetRaw = "chat"
     @Environment(\.startBack) private var back
+    /// A project's team was chosen for you on this page (once; switching back to the project sticks).
+    @State private var teamChosen = false
 
     private var project: ProjectInfo? {
         guard targetRaw.hasPrefix("project:") else { return nil }
@@ -218,15 +220,24 @@ struct ConversationStart: View {
         return engine.projects.first { $0.id == id && $0.missing != true }
     }
 
+    private var team: TeamInfo? {
+        guard targetRaw.hasPrefix("team:") else { return nil }
+        let id = String(targetRaw.dropFirst(5))
+        return engine.teams.first { $0.id == id }
+    }
+
     var body: some View {
         StartColumn(top: 128) {
             VStack(alignment: .leading, spacing: 12) {
                 Group {
-                    if let project { KindLabel(symbol: StartKind.project.symbol, text: project.name) } else { KindLabel(kind: .chat) }
+                    if let team { KindLabel(symbol: StartKind.team.symbol, text: team.name) }
+                    else if let project { KindLabel(symbol: StartKind.project.symbol, text: project.name) } else { KindLabel(kind: .chat) }
                 }
                 .padding(.bottom, 4)
-                TitleText(text: project == nil ? "What's on your mind?" : "New conversation")
-                Text(project == nil
+                TitleText(text: team != nil ? "What should the team do?" : project == nil ? "What's on your mind?" : "New conversation")
+                Text(team != nil
+                    ? "Its lead plans it and hands the tasks to the team, who work in parallel; you follow it on the board. To work on your own instead, pick the project in the box."
+                    : project == nil
                     ? "A conversation keeps its own history. Continue it in a project whenever it grows into a subject."
                     : "It works in the project's folder, with its instructions and the notes its conversations share.")
                     .font(.system(size: 15)).lineSpacing(4.5).foregroundStyle(Color.dsFg2)
@@ -235,13 +246,30 @@ struct ConversationStart: View {
             AskBox(engine: engine, item: $item)
         }
         .onExitCommand { back?() }
+        // A project with a team (docs/spec/19 §10): its work goes to the team, once the team is known.
+        .onAppear(perform: chooseTeam)
+        .onChange(of: engine.teams.count) { _, _ in chooseTeam() }
+        .onChange(of: engine.projects.count) { _, _ in chooseTeam() }
+        .onChange(of: item) { _, _ in
+            teamChosen = false
+            chooseTeam()
+        }
         // The sidebar marks where it goes: the project's row, or Conversations. Not once it has started (the box
         // resets its chip to no project as it opens the new conversation).
         .onChange(of: targetRaw) { _, raw in
             guard item == .start(.chat) || { if case .newSession = item { true } else { false } }() else { return }
+            // A team keeps the page where it is (its project's, when it has one).
+            if raw.hasPrefix("team:") { return }
             let next: SidebarItem = raw.hasPrefix("project:") ? .newSession(String(raw.dropFirst(8))) : .start(.chat)
             if next != item { item = next }
         }
+    }
+
+    private func chooseTeam() {
+        guard !teamChosen, case .newSession(let id) = item, targetRaw == "project:" + id,
+              let project = engine.projects.first(where: { $0.id == id }), let team = engine.team(in: project) else { return }
+        teamChosen = true
+        targetRaw = "team:" + team.id
     }
 }
 

@@ -1566,7 +1566,7 @@ export const methods = {
 	"teams.get": { params: Type.Object({ id: Type.String() }), result: Type.Object({ team: TeamInfo }) },
 	/** A team from a template; `cwd` is its project (development). With a goal, its lead starts on it. */
 	"teams.create": {
-		params: Type.Object({ name: Type.String(), template: Type.String(), cwd: Type.Optional(Type.String()), goal: Type.Optional(Type.String()), testCommand: Type.Optional(Type.String()), memberMode: Type.Optional(ApprovalMode), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })), model: Type.Optional(ModelRef) }),
+		params: Type.Object({ name: Type.String(), template: Type.String(), cwd: Type.Optional(Type.String()), goal: Type.Optional(Type.String()), testCommand: Type.Optional(Type.String()), memberMode: Type.Optional(ApprovalMode), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })), model: Type.Optional(ModelRef), initGit: Type.Optional(Type.Boolean({ description: "A new project's folder: make it a git repo first, so tasks get branches" })) }),
 		result: Type.Object({ team: TeamInfo }),
 	},
 	/** You add a card to the board (TD5). */

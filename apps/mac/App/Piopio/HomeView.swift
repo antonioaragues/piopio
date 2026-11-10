@@ -166,10 +166,11 @@ struct AskBox: View {
         get {
             if targetRaw.hasPrefix("project:") { return .project(String(targetRaw.dropFirst(8))) }
             if targetRaw.hasPrefix("agent:") { return .agent(String(targetRaw.dropFirst(6))) }
+            if targetRaw.hasPrefix("team:") { return .team(String(targetRaw.dropFirst(5))) }
             return .chat
         }
         nonmutating set {
-            switch newValue { case .chat: targetRaw = "chat"; case .project(let id): targetRaw = "project:" + id; case .agent(let id): targetRaw = "agent:" + id }
+            switch newValue { case .chat: targetRaw = "chat"; case .project(let id): targetRaw = "project:" + id; case .agent(let id): targetRaw = "agent:" + id; case .team(let id): targetRaw = "team:" + id }
             pendingChat = nil
         }
     }
@@ -182,9 +183,15 @@ struct AskBox: View {
     @State private var model: ModelRef?
     @FocusState private var focused: Bool
 
-    enum Target: Hashable { case chat, project(String), agent(String) }
+    enum Target: Hashable { case chat, project(String), agent(String), team(String) }
 
     private var areas: AreaSet { Areas.shared.set }
+
+    /// A team (docs/spec/19): the message goes to its lead, who plans it and hands out the tasks.
+    private var team: TeamInfo? {
+        if case .team(let id) = target { return engine.teams.first { $0.id == id } }
+        return nil
+    }
 
     private var project: ProjectInfo? {
         if case .project(let id) = target { return engine.projects.first { $0.id == id && $0.missing != true } }
@@ -204,6 +211,7 @@ struct AskBox: View {
     private var placeholder: String {
         if let project { return "What should we do in \(project.name)?" }
         if let agent { return "Message \(agent.title)…" }
+        if let team { return "What should \(team.name) do? Its lead plans it and hands out the tasks." }
         return "Ask anything, or @ a project or an agent…"
     }
 
@@ -277,7 +285,7 @@ struct AskBox: View {
     private var targetMenu: some View {
         Button { picking = true } label: {
             HStack(spacing: 5) {
-                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : "bubble.left").font(.system(size: 11))
+                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : team != nil ? "person.3" : "bubble.left").font(.system(size: 11))
                 Text(targetLabel)
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
             }
@@ -327,6 +335,7 @@ struct AskBox: View {
 
     /// "In piopio · can edit files; asks before commands"; nothing with no project (it can't touch files).
     private var whereLine: String? {
+        if let team { return "To \(team.name)'s lead · it plans the work, hands tasks to the team, and you follow it on the board" }
         guard let project else { return nil }
         let place = switch workOn {
         case .folder: ""
@@ -339,12 +348,14 @@ struct AskBox: View {
     private var targetLabel: String {
         if let project { return project.name }
         if let agent { return agent.title }
+        if let team { return team.name }
         return "No project"
     }
 
     private var sendLabel: String {
         if let project { return "Start in \(project.name)" }
         if let agent { return "Send to \(agent.title)" }
+        if let team { return "Send to \(team.name)" }
         return "Send"
     }
 
@@ -463,6 +474,20 @@ struct AskBox: View {
                     sendError = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was started, and your message is kept."
                 }
             }
+        case .team(let id):
+            guard let lead = team?.leadSessionId else { sendError = "That team isn't ready."; return }
+            sending = true
+            Task {
+                defer { sending = false }
+                let thread = engine.thread(ContainerRef(kind: .build, id: lead))
+                await thread.open()
+                if await thread.send(message, attachments: attachments.map(\.attachment)) {
+                    text = ""; attachments = []; saveHomeDraft()
+                    target = .chat
+                    UserDefaults.standard.set("lead", forKey: "teamTab")
+                    withAnimation(StartMotion.morph) { item = .team(id) }
+                } else { sendError = thread.error ?? "Couldn't send. Your draft is saved; retry when connected." }
+            }
         case .agent(let id):
             sending = true
             Task {
@@ -522,6 +547,7 @@ struct TargetPicker: View {
         let projects = engine.projects.filter { $0.missing != true && matches($0.name) }
         let folders = recent.filter { matches($0.url.lastPathComponent) || matches($0.path) }.prefix(query.isEmpty ? 5 : 12)
         let agents = Areas.shared.contains(.agents) ? engine.agents.filter { matches($0.title) } : []
+        let teams = Areas.shared.contains(.agents) ? engine.teams.filter { matches($0.name) } : []
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
@@ -542,6 +568,10 @@ struct TargetPicker: View {
                     if !folders.isEmpty {
                         header("Folders on this Mac")
                         ForEach(Array(folders)) { f in row(f.url.lastPathComponent, detail: f.path, symbol: "folder.badge.plus", on: false) { choose(.folder(f.url)) } }
+                    }
+                    if !teams.isEmpty {
+                        header("Give a team work")
+                        ForEach(teams) { t in row(t.name, symbol: "person.3", on: current == .team(t.id)) { choose(.target(.team(t.id))) } }
                     }
                     if !agents.isEmpty {
                         header("Message an agent")

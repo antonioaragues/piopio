@@ -24,6 +24,9 @@ struct NewProjectPage: View {
     @State private var instructions = ""
     @State private var error: String?
     @State private var saving = false
+    /// A team for the project (docs/spec/19 §10): a template id, or nil for none.
+    @State private var teamTemplate: String?
+    @State private var templates: [TeamTemplate] = []
     @FocusState private var focus: StartField?
 
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -49,6 +52,21 @@ struct NewProjectPage: View {
                     .font(.system(size: 14)).scrollContentBackground(.hidden).padding(12).frame(height: 102)
                     .composerBox()
                 FinePrint("Makes the folder ~/Piopio/\(folderName), with the instructions in AGENTS.md and the shared notes in NOTES.md. Edit them there any time.")
+                if continuing == nil && !templates.isEmpty {
+                    HStack(spacing: 10) {
+                        Text("Team").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
+                        Menu {
+                            Button("No team") { teamTemplate = nil }
+                            Divider()
+                            ForEach(templates) { t in Button(t.name) { teamTemplate = t.id } }
+                        } label: {
+                            Text(templates.first { $0.id == teamTemplate }?.name ?? "No team").foregroundStyle(teamTemplate == nil ? Color.dsFg3 : Color.dsFg)
+                        }
+                        .menuStyle(.button).buttonStyle(PillStyle()).fixedSize()
+                        Text(teamTemplate.flatMap { id in templates.first { $0.id == id } }.map { "\($0.roles.map(\.name).joined(separator: ", ")). What you ask in this project goes to its lead." } ?? "Optional: a team of agents that works on what you ask here.")
+                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 StartError(text: error)
                 HStack {
                     Button("Open a folder instead…", action: chooseFolder).buttonStyle(PillStyle())
@@ -61,6 +79,7 @@ struct NewProjectPage: View {
         }
         .disabled(saving)
         .onAppear { focus = .name }
+        .task { templates = await engine.teamTemplates() }
         .onExitCommand { done(nil) }
     }
 
@@ -72,7 +91,15 @@ struct NewProjectPage: View {
         error = nil
         Task {
             defer { saving = false }
-            do { done(try await engine.createProject(name: projectName, instructions: text.isEmpty ? nil : text)) }
+            do {
+                let project = try await engine.createProject(name: projectName, instructions: text.isEmpty ? nil : text)
+                // With a team: it works in the new folder, which becomes a git repo so tasks get their own branches.
+                if let teamTemplate {
+                    do { _ = try await engine.createTeam(name: "\(project.name) team", template: teamTemplate, cwd: project.path, goal: nil, testCommand: nil, initGit: true) }
+                    catch { self.error = "The project is made, but not its team: \((error as? EngineError)?.message ?? error.localizedDescription)" }
+                }
+                done(project)
+            }
             catch { self.error = ((error as? EngineError)?.message ?? error.localizedDescription) + " Nothing was made." }
         }
     }

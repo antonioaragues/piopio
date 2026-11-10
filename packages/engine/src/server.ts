@@ -756,6 +756,7 @@ export class Engine {
 					...(p.testCommand ? { testCommand: p.testCommand } : {}),
 					...(p.memberMode ? { memberMode: p.memberMode } : {}),
 					...(p.maxParallel ? { maxParallel: p.maxParallel } : {}),
+					...(p.initGit ? { initGit: true } : {}),
 					...(p.model ? { model: p.model.provider === "openrouter" ? p.model.id : `${p.model.provider}:${p.model.id}` } : {}),
 				});
 				return { team } satisfies Result<"teams.create">;

@@ -606,9 +606,14 @@ final class EngineController {
         (try? await client?.call("teams.templates", Empty(), as: TeamTemplatesResult.self).templates) ?? []
     }
 
-    func createTeam(name: String, template: String, cwd: String?, goal: String?, testCommand: String?) async throws -> TeamInfo {
+    /// The team that works in a project's folder (a project's team, docs/spec/19 §10).
+    func team(in project: ProjectInfo) -> TeamInfo? {
+        teams.first { $0.cwd == project.path }
+    }
+
+    func createTeam(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, initGit: Bool = false) async throws -> TeamInfo {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build)), as: TeamResult.self).team
+        let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build), initGit: initGit), as: TeamResult.self).team
         await loadTeams()
         try? await refreshCatalog()
         return team

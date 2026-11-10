@@ -263,8 +263,11 @@ struct MainSidebar: View {
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
         // No draft row: the project's row is marked while its new conversation page is open.
-        if !collapsedProjects.contains(project.id), !all.isEmpty {
+        let team = engine.team(in: project)
+        if !collapsedProjects.contains(project.id), !all.isEmpty || team != nil {
             VStack(alignment: .leading, spacing: 1) {
+                // Its team first (docs/spec/19 §10): what you ask in the project goes to it.
+                if let team { projectTeamRow(team) }
                 ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in
                     if s.ref.kind == .thread { chatRow(s) } else { sessionRow(s, indent: true) }
                 }
@@ -368,6 +371,23 @@ struct MainSidebar: View {
     }
 
     // MARK: Agents
+
+    /// A project's team, under the project: its name, and a dot while its tasks run.
+    private func projectTeamRow(_ team: TeamInfo) -> some View {
+        let working = team.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
+        return Button { item = .team(team.id) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.3").font(.system(size: 11)).foregroundStyle(Color.dsFg2).frame(width: 16)
+                Text(team.name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Spacer(minLength: 4)
+                if working > 0 { SidebarDot(status: .running).help("\(working) task\(working == 1 ? "" : "s") in progress") }
+            }
+            .padding(.leading, 8)
+            .rowChrome(selected: item == .team(team.id))
+        }
+        .buttonStyle(.plain)
+        .help("The project's team: its lead, board and members")
+    }
 
     /// Teams (docs/spec/19): each opens its page; a dot while any of its tasks is running.
     @ViewBuilder private var teamsSection: some View {

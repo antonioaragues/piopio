@@ -718,8 +718,9 @@ public struct CreateTeamParams: Encodable, Sendable {
     public var goal: String?
     public var testCommand: String?
     public var model: ModelRef?
-    public init(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, model: ModelRef?) {
-        self.name = name; self.template = template; self.cwd = cwd; self.goal = goal; self.testCommand = testCommand; self.model = model
+    public var initGit: Bool?
+    public init(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, model: ModelRef?, initGit: Bool = false) {
+        self.name = name; self.template = template; self.cwd = cwd; self.goal = goal; self.testCommand = testCommand; self.model = model; self.initGit = initGit ? true : nil
     }
 }
 public struct AddTeamTaskParams: Encodable, Sendable {

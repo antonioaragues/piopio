@@ -91,7 +91,10 @@ struct RootView: View {
         .onChange(of: itemRaw, initial: true) { _, raw in
             let target = UserDefaults.standard.string(forKey: "homeTarget") ?? "chat"
             switch SidebarItem(raw: raw) {
-            case .newSession(let id): UserDefaults.standard.set("project:" + id, forKey: "homeTarget")
+            case .newSession(let id):
+                // A project with a team (docs/spec/19 §10): its work goes to the team; the chip switches back to the project.
+                let team = engine.projects.first { $0.id == id }.flatMap { engine.team(in: $0) }
+                UserDefaults.standard.set(team.map { "team:" + $0.id } ?? "project:" + id, forKey: "homeTarget")
             case .start(.chat) where target.hasPrefix("project:"): UserDefaults.standard.set("chat", forKey: "homeTarget")
             default: break
             }
@@ -417,3 +420,4 @@ private struct StartSheets: ViewModifier {
             }
     }
 }
+

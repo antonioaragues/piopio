@@ -112,3 +112,16 @@ test("a research team works in its own folder, without git; you can move a card 
 	await client.call("teams.updateTask", { id: team.id, taskId: "T1", state: "blocked" });
 	expect(((await client.call("teams.get", { id: team.id })) as { team: Team }).team.tasks[0]).toMatchObject({ state: "blocked", blocked: "Stopped by you" });
 }, 40_000);
+
+test("a team for a new project: its folder becomes a git repo, and the team works on its own branch", async () => {
+	const { client } = await start();
+	const project = (await client.call("projects.create", { name: "Shop" })) as { project?: { path: string }; path?: string };
+	const path = project.project?.path ?? project.path!;
+	expect(existsSync(join(path, ".git"))).toBe(false);
+	const { team } = (await client.call("teams.create", { name: "Shop team", template: "development", cwd: path, initGit: true })) as { team: Team };
+	expect(existsSync(join(path, ".git"))).toBe(true);
+	expect(team.git).toMatchObject({ base: "main", branch: expect.stringMatching(/^team\/shop-team-/) });
+	// The project's own files are in the first commit (AGENTS.md, NOTES.md).
+	expect(execFileSync("git", ["log", "--format=%s", "main"], { cwd: path }).toString().trim()).toBe("Start");
+	expect(execFileSync("git", ["ls-files"], { cwd: path }).toString()).toContain("AGENTS.md");
+}, 30_000);

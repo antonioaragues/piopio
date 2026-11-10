@@ -264,8 +264,17 @@ enum DebugAutomation {
             Task {
                 let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
                 if let tab = env["PIOPIO_DEMO_TEAM_TAB"] { UserDefaults.standard.set(tab, forKey: "teamTab") }
+                // PIOPIO_DEMO_TEAM_START=1: the folder is added as a project first, and its + page opens (its team chosen).
+                let start = env["PIOPIO_DEMO_TEAM_START"] == "1" && parts.count > 1
+                let project = start ? await engine.addProject(URL(fileURLWithPath: parts[1])) : nil
                 guard let team = try? await engine.createTeam(name: "", template: parts[0], cwd: parts.count > 1 ? parts[1] : nil, goal: env["PIOPIO_DEMO_TEAM_GOAL"], testCommand: env["PIOPIO_DEMO_TEAM_TEST"]) else { return }
-                NotificationCenter.default.post(name: .selectItem, object: SidebarItem.team(team.id).raw)
+                if let project {
+                    // As the project's + does, once the project and its team are loaded.
+                    try? await Task.sleep(for: .seconds(1))
+                    NotificationCenter.default.post(name: .newBuildSession, object: project.id)
+                } else {
+                    NotificationCenter.default.post(name: .selectItem, object: SidebarItem.team(team.id).raw)
+                }
             }
         }
         // PIOPIO_DEMO_PROJECT: add this folder in Build and open a session there; PIOPIO_DEMO_BUILD_PROMPT: send it.

@@ -129,7 +129,7 @@ export class TeamRunner {
 
 	// ── Making a team ──
 
-	async create(params: { name: string; template: string; cwd?: string; folder: string; model?: string; goal?: string; testCommand?: string; memberMode?: ApprovalMode; maxParallel?: number }): Promise<Team> {
+	async create(params: { name: string; template: string; cwd?: string; folder: string; model?: string; goal?: string; testCommand?: string; memberMode?: ApprovalMode; maxParallel?: number; initGit?: boolean }): Promise<Team> {
 		const t: TeamTemplate | undefined = template(params.template);
 		if (!t) throw new EngineError("INVALID", `No team template “${params.template}”.`);
 		const name = params.name.trim() || t.name;
@@ -138,7 +138,8 @@ export class TeamRunner {
 		mkdirSync(params.folder, { recursive: true });
 		const notes = join(params.folder, "NOTES.md");
 		if (!existsSync(notes)) writeFileSync(notes, `# ${name}: notes\n\n<!-- What the team keeps for each other: decisions, conventions, how to run things. -->\n`);
-		const cwd = t.workplace === "project" ? params.cwd! : params.folder;
+		// A folder team can work in a project too (a writing project); otherwise in its own folder.
+		const cwd = params.cwd ?? params.folder;
 		const id = `team_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		const team: Team = {
 			id,
@@ -158,8 +159,16 @@ export class TeamRunner {
 			nextTask: 1,
 			createdAt: iso(),
 		};
+		// Branches per task only when someone merges them (a CI role); others share the folder.
+		const merges = t.roles.some((r) => r.kind === "integrate");
+		// A new project's folder (New project with a team) becomes a git repo, so tasks can have branches.
+		if (merges && params.initGit && !(await this.host.isRepo(cwd))) {
+			await this.host.git(cwd, ["init", "-q", "-b", "main"]);
+			await this.host.git(cwd, ["add", "-A"]);
+			await this.host.git(cwd, ["-c", "user.name=Piopio", "-c", "user.email=piopio@localhost", "commit", "-q", "--allow-empty", "-m", "Start"]);
+		}
 		// In a git project the team works on its own branch, in its own worktree; tasks branch from it (T2).
-		if (t.workplace === "project" && (await this.host.isRepo(cwd))) {
+		if (merges && (await this.host.isRepo(cwd))) {
 			const base = (await this.host.branchOf(cwd)) ?? "HEAD";
 			const branch = `team/${slug}-${id.slice(-4)}`;
 			const integration = join(this.host.worktreesDir, id, "_team");

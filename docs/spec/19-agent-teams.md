@@ -308,9 +308,17 @@ The first version of T1 and T2, from §10's development team.
       done or give it to another role. + adds a task of yours.
     - **Members:** the role cards.
   - **Session lists:** team sessions don't show in the projects' lists.
+- **A team per project:**
+  - **New project** offers a team: no team, or a template. A team that merges (one with a CI role) makes the new folder
+    a git repo first, with a "Start" commit (`teams.create` `initGit`), so its tasks get their own branches.
+  - **Sidebar:** a project's team shows first under it.
+  - **The project's +** opens "What should the team do?" with the team chosen: what you send goes to its lead, and the
+    team's page opens on the Lead tab. To work on your own, pick the project in the box. The box also lists teams
+    ("Give a team work").
+  - **Folder templates** (research, writing) can also work in a project folder. Only a team with a CI role makes
+    branches.
 
 **Not yet:**
-- Choosing a team when you make a project.
 - Merging the team's branch from the app: today you merge `team/<name>` yourself.
 - Editing roles or adding your own templates.
 - Collaboration styles other than "a lead and the rest follow".
