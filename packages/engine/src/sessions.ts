@@ -41,6 +41,7 @@ import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
 import { runCommand, type TeamHost, type TeamRunner } from "./teams/runner.js";
 import type { TeamBridge } from "./teams/extension.js";
+import { routineLabel } from "./teams/routines.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { SdkEventMapper } from "./timeline/pi-sdk.js";
 import type { SessionEvent } from "@piopio/protocol";
@@ -1126,6 +1127,16 @@ export class Sessions {
 			board: () => teams.board(team().id),
 			message: (taskId, text) => teams.message(team().id, taskId, text),
 			verdict: (pass, notes) => teams.verdict(entry.ref.id, pass, notes),
+			addRoutine: async (input) => {
+				const r = await teams.addRoutine(team().id, input, "lead");
+				const url = r.on === "webhook" ? teams.hookUrl?.(team().id, r.id) : undefined;
+				return `Set ${r.id}: ${routineLabel(r)}${r.next ? `, first ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}.${url ? ` Its URL (POST, from this Mac): ${url}` : ""} The user sees it on the team page.`;
+			},
+			routines: () => teams.routineList(team().id),
+			cancelRoutine: async (id) => {
+				const r = await teams.removeRoutine(team().id, id, "lead");
+				return `Removed ${r.id}: ${routineLabel(r)}.`;
+			},
 		};
 	}
 

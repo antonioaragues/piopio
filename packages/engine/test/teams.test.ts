@@ -28,10 +28,9 @@ async function until<T>(get: () => Promise<T> | T, ok: (v: T) => boolean, ms = 2
 	}
 }
 
-async function start() {
-	const home = mkdtempSync(join(tmpdir(), "piopio-teams-"));
+async function start(home = mkdtempSync(join(tmpdir(), "piopio-teams-"))) {
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), teamsDir: join(home, "Teams"), hooksPort: 0, log: () => {} });
+	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), teamsDir: join(home, "Teams"), hooksPort: 0, watchers: { settleMs: 200 }, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	open.push({ engine, client });
@@ -195,3 +194,57 @@ test("a merge that conflicts changes nothing; with the project on another branch
 	git(dir, "remote", "set-url", "origin", "git@github.com:acme/shop.git");
 	expect(((await client.call("teams.landing", { id: team.id })) as Landing).compareUrl).toBe(`https://github.com/acme/shop/compare/main...${team.git!.branch}?expand=1`);
 }, 90_000);
+
+type Routine = { id: string; on: string; by: string; label: string; url?: string; next?: number; runs: number; lastRun?: string };
+const leadText = async (client: TestClient, id: string) => JSON.stringify((await client.call("sessions.open", { ref: { kind: "build", id } })).items);
+
+test("routines start a team's work on their own: the lead sets them, a file or a webhook wakes it, you run or remove them (docs/spec/19 T1)", async () => {
+	const { client } = await start();
+	const { team } = (await client.call("teams.create", { name: "Market", template: "research" })) as { team: Team };
+	const inbox = mkdtempSync(join(tmpdir(), "piopio-team-inbox-"));
+	// The lead sets two routines when asked.
+	await client.call("sessions.submit", { ref: { kind: "build", id: team.leadSessionId }, input: { text: `call: schedule | ${JSON.stringify({ when: "0 9 * * 1", prompt: "Write this week's brief" })}\ncall: watch | ${JSON.stringify({ on: "folder", folder: inbox, prompt: "Summarize the new report" })}` } });
+	const set = await until(async () => ((await client.call("teams.get", { id: team.id })) as { team: { routines?: Routine[] } }).team.routines ?? [], (r) => r.length === 2);
+	expect(set.map((r) => [r.on, r.by, r.label])).toEqual([["time", "lead", "Every Monday at 09:00"], ["folder", "lead", `When a file appears or changes in ${inbox}`]]);
+	expect(set[0]!.next).toBeGreaterThan(Date.now());
+
+	// A file appears: the lead hears it, with the path.
+	await new Promise((r) => setTimeout(r, 300));
+	writeFileSync(join(inbox, "q3.pdf"), "report");
+	await until(() => leadText(client, team.leadSessionId), (s) => s.includes("[Routine] When a file appears or changes in") && s.includes("q3.pdf"));
+
+	// You add a webhook routine; its URL wakes the lead once per delivery.
+	const { routine } = (await client.call("teams.addRoutine", { id: team.id, on: "webhook", prompt: "Look into the new lead" })) as { routine: Routine };
+	expect(routine.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/hooks\/team_/);
+	for (let i = 0; i < 2; i++) expect((await fetch(routine.url!, { method: "POST", headers: { "Idempotency-Key": "d1" }, body: '{"name":"Acme"}' })).status).toBe(202);
+	await until(() => leadText(client, team.leadSessionId), (s) => s.includes("[Routine] When its URL is called") && s.includes("Acme"));
+	// The same delivery twice ran once.
+	expect((((await client.call("teams.get", { id: team.id })) as { team: { routines: Routine[] } }).team.routines).find((r) => r.id === routine.id)).toMatchObject({ runs: 1 });
+	expect(await leadText(client, team.leadSessionId)).toContain("You were given a routine: When its URL is called");
+
+	// Run now, then remove; a bad time is refused.
+	await client.call("teams.runRoutine", { id: team.id, routineId: set[0]!.id });
+	await until(() => leadText(client, team.leadSessionId), (s) => s.includes("[Routine] Every Monday at 09:00: Write this week's brief"));
+	await client.call("teams.removeRoutine", { id: team.id, routineId: set[1]!.id });
+	expect((((await client.call("teams.get", { id: team.id })) as { team: { routines: Routine[] } }).team.routines).map((r) => r.on)).toEqual(["time", "webhook"]);
+	await expect(client.call("teams.addRoutine", { id: team.id, on: "time", when: "2020-01-01T09:00", prompt: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+}, 60_000);
+
+test("a time routine missed while the engine was off runs once when it's back", async () => {
+	const first = await start();
+	const { team } = (await first.client.call("teams.create", { name: "Weekly", template: "research" })) as { team: Team };
+	await first.client.call("teams.addRoutine", { id: team.id, on: "time", when: "0 9 * * 1", prompt: "Write the weekly brief" });
+	const o = open.splice(0)[0]!;
+	o.client.close();
+	await o.engine.stop();
+	// The Mac slept through Monday 9:00.
+	const file = join(first.home, "teams.json");
+	const teams = JSON.parse(readFileSync(file, "utf8")) as { routines: { next: number }[] }[];
+	teams[0]!.routines[0]!.next = Date.now() - 60_000;
+	writeFileSync(file, JSON.stringify(teams));
+	const { client } = await start(first.home);
+	await until(() => leadText(client, team.leadSessionId), (s) => s.includes("[Routine] Every Monday at 09:00: Write the weekly brief"));
+	const after = ((await client.call("teams.get", { id: team.id })) as { team: { routines: Routine[] } }).team.routines[0]!;
+	expect(after).toMatchObject({ runs: 1 });
+	expect(after.next).toBeGreaterThan(Date.now());
+}, 40_000);

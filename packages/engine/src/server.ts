@@ -41,7 +41,8 @@ const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask
 import { AppServices } from "./app-services.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
-import { TeamRunner } from "./teams/runner.js";
+import { routineLabel, type TeamRoutine } from "./teams/routines.js";
+import { TeamRunner, type Team } from "./teams/runner.js";
 import { TEAM_TEMPLATES } from "./teams/templates.js";
 import { TEMPLATES } from "@piopio/runtime";
 
@@ -205,8 +206,12 @@ export class Engine {
 		this.sessions.telegram = this.telegram;
 		// Event routines agents set themselves (docs/spec/19 S3): folders and connected mail; webhooks go through hooks.
 		this.watchers = new AgentWatchers({
-			watches: () => this.sessions.agentWatches(),
-			fire: async (id, watchId, happened, key) => void (await (await this.sessions.agent({ kind: "agent", id })).fireWatch(watchId, happened, key)),
+			// Agents' watches, and teams' folder and email routines (keyed by the team's id).
+			watches: async () => [...(await this.sessions.agentWatches()), ...this.teams.routineWatches()],
+			fire: async (id, watchId, happened, key) => {
+				if (this.teams.has(id)) await this.teams.fireRoutine(id, watchId, happened, key);
+				else await (await this.sessions.agent({ kind: "agent", id })).fireWatch(watchId, happened, key);
+			},
 			mail: () => this.connectors.mailboxes("agent").map((b) => ({ name: b.name, search: (q: string, n: number) => b.mailbox.search(q, n) })),
 			stateFile: join(options.paths.home, "watchers.json"),
 			log: this.log,
@@ -218,7 +223,10 @@ export class Engine {
 		this.teamsDir = options.teamsDir ?? process.env.PIOPIO_TEAMS_DIR ?? join(homedir(), "Piopio", "Teams");
 		this.teams = new TeamRunner(this.sessions.teamHost({ stateFile: join(options.paths.home, "teams.json"), worktreesDir: join(options.paths.home, "worktrees", "teams"), log: this.log }));
 		this.sessions.teams = this.teams;
-		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
+		// A team's webhook routine has the same kind of URL as an agent's trigger, with the team's id.
+		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.teams.has(agent) ? this.teams.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
+		this.teams.hookUrl = (team, routine) => (this.hooks.port ? this.hooks.url(team, routine) : undefined);
+		this.teams.onRoutines = () => void this.watchers.sync().catch(() => undefined);
 		this.sessions.hookUrl = (agent, trigger) => this.hooks.url(agent, trigger);
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp || JSON.stringify(next.chat.mcpServers) !== JSON.stringify(previous.chat.mcpServers)) void this.chatMcp.reset();
@@ -310,6 +318,16 @@ export class Engine {
 				};
 			}),
 		);
+	}
+
+	/** A team as the app sees it: its routines with a label, and a webhook's URL. */
+	private teamView(team: Team): Team {
+		return team.routines?.length ? { ...team, routines: team.routines.map((r) => this.routineView(team.id, r)) } : team;
+	}
+
+	private routineView(teamId: string, r: TeamRoutine): TeamRoutine & { label: string; url?: string } {
+		const url = r.on === "webhook" && this.hooks.port ? this.hooks.url(teamId, r.id) : undefined;
+		return { ...r, label: routineLabel(r), ...(url ? { url } : {}) };
 	}
 
 	async stop(): Promise<void> {
@@ -737,10 +755,10 @@ export class Engine {
 			case "teams.templates":
 				return { templates: TEAM_TEMPLATES.map((t) => ({ id: t.id, name: t.name, description: t.description, workplace: t.workplace, roles: t.roles })) } satisfies Result<"teams.templates">;
 			case "teams.list":
-				return { teams: this.teams.list() } satisfies Result<"teams.list">;
+				return { teams: this.teams.list().map((t) => this.teamView(t)) } satisfies Result<"teams.list">;
 			case "teams.get": {
 				const p = params as Params<"teams.get">;
-				return { team: this.teams.get(p.id) } satisfies Result<"teams.get">;
+				return { team: this.teamView(this.teams.get(p.id)) } satisfies Result<"teams.get">;
 			}
 			case "teams.create": {
 				const p = params as Params<"teams.create">;
@@ -759,12 +777,26 @@ export class Engine {
 					...(p.initGit ? { initGit: true } : {}),
 					...(p.model ? { model: p.model.provider === "openrouter" ? p.model.id : `${p.model.provider}:${p.model.id}` } : {}),
 				});
-				return { team } satisfies Result<"teams.create">;
+				return { team: this.teamView(team) } satisfies Result<"teams.create">;
 			}
 			case "teams.addTask": {
 				const p = params as Params<"teams.addTask">;
 				const task = await this.teams.createTask(p.id, { title: p.title, brief: p.brief, ...(p.done ? { done: p.done } : {}), ...(p.role ? { role: p.role } : {}) }, "you");
 				return { task } satisfies Result<"teams.addTask">;
+			}
+			case "teams.addRoutine": {
+				const p = params as Params<"teams.addRoutine">;
+				const routine = await this.teams.addRoutine(p.id, { on: p.on, prompt: p.prompt, ...(p.when ? { when: p.when } : {}), ...(p.folder ? { folder: p.folder } : {}), ...(p.from ? { from: p.from } : {}), ...(p.subject ? { subject: p.subject } : {}) }, "you");
+				return { routine: this.routineView(p.id, routine) } satisfies Result<"teams.addRoutine">;
+			}
+			case "teams.removeRoutine": {
+				const p = params as Params<"teams.removeRoutine">;
+				await this.teams.removeRoutine(p.id, p.routineId, "you");
+				return {} satisfies Result<"teams.removeRoutine">;
+			}
+			case "teams.runRoutine": {
+				const p = params as Params<"teams.runRoutine">;
+				return (await this.teams.fireRoutine(p.id, p.routineId, "Run by the user from the team page.")) satisfies Result<"teams.runRoutine">;
 			}
 			case "teams.landing": {
 				const p = params as Params<"teams.landing">;

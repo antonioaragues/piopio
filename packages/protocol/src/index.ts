@@ -902,6 +902,26 @@ export const TeamLanding = Type.Object({
 	compareUrl: Type.Optional(Type.String()),
 });
 export type TeamLanding = Static<typeof TeamLanding>;
+/** What starts a team's work on its own (docs/spec/19 T1): a time, a folder, an email, a webhook. */
+export const TeamRoutine = Type.Object({
+	id: Type.String(),
+	on: literals("time", "folder", "email", "webhook"),
+	prompt: Type.String(),
+	cron: Type.Optional(Type.String()),
+	at: Type.Optional(Type.Number()),
+	tz: Type.Optional(Type.String()),
+	folder: Type.Optional(Type.String()),
+	from: Type.Optional(Type.String()),
+	subject: Type.Optional(Type.String()),
+	by: literals("lead", "you"),
+	createdAt: Type.String(),
+	next: Type.Optional(Type.Number({ description: "time: the next fire, epoch ms" })),
+	lastRun: Type.Optional(Type.String()),
+	runs: Type.Number(),
+	label: Type.Optional(Type.String({ description: "“Every Monday at 09:00”, “When a file appears in ~/Inbox”" })),
+	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
+});
+export type TeamRoutine = Static<typeof TeamRoutine>;
 export const TeamInfo = Type.Object({
 	id: Type.String(),
 	name: Type.String(),
@@ -920,6 +940,8 @@ export const TeamInfo = Type.Object({
 	goal: Type.Optional(Type.String()),
 	tasks: Type.Array(TeamTask),
 	nextTask: Type.Number(),
+	routines: Type.Optional(Type.Array(TeamRoutine)),
+	fired: Type.Optional(Type.Array(Type.String())),
 	createdAt: Type.String(),
 });
 export type TeamInfo = Static<typeof TeamInfo>;
@@ -1586,6 +1608,14 @@ export const methods = {
 	},
 	/** You add a card to the board (TD5). */
 	"teams.addTask": { params: Type.Object({ id: Type.String(), title: Type.String(), brief: Type.String(), done: Type.Optional(Type.String()), role: Type.Optional(Type.String()) }), result: Type.Object({ task: TeamTask }) },
+	/** You add a routine on the team page: a time (`when`: a cron or a local date-time), a folder, an email or a webhook. */
+	"teams.addRoutine": {
+		params: Type.Object({ id: Type.String(), on: literals("time", "folder", "email", "webhook"), prompt: Type.String(), when: Type.Optional(Type.String()), folder: Type.Optional(Type.String()), from: Type.Optional(Type.String()), subject: Type.Optional(Type.String()) }),
+		result: Type.Object({ routine: TeamRoutine }),
+	},
+	"teams.removeRoutine": { params: Type.Object({ id: Type.String(), routineId: Type.String() }), result: Type.Object({}) },
+	/** Runs a routine now, as if it had fired. */
+	"teams.runRoutine": { params: Type.Object({ id: Type.String(), routineId: Type.String() }), result: Type.Object({ runId: Type.String() }) },
 	/** What the team's branch would bring to the project's (a team that works on a branch). */
 	"teams.landing": { params: Type.Object({ id: Type.String() }), result: TeamLanding },
 	/** You land the team's work: merge its branch into the project's, or push it for a pull request. */

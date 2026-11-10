@@ -710,6 +710,32 @@ public struct TeamLandParams: Encodable, Sendable {
 }
 public struct TeamLandResult: Decodable, Sendable { public var commit: String?; public var compareUrl: String?; public var output: String? }
 
+/// What starts a team's work on its own (docs/spec/19 T1).
+public struct TeamRoutine: Codable, Sendable, Hashable, Identifiable {
+    public var id, on, prompt, by, createdAt: String
+    public var cron: String?
+    public var at: Double?
+    public var folder: String?
+    public var from: String?
+    public var subject: String?
+    public var next: Double?
+    public var lastRun: String?
+    public var runs: Int
+    public var label: String?
+    public var url: String?
+}
+public struct AddTeamRoutineParams: Encodable, Sendable {
+    public var id, on, prompt: String
+    public var when, folder, from, subject: String?
+    public init(id: String, on: String, prompt: String, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil) {
+        self.id = id; self.on = on; self.prompt = prompt; self.when = when; self.folder = folder; self.from = from; self.subject = subject
+    }
+}
+public struct TeamRoutineParams: Encodable, Sendable {
+    public var id, routineId: String
+    public init(id: String, routineId: String) { self.id = id; self.routineId = routineId }
+}
+
 public struct TeamInfo: Codable, Sendable, Hashable, Identifiable {
     public struct Git: Codable, Sendable, Hashable { public var base, branch, integration: String }
     public var id, name, slug, template, style, cwd, folder: String
@@ -721,6 +747,7 @@ public struct TeamInfo: Codable, Sendable, Hashable, Identifiable {
     public var testCommand: String?
     public var goal: String?
     public var tasks: [TeamTask]
+    public var routines: [TeamRoutine]?
 }
 
 public struct TeamTemplate: Decodable, Sendable, Hashable, Identifiable {

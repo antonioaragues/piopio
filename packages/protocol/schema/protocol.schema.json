@@ -34220,6 +34220,105 @@
 							"nextTask": {
 								"type": "number"
 							},
+							"routines": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"on",
+										"prompt",
+										"by",
+										"createdAt",
+										"runs"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"on": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "time"
+												},
+												{
+													"type": "string",
+													"const": "folder"
+												},
+												{
+													"type": "string",
+													"const": "email"
+												},
+												{
+													"type": "string",
+													"const": "webhook"
+												}
+											]
+										},
+										"prompt": {
+											"type": "string"
+										},
+										"cron": {
+											"type": "string"
+										},
+										"at": {
+											"type": "number"
+										},
+										"tz": {
+											"type": "string"
+										},
+										"folder": {
+											"type": "string"
+										},
+										"from": {
+											"type": "string"
+										},
+										"subject": {
+											"type": "string"
+										},
+										"by": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "lead"
+												},
+												{
+													"type": "string",
+													"const": "you"
+												}
+											]
+										},
+										"createdAt": {
+											"type": "string"
+										},
+										"next": {
+											"type": "number",
+											"description": "time: the next fire, epoch ms"
+										},
+										"lastRun": {
+											"type": "string"
+										},
+										"runs": {
+											"type": "number"
+										},
+										"label": {
+											"type": "string",
+											"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+										},
+										"url": {
+											"type": "string",
+											"description": "webhook: where to POST"
+										}
+									}
+								}
+							},
+							"fired": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
 							"createdAt": {
 								"type": "string"
 							}
@@ -34497,6 +34596,105 @@
 						},
 						"nextTask": {
 							"type": "number"
+						},
+						"routines": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"on",
+									"prompt",
+									"by",
+									"createdAt",
+									"runs"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"on": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "time"
+											},
+											{
+												"type": "string",
+												"const": "folder"
+											},
+											{
+												"type": "string",
+												"const": "email"
+											},
+											{
+												"type": "string",
+												"const": "webhook"
+											}
+										]
+									},
+									"prompt": {
+										"type": "string"
+									},
+									"cron": {
+										"type": "string"
+									},
+									"at": {
+										"type": "number"
+									},
+									"tz": {
+										"type": "string"
+									},
+									"folder": {
+										"type": "string"
+									},
+									"from": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "string"
+									},
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"next": {
+										"type": "number",
+										"description": "time: the next fire, epoch ms"
+									},
+									"lastRun": {
+										"type": "string"
+									},
+									"runs": {
+										"type": "number"
+									},
+									"label": {
+										"type": "string",
+										"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+									},
+									"url": {
+										"type": "string",
+										"description": "webhook: where to POST"
+									}
+								}
+							}
+						},
+						"fired": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
 						},
 						"createdAt": {
 							"type": "string"
@@ -34832,6 +35030,105 @@
 						"nextTask": {
 							"type": "number"
 						},
+						"routines": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"on",
+									"prompt",
+									"by",
+									"createdAt",
+									"runs"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"on": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "time"
+											},
+											{
+												"type": "string",
+												"const": "folder"
+											},
+											{
+												"type": "string",
+												"const": "email"
+											},
+											{
+												"type": "string",
+												"const": "webhook"
+											}
+										]
+									},
+									"prompt": {
+										"type": "string"
+									},
+									"cron": {
+										"type": "string"
+									},
+									"at": {
+										"type": "number"
+									},
+									"tz": {
+										"type": "string"
+									},
+									"folder": {
+										"type": "string"
+									},
+									"from": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "string"
+									},
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"next": {
+										"type": "number",
+										"description": "time: the next fire, epoch ms"
+									},
+									"lastRun": {
+										"type": "string"
+									},
+									"runs": {
+										"type": "number"
+									},
+									"label": {
+										"type": "string",
+										"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+									},
+									"url": {
+										"type": "string",
+										"description": "webhook: where to POST"
+									}
+								}
+							}
+						},
+						"fired": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
 						"createdAt": {
 							"type": "string"
 						}
@@ -34974,6 +35271,197 @@
 							"type": "string"
 						}
 					}
+				}
+			}
+		},
+		"teams.addRoutine.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"on",
+				"prompt"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"on": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "time"
+						},
+						{
+							"type": "string",
+							"const": "folder"
+						},
+						{
+							"type": "string",
+							"const": "email"
+						},
+						{
+							"type": "string",
+							"const": "webhook"
+						}
+					]
+				},
+				"prompt": {
+					"type": "string"
+				},
+				"when": {
+					"type": "string"
+				},
+				"folder": {
+					"type": "string"
+				},
+				"from": {
+					"type": "string"
+				},
+				"subject": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.addRoutine.result": {
+			"type": "object",
+			"required": [
+				"routine"
+			],
+			"properties": {
+				"routine": {
+					"type": "object",
+					"required": [
+						"id",
+						"on",
+						"prompt",
+						"by",
+						"createdAt",
+						"runs"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"on": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "time"
+								},
+								{
+									"type": "string",
+									"const": "folder"
+								},
+								{
+									"type": "string",
+									"const": "email"
+								},
+								{
+									"type": "string",
+									"const": "webhook"
+								}
+							]
+						},
+						"prompt": {
+							"type": "string"
+						},
+						"cron": {
+							"type": "string"
+						},
+						"at": {
+							"type": "number"
+						},
+						"tz": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"from": {
+							"type": "string"
+						},
+						"subject": {
+							"type": "string"
+						},
+						"by": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "lead"
+								},
+								{
+									"type": "string",
+									"const": "you"
+								}
+							]
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"next": {
+							"type": "number",
+							"description": "time: the next fire, epoch ms"
+						},
+						"lastRun": {
+							"type": "string"
+						},
+						"runs": {
+							"type": "number"
+						},
+						"label": {
+							"type": "string",
+							"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+						},
+						"url": {
+							"type": "string",
+							"description": "webhook: where to POST"
+						}
+					}
+				}
+			}
+		},
+		"teams.removeRoutine.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"routineId"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"routineId": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.removeRoutine.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"teams.runRoutine.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"routineId"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"routineId": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.runRoutine.result": {
+			"type": "object",
+			"required": [
+				"runId"
+			],
+			"properties": {
+				"runId": {
+					"type": "string"
 				}
 			}
 		},

@@ -139,12 +139,13 @@ struct TeamPage: View {
                 PageHeader {
                     PageTitle(name: team.name, subtitle: subtitle(team))
                 } actions: {
-                    NeutralSegmented(selection: $tab, options: [("lead", "Lead"), ("board", "Board"), ("members", "Members")])
-                        .frame(width: 240)
+                    NeutralSegmented(selection: $tab, options: [("lead", "Lead"), ("board", "Board"), ("routines", "Routines"), ("members", "Members")])
+                        .frame(width: 320)
                 }
                 switch tab {
                 case "lead": lead(team)
                 case "members": TeamMembers(team: team)
+                case "routines": TeamRoutines(engine: engine, team: team)
                 default: TeamBoard(engine: engine, team: team, item: $item)
                 }
             }
@@ -447,5 +448,208 @@ struct TeamLandingCard: View {
             note = ((error as? EngineError)?.message ?? error.localizedDescription, true)
         }
         landing = await engine.teamLanding(team)
+    }
+}
+
+/// Routines (docs/spec/19 T1): what starts the team's work on its own. The lead sets them when you ask it; you can add,
+/// run or remove them here.
+struct TeamRoutines: View {
+    let engine: EngineController
+    let team: TeamInfo
+    @State private var adding = false
+    @State private var error: String?
+
+    private var routines: [TeamRoutine] { team.routines ?? [] }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("What starts the team's work on its own. Ask the lead (“every Monday, a brief on our competitors”), or add one here.")
+                        .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 16)
+                    Button("Add routine…") { adding = true }.buttonStyle(PillStyle())
+                }
+                if routines.isEmpty {
+                    Text("No routines yet.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.top, 8)
+                }
+                ForEach(routines) { row($0) }
+                if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
+            }
+            .padding(24)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .sheet(isPresented: $adding) { AddTeamRoutine(engine: engine, team: team) { adding = false } }
+    }
+
+    private func row(_ r: TeamRoutine) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: Self.icon(r.on)).font(.system(size: 14)).foregroundStyle(Color.dsFg2).frame(width: 20).padding(.top, 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(r.label ?? r.on).font(.system(size: 13.5, weight: .semibold))
+                Text(r.prompt).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+                Text(meta(r)).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                if let url = r.url {
+                    HStack(spacing: 6) {
+                        Text(url).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                        Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(url, forType: .string) }
+                            .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Color.dsFg2)
+                    }
+                }
+            }
+            Spacer(minLength: 12)
+            Button("Run now") { act { try await engine.runTeamRoutine(team, r) } }.buttonStyle(PillStyle(compact: true))
+                .help("The lead gets it now, as if it had fired")
+            Button { act { try await engine.removeTeamRoutine(team, r) } } label: { Image(systemName: "trash").font(.system(size: 12)) }
+                .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Remove this routine").padding(.top, 4)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+    }
+
+    private func meta(_ r: TeamRoutine) -> String {
+        var parts: [String] = []
+        if let next = r.next { parts.append("Next \(Self.day.string(from: Date(timeIntervalSince1970: next / 1000)))") }
+        parts.append(r.runs == 0 ? "Hasn't run yet" : "Ran \(r.runs == 1 ? "once" : "\(r.runs) times")")
+        if let last = r.lastRun.flatMap(Self.iso.date(from:)) { parts.append("last \(Self.day.string(from: last))") }
+        parts.append(r.by == "lead" ? "set by the lead" : "set by you")
+        return parts.joined(separator: " · ")
+    }
+
+    private static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let day: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE d MMM HH:mm")
+        return f
+    }()
+
+    static func icon(_ on: String) -> String {
+        switch on {
+        case "folder": "folder"
+        case "email": "envelope"
+        case "webhook": "link"
+        default: "clock"
+        }
+    }
+
+    private func act(_ work: @escaping () async throws -> Void) {
+        Task {
+            do { try await work(); error = nil } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+        }
+    }
+}
+
+/// A routine by hand: a time (repeating or once), a folder, an email or a webhook, and what the team does then.
+private struct AddTeamRoutine: View {
+    let engine: EngineController
+    let team: TeamInfo
+    let done: () -> Void
+    @State private var on = "time"
+    @State private var repeats = "weekly"
+    @State private var weekday = 2 // Calendar: 1 is Sunday
+    @State private var time = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
+    @State private var once = Date().addingTimeInterval(3600)
+    @State private var folder = ""
+    @State private var from = ""
+    @State private var subject = ""
+    @State private var prompt = ""
+    @State private var error: String?
+    @State private var saving = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New routine").font(.system(size: 15, weight: .semibold))
+            Picker("When", selection: $on) {
+                Text("At a time").tag("time")
+                Text("A file in a folder").tag("folder")
+                Text("An email").tag("email")
+                Text("A webhook call").tag("webhook")
+            }
+            switch on {
+            case "time":
+                Picker("Repeats", selection: $repeats) {
+                    Text("Every day").tag("daily")
+                    Text("Every weekday").tag("weekdays")
+                    Text("Every week").tag("weekly")
+                    Text("Once").tag("once")
+                }
+                if repeats == "weekly" {
+                    Picker("On", selection: $weekday) {
+                        ForEach(1...7, id: \.self) { d in Text(Calendar.current.weekdaySymbols[d % 7]).tag((d % 7) + 1) }
+                    }
+                }
+                if repeats == "once" { DatePicker("At", selection: $once, in: Date()...) }
+                else { DatePicker("At", selection: $time, displayedComponents: .hourAndMinute) }
+            case "folder":
+                HStack {
+                    TextField("Folder", text: $folder, prompt: Text("~/Inbox/Reports")).textFieldStyle(.roundedBorder)
+                    Button("Choose…", action: chooseFolder)
+                }
+            case "email":
+                TextField("From", text: $from, prompt: Text("Part of the sender's name or address")).textFieldStyle(.roundedBorder)
+                TextField("Subject", text: $subject, prompt: Text("Words in the subject")).textFieldStyle(.roundedBorder)
+                Text("Checked every 5 minutes in your connected mail.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            default:
+                Text("You get a URL on this Mac that other apps can POST to; the body comes with the routine.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            }
+            Text("Then the team…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
+            TextEditor(text: $prompt).font(.system(size: 13)).scrollContentBackground(.hidden).padding(6).frame(height: 90)
+                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                .accessibilityLabel("What the team does then")
+            Text("The lead gets this and plans it like a request from you.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
+            HStack {
+                Spacer()
+                Button("Cancel", action: done).keyboardShortcut(.cancelAction)
+                Button("Add", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(saving || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
+    }
+
+    /// A cron for the repeating times, a local date-time for once.
+    private var when: String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: time)
+        let hm = "\(c.minute ?? 0) \(c.hour ?? 9)"
+        switch repeats {
+        case "daily": return "\(hm) * * *"
+        case "weekdays": return "\(hm) * * 1-5"
+        case "weekly": return "\(hm) * * \(weekday - 1)"
+        default:
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            return f.string(from: once)
+        }
+    }
+
+    private func save() {
+        saving = true
+        Task {
+            defer { saving = false }
+            do {
+                try await engine.addTeamRoutine(team, on: on, prompt: prompt, when: on == "time" ? when : nil, folder: on == "folder" ? folder : nil, from: on == "email" ? from : nil, subject: on == "email" ? subject : nil)
+                done()
+            } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+        }
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        folder = url.path
     }
 }

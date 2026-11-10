@@ -328,6 +328,19 @@ The first version of T1 and T2, from §10's development team.
     create the PR there.
   - **The lead hears when it's ready:** when the last open task is done, its `[Board]` message says the branch is
     ready and that you merge it from the Board. The lead never merges into the base itself.
+- **Routines** (`engine/src/teams/routines.ts`; `teams.addRoutine`, `removeRoutine`, `runRoutine`): what starts a
+  team's work on its own, so a Research team can write its weekly brief without being asked.
+  - **Kinds:** a time (a cron, or once), a file appearing or changing in a folder, an email (from someone and/or about
+    something, in the connected mail), or a webhook call. They reuse T0's machinery: the cron helper, the folder and
+    mail watchers, and the hooks endpoint, with the team's id in place of an agent's.
+  - **Firing:** the lead gets a `[Routine]` message with the routine, its prompt and what happened, and plans it like a
+    request from you. The same file version, email or webhook delivery never fires twice. A time missed while the
+    engine was off fires once when it's back.
+  - **Set by asking:** the lead has `schedule`, `watch`, `list_routines` and `cancel_routine`, and its brief tells it
+    to set a routine when you want work to start on its own.
+  - **The Routines tab** on the team page lists them: when each fires next, how often it ran, who set it, and a
+    webhook's URL with Copy. "Run now" fires one at once; "Add routine…" offers every day, every weekday, every week,
+    once, a folder, an email or a webhook.
 
 **Not yet:**
 - Bringing the base into the team's branch from the app, when a merge conflicts.

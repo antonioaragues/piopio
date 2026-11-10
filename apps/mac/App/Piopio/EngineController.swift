@@ -625,6 +625,25 @@ final class EngineController {
         await loadTeams()
     }
 
+    /// A routine you add on the team page (docs/spec/19 T1): `when` is a cron or a local date-time.
+    func addTeamRoutine(_ team: TeamInfo, on: String, prompt: String, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.addRoutine", AddTeamRoutineParams(id: team.id, on: on, prompt: prompt, when: when, folder: folder, from: from, subject: subject), as: Empty.self)
+        await loadTeams()
+    }
+
+    func removeTeamRoutine(_ team: TeamInfo, _ routine: TeamRoutine) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.removeRoutine", TeamRoutineParams(id: team.id, routineId: routine.id), as: Empty.self)
+        await loadTeams()
+    }
+
+    func runTeamRoutine(_ team: TeamInfo, _ routine: TeamRoutine) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.runRoutine", TeamRoutineParams(id: team.id, routineId: routine.id), as: Empty.self)
+        await loadTeams()
+    }
+
     /// What the team's branch would bring to the project's; nil for a team without a branch.
     func teamLanding(_ team: TeamInfo) async -> TeamLanding? {
         guard team.git != nil else { return nil }

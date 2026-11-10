@@ -10,7 +10,9 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ApprovalMode } from "@piopio/protocol";
+import type { Watch } from "@piopio/runtime";
 import { EngineError } from "../models.js";
+import { nextOf, parseWhen, routineLabel, systemZone, type TeamRoutine } from "./routines.js";
 import { template, type Role, type TeamTemplate } from "./templates.js";
 
 export type TaskState = "todo" | "doing" | "review" | "integrating" | "done" | "blocked";
@@ -80,6 +82,10 @@ export type Team = {
 	goal?: string;
 	tasks: TeamTask[];
 	nextTask: number;
+	/** What starts work without you asking (docs/spec/19 T1): times, folders, emails, webhooks. */
+	routines?: TeamRoutine[];
+	/** Recent event keys, so the same file version, email or delivery never fires twice. */
+	fired?: string[];
 	createdAt: string;
 };
 
@@ -118,6 +124,14 @@ export class TeamRunner {
 	private readonly watching = new Map<string, () => void>();
 	/** Review verdicts given in a turn that hasn't settled yet, by review session. */
 	private readonly verdicts = new Map<string, { pass: boolean; notes: string }>();
+	private timer?: NodeJS.Timeout;
+	private stopped = false;
+	/** A webhook routine's URL (the hooks endpoint), set by the engine. */
+	hookUrl?: (teamId: string, routineId: string) => string | undefined;
+	/** Folder and email routines changed: the watchers start or stop theirs. */
+	onRoutines?: () => void;
+	/** Tests: the clock. */
+	now: () => number = () => Date.now();
 
 	constructor(private readonly host: TeamHost) {
 		try {
@@ -129,6 +143,10 @@ export class TeamRunner {
 
 	list(): Team[] {
 		return this.teams;
+	}
+
+	has(id: string): boolean {
+		return this.teams.some((t) => t.id === id);
 	}
 
 	get(id: string): Team {
@@ -215,7 +233,124 @@ export class TeamRunner {
 		const lead = team.roles.find((r) => r.kind === "lead")!;
 		const members = team.roles.filter((r) => r.kind !== "lead").map((r) => `- ${r.name} (role id "${r.id}", ${r.kind === "write" ? "does tasks; several can work at once" : r.kind === "review" ? "reviews every finished task; a failed review sends it back" : "merges approved work into the team branch and runs the checks"}): ${r.responsibility}`);
 		const where = team.git ? `Each task gets its own branch from ${team.git.branch}; approved work is merged into ${team.git.branch}, which starts from ${team.git.base}. You don't merge into ${team.git.base}: when the board is clear, tell the user the work is ready; they merge it, or push it for a pull request, from the team's Board.` : `Everyone works in the team folder, ${team.folder}.`;
-		return `${lead.responsibility}\n\n${team.style}\n\nYour team (${team.name}):\n${members.join("\n")}\n\n${where} At most ${team.maxParallel} tasks run at once; the rest wait their turn. Team notes: ${join(team.folder, "NOTES.md")}.\n\nMessages that start with [Board] are updates from the board, not from the user.`;
+		return `${lead.responsibility}\n\n${team.style}\n\nYour team (${team.name}):\n${members.join("\n")}\n\n${where} At most ${team.maxParallel} tasks run at once; the rest wait their turn. Team notes: ${join(team.folder, "NOTES.md")}.\n\nMessages that start with [Board] are updates from the board, not from the user. Messages that start with [Routine] are one of the team's routines firing: plan them as you would the user's request.\n\nWhen the user wants work to start on its own (every Monday, when a file arrives, when an email comes), set a routine: schedule for times, watch for events. list_routines shows them; cancel_routine removes one.`;
+	}
+
+	// ── Routines ──
+
+	/** The lead (`schedule`, `watch`) or you (the team page) add a routine. */
+	async addRoutine(teamId: string, input: { on: TeamRoutine["on"]; prompt: string; when?: string; folder?: string; from?: string; subject?: string }, by: "lead" | "you"): Promise<TeamRoutine> {
+		const team = this.get(teamId);
+		const prompt = input.prompt.trim();
+		if (!prompt) throw new EngineError("INVALID", "Say what the team should do then.");
+		const now = this.now();
+		const tz = systemZone();
+		const routine: TeamRoutine = { id: `r${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, on: input.on, prompt, by, createdAt: new Date(now).toISOString(), runs: 0 };
+		if (input.on === "time") {
+			const when = parseWhen(input.when ?? "", tz, now);
+			if ("error" in when) throw new EngineError("INVALID", when.error);
+			Object.assign(routine, when, { tz });
+			routine.next = nextOf(routine, now);
+		} else if (input.on === "folder") {
+			const folder = input.folder?.trim() ?? "";
+			if (!/^(\/|~\/)/.test(folder)) throw new EngineError("INVALID", "Give the folder as an absolute path (/Users/…) or one starting with ~/.");
+			routine.folder = folder;
+		} else if (input.on === "email") {
+			if (!input.from?.trim() && !input.subject?.trim()) throw new EngineError("INVALID", "Say whose emails (from) or which subject to watch for.");
+			if (input.from?.trim()) routine.from = input.from.trim();
+			if (input.subject?.trim()) routine.subject = input.subject.trim();
+		}
+		team.routines = [...(team.routines ?? []), routine];
+		this.save(team);
+		this.routinesChanged();
+		if (by === "you") await this.tellLead(team, `You were given a routine: ${routineLabel(routine)}: ${prompt}`);
+		return routine;
+	}
+
+	async removeRoutine(teamId: string, routineId: string, by: "lead" | "you"): Promise<TeamRoutine> {
+		const team = this.get(teamId);
+		const routine = team.routines?.find((r) => r.id === routineId);
+		if (!routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
+		team.routines = team.routines!.filter((r) => r.id !== routineId);
+		this.save(team);
+		this.routinesChanged();
+		if (by === "you") await this.tellLead(team, `The user removed the routine ${routineLabel(routine)}: ${routine.prompt}`);
+		return routine;
+	}
+
+	/** For the lead's `list_routines`. */
+	routineList(teamId: string): string {
+		const team = this.get(teamId);
+		if (!team.routines?.length) return "No routines.";
+		return team.routines
+			.map((r) => {
+				const url = r.on === "webhook" ? this.hookUrl?.(team.id, r.id) : undefined;
+				const next = r.next ? `, next ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : "";
+				return `- ${r.id}: ${routineLabel(r)}${next}${url ? ` (POST ${url})` : ""}: ${r.prompt}`;
+			})
+			.join("\n");
+	}
+
+	/** Folder and email routines, in the shape the watchers take (keyed by team id). */
+	routineWatches(): { agentId: string; watches: Watch[] }[] {
+		return this.teams
+			.map((team) => ({
+				agentId: team.id,
+				watches: (team.routines ?? [])
+					.filter((r) => r.on === "folder" || r.on === "email")
+					.map((r) => ({ id: r.id, on: r.on as "folder" | "email", prompt: r.prompt, ...(r.folder ? { folder: r.folder } : {}), ...(r.from ? { from: r.from } : {}), ...(r.subject ? { subject: r.subject } : {}), createdAt: r.createdAt, by: r.by })),
+			}))
+			.filter((x) => x.watches.length);
+	}
+
+	/** A routine fires: the lead gets it as a `[Routine]` message. `key` keeps an event from firing twice. */
+	async fireRoutine(teamId: string, routineId: string, happened?: string, key?: string): Promise<{ runId: string }> {
+		const team = this.get(teamId);
+		const routine = team.routines?.find((r) => r.id === routineId);
+		if (!routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
+		const dedupe = key ? `${routine.id}:${key}` : undefined;
+		if (dedupe && team.fired?.includes(dedupe)) return { runId: `${routine.id}-${routine.runs}` };
+		if (dedupe) team.fired = [...(team.fired ?? []), dedupe].slice(-200);
+		routine.runs++;
+		routine.lastRun = new Date(this.now()).toISOString();
+		this.save(team);
+		const what = happened?.trim() ? `\n\nWhat happened:\n${quote(happened.trim().slice(0, 4000))}` : "";
+		if (!team.leadSessionId) throw new EngineError("INVALID", "The team has no lead yet.");
+		await this.host.submit(team.leadSessionId, `[Routine] ${routineLabel(routine)}: ${routine.prompt}${what}`);
+		return { runId: `${routine.id}-${routine.runs}` };
+	}
+
+	private routinesChanged(): void {
+		this.arm();
+		this.onRoutines?.();
+	}
+
+	/** Sleeps until the next time routine (at most an hour, so a changed clock is picked up). */
+	private arm(): void {
+		clearTimeout(this.timer);
+		if (this.stopped) return;
+		const next = Math.min(...this.teams.flatMap((t) => (t.routines ?? []).map((r) => r.next ?? Infinity)));
+		if (!Number.isFinite(next)) return;
+		this.timer = setTimeout(() => void this.tick().catch((error: unknown) => this.host.log(`Team routines: ${(error as Error).message}`)), Math.min(Math.max(next - this.now(), 0), 3_600_000));
+		this.timer.unref?.();
+	}
+
+	/** Fires what's due (a fire missed while the engine was off runs once), then sets each one's next. */
+	private async tick(): Promise<void> {
+		const now = this.now();
+		for (const team of this.teams) {
+			const due = (team.routines ?? []).filter((r) => r.next !== undefined && r.next <= now);
+			for (const r of due) {
+				r.next = nextOf(r, now);
+				await this.fireRoutine(team.id, r.id, undefined, `time:${Math.floor(now / 60_000)}`).catch((error: unknown) => this.host.log(`Routine ${r.id}: ${(error as Error).message}`));
+			}
+			// A once that has fired is done.
+			if (due.length) {
+				team.routines = (team.routines ?? []).filter((r) => r.on !== "time" || r.next !== undefined);
+				this.save(team);
+			}
+		}
+		this.arm();
 	}
 
 	// ── The board ──
@@ -564,9 +699,12 @@ export class TeamRunner {
 			}
 			await this.pump(team).catch(() => undefined);
 		}
+		this.arm();
 	}
 
 	stop(): void {
+		this.stopped = true;
+		clearTimeout(this.timer);
 		for (const off of this.watching.values()) off();
 		this.watching.clear();
 	}
