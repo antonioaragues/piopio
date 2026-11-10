@@ -23,8 +23,10 @@ export type Role = {
 	responsibility: string;
 	/** What "done" means for its work. */
 	done?: string;
-	/** Its own model ("provider:id" or an OpenRouter id); unset: the team's. */
+	/** Its own model ("provider:id" or an OpenRouter id); unset: the agent's, else the team's. */
 	model?: string;
+	/** An agent this member is (docs/spec/20 §3): it brings its instructions, and its model when the role has none. */
+	agent?: string;
 };
 
 export type TeamTemplate = {

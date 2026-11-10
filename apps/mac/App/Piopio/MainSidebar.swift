@@ -379,20 +379,22 @@ struct MainSidebar: View {
 
     /// Teams (docs/spec/19): each opens its page; a dot while any of its tasks is running.
     @ViewBuilder private var teamsSection: some View {
-        let teams = engine.teams
-        // Teams are definitions (docs/spec/20 PT8): a project gets one in its Settings, so there's no + here.
+        let teams = engine.teamDefinitions
+        // Teams are definitions (docs/spec/20 PT8, P3): a project gets one in its Settings, so there's no + here.
         header(.teams, total: teams.count, shown: teams.count, add: nil)
         if !collapsed.contains(SidebarSection.teams.rawValue) {
             ForEach(teams) { team in
                 let selected = item == .team(team.id)
-                let working = team.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
+                let places = Set(team.projects.map(\.teamId))
+                let tasks = engine.teams.filter { places.contains($0.id) }.flatMap(\.tasks)
+                let working = tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
                 Button { item = .team(team.id) } label: {
                     HStack(spacing: 10) {
                         RowGlyph(symbol: "person.3")
                         Text(team.name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                         Spacer(minLength: 4)
                         if working > 0 { SidebarDot(status: .running).help("\(working) task\(working == 1 ? "" : "s") in progress") }
-                        else if team.tasks.contains(where: { $0.state == "blocked" }) { SidebarDot(status: .waiting).help("A task is blocked") }
+                        else if tasks.contains(where: { $0.state == "blocked" }) { SidebarDot(status: .waiting).help("A task is blocked") }
                     }
                     .rowChrome(selected: selected)
                 }

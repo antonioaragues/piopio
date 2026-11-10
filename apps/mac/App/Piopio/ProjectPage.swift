@@ -159,7 +159,7 @@ private struct ProjectSettings: View {
                         .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)
-                Button("Open team") { item = .team(team.id) }.buttonStyle(PillStyle(compact: true))
+                Button("Open team") { item = .team(team.definitionId ?? team.id) }.buttonStyle(PillStyle(compact: true))
                 Button("Remove…") { confirmRemove = true }.buttonStyle(PillStyle(compact: true))
             }
             .card()
@@ -179,7 +179,15 @@ private struct ProjectSettings: View {
                 }
                 Spacer(minLength: 12)
                 Menu {
-                    ForEach(templates) { t in Button(t.name) { assign(t) } }
+                    // Your teams first (docs/spec/20 P3): the same members, a board of its own here.
+                    if !engine.teamDefinitions.isEmpty {
+                        Section("Your teams") {
+                            ForEach(engine.teamDefinitions) { d in Button(d.name) { reuse(d) } }
+                        }
+                    }
+                    Section("New, from a template") {
+                        ForEach(templates) { t in Button(t.name) { assign(t) } }
+                    }
                 } label: { Text("Give it a team") }
                     .menuStyle(.button).buttonStyle(PillStyle(compact: true)).fixedSize()
                     .disabled(templates.isEmpty)
@@ -228,6 +236,10 @@ private struct ProjectSettings: View {
 
     private func assign(_ t: TeamTemplate) {
         act { _ = try await engine.createTeam(name: t.name, template: t.id, cwd: project.path, goal: nil, testCommand: nil) }
+    }
+
+    private func reuse(_ d: TeamDefinition) {
+        act { _ = try await engine.createTeam(name: d.name, template: d.template, cwd: project.path, goal: nil, testCommand: nil, definition: d.id) }
     }
 
     private func save(_ team: TeamInfo) {

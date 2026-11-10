@@ -329,6 +329,12 @@ export class Engine {
 		);
 	}
 
+	/** A team definition with the projects it works in. */
+	private definitionView(id: string) {
+		const def = this.teams.definition(id);
+		return { ...def, projects: this.teams.usedBy(id).map((t) => ({ teamId: t.id, cwd: t.cwd })) };
+	}
+
 	/** A team as the app sees it: its routines with a label, and a webhook's URL. */
 	private teamView(team: Team): Team {
 		return team.routines?.length ? { ...team, routines: team.routines.map((r) => this.routineView(team.id, r)) } : team;
@@ -787,6 +793,7 @@ export class Engine {
 					...(p.memberMode ? { memberMode: p.memberMode } : {}),
 					...(p.maxParallel ? { maxParallel: p.maxParallel } : {}),
 					...(p.initGit ? { initGit: true } : {}),
+					...(p.definition ? { definition: p.definition } : {}),
 					...(p.model ? { model: p.model.provider === "openrouter" ? p.model.id : `${p.model.provider}:${p.model.id}` } : {}),
 				});
 				return { team: this.teamView(team) } satisfies Result<"teams.create">;
@@ -795,6 +802,19 @@ export class Engine {
 				const p = params as Params<"teams.addTask">;
 				const task = await this.teams.createTask(p.id, { title: p.title, brief: p.brief, ...(p.done ? { done: p.done } : {}), ...(p.role ? { role: p.role } : {}) }, "you");
 				return { task } satisfies Result<"teams.addTask">;
+			}
+			case "teams.definitions":
+				return { definitions: this.teams.definitions().map((d) => this.definitionView(d.id)) } satisfies Result<"teams.definitions">;
+			case "teams.updateDefinition": {
+				const p = params as Params<"teams.updateDefinition">;
+				const def = this.teams.updateDefinition(p.id, { ...(p.name !== undefined ? { name: p.name } : {}), ...(p.roles ? { roles: p.roles } : {}), ...(p.model !== undefined ? { model: p.model } : {}) });
+				return { definition: this.definitionView(def.id) } satisfies Result<"teams.updateDefinition">;
+			}
+			case "teams.removeDefinition": {
+				const p = params as Params<"teams.removeDefinition">;
+				this.teams.removeDefinition(p.id);
+				for (const conn of this.authed) conn.notify("teams.changed", { id: p.id });
+				return {} satisfies Result<"teams.removeDefinition">;
 			}
 			case "teams.update": {
 				const p = params as Params<"teams.update">;

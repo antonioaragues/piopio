@@ -305,3 +305,43 @@ test("the project's Settings change the team's checks and pace, and remove it: i
 	expect(existsSync(team.git!.integration)).toBe(false);
 	await client.call("teams.create", { name: "Again", template: "development", cwd: dir });
 }, 30_000);
+
+type Def = { id: string; name: string; roles: { id: string; name: string; kind: string; responsibility: string; model?: string }[]; folder: string; projects: { teamId: string; cwd: string }[] };
+
+test("a team is a definition you edit: its QA gets its own model, a Designer joins, TEAM.md reaches members, and another project reuses it (docs/spec/20 P3)", async () => {
+	const { client } = await start();
+	const dir = repo();
+	const { team } = (await client.call("teams.create", { name: "Studio", template: "development", cwd: dir })) as { team: Team & { definitionId: string } };
+	let [def] = ((await client.call("teams.definitions", {})) as { definitions: Def[] }).definitions;
+	expect(def).toMatchObject({ id: team.definitionId, name: "Studio", projects: [{ teamId: team.id }] });
+	expect(existsSync(join(def!.folder, "TEAM.md"))).toBe(true);
+	writeFileSync(join(def!.folder, "TEAM.md"), "# Studio\n\nAlways write British English.\n");
+
+	// QA on its own model; a Designer joins. Invalid teams are refused.
+	const roles = def!.roles.map((r) => (r.kind === "review" ? { ...r, model: "faux:qa-model" } : r));
+	roles.push({ id: "", name: "Designer", kind: "write", responsibility: "You design screens in Figma-like detail." });
+	await expect(client.call("teams.updateDefinition", { id: def!.id, roles: roles.filter((r) => r.kind !== "lead") })).rejects.toMatchObject({ data: { code: "INVALID" } });
+	def = ((await client.call("teams.updateDefinition", { id: def!.id, roles })) as { definition: Def }).definition;
+	expect(def.roles.find((r) => r.name === "Designer")).toMatchObject({ id: "designer", kind: "write" });
+	// The project's copy follows.
+	const copy = ((await client.call("teams.get", { id: team.id })) as { team: Def }).team;
+	expect(copy.roles.map((r) => r.name)).toContain("Designer");
+
+	// The next task uses them: the Designer is told its role and TEAM.md; review runs on QA's model.
+	await client.call("teams.addTask", { id: team.id, title: "Sketch", brief: brief("sketch.txt", true), role: "designer" });
+	const t = await until(async () => ((await client.call("teams.get", { id: team.id })) as { team: Team }).team.tasks[0]!, (x) => !!x.reviewSessionId, 30_000);
+	const work = JSON.stringify((await client.call("sessions.open", { ref: { kind: "build", id: t.sessionId } })).items);
+	expect(work).toContain("You're the Designer on Studio. You design screens");
+	expect(work).toContain("Always write British English.");
+	const review = ((await client.call("sessions.list", { kind: "build" })).sessions as { ref: { id: string }; model?: { provider: string; id: string } }[]).find((s) => s.ref.id === t.reviewSessionId);
+	expect(review?.model).toEqual({ provider: "faux", id: "qa-model" });
+
+	// Another project reuses the same team: same members, its own board.
+	const other = repo();
+	const second = ((await client.call("teams.create", { name: "", template: "development", cwd: other, definition: def.id })) as { team: Team & { definitionId: string; roles: { name: string }[] } }).team;
+	expect(second.definitionId).toBe(def.id);
+	expect(second.roles.map((r) => r.name)).toContain("Designer");
+	expect(second.tasks).toEqual([]);
+	expect(((await client.call("teams.definitions", {})) as { definitions: Def[] }).definitions[0]!.projects).toHaveLength(2);
+	await expect(client.call("teams.removeDefinition", { id: def.id })).rejects.toMatchObject({ data: { code: "CONFLICT" } });
+}, 60_000);

@@ -677,7 +677,31 @@ public struct AgentPeopleResult: Decodable, Sendable { public var people: [Agent
 public struct TeamRole: Codable, Sendable, Hashable, Identifiable {
     public var id, name, kind, responsibility: String
     public var done: String?
+    /// "provider:id"; nil: the agent's, else the team's.
     public var model: String?
+    /// An agent this member is (docs/spec/20 §3).
+    public var agent: String?
+    public init(id: String = "", name: String, kind: String, responsibility: String, done: String? = nil, model: String? = nil, agent: String? = nil) {
+        self.id = id; self.name = name; self.kind = kind; self.responsibility = responsibility; self.done = done; self.model = model; self.agent = agent
+    }
+}
+
+/// A team as a definition (docs/spec/20 P3): members and way of working, reused by the projects it works in.
+public struct TeamDefinition: Codable, Sendable, Hashable, Identifiable {
+    public struct Place: Codable, Sendable, Hashable { public var teamId, cwd: String }
+    public var id, name, template, style, folder, memberMode, createdAt: String
+    public var roles: [TeamRole]
+    public var model: String?
+    public var projects: [Place]
+}
+public struct TeamDefinitionsResult: Decodable, Sendable { public var definitions: [TeamDefinition] }
+public struct UpdateTeamDefinitionParams: Encodable, Sendable {
+    public var id: String
+    public var name: String?
+    public var roles: [TeamRole]?
+    /// "" clears the team's model.
+    public var model: String?
+    public init(id: String, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil) { self.id = id; self.name = name; self.roles = roles; self.model = model }
 }
 
 public struct TeamTask: Codable, Sendable, Hashable, Identifiable {
@@ -750,6 +774,7 @@ public struct TeamRoutineParams: Encodable, Sendable {
 public struct TeamInfo: Codable, Sendable, Hashable, Identifiable {
     public struct Git: Codable, Sendable, Hashable { public var base, branch, integration: String }
     public var id, name, slug, template, style, cwd, folder: String
+    public var definitionId: String?
     public var roles: [TeamRole]
     public var git: Git?
     public var leadSessionId: String?
@@ -777,8 +802,10 @@ public struct CreateTeamParams: Encodable, Sendable {
     public var testCommand: String?
     public var model: ModelRef?
     public var initGit: Bool?
-    public init(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, model: ModelRef?, initGit: Bool = false) {
-        self.name = name; self.template = template; self.cwd = cwd; self.goal = goal; self.testCommand = testCommand; self.model = model; self.initGit = initGit ? true : nil
+    /// An existing team (definition) to work in this project.
+    public var definition: String?
+    public init(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, model: ModelRef?, initGit: Bool = false, definition: String? = nil) {
+        self.name = name; self.template = template; self.cwd = cwd; self.goal = goal; self.testCommand = testCommand; self.model = model; self.initGit = initGit ? true : nil; self.definition = definition
     }
 }
 public struct AddTeamTaskParams: Encodable, Sendable {

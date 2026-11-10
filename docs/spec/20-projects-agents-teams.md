@@ -188,3 +188,23 @@ folder becomes a project at that folder. Boards, branches and routines move with
 - **In a lead conversation:** its tasks show above the composer as chips (state, title; one opens its member's
   session; "Board" opens the project's). `[Board]` and `[Routine]` messages render as quiet event lines ("Board · T1
   is done…") with the report folded inside, not as your messages.
+
+## 12. P3 as built (2026-11-10)
+
+- **Definitions** (`team-definitions.json` beside `teams.json`): a team's name, members (role cards), way of working,
+  default model and folder. Each project's team points at one (`definitionId`) and carries a copy of its members;
+  editing the definition updates every copy, so the next task uses the change (tasks already started keep theirs).
+  Teams from before P3 get a definition each at start.
+- **Editing** (`teams.updateDefinition`): name, members and the team's model. Members are checked: one lead, at least
+  one that does tasks, at most one reviewer and one that merges, names required, ids kept or made from the name. A
+  member with work on a board can't be removed.
+- **Members can be agents:** a role may name an agent (`agent`); its instructions come before the role's, and its
+  model is used when the role has none. A member's model is its role's, else its agent's, else the team's.
+- **TEAM.md** in the team's folder is told to the lead and every member, in every project; the team's NOTES.md is its
+  memory across projects. Both are made with the team and edited on its page.
+- **Reuse:** `teams.create` takes `definition`, so a project gets one of your teams with its own board, branch and
+  routines. The project's "Give it a team" lists your teams first, then the templates.
+- **The team page:** Members (cards with each member's model and agent, Edit, Add member, the team's model), Instructions
+  (TEAM.md), Memory (NOTES.md), Projects (where it works; a team no project uses can be removed, its folder stays).
+- **The sidebar's Teams** lists definitions, with a dot while any of their projects has tasks running.
+- **Not yet (P4):** save as template, templates as folders, making a team by describing it.

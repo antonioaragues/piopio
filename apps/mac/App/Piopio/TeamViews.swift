@@ -125,39 +125,6 @@ struct TeamStart: View {
 // MARK: Page
 
 /// A team: its lead's conversation (where you give the goal and talk), the board, the members.
-struct TeamPage: View {
-    let engine: EngineController
-    let teamId: String
-    @Binding var item: SidebarItem
-
-    private var team: TeamInfo? { engine.teams.first { $0.id == teamId } }
-
-    /// A team is a definition (docs/spec/20 §5): who's on it and how they work. Its work is in its project.
-    var body: some View {
-        if let team {
-            let project = engine.projects.first { $0.path == team.cwd }
-            VStack(spacing: 0) {
-                PageHeader {
-                    PageTitle(name: team.name, subtitle: subtitle(team))
-                } actions: {
-                    if let project {
-                        Button("Open \(project.name)") { item = .project(project.id) }.buttonStyle(PillStyle())
-                    }
-                }
-                TeamMembers(team: team)
-            }
-            .task(id: teamId) { await engine.loadTeams() }
-        } else {
-            Text("This team is gone.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private func subtitle(_ team: TeamInfo) -> String {
-        let kind = team.template.prefix(1).uppercased() + team.template.dropFirst()
-        return "\(kind) · works in \(URL(fileURLWithPath: team.cwd).lastPathComponent)"
-    }
-}
-
 /// The board (TD5): To do, Doing, Review, Done and Blocked. A card opens its member's session; its menu moves it
 /// back, stops it or hands it to another role.
 struct TeamBoard: View {
@@ -305,46 +272,6 @@ private struct AddTeamTask: View {
         .padding(20)
         .frame(width: 440)
         .onAppear { role = team.roles.first { $0.kind == "write" }?.id }
-    }
-}
-
-/// The role cards: what each member does, and what it may do.
-struct TeamMembers: View {
-    let team: TeamInfo
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(team.roles) { role in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text(role.name).font(.system(size: 14, weight: .semibold))
-                            Text(Self.kind(role.kind)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                        }
-                        Text(role.responsibility).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-                        if let done = role.done { Text("Done means: \(done)").font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true) }
-                    }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-                }
-                Text("At most \(team.maxParallel) tasks run at once. Members \(team.memberMode == "full_auto" ? "run without asking" : "edit files on their own and ask before commands").\(team.testCommand.map { " After each merge: \($0)." } ?? "")")
-                    .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            }
-            .padding(24)
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    static func kind(_ kind: String) -> String {
-        switch kind {
-        case "lead": "Plans and assigns"
-        case "write": "Does tasks, in parallel"
-        case "review": "Reviews every task"
-        default: "Merges and runs the checks"
-        }
     }
 }
 

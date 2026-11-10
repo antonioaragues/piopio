@@ -16,6 +16,8 @@ final class EngineController {
     private(set) var agents: [SessionSummary] = []
     /// Teams (docs/spec/19): a lead, members and a board.
     private(set) var teams: [TeamInfo] = []
+    /// Teams as definitions (docs/spec/20 P3): the Teams section and the team pages.
+    private(set) var teamDefinitions: [TeamDefinition] = []
     /// Build: folders added as projects, and their sessions (newest first).
     private(set) var projects: [ProjectInfo] = []
     private(set) var buildSessions: [SessionSummary] = []
@@ -609,6 +611,28 @@ final class EngineController {
 
     func loadTeams() async {
         if let list = try? await client?.call("teams.list", Empty(), as: TeamsListResult.self).teams { teams = list }
+        if let defs = try? await client?.call("teams.definitions", Empty(), as: TeamDefinitionsResult.self).definitions { teamDefinitions = defs }
+    }
+
+    /// You edit a team (name, members, default model: "" clears it); every project it works in follows.
+    func updateTeamDefinition(_ def: TeamDefinition, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.updateDefinition", UpdateTeamDefinitionParams(id: def.id, name: name, roles: roles, model: model), as: Empty.self)
+        await loadTeams()
+    }
+
+    func removeTeamDefinition(_ def: TeamDefinition) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.removeDefinition", TeamIdParams(id: def.id), as: Empty.self)
+        await loadTeams()
+    }
+
+    /// A model's display name from its "provider:id".
+    func modelName(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
+        let id = parts.count == 2 ? parts[1] : raw
+        return models.first { $0.id == id && (parts.count < 2 || $0.provider == parts[0]) }?.name ?? id
     }
 
     func teamTemplates() async -> [TeamTemplate] {
@@ -620,9 +644,9 @@ final class EngineController {
         teams.first { $0.cwd == project.path }
     }
 
-    func createTeam(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, initGit: Bool = false) async throws -> TeamInfo {
+    func createTeam(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, initGit: Bool = false, definition: String? = nil) async throws -> TeamInfo {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build), initGit: initGit), as: TeamResult.self).team
+        let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build), initGit: initGit, definition: definition), as: TeamResult.self).team
         await loadTeams()
         await loadProjects() // a team without a folder gets a project (docs/spec/20 PT2)
         try? await refreshCatalog()

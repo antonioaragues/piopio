@@ -8,7 +8,7 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { ApprovalMode } from "@piopio/protocol";
 import type { Watch } from "@piopio/runtime";
 import { EngineError } from "../models.js";
@@ -64,8 +64,27 @@ export type TeamLanding = {
 	compareUrl?: string;
 };
 
+/**
+ * A team as a definition (docs/spec/20 PT1, P3): who's on it and how they work, reused by every project it works in.
+ * Its folder holds TEAM.md (what every member is told) and NOTES.md (what the team learns, across projects).
+ */
+export type TeamDefinition = {
+	id: string;
+	name: string;
+	template: string;
+	roles: Role[];
+	style: string;
+	folder: string;
+	model?: string;
+	memberMode: ApprovalMode;
+	createdAt: string;
+};
+
+/** A team at work in a project: its board, branch and routines, with its definition's members copied in. */
 export type Team = {
 	id: string;
+	/** Its definition; editing that updates every project's copy. */
+	definitionId?: string;
 	name: string;
 	slug: string;
 	template: string;
@@ -109,6 +128,8 @@ export type TeamHost = {
 	removeWorktree(repo: string, path: string, branch: string, force: boolean): Promise<void>;
 	/** The checks (a test command), in a folder. */
 	run(cwd: string, command: string): Promise<{ ok: boolean; output: string }>;
+	/** An agent a member is based on: its name, instructions and model. */
+	agent?(id: string): { name: string; instructions: string; model?: string } | undefined;
 	worktreesDir: string;
 	stateFile: string;
 	changed(teamId: string): void;
@@ -116,6 +137,29 @@ export type TeamHost = {
 };
 
 const MAX_ATTEMPTS = 3;
+const newDefId = () => `tdef_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/**
+ * Members as you edited them: one lead, at least one that does tasks, at most one reviewer and one that merges; names
+ * required; ids kept, or made from the name.
+ */
+function checkRoles(roles: Role[]): Role[] {
+	const out: Role[] = [];
+	for (const r of roles) {
+		const name = r.name?.trim();
+		if (!name) throw new EngineError("INVALID", "Every member needs a name.");
+		if (!["lead", "write", "review", "integrate"].includes(r.kind)) throw new EngineError("INVALID", `“${name}”: unknown kind ${r.kind}.`);
+		let id = (r.id?.trim() || name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")) || "member";
+		for (let n = 2; out.some((x) => x.id === id); n++) id = `${id.replace(/-\d+$/, "")}-${n}`;
+		out.push({ id, name, kind: r.kind, responsibility: r.responsibility?.trim() || `You're the ${name}.`, ...(r.done?.trim() ? { done: r.done.trim() } : {}), ...(r.model?.trim() ? { model: r.model.trim() } : {}), ...(r.agent?.trim() ? { agent: r.agent.trim() } : {}) });
+	}
+	const count = (k: Role["kind"]) => out.filter((r) => r.kind === k).length;
+	if (count("lead") !== 1) throw new EngineError("INVALID", "A team has one lead.");
+	if (!count("write")) throw new EngineError("INVALID", "A team needs at least one member who does tasks.");
+	if (count("review") > 1) throw new EngineError("INVALID", "A team has at most one reviewer.");
+	if (count("integrate") > 1) throw new EngineError("INVALID", "A team has at most one member that merges and checks.");
+	return out;
+}
 /** A conversation's title from a request: its first line, at most 60 characters. */
 const titleOf = (text: string) => {
 	const line = text.trim().split("\n")[0]!.replace(/\s+/g, " ");
@@ -144,12 +188,99 @@ export class TeamRunner {
 	/** Tests: the clock. */
 	now: () => number = () => Date.now();
 
+	private defs: TeamDefinition[] = [];
+	private readonly defsFile: string;
+
 	constructor(private readonly host: TeamHost) {
 		try {
 			if (existsSync(host.stateFile)) this.teams = JSON.parse(readFileSync(host.stateFile, "utf8")) as Team[];
 		} catch {
 			this.teams = [];
 		}
+		this.defsFile = join(dirname(host.stateFile), "team-definitions.json");
+		try {
+			if (existsSync(this.defsFile)) this.defs = JSON.parse(readFileSync(this.defsFile, "utf8")) as TeamDefinition[];
+		} catch {
+			this.defs = [];
+		}
+		// Teams from before definitions (P3) get one each, from what they carry.
+		const bare = this.teams.filter((t) => !t.definitionId || !this.defs.some((d) => d.id === t.definitionId));
+		for (const t of bare) {
+			const def: TeamDefinition = { id: newDefId(), name: t.name, template: t.template, roles: t.roles, style: t.style, folder: t.folder, ...(t.model ? { model: t.model } : {}), memberMode: t.memberMode, createdAt: t.createdAt };
+			this.defs.push(def);
+			t.definitionId = def.id;
+		}
+		if (bare.length) {
+			this.saveDefs();
+			this.save();
+		}
+	}
+
+	// ── Definitions (docs/spec/20 P3) ──
+
+	definitions(): TeamDefinition[] {
+		return this.defs;
+	}
+
+	definition(id: string): TeamDefinition {
+		const def = this.defs.find((d) => d.id === id);
+		if (!def) throw new EngineError("NOT_FOUND", `No team “${id}”.`);
+		return def;
+	}
+
+	/** The projects a definition works in. */
+	usedBy(defId: string): Team[] {
+		return this.teams.filter((t) => t.definitionId === defId);
+	}
+
+	/** You edit a team: its name, members (role cards, models, agents) or default model. Every project's copy follows. */
+	updateDefinition(id: string, change: { name?: string; roles?: Role[]; model?: string | null }): TeamDefinition {
+		const def = this.definition(id);
+		if (change.roles) {
+			const roles = checkRoles(change.roles);
+			// A member with work on a board can't go.
+			for (const team of this.usedBy(id)) {
+				const busy = team.tasks.find((t) => OPEN.has(t.state) && !roles.some((r) => r.id === t.role && r.kind === "write"));
+				if (busy) throw new EngineError("CONFLICT", `${busy.id} “${busy.title}” in ${team.cwd.split("/").pop()} is still with ${team.roles.find((r) => r.id === busy.role)?.name ?? busy.role}. Finish or move it first.`);
+			}
+			def.roles = roles;
+		}
+		if (change.name?.trim()) def.name = change.name.trim();
+		if (change.model !== undefined) {
+			if (change.model?.trim()) def.model = change.model.trim();
+			else delete def.model;
+		}
+		this.saveDefs();
+		for (const team of this.usedBy(id)) {
+			team.name = def.name;
+			team.roles = def.roles.map((r) => ({ ...r }));
+			if (def.model) team.model = def.model;
+			else delete team.model;
+			this.save(team);
+		}
+		return def;
+	}
+
+	/** A team no project uses can go; its folder (TEAM.md, NOTES.md) stays on disk. */
+	removeDefinition(id: string): void {
+		this.definition(id);
+		const using = this.usedBy(id);
+		if (using.length) throw new EngineError("CONFLICT", `It works in ${using.map((t) => t.cwd.split("/").pop()).join(", ")}. Remove it there first.`);
+		this.defs = this.defs.filter((d) => d.id !== id);
+		this.saveDefs();
+	}
+
+	private saveDefs(): void {
+		mkdirSync(dirname(this.defsFile), { recursive: true });
+		writeFileSync(this.defsFile, JSON.stringify(this.defs, null, "\t"));
+	}
+
+	/** TEAM.md, without its comments: what every member is told. */
+	private instructions(team: Team): string {
+		const file = join(team.folder, "TEAM.md");
+		if (!existsSync(file)) return "";
+		const text = readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, "").replace(/^#.*\n/, "").trim();
+		return text ? `\n\nThe team's instructions (TEAM.md):\n${text}` : "";
 	}
 
 	list(): Team[] {
@@ -184,31 +315,48 @@ export class TeamRunner {
 
 	// ── Making a team ──
 
-	async create(params: { name: string; template: string; cwd?: string; folder: string; model?: string; goal?: string; testCommand?: string; memberMode?: ApprovalMode; maxParallel?: number; initGit?: boolean }): Promise<Team> {
-		const t: TeamTemplate | undefined = template(params.template);
-		if (!t) throw new EngineError("INVALID", `No team template “${params.template}”.`);
-		const name = params.name.trim() || t.name;
+	async create(params: { name: string; template: string; cwd?: string; folder: string; model?: string; goal?: string; testCommand?: string; memberMode?: ApprovalMode; maxParallel?: number; initGit?: boolean; definition?: string }): Promise<Team> {
+		// An existing team (a definition) in another project, or a new one from a template.
+		const reuse = params.definition ? this.definition(params.definition) : undefined;
+		const t: TeamTemplate | undefined = template(reuse?.template ?? params.template);
+		if (!t && !reuse) throw new EngineError("INVALID", `No team template “${params.template}”.`);
+		const name = reuse?.name ?? (params.name.trim() || t!.name);
 		const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
-		if (t.workplace === "project" && !params.cwd) throw new EngineError("INVALID", `A ${t.name.toLowerCase()} works in a project: choose its folder.`);
-		mkdirSync(params.folder, { recursive: true });
-		const notes = join(params.folder, "NOTES.md");
-		if (!existsSync(notes)) writeFileSync(notes, `# ${name}: notes\n\n<!-- What the team keeps for each other: decisions, conventions, how to run things. -->\n`);
+		if (t?.workplace === "project" && !params.cwd) throw new EngineError("INVALID", `A ${t.name.toLowerCase()} works in a project: choose its folder.`);
+		const folder = reuse?.folder ?? params.folder;
+		mkdirSync(folder, { recursive: true });
+		const notes = join(folder, "NOTES.md");
+		if (!existsSync(notes)) writeFileSync(notes, `# ${name}: notes\n\n<!-- What the team learns about how it works, across projects: conventions, tools, what worked. -->\n`);
+		const brief = join(folder, "TEAM.md");
+		if (!existsSync(brief)) writeFileSync(brief, `# ${name}\n\n<!-- What every member of this team is told, in every project: conventions, tools, taste. -->\n`);
 		// Every team works in a project (docs/spec/20 PT2); the engine makes one when none is given.
 		const cwd = params.cwd ?? params.folder;
 		const taken = this.teams.find((x) => x.cwd === cwd);
 		if (taken) throw new EngineError("INVALID", `This project already has a team, ${taken.name}. A project has one team (docs/spec/20 PT3).`);
 		const id = `team_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-		const team: Team = {
-			id,
+		const def: TeamDefinition = reuse ?? {
+			id: newDefId(),
 			name,
-			slug,
-			template: t.id,
-			roles: t.roles.map((r) => ({ ...r })),
-			style: t.style,
-			cwd,
-			folder: params.folder,
+			template: t!.id,
+			roles: t!.roles.map((r) => ({ ...r })),
+			style: t!.style,
+			folder,
 			...(params.model ? { model: params.model } : {}),
 			memberMode: params.memberMode ?? "auto_edit",
+			createdAt: iso(),
+		};
+		const team: Team = {
+			id,
+			definitionId: def.id,
+			name,
+			slug,
+			template: def.template,
+			roles: def.roles.map((r) => ({ ...r })),
+			style: def.style,
+			cwd,
+			folder,
+			...(def.model ? { model: def.model } : {}),
+			memberMode: def.memberMode,
 			maxParallel: params.maxParallel ?? 3,
 			...(params.testCommand?.trim() ? { testCommand: params.testCommand.trim() } : {}),
 			...(params.goal?.trim() ? { goal: params.goal.trim() } : {}),
@@ -217,7 +365,7 @@ export class TeamRunner {
 			createdAt: iso(),
 		};
 		// Branches per task only when someone merges them (a CI role); others share the folder.
-		const merges = t.roles.some((r) => r.kind === "integrate");
+		const merges = def.roles.some((r) => r.kind === "integrate");
 		// A new project's folder (New project with a team) becomes a git repo, so tasks can have branches.
 		if (merges && params.initGit && !(await this.host.isRepo(cwd))) {
 			await this.host.git(cwd, ["init", "-q", "-b", "main"]);
@@ -231,6 +379,10 @@ export class TeamRunner {
 			const integration = join(this.host.worktreesDir, id, "_team");
 			await this.host.addWorktree(cwd, integration, branch, base);
 			team.git = { base, branch, integration };
+		}
+		if (!reuse) {
+			this.defs.push(def);
+			this.saveDefs();
 		}
 		this.teams.push(team);
 		this.save(team);
@@ -281,7 +433,8 @@ export class TeamRunner {
 	 * conversation there (PT5). */
 	async newLead(team: Team, title: string): Promise<string> {
 		const lead = team.roles.find((r) => r.kind === "lead")!;
-		return this.host.createSession({ cwd: team.cwd, title, ...(team.model ? { model: team.model } : {}), approvalMode: team.memberMode, team: { id: team.id, role: lead.id, kind: "lead" } });
+		const model = this.modelOf(team, lead);
+		return this.host.createSession({ cwd: team.cwd, title, ...(model ? { model } : {}), approvalMode: team.memberMode, team: { id: team.id, role: lead.id, kind: "lead" } });
 	}
 
 	/** What the lead is told about its team, each turn (system prompt). */
@@ -289,7 +442,7 @@ export class TeamRunner {
 		const lead = team.roles.find((r) => r.kind === "lead")!;
 		const members = team.roles.filter((r) => r.kind !== "lead").map((r) => `- ${r.name} (role id "${r.id}", ${r.kind === "write" ? "does tasks; several can work at once" : r.kind === "review" ? "reviews every finished task; a failed review sends it back" : "merges approved work into the team branch and runs the checks"}): ${r.responsibility}`);
 		const where = team.git ? `Each task gets its own branch from ${team.git.branch}; approved work is merged into ${team.git.branch}, which starts from ${team.git.base}. You don't merge into ${team.git.base}: when the board is clear, tell the user the work is ready; they merge it, or push it for a pull request, from the project's Board.` : `Everyone works in the project's folder, ${team.cwd}.`;
-		return `${lead.responsibility}\n\n${team.style}\n\nYour team (${team.name}):\n${members.join("\n")}\n\n${where} At most ${team.maxParallel} tasks run at once; the rest wait their turn. Notes: ${join(team.cwd, "NOTES.md")} is about this project; ${join(team.folder, "NOTES.md")} is how the team works, across projects.\n\nThis is one of several conversations in the project; each has its own tasks, and the board shows them all. Updates on the tasks you made come here.\n\nMessages that start with [Board] are updates from the board, not from the user. Messages that start with [Routine] are one of the team's routines firing: plan them as you would the user's request.\n\nWhen the user wants work to start on its own (every Monday, when a file arrives, when an email comes), set a routine: schedule for times, watch for events. list_routines shows them; cancel_routine removes one.`;
+		return `${lead.responsibility}\n\n${team.style}${this.instructions(team)}\n\nYour team (${team.name}):\n${members.join("\n")}\n\n${where} At most ${team.maxParallel} tasks run at once; the rest wait their turn. Notes: ${join(team.cwd, "NOTES.md")} is about this project; ${join(team.folder, "NOTES.md")} is how the team works, across projects.\n\nThis is one of several conversations in the project; each has its own tasks, and the board shows them all. Updates on the tasks you made come here.\n\nMessages that start with [Board] are updates from the board, not from the user. Messages that start with [Routine] are one of the team's routines firing: plan them as you would the user's request.\n\nWhen the user wants work to start on its own (every Monday, when a file arrives, when an email comes), set a routine: schedule for times, watch for events. list_routines shows them; cancel_routine removes one.`;
 	}
 
 	// ── Routines ──
@@ -499,7 +652,8 @@ export class TeamRunner {
 				await this.host.addWorktree(team.cwd, cwd, t.branch, team.git.branch);
 			}
 			t.cwd = cwd;
-			t.sessionId = await this.host.createSession({ cwd, title: `${t.id} · ${t.title}`, ...((role.model ?? team.model) ? { model: role.model ?? team.model } : {}), approvalMode: team.memberMode, team: { id: team.id, role: role.id, taskId: t.id, kind: "write" } });
+			const model = this.modelOf(team, role);
+			t.sessionId = await this.host.createSession({ cwd, title: `${t.id} · ${t.title}`, ...(model ? { model } : {}), approvalMode: team.memberMode, team: { id: team.id, role: role.id, taskId: t.id, kind: "write" } });
 			this.save(team);
 			await this.watch(team, t);
 			await this.host.submit(t.sessionId, this.workPrompt(team, t, role));
@@ -509,10 +663,22 @@ export class TeamRunner {
 		}
 	}
 
+	/** A member's model: its role's, else its agent's, else the team's. */
+	private modelOf(team: Team, role: Role): string | undefined {
+		return role.model ?? (role.agent ? this.host.agent?.(role.agent)?.model : undefined) ?? team.model;
+	}
+
+	/** Who a member is: its role, and the agent it's based on, if any. */
+	private whoIs(team: Team, role: Role): string {
+		const agent = role.agent ? this.host.agent?.(role.agent) : undefined;
+		const as = agent ? `You're ${agent.name}, working as the ${role.name} on ${team.name}.\n\n${agent.instructions.trim()}\n\n${role.responsibility}` : `You're the ${role.name} on ${team.name}. ${role.responsibility}`;
+		return `${as}${this.instructions(team)}`;
+	}
+
 	private workPrompt(team: Team, t: TeamTask, role: Role): string {
 		const where = team.git ? `You work on your own branch, ${t.branch}, in this folder; other members work on theirs at the same time. Don't switch branches.` : `You work in the project's folder, ${team.cwd}, alongside other members: only change the files your task is about.`;
 		return [
-			`You're the ${role.name} on ${team.name}. ${role.responsibility}`,
+			this.whoIs(team, role),
 			`Your task, ${t.id}: ${t.title}\n\n${t.brief}`,
 			t.done ?? role.done ? `Done means: ${t.done ?? role.done}` : "",
 			`${where} Read the notes first: ${join(team.cwd, "NOTES.md")} (this project) and ${join(team.folder, "NOTES.md")} (how the team works). Add a line where it belongs for what your teammates will need.`,
@@ -560,7 +726,7 @@ export class TeamRunner {
 		this.save(team);
 		const diff = team.git ? `The task's changes are on ${t.branch}: see them with \`git diff ${team.git.branch}...HEAD\`.` : `The task's files are in ${team.cwd}.`;
 		const prompt = [
-			`You're the ${reviewer.name} on ${team.name}. ${reviewer.responsibility}`,
+			this.whoIs(team, reviewer),
 			`Review ${t.id}: ${t.title}\n\n${t.brief}`,
 			t.done ? `Done means: ${t.done}` : "",
 			`${diff}\n\nIts report:\n${quote(t.report || "(no report)")}`,
@@ -569,7 +735,8 @@ export class TeamRunner {
 			.filter(Boolean)
 			.join("\n\n");
 		if (!t.reviewSessionId) {
-			t.reviewSessionId = await this.host.createSession({ cwd: t.cwd ?? team.cwd, title: `${t.id} · review`, ...((reviewer.model ?? team.model) ? { model: reviewer.model ?? team.model } : {}), approvalMode: team.memberMode, team: { id: team.id, role: reviewer.id, taskId: t.id, kind: "review" } });
+			const model = this.modelOf(team, reviewer);
+			t.reviewSessionId = await this.host.createSession({ cwd: t.cwd ?? team.cwd, title: `${t.id} · review`, ...(model ? { model } : {}), approvalMode: team.memberMode, team: { id: team.id, role: reviewer.id, taskId: t.id, kind: "review" } });
 			this.save(team);
 			await this.watch(team, t);
 		}

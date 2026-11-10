@@ -1198,6 +1198,14 @@ export class Sessions {
 			addWorktree: (repo, path, branch, base) => addWorktree(repo, path, branch, base),
 			removeWorktree: (repo, path, branch, force) => removeWorktree(repo, path, branch, force),
 			run: (cwd, command) => runCommand(cwd, command),
+			agent: (id) => {
+				try {
+					const { definition, instructions } = this.agentDefinition(id);
+					return { name: this.entry({ kind: "agent", id }).title, instructions, model: definition.models.default };
+				} catch {
+					return undefined;
+				}
+			},
 			worktreesDir: options.worktreesDir,
 			stateFile: options.stateFile,
 			changed: (id) => this.onTeams?.(id),

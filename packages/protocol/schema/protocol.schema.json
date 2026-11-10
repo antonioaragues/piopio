@@ -33949,6 +33949,10 @@
 										},
 										"model": {
 											"type": "string"
+										},
+										"agent": {
+											"type": "string",
+											"description": "An agent this member is: its instructions, and its model when the role has none"
 										}
 									}
 								}
@@ -33989,6 +33993,9 @@
 						],
 						"properties": {
 							"id": {
+								"type": "string"
+							},
+							"definitionId": {
 								"type": "string"
 							},
 							"name": {
@@ -34045,6 +34052,10 @@
 										},
 										"model": {
 											"type": "string"
+										},
+										"agent": {
+											"type": "string",
+											"description": "An agent this member is: its instructions, and its model when the role has none"
 										}
 									}
 								}
@@ -34337,6 +34348,379 @@
 				}
 			}
 		},
+		"teams.definitions.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"teams.definitions.result": {
+			"type": "object",
+			"required": [
+				"definitions"
+			],
+			"properties": {
+				"definitions": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"template",
+							"roles",
+							"style",
+							"folder",
+							"memberMode",
+							"createdAt",
+							"projects"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"template": {
+								"type": "string"
+							},
+							"roles": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"name",
+										"kind",
+										"responsibility"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string"
+										},
+										"kind": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "lead"
+												},
+												{
+													"type": "string",
+													"const": "write"
+												},
+												{
+													"type": "string",
+													"const": "review"
+												},
+												{
+													"type": "string",
+													"const": "integrate"
+												}
+											]
+										},
+										"responsibility": {
+											"type": "string"
+										},
+										"done": {
+											"type": "string"
+										},
+										"model": {
+											"type": "string"
+										},
+										"agent": {
+											"type": "string",
+											"description": "An agent this member is: its instructions, and its model when the role has none"
+										}
+									}
+								}
+							},
+							"style": {
+								"type": "string"
+							},
+							"folder": {
+								"type": "string",
+								"description": "TEAM.md and NOTES.md"
+							},
+							"model": {
+								"type": "string"
+							},
+							"memberMode": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "read_only"
+									},
+									{
+										"type": "string",
+										"const": "ask"
+									},
+									{
+										"type": "string",
+										"const": "auto_edit"
+									},
+									{
+										"type": "string",
+										"const": "full_auto"
+									}
+								]
+							},
+							"createdAt": {
+								"type": "string"
+							},
+							"projects": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"teamId",
+										"cwd"
+									],
+									"properties": {
+										"teamId": {
+											"type": "string"
+										},
+										"cwd": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"teams.updateDefinition.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"roles": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"kind",
+							"responsibility"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "lead"
+									},
+									{
+										"type": "string",
+										"const": "write"
+									},
+									{
+										"type": "string",
+										"const": "review"
+									},
+									{
+										"type": "string",
+										"const": "integrate"
+									}
+								]
+							},
+							"responsibility": {
+								"type": "string"
+							},
+							"done": {
+								"type": "string"
+							},
+							"model": {
+								"type": "string"
+							},
+							"agent": {
+								"type": "string",
+								"description": "An agent this member is: its instructions, and its model when the role has none"
+							}
+						}
+					}
+				},
+				"model": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					]
+				}
+			}
+		},
+		"teams.updateDefinition.result": {
+			"type": "object",
+			"required": [
+				"definition"
+			],
+			"properties": {
+				"definition": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"template",
+						"roles",
+						"style",
+						"folder",
+						"memberMode",
+						"createdAt",
+						"projects"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"template": {
+							"type": "string"
+						},
+						"roles": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"kind",
+									"responsibility"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"responsibility": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"model": {
+										"type": "string"
+									},
+									"agent": {
+										"type": "string",
+										"description": "An agent this member is: its instructions, and its model when the role has none"
+									}
+								}
+							}
+						},
+						"style": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string",
+							"description": "TEAM.md and NOTES.md"
+						},
+						"model": {
+							"type": "string"
+						},
+						"memberMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"projects": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"teamId",
+									"cwd"
+								],
+								"properties": {
+									"teamId": {
+										"type": "string"
+									},
+									"cwd": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"teams.removeDefinition.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.removeDefinition.result": {
+			"type": "object",
+			"properties": {}
+		},
 		"teams.get.params": {
 			"type": "object",
 			"required": [
@@ -34373,6 +34757,9 @@
 					],
 					"properties": {
 						"id": {
+							"type": "string"
+						},
+						"definitionId": {
 							"type": "string"
 						},
 						"name": {
@@ -34429,6 +34816,10 @@
 									},
 									"model": {
 										"type": "string"
+									},
+									"agent": {
+										"type": "string",
+										"description": "An agent this member is: its instructions, and its model when the role has none"
 									}
 								}
 							}
@@ -34785,6 +35176,10 @@
 				"initGit": {
 					"type": "boolean",
 					"description": "A new project's folder: make it a git repo first, so tasks get branches"
+				},
+				"definition": {
+					"type": "string",
+					"description": "An existing team (definition) to work in this project; else a new one from the template"
 				}
 			}
 		},
@@ -34813,6 +35208,9 @@
 					],
 					"properties": {
 						"id": {
+							"type": "string"
+						},
+						"definitionId": {
 							"type": "string"
 						},
 						"name": {
@@ -34869,6 +35267,10 @@
 									},
 									"model": {
 										"type": "string"
+									},
+									"agent": {
+										"type": "string",
+										"description": "An agent this member is: its instructions, and its model when the role has none"
 									}
 								}
 							}
@@ -35348,6 +35750,9 @@
 						"id": {
 							"type": "string"
 						},
+						"definitionId": {
+							"type": "string"
+						},
 						"name": {
 							"type": "string"
 						},
@@ -35402,6 +35807,10 @@
 									},
 									"model": {
 										"type": "string"
+									},
+									"agent": {
+										"type": "string",
+										"description": "An agent this member is: its instructions, and its model when the role has none"
 									}
 								}
 							}

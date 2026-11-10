@@ -865,7 +865,7 @@ export const GitStatus = Type.Object({
 export type GitStatus = Static<typeof GitStatus>;
 
 /** Teams (docs/spec/19): a role card, a task on the board, a team. */
-export const TeamRole = Type.Object({ id: Type.String(), name: Type.String(), kind: literals("lead", "write", "review", "integrate"), responsibility: Type.String(), done: Type.Optional(Type.String()), model: Type.Optional(Type.String()) });
+export const TeamRole = Type.Object({ id: Type.String(), name: Type.String(), kind: literals("lead", "write", "review", "integrate"), responsibility: Type.String(), done: Type.Optional(Type.String()), model: Type.Optional(Type.String()), agent: Type.Optional(Type.String({ description: "An agent this member is: its instructions, and its model when the role has none" })) });
 export type TeamRole = Static<typeof TeamRole>;
 export const TeamTask = Type.Object({
 	id: Type.String(),
@@ -924,8 +924,23 @@ export const TeamRoutine = Type.Object({
 	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
 });
 export type TeamRoutine = Static<typeof TeamRoutine>;
+/** A team as a definition (docs/spec/20 P3): its members and way of working, reused by the projects it works in. */
+export const TeamDefinition = Type.Object({
+	id: Type.String(),
+	name: Type.String(),
+	template: Type.String(),
+	roles: Type.Array(TeamRole),
+	style: Type.String(),
+	folder: Type.String({ description: "TEAM.md and NOTES.md" }),
+	model: Type.Optional(Type.String()),
+	memberMode: ApprovalMode,
+	createdAt: Type.String(),
+	projects: Type.Array(Type.Object({ teamId: Type.String(), cwd: Type.String() })),
+});
+export type TeamDefinition = Static<typeof TeamDefinition>;
 export const TeamInfo = Type.Object({
 	id: Type.String(),
+	definitionId: Type.Optional(Type.String()),
 	name: Type.String(),
 	slug: Type.String(),
 	template: Type.String(),
@@ -1604,10 +1619,16 @@ export const methods = {
 		result: Type.Object({ templates: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), description: Type.String(), workplace: literals("project", "folder"), roles: Type.Array(TeamRole) })) }),
 	},
 	"teams.list": { params: Type.Object({}), result: Type.Object({ teams: Type.Array(TeamInfo) }) },
+	/** Teams as definitions (docs/spec/20 P3), with the projects each works in. */
+	"teams.definitions": { params: Type.Object({}), result: Type.Object({ definitions: Type.Array(TeamDefinition) }) },
+	/** You edit a team: its name, members or default model (null clears it). Every project it works in follows. */
+	"teams.updateDefinition": { params: Type.Object({ id: Type.String(), name: Type.Optional(Type.String()), roles: Type.Optional(Type.Array(TeamRole)), model: Type.Optional(Type.Union([Type.String(), Type.Null()])) }), result: Type.Object({ definition: TeamDefinition }) },
+	/** A team no project uses; its folder stays on disk. */
+	"teams.removeDefinition": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
 	"teams.get": { params: Type.Object({ id: Type.String() }), result: Type.Object({ team: TeamInfo }) },
 	/** A team from a template; `cwd` is its project (development). With a goal, its lead starts on it. */
 	"teams.create": {
-		params: Type.Object({ name: Type.String(), template: Type.String(), cwd: Type.Optional(Type.String()), goal: Type.Optional(Type.String()), testCommand: Type.Optional(Type.String()), memberMode: Type.Optional(ApprovalMode), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })), model: Type.Optional(ModelRef), initGit: Type.Optional(Type.Boolean({ description: "A new project's folder: make it a git repo first, so tasks get branches" })) }),
+		params: Type.Object({ name: Type.String(), template: Type.String(), cwd: Type.Optional(Type.String()), goal: Type.Optional(Type.String()), testCommand: Type.Optional(Type.String()), memberMode: Type.Optional(ApprovalMode), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })), model: Type.Optional(ModelRef), initGit: Type.Optional(Type.Boolean({ description: "A new project's folder: make it a git repo first, so tasks get branches" })), definition: Type.Optional(Type.String({ description: "An existing team (definition) to work in this project; else a new one from the template" })) }),
 		result: Type.Object({ team: TeamInfo }),
 	},
 	/** You add a card to the board (TD5). */
