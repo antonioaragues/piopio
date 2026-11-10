@@ -1530,7 +1530,7 @@ export const methods = {
 			/** Messages held by quiet hours or the daily limit. */
 			outbox: Type.Array(Type.Object({ id: Type.String(), to: Type.String(), text: Type.String(), notBefore: Type.String(), reason: literals("quiet", "limit", "paused") })),
 			/** The schedules and reminders, with their next time. */
-			upcoming: Type.Array(Type.Object({ id: Type.String(), kind: literals("schedule", "heartbeat", "reminder"), label: Type.String(), next: Type.Optional(Type.String()) })),
+			upcoming: Type.Array(Type.Object({ id: Type.String(), kind: literals("schedule", "heartbeat", "reminder", "watch"), label: Type.String(), next: Type.Optional(Type.String()) })),
 		}),
 	},
 	/** Run now: a schedule from the definition (its prompt), or any prompt. */

@@ -572,7 +572,7 @@ struct AgentRunsView: View {
         }
     }
 
-    private static let kindIcon = ["schedule": "calendar", "heartbeat": "waveform.path.ecg", "reminder": "bell", "trigger": "bolt", "manual": "play"]
+    private static let kindIcon = ["schedule": "calendar", "heartbeat": "waveform.path.ecg", "reminder": "bell", "watch": "bolt", "trigger": "bolt", "manual": "play"]
 
     private func upcoming(_ u: AgentRunsResult.Upcoming) -> some View {
         HStack(spacing: 8) {

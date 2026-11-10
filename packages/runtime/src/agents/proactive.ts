@@ -29,14 +29,33 @@ export type RunRecord = {
 	sent: number;
 	costUsd?: number;
 };
+/**
+ * An event routine the agent set itself (the `watch` tool, docs/spec/19 S3): a webhook (it gets a URL), a folder (a file
+ * appears or changes in it), or an email (from someone, or with words in the subject). The host does the watching
+ * and calls `fireWatch` with what happened; each fire is a run, like a schedule's.
+ */
+export type Watch = {
+	id: string;
+	on: "webhook" | "folder" | "email";
+	prompt: string;
+	/** folder: an absolute path. */
+	folder?: string;
+	/** email: part of the sender's name or address, and part of the subject. */
+	from?: string;
+	subject?: string;
+	deliverTo?: string;
+	createdAt: string;
+	by: string;
+};
 /** A reminder or schedule the agent made (the `schedule` tool). */
 export type Reminder = { id: string; prompt: string; deliverTo?: string; at?: number; cron?: string; tz?: string; createdAt: string; by: string };
 export type Outbound = { id: string; to: string; text: string; from: string; queuedAt: string; notBefore: number; reason: "quiet" | "limit" | "paused"; urgent?: boolean };
 /** A schedule, the heartbeat or a reminder, with its next fire (the Runs tab). */
-export type Upcoming = { id: string; kind: "schedule" | "heartbeat" | "reminder"; label: string; next?: number };
+export type Upcoming = { id: string; kind: "schedule" | "heartbeat" | "reminder" | "watch"; label: string; next?: number };
 export type ProactiveState = {
 	runs?: RunRecord[];
 	reminders?: Reminder[];
+	watches?: Watch[];
 	outbox?: Outbound[];
 	/** day → messages sent that day; "day/contact" → to that person. */
 	sent?: Record<string, number>;
@@ -77,6 +96,10 @@ export interface ProactiveHost {
 	onOutbound?(to: string, text: string, from: string): void;
 	/** A run started or settled (the Runs tab). */
 	onRun?(run: RunRecord): void;
+	/** A webhook watch's address (the engine's local endpoint); absent where the host has none. */
+	watchUrl?(id: string): string | undefined;
+	/** Watches were added or removed: the host starts or stops watching. */
+	onWatches?(): void;
 }
 
 type ScheduleInput = { key: string; sig: string };
@@ -323,6 +346,7 @@ export class Proactivity {
 		for (const s of this.def.schedules ?? []) withNext(`def:${s.id}`, { id: s.id, kind: "schedule", label: `${s.cron} · ${s.prompt}` });
 		if (this.def.heartbeat) withNext("heartbeat", { id: "heartbeat", kind: "heartbeat", label: `Every ${this.def.heartbeat.every}${this.def.heartbeat.activeHours ? ` (${this.def.heartbeat.activeHours})` : ""}` });
 		for (const r of state.reminders ?? []) withNext(`rem:${r.id}`, { id: r.id, kind: "reminder", label: r.prompt });
+		for (const w of state.watches ?? []) upcoming.push({ id: w.id, kind: "watch", label: `${watchLabel(w)} · ${w.prompt}` });
 		return { runs: [...(state.runs ?? [])].reverse(), outbox: state.outbox ?? [], upcoming };
 	}
 
@@ -426,6 +450,31 @@ export class Proactivity {
 		await this.reconcile();
 	}
 
+	/** The event routines the agent set (the host watches them). */
+	async watches(): Promise<Watch[]> {
+		return (await this.host.read()).watches ?? [];
+	}
+
+	/** Something a watch waits for happened: a run with its prompt and what happened. `key` makes a repeat a no-op. */
+	async fireWatch(id: string, happened: string, key: string): Promise<RunRecord | undefined> {
+		const w = (await this.watches()).find((x) => x.id === id);
+		if (!w) return undefined;
+		const detail = happened.length > 20_000 ? `${happened.slice(0, 20_000)}\n… (cut)` : happened;
+		const prompt = w.prompt.includes("{{body}}") ? w.prompt.replaceAll("{{body}}", detail) : `${w.prompt}\n\nWhat happened:\n${detail}`;
+		return this.startRun("trigger", w.id, prompt, w.deliverTo, `watch:${w.id}:${key}`);
+	}
+
+	async cancelWatch(id: string): Promise<void> {
+		if (!(await this.watches()).some((w) => w.id === id)) throw new Error("That routine was already removed.");
+		await this.host.write((s) => void (s.watches = (s.watches ?? []).filter((w) => w.id !== id)));
+		this.host.onWatches?.();
+	}
+
+	async restoreWatch(watch: Watch): Promise<void> {
+		await this.host.write((s) => void (s.watches = [...(s.watches ?? []).filter((w) => w.id !== watch.id), watch]));
+		this.host.onWatches?.();
+	}
+
 	/** Undo: a reminder that was cancelled comes back (unless its moment has passed). */
 	async restoreReminder(reminder: Reminder): Promise<void> {
 		if (reminder.at !== undefined && reminder.at <= this.host.now()) throw new Error("Its moment has passed.");
@@ -520,13 +569,14 @@ export class Proactivity {
 
 		const listTool = defineTool({
 			name: "list_schedules",
-			description: "List the schedules (from your definition) and the reminders you set, with their next time.",
+			description: "List the schedules (from your definition), and the reminders and event routines (watches) you set.",
 			parameters: Type.Object({}),
 			execute: async () => {
 				const lines = [
 					...(self.def.schedules ?? []).map((s) => `- ${s.id} (definition) ${s.cron}: ${s.prompt}`),
 					...(self.def.heartbeat ? [`- heartbeat every ${self.def.heartbeat.every}`] : []),
 					...((await self.host.read()).reminders ?? []).map((r) => `- ${r.id} (yours) ${r.cron ?? new Date(r.at!).toISOString().slice(0, 16)}: ${r.prompt}`),
+					...((await self.host.read()).watches ?? []).map((w) => `- ${w.id} (yours) ${watchLabel(w)}${w.on === "webhook" && self.host.watchUrl?.(w.id) ? ` at ${self.host.watchUrl(w.id)}` : ""}: ${w.prompt}`),
 				];
 				return { output: [{ type: "text", text: lines.join("\n") || "No schedules." }] };
 			},
@@ -534,9 +584,16 @@ export class Proactivity {
 
 		const cancelTool = defineTool({
 			name: "cancel_schedule",
-			description: "Cancel a reminder you set (by id). Schedules in your definition are changed by the owner.",
+			description: "Cancel a reminder or an event routine (watch) you set, by id. Schedules in your definition are changed by the owner.",
 			parameters: Type.Object({ id: Type.String() }),
 			execute: async (args, api) => {
+				const watch = ((await self.host.read()).watches ?? []).find((w) => w.id === args.id);
+				if (watch) {
+					await self.cancelWatch(watch.id);
+					const card: ResultCard = { kind: "reminder", title: "Routine removed", detail: `${watchLabel(watch)}: ${watch.prompt}` };
+					const undo = await self.host.recordUndo?.("watch.restore", { watch }, `removing “${watch.prompt.slice(0, 60)}”`, api.conversationId);
+					return { output: [{ type: "text", text: `Removed ${args.id}.` }], details: { card, ...(undo ? { undo } : {}) } as never };
+				}
 				const reminder = ((await self.host.read()).reminders ?? []).find((r) => r.id === args.id);
 				if (!reminder) return { output: [{ type: "text", text: `No reminder ${args.id}.` }], isError: true };
 				await self.host.write((s) => void (s.reminders = (s.reminders ?? []).filter((r) => r.id !== args.id)));
@@ -547,7 +604,45 @@ export class Proactivity {
 			},
 		});
 
-		return { send: sendTool, schedule: scheduleTool, list: listTool, cancel: cancelTool };
+		const watchTool = defineTool({
+			name: "watch",
+			description:
+				"Set an event routine for yourself: when something happens, you get the prompt in an automatic run with what happened. on: \"email\" (a new email, from someone and/or with words in the subject, in the owner's connected mail), \"folder\" (a file appears or changes in a folder on this Mac), or \"webhook\" (you get a URL other apps can call; the request body comes with the run). For times use schedule instead.",
+			parameters: Type.Object({
+				on: Type.Union([Type.Literal("email"), Type.Literal("folder"), Type.Literal("webhook")]),
+				prompt: Type.String({ description: "What to do then, e.g. “Summarize the invoice and tell Antonio the amount”" }),
+				from: Type.Optional(Type.String({ description: "email: part of the sender's name or address" })),
+				subject: Type.Optional(Type.String({ description: "email: words in the subject" })),
+				folder: Type.Optional(Type.String({ description: "folder: an absolute path, or one starting with ~/" })),
+				to: Type.Optional(Type.String({ description: "Who it's usually for (a contact id). Default: the owner" })),
+			}),
+			execute: async (args, api) => {
+				const now = self.host.now();
+				if (args.on === "email" && !args.from?.trim() && !args.subject?.trim()) return { output: [{ type: "text", text: "Say whose emails (from) or which subject to watch for." }], isError: true };
+				if (args.on === "folder" && !/^(\/|~\/)/.test(args.folder?.trim() ?? "")) return { output: [{ type: "text", text: "Give the folder as an absolute path (/Users/…) or one starting with ~/." }], isError: true };
+				const by = (await self.personOf(api.conversationId)) ?? "run";
+				const watch: Watch = {
+					id: `w${now.toString(36)}`,
+					on: args.on,
+					prompt: args.prompt,
+					...(args.on === "folder" ? { folder: args.folder!.trim() } : {}),
+					...(args.on === "email" && args.from?.trim() ? { from: args.from.trim() } : {}),
+					...(args.on === "email" && args.subject?.trim() ? { subject: args.subject.trim() } : {}),
+					...(args.to ? { deliverTo: args.to } : {}),
+					createdAt: new Date(now).toISOString(),
+					by,
+				};
+				await self.host.write((s) => void (s.watches = [...(s.watches ?? []), watch]));
+				self.host.onWatches?.();
+				const url = watch.on === "webhook" ? self.host.watchUrl?.(watch.id) : undefined;
+				const card: ResultCard = { kind: "reminder", title: watchLabel(watch), detail: args.prompt };
+				const undo = await self.host.recordUndo?.("watch.cancel", { id: watch.id }, `the routine “${args.prompt.slice(0, 60)}”`, api.conversationId);
+				const text = `Set ${watch.id}: ${watchLabel(watch)}.${url ? ` Its URL (POST, from this Mac): ${url}` : ""}`;
+				return { output: [{ type: "text", text }], details: { id: watch.id, card, ...(url ? { url } : {}), ...(undo ? { undo } : {}) } as never };
+			},
+		});
+
+		return { send: sendTool, schedule: scheduleTool, list: listTool, cancel: cancelTool, watch: watchTool };
 	}
 
 	private async personOf(conversationId: ConversationId | string): Promise<string | undefined> {
@@ -582,3 +677,11 @@ export function parseLocal(text: string, tz: string): number | undefined {
 	}
 	return guess;
 }
+
+/** "When an email from the bank arrives", "When a file appears in ~/Downloads", "When its URL is called". */
+export function watchLabel(w: Pick<Watch, "on" | "from" | "subject" | "folder">): string {
+	if (w.on === "email") return `When an email${w.from ? ` from ${w.from}` : ""}${w.subject ? ` about “${w.subject}”` : ""} arrives`;
+	if (w.on === "folder") return `When a file appears or changes in ${w.folder}`;
+	return "When its URL is called";
+}
+

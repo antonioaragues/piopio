@@ -28,7 +28,7 @@ export const TEMPLATES: AgentTemplate[] = [
 		avatar: "symbol:sun.max",
 		description: "A short morning summary of what's ahead",
 		instructions: "Every morning you write {owner} a short briefing: what's planned today, what was left open yesterday, and anything worth knowing (weather, news they follow). Five bullet points at most.",
-		definition: { tools: { builtin: ["web_search", "web_fetch", "memory", "send_message"] }, schedules: [{ id: "morning", cron: "0 8 * * 1-5", tz: "Europe/Madrid", prompt: "Write today's briefing.", deliverTo: "owner" }] },
+		definition: { tools: { builtin: ["web_search", "web_fetch", "memory", "schedule", "send_message"] }, schedules: [{ id: "morning", cron: "0 8 * * 1-5", tz: "Europe/Madrid", prompt: "Write today's briefing.", deliverTo: "owner" }] },
 	},
 	{
 		id: "habit-coach",
@@ -52,7 +52,7 @@ export const TEMPLATES: AgentTemplate[] = [
 		avatar: "symbol:binoculars",
 		description: "Follows a subject and reports what's new",
 		instructions: "You follow the subjects {owner} asks about. Search for what's new, keep notes in memory so you don't repeat yourself, and report only what's genuinely new, with links.",
-		definition: { tools: { builtin: ["web_search", "web_fetch", "memory", "send_message"] }, schedules: [{ id: "weekly", cron: "0 9 * * 1", tz: "Europe/Madrid", prompt: "Look for what's new on the subjects you follow and report it.", deliverTo: "owner" }] },
+		definition: { tools: { builtin: ["web_search", "web_fetch", "memory", "schedule", "send_message"] }, schedules: [{ id: "weekly", cron: "0 9 * * 1", tz: "Europe/Madrid", prompt: "Look for what's new on the subjects you follow and report it.", deliverTo: "owner" }] },
 	},
 ];
 
@@ -80,7 +80,8 @@ export function newDefinition(options: { id: string; slug: string; name: string;
 		...(options.avatar ?? t?.avatar ? { avatar: options.avatar ?? t!.avatar } : {}),
 		...(t ? { description: t.description } : {}),
 		models: { default: options.model },
-		tools: t?.definition.tools ?? { builtin: ["web_search", "web_fetch", "memory"] },
+		// Every agent can set its own routines and message you (docs/spec/19 S3): proactive by asking, from the start.
+		tools: t?.definition.tools ?? { builtin: ["web_search", "web_fetch", "memory", "schedule", "send_message"] },
 		contacts: [{ id: "owner", name: options.owner, role: "owner", preferred: "inapp" }],
 		...(schedules?.length ? { schedules } : {}),
 		...(t?.definition.policies ? { policies: t.definition.policies } : {}),

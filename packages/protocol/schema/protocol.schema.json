@@ -33895,6 +33895,10 @@
 									{
 										"type": "string",
 										"const": "reminder"
+									},
+									{
+										"type": "string",
+										"const": "watch"
 									}
 								]
 							},

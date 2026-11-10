@@ -28,7 +28,7 @@ import { writingExtension } from "./tools/writing.js";
 import type { AgentFiles } from "./agent-files.js";
 import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
-import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError } from "@piopio/runtime";
+import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError, type Watch } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import { DebateRuntime, validateDebate, type DebateRecord } from "./runtimes/debate.js";
@@ -38,6 +38,7 @@ import { SearchIndex } from "./search.js";
 import { historyExtension, type HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
+import type { AgentWatchers } from "./watchers.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { SdkEventMapper } from "./timeline/pi-sdk.js";
 import type { SessionEvent } from "@piopio/protocol";
@@ -113,6 +114,9 @@ export class Sessions {
 	onInbox?: (change: { count: number; approval?: { agent: ContainerRef; agentName: string; approvalId: string; title: string } }) => void;
 	/** Agents on Telegram from this Mac (channels/manager.ts), set by the engine. */
 	telegram?: TelegramChannels;
+	/** Event routines on this Mac (watchers.ts), and a webhook's local URL; set by the engine. */
+	watchers?: AgentWatchers;
+	hookUrl?: (agentId: string, triggerId: string) => string;
 
 	constructor(
 		private readonly paths: EnginePaths,
@@ -754,6 +758,16 @@ export class Sessions {
 			await this.agentStatus(entry);
 		}
 		await this.telegram?.sync().catch((error: unknown) => log(`Telegram: ${(error as Error).message}`));
+		await this.watchers?.sync().catch((error: unknown) => log(`Routines: ${(error as Error).message}`));
+	}
+
+	/** Every open agent's event routines (watchers.ts). */
+	async agentWatches(): Promise<{ agentId: string; watches: Watch[] }[]> {
+		const out = [];
+		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent" && this.open.has(e.ref.id))) {
+			out.push({ agentId: entry.ref.id, watches: await (await this.agent(entry.ref)).watches() });
+		}
+		return out;
 	}
 
 	/** Local agents and their definitions (channels). */
@@ -1274,6 +1288,8 @@ export class Sessions {
 				onAnswer: (contactId, said, answer) => this.telegram?.answered(id, contactId, said, answer),
 				onOutbound: (to, text) => this.telegram?.outbound(id, to, text),
 				...(this.telegram ? { connectTelegram: (token: string) => this.telegram!.connect(id, token) } : {}),
+				...(this.hookUrl ? { watchUrl: (watchId: string) => this.hookUrl!(id, watchId) } : {}),
+				onWatches: () => void this.watchers?.sync().catch(() => undefined),
 			});
 		}
 		if (entry.ref.kind === "thread" && entry.debate) {

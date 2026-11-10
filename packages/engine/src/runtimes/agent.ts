@@ -52,6 +52,9 @@ export type AgentOpenOptions = {
 	onOutbound?: (to: string, text: string, from: string) => void;
 	/** The owner pasted a Telegram bot token in the chat: connect it and say what happened (docs/spec/19 S4). */
 	connectTelegram?: (token: string) => Promise<string>;
+	/** Event routines (docs/spec/19 S3): a webhook watch's URL, and a notice that the agent's watches changed. */
+	watchUrl?: (watchId: string) => string | undefined;
+	onWatches?: () => void;
 	/** Apple app tools through the Mac app (06 §4.1). */
 	appTool?: AgentCoreOptions["appTool"];
 	/** The other agents (06 §7). */
@@ -128,6 +131,8 @@ export class AgentRuntime implements Runtime {
 				for (const view of runtime?.live ?? []) if (view.conversationId === undo.conversationId) view.undone(undo);
 			},
 			onStatus: () => options.onStatus?.(),
+			...(options.watchUrl ? { watchUrl: options.watchUrl } : {}),
+			...(options.onWatches ? { onWatches: options.onWatches } : {}),
 		});
 		for (const e of [web, core.extension, ...(apps ? [apps] : [])]) registry.install(e as never);
 		runtime = new AgentRuntime(options, harness, core);
@@ -196,11 +201,29 @@ export class AgentRuntime implements Runtime {
 	/** A webhook trigger fired: its prompt with the body in `{{body}}` runs (PR3). `deliveryId` makes a retry a no-op. */
 	async trigger(triggerId: string, body: string, deliveryId?: string): Promise<RunRecord> {
 		const t = (this.options.definition().triggers ?? []).find((x) => x.id === triggerId);
-		if (!t) throw new EngineError("NOT_FOUND", `No trigger “${triggerId}”.`);
+		if (!t) {
+			// A webhook routine the agent set itself (the `watch` tool).
+			const w = (await this.core.proactive.watches()).find((x) => x.id === triggerId && x.on === "webhook");
+			if (!w) throw new EngineError("NOT_FOUND", `No trigger “${triggerId}”.`);
+			const run = await this.fireWatch(w.id, body, deliveryId ?? `${Date.now()}`);
+			if (!run) throw new EngineError("NOT_FOUND", `No trigger “${triggerId}”.`);
+			return run;
+		}
 		await this.ensureCredential();
 		const text = body.length > 20_000 ? `${body.slice(0, 20_000)}\n… (cut)` : body;
 		const prompt = t.prompt.includes("{{body}}") ? t.prompt.replaceAll("{{body}}", text) : `${t.prompt}\n\n${text}`;
 		return this.core.proactive.startRun("trigger", t.id, prompt, undefined, deliveryId ? `trigger:${t.id}:${deliveryId}` : undefined);
+	}
+
+	/** Something a routine waits for happened (a file, an email, a webhook): a run (docs/spec/19 S3). */
+	async fireWatch(watchId: string, happened: string, key: string): Promise<RunRecord | undefined> {
+		await this.ensureCredential();
+		return this.core.proactive.fireWatch(watchId, happened, key);
+	}
+
+	/** The routines the agent set that wait for events. */
+	watches() {
+		return this.core.proactive.watches();
 	}
 
 	/** A person's conversation: `person:<contactId>`, or the owner's. */

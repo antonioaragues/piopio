@@ -10,7 +10,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { configure, defineDoc, defineExtension, defineTool, GenerationTask, hook, section, ToolTask, type ConversationId, type Extension, type Harness, type JsonObject } from "@earendil-works/pi-durable";
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
-import { OUT_ENTRY, Proactivity, type ProactiveState, type Reminder, type RunRecord } from "./proactive.js";
+import { OUT_ENTRY, Proactivity, type ProactiveState, type Reminder, type RunRecord, type Watch } from "./proactive.js";
 import { Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
 import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange } from "../memory/learn.js";
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
@@ -81,6 +81,9 @@ export type AgentCoreOptions = {
 	onLearned?: (bank: string, changes: LearnedChange[]) => void;
 	/** This agent's paid requests outside the harness in a month (web search, utility model), for its budget. */
 	extraSpend?: (month: string) => number | Promise<number>;
+	/** Event routines (the `watch` tool): a webhook watch's URL, and a notice that the list changed. */
+	watchUrl?: (id: string) => string | undefined;
+	onWatches?: () => void;
 };
 
 /** An entry in a person's conversation: what the agent learned after a quiet moment, with Undo (M2). */
@@ -138,6 +141,8 @@ export class AgentCore {
 			person: (id) => this.conversation(id) as never,
 			newConversation: () => this.newConversation(),
 			recallForRun: (conversationId, prompt) => this.recallInto(conversationId, ["owner", "shared"], prompt),
+			...(options.watchUrl ? { watchUrl: options.watchUrl } : {}),
+			...(options.onWatches ? { onWatches: options.onWatches } : {}),
 			onOutbound: (to, text, from) => {
 				// What the agent sent on its own goes to that person's memory too, so later turns know about it.
 				const contact = this.contact(to);
@@ -215,6 +220,10 @@ export class AgentCore {
 				return this.proactive.cancelReminder(String(d.id));
 			case "reminder.restore":
 				return this.proactive.restoreReminder(d.reminder as Reminder);
+			case "watch.cancel":
+				return this.proactive.cancelWatch(String(d.id));
+			case "watch.restore":
+				return this.proactive.restoreWatch(d.watch as Watch);
 			case "outbox.withdraw":
 				return this.proactive.withdraw(String(d.outboxId));
 			case "memory.forget": {
@@ -330,7 +339,7 @@ export class AgentCore {
 		const off = [
 			...(builtin.includes("memory") ? [] : this.memoryTools),
 			...(builtin.includes("send_message") ? [] : [p.send]),
-			...(builtin.includes("schedule") ? [] : [p.schedule, p.list, p.cancel]),
+			...(builtin.includes("schedule") ? [] : [p.schedule, p.list, p.cancel, p.watch]),
 			// The web extension brings both tools when either is on: only the listed ones stay.
 			...(["web_search", "web_fetch"] as const).filter((t) => !builtin.includes(t)).map((name) => ({ name })),
 			...this.apple.filter((t) => !this.appleGroups.includes(APPLE_TOOLS.find((s) => s.name === t.name)!.group)),
@@ -548,7 +557,7 @@ export class AgentCore {
 		const p = this.proactive.tools;
 		return defineExtension({
 			name: "piopio-agent",
-			tools: [remember, recall, forget, p.send, p.schedule, p.list, p.cancel, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
+			tools: [remember, recall, forget, p.send, p.schedule, p.list, p.cancel, p.watch, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
 			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
 			hooks: [

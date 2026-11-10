@@ -39,6 +39,7 @@ import type { ToolItem } from "@piopio/protocol";
 const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
 import { TelegramChannels } from "./channels/manager.js";
+import { AgentWatchers } from "./watchers.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -66,6 +67,8 @@ export type EngineOptions = {
 	allowPrivateFetch?: boolean;
 	/** Where connected apps sign in and call their APIs (tests point them at a fake server). */
 	connectorEndpoints?: ConnectorEndpoints;
+	/** Event routines (tests: check mail and settle folders sooner). */
+	watchers?: { mailEveryMs?: number; settleMs?: number };
 	/** Telegram's API (tests: a fake one) and how long a poll waits. */
 	telegram?: { fetch?: typeof fetch; pollSeconds?: number; retryMs?: number };
 	log?: (line: string) => void;
@@ -92,6 +95,7 @@ export class Engine {
 	readonly memory: MemoryProviders;
 	readonly hooks: Hooks;
 	readonly telegram: TelegramChannels;
+	readonly watchers: AgentWatchers;
 	readonly app = new AppServices();
 	private usageCache?: { at: number; value: Result<"usage.summary"> };
 	private server?: Server;
@@ -189,7 +193,19 @@ export class Engine {
 			...(options.telegram?.retryMs !== undefined ? { retryMs: options.telegram.retryMs } : {}),
 		});
 		this.sessions.telegram = this.telegram;
+		// Event routines agents set themselves (docs/spec/19 S3): folders and connected mail; webhooks go through hooks.
+		this.watchers = new AgentWatchers({
+			watches: () => this.sessions.agentWatches(),
+			fire: async (id, watchId, happened, key) => void (await (await this.sessions.agent({ kind: "agent", id })).fireWatch(watchId, happened, key)),
+			mail: () => this.connectors.mailboxes("agent").map((b) => ({ name: b.name, search: (q: string, n: number) => b.mailbox.search(q, n) })),
+			stateFile: join(options.paths.home, "watchers.json"),
+			log: this.log,
+			...(options.watchers?.mailEveryMs !== undefined ? { mailEveryMs: options.watchers.mailEveryMs } : {}),
+			...(options.watchers?.settleMs !== undefined ? { settleMs: options.watchers.settleMs } : {}),
+		});
+		this.sessions.watchers = this.watchers;
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => this.sessions.fireTrigger(agent, trigger, body, delivery), this.log);
+		this.sessions.hookUrl = (agent, trigger) => this.hooks.url(agent, trigger);
 		this.settings.onChange((next, previous) => {
 			if (next.chat.mcp !== previous.chat.mcp || JSON.stringify(next.chat.mcpServers) !== JSON.stringify(previous.chat.mcpServers)) void this.chatMcp.reset();
 		});
@@ -283,6 +299,7 @@ export class Engine {
 
 	async stop(): Promise<void> {
 		this.telegram?.stop();
+		this.watchers?.stop();
 		for (const conn of this.authed) conn.close();
 		await this.backfill;
 		for (const off of this.subscriptions.values()) off();
