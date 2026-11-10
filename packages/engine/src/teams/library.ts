@@ -92,7 +92,7 @@ const SYSTEM = `You design a small team of AI agents from the user's description
 - description: one sentence on what the team does.
 - style: how the lead should split work among these members, in one or two sentences.
 - instructions: standing rules every member follows (tone, tools, format), from the description; empty when it gives none.
-- roles: exactly one "lead" (plans and assigns); at least one "write" (does tasks; several can run at once); at most one "review" (checks every finished task and sends it back); "integrate" only for software teams with a test command. responsibility in the second person ("You write…"), 1 to 3 sentences; done: what done means for its work.`;
+- roles: one role per kind of work, not per person: several tasks for the same role run at once, so "two writers" is one "Writer" role (never "Writer 1", "Writer 2"). Exactly one "lead" (plans and assigns); at least one "write" (does tasks); at most one "review" (checks every finished task and sends it back); "integrate" only for software teams with a test command. responsibility in the second person ("You write…"), 1 to 3 sentences; done: what done means for its work.`;
 
 /** The draft: the background model's, else one from the description's words. */
 export async function draftTeam(description: string, complete?: (system: string, prompt: string) => Promise<string | undefined>): Promise<TeamDraft> {

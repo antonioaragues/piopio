@@ -89,6 +89,9 @@ test("a development team: the lead's tasks run in parallel on their own branches
 	const leadItems = JSON.stringify((await client.call("sessions.open", { ref: lead })).items);
 	expect(leadItems).toContain("[Board] T1 “Greeting A” is done. Merged into team/dev-");
 	expect(leadItems).toContain("checks passed");
+	// QA's word comes with "done".
+	expect(leadItems).toContain("QA approved it:");
+	expect(leadItems).toContain("Looks right.");
 }, 60_000);
 
 test("a failing review sends a task back; after three rounds it's blocked and the lead hears why", async () => {
@@ -380,3 +383,18 @@ test("a team made by describing it, saved as a template folder you can edit by h
 	expect(team.roles.map((r) => r.name)).toEqual(["Lead", "Copywriter", "Editor"]);
 	expect(readFileSync(join(team.folder, "TEAM.md"), "utf8")).toContain("What this team is for");
 }, 30_000);
+
+test("a task starts from the project as it is: the team's branch catches up with commits on the base", async () => {
+	const { client } = await start();
+	const dir = repo();
+	const { team } = (await client.call("teams.create", { name: "Fresh", template: "development", cwd: dir })) as { team: Team };
+	// You commit something on main after the team was made (the lead's own change, say).
+	writeFileSync(join(dir, "about.html"), "<p>About</p>\n");
+	git(dir, "add", "-A");
+	git(dir, "commit", "-qm", "About page");
+	await client.call("teams.addTask", { id: team.id, title: "Contact", brief: brief("contact.html", true) });
+	const t = await until(async () => ((await client.call("teams.get", { id: team.id })) as { team: Team }).team.tasks[0]!, (x) => x.state === "done", 40_000);
+	expect(t.state).toBe("done");
+	expect(existsSync(join(team.git!.integration, "about.html"))).toBe(true);
+	expect(existsSync(join(team.git!.integration, "contact.html"))).toBe(true);
+}, 60_000);

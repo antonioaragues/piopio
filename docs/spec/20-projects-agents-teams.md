@@ -226,3 +226,31 @@ folder becomes a project at that folder. Boards, branches and routines move with
 - **New team** (Teams › +) is that page: describe it and draft, or start from a template (built in or yours). It
   makes a team that isn't in a project yet; a project gets it in its Settings, and New project's "Who works here"
   lists your teams first.
+
+## 14. First trial with real models (2026-11-10)
+
+An isolated app with the user's OpenRouter setup; a Development team on a small static site (check: `node check.mjs`),
+the lead on Claude Sonnet 5.5, builders and QA on Claude Haiku 5.5, members in Full auto in a throwaway folder.
+**$0.17 in all.**
+
+- **Drafting a team** ("un equipo para el blog de la panadería…", in Spanish) took 5 s: a content lead, two writers, a
+  photographer and a proofreader as reviewer, with Spanish instructions in the asked tone. It numbered the writers as
+  two roles ("Redactora 1", "Redactora 2"); the prompt now asks for one role per kind of work.
+- **The lead does small things itself (PT5) and explains why.** Two pages: it did them in 15 s ($0.035). A menu, a
+  Spanish version of every page and an order form: it did them too ($0.075), saying the three parts all change the
+  shared nav, so splitting them would mean conflicting tasks. Its own rule, applied well.
+- **The board, asked for parallel work:** three blog posts became three tasks with scoped briefs ("create
+  blog/rye.html only; don't touch other files", "check orders.html and contact.html for the real details"), built at
+  once, each reviewed by QA and merged by CI, all done in 75 s; builders and QA cost under a cent each. The lead
+  reported each update, raised what needed the user's call (a generic storage tip, posts not linked from anywhere),
+  and at the end said the branch was ready to merge from the Board. Merging it (`teams.land`) worked.
+- **Fixed from the trial:**
+  - **The team's branch went stale:** it was cut when the team was made, so after you committed the lead's work, new
+    tasks started without it. A task now starts from the team's branch caught up with the base (fast-forward, or a
+    merge left alone if it conflicts).
+  - **The lead never saw QA's verdict** and kept saying it was waiting for it: "done" now carries the reviewer's
+    notes.
+  - **A builder reported "nothing is committed yet"**, which confused the lead: builders are now told the board
+    commits their work.
+- **Seen, not changed:** the lead's own changes stay uncommitted in the project's folder, like any conversation's.
+  `check.mjs` only checks top-level pages; builders noticed and checked `blog/` by hand.

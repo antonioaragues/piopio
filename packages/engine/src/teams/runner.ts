@@ -682,6 +682,7 @@ export class TeamRunner {
 		if (!t.sessionId) {
 			let cwd = team.cwd;
 			if (team.git) {
+				await this.catchUp(team);
 				t.branch = `${team.git.branch}-${t.id.toLowerCase()}`;
 				cwd = join(this.host.worktreesDir, team.id, t.id);
 				await this.host.addWorktree(team.cwd, cwd, t.branch, team.git.branch);
@@ -710,8 +711,25 @@ export class TeamRunner {
 		return `${as}${this.instructions(team)}`;
 	}
 
+	/**
+	 * The team's branch takes what the project's branch gained since (your commits, the lead's work you committed), so
+	 * a new task starts from the project as it is. A fast-forward when the team has nothing unmerged; otherwise a merge,
+	 * left alone if it conflicts.
+	 */
+	private async catchUp(team: Team): Promise<void> {
+		const git = team.git!;
+		const behind = Number((await this.host.git(team.cwd, ["rev-list", "--count", `${git.branch}..${git.base}`]).catch(() => "0")).trim()) || 0;
+		if (!behind) return;
+		const ff = await this.host.git(git.integration, ["merge", "--ff-only", "-q", git.base]).then(() => true).catch(() => false);
+		if (ff) return;
+		await this.host.git(git.integration, ["-c", "user.name=Piopio", "-c", "user.email=piopio@localhost", "merge", "--no-edit", "-q", git.base]).catch(async () => {
+			await this.host.git(git.integration, ["merge", "--abort"]).catch(() => undefined);
+			this.host.log(`Team ${team.name}: ${git.base} conflicts with ${git.branch}; tasks start from the team's branch.`);
+		});
+	}
+
 	private workPrompt(team: Team, t: TeamTask, role: Role): string {
-		const where = team.git ? `You work on your own branch, ${t.branch}, in this folder; other members work on theirs at the same time. Don't switch branches.` : `You work in the project's folder, ${team.cwd}, alongside other members: only change the files your task is about.`;
+		const where = team.git ? `You work on your own branch, ${t.branch}, in this folder; other members work on theirs at the same time. Don't switch branches, and don't commit: when you finish, the board commits your work on your branch, then review and merging follow.` : `You work in the project's folder, ${team.cwd}, alongside other members: only change the files your task is about.`;
 		return [
 			this.whoIs(team, role),
 			`Your task, ${t.id}: ${t.title}\n\n${t.brief}`,
@@ -848,7 +866,10 @@ export class TeamRunner {
 		t.state = "done";
 		t.updatedAt = iso();
 		this.save(team);
-		await this.tellLead(team, `${t.id} “${t.title}” is done.${extra}\n\nReport:\n${quote(t.report || "(none)")}${await this.readyNote(team)}`, t);
+		// The reviewer's verdict comes with it (a trial with real models: the lead kept waiting for QA's word).
+		const reviewer = team.roles.find((r) => r.kind === "review");
+		const review = reviewer && t.review && t.review !== "(asked)" ? `\n\n${reviewer.name} approved it:\n${quote(t.review)}` : "";
+		await this.tellLead(team, `${t.id} “${t.title}” is done.${extra}\n\nReport:\n${quote(t.report || "(none)")}${review}${await this.readyNote(team)}`, t);
 		await this.pump(team);
 	}
 
