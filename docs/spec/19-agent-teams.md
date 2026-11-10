@@ -260,3 +260,21 @@ All decided with the user on 2026-11-09.
 - Role cards as agents (T7), which come with teams (T1).
 - **Not seen with a real model:** a real interview, a real Telegram bot, and Outlook mail.
 
+## 10. To fold in: teams as you described them (2026-11-10)
+
+From the user, to adjust together before T1 starts:
+- **A development team:** a tech lead, a QA and a developer. You give them a goal, and they coordinate to build it.
+- **The collaboration style is a team setting:** "a lead and the rest follow" (what §4 assumes), or more
+  distributed (peers who split the work and review each other), and maybe others.
+- **Shared memory is a team setting too:** what the members share, and how. TD7 assumes a team folder with NOTES.md.
+- **Choose a team when you create a project:** the project's work then goes to that team.
+
+**How it maps onto this spec:**
+
+| Idea | Where it fits | What's new |
+|---|---|---|
+| Tech lead, QA, developer | Role cards (T2, T7) as saved members | Roles fixed per team, not hired per task (TD1 says helpers by default) |
+| Collaboration style | §4.1, TC4 | A setting with named styles instead of instructions only in the lead's card |
+| Shared memory | TD7 | Choices per team: folder notes, a shared bank, or both |
+| A team per project | §2 Workplace, T3; Dispatch as default team (TD2) | The project picks its team; Build sessions there go through it |
+
