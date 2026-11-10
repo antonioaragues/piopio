@@ -259,11 +259,11 @@ enum DebugAutomation {
             }
         }
         // PIOPIO_DEMO_TEAM=<template>[:<folder>]: a team (docs/spec/19), with PIOPIO_DEMO_TEAM_GOAL for its lead and
-        // PIOPIO_DEMO_TEAM_TEST as its checks; then its page (the tab from PIOPIO_DEMO_TEAM_TAB: lead, board, members).
+        // PIOPIO_DEMO_TEAM_TEST as its checks; then its project's page (PIOPIO_DEMO_TEAM_TAB: conversations, board, settings).
         if let spec = env["PIOPIO_DEMO_TEAM"], engine.status == .ready {
             Task {
                 let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
-                if let tab = env["PIOPIO_DEMO_TEAM_TAB"] { UserDefaults.standard.set(tab, forKey: "teamTab") }
+                if let tab = env["PIOPIO_DEMO_TEAM_TAB"] { UserDefaults.standard.set(tab, forKey: "projectTab") }
                 // PIOPIO_DEMO_TEAM_START=1: the folder is added as a project first, and its + page opens (its team chosen).
                 let start = env["PIOPIO_DEMO_TEAM_START"] == "1" && parts.count > 1
                 let project = start ? await engine.addProject(URL(fileURLWithPath: parts[1])) : nil
@@ -273,7 +273,10 @@ enum DebugAutomation {
                     try? await Task.sleep(for: .seconds(1))
                     NotificationCenter.default.post(name: .newBuildSession, object: project.id)
                 } else {
-                    NotificationCenter.default.post(name: .selectItem, object: SidebarItem.team(team.id).raw)
+                    // Its project's page (docs/spec/20 §5), on the tab from PIOPIO_DEMO_TEAM_TAB.
+                    await engine.loadProjects()
+                    let place = engine.projects.first { $0.path == team.cwd }
+                    NotificationCenter.default.post(name: .selectItem, object: (place.map { SidebarItem.project($0.id) } ?? .team(team.id)).raw)
                 }
             }
         }

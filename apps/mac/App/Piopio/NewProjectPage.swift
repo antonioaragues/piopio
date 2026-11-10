@@ -54,16 +54,16 @@ struct NewProjectPage: View {
                 FinePrint("Makes the folder ~/Piopio/\(folderName), with the instructions in AGENTS.md and the shared notes in NOTES.md. Edit them there any time.")
                 if continuing == nil && !templates.isEmpty {
                     HStack(spacing: 10) {
-                        Text("Team").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
+                        Text("Who works here").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
                         Menu {
-                            Button("No team") { teamTemplate = nil }
+                            Button("Piopio") { teamTemplate = nil }
                             Divider()
                             ForEach(templates) { t in Button(t.name) { teamTemplate = t.id } }
                         } label: {
-                            Text(templates.first { $0.id == teamTemplate }?.name ?? "No team").foregroundStyle(teamTemplate == nil ? Color.dsFg3 : Color.dsFg)
+                            Text(templates.first { $0.id == teamTemplate }?.name ?? "Piopio").foregroundStyle(Color.dsFg)
                         }
                         .menuStyle(.button).buttonStyle(PillStyle()).fixedSize()
-                        Text(teamTemplate.flatMap { id in templates.first { $0.id == id } }.map { "\($0.roles.map(\.name).joined(separator: ", ")). What you ask in this project goes to its lead." } ?? "Optional: a team of agents that works on what you ask here.")
+                        Text(teamTemplate.flatMap { id in templates.first { $0.id == id } }.map { "\($0.roles.map(\.name).joined(separator: ", ")). Every conversation here is with its lead." } ?? "Or a team: a lead that plans and members that work in parallel. You can change it in the project's Settings.")
                             .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                     }
                 }

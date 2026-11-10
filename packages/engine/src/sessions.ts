@@ -1117,6 +1117,16 @@ export class Sessions {
 
 	// ── Teams (docs/spec/19) ─────────────────────────────────────────────
 
+	/** A project's team was removed: its lead conversations become plain ones; members' sessions stay out of lists. */
+	detachTeam(teamId: string): void {
+		for (const entry of this.entries.values()) {
+			if (entry.team?.id !== teamId || entry.team.kind !== "lead") continue;
+			delete entry.team;
+			this.changed(entry);
+		}
+		this.save();
+	}
+
 	/** The board's tools for a team's session: the lead's, or a reviewer's verdict. */
 	private teamBridge(entry: CatalogEntry): TeamBridge {
 		const teams = this.teams!;
@@ -1480,7 +1490,7 @@ export class Sessions {
 				},
 			},
 			...(entry.parent || entry.team ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
-			...(entry.team && this.teams ? { team: this.teamBridge(entry) } : {}),
+			...(entry.team && this.teams?.has(entry.team.id) ? { team: this.teamBridge(entry) } : {}),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			toolsOff: () => [...new Set([...(entry.toolsOff ?? []), ...((entry.parent && this.entries.get(entry.parent.id)?.toolsOff) || [])])],

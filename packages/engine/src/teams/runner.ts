@@ -243,6 +243,35 @@ export class TeamRunner {
 		return team;
 	}
 
+	/** The project's Settings (docs/spec/20 §5): the checks and how many tasks run at once. */
+	async update(teamId: string, change: { testCommand?: string; maxParallel?: number }): Promise<Team> {
+		const team = this.get(teamId);
+		if (change.testCommand !== undefined) {
+			if (change.testCommand.trim()) team.testCommand = change.testCommand.trim();
+			else delete team.testCommand;
+		}
+		if (change.maxParallel !== undefined) team.maxParallel = Math.min(8, Math.max(1, Math.round(change.maxParallel)));
+		this.save(team);
+		await this.pump(team);
+		return team;
+	}
+
+	/**
+	 * The project works without its team again. Refused while tasks run. The team's branch stays (its work may not be
+	 * merged); its worktree, routines and board go.
+	 */
+	async remove(teamId: string): Promise<Team> {
+		const team = this.get(teamId);
+		const running = team.tasks.filter((t) => t.state === "doing" || t.state === "review" || t.state === "integrating").length;
+		if (running) throw new EngineError("CONFLICT", `${running === 1 ? "A task is" : `${running} tasks are`} still running. Stop them on the Board first.`);
+		this.teams = this.teams.filter((t) => t.id !== teamId);
+		if (team.git) await this.host.git(team.cwd, ["worktree", "remove", "--force", team.git.integration]).catch(() => undefined);
+		for (const t of team.tasks) if (t.cwd && t.cwd !== team.cwd) await this.host.git(team.cwd, ["worktree", "remove", "--force", t.cwd]).catch(() => undefined);
+		this.save(team);
+		this.routinesChanged();
+		return team;
+	}
+
 	/** The lead role, for a conversation in the team's project. */
 	leadRole(teamId: string): Role {
 		return this.get(teamId).roles.find((r) => r.kind === "lead")!;
@@ -626,7 +655,7 @@ export class TeamRunner {
 		if (!team.git || team.tasks.some((t) => OPEN.has(t.state))) return "";
 		const landing = await this.landing(team.id).catch(() => undefined);
 		if (!landing?.ahead) return "";
-		return `\n\nThe board is clear: ${landing.branch} has ${landing.tasks.length === 1 ? "1 task" : `${landing.tasks.length} tasks`} ready for ${landing.base} (${landing.files.length === 1 ? "1 file" : `${landing.files.length} files`}${team.testCommand ? ", checks passed" : ""}). Tell the user it's ready: they merge it into ${landing.base}, or push it for a pull request, from the team's Board.`;
+		return `\n\nThe board is clear: ${landing.branch} has ${landing.tasks.length === 1 ? "1 task" : `${landing.tasks.length} tasks`} ready for ${landing.base} (${landing.files.length === 1 ? "1 file" : `${landing.files.length} files`}${team.testCommand ? ", checks passed" : ""}). Tell the user it's ready: they merge it into ${landing.base}, or push it for a pull request, from the project's Board.`;
 	}
 
 	/** One task per conversation among these, so each conversation hears once. */

@@ -553,7 +553,6 @@ struct TargetPicker: View {
         let projects = engine.projects.filter { $0.missing != true && matches($0.name) }
         let folders = recent.filter { matches($0.url.lastPathComponent) || matches($0.path) }.prefix(query.isEmpty ? 5 : 12)
         let agents = Areas.shared.contains(.agents) ? engine.agents.filter { matches($0.title) } : []
-        let teams = Areas.shared.contains(.agents) ? engine.teams.filter { matches($0.name) } : []
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
@@ -574,10 +573,6 @@ struct TargetPicker: View {
                     if !folders.isEmpty {
                         header("Folders on this Mac")
                         ForEach(Array(folders)) { f in row(f.url.lastPathComponent, detail: f.path, symbol: "folder.badge.plus", on: false) { choose(.folder(f.url)) } }
-                    }
-                    if !teams.isEmpty {
-                        header("Give a team work")
-                        ForEach(teams) { t in row(t.name, symbol: "person.3", on: current == .team(t.id)) { choose(.target(.team(t.id))) } }
                     }
                     if !agents.isEmpty {
                         header("Message an agent")

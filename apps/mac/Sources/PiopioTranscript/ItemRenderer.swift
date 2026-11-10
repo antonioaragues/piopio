@@ -38,6 +38,17 @@ nonisolated struct ItemRenderer: Sendable {
 
     func render(_ item: TimelineItem) -> NSAttributedString {
         switch item {
+        case .user(let u) where u.text.hasPrefix("[Board] ") || u.text.hasPrefix("[Routine] "):
+            // A board update or a routine firing (docs/spec/20 §4): an event, not something you wrote. Its first line
+            // shows; the report opens under it.
+            if compact { return NSAttributedString() }
+            let routine = u.text.hasPrefix("[Routine] ")
+            let text = String(u.text.dropFirst(routine ? 10 : 8))
+            let first = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? text
+            let rest = text.dropFirst(first.count).trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = (routine ? "Routine · " : "Board · ") + first
+            if rest.isEmpty { return note(title) }
+            return thinkingCard(DisclosureCard(kind: .thinking, title: title, body: rest))
         case .user(let u):
             if compact { return NSAttributedString() }
             let out = NSMutableAttributedString()

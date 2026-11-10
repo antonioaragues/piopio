@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 @testable import PiopioKit
 @testable import PiopioTranscript
@@ -93,4 +94,23 @@ import Testing
     #expect(ItemRenderer.splitLine("localhost:8080:x") == ("localhost:8080:x", nil))
     #expect(ItemRenderer.splitLine("a:b") == ("a:b", nil))
     #expect(ItemRenderer.splitLine(":12") == (":12", nil))
+}
+
+/// Board updates and routines in a lead conversation are events, not your messages (docs/spec/20 §4).
+@Test @MainActor func boardUpdatesAreEventRowsNotBubbles() {
+    let renderer = ItemRenderer()
+    let update = renderer.render(.user(UserItem(id: "u1", at: "", text: "[Board] T1 “Signup form” is done. Merged into team/shop-ab12.\n\nReport:\n> Added the form.")))
+    var cards: [DisclosureCard] = []
+    var styles: [String] = []
+    update.enumerateAttributes(in: NSRange(location: 0, length: update.length)) { attrs, _, _ in
+        if let a = attrs[.attachment] as? DisclosureAttachment { cards.append(a.card) }
+        if let s = attrs[.piopioCard] as? String { styles.append(s) }
+    }
+    #expect(cards.map(\.title) == ["Board · T1 “Signup form” is done. Merged into team/shop-ab12."])
+    #expect(!styles.contains(CardStyle.user.rawValue))
+    if case .text(let body) = cards.first?.content { #expect(body.contains("Added the form.")) } else { Issue.record("no report") }
+
+    let routine = renderer.render(.user(UserItem(id: "u2", at: "", text: "[Routine] Every Monday at 09:00: Write the brief")))
+    #expect(routine.string.contains("Routine · Every Monday at 09:00: Write the brief"))
+    #expect(!routine.string.contains("[Routine]"))
 }

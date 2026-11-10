@@ -736,6 +736,12 @@ public struct AddTeamRoutineParams: Encodable, Sendable {
         self.id = id; self.on = on; self.prompt = prompt; self.when = when; self.folder = folder; self.from = from; self.subject = subject
     }
 }
+public struct UpdateTeamParams: Encodable, Sendable {
+    public var id: String
+    public var testCommand: String?
+    public var maxParallel: Int?
+    public init(id: String, testCommand: String? = nil, maxParallel: Int? = nil) { self.id = id; self.testCommand = testCommand; self.maxParallel = maxParallel }
+}
 public struct TeamRoutineParams: Encodable, Sendable {
     public var id, routineId: String
     public init(id: String, routineId: String) { self.id = id; self.routineId = routineId }

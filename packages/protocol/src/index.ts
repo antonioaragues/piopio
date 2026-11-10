@@ -1612,6 +1612,10 @@ export const methods = {
 	},
 	/** You add a card to the board (TD5). */
 	"teams.addTask": { params: Type.Object({ id: Type.String(), title: Type.String(), brief: Type.String(), done: Type.Optional(Type.String()), role: Type.Optional(Type.String()) }), result: Type.Object({ task: TeamTask }) },
+	/** The project's Settings: the team's checks and how many tasks run at once. An empty testCommand removes it. */
+	"teams.update": { params: Type.Object({ id: Type.String(), testCommand: Type.Optional(Type.String()), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })) }), result: Type.Object({ team: TeamInfo }) },
+	/** The project works without its team again; its lead conversations stay as plain ones, its branch is kept. */
+	"teams.remove": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
 	/** You add a routine on the team page: a time (`when`: a cron or a local date-time), a folder, an email or a webhook. */
 	"teams.addRoutine": {
 		params: Type.Object({ id: Type.String(), on: literals("time", "folder", "email", "webhook"), prompt: Type.String(), when: Type.Optional(Type.String()), folder: Type.Optional(Type.String()), from: Type.Optional(Type.String()), subject: Type.Optional(Type.String()) }),

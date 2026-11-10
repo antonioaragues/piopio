@@ -129,25 +129,22 @@ struct TeamPage: View {
     let engine: EngineController
     let teamId: String
     @Binding var item: SidebarItem
-    @AppStorage("teamTab") private var tab = "board"
 
     private var team: TeamInfo? { engine.teams.first { $0.id == teamId } }
 
+    /// A team is a definition (docs/spec/20 §5): who's on it and how they work. Its work is in its project.
     var body: some View {
         if let team {
+            let project = engine.projects.first { $0.path == team.cwd }
             VStack(spacing: 0) {
                 PageHeader {
                     PageTitle(name: team.name, subtitle: subtitle(team))
                 } actions: {
-                    NeutralSegmented(selection: $tab, options: [("lead", "Lead"), ("board", "Board"), ("routines", "Routines"), ("members", "Members")])
-                        .frame(width: 320)
+                    if let project {
+                        Button("Open \(project.name)") { item = .project(project.id) }.buttonStyle(PillStyle())
+                    }
                 }
-                switch tab {
-                case "lead": lead(team)
-                case "members": TeamMembers(team: team)
-                case "routines": TeamRoutines(engine: engine, team: team)
-                default: TeamBoard(engine: engine, team: team, item: $item)
-                }
+                TeamMembers(team: team)
             }
             .task(id: teamId) { await engine.loadTeams() }
         } else {
@@ -157,40 +154,7 @@ struct TeamPage: View {
 
     private func subtitle(_ team: TeamInfo) -> String {
         let kind = team.template.prefix(1).uppercased() + team.template.dropFirst()
-        let place = team.git.map { "\(URL(fileURLWithPath: team.cwd).lastPathComponent) · \($0.branch)" } ?? "~/Piopio/Teams/\(URL(fileURLWithPath: team.folder).lastPathComponent)"
-        return "\(kind) · \(place)"
-    }
-
-    /// Conversations with the lead (docs/spec/20 PT6): each conversation in the project is one. They live with the
-    /// project's conversations; this lists them until the project page takes over (P2).
-    @ViewBuilder private func lead(_ team: TeamInfo) -> some View {
-        let conversations = engine.buildSessions.filter { $0.team?.id == team.id && $0.team?.kind == "lead" }.sorted { $0.updatedAt > $1.updatedAt }
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Every conversation in \(URL(fileURLWithPath: team.cwd).lastPathComponent) is with the lead. Start one from the project's +.")
-                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-                if conversations.isEmpty { Text("No conversations yet.").font(.system(size: 13)).foregroundStyle(Color.dsFg3) }
-                ForEach(conversations) { s in
-                    Button { item = .session(s.ref.id) } label: {
-                        HStack {
-                            Text(s.title).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Color.dsFg)
-                            Spacer()
-                            let tasks = team.tasks.filter { $0.conversationId == s.ref.id }
-                            if !tasks.isEmpty { Text("\(tasks.count) task\(tasks.count == 1 ? "" : "s")").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                            Text(BuildSessionView.relative(s.updatedAt)).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                        }
-                        .padding(12)
-                        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(24)
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity)
-        }
+        return "\(kind) · works in \(URL(fileURLWithPath: team.cwd).lastPathComponent)"
     }
 }
 
@@ -477,7 +441,7 @@ struct TeamLandingCard: View {
 
 /// Routines (docs/spec/19 T1): what starts the team's work on its own. The lead sets them when you ask it; you can add,
 /// run or remove them here.
-struct TeamRoutines: View {
+struct TeamRoutinesList: View {
     let engine: EngineController
     let team: TeamInfo
     @State private var adding = false
@@ -486,23 +450,15 @@ struct TeamRoutines: View {
     private var routines: [TeamRoutine] { team.routines ?? [] }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("What starts the team's work on its own. Ask the lead (“every Monday, a brief on our competitors”), or add one here.")
-                        .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 16)
-                    Button("Add routine…") { adding = true }.buttonStyle(PillStyle())
-                }
-                if routines.isEmpty {
-                    Text("No routines yet.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.top, 8)
-                }
-                ForEach(routines) { row($0) }
-                if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("What starts work here on its own: each run is a new conversation with the lead. Ask the lead (“every Monday, a brief on our competitors”), or add one.")
+                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 16)
+                Button("Add routine…") { adding = true }.buttonStyle(PillStyle(compact: true))
             }
-            .padding(24)
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            ForEach(routines) { row($0) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
         }
         .sheet(isPresented: $adding) { AddTeamRoutine(engine: engine, team: team) { adding = false } }
     }

@@ -35302,6 +35302,412 @@
 				}
 			}
 		},
+		"teams.update.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"testCommand": {
+					"type": "string"
+				},
+				"maxParallel": {
+					"type": "number",
+					"minimum": 1,
+					"maximum": 8
+				}
+			}
+		},
+		"teams.update.result": {
+			"type": "object",
+			"required": [
+				"team"
+			],
+			"properties": {
+				"team": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"slug",
+						"template",
+						"roles",
+						"style",
+						"cwd",
+						"folder",
+						"memberMode",
+						"maxParallel",
+						"tasks",
+						"nextTask",
+						"createdAt"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"slug": {
+							"type": "string"
+						},
+						"template": {
+							"type": "string"
+						},
+						"roles": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"kind",
+									"responsibility"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"responsibility": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"model": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"style": {
+							"type": "string"
+						},
+						"cwd": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"git": {
+							"type": "object",
+							"required": [
+								"base",
+								"branch",
+								"integration"
+							],
+							"properties": {
+								"base": {
+									"type": "string"
+								},
+								"branch": {
+									"type": "string"
+								},
+								"integration": {
+									"type": "string"
+								}
+							}
+						},
+						"leadSessionId": {
+							"type": "string"
+						},
+						"model": {
+							"type": "string"
+						},
+						"memberMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"maxParallel": {
+							"type": "number"
+						},
+						"testCommand": {
+							"type": "string"
+						},
+						"goal": {
+							"type": "string"
+						},
+						"tasks": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"title",
+									"brief",
+									"role",
+									"state",
+									"by",
+									"attempts",
+									"createdAt",
+									"updatedAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"brief": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"role": {
+										"type": "string"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "todo"
+											},
+											{
+												"type": "string",
+												"const": "doing"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrating"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "blocked"
+											}
+										]
+									},
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"conversationId": {
+										"type": "string",
+										"description": "The lead conversation that made it"
+									},
+									"sessionId": {
+										"type": "string"
+									},
+									"reviewSessionId": {
+										"type": "string"
+									},
+									"branch": {
+										"type": "string"
+									},
+									"cwd": {
+										"type": "string"
+									},
+									"report": {
+										"type": "string"
+									},
+									"review": {
+										"type": "string"
+									},
+									"attempts": {
+										"type": "number"
+									},
+									"blocked": {
+										"type": "string"
+									},
+									"landed": {
+										"type": "string",
+										"description": "When its work was merged into the project's branch"
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"updatedAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"nextTask": {
+							"type": "number"
+						},
+						"routines": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"on",
+									"prompt",
+									"by",
+									"createdAt",
+									"runs"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"on": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "time"
+											},
+											{
+												"type": "string",
+												"const": "folder"
+											},
+											{
+												"type": "string",
+												"const": "email"
+											},
+											{
+												"type": "string",
+												"const": "webhook"
+											}
+										]
+									},
+									"prompt": {
+										"type": "string"
+									},
+									"cron": {
+										"type": "string"
+									},
+									"at": {
+										"type": "number"
+									},
+									"tz": {
+										"type": "string"
+									},
+									"folder": {
+										"type": "string"
+									},
+									"from": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "string"
+									},
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"next": {
+										"type": "number",
+										"description": "time: the next fire, epoch ms"
+									},
+									"lastRun": {
+										"type": "string"
+									},
+									"runs": {
+										"type": "number"
+									},
+									"lastConversation": {
+										"type": "string"
+									},
+									"label": {
+										"type": "string",
+										"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+									},
+									"url": {
+										"type": "string",
+										"description": "webhook: where to POST"
+									}
+								}
+							}
+						},
+						"fired": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"createdAt": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"teams.remove.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.remove.result": {
+			"type": "object",
+			"properties": {}
+		},
 		"teams.addRoutine.params": {
 			"type": "object",
 			"required": [

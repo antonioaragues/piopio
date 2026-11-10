@@ -236,12 +236,13 @@ struct ConversationStart: View {
                 .padding(.bottom, 4)
                 TitleText(text: team != nil ? "What should the team do?" : project == nil ? "What's on your mind?" : "New conversation")
                 Text(team != nil
-                    ? "A conversation with its lead: it does small things itself and puts bigger work on the board, where the team works in parallel. To work without the team, pick the project in the box."
+                    ? "A conversation with its lead: it does small things itself and puts bigger work on the board, where the team works in parallel."
                     : project == nil
                     ? "A conversation keeps its own history. Continue it in a project whenever it grows into a subject."
                     : "It works in the project's folder, with its instructions and the notes its conversations share.")
                     .font(.system(size: 15)).lineSpacing(4.5).foregroundStyle(Color.dsFg2)
                     .fixedSize(horizontal: false, vertical: true)
+                if let (place, crew) = whoChoice { who(place, crew) }
             }
             AskBox(engine: engine, item: $item)
         }
@@ -263,6 +264,23 @@ struct ConversationStart: View {
             let next: SidebarItem = raw.hasPrefix("project:") ? .newSession(String(raw.dropFirst(8))) : .start(.chat)
             if next != item { item = next }
         }
+    }
+
+    /// A project with a team (docs/spec/20 §4): who answers this conversation, visible and per conversation.
+    private var whoChoice: (ProjectInfo, TeamInfo)? {
+        if let team, let place = engine.projects.first(where: { $0.path == team.cwd }) { return (place, team) }
+        if let project, let crew = engine.team(in: project) { return (project, crew) }
+        return nil
+    }
+
+    private func who(_ place: ProjectInfo, _ crew: TeamInfo) -> some View {
+        HStack(spacing: 10) {
+            Text("Who").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
+            NeutralSegmented(selection: Binding(get: { team != nil ? "team" : "piopio" }, set: { targetRaw = $0 == "team" ? "team:" + crew.id : "project:" + place.id }),
+                             options: [("team", crew.name), ("piopio", "Piopio alone")])
+                .frame(width: 300)
+        }
+        .padding(.top, 6)
     }
 
     private func chooseTeam() {

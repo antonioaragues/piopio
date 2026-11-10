@@ -286,3 +286,22 @@ test("a lead per conversation: two conversations plan their own tasks on one boa
 	await client.call("sessions.submit", { ref: a, input: { text: "call: list_tasks | {}" } });
 	await until(() => leadText(client, a.id), (s) => /T\d \[done\] From A \(builder, yours\)/.test(s) && /T\d \[done\] From B \(builder\)/.test(s));
 }, 90_000);
+
+test("the project's Settings change the team's checks and pace, and remove it: its lead conversations stay, as plain ones (docs/spec/20 P2)", async () => {
+	const { client } = await start();
+	const dir = repo();
+	const { team } = (await client.call("teams.create", { name: "Solo", template: "development", cwd: dir, testCommand: "npm test" })) as { team: Team & { testCommand?: string; maxParallel: number } };
+	const lead = await conversation(client, team);
+	const updated = ((await client.call("teams.update", { id: team.id, testCommand: "", maxParallel: 5 })) as { team: { testCommand?: string; maxParallel: number } }).team;
+	expect(updated.testCommand).toBeUndefined();
+	expect(updated.maxParallel).toBe(5);
+	await client.call("teams.remove", { id: team.id });
+	expect(((await client.call("teams.list", {})) as { teams: unknown[] }).teams).toEqual([]);
+	const s = ((await client.call("sessions.list", { kind: "build" })).sessions as { ref: { id: string }; team?: unknown }[]).find((x) => x.ref.id === lead.id);
+	expect(s).toBeDefined();
+	expect(s!.team).toBeUndefined();
+	// The branch stays; its worktree goes. The project can get a team again.
+	expect(execFileSync("git", ["branch", "--list", team.git!.branch], { cwd: dir }).toString()).toContain(team.git!.branch);
+	expect(existsSync(team.git!.integration)).toBe(false);
+	await client.call("teams.create", { name: "Again", template: "development", cwd: dir });
+}, 30_000);

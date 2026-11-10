@@ -197,7 +197,7 @@ struct RootView: View {
         case .index(.projects):
             ProjectsIndex(engine: engine, item: itemBinding)
         case .project(let id):
-            ProjectsIndex(engine: engine, item: itemBinding, focus: id)
+            ProjectPage(engine: engine, projectId: id, item: itemBinding)
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.chats) where engine.threads.isEmpty:

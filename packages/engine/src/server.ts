@@ -796,6 +796,16 @@ export class Engine {
 				const task = await this.teams.createTask(p.id, { title: p.title, brief: p.brief, ...(p.done ? { done: p.done } : {}), ...(p.role ? { role: p.role } : {}) }, "you");
 				return { task } satisfies Result<"teams.addTask">;
 			}
+			case "teams.update": {
+				const p = params as Params<"teams.update">;
+				return { team: this.teamView(await this.teams.update(p.id, { ...(p.testCommand !== undefined ? { testCommand: p.testCommand } : {}), ...(p.maxParallel !== undefined ? { maxParallel: p.maxParallel } : {}) })) } satisfies Result<"teams.update">;
+			}
+			case "teams.remove": {
+				const p = params as Params<"teams.remove">;
+				await this.teams.remove(p.id);
+				this.sessions.detachTeam(p.id);
+				return {} satisfies Result<"teams.remove">;
+			}
 			case "teams.addRoutine": {
 				const p = params as Params<"teams.addRoutine">;
 				const routine = await this.teams.addRoutine(p.id, { on: p.on, prompt: p.prompt, ...(p.when ? { when: p.when } : {}), ...(p.folder ? { folder: p.folder } : {}), ...(p.from ? { from: p.from } : {}), ...(p.subject ? { subject: p.subject } : {}) }, "you");

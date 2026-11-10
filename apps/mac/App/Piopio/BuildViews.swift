@@ -202,6 +202,8 @@ struct BuildSessionView: View {
                 if !session.prompts.isEmpty {
                     PromptStack(session: session).frame(maxWidth: 680)
                 }
+                // A lead conversation's tasks (docs/spec/20 §4), live from the board.
+                if let team = leadTeam { ConversationTasks(engine: engine, team: team, conversationId: summary.ref.id) }
                 Composer(engine: engine, thread: session).frame(maxWidth: 680)
             }
             .padding(.horizontal, 40)
@@ -331,11 +333,17 @@ struct BuildSessionView: View {
     }
 
     /// "smart-paste · pi/engine-protocol", or "· no git".
+    /// The team whose lead this conversation is (docs/spec/20 PT4).
+    private var leadTeam: TeamInfo? {
+        guard let t = summary.team, t.kind == "lead" else { return nil }
+        return engine.teams.first { $0.id == t.id }
+    }
+
     private var subtitle: String {
         let name = project?.name ?? URL(fileURLWithPath: summary.cwd ?? "").lastPathComponent
         let branch = git?.status?.branch ?? summary.worktree?.branch ?? project?.branch
-        if let branch { return "\(name) · \(branch)" }
-        return git?.status?.repo == false ? "\(name) · no git" : name
+        let base = branch.map { "\(name) · \($0)" } ?? (git?.status?.repo == false ? "\(name) · no git" : name)
+        return leadTeam.map { "\(base) · with \($0.name)" } ?? base
     }
 
     static func relative(_ iso: String) -> String {

@@ -169,3 +169,22 @@ folder becomes a project at that folder. Boards, branches and routines move with
   once, and git's lock sent one back.
 - **Not yet (P2):** the team row under the project, the team page's tabs, task cards and event rows in the
   conversation, the "Who" choice. Until then the team page's Lead tab lists the lead conversations.
+
+## 11. P2 as built (2026-11-10)
+
+- **The project page** (`ProjectPage.swift`): a project's row opens it; clicking the row again on its page folds or
+  unfolds its conversations. **Conversations · Board · Settings**, and "New conversation".
+  - **Conversations:** newest first; each says whether it's with the lead or Piopio, and how many of its tasks run.
+  - **Board:** the team's board and merge card; without a team, a pointer to Settings.
+  - **Settings:** who works here (Piopio, or a team: "Give it a team" from the templates, "Open team", "Remove…"),
+    the checks and how many tasks at once (`teams.update`), the routines, and AGENTS.md and NOTES.md.
+- **Removing a team** (`teams.remove`): refused while tasks run. Its lead conversations stay as plain ones, its
+  worktrees, board and routines go, and its branch stays.
+- **The sidebar:** no team row under a project; the project's row shows a dot while its team's tasks run. Teams has no
+  +: a project gets its team in Settings or in New project ("Who works here").
+- **The team page** is the definition for now: its members, and "Open <project>". Editing comes in P3.
+- **Who:** the project's start page shows "Who: <team> | Piopio alone" when the project has a team; a lead
+  conversation's header says "with <team>". The box's "Give a team work" list is gone.
+- **In a lead conversation:** its tasks show above the composer as chips (state, title; one opens its member's
+  session; "Board" opens the project's). `[Board]` and `[Routine]` messages render as quiet event lines ("Board · T1
+  is done…") with the report folded inside, not as your messages.

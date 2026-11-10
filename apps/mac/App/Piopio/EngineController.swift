@@ -624,8 +624,24 @@ final class EngineController {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build), initGit: initGit), as: TeamResult.self).team
         await loadTeams()
+        await loadProjects() // a team without a folder gets a project (docs/spec/20 PT2)
         try? await refreshCatalog()
         return team
+    }
+
+    /// The project's Settings: the team's checks (empty removes them) and how many tasks run at once.
+    func updateTeam(_ team: TeamInfo, testCommand: String? = nil, maxParallel: Int? = nil) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.update", UpdateTeamParams(id: team.id, testCommand: testCommand, maxParallel: maxParallel), as: Empty.self)
+        await loadTeams()
+    }
+
+    /// The project works with Piopio again: the team's conversations stay, as plain ones.
+    func removeTeam(_ team: TeamInfo) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("teams.remove", TeamIdParams(id: team.id), as: Empty.self)
+        await loadTeams()
+        try? await refreshCatalog()
     }
 
     func addTeamTask(_ team: TeamInfo, title: String, brief: String, role: String?) async throws {
