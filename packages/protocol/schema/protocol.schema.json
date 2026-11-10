@@ -33956,6 +33956,21 @@
 										}
 									}
 								}
+							},
+							"source": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "builtin"
+									},
+									{
+										"type": "string",
+										"const": "yours"
+									}
+								]
+							},
+							"folder": {
+								"type": "string"
 							}
 						}
 					}
@@ -34703,6 +34718,341 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"teams.draft.params": {
+			"type": "object",
+			"required": [
+				"description"
+			],
+			"properties": {
+				"description": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.draft.result": {
+			"type": "object",
+			"required": [
+				"draft"
+			],
+			"properties": {
+				"draft": {
+					"type": "object",
+					"required": [
+						"name",
+						"description",
+						"style",
+						"instructions",
+						"roles"
+					],
+					"properties": {
+						"name": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
+						},
+						"style": {
+							"type": "string"
+						},
+						"instructions": {
+							"type": "string"
+						},
+						"roles": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"kind",
+									"responsibility"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"responsibility": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"model": {
+										"type": "string"
+									},
+									"agent": {
+										"type": "string",
+										"description": "An agent this member is: its instructions, and its model when the role has none"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"teams.createDefinition.params": {
+			"type": "object",
+			"properties": {
+				"template": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"style": {
+					"type": "string"
+				},
+				"instructions": {
+					"type": "string"
+				},
+				"roles": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"kind",
+							"responsibility"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "lead"
+									},
+									{
+										"type": "string",
+										"const": "write"
+									},
+									{
+										"type": "string",
+										"const": "review"
+									},
+									{
+										"type": "string",
+										"const": "integrate"
+									}
+								]
+							},
+							"responsibility": {
+								"type": "string"
+							},
+							"done": {
+								"type": "string"
+							},
+							"model": {
+								"type": "string"
+							},
+							"agent": {
+								"type": "string",
+								"description": "An agent this member is: its instructions, and its model when the role has none"
+							}
+						}
+					}
+				}
+			}
+		},
+		"teams.createDefinition.result": {
+			"type": "object",
+			"required": [
+				"definition"
+			],
+			"properties": {
+				"definition": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"template",
+						"roles",
+						"style",
+						"folder",
+						"memberMode",
+						"createdAt",
+						"projects"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"template": {
+							"type": "string"
+						},
+						"roles": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"kind",
+									"responsibility"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"responsibility": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"model": {
+										"type": "string"
+									},
+									"agent": {
+										"type": "string",
+										"description": "An agent this member is: its instructions, and its model when the role has none"
+									}
+								}
+							}
+						},
+						"style": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string",
+							"description": "TEAM.md and NOTES.md"
+						},
+						"model": {
+							"type": "string"
+						},
+						"memberMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"projects": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"teamId",
+									"cwd"
+								],
+								"properties": {
+									"teamId": {
+										"type": "string"
+									},
+									"cwd": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"teams.saveTemplate.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.saveTemplate.result": {
+			"type": "object",
+			"required": [
+				"id",
+				"folder"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"folder": {
+					"type": "string"
 				}
 			}
 		},

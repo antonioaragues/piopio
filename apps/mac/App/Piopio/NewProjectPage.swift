@@ -32,6 +32,14 @@ struct NewProjectPage: View {
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var folderName: String { trimmed.isEmpty ? "Name" : trimmed.replacingOccurrences(of: "/", with: "-") }
 
+    /// The chosen team: one of yours ("def:<id>") or a template.
+    private var chosenDefinition: TeamDefinition? {
+        guard let id = teamTemplate, id.hasPrefix("def:") else { return nil }
+        return engine.teamDefinitions.first { $0.id == String(id.dropFirst(4)) }
+    }
+    private var chosenName: String? { chosenDefinition?.name ?? templates.first { $0.id == teamTemplate }?.name }
+    private var chosenRoles: [TeamRole]? { chosenDefinition?.roles ?? templates.first { $0.id == teamTemplate }?.roles }
+
     private var description: String {
         if let continuing, let title = engine.threads.first(where: { $0.ref == continuing })?.title ?? engine.buildSessions.first(where: { $0.ref == continuing })?.title {
             return "A folder for a subject. “\(title)” continues there once it's made."
@@ -57,13 +65,16 @@ struct NewProjectPage: View {
                         Text("Who works here").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
                         Menu {
                             Button("Piopio") { teamTemplate = nil }
-                            Divider()
-                            ForEach(templates) { t in Button(t.name) { teamTemplate = t.id } }
+                            // Your teams first (docs/spec/20 P3), then a new one from a template.
+                            if !engine.teamDefinitions.isEmpty {
+                                Section("Your teams") { ForEach(engine.teamDefinitions) { d in Button(d.name) { teamTemplate = "def:" + d.id } } }
+                            }
+                            Section("New, from a template") { ForEach(templates) { t in Button(t.name) { teamTemplate = t.id } } }
                         } label: {
-                            Text(templates.first { $0.id == teamTemplate }?.name ?? "Piopio").foregroundStyle(Color.dsFg)
+                            Text(chosenName ?? "Piopio").foregroundStyle(Color.dsFg)
                         }
                         .menuStyle(.button).buttonStyle(PillStyle()).fixedSize()
-                        Text(teamTemplate.flatMap { id in templates.first { $0.id == id } }.map { "\($0.roles.map(\.name).joined(separator: ", ")). Every conversation here is with its lead." } ?? "Or a team: a lead that plans and members that work in parallel. You can change it in the project's Settings.")
+                        Text(chosenRoles.map { "\($0.map(\.name).joined(separator: ", ")). Every conversation here is with its lead." } ?? "Or a team: a lead that plans and members that work in parallel. You can change it in the project's Settings.")
                             .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -95,7 +106,8 @@ struct NewProjectPage: View {
                 let project = try await engine.createProject(name: projectName, instructions: text.isEmpty ? nil : text)
                 // With a team: it works in the new folder, which becomes a git repo so tasks get their own branches.
                 if let teamTemplate {
-                    do { _ = try await engine.createTeam(name: "\(project.name) team", template: teamTemplate, cwd: project.path, goal: nil, testCommand: nil, initGit: true) }
+                    let def = chosenDefinition
+                    do { _ = try await engine.createTeam(name: def?.name ?? "\(project.name) team", template: def?.template ?? teamTemplate, cwd: project.path, goal: nil, testCommand: nil, initGit: true, definition: def?.id) }
                     catch { self.error = "The project is made, but not its team: \((error as? EngineError)?.message ?? error.localizedDescription)" }
                 }
                 done(project)

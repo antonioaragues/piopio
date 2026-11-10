@@ -43,6 +43,7 @@ import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
 import { routineLabel, type TeamRoutine } from "./teams/routines.js";
 import { TeamRunner, type Team } from "./teams/runner.js";
+import { draftTeam, readTemplates } from "./teams/library.js";
 import { TEAM_TEMPLATES } from "./teams/templates.js";
 import { TEMPLATES } from "@piopio/runtime";
 
@@ -223,6 +224,9 @@ export class Engine {
 		this.teamsDir = options.teamsDir ?? process.env.PIOPIO_TEAMS_DIR ?? join(homedir(), "Piopio", "Teams");
 		this.teams = new TeamRunner(this.sessions.teamHost({ stateFile: join(options.paths.home, "teams.json"), worktreesDir: join(options.paths.home, "worktrees", "teams"), log: this.log }));
 		this.sessions.teams = this.teams;
+		// Your templates live beside your teams, as folders (docs/spec/20 P4).
+		this.teams.templatesDir = join(this.teamsDir, "Templates");
+		this.teams.templates = () => [...TEAM_TEMPLATES.map((t) => ({ ...t, source: "builtin" as const })), ...readTemplates(join(this.teamsDir, "Templates"))];
 		// A team's webhook routine has the same kind of URL as an agent's trigger, with the team's id.
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.teams.has(agent) ? this.teams.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
 		this.teams.hookUrl = (team, routine) => (this.hooks.port ? this.hooks.url(team, routine) : undefined);
@@ -768,7 +772,7 @@ export class Engine {
 				return { people: await this.sessions.agentConversations(p.ref) } satisfies Result<"agents.conversations">;
 			}
 			case "teams.templates":
-				return { templates: TEAM_TEMPLATES.map((t) => ({ id: t.id, name: t.name, description: t.description, workplace: t.workplace, roles: t.roles })) } satisfies Result<"teams.templates">;
+				return { templates: this.teams.templates().map((t) => ({ id: t.id, name: t.name, description: t.description, workplace: t.workplace, roles: t.roles, ...(t.source ? { source: t.source } : {}), ...(t.folder ? { folder: t.folder } : {}) })) } satisfies Result<"teams.templates">;
 			case "teams.list":
 				return { teams: this.teams.list().map((t) => this.teamView(t)) } satisfies Result<"teams.list">;
 			case "teams.get": {
@@ -802,6 +806,25 @@ export class Engine {
 				const p = params as Params<"teams.addTask">;
 				const task = await this.teams.createTask(p.id, { title: p.title, brief: p.brief, ...(p.done ? { done: p.done } : {}), ...(p.role ? { role: p.role } : {}) }, "you");
 				return { task } satisfies Result<"teams.addTask">;
+			}
+			case "teams.draft": {
+				const p = params as Params<"teams.draft">;
+				if (!p.description.trim()) throw new EngineError("INVALID", "Describe the team: who's on it and what it does.");
+				return { draft: await draftTeam(p.description, (system, prompt) => this.hub.utility(system, prompt, "team-draft")) } satisfies Result<"teams.draft">;
+			}
+			case "teams.createDefinition": {
+				const p = params as Params<"teams.createDefinition">;
+				const name = p.name?.trim() || this.teams.templates().find((t) => t.id === p.template)?.name || "Team";
+				const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
+				let folder = join(this.teamsDir, slug);
+				for (let n = 2; existsSync(folder); n++) folder = join(this.teamsDir, `${slug}-${n}`);
+				const def = this.teams.createDefinition({ ...(p.template ? { template: p.template } : {}), ...(p.name ? { name: p.name } : {}), ...(p.style ? { style: p.style } : {}), ...(p.instructions !== undefined ? { instructions: p.instructions } : {}), ...(p.roles ? { roles: p.roles } : {}) }, folder);
+				for (const conn of this.authed) conn.notify("teams.changed", { id: def.id });
+				return { definition: this.definitionView(def.id) } satisfies Result<"teams.createDefinition">;
+			}
+			case "teams.saveTemplate": {
+				const p = params as Params<"teams.saveTemplate">;
+				return this.teams.saveTemplate(p.id, { ...(p.name ? { name: p.name } : {}), ...(p.description ? { description: p.description } : {}) }) satisfies Result<"teams.saveTemplate">;
 			}
 			case "teams.definitions":
 				return { definitions: this.teams.definitions().map((d) => this.definitionView(d.id)) } satisfies Result<"teams.definitions">;

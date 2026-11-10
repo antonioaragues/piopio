@@ -621,6 +621,26 @@ final class EngineController {
         await loadTeams()
     }
 
+    /// A team drafted from a description: the background model's, or one from your words.
+    func draftTeam(_ description: String) async throws -> TeamDraft {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("teams.draft", TeamDraftParams(description: description), as: TeamDraftResult.self).draft
+    }
+
+    /// A new team, not in a project yet: from a template, or from a draft you adjusted.
+    func createTeamDefinition(_ params: CreateTeamDefinitionParams) async throws -> TeamDefinition {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let def = try await client.call("teams.createDefinition", params, as: TeamDefinitionResult.self).definition
+        await loadTeams()
+        return def
+    }
+
+    /// Save as template: a folder you can edit or share; returns it.
+    func saveTeamTemplate(_ def: TeamDefinition, name: String?) async throws -> String {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("teams.saveTemplate", SaveTeamTemplateParams(id: def.id, name: name), as: SaveTeamTemplateResult.self).folder
+    }
+
     func removeTeamDefinition(_ def: TeamDefinition) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         _ = try await client.call("teams.removeDefinition", TeamIdParams(id: def.id), as: Empty.self)

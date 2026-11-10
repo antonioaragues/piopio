@@ -789,7 +789,32 @@ public struct TeamInfo: Codable, Sendable, Hashable, Identifiable {
 public struct TeamTemplate: Decodable, Sendable, Hashable, Identifiable {
     public var id, name, description, workplace: String
     public var roles: [TeamRole]
+    /// "builtin", or "yours": a folder in ~/Piopio/Teams/Templates (docs/spec/20 P4).
+    public var source: String?
+    public var folder: String?
 }
+
+/// A team drafted from your description (docs/spec/20 P4); nothing is made until you create it.
+public struct TeamDraft: Codable, Sendable, Hashable {
+    public var name, description, style, instructions: String
+    public var roles: [TeamRole]
+}
+public struct TeamDraftParams: Encodable, Sendable { public var description: String; public init(description: String) { self.description = description } }
+public struct TeamDraftResult: Decodable, Sendable { public var draft: TeamDraft }
+public struct CreateTeamDefinitionParams: Encodable, Sendable {
+    public var template, name, style, instructions: String?
+    public var roles: [TeamRole]?
+    public init(template: String? = nil, name: String? = nil, style: String? = nil, instructions: String? = nil, roles: [TeamRole]? = nil) {
+        self.template = template; self.name = name; self.style = style; self.instructions = instructions; self.roles = roles
+    }
+}
+public struct TeamDefinitionResult: Decodable, Sendable { public var definition: TeamDefinition }
+public struct SaveTeamTemplateParams: Encodable, Sendable {
+    public var id: String
+    public var name: String?
+    public init(id: String, name: String? = nil) { self.id = id; self.name = name }
+}
+public struct SaveTeamTemplateResult: Decodable, Sendable { public var id, folder: String }
 
 public struct TeamTemplatesResult: Decodable, Sendable { public var templates: [TeamTemplate] }
 public struct TeamsListResult: Decodable, Sendable { public var teams: [TeamInfo] }

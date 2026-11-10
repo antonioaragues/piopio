@@ -208,3 +208,21 @@ folder becomes a project at that folder. Boards, branches and routines move with
   (TEAM.md), Memory (NOTES.md), Projects (where it works; a team no project uses can be removed, its folder stays).
 - **The sidebar's Teams** lists definitions, with a dot while any of their projects has tasks running.
 - **Not yet (P4):** save as template, templates as folders, making a team by describing it.
+
+## 13. P4 as built (2026-11-10)
+
+- **Your templates are folders** (`engine/src/teams/library.ts`) in ~/Piopio/Teams/Templates/<name>: `TEAM.md` (front
+  matter: name, description, workplace, style; its text is what every member is told) and `roles/NN-<id>.md`, one card
+  per member (front matter: name, kind, done, model, agent; its text is the responsibility). The number keeps the
+  order. Edit them by hand, share them or bring cards from elsewhere; a folder that doesn't read (no lead, no member
+  that does tasks) is skipped. They're listed with the built-in ones as `my-<name>`, marked "Yours".
+- **Save as template** (`teams.saveTemplate`, on the team page): the team's members, way of working and TEAM.md.
+- **A team from a template** gets the template's text in its TEAM.md.
+- **Make a team by describing it** (`teams.draft`, then `teams.createDefinition`): the background model drafts the
+  name, members (with kinds), way of working and instructions; the lead always keeps the board's way of working. When
+  there's no background model, the description's own words do: the name from before "with", members from the list
+  after it, "who leads" or "jefa" a lead, "who reviews" or "revisora" a reviewer, in English or Spanish. Nothing is
+  made until you press Create; you can rename or leave out members first.
+- **New team** (Teams › +) is that page: describe it and draft, or start from a template (built in or yours). It
+  makes a team that isn't in a project yet; a project gets it in its Settings, and New project's "Who works here"
+  lists your teams first.

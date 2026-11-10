@@ -345,3 +345,38 @@ test("a team is a definition you edit: its QA gets its own model, a Designer joi
 	expect(((await client.call("teams.definitions", {})) as { definitions: Def[] }).definitions[0]!.projects).toHaveLength(2);
 	await expect(client.call("teams.removeDefinition", { id: def.id })).rejects.toMatchObject({ data: { code: "CONFLICT" } });
 }, 60_000);
+
+test("a team made by describing it, saved as a template folder you can edit by hand, then used in a new project (docs/spec/20 P4)", async () => {
+	const { client } = await start();
+	type Draft = { name: string; instructions: string; roles: { id: string; name: string; kind: string; responsibility: string; model?: string }[] };
+	const { draft } = (await client.call("teams.draft", { description: "a marketing team with a lead, a copywriter, a designer and an editor who reviews" })) as { draft: Draft };
+	expect(draft.name).toBe("Marketing team");
+	expect(draft.roles.map((r) => [r.name, r.kind])).toEqual([["Lead", "lead"], ["Copywriter", "write"], ["Designer", "write"], ["Editor", "review"]]);
+	const es = ((await client.call("teams.draft", { description: "un equipo de contenido con una jefa, dos redactoras y una revisora" })) as { draft: Draft }).draft;
+	expect(es.name).toBe("Equipo de contenido");
+	expect(es.roles.map((r) => r.kind)).toEqual(["lead", "write", "review"]);
+	const podcast = ((await client.call("teams.draft", { description: "a research team for our podcast with a producer who leads, two researchers and a fact-checker who reviews" })) as { draft: Draft }).draft;
+	expect(podcast.name).toBe("Research team");
+	expect(podcast.roles.map((r) => [r.name, r.kind])).toEqual([["Producer", "lead"], ["Researchers", "write"], ["Fact-checker", "review"]]);
+
+	// You adjust it (no designer) and make it; its TEAM.md says what it's for.
+	const { definition } = (await client.call("teams.createDefinition", { name: draft.name, instructions: draft.instructions, roles: draft.roles.filter((r) => r.name !== "Designer") })) as { definition: Def };
+	expect(definition.roles.map((r) => r.name)).toEqual(["Lead", "Copywriter", "Editor"]);
+	expect(definition.projects).toEqual([]);
+	expect(readFileSync(join(definition.folder, "TEAM.md"), "utf8")).toContain("What this team is for: a marketing team");
+
+	// Save as template: a folder of readable cards; edit one by hand and the template follows.
+	const saved = (await client.call("teams.saveTemplate", { id: definition.id })) as { id: string; folder: string };
+	expect(saved.id).toBe("my-marketing-team");
+	const copywriter = join(saved.folder, "roles", "02-copywriter.md");
+	expect(readFileSync(copywriter, "utf8")).toMatch(/^---\nname: Copywriter\nkind: write\n---/);
+	writeFileSync(copywriter, readFileSync(copywriter, "utf8").replace("kind: write", "kind: write\nmodel: faux:copy-model"));
+	type Template = { id: string; source?: string; roles: { name: string; model?: string }[] };
+	const mine = ((await client.call("teams.templates", {})) as { templates: Template[] }).templates.find((t) => t.id === saved.id);
+	expect(mine).toMatchObject({ source: "yours", roles: [{ name: "Lead" }, { name: "Copywriter", model: "faux:copy-model" }, { name: "Editor" }] });
+
+	// A new project with it: the same members, and the template's instructions in its TEAM.md.
+	const { team } = (await client.call("teams.create", { name: "Launch", template: saved.id })) as { team: Team & { roles: { name: string }[]; folder: string } };
+	expect(team.roles.map((r) => r.name)).toEqual(["Lead", "Copywriter", "Editor"]);
+	expect(readFileSync(join(team.folder, "TEAM.md"), "utf8")).toContain("What this team is for");
+}, 30_000);

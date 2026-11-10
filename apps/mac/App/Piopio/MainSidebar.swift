@@ -380,9 +380,11 @@ struct MainSidebar: View {
     /// Teams (docs/spec/19): each opens its page; a dot while any of its tasks is running.
     @ViewBuilder private var teamsSection: some View {
         let teams = engine.teamDefinitions
-        // Teams are definitions (docs/spec/20 PT8, P3): a project gets one in its Settings, so there's no + here.
-        header(.teams, total: teams.count, shown: teams.count, add: nil)
+        // Teams are definitions (docs/spec/20 P3, P4): + makes one (described, or from a template); a project gets one
+        // in its Settings.
+        header(.teams, total: teams.count, shown: teams.count, add: { item = .start(.team) }, addHelp: "New team")
         if !collapsed.contains(SidebarSection.teams.rawValue) {
+            if item == .start(.team) { draftRow(.team) }
             ForEach(teams) { team in
                 let selected = item == .team(team.id)
                 let places = Set(team.projects.map(\.teamId))

@@ -11,6 +11,7 @@ struct TeamPage: View {
     let teamId: String
     @Binding var item: SidebarItem
     @AppStorage("teamTab") private var tab = "members"
+    @State private var saving: TeamDefinition?
 
     private var def: TeamDefinition? {
         engine.teamDefinitions.first { $0.id == teamId }
@@ -26,6 +27,8 @@ struct TeamPage: View {
                     } actions: {
                         NeutralSegmented(selection: $tab, options: [("members", "Members"), ("instructions", "Instructions"), ("memory", "Memory"), ("projects", "Projects")])
                             .frame(width: 380)
+                        Button("Save as template…") { saving = def }.buttonStyle(PillStyle())
+                            .help("A folder with TEAM.md and a card per member, to start other teams from, edit by hand or share")
                     }
                     switch tab {
                     case "instructions":
@@ -45,6 +48,7 @@ struct TeamPage: View {
             }
         }
         .task(id: teamId) { await engine.loadTeams() }
+        .sheet(item: $saving) { def in SaveTemplateSheet(engine: engine, def: def) { saving = nil } }
     }
 
     private func subtitle(_ def: TeamDefinition) -> String {
@@ -301,5 +305,52 @@ private struct TeamProjects: View {
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+    }
+}
+
+/// Save as template (docs/spec/20 P4): a name, then where the folder went.
+private struct SaveTemplateSheet: View {
+    let engine: EngineController
+    let def: TeamDefinition
+    let done: () -> Void
+    @State private var name = ""
+    @State private var folder: String?
+    @State private var error: String?
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Save as template").font(.system(size: 15, weight: .semibold))
+            if let folder {
+                Text("Saved. New teams can start from it, and you can edit its cards by hand or share the folder.")
+                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+                Text(folder).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg3).textSelection(.enabled)
+                HStack {
+                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: folder)]) }
+                    Spacer()
+                    Button("Done", action: done).keyboardShortcut(.defaultAction)
+                }
+            } else {
+                TextField("Name", text: $name, prompt: Text(def.name)).textFieldStyle(.roundedBorder)
+                Text("Its members, way of working and TEAM.md, as a folder in ~/Piopio/Teams/Templates: TEAM.md and a card per member.")
+                    .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+                if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
+                HStack {
+                    Spacer()
+                    Button("Cancel", action: done).keyboardShortcut(.cancelAction)
+                    Button("Save") {
+                        busy = true
+                        Task {
+                            defer { busy = false }
+                            do { folder = try await engine.saveTeamTemplate(def, name: name.trimmingCharacters(in: .whitespaces).isEmpty ? nil : name) }
+                            catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+                        }
+                    }
+                    .keyboardShortcut(.defaultAction).disabled(busy)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
     }
 }

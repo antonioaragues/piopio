@@ -13,7 +13,8 @@ import type { ApprovalMode } from "@piopio/protocol";
 import type { Watch } from "@piopio/runtime";
 import { EngineError } from "../models.js";
 import { nextOf, parseWhen, routineLabel, systemZone, type TeamRoutine } from "./routines.js";
-import { template, type Role, type TeamTemplate } from "./templates.js";
+import { writeTemplate } from "./library.js";
+import { TEAM_TEMPLATES, type Role, type TeamTemplate } from "./templates.js";
 
 export type TaskState = "todo" | "doing" | "review" | "integrating" | "done" | "blocked";
 
@@ -187,6 +188,10 @@ export class TeamRunner {
 	onRoutines?: () => void;
 	/** Tests: the clock. */
 	now: () => number = () => Date.now();
+	/** Every template: the built-in ones and yours (docs/spec/20 P4), set by the engine. */
+	templates: () => TeamTemplate[] = () => TEAM_TEMPLATES;
+	/** Where "Save as template" writes. */
+	templatesDir?: string;
 
 	private defs: TeamDefinition[] = [];
 	private readonly defsFile: string;
@@ -261,6 +266,36 @@ export class TeamRunner {
 		return def;
 	}
 
+	/**
+	 * A new team, not yet in a project (docs/spec/20 P4): from a template, or from members you drafted (a description).
+	 * Its folder gets TEAM.md (the instructions) and NOTES.md.
+	 */
+	createDefinition(input: { template?: string; name?: string; style?: string; instructions?: string; roles?: Role[] }, folder: string): TeamDefinition {
+		const t = input.template ? this.templates().find((x) => x.id === input.template) : undefined;
+		if (input.template && !t) throw new EngineError("INVALID", `No team template “${input.template}”.`);
+		if (!t && !input.roles?.length) throw new EngineError("INVALID", "Give a template or the members.");
+		const roles = checkRoles(input.roles ?? t!.roles);
+		const name = input.name?.trim() || t?.name || "New team";
+		mkdirSync(folder, { recursive: true });
+		const instructions = input.instructions?.trim() ?? t?.instructions?.trim() ?? "";
+		writeFileSync(join(folder, "TEAM.md"), `# ${name}\n\n${instructions || "<!-- What every member of this team is told, in every project: conventions, tools, taste. -->"}\n`);
+		if (!existsSync(join(folder, "NOTES.md"))) writeFileSync(join(folder, "NOTES.md"), `# ${name}: notes\n\n<!-- What the team learns about how it works, across projects: conventions, tools, what worked. -->\n`);
+		const def: TeamDefinition = { id: newDefId(), name, template: t?.id ?? "custom", roles, style: input.style?.trim() || t?.style || "", folder, memberMode: "auto_edit", createdAt: iso() };
+		this.defs.push(def);
+		this.saveDefs();
+		return def;
+	}
+
+	/** Save as template: the team's members, way of working and TEAM.md, as a folder you can edit or share. */
+	saveTemplate(defId: string, input: { name?: string; description?: string }): { id: string; folder: string } {
+		const def = this.definition(defId);
+		if (!this.templatesDir) throw new EngineError("INTERNAL", "Templates have no folder.");
+		const file = join(def.folder, "TEAM.md");
+		const instructions = existsSync(file) ? readFileSync(file, "utf8").replace(/^#.*\n?/, "").replace(/<!--[\s\S]*?-->/g, "").trim() : "";
+		const name = input.name?.trim() || def.name;
+		return writeTemplate(this.templatesDir, { name, description: input.description?.trim() || def.roles.map((r) => r.name).join(", "), style: def.style, instructions, roles: def.roles });
+	}
+
 	/** A team no project uses can go; its folder (TEAM.md, NOTES.md) stays on disk. */
 	removeDefinition(id: string): void {
 		this.definition(id);
@@ -318,7 +353,7 @@ export class TeamRunner {
 	async create(params: { name: string; template: string; cwd?: string; folder: string; model?: string; goal?: string; testCommand?: string; memberMode?: ApprovalMode; maxParallel?: number; initGit?: boolean; definition?: string }): Promise<Team> {
 		// An existing team (a definition) in another project, or a new one from a template.
 		const reuse = params.definition ? this.definition(params.definition) : undefined;
-		const t: TeamTemplate | undefined = template(reuse?.template ?? params.template);
+		const t: TeamTemplate | undefined = this.templates().find((x) => x.id === (reuse?.template ?? params.template));
 		if (!t && !reuse) throw new EngineError("INVALID", `No team template “${params.template}”.`);
 		const name = reuse?.name ?? (params.name.trim() || t!.name);
 		const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
@@ -328,7 +363,7 @@ export class TeamRunner {
 		const notes = join(folder, "NOTES.md");
 		if (!existsSync(notes)) writeFileSync(notes, `# ${name}: notes\n\n<!-- What the team learns about how it works, across projects: conventions, tools, what worked. -->\n`);
 		const brief = join(folder, "TEAM.md");
-		if (!existsSync(brief)) writeFileSync(brief, `# ${name}\n\n<!-- What every member of this team is told, in every project: conventions, tools, taste. -->\n`);
+		if (!existsSync(brief)) writeFileSync(brief, `# ${name}\n\n${t?.instructions?.trim() || "<!-- What every member of this team is told, in every project: conventions, tools, taste. -->"}\n`);
 		// Every team works in a project (docs/spec/20 PT2); the engine makes one when none is given.
 		const cwd = params.cwd ?? params.folder;
 		const taken = this.teams.find((x) => x.cwd === cwd);

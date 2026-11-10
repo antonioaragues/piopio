@@ -349,7 +349,7 @@ private enum TitleFont {
     static let tracking: CGFloat = -0.68
 }
 
-private struct TitleText: View {
+struct TitleText: View {
     let text: String
     var body: some View {
         Text(text).font(TitleFont.font).tracking(TitleFont.tracking).foregroundStyle(Color.dsFg)

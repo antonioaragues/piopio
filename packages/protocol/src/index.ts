@@ -1616,13 +1616,25 @@ export const methods = {
 	/** Team templates (docs/spec/19): development, research, writing. */
 	"teams.templates": {
 		params: Type.Object({}),
-		result: Type.Object({ templates: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), description: Type.String(), workplace: literals("project", "folder"), roles: Type.Array(TeamRole) })) }),
+		result: Type.Object({ templates: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), description: Type.String(), workplace: literals("project", "folder"), roles: Type.Array(TeamRole), source: Type.Optional(literals("builtin", "yours")), folder: Type.Optional(Type.String()) })) }),
 	},
 	"teams.list": { params: Type.Object({}), result: Type.Object({ teams: Type.Array(TeamInfo) }) },
 	/** Teams as definitions (docs/spec/20 P3), with the projects each works in. */
 	"teams.definitions": { params: Type.Object({}), result: Type.Object({ definitions: Type.Array(TeamDefinition) }) },
 	/** You edit a team: its name, members or default model (null clears it). Every project it works in follows. */
 	"teams.updateDefinition": { params: Type.Object({ id: Type.String(), name: Type.Optional(Type.String()), roles: Type.Optional(Type.Array(TeamRole)), model: Type.Optional(Type.Union([Type.String(), Type.Null()])) }), result: Type.Object({ definition: TeamDefinition }) },
+	/** A team drafted from your description (docs/spec/20 P4): nothing is made until you create it. */
+	"teams.draft": {
+		params: Type.Object({ description: Type.String() }),
+		result: Type.Object({ draft: Type.Object({ name: Type.String(), description: Type.String(), style: Type.String(), instructions: Type.String(), roles: Type.Array(TeamRole) }) }),
+	},
+	/** A new team, not yet in a project: from a template, or from members (a draft you adjusted). */
+	"teams.createDefinition": {
+		params: Type.Object({ template: Type.Optional(Type.String()), name: Type.Optional(Type.String()), style: Type.Optional(Type.String()), instructions: Type.Optional(Type.String()), roles: Type.Optional(Type.Array(TeamRole)) }),
+		result: Type.Object({ definition: TeamDefinition }),
+	},
+	/** Save as template: a folder in ~/Piopio/Teams/Templates with TEAM.md and a role card per member. */
+	"teams.saveTemplate": { params: Type.Object({ id: Type.String(), name: Type.Optional(Type.String()), description: Type.Optional(Type.String()) }), result: Type.Object({ id: Type.String(), folder: Type.String() }) },
 	/** A team no project uses; its folder stays on disk. */
 	"teams.removeDefinition": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
 	"teams.get": { params: Type.Object({ id: Type.String() }), result: Type.Object({ team: TeamInfo }) },
