@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>body{margin:0;background:#121212;}a{color:oklch(0.72 0.14 255);text-decoration:none}a:hover{color:oklch(0.8 0.12 255)}</style>
+</helmet>
+<section style="padding:64px;display:flex;flex-direction:column;gap:80px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;color:#e6e6e6;background:#121212;border-bottom:1px solid #2a2a2a">
+
+<div style="display:flex;flex-direction:column;gap:28px;max-width:2400px">
+  <div style="display:flex;flex-direction:column;gap:12px;max-width:760px">
+    <div style="font-size:13px;color:#8a8a8a">Piopio · Ronda 2 · Journeys</div>
+    <div style="font-size:40px;font-weight:700;letter-spacing:-0.02em">Empieza por la intención, no por el tipo de objeto</div>
+    <div style="font-size:16px;line-height:1.55;color:#b0b0b0;text-wrap:pretty">Hoy el usuario tiene que saber de antemano si necesita un agente, un equipo o un proyecto, crearlo en su sección y luego conectarlo en Settings. Nadie piensa así. Se piensa <span style="color:#fff">"quiero que esto pase solo"</span>, <span style="color:#fff">"esto se me ha hecho grande"</span> o <span style="color:#fff">"esta conversación debería seguir viva"</span>. La propuesta reordena todo alrededor de esos tres momentos.</div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(5,minmax(0,300px));gap:16px">
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5;color:#a8a8a8"><span style="color:#7a7a7a;font-size:12px">Regla 1</span><span style="color:#fff;font-weight:600;font-size:15px">Los equipos nacen en un proyecto</span>Aparecen cuando el trabajo crece, propuestos por Piopio leyendo el proyecto. Después se guardan para reutilizarlos. Crear un equipo "en vacío" sigue existiendo, pero es secundario.</div>
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5;color:#a8a8a8"><span style="color:#7a7a7a;font-size:12px">Regla 2</span><span style="color:#fff;font-weight:600;font-size:15px">Todo miembro es un agente</span>Mismo avatar, misma página, mismo Setup. Un miembro es uno de tus agentes o un agente que solo existe dentro del equipo. Los de equipo pueden "salir" y ser tuyos.</div>
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5;color:#a8a8a8"><span style="color:#7a7a7a;font-size:12px">Regla 3</span><span style="color:#fff;font-weight:600;font-size:15px">Se crea hablando, se ajusta viendo</span>Nada empieza con un formulario. El resultado de la conversación es una tarjeta que puedes corregir; Setup es para después.</div>
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5;color:#a8a8a8"><span style="color:#7a7a7a;font-size:12px">Regla 4</span><span style="color:#fff;font-weight:600;font-size:15px">Una sola agenda</span>Rutinas de agentes y de proyectos en un mismo sitio (Home): qué pasó mientras no estabas, qué pasará hoy, qué espera por ti.</div>
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5;color:#a8a8a8"><span style="color:#7a7a7a;font-size:12px">Regla 5</span><span style="color:#fff;font-weight:600;font-size:15px">La memoria tiene dueño</span>Lo que un agente aprende trabajando en un equipo va a las notas del equipo o del proyecto, no a su memoria personal. Se dice explícitamente al unirlo.</div>
+  </div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:16px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:24px;font-weight:700">El modelo</span><span style="font-size:15px;color:#8a8a8a">Acordado con Antonio</span></div>
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,330px));gap:16px;align-items:stretch">
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;color:#a8a8a8">
+      <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:12px;border:1.5px solid #9a9a9a;border-radius:50%"></div><span style="color:#fff;font-weight:600;font-size:15px">Conversación</span></div>
+      Suelta o dentro de un proyecto. Siempre con Piopio o, en un proyecto con equipo, con su lead.
+      <span style="color:#7a7a7a;font-size:13px">Tus agentes entran con @nombre o cuando el modelo los llama. No se "asignan".</span>
+    </div>
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;color:#a8a8a8">
+      <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:11px;border:1.5px solid #9a9a9a;border-radius:2px"></div><span style="color:#fff;font-weight:600;font-size:15px">Proyecto</span></div>
+      Una carpeta. Sesiones normales con Piopio. Opcionalmente, <span style="color:#fff">un</span> equipo asignado: entonces aparece el Board.
+      <span style="color:#7a7a7a;font-size:13px">Un equipo creado aquí vive aquí, salvo que lo guardes para reutilizar.</span>
+    </div>
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;color:#a8a8a8">
+      <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:4px;background:oklch(0.72 0.12 70)"></div><span style="color:#fff;font-weight:600;font-size:15px">Agente</span></div>
+      Alguien con modelo, instrucciones, herramientas, memoria, rutinas y canales. Tiene su propio chat.
+      <span style="color:#7a7a7a;font-size:13px">Puede ser miembro de equipos, conservando su identidad.</span>
+    </div>
+    <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5;color:#a8a8a8">
+      <div style="display:flex;align-items:center;gap:8px"><div style="display:flex"><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 255)"></div><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 300);margin-left:-4px"></div><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 190);margin-left:-4px"></div></div><span style="color:#fff;font-weight:600;font-size:15px">Equipo</span></div>
+      Miembros en roles: <span style="color:#fff">tus agentes</span> o <span style="color:#fff">agentes del equipo</span> (solo existen ahí). Configuración propia: modelo, TEAM.md, notas, reglas de revisión.
+      <span style="color:#7a7a7a;font-size:13px">No tiene chat: trabaja en el proyecto que lo tiene asignado.</span>
+    </div>
+  </div>
+</div>
+
+<div id="5f" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;align-items:center;gap:12px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">5f</span><span style="font-size:24px;font-weight:700">Montar un equipo</span><span style="font-size:15px;color:#8a8a8a">Con tus agentes y con agentes que solo viven en él</span></div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">New team</span><span style="color:#7a7a7a">from Teams › + or a project</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;line-height:1.5">
+          <div style="border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px 12px;background:#262626">A lead, two writers and my Code reviewer checking everything</div>
+          <span style="color:#8a8a8a">Draft</span>
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 255)"></div><span style="font-weight:600">Lead</span><span style="flex:1;color:#8a8a8a">plans</span><span style="font-size:11px;color:#9a9a9a;border:1px solid #3a3a3a;padding:1px 6px;border-radius:4px">team only</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 300)"></div><span style="font-weight:600">Writer</span><span style="flex:1;color:#8a8a8a">does tasks ×2</span><span style="font-size:11px;color:#9a9a9a;border:1px solid #3a3a3a;padding:1px 6px;border-radius:4px">team only</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 0"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 190)"></div><span style="font-weight:600">Code reviewer</span><span style="flex:1;color:#8a8a8a">reviews every task</span><span style="font-size:11px;color:#151515;background:oklch(0.78 0.1 190);padding:1px 6px;border-radius:4px">your agent</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">1 · Describirlo en una frase.</span> Si nombras a uno de tus agentes, entra como tal. Cada miembro lleva su etiqueta: "your agent" o "team only".</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">Add a member</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px;padding:14px">
+          <div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 10px;color:#6a6a6a">Search your agents or describe a new one…</div>
+          <span style="color:#7a7a7a;padding-top:6px">Your agents</span>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.06)"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 190)"></div><span style="flex:1">Code reviewer</span><span style="color:#7a7a7a">Sonnet 5 · web, files</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 70)"></div><span style="flex:1">Morning briefing</span><span style="color:#7a7a7a">Haiku 5.5 · web, calendar</span></div>
+          <span style="color:#7a7a7a;padding-top:6px">New, only in this team</span>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px"><div style="width:18px;height:18px;border-radius:5px;border:1.5px dashed #666"></div><span style="flex:1">Blank member</span><span style="color:#7a7a7a">uses the team's setup</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px"><div style="width:18px;height:18px;border-radius:5px;border:1.5px dashed #666"></div><span style="flex:1">From a role: Editor, Researcher, QA…</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">2 · Un solo "Add member" con dos orígenes.</span> Arriba tus agentes, abajo crear uno que solo existe aquí. Nada de "Based on agent: None" escondido en un modal.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">Writing team</span><span style="color:#7a7a7a">Settings</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;padding:6px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="display:flex;flex-direction:column"><span>Model</span><span style="color:#7a7a7a">for members without their own</span></div><span style="padding:3px 9px;background:#2a2a2a;border-radius:6px">Haiku 5.5 ⌄</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="display:flex;flex-direction:column"><span>Tools</span><span style="color:#7a7a7a">what team-only members may use</span></div><span style="color:#b0b0b0">Web · files</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="display:flex;flex-direction:column"><span>Review</span><span style="color:#7a7a7a">sent back at most</span></div><span style="padding:3px 9px;background:#2a2a2a;border-radius:6px">2 times, then ask me</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="display:flex;flex-direction:column"><span>Budget</span><span style="color:#7a7a7a">per job, across members</span></div><span style="padding:3px 9px;background:#2a2a2a;border-radius:6px">$2</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0"><div style="display:flex;flex-direction:column"><span>TEAM.md</span><span style="color:#7a7a7a">what every member is told</span></div><span style="color:oklch(0.72 0.14 255)">Edit</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">3 · La configuración del equipo es la base.</span> Los miembros "team only" la heredan; tus agentes conservan su modelo y herramientas, salvo que digas lo contrario.</div>
+    </div>
+  </div>
+</div>
+
+<div id="5a" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;align-items:center;gap:12px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">5a</span><span style="font-size:24px;font-weight:700">"Quiero que esto pase solo"</span><span style="font-size:15px;color:#8a8a8a">Crear un agente hablando</span></div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:16px;height:16px;border-radius:5px;border:1.5px dashed #666"></div><span style="color:#9a9a9a">New agent</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:14px;padding:20px">
+          <div style="width:44px;height:44px;border-radius:12px;border:1.5px dashed #5a5a5a"></div>
+          <span style="font-size:15px;font-weight:600">What should I do for you?</span>
+          <div style="display:flex;flex-direction:column;gap:6px;width:100%">
+            <span style="padding:7px 10px;border-radius:8px;background:#2a2a2a;color:#cfcfcf">Every morning, tell me what's ahead</span>
+            <span style="padding:7px 10px;border-radius:8px;background:#2a2a2a;color:#cfcfcf">Watch my email and warn me about bills</span>
+            <span style="padding:7px 10px;border-radius:8px;background:#2a2a2a;color:#cfcfcf">Keep a shared list for the family</span>
+          </div>
+          <div style="width:100%;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px;color:#6a6a6a">In your own words…</div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">1 · Un agente vacío que pregunta.</span> Desde Agents › +, ⌘⇧N o "Turn into an agent" en una conversación. Sin campos: un avatar en blanco y tres ideas.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:16px;height:16px;border-radius:5px;border:1.5px dashed #666"></div><span style="color:#9a9a9a">New agent</span><span style="margin-left:auto;color:#6a6a6a">Question 2 of 3</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:12px;padding:16px;line-height:1.5">
+          <div style="align-self:flex-end;max-width:300px;background:#2c2c2c;padding:7px 11px;border-radius:12px">Weekday mornings: my calendar, the weather in Zaragoza and AI news.</div>
+          <span>Got it. Where should I send it?</span>
+          <div style="display:flex;gap:6px"><span style="padding:5px 10px;border-radius:7px;background:#ececec;color:#111">Here in Piopio</span><span style="padding:5px 10px;border-radius:7px;background:#2a2a2a">Telegram</span><span style="padding:5px 10px;border-radius:7px;background:#2a2a2a">Both</span></div>
+          <span style="color:#7a7a7a">Then: what time? (I'd suggest 8:00)</span>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">2 · Máximo tres preguntas, con respuestas rápidas.</span> Solo pregunta lo que no puede deducir. Se ve cuántas quedan.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:16px;height:16px;border-radius:5px;background:oklch(0.72 0.12 70);color:#151515;font-weight:700;font-size:9px;display:flex;align-items:center;justify-content:center">M</div><span style="font-weight:600">Morning briefing</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:12px;padding:16px">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="width:44px;height:44px;border-radius:12px;background:oklch(0.72 0.12 70);color:#151515;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 6px oklch(0.72 0.12 70 / 0.18)">M</div>
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:600">I'm Morning briefing</span><span style="color:#8a8a8a">Rename · change colour</span></div>
+          </div>
+          <div style="display:grid;grid-template-columns:70px 1fr;gap:6px 10px;border:1px solid rgba(255,255,255,0.09);border-radius:10px;padding:10px 12px;background:#232323">
+            <span style="color:#8a8a8a">Does</span><span>Calendar, weather, AI news. 5 points max.</span>
+            <span style="color:#8a8a8a">When</span><span>Weekdays at 8:00</span>
+            <span style="color:#8a8a8a">Uses</span><span>Web · Calendar <span style="color:oklch(0.78 0.13 70)">needs your OK</span></span>
+            <span style="color:#8a8a8a">Reaches</span><span>You, here in Piopio</span>
+          </div>
+          <div style="display:flex;gap:6px"><span style="padding:5px 10px;border-radius:7px;background:#ececec;color:#111">Looks good</span><span style="padding:5px 10px;border-radius:7px;background:#2a2a2a">Change something</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">3 · Cobra vida.</span> Aparecen nombre, color y avatar; la cabecera y la barra lateral se actualizan a la vez. Su "carné" resume lo decidido. Los permisos quedan marcados, no escondidos.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:16px;height:16px;border-radius:5px;background:oklch(0.72 0.12 70);color:#151515;font-weight:700;font-size:9px;display:flex;align-items:center;justify-content:center">M</div><span style="font-weight:600">Morning briefing</span><span style="color:#7a7a7a">Next: tomorrow 8:00</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:16px;line-height:1.5">
+          <span>Want a first one now, so you can see how it looks?</span>
+          <div style="display:flex;align-items:center;gap:10px;color:#7a7a7a;font-size:11px"><div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>Trial run · now<div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div></div>
+          <span style="color:#cfcfcf">· 10:00 Call with Marta<br>· 18°, sunny in Zaragoza<br>· A new open model beats last month's leader</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:oklch(0.3 0.05 255);border-radius:8px;padding:8px 10px"><span>Shorter? Longer? Tell me and I'll adjust.</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">4 · Probar antes de esperar.</span> Una ejecución de prueba inmediata. Cerrar el ciclo en el minuto uno, no mañana a las 8:00.</div>
+    </div>
+  </div>
+</div>
+
+<div id="5b" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;align-items:center;gap:12px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">5b</span><span style="font-size:24px;font-weight:700">"Esto se me ha hecho grande"</span><span style="font-size:15px;color:#8a8a8a">El equipo nace dentro del proyecto</span></div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">piopio</span><span style="color:#7a7a7a">with Piopio</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;line-height:1.5">
+          <div style="align-self:flex-end;max-width:320px;background:#2c2c2c;padding:7px 11px;border-radius:12px">Add Sign in with Apple, a settings screen, and fix the three crash reports.</div>
+          <span>That's three separate pieces of work. I can do them one after another here, or bring in a team: they work in parallel and each change gets reviewed.</span>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="padding:7px 10px;border-radius:8px;background:#2a2a2a">Do it here, one by one</span>
+            <span style="padding:7px 10px;border-radius:8px;background:#ececec;color:#111">Bring in a team for piopio</span>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">1 · Piopio detecta el salto.</span> Trabajo divisible o grande → ofrece un equipo en la misma conversación. Nunca obligatorio.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">A team for piopio</span><span style="margin-left:auto;color:oklch(0.72 0.14 255)">Use Development team instead</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;padding:14px">
+          <span style="color:#8a8a8a">Drafted from the repo: Swift, tests in Tests/, 3 open crash reports.</span>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 255)"></div><span style="font-weight:600">Lead</span><span style="color:#8a8a8a;flex:1">plans · talks to you</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 300)"></div><span style="font-weight:600">Builder</span><span style="color:#8a8a8a;flex:1">does tasks</span><span style="padding:2px 8px;background:#2a2a2a;border-radius:5px">×3</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 190)"></div><span style="font-weight:600">Reviewer</span><span style="color:#8a8a8a;flex:1">your agent Code reviewer</span><span style="color:#8a8a8a">⌄</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><div style="width:18px;height:18px;border-radius:5px;background:#555"></div><span style="font-weight:600">Checks</span><span style="color:#8a8a8a;flex:1;font-family:ui-monospace,Menlo,monospace">swift test</span><span style="color:#8a8a8a">found</span></div>
+          <div style="flex:1"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="color:#7a7a7a">≈ $0.40 for this job</span><span style="padding:5px 10px;border-radius:7px;background:#ececec;color:#111">Start with this team</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">2 · Un borrador que ya conoce el proyecto.</span> Lenguaje, tests, checks. Propone tus agentes cuando encajan (Code reviewer). Estimación de coste antes de empezar.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">piopio</span><span style="color:#7a7a7a">with piopio team</span><div style="margin-left:auto;display:flex"><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 255)"></div><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 300);margin-left:-4px"></div><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 190);margin-left:-4px"></div></div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;padding:14px;line-height:1.5">
+          <span>Plan: three tasks, none touching the same files.</span>
+          <div style="display:flex;flex-direction:column;border:1px solid rgba(255,255,255,0.09);border-radius:10px;overflow:hidden">
+            <div style="display:flex;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:7px;height:7px;border-radius:50%;background:oklch(0.72 0.14 150)"></div><span style="flex:1">Sign in with Apple</span><span style="color:#8a8a8a">Approved</span></div>
+            <div style="display:flex;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:7px;height:7px;border-radius:50%;background:oklch(0.75 0.13 70)"></div><span style="flex:1">Settings screen</span><span style="color:#8a8a8a">In review · QA</span></div>
+            <div style="display:flex;gap:8px;align-items:center;padding:7px 10px"><div style="width:7px;height:7px;border-radius:50%;background:oklch(0.66 0.17 255)"></div><span style="flex:1">Fix 3 crash reports</span><span style="color:#8a8a8a">Building · 4 min</span></div>
+          </div>
+          <span style="color:#7a7a7a;font-size:11px">Reviewer sent "Settings screen" back once: missing dark mode.</span>
+          <div style="flex:1"></div>
+          <div style="border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px;color:#6a6a6a">Ask the lead…</div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">3 · La misma conversación, ahora con el lead.</span> El plan es un bloque vivo que se actualiza solo, no una cadena de eventos. Una línea gris solo para lo que merece contarse.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">piopio</span><span style="color:#7a7a7a">with piopio team</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;line-height:1.5">
+          <div style="display:flex;flex-direction:column;gap:8px;border:1.5px solid oklch(0.66 0.14 150);border-radius:10px;padding:12px;background:#222a24">
+            <span style="font-size:14px;font-weight:600">Ready for main</span>
+            <span style="color:#b0b0b0">3 tasks · 14 files · all checks passed · $0.36</span>
+            <div style="display:flex;gap:6px"><span style="padding:5px 10px;border-radius:7px;background:#ececec;color:#111">Merge into main</span><span style="padding:5px 10px;border-radius:7px;background:#2a2a2a">See changes</span><span style="padding:5px 10px;border-radius:7px;background:#2a2a2a">Push for a PR</span></div>
+          </div>
+          <span style="color:#7a7a7a">After merging:</span>
+          <div style="display:flex;flex-direction:column;gap:6px;border:1px solid rgba(255,255,255,0.09);border-radius:10px;padding:10px 12px;background:#232323">
+            <span>This team stays on piopio. Use it elsewhere too?</span>
+            <div style="display:flex;gap:6px"><span style="padding:4px 10px;border-radius:7px;background:#2a2a2a">Save as "App team"</span><span style="padding:4px 10px;color:#8a8a8a">Keep it here only</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">4 · Merge y, entonces, reutilizar.</span> El equipo se queda en el proyecto. Solo si lo guardas pasa a la sección Teams: ahí solo hay equipos que alguien decidió reutilizar.</div>
+    </div>
+  </div>
+</div>
+
+<div id="5c" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;align-items:center;gap:12px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">5c</span><span style="font-size:24px;font-weight:700">"¿Con quién hablo aquí?"</span><span style="font-size:15px;color:#8a8a8a">Asignar equipos y agentes a proyectos</span></div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">RC bioinformatica</span><span style="color:#7a7a7a">New conversation</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;padding:14px">
+          <div style="display:flex;flex-direction:column;border:1px solid rgba(255,255,255,0.1);border-radius:10px;background:#262626;width:240px;overflow:hidden">
+            <div style="display:flex;gap:8px;align-items:center;padding:7px 10px;background:rgba(255,255,255,0.06)"><div style="display:flex;width:14px"><div style="width:9px;height:9px;border-radius:50%;background:oklch(0.72 0.12 255)"></div><div style="width:9px;height:9px;border-radius:50%;background:oklch(0.72 0.12 190);margin-left:-4px"></div></div><span style="flex:1">Research team's lead</span><span style="color:#8a8a8a">✓</span></div>
+            <div style="display:flex;gap:8px;align-items:center;padding:7px 10px"><div style="width:14px;height:14px;border-radius:50%;border:1.5px solid #888"></div><span style="flex:1">Piopio alone</span><span style="color:#7a7a7a">no board</span></div>
+          </div>
+          <div style="border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;color:#6a6a6a"><span>Plan the first two lessons…</span><span style="color:#cfcfcf;background:#2f2f2f;padding:1px 8px;border-radius:5px">with the lead ⌄</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">1 · En un proyecto con equipo, dos opciones.</span> Hablar con el lead (por defecto) o con Piopio solo, para algo rápido que no necesita el Board. Sin equipo, el selector no aparece.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">piopio</span><span style="color:#7a7a7a">with Piopio</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;line-height:1.5">
+          <div style="align-self:flex-end;max-width:320px;background:#2c2c2c;padding:7px 11px;border-radius:12px"><span style="color:oklch(0.78 0.1 190)">@Code reviewer</span> look at the diff I just made</div>
+          <div style="display:flex;flex-direction:column;gap:6px;border-left:2px solid oklch(0.72 0.12 190);padding-left:12px">
+            <div style="display:flex;align-items:center;gap:6px"><div style="width:14px;height:14px;border-radius:4px;background:oklch(0.72 0.12 190)"></div><span style="font-weight:600">Code reviewer</span><span style="color:#7a7a7a">joined for this message</span></div>
+            <span>Two things: the token isn't refreshed on resume, and the new view has no dark mode.</span>
+          </div>
+          <span style="color:#7a7a7a;font-size:11px">Piopio also calls your agents on its own when one fits: "Asked Code reviewer".</span>
+          <div style="flex:1"></div>
+          <div style="border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px;color:#6a6a6a">@ to bring in one of your agents</div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">2 · Tus agentes se invocan, no se asignan.</span> Con @nombre o porque el modelo lo decide. Su respuesta lleva su avatar y color; no se queda en la conversación.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">Research team</span><span style="color:#7a7a7a">Add to a project</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;line-height:1.5">
+          <span style="font-size:14px;font-weight:600">Before it starts in RC bioinformatica</span>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:oklch(0.72 0.14 150)">✓</span><span>Its lead can read the folder (24 PDFs, 3 notebooks)</span></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:oklch(0.78 0.13 70)">!</span><span>No git here. Researchers will write notes, not change files. <span style="color:oklch(0.72 0.14 255)">Start git</span></span></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:oklch(0.78 0.13 70)">!</span><span>No AGENTS.md. Tell it what this course is about? <span style="color:oklch(0.72 0.14 255)">Write one with Piopio</span></span></div>
+          <div style="flex:1"></div>
+          <div style="display:flex;justify-content:flex-end;gap:6px"><span style="padding:5px 10px;border-radius:7px;background:#2a2a2a">Cancel</span><span style="padding:5px 10px;border-radius:7px;background:#ececec;color:#111">Add to project</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">2 · Al llevar un equipo a otro proyecto, un chequeo de encaje.</span> Qué funciona, qué no, y cómo arreglarlo en un clic. Mismo diálogo desde el equipo o desde el proyecto.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">Development team</span><span style="color:#7a7a7a">Works in</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:2px;padding:14px">
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:13px;height:11px;border:1.4px solid #8a8a8a;border-radius:2px"></div><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span>piopio</span><span style="color:#8a8a8a">2 tasks doing · default here</span></div><span style="color:#8a8a8a">3 at once</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:13px;height:11px;border:1.4px solid #8a8a8a;border-radius:2px"></div><div style="flex:1;display:flex;flex-direction:column;gap:1px"><span>landing-site</span><span style="color:#8a8a8a">Idle · last job 5 days ago</span></div><span style="color:#8a8a8a">1 at once</span></div>
+          <div style="padding:9px 0;color:oklch(0.72 0.14 255)">+ Add to a project</div>
+          <div style="flex:1"></div>
+          <span style="color:#7a7a7a;line-height:1.5">Changing a member changes it in every project. Tasks already started keep how they began.</span>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">3 · Desde el equipo, la vista inversa.</span> Dónde trabaja, qué está haciendo en cada sitio, y el aviso de que los cambios se propagan.</div>
+    </div>
+  </div>
+</div>
+
+<div id="5d" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;align-items:center;gap:12px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">5d</span><span style="font-size:24px;font-weight:700">Agentes que entran y salen de equipos</span><span style="font-size:15px;color:#8a8a8a">Una sola familia</span></div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:16px;height:16px;border-radius:5px;background:oklch(0.72 0.12 190)"></div><span style="font-weight:600">Code reviewer</span><span style="color:#7a7a7a">Join a team</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;line-height:1.5">
+          <div style="display:flex;gap:8px;align-items:center"><span style="color:#8a8a8a;width:60px">Team</span><span style="padding:4px 10px;background:#2a2a2a;border-radius:6px">Development team ⌄</span></div>
+          <div style="display:flex;gap:8px;align-items:center"><span style="color:#8a8a8a;width:60px">As</span><span style="padding:4px 10px;background:#2a2a2a;border-radius:6px">Reviews every task ⌄</span><span style="color:#7a7a7a">replaces QA</span></div>
+          <div style="border:1px solid rgba(255,255,255,0.09);border-radius:10px;padding:10px 12px;background:#232323;display:flex;flex-direction:column;gap:4px">
+            <span style="font-weight:600">In the team it…</span>
+            <span style="color:#b0b0b0">Keeps its instructions, plus the team's TEAM.md<br>Uses the team's model unless you keep its own<br>Writes what it learns to the team's notes, not its memory</span>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;justify-content:flex-end"><span style="padding:5px 10px;border-radius:7px;background:#ececec;color:#111">Join</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">1 · Tu agente entra en un equipo.</span> Desde su página. Se explica qué conserva y qué cambia, sobre todo la memoria.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:16px;height:16px;border-radius:5px;background:oklch(0.72 0.12 300)"></div><span style="font-weight:600">Builder</span><span style="color:#7a7a7a">in Development team</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;line-height:1.5">
+          <div style="display:flex;gap:10px;align-items:center"><div style="width:36px;height:36px;border-radius:10px;background:oklch(0.72 0.12 300);color:#151515;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center">B</div><div style="display:flex;flex-direction:column"><span style="font-weight:600;font-size:14px">Builder</span><span style="color:#8a8a8a">Lives in this team · same page as any agent</span></div></div>
+          <div style="display:grid;grid-template-columns:70px 1fr;gap:6px 10px">
+            <span style="color:#8a8a8a">Doing</span><span>"Fix crash reports" in piopio</span>
+            <span style="color:#8a8a8a">Done</span><span>11 tasks · 2 sent back</span>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px"><span style="color:#8a8a8a">Want it outside the team?</span><span style="padding:4px 10px;border-radius:7px;background:#2a2a2a">Make it one of your agents</span></div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">2 · Un miembro tiene la misma página que un agente.</span> Con lo que está haciendo y su historial. Si te gusta, lo sacas y pasa a tu lista.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;width:440px">
+      <div style="width:440px;height:300px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">Plan de clases</span><span style="color:#7a7a7a">with Piopio</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;line-height:1.5">
+          <span style="color:#b0b0b0">…so each Friday, send me what students asked this week and a draft for Monday.</span>
+          <div style="display:flex;flex-direction:column;gap:8px;border:1px solid rgba(255,255,255,0.09);border-radius:10px;padding:12px;background:#232323">
+            <span style="font-weight:600">This sounds like a job for an agent</span>
+            <span style="color:#b0b0b0">"Course assistant" · Fridays at 17:00 · works in RC bioinformatica</span>
+            <div style="display:flex;gap:6px"><span style="padding:4px 10px;border-radius:7px;background:#ececec;color:#111">Make it</span><span style="padding:4px 10px;border-radius:7px;background:#2a2a2a">Just a routine here</span><span style="padding:4px 10px;color:#8a8a8a">No</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">3 · Una conversación que pide repetirse.</span> Piopio ofrece dos salidas: un agente (con identidad, te habla) o una rutina del proyecto (más ligera). Diferencia clara entre ambos.</div>
+    </div>
+  </div>
+</div>
+
+<div id="5e" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;align-items:center;gap:12px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">5e</span><span style="font-size:24px;font-weight:700">Vivir con ellos</span><span style="font-size:15px;color:#8a8a8a">Volver por la mañana: qué pasó, qué espera, qué viene</span></div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+    <div style="display:flex;flex-direction:column;gap:10px;width:900px">
+      <div style="width:900px;height:420px;border-radius:10px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;font-size:12.5px">
+        <div style="height:34px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="font-weight:600">Home</span><span style="color:#7a7a7a">Tuesday morning</span></div>
+        <div style="flex:1;display:grid;grid-template-columns:1.2fr 1fr;gap:28px;padding:20px 24px;line-height:1.5">
+          <div style="display:flex;flex-direction:column;gap:18px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span style="font-weight:600;font-size:14px">Waiting on you · 3</span>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 70)"></div><span style="flex:1">Morning briefing wants to read Calendar</span><span style="padding:3px 9px;border-radius:6px;background:#ececec;color:#111">Allow</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><div style="display:flex;width:18px"><div style="width:11px;height:11px;border-radius:50%;background:oklch(0.72 0.12 255)"></div><div style="width:11px;height:11px;border-radius:50%;background:oklch(0.72 0.12 300);margin-left:-4px"></div></div><span style="flex:1">piopio · 3 tasks ready for main</span><span style="padding:3px 9px;border-radius:6px;background:#2a2a2a">Review</span></div>
+              <div style="display:flex;flex-direction:column;gap:6px;padding:8px 0"><div style="display:flex;align-items:center;gap:10px"><div style="width:18px;height:18px;border-radius:5px;background:oklch(0.72 0.12 150)"></div><span style="flex:1">Family helper: "Which supermarket this week?"</span></div><div style="margin-left:28px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px;color:#6a6a6a">Answer here…</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-weight:600;font-size:14px">While you were away</span>
+              <span style="color:#b0b0b0"><span style="color:#e6e6e6">Morning briefing</span> sent today's briefing · 8:00</span>
+              <span style="color:#b0b0b0"><span style="color:#e6e6e6">piopio team</span> finished 2 tasks; the reviewer sent 1 back</span>
+              <span style="color:#7a7a7a">Habit coach had nothing to say · 21:00</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span style="font-weight:600;font-size:14px">Today</span>
+            <div style="display:flex;flex-direction:column;border-left:1px solid rgba(255,255,255,0.1);margin-left:4px">
+              <div style="display:flex;gap:10px;padding:6px 0 6px 14px;color:#7a7a7a"><span style="width:40px">8:00</span><span>Morning briefing ✓</span></div>
+              <div style="display:flex;gap:10px;padding:6px 0 6px 14px;background:rgba(255,255,255,0.04);border-radius:0 6px 6px 0"><span style="width:40px;color:oklch(0.72 0.14 255)">now</span><span>piopio team · fixing crash reports</span></div>
+              <div style="display:flex;gap:10px;padding:6px 0 6px 14px"><span style="width:40px;color:#9a9a9a">9:00</span><span>piopio · write this week's brief</span></div>
+              <div style="display:flex;gap:10px;padding:6px 0 6px 14px"><span style="width:40px;color:#9a9a9a">17:00</span><span>Course assistant · weekly summary</span></div>
+              <div style="display:flex;gap:10px;padding:6px 0 6px 14px"><span style="width:40px;color:#9a9a9a">any</span><span>Bank emails → Morning briefing</span></div>
+              <div style="display:flex;gap:10px;padding:6px 0 6px 14px"><span style="width:40px;color:#9a9a9a">21:00</span><span>Habit coach · check-in</span></div>
+            </div>
+            <span style="color:#7a7a7a">Quiet hours 22:30 – 7:30 · held messages wait here</span>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;line-height:1.45;color:#a8a8a8"><span style="color:#fff">Home es la agenda de todos.</span> Lo que espera por ti (absorbe "Needs you", con acciones en línea), lo que pasó, y una línea del día con rutinas de agentes y de proyectos juntas. Es la respuesta al punto 6 y 8 del brief en una sola pantalla.</div>
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px;max-width:900px;border-top:1px solid #2a2a2a;padding-top:28px">
+  <span style="font-size:18px;font-weight:600">Decidido</span>
+  <div style="display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5;color:#a8a8a8">
+    <span><span style="color:#fff">Equipos solo-proyecto:</span> viven dentro del proyecto (pila de avatares junto a su nombre). La sección Teams solo muestra los guardados para reutilizar.</span>
+    <span><span style="color:#fff">Agentes en proyectos:</span> no se asignan. Se llaman con @ o los llama el modelo (5c, paso 2).</span>
+    <span><span style="color:#fff">Rutinas:</span> hay dos dueños posibles. Un <span style="color:#fff">agente</span> (te escribe a ti, en cualquier canal) o un <span style="color:#fff">proyecto</span> (abre una sesión en esa carpeta). En 5d paso 3, "Make it" crea un agente; "Just a routine here" crea una rutina del proyecto.</span>
+  </div>
+</div>
+
+</section>
+<section style="padding:64px;display:flex;flex-direction:column;gap:72px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;color:#e6e6e6;background:#121212">
+
+<div style="display:flex;gap:64px;flex-wrap:wrap;max-width:2700px">
+  <div style="display:flex;flex-direction:column;gap:12px;max-width:560px">
+    <div style="font-size:13px;color:#8a8a8a">Piopio · Ronda 1</div>
+    <div style="font-size:40px;font-weight:700;letter-spacing:-0.02em">Agentes, equipos y proyectos</div>
+    <div style="font-size:16px;line-height:1.55;color:#b0b0b0;text-wrap:pretty">Una idea guía todo: <span style="color:#fff">un agente es alguien; un equipo es un grupo de alguienes; un proyecto es dónde trabajan.</span> Hoy la app los trata como tres cosas sin relación visual. La propuesta los une con un mismo lenguaje (avatar, color, verbo de rol) y reduce los sitios donde mirar.</div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,320px));gap:20px 40px;font-size:14px;line-height:1.5;color:#b0b0b0">
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="color:#fff;font-weight:600">1 · Cuatro sitios por agente</span>Chat, panel derecho, Activity y Setup repiten lo mismo. Las ejecuciones viven lejos de los mensajes que producen.</div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="color:#fff;font-weight:600">2 · Setup es un formulario técnico</span>Cron, "Mac apps" separado de "Abilities", aprobación en otro sitio. Se organiza por implementación, no por preguntas.</div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="color:#fff;font-weight:600">3 · Equipos sin forma</span>Los miembros son tarjetas de texto apiladas. No se ve quién pasa trabajo a quién, ni qué miembro es uno de tus agentes.</div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="color:#fff;font-weight:600">4 · Proyecto y equipo desconectados</span>"Give it a team" y "Choose a team in Settings" mandan a otro sitio. En la barra lateral no se ve qué proyecto tiene equipo.</div>
+  </div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:24px;font-weight:700">A · Barra lateral</span><span style="font-size:15px;color:#8a8a8a">Cómo conviven agentes y equipos</span></div>
+  <div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+    <div id="1a" style="display:flex;flex-direction:column;gap:14px;width:300px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">1a</span><span style="font-weight:600">Una sola sección "Agents"</span></div>
+      <div style="height:640px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);width:248px"><dc-import name="Sidebar" variant="unified" active="daily" hint-size="248px,640px"></dc-import></div>
+      <div style="font-size:13.5px;line-height:1.5;color:#a8a8a8;text-wrap:pretty">Equipos y agentes en la misma lista; el equipo se distingue por su pila de avatares. El proyecto muestra la pila del equipo que trabaja ahí. <span style="color:#fff">Recomendada.</span></div>
+    </div>
+    <div id="1b" style="display:flex;flex-direction:column;gap:14px;width:300px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">1b</span><span style="font-weight:600">Equipos desplegables</span></div>
+      <div style="height:640px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);width:248px"><dc-import name="Sidebar" variant="grouped" active="devteam" hint-size="248px,640px"></dc-import></div>
+      <div style="font-size:13.5px;line-height:1.5;color:#a8a8a8;text-wrap:pretty">Igual que 1a, pero el equipo se abre como carpeta y enseña sus miembros. Se ve que "QA" es tu agente Code reviewer. Más largo; útil si hay pocos equipos.</div>
+    </div>
+    <div id="1c" style="display:flex;flex-direction:column;gap:14px;width:300px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">1c</span><span style="font-weight:600">Directorio + fijados</span></div>
+      <div style="height:640px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);width:248px"><dc-import name="Sidebar" variant="directory" active="agents" hint-size="248px,640px"></dc-import></div>
+      <div style="font-size:13.5px;line-height:1.5;color:#a8a8a8;text-wrap:pretty">"Agents and teams" pasa a ser un destino, como Home. La barra solo guarda los fijados. Escala mejor con muchos agentes, pero esconde lo que hoy está a un clic.</div>
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:24px;font-weight:700">B · Página del agente</span><span style="font-size:15px;color:#8a8a8a">De cuatro sitios a dos: hablar y configurar</span></div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+
+    <div id="2a" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">2a</span><span style="font-weight:600">Chat primero, con franja de un vistazo</span></div>
+      <div style="width:1280px;height:800px;border-radius:12px;overflow:hidden;display:flex;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);box-shadow:0 30px 80px rgba(0,0,0,0.5);font-size:13px">
+        <dc-import name="Sidebar" variant="unified" active="daily" hint-size="248px,800px"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+          <div style="height:52px;display:flex;align-items:center;gap:10px;padding:0 20px;flex:none">
+            <div style="width:22px;height:22px;border-radius:6px;background:oklch(0.72 0.12 70);color:#151515;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center">D</div>
+            <span style="font-weight:600;font-size:14px">Daily briefing</span>
+            <span style="color:#7a7a7a">A short morning summary of what's ahead</span>
+            <div style="flex:1"></div>
+            <div style="display:flex;background:#2a2a2a;border-radius:7px;padding:2px">
+              <span style="padding:4px 12px;border-radius:5px;background:#3a3a3a">Chat</span>
+              <span style="padding:4px 12px;color:#9a9a9a">Setup</span>
+            </div>
+            <span style="padding:5px 12px;border-radius:7px;background:#2a2a2a">Run now</span>
+            <span style="color:#8a8a8a;padding:0 4px">•••</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.06);flex:none">
+            <div style="display:flex;flex-direction:column;gap:3px;padding:12px 20px;border-right:1px solid rgba(255,255,255,0.06)"><span style="color:#7a7a7a;font-size:11.5px">Next</span><span>Tomorrow 8:00 <span style="color:#7a7a7a">· weekdays</span></span></div>
+            <div style="display:flex;flex-direction:column;gap:3px;padding:12px 20px;border-right:1px solid rgba(255,255,255,0.06)"><span style="color:#7a7a7a;font-size:11.5px">Can</span><span>Web · Memory · Message you</span></div>
+            <div style="display:flex;flex-direction:column;gap:3px;padding:12px 20px;border-right:1px solid rgba(255,255,255,0.06)"><span style="color:#7a7a7a;font-size:11.5px">Reaches you</span><span>In Piopio <span style="color:oklch(0.72 0.14 255)">· Add Telegram</span></span></div>
+            <div style="display:flex;flex-direction:column;gap:3px;padding:12px 20px"><span style="color:#7a7a7a;font-size:11.5px">This month</span><div style="display:flex;align-items:center;gap:8px"><span>$0.05 of $15</span><div style="flex:1;max-width:80px;height:4px;border-radius:2px;background:#333"><div style="width:6%;height:4px;border-radius:2px;background:#aaa"></div></div></div></div>
+          </div>
+          <div style="flex:1;overflow:hidden;display:flex;justify-content:center;padding:24px 32px 0">
+            <div style="width:100%;max-width:640px;display:flex;flex-direction:column;gap:18px;font-size:14px;line-height:1.55">
+              <div style="display:flex;align-items:center;gap:12px;color:#7a7a7a;font-size:12px"><div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div><span>Fri 8:00 · Automatic run · nothing new, didn't write · $0.0004</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div></div>
+              <div style="display:flex;align-items:center;gap:12px;color:#7a7a7a;font-size:12px"><div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div><span>Today 8:00 · Automatic run · 2 steps ›</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div></div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span>Good morning, Antonio. Your briefing is still thin because I'm missing the basics:</span>
+                <span style="color:#cfcfcf;padding-left:14px">· Plans for today: nothing in my notes. Share your calendar or tasks.<br>· Weather: tell me your city and I'll add the forecast.<br>· News: tell me which topics you follow.</span>
+              </div>
+              <div style="align-self:flex-end;max-width:420px;background:#2c2c2c;padding:9px 14px;border-radius:14px">I'm in Zaragoza. Use my Apple Calendar, and I follow AI and cycling.</div>
+              <span>Got it. From tomorrow the briefing will include your calendar, Zaragoza's weather and those two topics.</span>
+              <div style="display:flex;flex-direction:column;gap:8px;border:1px solid rgba(255,255,255,0.09);border-radius:10px;padding:12px 14px;font-size:13px;background:#232323">
+                <div style="display:flex;justify-content:space-between"><span style="font-weight:600">Changed its setup</span><span style="color:oklch(0.72 0.14 255)">Undo</span></div>
+                <span style="color:#b0b0b0">Remembers: city Zaragoza · topics AI, cycling<br>Asks to use: Calendar (read)</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:oklch(0.3 0.05 255);border-radius:10px;padding:10px 14px;font-size:13px">
+                <span>Wants to read your Calendar</span>
+                <div style="display:flex;gap:8px"><span style="padding:4px 10px;border-radius:6px;background:rgba(255,255,255,0.1)">Not now</span><span style="padding:4px 10px;border-radius:6px;background:#fff;color:#111">Allow</span></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:center;padding:16px 32px 20px;flex:none">
+            <div style="width:100%;max-width:640px;border:1px solid rgba(255,255,255,0.09);border-radius:14px;background:#262626;padding:12px 14px;display:flex;justify-content:space-between;color:#7a7a7a"><span>Reply, or ask it to change how it works…</span><span>Haiku 5.5</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:1100px;font-size:13.5px;line-height:1.5;color:#a8a8a8;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+        <span><span style="color:#fff">Activity desaparece como pestaña.</span> Cada ejecución es un separador en el chat; las que no escribieron nada se quedan en una línea gris. "2 steps ›" abre el detalle ahí mismo.</span>
+        <span><span style="color:#fff">El panel derecho se vuelve una franja</span> de cuatro datos: cuándo, qué puede, por dónde te llega, cuánto gasta. Cada uno abre su sección en Setup.</span>
+        <span><span style="color:#fff">Se configura hablando.</span> Los cambios que hace llegan como tarjeta con Undo; los permisos, como petición en línea.</span>
+      </div>
+    </div>
+
+    <div id="2b" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">2b</span><span style="font-weight:600">Ficha + chat al lado</span></div>
+      <div style="width:1280px;height:800px;border-radius:12px;overflow:hidden;display:flex;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);box-shadow:0 30px 80px rgba(0,0,0,0.5);font-size:13px">
+        <dc-import name="Sidebar" variant="unified" active="daily" hint-size="248px,800px"></dc-import>
+        <div style="width:440px;flex:none;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:26px;padding:28px 28px;overflow:hidden">
+          <div style="display:flex;gap:14px;align-items:center">
+            <div style="width:52px;height:52px;border-radius:14px;background:oklch(0.72 0.12 70);color:#151515;font-weight:700;font-size:22px;display:flex;align-items:center;justify-content:center">D</div>
+            <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:20px;font-weight:700">Daily briefing</span><span style="color:#8a8a8a">A short morning summary of what's ahead</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between"><span style="font-weight:600">Coming up</span><span style="color:oklch(0.72 0.14 255)">Add a routine</span></div>
+            <div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="width:86px;color:#9a9a9a">Tomorrow 8:00</span><span style="flex:1">Write today's briefing</span><span style="color:#7a7a7a">Weekdays</span></div>
+            <div style="display:flex;gap:12px;padding:8px 0"><span style="width:86px;color:#9a9a9a">On email</span><span style="flex:1">From the bank: summarize it</span><span style="color:#7a7a7a">Any time</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between"><span style="font-weight:600">While you were away</span><span style="color:oklch(0.72 0.14 255)">All runs</span></div>
+            <div style="display:flex;gap:10px;align-items:center;padding:6px 0"><div style="width:7px;height:7px;border-radius:50%;background:oklch(0.72 0.14 150)"></div><span style="width:78px;color:#9a9a9a">Today 8:00</span><span style="flex:1">Sent you the briefing</span><span style="color:#7a7a7a">$0.0009</span></div>
+            <div style="display:flex;gap:10px;align-items:center;padding:6px 0"><div style="width:7px;height:7px;border-radius:50%;background:#555"></div><span style="width:78px;color:#9a9a9a">Fri 8:00</span><span style="flex:1;color:#9a9a9a">Nothing new, didn't write</span><span style="color:#7a7a7a">$0.0004</span></div>
+            <div style="display:flex;gap:10px;align-items:center;padding:6px 0"><div style="width:7px;height:7px;border-radius:50%;background:oklch(0.75 0.13 70)"></div><span style="width:78px;color:#9a9a9a">Thu 8:00</span><span style="flex:1">Held until quiet hours ended</span><span style="color:#7a7a7a">$0.0006</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between"><span style="font-weight:600">How it works</span><span style="color:oklch(0.72 0.14 255)">Edit</span></div>
+            <div style="display:grid;grid-template-columns:86px 1fr;gap:8px 12px;line-height:1.45">
+              <span style="color:#9a9a9a">Can</span><span>Search the web, remember things, message you</span>
+              <span style="color:#9a9a9a">Asks first</span><span>Before using Calendar or Reminders</span>
+              <span style="color:#9a9a9a">Reaches you</span><span>In Piopio · <span style="color:oklch(0.72 0.14 255)">Connect Telegram</span></span>
+              <span style="color:#9a9a9a">On teams</span><span style="color:#9a9a9a">None</span>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;justify-content:space-between;color:#7a7a7a;font-size:12px"><span>Haiku 5.5 · runs on this Mac</span><span>$0.05 of $15 this month</span></div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+          <div style="height:52px;display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 20px;flex:none;color:#8a8a8a"><span style="padding:5px 12px;border-radius:7px;background:#2a2a2a;color:#e6e6e6">Run now</span><span>•••</span></div>
+          <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:16px;padding:8px 32px;font-size:14px;line-height:1.55">
+            <div style="color:#7a7a7a;font-size:12px">Today 8:00 · Automatic run</div>
+            <span>Good morning, Antonio. Your briefing is still thin because I'm missing the basics. Tell me your city, share your calendar, and say which news topics you follow.</span>
+            <div style="align-self:flex-end;max-width:360px;background:#2c2c2c;padding:9px 14px;border-radius:14px">Zaragoza. Apple Calendar. AI and cycling.</div>
+            <span>Got it. From tomorrow it'll include your calendar, the weather and those topics.</span>
+          </div>
+          <div style="padding:16px 24px 20px;flex:none"><div style="border:1px solid rgba(255,255,255,0.09);border-radius:14px;background:#262626;padding:12px 14px;color:#7a7a7a">Reply…</div></div>
+        </div>
+      </div>
+      <div style="max-width:1100px;font-size:13.5px;line-height:1.5;color:#a8a8a8;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+        <span><span style="color:#fff">La ficha es la página.</span> Se lee de arriba abajo: quién es, qué va a hacer, qué hizo, cómo funciona. Responde "¿qué está pasando?" sin abrir nada.</span>
+        <span><span style="color:#fff">"While you were away"</span> agrupa lo ocurrido desde tu última visita con el resultado en un punto de color.</span>
+        <span><span style="color:#fff">Contra:</span> el chat queda estrecho. Mejor para agentes proactivos que para agentes de conversación; 2a sirve a los dos.</span>
+      </div>
+    </div>
+
+    <div id="2c" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">2c</span><span style="font-weight:600">Setup ordenado por preguntas</span></div>
+      <div style="width:1280px;height:800px;border-radius:12px;overflow:hidden;display:flex;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);box-shadow:0 30px 80px rgba(0,0,0,0.5);font-size:13px">
+        <dc-import name="Sidebar" variant="unified" active="daily" hint-size="248px,800px"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+          <div style="height:52px;display:flex;align-items:center;gap:10px;padding:0 20px;flex:none">
+            <div style="width:22px;height:22px;border-radius:6px;background:oklch(0.72 0.12 70);color:#151515;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center">D</div>
+            <span style="font-weight:600;font-size:14px">Daily briefing</span>
+            <div style="flex:1"></div>
+            <span style="color:#7a7a7a">Saved 2 weeks ago</span>
+            <div style="display:flex;background:#2a2a2a;border-radius:7px;padding:2px">
+              <span style="padding:4px 12px;color:#9a9a9a">Chat</span>
+              <span style="padding:4px 12px;border-radius:5px;background:#3a3a3a">Setup</span>
+            </div>
+          </div>
+          <div style="flex:1;display:flex;gap:48px;padding:28px 48px;overflow:hidden">
+            <div style="width:180px;flex:none;display:flex;flex-direction:column;gap:2px;font-size:13.5px">
+              <span style="padding:6px 10px;color:#b0b0b0">What it does</span>
+              <span style="padding:6px 10px;border-radius:6px;background:rgba(255,255,255,0.07)">When it acts</span>
+              <span style="padding:6px 10px;color:#b0b0b0">What it can use</span>
+              <span style="padding:6px 10px;color:#b0b0b0">Who it talks to</span>
+              <span style="padding:6px 10px;color:#b0b0b0">What it knows</span>
+              <span style="padding:6px 10px;color:#b0b0b0">Limits</span>
+              <div style="flex:1"></div>
+              <span style="padding:6px 10px;color:#6a6a6a">History · View as file</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:28px;max-width:720px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <span style="font-size:17px;font-weight:600">When it acts</span>
+                <span style="color:#8a8a8a">Routines it follows on its own. Ask it in the chat, or add one here.</span>
+              </div>
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                  <span style="width:70px;color:#8a8a8a;font-size:12px">At a time</span>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px">Weekdays at 8:00</span><span style="color:#8a8a8a">Write today's briefing</span></div>
+                  <span style="color:#7a7a7a">Next: tomorrow</span>
+                  <div style="width:32px;height:18px;border-radius:9px;background:oklch(0.62 0.16 255);display:flex;justify-content:flex-end;padding:2px;box-sizing:border-box"><div style="width:14px;height:14px;border-radius:50%;background:#fff"></div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid rgba(255,255,255,0.07)">
+                  <span style="width:70px;color:#8a8a8a;font-size:12px">On an event</span>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px">An email from the bank arrives</span><span style="color:#8a8a8a">Summarize it and tell me if I must act</span></div>
+                  <span style="color:#7a7a7a">Last: 3 days ago</span>
+                  <div style="width:32px;height:18px;border-radius:9px;background:oklch(0.62 0.16 255);display:flex;justify-content:flex-end;padding:2px;box-sizing:border-box"><div style="width:14px;height:14px;border-radius:50%;background:#fff"></div></div>
+                </div>
+                <div style="display:flex;gap:16px;padding:12px 0;border-top:1px solid rgba(255,255,255,0.07);color:oklch(0.72 0.14 255)"><span>+ At a time</span><span>+ When an email arrives</span><span>+ When a file appears</span><span>+ From a link (webhook)</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid rgba(255,255,255,0.07)"><div style="display:flex;flex-direction:column;gap:2px"><span>Quiet hours</span><span style="color:#8a8a8a">Messages wait until they end; urgent ones don't</span></div><span style="padding:5px 10px;background:#2a2a2a;border-radius:6px">22:30 – 7:30</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid rgba(255,255,255,0.07)"><span>Time zone</span><span style="color:#b0b0b0">Europe/Madrid · from this Mac</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;padding-top:8px">
+                <span style="font-size:17px;font-weight:600">What it can use</span>
+                <span style="color:#8a8a8a">One list for every tool. Choose, per tool, whether it asks you first.</span>
+              </div>
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07)"><span style="flex:1">Search and read the web</span><div style="display:flex;background:#2a2a2a;border-radius:6px;padding:2px;font-size:12px"><span style="padding:3px 10px;color:#8a8a8a">Off</span><span style="padding:3px 10px;color:#8a8a8a">Asks</span><span style="padding:3px 10px;border-radius:4px;background:#444">Allowed</span></div></div>
+                <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07)"><span style="flex:1">Calendar <span style="color:#7a7a7a">· events and free time</span></span><div style="display:flex;background:#2a2a2a;border-radius:6px;padding:2px;font-size:12px"><span style="padding:3px 10px;color:#8a8a8a">Off</span><span style="padding:3px 10px;border-radius:4px;background:#444">Asks</span><span style="padding:3px 10px;color:#8a8a8a">Allowed</span></div></div>
+                <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.07)"><span style="flex:1">Reminders <span style="color:#7a7a7a">· read, add, tick</span></span><div style="display:flex;background:#2a2a2a;border-radius:6px;padding:2px;font-size:12px"><span style="padding:3px 10px;border-radius:4px;background:#444">Off</span><span style="padding:3px 10px;color:#8a8a8a">Asks</span><span style="padding:3px 10px;color:#8a8a8a">Allowed</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:1100px;font-size:13.5px;line-height:1.5;color:#a8a8a8;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+        <span><span style="color:#fff">Seis preguntas en vez de diez nombres técnicos.</span> Abilities + Mac apps = "What it can use". People + canales = "Who it talks to". Memory = "What it knows".</span>
+        <span><span style="color:#fff">Rutinas en lenguaje natural.</span> Hora y evento en la misma lista; el cron solo aparece al editar, como "Custom".</span>
+        <span><span style="color:#fff">El modo de aprobación se reparte por herramienta</span> (Off · Asks · Allowed) en lugar de ser un ajuste global en la cabecera.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:24px;font-weight:700">C · Equipo y proyecto</span><span style="font-size:15px;color:#8a8a8a">Ver cómo fluye el trabajo, y darle un equipo al proyecto sin salir de él</span></div>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+
+    <div id="3a" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">3a</span><span style="font-weight:600">Equipo como cadena de trabajo</span></div>
+      <div style="width:1280px;height:800px;border-radius:12px;overflow:hidden;display:flex;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);box-shadow:0 30px 80px rgba(0,0,0,0.5);font-size:13px">
+        <dc-import name="Sidebar" variant="unified" active="devteam" hint-size="248px,800px"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+          <div style="height:52px;display:flex;align-items:center;gap:10px;padding:0 20px;flex:none">
+            <span style="font-weight:600;font-size:14px">Development team</span>
+            <span style="color:#7a7a7a">Works in piopio</span>
+            <div style="flex:1"></div>
+            <div style="display:flex;background:#2a2a2a;border-radius:7px;padding:2px">
+              <span style="padding:4px 12px;border-radius:5px;background:#3a3a3a">Members</span>
+              <span style="padding:4px 12px;color:#9a9a9a">TEAM.md</span>
+              <span style="padding:4px 12px;color:#9a9a9a">Notes</span>
+              <span style="padding:4px 12px;color:#9a9a9a">Projects</span>
+            </div>
+            <span style="color:#8a8a8a;padding:0 4px">•••</span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:22px;padding:24px 40px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="color:#8a8a8a">How a task moves through the team</span><span style="color:#8a8a8a">Team model <span style="color:#e6e6e6">Haiku 5.5</span> · <span style="color:oklch(0.72 0.14 255)">Add member</span></span></div>
+            <div style="display:grid;grid-template-columns:1fr 24px 1fr 24px 1fr 24px 1fr;align-items:stretch">
+              <div style="border:1.5px solid oklch(0.66 0.17 255);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;background:#252525">
+                <div style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:7px;background:oklch(0.72 0.12 255);color:#151515;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center">T</div><span style="font-weight:600;font-size:14px">Tech lead</span></div>
+                <span style="color:#b0b0b0">Plans and assigns. Talks to you in every conversation.</span>
+                <span style="color:#7a7a7a;font-size:12px">Team model</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;color:#5a5a5a">→</div>
+              <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;background:#232323">
+                <div style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:7px;background:oklch(0.72 0.12 300);color:#151515;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center">B</div><span style="font-weight:600;font-size:14px">Builder</span><span style="margin-left:auto;font-size:11.5px;color:#b0b0b0;background:#2f2f2f;padding:2px 7px;border-radius:5px">×3 at once</span></div>
+                <span style="color:#b0b0b0">Does tasks, each on its own branch.</span>
+                <span style="color:#7a7a7a;font-size:12px">Sonnet 5</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;color:#5a5a5a">→</div>
+              <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;background:#232323">
+                <div style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:7px;background:oklch(0.72 0.12 190);color:#151515;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center">C</div><span style="font-weight:600;font-size:14px">QA</span></div>
+                <span style="color:#b0b0b0">Reviews every task. Sends it back if it's wrong.</span>
+                <span style="color:#7a7a7a;font-size:12px">Is your agent <span style="color:oklch(0.78 0.1 190)">Code reviewer ↗</span></span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;color:#5a5a5a">→</div>
+              <div style="border:1px dashed rgba(255,255,255,0.14);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:7px;background:#555;color:#151515;font-weight:700;font-size:10px;display:flex;align-items:center;justify-content:center">CI</div><span style="font-weight:600;font-size:14px">CI</span></div>
+                <span style="color:#b0b0b0">Merges approved work and runs the checks.</span>
+                <span style="color:#7a7a7a;font-size:12px">No model · automatic</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:16px;border-top:1px solid rgba(255,255,255,0.07);padding-top:22px;max-width:820px">
+              <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:16px;font-weight:600">Tech lead</span><span style="color:#8a8a8a">Remove from team</span></div>
+              <div style="display:grid;grid-template-columns:140px 1fr;gap:14px 20px;align-items:start">
+                <span style="color:#9a9a9a;padding-top:8px">Responsible for</span>
+                <div style="background:#262626;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px;line-height:1.5;color:#d6d6d6">You lead this team. You don't do the work yourself: you plan, split the goal into tasks with clear briefs (what to do, where, what done means), put them on the board, and read the reports that come back. Two tasks that would change the same files are one task.</div>
+                <span style="color:#9a9a9a;padding-top:8px">Done means</span>
+                <div style="background:#262626;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px;color:#6a6a6a">What done means for its work (optional)</div>
+                <span style="color:#9a9a9a;padding-top:4px">Who it is</span>
+                <div style="display:flex;gap:8px;align-items:center"><span style="padding:5px 10px;background:#2a2a2a;border-radius:6px">A new member ⌄</span><span style="color:#7a7a7a">or one of your agents: brings its instructions and model</span></div>
+                <span style="color:#9a9a9a;padding-top:4px">Model</span>
+                <span style="padding-top:4px">The team's <span style="color:#7a7a7a">· Haiku 5.5</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:1100px;font-size:13.5px;line-height:1.5;color:#a8a8a8;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+        <span><span style="color:#fff">Los miembros se ordenan por el camino de una tarea:</span> planifica → hace → revisa → integra. El rol es el verbo, no una etiqueta gris.</span>
+        <span><span style="color:#fff">La edición es en línea,</span> no en un modal: clic en la tarjeta y se abre debajo.</span>
+        <span><span style="color:#fff">Un miembro puede ser uno de tus agentes:</span> lleva su avatar y color y enlaza a su página. En la página del agente, "On teams" muestra lo inverso.</span>
+      </div>
+    </div>
+
+    <div id="4a" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">4a</span><span style="font-weight:600">Proyecto: "Who works here" como elección</span></div>
+      <div style="width:1280px;height:800px;border-radius:12px;overflow:hidden;display:flex;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);box-shadow:0 30px 80px rgba(0,0,0,0.5);font-size:13px">
+        <dc-import name="Sidebar" variant="unified" active="piopio" hint-size="248px,800px"></dc-import>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+          <div style="height:52px;display:flex;align-items:center;gap:10px;padding:0 20px;flex:none">
+            <span style="font-weight:600;font-size:14px">piopio</span>
+            <span style="color:#7a7a7a;font-family:ui-monospace,Menlo,monospace;font-size:12px">main</span>
+            <div style="flex:1"></div>
+            <div style="display:flex;background:#2a2a2a;border-radius:7px;padding:2px">
+              <span style="padding:4px 12px;color:#9a9a9a">Conversations</span>
+              <span style="padding:4px 12px;color:#9a9a9a">Board</span>
+              <span style="padding:4px 12px;border-radius:5px;background:#3a3a3a">Settings</span>
+            </div>
+            <span style="padding:5px 12px;border-radius:7px;background:#ececec;color:#111">New conversation</span>
+          </div>
+          <div style="flex:1;display:flex;justify-content:center;padding:28px 40px;overflow:hidden">
+            <div style="width:100%;max-width:760px;display:flex;flex-direction:column;gap:28px">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <span style="font-size:16px;font-weight:600">Who works here</span>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                  <div style="border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:50%;border:1.5px solid #666"></div><span style="font-weight:600;font-size:14px">Piopio alone</span></div>
+                    <span style="color:#9a9a9a;line-height:1.5">Each conversation works on its own. Good for questions and small changes.</span>
+                  </div>
+                  <div style="border:1.5px solid oklch(0.66 0.17 255);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;background:#252525">
+                    <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:50%;border:4px solid oklch(0.66 0.17 255);box-sizing:border-box"></div><span style="font-weight:600;font-size:14px">A team</span><span style="margin-left:auto;padding:3px 9px;background:#333;border-radius:6px">Development team ⌄</span></div>
+                    <span style="color:#9a9a9a;line-height:1.5">You talk to the lead. Bigger work goes on the board, done in parallel and reviewed.</span>
+                    <div style="display:flex;align-items:center;gap:6px;color:#b0b0b0;font-size:12px">
+                      <div style="width:16px;height:16px;border-radius:4px;background:oklch(0.72 0.12 255)"></div>Lead<span style="color:#555">→</span>
+                      <div style="width:16px;height:16px;border-radius:4px;background:oklch(0.72 0.12 300)"></div>Builder ×3<span style="color:#555">→</span>
+                      <div style="width:16px;height:16px;border-radius:4px;background:oklch(0.72 0.12 190)"></div>QA<span style="color:#555">→</span>
+                      <div style="width:16px;height:16px;border-radius:4px;background:#555"></div>CI
+                    </div>
+                  </div>
+                </div>
+                <span style="color:#8a8a8a">No team fits? <span style="color:oklch(0.72 0.14 255)">Describe one for this project…</span></span>
+              </div>
+              <div style="display:flex;flex-direction:column">
+                <span style="font-size:16px;font-weight:600;padding-bottom:10px">How the team works here</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-top:1px solid rgba(255,255,255,0.07)"><div style="display:flex;flex-direction:column;gap:2px"><span>Tasks at once</span><span style="color:#8a8a8a">How many builders work in parallel</span></div><span style="padding:5px 12px;background:#2a2a2a;border-radius:6px">3</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-top:1px solid rgba(255,255,255,0.07)"><div style="display:flex;flex-direction:column;gap:2px"><span>Checks</span><span style="color:#8a8a8a">CI runs these before merging</span></div><span style="padding:5px 12px;background:#2a2a2a;border-radius:6px;font-family:ui-monospace,Menlo,monospace;font-size:12px">swift test</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-top:1px solid rgba(255,255,255,0.07)"><div style="display:flex;flex-direction:column;gap:2px"><span>Every Monday at 9:00</span><span style="color:#8a8a8a">Routine · starts a conversation with the lead: "write this week's brief"</span></div><span style="color:oklch(0.72 0.14 255)">Add a routine</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <span style="font-size:16px;font-weight:600">Instructions and notes</span>
+                <div style="display:flex;gap:12px">
+                  <div style="flex:1;display:flex;justify-content:space-between;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">AGENTS.md</span><span style="color:oklch(0.72 0.14 255)">Create</span></div>
+                  <div style="flex:1;display:flex;justify-content:space-between;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">NOTES.md</span><span style="color:#8a8a8a">Edited yesterday</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:1100px;font-size:13.5px;line-height:1.5;color:#a8a8a8;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+        <span><span style="color:#fff">Dos opciones visibles, una elegida.</span> Se entiende qué cambia antes de cambiarlo; el equipo enseña su cadena en miniatura.</span>
+        <span><span style="color:#fff">Los ajustes del equipo en este proyecto</span> (tareas a la vez, checks, rutinas) solo aparecen si hay equipo.</span>
+        <span><span style="color:#fff">Crear un equipo desde aquí</span> lo asigna al proyecto al terminar; no hay que ir a Teams y volver.</span>
+      </div>
+    </div>
+
+    <div id="4b" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#fff;color:#111;font-weight:700;font-size:12px;padding:3px 8px;border-radius:5px">4b</span><span style="font-weight:600">Board vacío que resuelve en sitio</span></div>
+      <div style="width:820px;height:520px;border-radius:12px;overflow:hidden;background:#1f1f1f;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:13px">
+        <div style="width:560px;display:flex;flex-direction:column;gap:18px;align-items:stretch">
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center">
+            <span style="font-size:17px;font-weight:600">No team works here yet</span>
+            <span style="color:#9a9a9a;line-height:1.5;text-wrap:pretty">With a team, the lead puts bigger work on this board and members do it in parallel. Pick one to start.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;border:1px solid rgba(255,255,255,0.09);border-radius:12px;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.07)">
+              <div style="display:flex;width:30px"><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 255)"></div><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 300);margin-left:-4px"></div><div style="width:12px;height:12px;border-radius:50%;background:oklch(0.72 0.12 190);margin-left:-4px"></div></div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">Development team</span><span style="color:#8a8a8a">Yours · also works in piopio</span></div>
+              <span style="padding:4px 10px;border-radius:6px;background:#ececec;color:#111">Use here</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.07)">
+              <div style="width:30px;color:#7a7a7a">+</div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span>Research team</span><span style="color:#8a8a8a">Template · lead, researchers, editor</span></div>
+              <span style="padding:4px 10px;border-radius:6px;background:#2f2f2f">Use here</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px">
+              <div style="width:30px;color:#7a7a7a">+</div>
+              <span style="flex:1;color:#7a7a7a">Or describe one: "a lead, two researchers and an editor"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:820px;font-size:13.5px;line-height:1.5;color:#a8a8a8">Hoy el estado vacío dice "Choose a team in Settings". Aquí se elige en el propio Board; el mismo patrón sirve en la tarjeta "Give it a team".</div>
+    </div>
+  </div>
+</div>
+
+</section>
+</x-dc>
+</body>
+</html>

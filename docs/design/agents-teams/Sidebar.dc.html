@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:248px;height:100%;background:#1a1a1a;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;color:#e6e6e6;font-size:13px;overflow:hidden;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:8px;padding:14px 14px 10px">
+    <div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+    <div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div>
+    <div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;gap:1px;padding:4px 8px;overflow:hidden">
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="12">
+      <sc-if value="{{ r.isHeader }}">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 8px 4px;color:#7a7a7a;font-size:11.5px">
+          <span>{{ r.label }}</span><span style="font-size:14px;color:#6a6a6a">{{ r.plus }}</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{ r.isItem }}">
+        <div style="display:flex;align-items:center;gap:8px;height:28px;border-radius:6px;padding-right:8px;padding-left:{{ r.pad }};background:{{ r.bg }};color:{{ r.color }}">
+          <sc-if value="{{ r.avatar }}"><div style="width:18px;height:18px;border-radius:5px;background:{{ r.avatar }};color:#151515;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">{{ r.letter }}</div></sc-if>
+          <sc-if value="{{ r.icon }}"><div style="width:13px;height:11px;border:1.4px solid #8a8a8a;border-radius:{{ r.icon }};flex:none;margin:0 2px"></div></sc-if>
+          <sc-if value="{{ r.stack }}">
+            <div style="display:flex;flex:none;width:22px">
+              <div style="width:10px;height:10px;border-radius:50%;background:oklch(0.68 0.12 255);border:1.5px solid #1a1a1a"></div>
+              <div style="width:10px;height:10px;border-radius:50%;background:oklch(0.68 0.12 300);border:1.5px solid #1a1a1a;margin-left:-4px"></div>
+              <div style="width:10px;height:10px;border-radius:50%;background:oklch(0.68 0.12 190);border:1.5px solid #1a1a1a;margin-left:-4px"></div>
+            </div>
+          </sc-if>
+          <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.label }}</span>
+          <span style="color:#7a7a7a;font-size:11.5px;font-family:{{ r.metaFont }}">{{ r.meta }}</span>
+          <sc-if value="{{ r.dot }}"><div style="width:6px;height:6px;border-radius:50%;background:oklch(0.66 0.17 255)"></div></sc-if>
+        </div>
+      </sc-if>
+    </sc-for>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid rgba(255,255,255,0.06)">
+    <div style="width:26px;height:26px;border-radius:50%;background:#2c2c2c;display:flex;align-items:center;justify-content:center;font-size:11px;color:#aaa">A</div>
+    <div style="display:flex;flex-direction:column;gap:1px"><span>Antonio</span><span style="font-size:11px;color:#7a7a7a">This Mac · $0.18 today</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:248,&quot;height&quot;:800},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;unified&quot;,&quot;grouped&quot;,&quot;directory&quot;],&quot;default&quot;:&quot;unified&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;active&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;daily&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const v = this.props.variant ?? 'unified', act = this.props.active ?? '';
+    const c = h => `oklch(0.72 0.12 ${h})`;
+    const rows = [];
+    const H = (label, plus = '+') => rows.push({ isHeader: true, label, plus });
+    const I = (id, o) => rows.push(Object.assign({
+      isItem: true, label: '', meta: '', pad: o.child ? '30px' : '8px',
+      bg: id && id === act ? 'rgba(255,255,255,0.08)' : 'transparent',
+      color: o.dim ? '#a8a8a8' : '#e6e6e6', metaFont: o.mono ? 'ui-monospace,Menlo,monospace' : 'inherit'
+    }, o));
+    I('search', { icon: '50%', label: 'Search', meta: '⌘K' });
+    I('home', { icon: '2px', label: 'Home' });
+    I('needs', { icon: '3px', label: 'Needs you', meta: '6' });
+    if (v === 'directory') I('agents', { icon: '5px', label: 'Agents and teams', meta: '5' });
+    H('Projects');
+    I('piopio', { icon: '2px 2px 3px 3px', label: 'piopio', meta: 'main', mono: true, stack: v !== 'split' });
+    I('', { child: true, label: 'Signup form', dim: true });
+    I('', { child: true, label: 'Por qué una de las últimas…', dim: true });
+    I('rc', { icon: '2px 2px 3px 3px', label: 'RC bioinformatica' });
+    if (v === 'unified') {
+      H('Agents');
+      I('daily', { avatar: c(70), letter: 'D', label: 'Daily briefing', dot: true });
+      I('family', { avatar: c(150), letter: 'F', label: 'Family helper', meta: 'Draft' });
+      I('reviewer', { avatar: c(190), letter: 'C', label: 'Code reviewer' });
+      I('devteam', { stack: true, label: 'Development team', meta: '4' });
+    } else if (v === 'grouped') {
+      H('Agents');
+      I('daily', { avatar: c(70), letter: 'D', label: 'Daily briefing', dot: true });
+      I('family', { avatar: c(150), letter: 'F', label: 'Family helper', meta: 'Draft' });
+      I('reviewer', { avatar: c(190), letter: 'C', label: 'Code reviewer' });
+      I('devteam', { stack: true, label: 'Development team', meta: '▾' });
+      I('', { child: true, avatar: c(255), letter: 'T', label: 'Tech lead', dim: true });
+      I('', { child: true, avatar: c(300), letter: 'B', label: 'Builder', meta: '×3', dim: true });
+      I('', { child: true, avatar: c(190), letter: 'C', label: 'QA · Code reviewer', dim: true });
+      I('', { child: true, avatar: 'oklch(0.6 0 0)', letter: 'CI', label: 'CI', dim: true });
+    } else if (v === 'directory') {
+      H('Pinned', '');
+      I('daily', { avatar: c(70), letter: 'D', label: 'Daily briefing', dot: true });
+    }
+    H('Conversations');
+    ['nk', 'hi', 'tedst', 'Quiero que resuelvas el ejerc…'].forEach(l => I('', { icon: '50%', label: l }));
+    return { rows };
+  }
+}
+</script>
+</body>
+</html>

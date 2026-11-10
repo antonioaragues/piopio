@@ -25,6 +25,7 @@ Piopio is a native macOS app on top of the **pi** agent harnesses (`pi-coding-ag
 | [18-conversation-first.md](18-conversation-first.md) | Conversation first: one way to start, the project and permissions as composer chips, notebooks become projects, and a project is always a folder (New project makes one in ~/Piopio, with AGENTS.md and NOTES.md); decided 2026-11-07, CF4 revised 2026-11-08 |
 | [19-agent-teams.md](19-agent-teams.md) | Agent teams: make agents and teams from a conversation, a lead that hands tasks to specialists on a shared board, teams that build in real workplaces, running on the Mac or in your cloud, reachable from Telegram and WhatsApp; Dispatch becomes the default team; draft 2026-11-09 |
 | [20-projects-agents-teams.md](20-projects-agents-teams.md) | Projects, agents and teams: agents and teams are definitions, work happens in projects, a project's conversations are with its team's lead (a lead per conversation, tasks shown inside it), the Board and routines belong to the project; decided 2026-11-10 |
+| [21-agents-teams-design.md](21-agents-teams-design.md) | The agents and teams design handoff (docs/design/agents-teams) as a plan: one Agents section, Chat and Setup on the agent page, per-tool permissions, the team as a chain of work, teams born in a project, @mentions, Home absorbs Needs you; phases D1–D7; plan 2026-11-10 |
 
 Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release of a mode. "Later" means after it.
 
