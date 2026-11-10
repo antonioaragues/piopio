@@ -1768,7 +1768,8 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 
 	test("reminders and triggers start runs that message the owner; quiet hours and the daily limit hold messages; restart resumes", async () => {
 		const a = await start();
-		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		// With instructions, so it doesn't open with an interview (docs/spec/19 S2).
+		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", instructions: "Help Antonio.", model: { provider: "faux", id: "faux-1" } });
 		const got = await a.client.call("agents.get", { ref });
 		const base = { ...(got.definition as object), timezone: "UTC", tools: { builtin: ["memory", "schedule", "send_message"] }, triggers: [{ id: "strava", type: "webhook", prompt: "New activity: {{body}}" }] };
 		const save = async (policies: object) => expect(await a.client.call("agents.save", { ref, definition: { ...base, policies }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });

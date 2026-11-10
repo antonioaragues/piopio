@@ -81,10 +81,25 @@ export type AgentCoreOptions = {
 	onLearned?: (bank: string, changes: LearnedChange[]) => void;
 	/** This agent's paid requests outside the harness in a month (web search, utility model), for its budget. */
 	extraSpend?: (month: string) => number | Promise<number>;
+	/**
+	 * The agent sets itself up (`set_up`, docs/spec/19 S2): changes its name, line, icon or instructions. Returns what
+	 * they were before, for Undo. Absent: the tool says it can't.
+	 */
+	updateSelf?: (change: SelfChange) => Promise<SelfChange>;
 	/** Event routines (the `watch` tool): a webhook watch's URL, and a notice that the list changed. */
 	watchUrl?: (id: string) => string | undefined;
 	onWatches?: () => void;
 };
+
+/** What `set_up` changes. `instructions` is the body of instructions.md, without its heading. */
+export type SelfChange = { name?: string; description?: string; avatar?: string; instructions?: string };
+
+/** While an agent is new (`interview`), how it learns its job: a short interview, then set_up (docs/spec/19 S2). */
+export const INTERVIEW_PROMPT = `You were just created and don't have a job yet. Learn it from your owner in a short interview, then set yourself up:
+- Ask at most three short questions, one at a time: what you're for (offer three or four numbered examples that fit what they said, plus "something else, in your words"), which apps, places or people it involves, and how they want to hear from you (here, or on Telegram).
+- Don't ask what you can decide yourself. A good default beats a question.
+- Then call set_up with a short name, a one-line description, an icon (one emoji) and your instructions: in the second person, with the standing details they told you.
+- Then set the routines it needs: schedule for times ("every weekday at 8"), watch for events (an email from someone, a file in a folder, a webhook). Say in one or two lines what you set up and when they'll hear from you.`;
 
 /** An entry in a person's conversation: what the agent learned after a quiet moment, with Undo (M2). */
 export const LEARN_ENTRY = "piopio.learned";
@@ -220,6 +235,10 @@ export class AgentCore {
 				return this.proactive.cancelReminder(String(d.id));
 			case "reminder.restore":
 				return this.proactive.restoreReminder(d.reminder as Reminder);
+			case "self.restore":
+				if (!this.options.updateSelf) throw new Error("This agent can't change itself here.");
+				await this.options.updateSelf(d as SelfChange);
+				return;
 			case "watch.cancel":
 				return this.proactive.cancelWatch(String(d.id));
 			case "watch.restore":
@@ -554,10 +573,43 @@ export class AgentCore {
 		});
 
 		this.memoryTools = [remember, recall, forget];
+		// The agent sets itself up from the owner's conversation (docs/spec/19 S2): name, line, icon, instructions.
+		const setUp = defineTool({
+			name: "set_up",
+			description:
+				"Set yourself up, or change how you're set up, when your owner tells you what you're for: your name, a one-line description, an icon (one emoji) and your instructions (in the second person, with the standing details). Only what you pass changes. Only in your owner's conversation.",
+			parameters: Type.Object({
+				name: Type.Optional(Type.String({ minLength: 1, maxLength: 60 })),
+				description: Type.Optional(Type.String({ maxLength: 120 })),
+				avatar: Type.Optional(Type.String({ maxLength: 8, description: "One emoji" })),
+				instructions: Type.Optional(Type.String({ minLength: 1, description: "Your full instructions; they replace the current ones" })),
+			}),
+			execute: async (args, api) => {
+				const contact = await core.contactOf(api.conversationId);
+				if (contact?.role !== "owner") return { output: [{ type: "text", text: "Only your owner can change how you're set up." }], isError: true };
+				if (!core.options.updateSelf) return { output: [{ type: "text", text: "You can't change yourself here: ask your owner to edit your definition." }], isError: true };
+				const change: SelfChange = {};
+				if (args.name?.trim()) change.name = args.name.trim();
+				if (args.description?.trim()) change.description = args.description.trim();
+				if (args.avatar?.trim()) change.avatar = args.avatar.trim();
+				if (args.instructions?.trim()) change.instructions = args.instructions.trim();
+				if (!Object.keys(change).length) return { output: [{ type: "text", text: "Nothing to change." }], isError: true };
+				let previous: SelfChange;
+				try {
+					previous = await core.options.updateSelf(change);
+				} catch (error) {
+					return { output: [{ type: "text", text: (error as Error).message }], isError: true };
+				}
+				const title = change.name ? `Set up as ${change.name}` : "Updated how I'm set up";
+				const detail = [change.description, change.instructions ? `Instructions: ${change.instructions.slice(0, 280)}${change.instructions.length > 280 ? "…" : ""}` : undefined].filter(Boolean).join("\n");
+				const undo = await core.safety.recordUndo("self.restore", previous as JsonObject, "the setup", api.conversationId);
+				return { output: [{ type: "text", text: `${title}.` }], details: { card: { kind: "setup", title, ...(detail ? { detail } : {}) } satisfies ResultCard, undo } as never };
+			},
+		});
 		const p = this.proactive.tools;
 		return defineExtension({
 			name: "piopio-agent",
-			tools: [remember, recall, forget, p.send, p.schedule, p.list, p.cancel, p.watch, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
+			tools: [remember, recall, forget, setUp, p.send, p.schedule, p.list, p.cancel, p.watch, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
 			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
 			hooks: [
@@ -597,7 +649,8 @@ export class AgentCore {
 							: core.def.channels?.telegram
 								? "\n\nYou're also on Telegram: the owner's messages there come to this same conversation, and your answers go back there."
 								: "\n\nIf the owner wants to talk with you on Telegram: they make a bot with @BotFather (/newbot) and paste the token it gives them in this chat. Piopio connects it and sends them a link; you never see the token.";
-					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
+					const interview = core.def.interview && contact?.role === "owner" ? `\n\n${INTERVIEW_PROMPT}` : "";
+					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
 				}),
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;

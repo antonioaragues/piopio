@@ -227,3 +227,36 @@ All decided with the user on 2026-11-09.
 | TD6 | **A lead hires helpers on its own**, within the team's budget and from existing role cards. A new kind of role asks you first. |
 | TD7 | **A team shares knowledge through a team folder** with NOTES.md, like a project (CF4). A shared memory bank can come later if notes aren't enough. |
 | TD8 | **Simple first** (S1–S5): the single agent stays the default path. Telegram works from the Mac by polling, before the cloud exists. |
+
+## 9. T0 as built (2026-11-10)
+
+- **Telegram from the Mac** (S4; `engine/src/channels/`).
+  - **Connect:** paste a @BotFather token in the agent's chat. The engine catches it before the model or the
+    transcript, checks it with Telegram, and keeps it in the Keychain. It answers with a pairing link,
+    `t.me/<bot>?start=<code>`, valid for an hour.
+  - **Talk:** the engine polls the bot while it runs. A message from a known chat is a turn in that person's
+    conversation, and the answer goes back to Telegram as HTML. Messages the agent sends on its own go there when
+    Telegram is the person's preferred channel, and pending approvals are announced there.
+  - **Strangers** get a polite line, or the owner is told (`unknownSenders`).
+- **Event routines by asking** (S3).
+  - **The `watch` tool:** the agent sets them itself, next to `schedule` for times.
+    - `email`: from someone and/or about something, in the connected mail, checked every 5 minutes.
+    - `folder`: a file appears or changes.
+    - `webhook`: it gets a signed local URL.
+  - Each fire is a run, never twice for the same file version, message or delivery.
+  - **Where they show:** the Runs tab's "Next", and `list_schedules` / `cancel_schedule`, with Undo.
+  - **Defaults:** every agent has `schedule` and `send_message` on, and the templates too.
+- **Set up by talking** (S2).
+  - **An empty agent interviews you:** an agent created with no instructions and no template is marked `interview`.
+    Its chat opens with a greeting written by the engine (no model call) that asks what it's for, with examples.
+  - **The interview:** its prompt tells it to ask at most three short questions, then call `set_up` (name, line,
+    icon, instructions), then set its routines.
+  - **`set_up`:** owner's conversation only, with a result card and Undo. It ends the interview.
+  - **Start page:** Create works with nothing filled in.
+
+**Not in T0 yet:**
+- Question cards for agents: the interview asks in text, which also works on Telegram.
+- "Turn into an agent" as a card in the conversation; it still opens the start page.
+- Role cards as agents (T7), which come with teams (T1).
+- **Not seen with a real model:** a real interview, a real Telegram bot, and Outlook mail.
+

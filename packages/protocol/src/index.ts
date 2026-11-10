@@ -313,7 +313,7 @@ export const ResultItem = Type.Object({
 	id: Type.String(),
 	at: Type.String(),
 	callId: Type.String(),
-	card: Type.Object({ kind: literals("reminder", "message", "memory", "event", "contact", "note", "music", "shortcut"), title: Type.String(), detail: Type.Optional(Type.String()) }),
+	card: Type.Object({ kind: literals("reminder", "message", "memory", "event", "contact", "note", "music", "shortcut", "setup"), title: Type.String(), detail: Type.Optional(Type.String()) }),
 	undo: Type.Optional(Type.Object({ id: Type.String(), status: literals("available", "undone", "failed", "expired"), until: Type.String() })),
 });
 /** A message between two of the owner's agents (06-agents §7 AA5): sent (`out`, with the answer once it comes) or received (`in`). */

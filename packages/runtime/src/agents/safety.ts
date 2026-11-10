@@ -38,9 +38,9 @@ export type Approval = {
 };
 
 /** What a tool changed (RC1). */
-export type ResultCard = { kind: "reminder" | "message" | "memory" | "event" | "contact" | "note" | "music" | "shortcut"; title: string; detail?: string };
+export type ResultCard = { kind: "reminder" | "message" | "memory" | "event" | "contact" | "note" | "music" | "shortcut" | "setup"; title: string; detail?: string };
 /** `app.tool`: an Apple app call that reverses another (§4.1). */
-export type UndoKind = "reminder.cancel" | "reminder.restore" | "watch.cancel" | "watch.restore" | "memory.forget" | "memory.restore" | "memory.unlearn" | "outbox.withdraw" | "app.tool";
+export type UndoKind = "reminder.cancel" | "reminder.restore" | "watch.cancel" | "watch.restore" | "self.restore" | "memory.forget" | "memory.restore" | "memory.unlearn" | "outbox.withdraw" | "app.tool";
 export type UndoRecord = { id: string; kind: UndoKind; data: JsonObject; title: string; conversationId: string; at: string; until: number; status: "available" | "undone" | "failed"; error?: string };
 
 export type InboxKind = "approval" | "message" | "run_failed" | "budget" | "paused";

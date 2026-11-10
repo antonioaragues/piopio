@@ -507,6 +507,12 @@ export class Proactivity {
 		this.host.onOutbound?.(to, text, from);
 	}
 
+	/** The agent's first words in the owner's conversation, written by the host, not the model (docs/spec/19 S2). */
+	async greet(text: string): Promise<void> {
+		const conversation = await this.host.person(this.owner);
+		await conversation.submit({ type: "write", entry: { kind: OUT_ENTRY, data: { text, from: "greeting" }, model: [{ role: "user", content: `(You opened the conversation with this message:)\n${text}`, timestamp: this.host.now() }] } } as never, this.host.context);
+	}
+
 	/** A note in someone's conversation, the owner's by default (not a message from the agent, not counted). */
 	async notice(text: string, contactId = this.owner, forModel?: string): Promise<void> {
 		const conversation = await this.host.person(contactId);

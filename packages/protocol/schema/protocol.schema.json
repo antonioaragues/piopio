@@ -1393,6 +1393,10 @@
 										{
 											"type": "string",
 											"const": "shortcut"
+										},
+										{
+											"type": "string",
+											"const": "setup"
 										}
 									]
 								},
@@ -3608,6 +3612,10 @@
 														{
 															"type": "string",
 															"const": "shortcut"
+														},
+														{
+															"type": "string",
+															"const": "setup"
 														}
 													]
 												},
@@ -5314,6 +5322,10 @@
 														{
 															"type": "string",
 															"const": "shortcut"
+														},
+														{
+															"type": "string",
+															"const": "setup"
 														}
 													]
 												},
@@ -7000,6 +7012,10 @@
 														{
 															"type": "string",
 															"const": "shortcut"
+														},
+														{
+															"type": "string",
+															"const": "setup"
 														}
 													]
 												},
@@ -9273,6 +9289,10 @@
 																	{
 																		"type": "string",
 																		"const": "shortcut"
+																	},
+																	{
+																		"type": "string",
+																		"const": "setup"
 																	}
 																]
 															},
@@ -11527,6 +11547,10 @@
 													{
 														"type": "string",
 														"const": "shortcut"
+													},
+													{
+														"type": "string",
+														"const": "setup"
 													}
 												]
 											},
@@ -14062,6 +14086,10 @@
 																	{
 																		"type": "string",
 																		"const": "shortcut"
+																	},
+																	{
+																		"type": "string",
+																		"const": "setup"
 																	}
 																]
 															},
@@ -15768,6 +15796,10 @@
 																	{
 																		"type": "string",
 																		"const": "shortcut"
+																	},
+																	{
+																		"type": "string",
+																		"const": "setup"
 																	}
 																]
 															},
@@ -17454,6 +17486,10 @@
 																	{
 																		"type": "string",
 																		"const": "shortcut"
+																	},
+																	{
+																		"type": "string",
+																		"const": "setup"
 																	}
 																]
 															},
@@ -19727,6 +19763,10 @@
 																				{
 																					"type": "string",
 																					"const": "shortcut"
+																				},
+																				{
+																					"type": "string",
+																					"const": "setup"
 																				}
 																			]
 																		},
@@ -23274,6 +23314,10 @@
 													{
 														"type": "string",
 														"const": "shortcut"
+													},
+													{
+														"type": "string",
+														"const": "setup"
 													}
 												]
 											},
@@ -25580,6 +25624,10 @@
 															{
 																"type": "string",
 																"const": "shortcut"
+															},
+															{
+																"type": "string",
+																"const": "setup"
 															}
 														]
 													},

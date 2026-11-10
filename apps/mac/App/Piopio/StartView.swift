@@ -966,18 +966,19 @@ private struct AgentStart: View {
     private var draft: StartDrafts.Draft { drafts[.agent] }
     private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var instructions: String { draft.text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canCreate: Bool { !name.isEmpty && !instructions.isEmpty }
+    /// Nothing is required: with no instructions (and no template) it interviews you and sets itself up (docs/spec/19 S2).
+    private var canCreate: Bool { true }
 
     var body: some View {
-        StartHeader(kind: .agent, description: "Runs on a schedule on this Mac, remembers what you teach it, and reaches you only when something matters.") {
+        StartHeader(kind: .agent, description: "Say what it should do, or just create it: it asks you a few questions and sets itself up. It remembers what you teach it and reaches you only when something matters.") {
             HStack(spacing: 14) {
                 AvatarPicker(avatar: drafts.binding(.agent, \.avatar), size: CGSize(width: 44, height: 44))
-                TitleField(placeholder: "Name your agent", text: drafts.binding(.agent, \.name), focused: $focus) { focus = .text }
+                TitleField(placeholder: "New agent", text: drafts.binding(.agent, \.name), focused: $focus) { focus = .text }
             }
         }
         VStack(alignment: .leading, spacing: 12) {
             ComposerCard {
-                AnyView(CardText(placeholder: "What should it do? In your own words, e.g. “Every morning, tell me what's on my calendar and which emails need a reply.”", text: drafts.binding(.agent, \.text), focused: $focus, minHeight: 84, submit: create))
+                AnyView(CardText(placeholder: "What should it do? In your own words, e.g. “Every morning, tell me what's on my calendar and which emails need a reply.” Or leave it empty: it will ask you.", text: drafts.binding(.agent, \.text), focused: $focus, minHeight: 84, submit: create))
             } extra: {
                 EmptyView()
             } leading: {
@@ -987,11 +988,11 @@ private struct AgentStart: View {
                     Text("Notifies you in Piopio")
                 }
                 .font(.system(size: 13)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6)
-                .help("It writes to you here, with a Mac notification. Other channels come later.")
+                .help("It writes to you here, with a Mac notification. To talk on Telegram, paste a bot token from @BotFather in its chat.")
                 Text("Runs on this Mac").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.leading, 4)
             } action: {
                 MainAction(title: "Create ⌘↩", busy: creating, enabled: canCreate, action: create)
-                    .help(name.isEmpty ? "Name the agent first" : instructions.isEmpty ? "Say what it should do first" : "Create the agent")
+                    .help(instructions.isEmpty && draft.template == nil ? "Create it: it asks you what it's for" : "Create the agent")
             }
             StartError(text: error)
         }
@@ -1038,7 +1039,7 @@ private struct AgentStart: View {
         Task {
             defer { creating = false }
             do {
-                let ref = try await engine.createAgent(name: name, template: draft.template, avatar: draft.avatar.trimmingCharacters(in: .whitespaces), instructions: instructions, schedule: schedule)
+                let ref = try await engine.createAgent(name: name.isEmpty ? "New agent" : name, template: draft.template, avatar: draft.avatar.trimmingCharacters(in: .whitespaces), instructions: instructions, schedule: schedule)
                 UserDefaults.standard.set("Chat", forKey: "agentTab")
                 drafts.clear(.agent)
                 morph(to: .agent(ref.id), $item)

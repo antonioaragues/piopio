@@ -40,6 +40,8 @@ export const AgentDefinition = Type.Object({
 	timezone: Type.Optional(Type.String()),
 	/** One line for the sidebar. */
 	description: Type.Optional(Type.String({ maxLength: 120 })),
+	/** Just created with nothing said yet: it interviews the owner and sets itself up (docs/spec/19 S2). `set_up` clears it. */
+	interview: Type.Optional(Type.Boolean()),
 	/** `utility`: its background work, learned facts (07-shared §1.3): "auto", "on-device", "off" or a model id; unset follows Settings › Models. */
 	models: Type.Object({ default: Type.String({ minLength: 1 }), utility: Type.Optional(Type.String()) }),
 	thinking: Type.Optional(Type.Union([Type.Literal("off"), Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")])),

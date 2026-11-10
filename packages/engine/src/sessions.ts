@@ -677,7 +677,9 @@ export class Sessions {
 		const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "agent";
 		const model = params.model ?? this.hub.defaultModel;
 		const folder = this.host.files.folderFor(slug);
-		const made = newDefinition({ id, slug: basename(folder), name, owner: params.owner?.trim() || "Owner", model: model.provider === "openrouter" ? model.id : `${model.provider}:${model.id}`, ...(params.template ? { template: params.template } : {}), ...(params.avatar ? { avatar: params.avatar } : {}), ...(params.instructions !== undefined ? { instructions: params.instructions } : {}), ...(params.schedule !== undefined ? { schedule: params.schedule } : {}) });
+		// Nothing said yet (no template, no instructions): it interviews the owner and sets itself up (docs/spec/19 S2).
+		const interview = !params.template && !params.instructions?.trim();
+		const made = newDefinition({ id, slug: basename(folder), name, owner: params.owner?.trim() || "Owner", model: model.provider === "openrouter" ? model.id : `${model.provider}:${model.id}`, ...(params.template ? { template: params.template } : {}), ...(params.avatar ? { avatar: params.avatar } : {}), ...(params.instructions !== undefined ? { instructions: params.instructions } : {}), ...(params.schedule !== undefined ? { schedule: params.schedule } : {}), ...(interview ? { interview: true } : {}) });
 		await this.host.files.create(folder, made);
 		this.definitions.set(id, made);
 		const now = new Date().toISOString();
@@ -687,7 +689,30 @@ export class Sessions {
 		this.entries.set(id, entry);
 		this.save();
 		this.changed(entry);
+		if (interview) {
+			const owner = made.definition.contacts[0]!.name;
+			const hi = owner && owner !== "Owner" ? `Hi ${owner}!` : "Hi!";
+			await (await this.agent(entry.ref)).greet(
+				`${hi} I'm your new agent. What would you like me to help with? For example:\n\n1. A morning briefing: your calendar, the emails that need you, the weather\n2. Watching something and telling you when it changes\n3. Reminders, and keeping track of what you ask me\n4. Something else: tell me in your words`,
+			);
+		}
 		return entry.ref;
+	}
+
+	/** `set_up` from the agent itself (docs/spec/19 S2): saved like an edit, and the interview ends once it has instructions. */
+	private async updateAgentSelf(id: string, change: { name?: string; description?: string; avatar?: string; instructions?: string }) {
+		const { definition, instructions } = this.agentDefinition(id);
+		const body = instructions.replace(/^#[^\n]*\n+/, "").trim();
+		const previous = { name: definition.name, ...(definition.description ? { description: definition.description } : {}), ...(definition.avatar ? { avatar: definition.avatar } : {}), instructions: body };
+		const next = structuredClone(definition);
+		if (change.name) next.name = change.name;
+		if (change.description) next.description = change.description;
+		if (change.avatar) next.avatar = change.avatar;
+		if (change.instructions) delete next.interview;
+		const text = `# ${next.name}\n\n${change.instructions ?? body}\n`;
+		const result = await this.saveAgent({ kind: "agent", id }, next, text, change.instructions ? "Set itself up" : "Change its name or line");
+		if (!result.saved && result.errors.length) throw new Error(result.errors.map((e) => e.message).join(" "));
+		return previous;
 	}
 
 	/** The definition as it is on disk, its errors and history. */
@@ -1290,6 +1315,7 @@ export class Sessions {
 				...(this.telegram ? { connectTelegram: (token: string) => this.telegram!.connect(id, token) } : {}),
 				...(this.hookUrl ? { watchUrl: (watchId: string) => this.hookUrl!(id, watchId) } : {}),
 				onWatches: () => void this.watchers?.sync().catch(() => undefined),
+				updateSelf: (change) => this.updateAgentSelf(id, change),
 			});
 		}
 		if (entry.ref.kind === "thread" && entry.debate) {

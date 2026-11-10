@@ -63,7 +63,7 @@ const SCHEDULED_PROMPT = "It's your scheduled time. Do what your instructions as
  * A new definition: from a template (or from scratch), for `owner`. `instructions` replaces the template's (the
  * start page's text); `schedule` is a cron that replaces the template's first schedule, or null for none.
  */
-export function newDefinition(options: { id: string; slug: string; name: string; owner: string; model: string; template?: string; avatar?: string; instructions?: string; schedule?: string | null; timezone?: string }): { definition: AgentDefinition; instructions: string } {
+export function newDefinition(options: { id: string; slug: string; name: string; owner: string; model: string; template?: string; avatar?: string; instructions?: string; schedule?: string | null; timezone?: string; interview?: boolean }): { definition: AgentDefinition; instructions: string } {
 	const t = TEMPLATES.find((x) => x.id === options.template);
 	const first = t?.definition.schedules?.[0];
 	const schedules =
@@ -79,6 +79,7 @@ export function newDefinition(options: { id: string; slug: string; name: string;
 		name: options.name,
 		...(options.avatar ?? t?.avatar ? { avatar: options.avatar ?? t!.avatar } : {}),
 		...(t ? { description: t.description } : {}),
+		...(options.interview ? { interview: true } : {}),
 		models: { default: options.model },
 		// Every agent can set its own routines and message you (docs/spec/19 S3): proactive by asking, from the start.
 		tools: t?.definition.tools ?? { builtin: ["web_search", "web_fetch", "memory", "schedule", "send_message"] },
@@ -86,7 +87,7 @@ export function newDefinition(options: { id: string; slug: string; name: string;
 		...(schedules?.length ? { schedules } : {}),
 		...(t?.definition.policies ? { policies: t.definition.policies } : {}),
 	};
-	const body = options.instructions?.trim() || t?.instructions || "You are {owner}'s agent.";
+	const body = options.instructions?.trim() || t?.instructions || (options.interview ? "You were just created. You'll learn your job from {owner}." : "You are {owner}'s agent.");
 	const instructions = `# ${options.name}\n\n${body.replaceAll("{owner}", options.owner)}\n`;
 	return { definition, instructions };
 }

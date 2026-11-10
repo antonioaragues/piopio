@@ -52,6 +52,8 @@ export type AgentOpenOptions = {
 	onOutbound?: (to: string, text: string, from: string) => void;
 	/** The owner pasted a Telegram bot token in the chat: connect it and say what happened (docs/spec/19 S4). */
 	connectTelegram?: (token: string) => Promise<string>;
+	/** The agent sets itself up (docs/spec/19 S2): saved to its definition and instructions; returns what they were. */
+	updateSelf?: AgentCoreOptions["updateSelf"];
 	/** Event routines (docs/spec/19 S3): a webhook watch's URL, and a notice that the agent's watches changed. */
 	watchUrl?: (watchId: string) => string | undefined;
 	onWatches?: () => void;
@@ -133,6 +135,7 @@ export class AgentRuntime implements Runtime {
 			onStatus: () => options.onStatus?.(),
 			...(options.watchUrl ? { watchUrl: options.watchUrl } : {}),
 			...(options.onWatches ? { onWatches: options.onWatches } : {}),
+			...(options.updateSelf ? { updateSelf: options.updateSelf } : {}),
 		});
 		for (const e of [web, core.extension, ...(apps ? [apps] : [])]) registry.install(e as never);
 		runtime = new AgentRuntime(options, harness, core);
@@ -219,6 +222,11 @@ export class AgentRuntime implements Runtime {
 	async fireWatch(watchId: string, happened: string, key: string): Promise<RunRecord | undefined> {
 		await this.ensureCredential();
 		return this.core.proactive.fireWatch(watchId, happened, key);
+	}
+
+	/** Its first words to the owner, written by the engine (an agent that interviews, docs/spec/19 S2). */
+	greet(text: string): Promise<void> {
+		return this.core.proactive.greet(text);
 	}
 
 	/** The routines the agent set that wait for events. */

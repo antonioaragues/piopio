@@ -50,7 +50,8 @@ nonisolated struct ItemRenderer: Sendable {
             if let speaker = a.speaker { out.append(speakerLine(speaker)) }
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: Self.thought(a.thinkingMs), detail: "", body: thinking))) }
-            if let o = a.outbound { out.append(note((o.from.hasPrefix("run_") ? "Automatic run" : "Sent on its own") + (Self.date(a.at).map { " · " + $0.formatted(date: .omitted, time: .shortened) } ?? ""))) }
+            // A new agent's greeting (docs/spec/19 S2) reads as its first message, with no label.
+            if let o = a.outbound, o.from != "greeting" { out.append(note((o.from.hasPrefix("run_") ? "Automatic run" : "Sent on its own") + (Self.date(a.at).map { " · " + $0.formatted(date: .omitted, time: .shortened) } ?? ""))) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
             if a.status != .streaming, !compact, !midTurn.contains(a.id) { out.append(answerFooter(a)) }
