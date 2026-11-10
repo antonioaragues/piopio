@@ -34,8 +34,30 @@ export type TeamTask = {
 	/** Rounds sent back by review or integration. */
 	attempts: number;
 	blocked?: string;
+	/** When its work reached the project's branch (merged from the team page). */
+	landed?: string;
 	createdAt: string;
 	updatedAt: string;
+};
+
+/** What the team's branch would bring to the project's (the merge card). */
+export type TeamLanding = {
+	base: string;
+	branch: string;
+	/** Commits on the team's branch that the base doesn't have. */
+	ahead: number;
+	/** Commits on the base since the team branched (someone else's work). */
+	behind: number;
+	files: { path: string; added: number; removed: number }[];
+	/** Done tasks not merged into the base yet. */
+	tasks: { id: string; title: string }[];
+	/** Tasks still on the board (to do, doing, in review). */
+	open: number;
+	/** The branch the project's folder is on. */
+	checkedOut?: string;
+	remote?: string;
+	/** GitHub's page to open a pull request, once the branch is pushed. */
+	compareUrl?: string;
 };
 
 export type Team = {
@@ -84,7 +106,11 @@ export type TeamHost = {
 };
 
 const MAX_ATTEMPTS = 3;
+/** States still on the board's way to done. */
+const OPEN = new Set<TaskState>(["todo", "doing", "review", "integrating"]);
 const iso = () => new Date().toISOString();
+/** A branch name in a URL path: its slashes stay. */
+const ref = (name: string) => name.split("/").map(encodeURIComponent).join("/");
 const quote = (text: string) => text.split("\n").map((l) => `> ${l}`).join("\n");
 
 export class TeamRunner {
@@ -188,7 +214,7 @@ export class TeamRunner {
 	leadBrief(team: Team): string {
 		const lead = team.roles.find((r) => r.kind === "lead")!;
 		const members = team.roles.filter((r) => r.kind !== "lead").map((r) => `- ${r.name} (role id "${r.id}", ${r.kind === "write" ? "does tasks; several can work at once" : r.kind === "review" ? "reviews every finished task; a failed review sends it back" : "merges approved work into the team branch and runs the checks"}): ${r.responsibility}`);
-		const where = team.git ? `Each task gets its own branch from ${team.git.branch}; approved work is merged into ${team.git.branch}, which starts from ${team.git.base}.` : `Everyone works in the team folder, ${team.folder}.`;
+		const where = team.git ? `Each task gets its own branch from ${team.git.branch}; approved work is merged into ${team.git.branch}, which starts from ${team.git.base}. You don't merge into ${team.git.base}: when the board is clear, tell the user the work is ready; they merge it, or push it for a pull request, from the team's Board.` : `Everyone works in the team folder, ${team.folder}.`;
 		return `${lead.responsibility}\n\n${team.style}\n\nYour team (${team.name}):\n${members.join("\n")}\n\n${where} At most ${team.maxParallel} tasks run at once; the rest wait their turn. Team notes: ${join(team.folder, "NOTES.md")}.\n\nMessages that start with [Board] are updates from the board, not from the user.`;
 	}
 
@@ -419,8 +445,98 @@ export class TeamRunner {
 		t.state = "done";
 		t.updatedAt = iso();
 		this.save(team);
-		await this.tellLead(team, `${t.id} “${t.title}” is done.${extra}\n\nReport:\n${quote(t.report || "(none)")}`);
+		await this.tellLead(team, `${t.id} “${t.title}” is done.${extra}\n\nReport:\n${quote(t.report || "(none)")}${await this.readyNote(team)}`);
 		await this.pump(team);
+	}
+
+	/** When the board is clear and the team's branch has work: it's ready for the user to merge. */
+	private async readyNote(team: Team): Promise<string> {
+		if (!team.git || team.tasks.some((t) => OPEN.has(t.state))) return "";
+		const landing = await this.landing(team.id).catch(() => undefined);
+		if (!landing?.ahead) return "";
+		return `\n\nThe board is clear: ${landing.branch} has ${landing.tasks.length === 1 ? "1 task" : `${landing.tasks.length} tasks`} ready for ${landing.base} (${landing.files.length === 1 ? "1 file" : `${landing.files.length} files`}${team.testCommand ? ", checks passed" : ""}). Tell the user it's ready: they merge it into ${landing.base}, or push it for a pull request, from the team's Board.`;
+	}
+
+	// ── Landing: the team's branch into the project's ──
+
+	async landing(teamId: string): Promise<TeamLanding> {
+		const team = this.get(teamId);
+		if (!team.git) throw new EngineError("INVALID", "This team doesn't work on a branch.");
+		const { base, branch } = team.git;
+		const git = (args: string[]) => this.host.git(team.cwd, args);
+		const [behind = 0, ahead = 0] = (await git(["rev-list", "--left-right", "--count", `${base}...${branch}`])).trim().split(/\s+/).map(Number);
+		const files = ahead
+			? (await git(["diff", "--numstat", `${base}...${branch}`]))
+					.split("\n")
+					.filter(Boolean)
+					.map((line) => {
+						const [a, r, ...path] = line.split("\t");
+						return { path: path.join("\t"), added: Number(a) || 0, removed: Number(r) || 0 };
+					})
+			: [];
+		const remotes = (await git(["remote"]).catch(() => "")).split("\n").filter(Boolean);
+		const remote = remotes.includes("origin") ? "origin" : remotes[0];
+		const url = remote ? (await git(["remote", "get-url", remote]).catch(() => "")).trim() : "";
+		const github = /github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url);
+		const checkedOut = await this.host.branchOf(team.cwd).catch(() => undefined);
+		return {
+			base,
+			branch,
+			ahead,
+			behind,
+			files,
+			tasks: team.tasks.filter((t) => t.state === "done" && t.branch && !t.landed).map((t) => ({ id: t.id, title: t.title })),
+			open: team.tasks.filter((t) => OPEN.has(t.state)).length,
+			...(checkedOut ? { checkedOut } : {}),
+			...(remote ? { remote } : {}),
+			...(github ? { compareUrl: `https://github.com/${github[1]}/${github[2]}/compare/${ref(base)}...${ref(branch)}?expand=1` } : {}),
+		};
+	}
+
+	/**
+	 * You land the team's work (the merge card): `merge` it into the project's branch, in the project's folder when
+	 * that branch is checked out there, otherwise in a temporary worktree; or `push` the team's branch for a pull
+	 * request. A merge with conflicts changes nothing.
+	 */
+	async land(teamId: string, action: "merge" | "push"): Promise<{ commit?: string; compareUrl?: string; output?: string }> {
+		const team = this.get(teamId);
+		const landing = await this.landing(teamId);
+		const { base, branch, integration } = team.git!;
+		if (!landing.ahead) throw new EngineError("INVALID", `Nothing to merge: ${branch} has no work that ${base} doesn't have.`);
+		if (action === "push") {
+			if (!landing.remote) throw new EngineError("INVALID", "This project has no remote to push to.");
+			const output = await this.host.git(integration, ["push", "-u", landing.remote, branch]);
+			await this.tellLead(team, `The user pushed ${branch} to ${landing.remote} for a pull request into ${base}.`);
+			return { output, ...(landing.compareUrl ? { compareUrl: landing.compareUrl } : {}) };
+		}
+		const ids = landing.tasks.map((t) => t.id);
+		const message = `Merge ${team.name}: ${ids.length ? ids.map((id) => `${id} ${team.tasks.find((t) => t.id === id)?.title ?? ""}`.trim()).join(", ") : branch}`;
+		const here = landing.checkedOut === base;
+		const dir = here ? team.cwd : join(this.host.worktreesDir, team.id, "_land");
+		if (!here) await this.host.git(team.cwd, ["worktree", "add", "-q", dir, base]);
+		try {
+			const named = (await this.host.git(dir, ["config", "user.email"]).catch(() => "")).trim();
+			const who = named ? [] : ["-c", "user.name=Piopio", "-c", "user.email=piopio@localhost"];
+			await this.host.git(dir, [...who, "merge", "--no-ff", "-q", "-m", message, branch]).catch(async (error: unknown) => {
+				await this.host.git(dir, ["merge", "--abort"]).catch(() => undefined);
+				const first = String((error as Error).message).split("\n").find((l) => /CONFLICT|overwritten|error:/i.test(l)) ?? "";
+				throw new EngineError("CONFLICT", `${base} changed in the same places as the team's work, so nothing was merged. Ask the lead to bring ${base} into ${branch} first. ${first}`.trim());
+			});
+		} finally {
+			if (!here) await this.host.git(team.cwd, ["worktree", "remove", "--force", dir]).catch(() => undefined);
+		}
+		const commit = (await this.host.git(team.cwd, ["rev-parse", "--short", base])).trim();
+		// The team's branch moves up to the merge, so its next tasks start from what's in the project now.
+		await this.host.git(integration, ["merge", "--ff-only", "-q", base]).catch(() => undefined);
+		const now = iso();
+		for (const t of team.tasks) {
+			if (!ids.includes(t.id)) continue;
+			t.landed = now;
+			if (t.branch) await this.host.git(team.cwd, ["branch", "-D", t.branch]).catch(() => undefined);
+		}
+		this.save(team);
+		await this.tellLead(team, `The user merged ${branch} into ${base} (${commit}): ${ids.length ? ids.join(", ") : "the team's work"}. New tasks start from there.`);
+		return { commit };
 	}
 
 	private async block(team: Team, t: TeamTask, why: string): Promise<void> {

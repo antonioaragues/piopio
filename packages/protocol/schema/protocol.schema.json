@@ -34204,6 +34204,10 @@
 										"blocked": {
 											"type": "string"
 										},
+										"landed": {
+											"type": "string",
+											"description": "When its work was merged into the project's branch"
+										},
 										"createdAt": {
 											"type": "string"
 										},
@@ -34477,6 +34481,10 @@
 									},
 									"blocked": {
 										"type": "string"
+									},
+									"landed": {
+										"type": "string",
+										"description": "When its work was merged into the project's branch"
 									},
 									"createdAt": {
 										"type": "string"
@@ -34808,6 +34816,10 @@
 									"blocked": {
 										"type": "string"
 									},
+									"landed": {
+										"type": "string",
+										"description": "When its work was merged into the project's branch"
+									},
 									"createdAt": {
 										"type": "string"
 									},
@@ -34951,6 +34963,10 @@
 						"blocked": {
 							"type": "string"
 						},
+						"landed": {
+							"type": "string",
+							"description": "When its work was merged into the project's branch"
+						},
 						"createdAt": {
 							"type": "string"
 						},
@@ -34958,6 +34974,133 @@
 							"type": "string"
 						}
 					}
+				}
+			}
+		},
+		"teams.landing.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.landing.result": {
+			"type": "object",
+			"required": [
+				"base",
+				"branch",
+				"ahead",
+				"behind",
+				"files",
+				"tasks",
+				"open"
+			],
+			"properties": {
+				"base": {
+					"type": "string"
+				},
+				"branch": {
+					"type": "string"
+				},
+				"ahead": {
+					"type": "number"
+				},
+				"behind": {
+					"type": "number"
+				},
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"path",
+							"added",
+							"removed"
+						],
+						"properties": {
+							"path": {
+								"type": "string"
+							},
+							"added": {
+								"type": "number"
+							},
+							"removed": {
+								"type": "number"
+							}
+						}
+					}
+				},
+				"tasks": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"title"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"open": {
+					"type": "number"
+				},
+				"checkedOut": {
+					"type": "string"
+				},
+				"remote": {
+					"type": "string"
+				},
+				"compareUrl": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.land.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"action"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"action": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "merge"
+						},
+						{
+							"type": "string",
+							"const": "push"
+						}
+					]
+				}
+			}
+		},
+		"teams.land.result": {
+			"type": "object",
+			"properties": {
+				"commit": {
+					"type": "string"
+				},
+				"compareUrl": {
+					"type": "string"
+				},
+				"output": {
+					"type": "string"
 				}
 			}
 		},

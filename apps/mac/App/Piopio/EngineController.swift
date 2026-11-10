@@ -625,6 +625,20 @@ final class EngineController {
         await loadTeams()
     }
 
+    /// What the team's branch would bring to the project's; nil for a team without a branch.
+    func teamLanding(_ team: TeamInfo) async -> TeamLanding? {
+        guard team.git != nil else { return nil }
+        return try? await client?.call("teams.landing", TeamIdParams(id: team.id), as: TeamLanding.self)
+    }
+
+    /// Merges the team's branch into the project's ("merge"), or pushes it for a pull request ("push").
+    func landTeam(_ team: TeamInfo, action: String) async throws -> TeamLandResult {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let result = try await client.call("teams.land", TeamLandParams(id: team.id, action: action), as: TeamLandResult.self)
+        await loadTeams()
+        return result
+    }
+
     func updateTeamTask(_ team: TeamInfo, _ task: TeamTask, state: String? = nil, role: String? = nil) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         _ = try await client.call("teams.updateTask", UpdateTeamTaskParams(id: team.id, taskId: task.id, state: state, role: role), as: Empty.self)

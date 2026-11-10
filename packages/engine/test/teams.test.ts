@@ -125,3 +125,73 @@ test("a team for a new project: its folder becomes a git repo, and the team work
 	expect(execFileSync("git", ["log", "--format=%s", "main"], { cwd: path }).toString().trim()).toBe("Start");
 	expect(execFileSync("git", ["ls-files"], { cwd: path }).toString()).toContain("AGENTS.md");
 }, 30_000);
+
+type Landing = { base: string; branch: string; ahead: number; behind: number; files: { path: string }[]; tasks: { id: string }[]; open: number; checkedOut?: string; remote?: string; compareUrl?: string };
+const git = (dir: string, ...args: string[]) => execFileSync("git", args, { cwd: dir, env: { ...process.env, GIT_AUTHOR_NAME: "T", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "T", GIT_COMMITTER_EMAIL: "t@t" } }).toString();
+
+async function finished(client: TestClient, dir: string, file: string) {
+	const { team } = (await client.call("teams.create", { name: "Ship", template: "development", cwd: dir })) as { team: Team };
+	await client.call("teams.addTask", { id: team.id, title: `Add ${file}`, brief: brief(file, true) });
+	await until(async () => ((await client.call("teams.get", { id: team.id })) as { team: Team }).team, (t) => t.tasks[0]?.state === "done", 40_000);
+	return team;
+}
+
+test("when the board is clear the lead hears it's ready; you merge the team's branch into the project's from the app", async () => {
+	const { client } = await start();
+	const dir = repo();
+	const team = await finished(client, dir, "a.txt");
+	const lead = { kind: "build", id: team.leadSessionId };
+	await until(async () => JSON.stringify((await client.call("sessions.open", { ref: lead })).items), (s) => s.includes("The board is clear"));
+
+	const landing = (await client.call("teams.landing", { id: team.id })) as Landing;
+	expect(landing).toMatchObject({ base: "main", branch: team.git!.branch, behind: 0, open: 0, checkedOut: "main", tasks: [{ id: "T1" }], files: [{ path: "a.txt" }] });
+	expect(landing.ahead).toBeGreaterThan(0);
+	expect(landing.remote).toBeUndefined();
+
+	const { commit } = (await client.call("teams.land", { id: team.id, action: "merge" })) as { commit: string };
+	expect(commit).toMatch(/^[0-9a-f]+$/);
+	expect(readFileSync(join(dir, "a.txt"), "utf8")).toContain("hello from a.txt");
+	expect(git(dir, "log", "-1", "--format=%s", "main")).toContain("Merge Ship: T1 Add a.txt");
+	// The task's branch is gone; the team's branch moved up to the merge.
+	expect(git(dir, "branch", "--list", `${team.git!.branch}-t1`).trim()).toBe("");
+	expect(((await client.call("teams.landing", { id: team.id })) as Landing)).toMatchObject({ ahead: 0, behind: 0, tasks: [] });
+	expect(((await client.call("teams.get", { id: team.id })) as { team: Team & { tasks: (Task & { landed?: string })[] } }).team.tasks[0]!.landed).toBeTruthy();
+	await expect(client.call("teams.land", { id: team.id, action: "merge" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+	await until(async () => JSON.stringify((await client.call("sessions.open", { ref: lead })).items), (s) => s.includes("The user merged"));
+}, 60_000);
+
+test("a merge that conflicts changes nothing; with the project on another branch it merges aside; push sends the team's branch", async () => {
+	const { client } = await start();
+	const dir = repo();
+	const team = await finished(client, dir, "a.txt");
+	// Someone changed a.txt on main meanwhile, and the project's folder is now on another branch.
+	writeFileSync(join(dir, "a.txt"), "mine\n");
+	git(dir, "add", "-A");
+	git(dir, "commit", "-qm", "mine");
+	git(dir, "checkout", "-q", "-b", "other");
+	const before = git(dir, "rev-parse", "main");
+	const landing = (await client.call("teams.landing", { id: team.id })) as Landing;
+	expect(landing).toMatchObject({ behind: 1, checkedOut: "other" });
+	await expect(client.call("teams.land", { id: team.id, action: "merge" })).rejects.toMatchObject({ data: { code: "CONFLICT" } });
+	expect(git(dir, "rev-parse", "main")).toBe(before);
+	expect(git(dir, "worktree", "list")).not.toContain("_land");
+
+	// Without the conflict it merges aside, leaving the folder on its branch.
+	git(dir, "checkout", "-q", "main");
+	git(dir, "reset", "-q", "--hard", "HEAD~1");
+	git(dir, "checkout", "-q", "other");
+	await client.call("teams.land", { id: team.id, action: "merge" });
+	expect(git(dir, "show", "main:a.txt")).toContain("hello from a.txt");
+	expect(git(dir, "branch", "--show-current").trim()).toBe("other");
+
+	// Push: a second task, then the team's branch goes to the remote; a GitHub remote gives the PR page.
+	const remote = mkdtempSync(join(tmpdir(), "piopio-team-remote-"));
+	git(remote, "init", "-q", "--bare");
+	git(dir, "remote", "add", "origin", remote);
+	await client.call("teams.addTask", { id: team.id, title: "Add b", brief: brief("b.txt", true) });
+	await until(async () => ((await client.call("teams.get", { id: team.id })) as { team: Team }).team, (t) => t.tasks[1]?.state === "done", 40_000);
+	await client.call("teams.land", { id: team.id, action: "push" });
+	expect(git(remote, "branch", "--list", team.git!.branch)).toContain(team.git!.branch);
+	git(dir, "remote", "set-url", "origin", "git@github.com:acme/shop.git");
+	expect(((await client.call("teams.landing", { id: team.id })) as Landing).compareUrl).toBe(`https://github.com/acme/shop/compare/main...${team.git!.branch}?expand=1`);
+}, 90_000);

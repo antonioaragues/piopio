@@ -317,9 +317,20 @@ The first version of T1 and T2, from §10's development team.
     ("Give a team work").
   - **Folder templates** (research, writing) can also work in a project folder. Only a team with a CI role makes
     branches.
+- **Landing the work** (`teams.landing`, `teams.land`):
+  - **The merge card** sits on top of the Board once the team's branch has work the project's branch doesn't: the
+    tasks and files it brings, "Merge into main…" and, with a remote, "Push for a PR".
+  - **Merge** asks first, then merges with `--no-ff`: in the project's folder when it's on the base branch, otherwise
+    in a temporary worktree, so the folder stays on its branch. A conflict changes nothing and says to have the lead
+    bring the base into the team's branch. Afterwards the team's branch moves up to the merge, the tasks are marked
+    landed, their branches are deleted, and the lead hears it.
+  - **Push** sends the team's branch to the remote. With a GitHub remote, the browser opens the pull request page; you
+    create the PR there.
+  - **The lead hears when it's ready:** when the last open task is done, its `[Board]` message says the branch is
+    ready and that you merge it from the Board. The lead never merges into the base itself.
 
 **Not yet:**
-- Merging the team's branch from the app: today you merge `team/<name>` yourself.
+- Bringing the base into the team's branch from the app, when a merge conflicts.
 - Editing roles or adding your own templates.
 - Collaboration styles other than "a lead and the rest follow".
 - A shared memory bank.

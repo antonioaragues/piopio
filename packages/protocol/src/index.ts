@@ -883,10 +883,25 @@ export const TeamTask = Type.Object({
 	review: Type.Optional(Type.String()),
 	attempts: Type.Number(),
 	blocked: Type.Optional(Type.String()),
+	landed: Type.Optional(Type.String({ description: "When its work was merged into the project's branch" })),
 	createdAt: Type.String(),
 	updatedAt: Type.String(),
 });
 export type TeamTask = Static<typeof TeamTask>;
+/** What a team's branch would bring to the project's branch (the merge card). */
+export const TeamLanding = Type.Object({
+	base: Type.String(),
+	branch: Type.String(),
+	ahead: Type.Number(),
+	behind: Type.Number(),
+	files: Type.Array(Type.Object({ path: Type.String(), added: Type.Number(), removed: Type.Number() })),
+	tasks: Type.Array(Type.Object({ id: Type.String(), title: Type.String() })),
+	open: Type.Number(),
+	checkedOut: Type.Optional(Type.String()),
+	remote: Type.Optional(Type.String()),
+	compareUrl: Type.Optional(Type.String()),
+});
+export type TeamLanding = Static<typeof TeamLanding>;
 export const TeamInfo = Type.Object({
 	id: Type.String(),
 	name: Type.String(),
@@ -1571,6 +1586,10 @@ export const methods = {
 	},
 	/** You add a card to the board (TD5). */
 	"teams.addTask": { params: Type.Object({ id: Type.String(), title: Type.String(), brief: Type.String(), done: Type.Optional(Type.String()), role: Type.Optional(Type.String()) }), result: Type.Object({ task: TeamTask }) },
+	/** What the team's branch would bring to the project's (a team that works on a branch). */
+	"teams.landing": { params: Type.Object({ id: Type.String() }), result: TeamLanding },
+	/** You land the team's work: merge its branch into the project's, or push it for a pull request. */
+	"teams.land": { params: Type.Object({ id: Type.String(), action: literals("merge", "push") }), result: Type.Object({ commit: Type.Optional(Type.String()), compareUrl: Type.Optional(Type.String()), output: Type.Optional(Type.String()) }) },
 	/** You move, reassign or edit a card. */
 	"teams.updateTask": { params: Type.Object({ id: Type.String(), taskId: Type.String(), state: Type.Optional(literals("todo", "blocked", "done")), role: Type.Optional(Type.String()), title: Type.Optional(Type.String()), brief: Type.Optional(Type.String()) }), result: Type.Object({}) },
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */

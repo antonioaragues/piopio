@@ -687,8 +687,28 @@ public struct TeamTask: Codable, Sendable, Hashable, Identifiable {
     public var review: String?
     public var attempts: Int
     public var blocked: String?
+    /// When its work was merged into the project's branch.
+    public var landed: String?
     public var createdAt, updatedAt: String
 }
+
+/// What a team's branch would bring to the project's branch (the merge card).
+public struct TeamLanding: Decodable, Sendable, Hashable {
+    public struct File: Decodable, Sendable, Hashable { public var path: String; public var added, removed: Int }
+    public struct Task: Decodable, Sendable, Hashable { public var id, title: String }
+    public var base, branch: String
+    public var ahead, behind, open: Int
+    public var files: [File]
+    public var tasks: [Task]
+    public var checkedOut: String?
+    public var remote: String?
+    public var compareUrl: String?
+}
+public struct TeamLandParams: Encodable, Sendable {
+    public var id, action: String
+    public init(id: String, action: String) { self.id = id; self.action = action }
+}
+public struct TeamLandResult: Decodable, Sendable { public var commit: String?; public var compareUrl: String?; public var output: String? }
 
 public struct TeamInfo: Codable, Sendable, Hashable, Identifiable {
     public struct Git: Codable, Sendable, Hashable { public var base, branch, integration: String }

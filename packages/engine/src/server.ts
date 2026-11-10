@@ -766,6 +766,14 @@ export class Engine {
 				const task = await this.teams.createTask(p.id, { title: p.title, brief: p.brief, ...(p.done ? { done: p.done } : {}), ...(p.role ? { role: p.role } : {}) }, "you");
 				return { task } satisfies Result<"teams.addTask">;
 			}
+			case "teams.landing": {
+				const p = params as Params<"teams.landing">;
+				return (await this.teams.landing(p.id)) satisfies Result<"teams.landing">;
+			}
+			case "teams.land": {
+				const p = params as Params<"teams.land">;
+				return (await this.teams.land(p.id, p.action)) satisfies Result<"teams.land">;
+			}
 			case "teams.updateTask": {
 				const p = params as Params<"teams.updateTask">;
 				await this.teams.updateTask(p.id, p.taskId, { ...(p.state ? { state: p.state } : {}), ...(p.role ? { role: p.role } : {}), ...(p.title ? { title: p.title } : {}), ...(p.brief ? { brief: p.brief } : {}) });

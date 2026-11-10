@@ -182,6 +182,14 @@ struct TeamBoard: View {
     ]
 
     var body: some View {
+        VStack(spacing: 0) {
+            if team.git != nil { TeamLandingCard(engine: engine, team: team).padding([.horizontal, .top], 20) }
+            columns
+        }
+        .sheet(isPresented: $adding) { AddTeamTask(engine: engine, team: team) { adding = false } }
+    }
+
+    private var columns: some View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(Self.columns, id: \.id) { column in
@@ -192,7 +200,6 @@ struct TeamBoard: View {
             .padding(20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .sheet(isPresented: $adding) { AddTeamTask(engine: engine, team: team) { adding = false } }
     }
 
     private func column(_ title: String, _ tasks: [TeamTask], add: Bool) -> some View {
@@ -349,5 +356,96 @@ struct TeamMembers: View {
         case "review": "Reviews every task"
         default: "Merges and runs the checks"
         }
+    }
+}
+
+/// The merge card (docs/spec/19 §11): what the team's branch would bring to the project's, and the two ways to land
+/// it: merge it here, or push it for a pull request. Shown once the branch has work the project doesn't.
+struct TeamLandingCard: View {
+    let engine: EngineController
+    let team: TeamInfo
+    @State private var landing: TeamLanding?
+    @State private var busy = false
+    @State private var confirming = false
+    @State private var note: (text: String, warn: Bool)?
+
+    /// Reloads when a card moves or lands.
+    private var key: String { team.tasks.map { "\($0.id)\($0.state)\($0.landed ?? "")" }.joined(separator: ",") }
+
+    var body: some View {
+        // A stack, not a Group: an empty Group has nothing to run the task on.
+        VStack(alignment: .leading, spacing: 0) {
+            if let landing, landing.ahead > 0 { card(landing) }
+            else if let note { line(note.text, warn: note.warn).frame(maxWidth: .infinity, alignment: .leading) }
+        }
+        .task(id: key) { landing = await engine.teamLanding(team) }
+    }
+
+    private func card(_ l: TeamLanding) -> some View {
+        let added = l.files.reduce(0) { $0 + $1.added }, removed = l.files.reduce(0) { $0 + $1.removed }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "arrow.triangle.merge").font(.system(size: 15)).foregroundStyle(Color.dsFg2)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(l.open > 0 ? "Done work is ready for \(l.base)" : "Ready for \(l.base)").font(.system(size: 13.5, weight: .semibold))
+                    HStack(spacing: 6) {
+                        Text(count(l.tasks.count, "task")).help(l.tasks.map { "\($0.id) \($0.title)" }.joined(separator: "\n"))
+                        Text("·")
+                        Text(count(l.files.count, "file")).help(l.files.map { "\($0.path)  +\($0.added) −\($0.removed)" }.joined(separator: "\n"))
+                        if added > 0 { Text("+\(added)").foregroundStyle(Color.dsGreen) }
+                        if removed > 0 { Text("−\(removed)").foregroundStyle(Color.dsRed) }
+                        Text("·")
+                        Text(l.branch).font(.system(size: 12, design: .monospaced))
+                    }
+                    .font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+                }
+                Spacer(minLength: 12)
+                if busy { ProgressView().controlSize(.small) }
+                if l.remote != nil {
+                    Button("Push for a PR") { Task { await land("push") } }.buttonStyle(PillStyle())
+                        .help("Pushes \(l.branch) to \(l.remote ?? "the remote")\(l.compareUrl != nil ? " and opens GitHub to create the pull request" : "")")
+                }
+                Button("Merge into \(l.base)…") { confirming = true }.buttonStyle(PillStyle(kind: .primary))
+            }
+            if l.open > 0 { line("\(count(l.open, "task")) still on the board; they stay on the team's branch.", warn: false) }
+            if l.behind > 0 { line("\(l.base) has \(count(l.behind, "commit")) the team doesn't. If they touch the same files, the merge stops and changes nothing.", warn: false) }
+            if let note { line(note.text, warn: note.warn) }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+        .disabled(busy)
+        .alert("Merge \(l.branch) into \(l.base)?", isPresented: $confirming) {
+            Button("Merge") { Task { await land("merge") } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(l.checkedOut == l.base
+                ? "In the project's folder, which is on \(l.base): \(count(l.tasks.count, "task")), \(count(l.files.count, "file")). The team keeps working from there."
+                : "The project's folder is on \(l.checkedOut ?? "another branch") and stays there; \(l.base) is updated aside. \(count(l.tasks.count, "task")), \(count(l.files.count, "file")).")
+        }
+    }
+
+    private func line(_ text: String, warn: Bool) -> some View {
+        Text(text).font(.system(size: 12)).foregroundStyle(warn ? Color.dsWarn : Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func count(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
+
+    private func land(_ action: String) async {
+        busy = true
+        defer { busy = false }
+        do {
+            let result = try await engine.landTeam(team, action: action)
+            if action == "push" {
+                if let url = result.compareUrl.flatMap(URL.init(string:)) { NSWorkspace.shared.open(url) }
+                note = ("Pushed \(team.git?.branch ?? "the team's branch")\(result.compareUrl != nil ? ": create the pull request in your browser." : ".")", false)
+            } else {
+                note = ("Merged into \(team.git?.base ?? "the project")\(result.commit.map { " (\($0))" } ?? ""). The lead knows.", false)
+            }
+        } catch {
+            note = ((error as? EngineError)?.message ?? error.localizedDescription, true)
+        }
+        landing = await engine.teamLanding(team)
     }
 }
