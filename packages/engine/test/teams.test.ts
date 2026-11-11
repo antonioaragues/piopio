@@ -49,6 +49,12 @@ function repo(): string {
 	return dir;
 }
 
+/** The id of the project a team works in. */
+async function projectOf(client: TestClient, team: { id: string }): Promise<string> {
+	const t = ((await client.call("teams.get", { id: team.id })) as { team: { cwd: string } }).team;
+	return ((await client.call("projects.list", {})) as { projects: { id: string; path: string }[] }).projects.find((p) => p.path === t.cwd)!.id;
+}
+
 /** A new conversation in the team's project: with its lead (docs/spec/20 PT4). */
 async function conversation(client: TestClient, team: { id: string; cwd?: string; folder: string }) {
 	const t = ((await client.call("teams.get", { id: team.id })) as { team: { cwd: string } }).team;
@@ -222,7 +228,9 @@ test("routines start a team's work on their own: the lead sets them, a file or a
 	const inbox = mkdtempSync(join(tmpdir(), "piopio-team-inbox-"));
 	// The lead sets two routines when asked.
 	const { team } = (await client.call("teams.create", { name: "Market", template: "research", goal: `call: schedule | ${JSON.stringify({ when: "0 9 * * 1", prompt: "Write this week's brief" })}\ncall: watch | ${JSON.stringify({ on: "folder", folder: inbox, prompt: "Summarize the new report" })}` })) as { team: Team };
-	const set = await until(async () => ((await client.call("teams.get", { id: team.id })) as { team: { routines?: Routine[] } }).team.routines ?? [], (r) => r.length === 2);
+	const project = await projectOf(client, team);
+	const list = async () => ((await client.call("routines.list", { project })) as { routines: Routine[] }).routines;
+	const set = await until(list, (r) => r.length === 2);
 	expect(set.map((r) => [r.on, r.by, r.label])).toEqual([["time", "lead", "Every Monday at 09:00"], ["folder", "lead", `When a file appears or changes in ${inbox}`]]);
 	expect(set[0]!.next).toBeGreaterThan(Date.now());
 
@@ -233,37 +241,38 @@ test("routines start a team's work on their own: the lead sets them, a file or a
 	await until(() => teamText(client, team.id), (s) => s.includes("[Routine] When a file appears or changes in") && s.includes("q3.pdf"));
 
 	// You add a webhook routine; its URL wakes the lead once per delivery.
-	const { routine } = (await client.call("teams.addRoutine", { id: team.id, on: "webhook", prompt: "Look into the new lead" })) as { routine: Routine };
-	expect(routine.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/hooks\/team_/);
+	const { routine } = (await client.call("routines.add", { project, on: "webhook", prompt: "Look into the new lead" })) as { routine: Routine };
+	expect(routine.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/hooks\/prj_/);
 	for (let i = 0; i < 2; i++) expect((await fetch(routine.url!, { method: "POST", headers: { "Idempotency-Key": "d1" }, body: '{"name":"Acme"}' })).status).toBe(202);
 	await until(() => teamText(client, team.id), (s) => s.includes("[Routine] When its URL is called") && s.includes("Acme"));
 	// The same delivery twice ran once.
-	expect((((await client.call("teams.get", { id: team.id })) as { team: { routines: Routine[] } }).team.routines).find((r) => r.id === routine.id)).toMatchObject({ runs: 1 });
+	expect((await list()).find((r) => r.id === routine.id)).toMatchObject({ runs: 1 });
 
 	// Run now, then remove; a bad time is refused.
-	const { runId } = (await client.call("teams.runRoutine", { id: team.id, routineId: set[0]!.id })) as { runId: string };
+	const { runId } = (await client.call("routines.run", { project, routineId: set[0]!.id })) as { runId: string };
 	expect(runId).toMatch(/^ses/);
 	await until(() => leadText(client, runId), (s) => s.includes("[Routine] Every Monday at 09:00: Write this week's brief"));
-	await client.call("teams.removeRoutine", { id: team.id, routineId: set[1]!.id });
-	expect((((await client.call("teams.get", { id: team.id })) as { team: { routines: Routine[] } }).team.routines).map((r) => r.on)).toEqual(["time", "webhook"]);
-	await expect(client.call("teams.addRoutine", { id: team.id, on: "time", when: "2020-01-01T09:00", prompt: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+	await client.call("routines.remove", { project, routineId: set[1]!.id });
+	expect((await list()).map((r) => r.on)).toEqual(["time", "webhook"]);
+	await expect(client.call("routines.add", { project, on: "time", when: "2020-01-01T09:00", prompt: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 }, 60_000);
 
 test("a time routine missed while the engine was off runs once when it's back", async () => {
 	const first = await start();
 	const { team } = (await first.client.call("teams.create", { name: "Weekly", template: "research" })) as { team: Team };
-	await first.client.call("teams.addRoutine", { id: team.id, on: "time", when: "0 9 * * 1", prompt: "Write the weekly brief" });
+	const project = await projectOf(first.client, team);
+	await first.client.call("routines.add", { project, on: "time", when: "0 9 * * 1", prompt: "Write the weekly brief" });
 	const o = open.splice(0)[0]!;
 	o.client.close();
 	await o.engine.stop();
 	// The Mac slept through Monday 9:00.
-	const file = join(first.home, "teams.json");
-	const teams = JSON.parse(readFileSync(file, "utf8")) as { routines: { next: number }[] }[];
-	teams[0]!.routines[0]!.next = Date.now() - 60_000;
-	writeFileSync(file, JSON.stringify(teams));
+	const file = join(first.home, "project-routines.json");
+	const places = JSON.parse(readFileSync(file, "utf8")) as { routines: { next: number }[] }[];
+	places[0]!.routines[0]!.next = Date.now() - 60_000;
+	writeFileSync(file, JSON.stringify(places));
 	const { client } = await start(first.home);
 	await until(() => teamText(client, team.id), (s) => s.includes("[Routine] Every Monday at 09:00: Write the weekly brief"));
-	const after = ((await client.call("teams.get", { id: team.id })) as { team: { routines: Routine[] } }).team.routines[0]!;
+	const after = ((await client.call("routines.list", { project })) as { routines: Routine[] }).routines[0]!;
 	expect(after).toMatchObject({ runs: 1 });
 	expect(after.next).toBeGreaterThan(Date.now());
 }, 40_000);
@@ -398,3 +407,44 @@ test("a task starts from the project as it is: the team's branch catches up with
 	expect(existsSync(join(team.git!.integration, "about.html"))).toBe(true);
 	expect(existsSync(join(team.git!.integration, "contact.html"))).toBe(true);
 }, 60_000);
+
+test("D1: a team made in a project lives only there until saved; settings reach its copy; a member becomes one of your agents (docs/spec/21)", async () => {
+	const { client } = await start();
+	const dir = repo();
+	type D = Def & { saved: boolean; reviewLimit?: number; budgetPerJob?: number; roles: { id: string; name: string; kind: string; agent?: string }[] };
+	const { team } = (await client.call("teams.create", { name: "Here", template: "development", cwd: dir })) as { team: Team & { definitionId: string } };
+	const defs = async () => ((await client.call("teams.definitions", {})) as { definitions: D[] }).definitions;
+	expect((await defs())[0]).toMatchObject({ id: team.definitionId, saved: false });
+	// Settings: review limit and budget per job reach the project's copy.
+	await client.call("teams.updateDefinition", { id: team.definitionId, reviewLimit: 1, budgetPerJob: 2.5 });
+	expect(((await client.call("teams.get", { id: team.id })) as { team: { reviewLimit?: number; budgetPerJob?: number } }).team).toMatchObject({ reviewLimit: 1, budgetPerJob: 2.5 });
+	// One review round, then it's blocked.
+	await client.call("teams.addTask", { id: team.id, title: "Wrong", brief: brief("w.txt", false) });
+	const blocked = await until(async () => ((await client.call("teams.get", { id: team.id })) as { team: Team }).team.tasks[0]!, (t) => t.state === "blocked", 40_000);
+	expect(blocked).toMatchObject({ attempts: 1, blocked: expect.stringContaining("Sent back 1 times") });
+	expect(((await client.call("teams.job", { id: team.id, conversationId: "none" })) as { tasks: number; budget?: number })).toMatchObject({ tasks: 0, budget: 2.5 });
+	// Make it one of your agents: the builder becomes an agent; the member is now it.
+	const { agent } = (await client.call("teams.promoteMember", { id: team.definitionId, roleId: "builder" })) as { agent: { id: string } };
+	expect((await defs())[0]!.roles.find((r) => r.id === "builder")?.agent).toBe(agent.id);
+	expect(((await client.call("sessions.list", { kind: "agent" })).sessions as { ref: { id: string }; title: string }[]).find((s) => s.ref.id === agent.id)?.title).toBe("Builder");
+	// Removing the team from the project removes a team that lived only there.
+	await client.call("teams.remove", { id: team.id });
+	expect(await defs()).toEqual([]);
+	// One you save stays: Agents › + makes saved ones; saving one made in a project keeps it.
+	const again = (await client.call("teams.create", { name: "Kept", template: "development", cwd: dir })) as { team: Team & { definitionId: string } };
+	await client.call("teams.updateDefinition", { id: again.team.definitionId, saved: true });
+	await client.call("teams.remove", { id: again.team.id });
+	expect((await defs()).map((d) => [d.name, d.saved])).toEqual([["Kept", true]]);
+}, 60_000);
+
+test("D1: a project's routine without a team opens a conversation with Piopio there", async () => {
+	const { client } = await start();
+	const created = (await client.call("projects.create", { name: "Notes" })) as { project: { id: string; path: string } };
+	const project = created.project.id;
+	const { routine } = (await client.call("routines.add", { project, on: "time", when: "0 9 * * 1", prompt: "Tidy the inbox notes" })) as { routine: { id: string } };
+	const { runId } = (await client.call("routines.run", { project, routineId: routine.id })) as { runId: string };
+	const s = ((await client.call("sessions.list", { kind: "build" })).sessions as { ref: { id: string }; cwd?: string; team?: unknown; title: string }[]).find((x) => x.ref.id === runId);
+	expect(s).toMatchObject({ title: "Tidy the inbox notes" });
+	expect(s!.team).toBeUndefined();
+	await until(() => leadText(client, runId), (t) => t.includes("[Routine] Every Monday at 09:00: Tidy the inbox notes"));
+}, 30_000);

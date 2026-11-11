@@ -78,8 +78,20 @@ export type TeamDefinition = {
 	folder: string;
 	model?: string;
 	memberMode: ApprovalMode;
+	/**
+	 * Listed under Agents for reuse (docs/spec/21 AD1). A team made in a project lives only there (false) until you
+	 * save it; one made from Agents › + is saved.
+	 */
+	saved: boolean;
+	/** How many times review or checks may send a task back before it's blocked and you're asked (default 3). */
+	reviewLimit?: number;
+	/** What one job (a conversation's tasks) may spend, in USD; new tasks wait once it's reached. */
+	budgetPerJob?: number;
 	createdAt: string;
 };
+
+/** A project's routines (docs/spec/21 AD5), keyed by the project's id. */
+type ProjectRoutines = { project: string; path: string; routines: TeamRoutine[]; fired?: string[] };
 
 /** A team at work in a project: its board, branch and routines, with its definition's members copied in. */
 export type Team = {
@@ -106,16 +118,25 @@ export type Team = {
 	goal?: string;
 	tasks: TeamTask[];
 	nextTask: number;
-	/** What starts work without you asking (docs/spec/19 T1): times, folders, emails, webhooks. */
+	/** Copies of the definition's settings. */
+	reviewLimit?: number;
+	budgetPerJob?: number;
+	/** Before docs/spec/21: routines lived on the team; they move to the project at start. */
 	routines?: TeamRoutine[];
-	/** Recent event keys, so the same file version, email or delivery never fires twice. */
 	fired?: string[];
 	createdAt: string;
 };
 
 export type TeamHost = {
 	/** A Build session for a member or the lead. */
-	createSession(params: { cwd: string; title: string; model?: string; approvalMode: ApprovalMode; team: { id: string; role: string; taskId?: string; kind: Role["kind"] } }): Promise<string>;
+	/** A Build session; without `team`, a plain one with Piopio (a project routine with no team). */
+	createSession(params: { cwd: string; title: string; model?: string; approvalMode?: ApprovalMode; team?: { id: string; role: string; taskId?: string; kind: Role["kind"] } }): Promise<string>;
+	/** A project by id or path: its id and folder. */
+	project?(idOrPath: string): { id: string; path: string } | undefined;
+	/** A new agent of yours (Make it one of your agents); returns its id. */
+	makeAgent?(params: { name: string; instructions: string; model?: string }): Promise<string>;
+	/** What a session has cost so far, in USD. */
+	cost?(sessionId: string): Promise<number>;
 	/** Sends a message; it waits behind a turn that's running. */
 	submit(sessionId: string, text: string): Promise<void>;
 	/** Calls back each time the session finishes a turn, with its last answer; resolves once it's listening. */
@@ -138,6 +159,19 @@ export type TeamHost = {
 };
 
 const MAX_ATTEMPTS = 3;
+/** A definition's settings, copied into each project's team. */
+function copySettings(def: TeamDefinition, team: Team): void {
+	team.name = def.name;
+	team.roles = def.roles.map((r) => ({ ...r }));
+	team.memberMode = def.memberMode;
+	if (def.model) team.model = def.model;
+	else delete team.model;
+	if (def.reviewLimit) team.reviewLimit = def.reviewLimit;
+	else delete team.reviewLimit;
+	if (def.budgetPerJob) team.budgetPerJob = def.budgetPerJob;
+	else delete team.budgetPerJob;
+}
+
 const newDefId = () => `tdef_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /**
@@ -195,6 +229,8 @@ export class TeamRunner {
 
 	private defs: TeamDefinition[] = [];
 	private readonly defsFile: string;
+	private places: ProjectRoutines[] = [];
+	private readonly routinesFile: string;
 
 	constructor(private readonly host: TeamHost) {
 		try {
@@ -208,10 +244,25 @@ export class TeamRunner {
 		} catch {
 			this.defs = [];
 		}
+		this.routinesFile = join(dirname(host.stateFile), "project-routines.json");
+		try {
+			if (existsSync(this.routinesFile)) this.places = JSON.parse(readFileSync(this.routinesFile, "utf8")) as ProjectRoutines[];
+		} catch {
+			this.places = [];
+		}
+		// Definitions from before docs/spec/21 were all listed: they stay saved.
+		let unmarked = false;
+		for (const d of this.defs) {
+			if (d.saved === undefined) {
+				d.saved = true;
+				unmarked = true;
+			}
+		}
+		if (unmarked) this.saveDefs();
 		// Teams from before definitions (P3) get one each, from what they carry.
 		const bare = this.teams.filter((t) => !t.definitionId || !this.defs.some((d) => d.id === t.definitionId));
 		for (const t of bare) {
-			const def: TeamDefinition = { id: newDefId(), name: t.name, template: t.template, roles: t.roles, style: t.style, folder: t.folder, ...(t.model ? { model: t.model } : {}), memberMode: t.memberMode, createdAt: t.createdAt };
+			const def: TeamDefinition = { id: newDefId(), name: t.name, template: t.template, roles: t.roles, style: t.style, folder: t.folder, ...(t.model ? { model: t.model } : {}), memberMode: t.memberMode, saved: true, createdAt: t.createdAt };
 			this.defs.push(def);
 			t.definitionId = def.id;
 		}
@@ -239,7 +290,7 @@ export class TeamRunner {
 	}
 
 	/** You edit a team: its name, members (role cards, models, agents) or default model. Every project's copy follows. */
-	updateDefinition(id: string, change: { name?: string; roles?: Role[]; model?: string | null }): TeamDefinition {
+	updateDefinition(id: string, change: { name?: string; roles?: Role[]; model?: string | null; saved?: boolean; reviewLimit?: number; budgetPerJob?: number | null; memberMode?: ApprovalMode }): TeamDefinition {
 		const def = this.definition(id);
 		if (change.roles) {
 			const roles = checkRoles(change.roles);
@@ -255,15 +306,48 @@ export class TeamRunner {
 			if (change.model?.trim()) def.model = change.model.trim();
 			else delete def.model;
 		}
+		if (change.saved !== undefined) def.saved = change.saved;
+		if (change.reviewLimit !== undefined) def.reviewLimit = Math.min(10, Math.max(1, Math.round(change.reviewLimit)));
+		if (change.budgetPerJob !== undefined) {
+			if (change.budgetPerJob && change.budgetPerJob > 0) def.budgetPerJob = change.budgetPerJob;
+			else delete def.budgetPerJob;
+		}
+		if (change.memberMode) def.memberMode = change.memberMode;
 		this.saveDefs();
 		for (const team of this.usedBy(id)) {
-			team.name = def.name;
-			team.roles = def.roles.map((r) => ({ ...r }));
-			if (def.model) team.model = def.model;
-			else delete team.model;
+			copySettings(def, team);
 			this.save(team);
 		}
+		if (change.budgetPerJob !== undefined) for (const team of this.usedBy(id)) void this.pump(team);
 		return def;
+	}
+
+	/**
+	 * Make it one of your agents (docs/spec/21 AD3): a team-only member becomes an agent of yours, with its role as its
+	 * instructions and its model; the member is now that agent, in this team and any that reuse it.
+	 */
+	async promoteMember(defId: string, roleId: string): Promise<string> {
+		const def = this.definition(defId);
+		const role = def.roles.find((r) => r.id === roleId);
+		if (!role) throw new EngineError("NOT_FOUND", `No member “${roleId}”.`);
+		if (role.agent) throw new EngineError("INVALID", `${role.name} is already one of your agents.`);
+		if (role.kind === "integrate") throw new EngineError("INVALID", "The member that merges and runs the checks has no model to be an agent.");
+		if (!this.host.makeAgent) throw new EngineError("INTERNAL", "Agents can't be made here.");
+		const instructions = [role.responsibility, role.done ? `Done means: ${role.done}` : ""].filter(Boolean).join("\n\n");
+		const agent = await this.host.makeAgent({ name: role.name, instructions, ...((role.model ?? def.model) ? { model: role.model ?? def.model } : {}) });
+		this.updateDefinition(defId, { roles: def.roles.map((r) => (r.id === roleId ? { ...r, agent } : r)) });
+		return agent;
+	}
+
+	// ── Jobs (docs/spec/21 D1): a conversation's tasks, and what they cost ──
+
+	/** What a conversation's tasks have cost so far: their members' and reviewers' sessions. */
+	async jobCost(teamId: string, conversationId: string): Promise<{ cost: number; tasks: number; budget?: number }> {
+		const team = this.get(teamId);
+		const tasks = team.tasks.filter((t) => t.conversationId === conversationId);
+		let cost = 0;
+		for (const t of tasks) for (const id of [t.sessionId, t.reviewSessionId]) if (id && this.host.cost) cost += await this.host.cost(id).catch(() => 0);
+		return { cost, tasks: tasks.length, ...(team.budgetPerJob ? { budget: team.budgetPerJob } : {}) };
 	}
 
 	/**
@@ -280,7 +364,7 @@ export class TeamRunner {
 		const instructions = input.instructions?.trim() ?? t?.instructions?.trim() ?? "";
 		writeFileSync(join(folder, "TEAM.md"), `# ${name}\n\n${instructions || "<!-- What every member of this team is told, in every project: conventions, tools, taste. -->"}\n`);
 		if (!existsSync(join(folder, "NOTES.md"))) writeFileSync(join(folder, "NOTES.md"), `# ${name}: notes\n\n<!-- What the team learns about how it works, across projects: conventions, tools, what worked. -->\n`);
-		const def: TeamDefinition = { id: newDefId(), name, template: t?.id ?? "custom", roles, style: input.style?.trim() || t?.style || "", folder, memberMode: "auto_edit", createdAt: iso() };
+		const def: TeamDefinition = { id: newDefId(), name, template: t?.id ?? "custom", roles, style: input.style?.trim() || t?.style || "", folder, memberMode: "auto_edit", saved: true, createdAt: iso() };
 		this.defs.push(def);
 		this.saveDefs();
 		return def;
@@ -378,6 +462,8 @@ export class TeamRunner {
 			folder,
 			...(params.model ? { model: params.model } : {}),
 			memberMode: params.memberMode ?? "auto_edit",
+			// Made inside a project: it lives there until you save it (docs/spec/21 AD1).
+			saved: false,
 			createdAt: iso(),
 		};
 		const team: Team = {
@@ -392,6 +478,8 @@ export class TeamRunner {
 			folder,
 			...(def.model ? { model: def.model } : {}),
 			memberMode: def.memberMode,
+			...(def.reviewLimit ? { reviewLimit: def.reviewLimit } : {}),
+			...(def.budgetPerJob ? { budgetPerJob: def.budgetPerJob } : {}),
 			maxParallel: params.maxParallel ?? 3,
 			...(params.testCommand?.trim() ? { testCommand: params.testCommand.trim() } : {}),
 			...(params.goal?.trim() ? { goal: params.goal.trim() } : {}),
@@ -452,6 +540,12 @@ export class TeamRunner {
 		const running = team.tasks.filter((t) => t.state === "doing" || t.state === "review" || t.state === "integrating").length;
 		if (running) throw new EngineError("CONFLICT", `${running === 1 ? "A task is" : `${running} tasks are`} still running. Stop them on the Board first.`);
 		this.teams = this.teams.filter((t) => t.id !== teamId);
+		// A team that lived only in this project goes with it (its folder stays on disk).
+		const def = team.definitionId ? this.defs.find((d) => d.id === team.definitionId) : undefined;
+		if (def && !def.saved && !this.usedBy(def.id).length) {
+			this.defs = this.defs.filter((d) => d.id !== def.id);
+			this.saveDefs();
+		}
 		if (team.git) await this.host.git(team.cwd, ["worktree", "remove", "--force", team.git.integration]).catch(() => undefined);
 		for (const t of team.tasks) if (t.cwd && t.cwd !== team.cwd) await this.host.git(team.cwd, ["worktree", "remove", "--force", t.cwd]).catch(() => undefined);
 		this.save(team);
@@ -480,13 +574,40 @@ export class TeamRunner {
 		return `${lead.responsibility}\n\n${team.style}${this.instructions(team)}\n\nYour team (${team.name}):\n${members.join("\n")}\n\n${where} At most ${team.maxParallel} tasks run at once; the rest wait their turn. Notes: ${join(team.cwd, "NOTES.md")} is about this project; ${join(team.folder, "NOTES.md")} is how the team works, across projects.\n\nThis is one of several conversations in the project; each has its own tasks, and the board shows them all. Updates on the tasks you made come here.\n\nMessages that start with [Board] are updates from the board, not from the user. Messages that start with [Routine] are one of the team's routines firing: plan them as you would the user's request.\n\nWhen the user wants work to start on its own (every Monday, when a file arrives, when an email comes), set a routine: schedule for times, watch for events. list_routines shows them; cancel_routine removes one.`;
 	}
 
-	// ── Routines ──
+	// ── Routines (docs/spec/21 AD5): a project's, fired with its team's lead, or with Piopio when it has none ──
 
-	/** The lead (`schedule`, `watch`) or you (the team page) add a routine. */
-	async addRoutine(teamId: string, input: { on: TeamRoutine["on"]; prompt: string; when?: string; folder?: string; from?: string; subject?: string }, by: "lead" | "you"): Promise<TeamRoutine> {
+	/** A project's routines, by its id. Its path comes from the engine's projects. */
+	private placeOf(projectId: string, create = false): ProjectRoutines | undefined {
+		let place = this.places.find((p) => p.project === projectId);
+		if (!place && create) {
+			const project = this.host.project?.(projectId);
+			if (!project) throw new EngineError("NOT_FOUND", `No project “${projectId}”.`);
+			place = { project: project.id, path: project.path, routines: [] };
+			this.places.push(place);
+		}
+		return place;
+	}
+
+	/** The project a team works in (its routines live there). */
+	projectOf(teamId: string): string {
 		const team = this.get(teamId);
+		const project = this.host.project?.(team.cwd);
+		if (!project) throw new EngineError("NOT_FOUND", `${team.name}'s folder isn't a project.`);
+		return project.id;
+	}
+
+	hasProject(id: string): boolean {
+		return this.places.some((p) => p.project === id);
+	}
+
+	routines(projectId: string): TeamRoutine[] {
+		return this.placeOf(projectId)?.routines ?? [];
+	}
+
+	/** A routine for a project: the lead (`schedule`, `watch`) or you (the project's Settings). */
+	async addRoutine(projectId: string, input: { on: TeamRoutine["on"]; prompt: string; when?: string; folder?: string; from?: string; subject?: string }, by: "lead" | "you"): Promise<TeamRoutine> {
 		const prompt = input.prompt.trim();
-		if (!prompt) throw new EngineError("INVALID", "Say what the team should do then.");
+		if (!prompt) throw new EngineError("INVALID", "Say what should happen then.");
 		const now = this.now();
 		const tz = systemZone();
 		const routine: TeamRoutine = { id: `r${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, on: input.on, prompt, by, createdAt: new Date(now).toISOString(), runs: 0 };
@@ -504,65 +625,75 @@ export class TeamRunner {
 			if (input.from?.trim()) routine.from = input.from.trim();
 			if (input.subject?.trim()) routine.subject = input.subject.trim();
 		}
-		team.routines = [...(team.routines ?? []), routine];
-		this.save(team);
+		const place = this.placeOf(projectId, true)!;
+		place.routines.push(routine);
+		this.saveRoutines();
 		this.routinesChanged();
 		return routine;
 	}
 
-	async removeRoutine(teamId: string, routineId: string, by: "lead" | "you"): Promise<TeamRoutine> {
-		const team = this.get(teamId);
-		const routine = team.routines?.find((r) => r.id === routineId);
-		if (!routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
-		team.routines = team.routines!.filter((r) => r.id !== routineId);
-		this.save(team);
+	async removeRoutine(projectId: string, routineId: string): Promise<TeamRoutine> {
+		const place = this.placeOf(projectId);
+		const routine = place?.routines.find((r) => r.id === routineId);
+		if (!place || !routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
+		place.routines = place.routines.filter((r) => r.id !== routineId);
+		this.saveRoutines();
 		this.routinesChanged();
 		return routine;
 	}
 
 	/** For the lead's `list_routines`. */
-	routineList(teamId: string): string {
-		const team = this.get(teamId);
-		if (!team.routines?.length) return "No routines.";
-		return team.routines
+	routineList(projectId: string): string {
+		const list = this.routines(projectId);
+		if (!list.length) return "No routines.";
+		return list
 			.map((r) => {
-				const url = r.on === "webhook" ? this.hookUrl?.(team.id, r.id) : undefined;
+				const url = r.on === "webhook" ? this.hookUrl?.(projectId, r.id) : undefined;
 				const next = r.next ? `, next ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : "";
 				return `- ${r.id}: ${routineLabel(r)}${next}${url ? ` (POST ${url})` : ""}: ${r.prompt}`;
 			})
 			.join("\n");
 	}
 
-	/** Folder and email routines, in the shape the watchers take (keyed by team id). */
+	/** Folder and email routines, in the shape the watchers take (keyed by project id). */
 	routineWatches(): { agentId: string; watches: Watch[] }[] {
-		return this.teams
-			.map((team) => ({
-				agentId: team.id,
-				watches: (team.routines ?? [])
+		return this.places
+			.map((place) => ({
+				agentId: place.project,
+				watches: place.routines
 					.filter((r) => r.on === "folder" || r.on === "email")
 					.map((r) => ({ id: r.id, on: r.on as "folder" | "email", prompt: r.prompt, ...(r.folder ? { folder: r.folder } : {}), ...(r.from ? { from: r.from } : {}), ...(r.subject ? { subject: r.subject } : {}), createdAt: r.createdAt, by: r.by })),
 			}))
 			.filter((x) => x.watches.length);
 	}
 
-	/** A routine fires: a new conversation with the lead in the project, titled after it, gets it as a `[Routine]`
-	 * message (docs/spec/20 §4). `key` keeps an event from firing twice. The run's id is that conversation's. */
-	async fireRoutine(teamId: string, routineId: string, happened?: string, key?: string): Promise<{ runId: string }> {
-		const team = this.get(teamId);
-		const routine = team.routines?.find((r) => r.id === routineId);
-		if (!routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
+	/**
+	 * A routine fires: a new conversation in its project, titled after it, gets it as a `[Routine]` message: with the
+	 * team's lead when the project has a team, else with Piopio. `key` keeps an event from firing twice. The run's id
+	 * is that conversation's.
+	 */
+	async fireRoutine(projectId: string, routineId: string, happened?: string, key?: string): Promise<{ runId: string }> {
+		const place = this.placeOf(projectId);
+		const routine = place?.routines.find((r) => r.id === routineId);
+		if (!place || !routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
 		const dedupe = key ? `${routine.id}:${key}` : undefined;
-		if (dedupe && team.fired?.includes(dedupe)) return { runId: routine.lastConversation ?? routine.id };
-		if (dedupe) team.fired = [...(team.fired ?? []), dedupe].slice(-200);
+		if (dedupe && place.fired?.includes(dedupe)) return { runId: routine.lastConversation ?? routine.id };
+		if (dedupe) place.fired = [...(place.fired ?? []), dedupe].slice(-200);
 		routine.runs++;
 		routine.lastRun = new Date(this.now()).toISOString();
-		this.save(team);
+		this.saveRoutines();
 		const what = happened?.trim() ? `\n\nWhat happened:\n${quote(happened.trim().slice(0, 4000))}` : "";
-		const conversation = await this.newLead(team, titleOf(routine.prompt));
+		const team = this.teams.find((t) => t.cwd === place.path);
+		const conversation = team ? await this.newLead(team, titleOf(routine.prompt)) : await this.host.createSession({ cwd: place.path, title: titleOf(routine.prompt) });
 		routine.lastConversation = conversation;
-		this.save(team);
+		this.saveRoutines();
 		await this.host.submit(conversation, `[Routine] ${routineLabel(routine)}: ${routine.prompt}${what}`);
 		return { runId: conversation };
+	}
+
+	private saveRoutines(): void {
+		mkdirSync(dirname(this.routinesFile), { recursive: true });
+		writeFileSync(this.routinesFile, JSON.stringify(this.places, null, "\t"));
 	}
 
 	private routinesChanged(): void {
@@ -574,28 +705,48 @@ export class TeamRunner {
 	private arm(): void {
 		clearTimeout(this.timer);
 		if (this.stopped) return;
-		const next = Math.min(...this.teams.flatMap((t) => (t.routines ?? []).map((r) => r.next ?? Infinity)));
+		const next = Math.min(...this.places.flatMap((p) => p.routines.map((r) => r.next ?? Infinity)));
 		if (!Number.isFinite(next)) return;
-		this.timer = setTimeout(() => void this.tick().catch((error: unknown) => this.host.log(`Team routines: ${(error as Error).message}`)), Math.min(Math.max(next - this.now(), 0), 3_600_000));
+		this.timer = setTimeout(() => void this.tick().catch((error: unknown) => this.host.log(`Routines: ${(error as Error).message}`)), Math.min(Math.max(next - this.now(), 0), 3_600_000));
 		this.timer.unref?.();
 	}
 
 	/** Fires what's due (a fire missed while the engine was off runs once), then sets each one's next. */
 	private async tick(): Promise<void> {
 		const now = this.now();
-		for (const team of this.teams) {
-			const due = (team.routines ?? []).filter((r) => r.next !== undefined && r.next <= now);
+		for (const place of this.places) {
+			const due = place.routines.filter((r) => r.next !== undefined && r.next <= now);
 			for (const r of due) {
 				r.next = nextOf(r, now);
-				await this.fireRoutine(team.id, r.id, undefined, `time:${Math.floor(now / 60_000)}`).catch((error: unknown) => this.host.log(`Routine ${r.id}: ${(error as Error).message}`));
+				await this.fireRoutine(place.project, r.id, undefined, `time:${Math.floor(now / 60_000)}`).catch((error: unknown) => this.host.log(`Routine ${r.id}: ${(error as Error).message}`));
 			}
 			// A once that has fired is done.
 			if (due.length) {
-				team.routines = (team.routines ?? []).filter((r) => r.on !== "time" || r.next !== undefined);
-				this.save(team);
+				place.routines = place.routines.filter((r) => r.on !== "time" || r.next !== undefined);
+				this.saveRoutines();
 			}
 		}
 		this.arm();
+	}
+
+	/** Routines that lived on teams (docs/spec/19, 20) move to their projects. */
+	private moveTeamRoutines(): void {
+		let moved = false;
+		for (const team of this.teams) {
+			if (!team.routines?.length) continue;
+			const project = this.host.project?.(team.cwd);
+			if (!project) continue;
+			const place = this.placeOf(project.id) ?? (this.places.push({ project: project.id, path: project.path, routines: [] }), this.places[this.places.length - 1]!);
+			place.routines.push(...team.routines);
+			place.fired = [...(place.fired ?? []), ...(team.fired ?? [])].slice(-200);
+			delete team.routines;
+			delete team.fired;
+			moved = true;
+		}
+		if (moved) {
+			this.saveRoutines();
+			this.save();
+		}
 	}
 
 	// ── The board ──
@@ -671,6 +822,14 @@ export class TeamRunner {
 		const busy = () => team.tasks.filter((t) => t.state === "doing" || t.state === "review" || t.state === "integrating").length;
 		for (const t of team.tasks.filter((x) => x.state === "todo")) {
 			if (busy() >= team.maxParallel) break;
+			// A job that reached its budget starts nothing new (docs/spec/21 D1); you raise it, or move the task back.
+			if (team.budgetPerJob && t.conversationId) {
+				const job = await this.jobCost(team.id, t.conversationId);
+				if (job.cost >= team.budgetPerJob) {
+					await this.block(team, t, `This job reached its budget ($${job.cost.toFixed(2)} of $${team.budgetPerJob.toFixed(2)}). Raise it in the team's settings, then move the task back to To do.`);
+					continue;
+				}
+			}
 			await this.start(team, t).catch((error: unknown) => this.block(team, t, (error as Error).message));
 		}
 	}
@@ -816,7 +975,7 @@ export class TeamRunner {
 
 	private async sendBack(team: Team, t: TeamTask, message: string, by: "review" | "integration"): Promise<void> {
 		t.attempts++;
-		if (t.attempts >= MAX_ATTEMPTS) return this.block(team, t, `Sent back ${t.attempts} times by ${by}; it needs a decision.`);
+		if (t.attempts >= (team.reviewLimit ?? MAX_ATTEMPTS)) return this.block(team, t, `Sent back ${t.attempts} times by ${by}; it needs a decision.`);
 		t.state = "doing";
 		t.updatedAt = iso();
 		this.save(team);
@@ -986,6 +1145,7 @@ export class TeamRunner {
 
 	/** After a restart: watch running tasks again, and settle those whose turn ended meanwhile. */
 	async resume(): Promise<void> {
+		this.moveTeamRoutines();
 		for (const team of this.teams) {
 			for (const t of team.tasks) {
 				if (t.state !== "doing" && t.state !== "review") continue;

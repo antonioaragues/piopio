@@ -379,7 +379,8 @@ struct MainSidebar: View {
 
     /// Teams (docs/spec/19): each opens its page; a dot while any of its tasks is running.
     @ViewBuilder private var teamsSection: some View {
-        let teams = engine.teamDefinitions
+        // Saved teams; one that lives only in a project shows there (docs/spec/21 AD1).
+        let teams = engine.teamDefinitions.filter(\.saved)
         // Teams are definitions (docs/spec/20 P3, P4): + makes one (described, or from a template); a project gets one
         // in its Settings.
         header(.teams, total: teams.count, shown: teams.count, add: { item = .start(.team) }, addHelp: "New team")

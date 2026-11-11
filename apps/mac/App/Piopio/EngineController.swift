@@ -615,9 +615,9 @@ final class EngineController {
     }
 
     /// You edit a team (name, members, default model: "" clears it); every project it works in follows.
-    func updateTeamDefinition(_ def: TeamDefinition, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil) async throws {
+    func updateTeamDefinition(_ def: TeamDefinition, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil, saved: Bool? = nil, reviewLimit: Int? = nil, budgetPerJob: Double? = nil) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.updateDefinition", UpdateTeamDefinitionParams(id: def.id, name: name, roles: roles, model: model), as: Empty.self)
+        _ = try await client.call("teams.updateDefinition", UpdateTeamDefinitionParams(id: def.id, name: name, roles: roles, model: model, saved: saved, reviewLimit: reviewLimit, budgetPerJob: budgetPerJob), as: Empty.self)
         await loadTeams()
     }
 
@@ -694,23 +694,34 @@ final class EngineController {
         await loadTeams()
     }
 
-    /// A routine you add on the team page (docs/spec/19 T1): `when` is a cron or a local date-time.
-    func addTeamRoutine(_ team: TeamInfo, on: String, prompt: String, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil) async throws {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.addRoutine", AddTeamRoutineParams(id: team.id, on: on, prompt: prompt, when: when, folder: folder, from: from, subject: subject), as: Empty.self)
-        await loadTeams()
+    /// A project's routines (docs/spec/21 AD5): each run opens a session there, with the team's lead when it has one.
+    func routines(in project: ProjectInfo) async -> [TeamRoutine] {
+        (try? await client?.call("routines.list", ProjectParams(project: project.id), as: RoutinesResult.self).routines) ?? []
     }
 
-    func removeTeamRoutine(_ team: TeamInfo, _ routine: TeamRoutine) async throws {
+    func addRoutine(_ project: ProjectInfo, on: String, prompt: String, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.removeRoutine", TeamRoutineParams(id: team.id, routineId: routine.id), as: Empty.self)
-        await loadTeams()
+        _ = try await client.call("routines.add", AddRoutineParams(project: project.id, on: on, prompt: prompt, when: when, folder: folder, from: from, subject: subject), as: Empty.self)
     }
 
-    func runTeamRoutine(_ team: TeamInfo, _ routine: TeamRoutine) async throws {
+    func removeRoutine(_ project: ProjectInfo, _ routine: TeamRoutine) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.runRoutine", TeamRoutineParams(id: team.id, routineId: routine.id), as: Empty.self)
+        _ = try await client.call("routines.remove", RoutineParams(project: project.id, routineId: routine.id), as: Empty.self)
+    }
+
+    func runRoutine(_ project: ProjectInfo, _ routine: TeamRoutine) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("routines.run", RoutineParams(project: project.id, routineId: routine.id), as: Empty.self)
+        try? await refreshCatalog()
+    }
+
+    /// Make it one of your agents (docs/spec/21 AD3).
+    func promoteMember(_ def: TeamDefinition, _ role: TeamRole) async throws -> ContainerRef {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let ref = try await client.call("teams.promoteMember", PromoteMemberParams(id: def.id, roleId: role.id), as: PromoteMemberResult.self).agent
         await loadTeams()
+        try? await refreshCatalog()
+        return ref
     }
 
     /// What the team's branch would bring to the project's; nil for a team without a branch.

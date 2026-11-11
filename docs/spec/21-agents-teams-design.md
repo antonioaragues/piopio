@@ -95,3 +95,27 @@ and D6. D4 and D5 can swap.
 - **Agent page width:** the glance strip has four cells; below about 700 pt it needs two rows or fewer cells.
 - **Telegram on the strip:** "Add Telegram" opens the channel setup; is the paste-the-token flow (19 T0) enough, or
   does it need its own sheet?
+
+## 7. D1 as built (2026-11-11)
+
+- **Saved and project-only teams** (AD1): a definition has `saved`. A team made in a project (New project, the
+  project's "Give it a team") starts unsaved and lives only there; removing it from the project removes it, its folder
+  stays on disk. Agents › + (New team) and teams from before 21 are saved. "Save for reuse" is on the project's Settings
+  and the team page. The sidebar's Teams list and the "Your teams" menus show only saved teams.
+- **Team settings** (`teams.updateDefinition`): `reviewLimit` (times review or the checks may send a task back before
+  it's blocked and you're asked; default 3), `budgetPerJob` (USD), and the members' approval mode. They reach every
+  project's copy. On the team page for now: "Sent back at most N times, then ask me" and "Budget per job" (D5 redesigns
+  the page).
+- **Cost per job** (`teams.job`): a job is a conversation's tasks; its cost is its members' and reviewers' sessions. A
+  job at its budget starts nothing new: the next task is blocked with the reason, and its conversation hears it. Raise
+  the budget, then move the task back to To do.
+- **Member source** (AD3): a member with `agent` is one of your agents; without, it's team-only. "Make it one of your
+  agents" (`teams.promoteMember`, in the member editor) makes an agent from the role (its responsibility and done as
+  instructions, its model) and points the member at it.
+- **Project routines** (AD5): routines belong to a project (`routines.list`, `add`, `remove`, `run`;
+  `project-routines.json`). A run opens a new conversation there: with the team's lead when the project has a team,
+  else with Piopio. Webhook URLs and watches are keyed by the project's id. A lead's `schedule` and `watch` add to its
+  project. Routines that lived on teams move to their project at start. The project's Settings shows them with or
+  without a team.
+- **Not in D1:** tools for team-only members (the design's team settings): members keep Build's tools, with the team's
+  approval mode. A job's cost doesn't include the lead's own conversation.

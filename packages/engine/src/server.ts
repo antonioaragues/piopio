@@ -210,7 +210,7 @@ export class Engine {
 			// Agents' watches, and teams' folder and email routines (keyed by the team's id).
 			watches: async () => [...(await this.sessions.agentWatches()), ...this.teams.routineWatches()],
 			fire: async (id, watchId, happened, key) => {
-				if (this.teams.has(id)) await this.teams.fireRoutine(id, watchId, happened, key);
+				if (this.teams.hasProject(id)) await this.teams.fireRoutine(id, watchId, happened, key);
 				else await (await this.sessions.agent({ kind: "agent", id })).fireWatch(watchId, happened, key);
 			},
 			mail: () => this.connectors.mailboxes("agent").map((b) => ({ name: b.name, search: (q: string, n: number) => b.mailbox.search(q, n) })),
@@ -222,13 +222,31 @@ export class Engine {
 		this.sessions.watchers = this.watchers;
 		// Teams (docs/spec/19): a lead and members working through a board.
 		this.teamsDir = options.teamsDir ?? process.env.PIOPIO_TEAMS_DIR ?? join(homedir(), "Piopio", "Teams");
-		this.teams = new TeamRunner(this.sessions.teamHost({ stateFile: join(options.paths.home, "teams.json"), worktreesDir: join(options.paths.home, "worktrees", "teams"), log: this.log }));
+		this.teams = new TeamRunner(
+			this.sessions.teamHost({
+				stateFile: join(options.paths.home, "teams.json"),
+				worktreesDir: join(options.paths.home, "worktrees", "teams"),
+				log: this.log,
+				// A project by id or by folder (routines are a project's, docs/spec/21 AD5).
+				project: (x) => {
+					if (x.startsWith("prj_")) {
+						try {
+							const p = this.projects.get(x);
+							return { id: p.id, path: p.path };
+						} catch {
+							return undefined;
+						}
+					}
+					return this.projects.projectFor(x);
+				},
+			}),
+		);
 		this.sessions.teams = this.teams;
 		// Your templates live beside your teams, as folders (docs/spec/20 P4).
 		this.teams.templatesDir = join(this.teamsDir, "Templates");
 		this.teams.templates = () => [...TEAM_TEMPLATES.map((t) => ({ ...t, source: "builtin" as const })), ...readTemplates(join(this.teamsDir, "Templates"))];
 		// A team's webhook routine has the same kind of URL as an agent's trigger, with the team's id.
-		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.teams.has(agent) ? this.teams.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
+		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.teams.hasProject(agent) ? this.teams.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
 		this.teams.hookUrl = (team, routine) => (this.hooks.port ? this.hooks.url(team, routine) : undefined);
 		this.teams.onRoutines = () => void this.watchers.sync().catch(() => undefined);
 		this.sessions.hookUrl = (agent, trigger) => this.hooks.url(agent, trigger);
@@ -830,7 +848,7 @@ export class Engine {
 				return { definitions: this.teams.definitions().map((d) => this.definitionView(d.id)) } satisfies Result<"teams.definitions">;
 			case "teams.updateDefinition": {
 				const p = params as Params<"teams.updateDefinition">;
-				const def = this.teams.updateDefinition(p.id, { ...(p.name !== undefined ? { name: p.name } : {}), ...(p.roles ? { roles: p.roles } : {}), ...(p.model !== undefined ? { model: p.model } : {}) });
+				const def = this.teams.updateDefinition(p.id, { ...(p.name !== undefined ? { name: p.name } : {}), ...(p.roles ? { roles: p.roles } : {}), ...(p.model !== undefined ? { model: p.model } : {}), ...(p.saved !== undefined ? { saved: p.saved } : {}), ...(p.reviewLimit !== undefined ? { reviewLimit: p.reviewLimit } : {}), ...(p.budgetPerJob !== undefined ? { budgetPerJob: p.budgetPerJob } : {}), ...(p.memberMode ? { memberMode: p.memberMode } : {}) });
 				return { definition: this.definitionView(def.id) } satisfies Result<"teams.updateDefinition">;
 			}
 			case "teams.removeDefinition": {
@@ -849,19 +867,33 @@ export class Engine {
 				this.sessions.detachTeam(p.id);
 				return {} satisfies Result<"teams.remove">;
 			}
-			case "teams.addRoutine": {
-				const p = params as Params<"teams.addRoutine">;
-				const routine = await this.teams.addRoutine(p.id, { on: p.on, prompt: p.prompt, ...(p.when ? { when: p.when } : {}), ...(p.folder ? { folder: p.folder } : {}), ...(p.from ? { from: p.from } : {}), ...(p.subject ? { subject: p.subject } : {}) }, "you");
-				return { routine: this.routineView(p.id, routine) } satisfies Result<"teams.addRoutine">;
+			case "routines.list": {
+				const p = params as Params<"routines.list">;
+				return { routines: this.teams.routines(p.project).map((r) => this.routineView(p.project, r)) } satisfies Result<"routines.list">;
 			}
-			case "teams.removeRoutine": {
-				const p = params as Params<"teams.removeRoutine">;
-				await this.teams.removeRoutine(p.id, p.routineId, "you");
-				return {} satisfies Result<"teams.removeRoutine">;
+			case "routines.add": {
+				const p = params as Params<"routines.add">;
+				this.projects.get(p.project);
+				const routine = await this.teams.addRoutine(p.project, { on: p.on, prompt: p.prompt, ...(p.when ? { when: p.when } : {}), ...(p.folder ? { folder: p.folder } : {}), ...(p.from ? { from: p.from } : {}), ...(p.subject ? { subject: p.subject } : {}) }, "you");
+				return { routine: this.routineView(p.project, routine) } satisfies Result<"routines.add">;
 			}
-			case "teams.runRoutine": {
-				const p = params as Params<"teams.runRoutine">;
-				return (await this.teams.fireRoutine(p.id, p.routineId, "Run by the user from the team page.")) satisfies Result<"teams.runRoutine">;
+			case "routines.remove": {
+				const p = params as Params<"routines.remove">;
+				await this.teams.removeRoutine(p.project, p.routineId);
+				return {} satisfies Result<"routines.remove">;
+			}
+			case "routines.run": {
+				const p = params as Params<"routines.run">;
+				return (await this.teams.fireRoutine(p.project, p.routineId, "Run by the user.")) satisfies Result<"routines.run">;
+			}
+			case "teams.promoteMember": {
+				const p = params as Params<"teams.promoteMember">;
+				const agent = await this.teams.promoteMember(p.id, p.roleId);
+				return { agent: { kind: "agent", id: agent } } satisfies Result<"teams.promoteMember">;
+			}
+			case "teams.job": {
+				const p = params as Params<"teams.job">;
+				return (await this.teams.jobCost(p.id, p.conversationId)) satisfies Result<"teams.job">;
 			}
 			case "teams.landing": {
 				const p = params as Params<"teams.landing">;

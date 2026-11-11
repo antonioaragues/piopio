@@ -249,20 +249,22 @@ struct TeamLandingCard: View {
     }
 }
 
-/// Routines (docs/spec/19 T1): what starts the team's work on its own. The lead sets them when you ask it; you can add,
-/// run or remove them here.
-struct TeamRoutinesList: View {
+/// A project's routines (docs/spec/21 AD5): what starts work here on its own. Each run is a new conversation in the
+/// project, with the team's lead when it has a team, else with Piopio. You add, run or remove them here; a lead sets
+/// them when you ask it.
+struct ProjectRoutinesList: View {
     let engine: EngineController
-    let team: TeamInfo
+    let project: ProjectInfo
+    let team: TeamInfo?
+    @State private var routines: [TeamRoutine] = []
     @State private var adding = false
     @State private var error: String?
-
-    private var routines: [TeamRoutine] { team.routines ?? [] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("What starts work here on its own: each run is a new conversation with the lead. Ask the lead (“every Monday, a brief on our competitors”), or add one.")
+                Text(team.map { "What starts work here on its own: each run is a new conversation with \($0.name)'s lead. Ask the lead (“every Monday, a brief on our competitors”), or add one." }
+                    ?? "What starts work here on its own: each run is a new conversation in this project.")
                     .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 16)
                 Button("Add routine…") { adding = true }.buttonStyle(PillStyle(compact: true))
@@ -270,8 +272,11 @@ struct TeamRoutinesList: View {
             ForEach(routines) { row($0) }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
         }
-        .sheet(isPresented: $adding) { AddTeamRoutine(engine: engine, team: team) { adding = false } }
+        .task(id: project.id) { await reload() }
+        .sheet(isPresented: $adding, onDismiss: { Task { await reload() } }) { AddRoutine(engine: engine, project: project) { adding = false } }
     }
+
+    private func reload() async { routines = await engine.routines(in: project) }
 
     private func row(_ r: TeamRoutine) -> some View {
         HStack(alignment: .top, spacing: 12) {
@@ -289,9 +294,9 @@ struct TeamRoutinesList: View {
                 }
             }
             Spacer(minLength: 12)
-            Button("Run now") { act { try await engine.runTeamRoutine(team, r) } }.buttonStyle(PillStyle(compact: true))
-                .help("The lead gets it now, as if it had fired")
-            Button { act { try await engine.removeTeamRoutine(team, r) } } label: { Image(systemName: "trash").font(.system(size: 12)) }
+            Button("Run now") { act { try await engine.runRoutine(project, r) } }.buttonStyle(PillStyle(compact: true))
+                .help("It runs now, as if it had fired")
+            Button { act { try await engine.removeRoutine(project, r) } } label: { Image(systemName: "trash").font(.system(size: 12)) }
                 .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Remove this routine").padding(.top, 4)
         }
         .padding(14)
@@ -333,14 +338,15 @@ struct TeamRoutinesList: View {
     private func act(_ work: @escaping () async throws -> Void) {
         Task {
             do { try await work(); error = nil } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+            await reload()
         }
     }
 }
 
 /// A routine by hand: a time (repeating or once), a folder, an email or a webhook, and what the team does then.
-private struct AddTeamRoutine: View {
+private struct AddRoutine: View {
     let engine: EngineController
-    let team: TeamInfo
+    let project: ProjectInfo
     let done: () -> Void
     @State private var on = "time"
     @State private var repeats = "weekly"
@@ -394,7 +400,7 @@ private struct AddTeamRoutine: View {
             TextEditor(text: $prompt).font(.system(size: 13)).scrollContentBackground(.hidden).padding(6).frame(height: 90)
                 .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
                 .accessibilityLabel("What the team does then")
-            Text("The lead gets this and plans it like a request from you.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            Text("Each run starts a new conversation in the project with this request.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
             HStack {
                 Spacer()
@@ -429,7 +435,7 @@ private struct AddTeamRoutine: View {
         Task {
             defer { saving = false }
             do {
-                try await engine.addTeamRoutine(team, on: on, prompt: prompt, when: on == "time" ? when : nil, folder: on == "folder" ? folder : nil, from: on == "email" ? from : nil, subject: on == "email" ? subject : nil)
+                try await engine.addRoutine(project, on: on, prompt: prompt, when: on == "time" ? when : nil, folder: on == "folder" ? folder : nil, from: on == "email" ? from : nil, subject: on == "email" ? subject : nil)
                 done()
             } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
         }

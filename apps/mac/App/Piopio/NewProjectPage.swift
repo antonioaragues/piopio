@@ -66,8 +66,8 @@ struct NewProjectPage: View {
                         Menu {
                             Button("Piopio") { teamTemplate = nil }
                             // Your teams first (docs/spec/20 P3), then a new one from a template.
-                            if !engine.teamDefinitions.isEmpty {
-                                Section("Your teams") { ForEach(engine.teamDefinitions) { d in Button(d.name) { teamTemplate = "def:" + d.id } } }
+                            if engine.teamDefinitions.contains(where: \.saved) {
+                                Section("Your teams") { ForEach(engine.teamDefinitions.filter(\.saved)) { d in Button(d.name) { teamTemplate = "def:" + d.id } } }
                             }
                             Section("New, from a template") { ForEach(templates) { t in Button(t.name) { teamTemplate = t.id } } }
                         } label: {

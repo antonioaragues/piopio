@@ -934,6 +934,9 @@ export const TeamDefinition = Type.Object({
 	folder: Type.String({ description: "TEAM.md and NOTES.md" }),
 	model: Type.Optional(Type.String()),
 	memberMode: ApprovalMode,
+	saved: Type.Boolean({ description: "Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1)" }),
+	reviewLimit: Type.Optional(Type.Number({ description: "Times a task may be sent back before you're asked (default 3)" })),
+	budgetPerJob: Type.Optional(Type.Number({ description: "USD one conversation's tasks may spend" })),
 	createdAt: Type.String(),
 	projects: Type.Array(Type.Object({ teamId: Type.String(), cwd: Type.String() })),
 });
@@ -957,6 +960,8 @@ export const TeamInfo = Type.Object({
 	goal: Type.Optional(Type.String()),
 	tasks: Type.Array(TeamTask),
 	nextTask: Type.Number(),
+	reviewLimit: Type.Optional(Type.Number()),
+	budgetPerJob: Type.Optional(Type.Number()),
 	routines: Type.Optional(Type.Array(TeamRoutine)),
 	fired: Type.Optional(Type.Array(Type.String())),
 	createdAt: Type.String(),
@@ -1622,7 +1627,22 @@ export const methods = {
 	/** Teams as definitions (docs/spec/20 P3), with the projects each works in. */
 	"teams.definitions": { params: Type.Object({}), result: Type.Object({ definitions: Type.Array(TeamDefinition) }) },
 	/** You edit a team: its name, members or default model (null clears it). Every project it works in follows. */
-	"teams.updateDefinition": { params: Type.Object({ id: Type.String(), name: Type.Optional(Type.String()), roles: Type.Optional(Type.Array(TeamRole)), model: Type.Optional(Type.Union([Type.String(), Type.Null()])) }), result: Type.Object({ definition: TeamDefinition }) },
+	"teams.updateDefinition": {
+		params: Type.Object({ id: Type.String(), name: Type.Optional(Type.String()), roles: Type.Optional(Type.Array(TeamRole)), model: Type.Optional(Type.Union([Type.String(), Type.Null()])), saved: Type.Optional(Type.Boolean()), reviewLimit: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })), budgetPerJob: Type.Optional(Type.Union([Type.Number({ minimum: 0 }), Type.Null()])), memberMode: Type.Optional(ApprovalMode) }),
+		result: Type.Object({ definition: TeamDefinition }),
+	},
+	/** Make it one of your agents (docs/spec/21 AD3): a team-only member becomes an agent of yours. */
+	"teams.promoteMember": { params: Type.Object({ id: Type.String(), roleId: Type.String() }), result: Type.Object({ agent: ContainerRef }) },
+	/** What a conversation's tasks have cost (a job), against the team's budget per job. */
+	"teams.job": { params: Type.Object({ id: Type.String(), conversationId: Type.String() }), result: Type.Object({ cost: Type.Number(), tasks: Type.Number(), budget: Type.Optional(Type.Number()) }) },
+	/** A project's routines (docs/spec/21 AD5): each run opens a session there, with the team's lead when it has one. */
+	"routines.list": { params: Type.Object({ project: Type.String() }), result: Type.Object({ routines: Type.Array(TeamRoutine) }) },
+	"routines.add": {
+		params: Type.Object({ project: Type.String(), on: literals("time", "folder", "email", "webhook"), prompt: Type.String(), when: Type.Optional(Type.String()), folder: Type.Optional(Type.String()), from: Type.Optional(Type.String()), subject: Type.Optional(Type.String()) }),
+		result: Type.Object({ routine: TeamRoutine }),
+	},
+	"routines.remove": { params: Type.Object({ project: Type.String(), routineId: Type.String() }), result: Type.Object({}) },
+	"routines.run": { params: Type.Object({ project: Type.String(), routineId: Type.String() }), result: Type.Object({ runId: Type.String() }) },
 	/** A team drafted from your description (docs/spec/20 P4): nothing is made until you create it. */
 	"teams.draft": {
 		params: Type.Object({ description: Type.String() }),
@@ -1649,14 +1669,6 @@ export const methods = {
 	"teams.update": { params: Type.Object({ id: Type.String(), testCommand: Type.Optional(Type.String()), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })) }), result: Type.Object({ team: TeamInfo }) },
 	/** The project works without its team again; its lead conversations stay as plain ones, its branch is kept. */
 	"teams.remove": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
-	/** You add a routine on the team page: a time (`when`: a cron or a local date-time), a folder, an email or a webhook. */
-	"teams.addRoutine": {
-		params: Type.Object({ id: Type.String(), on: literals("time", "folder", "email", "webhook"), prompt: Type.String(), when: Type.Optional(Type.String()), folder: Type.Optional(Type.String()), from: Type.Optional(Type.String()), subject: Type.Optional(Type.String()) }),
-		result: Type.Object({ routine: TeamRoutine }),
-	},
-	"teams.removeRoutine": { params: Type.Object({ id: Type.String(), routineId: Type.String() }), result: Type.Object({}) },
-	/** Runs a routine now, as if it had fired. */
-	"teams.runRoutine": { params: Type.Object({ id: Type.String(), routineId: Type.String() }), result: Type.Object({ runId: Type.String() }) },
 	/** What the team's branch would bring to the project's (a team that works on a branch). */
 	"teams.landing": { params: Type.Object({ id: Type.String() }), result: TeamLanding },
 	/** You land the team's work: merge its branch into the project's, or push it for a pull request. */

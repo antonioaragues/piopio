@@ -34253,6 +34253,12 @@
 							"nextTask": {
 								"type": "number"
 							},
+							"reviewLimit": {
+								"type": "number"
+							},
+							"budgetPerJob": {
+								"type": "number"
+							},
 							"routines": {
 								"type": "array",
 								"items": {
@@ -34385,6 +34391,7 @@
 							"style",
 							"folder",
 							"memberMode",
+							"saved",
 							"createdAt",
 							"projects"
 						],
@@ -34480,6 +34487,18 @@
 										"const": "full_auto"
 									}
 								]
+							},
+							"saved": {
+								"type": "boolean",
+								"description": "Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1)"
+							},
+							"reviewLimit": {
+								"type": "number",
+								"description": "Times a task may be sent back before you're asked (default 3)"
+							},
+							"budgetPerJob": {
+								"type": "number",
+								"description": "USD one conversation's tasks may spend"
 							},
 							"createdAt": {
 								"type": "string"
@@ -34581,6 +34600,45 @@
 							"type": "null"
 						}
 					]
+				},
+				"saved": {
+					"type": "boolean"
+				},
+				"reviewLimit": {
+					"type": "number",
+					"minimum": 1,
+					"maximum": 10
+				},
+				"budgetPerJob": {
+					"anyOf": [
+						{
+							"type": "number",
+							"minimum": 0
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"memberMode": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "read_only"
+						},
+						{
+							"type": "string",
+							"const": "ask"
+						},
+						{
+							"type": "string",
+							"const": "auto_edit"
+						},
+						{
+							"type": "string",
+							"const": "full_auto"
+						}
+					]
 				}
 			}
 		},
@@ -34600,6 +34658,7 @@
 						"style",
 						"folder",
 						"memberMode",
+						"saved",
 						"createdAt",
 						"projects"
 					],
@@ -34696,6 +34755,18 @@
 								}
 							]
 						},
+						"saved": {
+							"type": "boolean",
+							"description": "Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1)"
+						},
+						"reviewLimit": {
+							"type": "number",
+							"description": "Times a task may be sent back before you're asked (default 3)"
+						},
+						"budgetPerJob": {
+							"type": "number",
+							"description": "USD one conversation's tasks may spend"
+						},
 						"createdAt": {
 							"type": "string"
 						},
@@ -34718,6 +34789,406 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"teams.promoteMember.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"roleId"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"roleId": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.promoteMember.result": {
+			"type": "object",
+			"required": [
+				"agent"
+			],
+			"properties": {
+				"agent": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "space"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"teams.job.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"conversationId"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"conversationId": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.job.result": {
+			"type": "object",
+			"required": [
+				"cost",
+				"tasks"
+			],
+			"properties": {
+				"cost": {
+					"type": "number"
+				},
+				"tasks": {
+					"type": "number"
+				},
+				"budget": {
+					"type": "number"
+				}
+			}
+		},
+		"routines.list.params": {
+			"type": "object",
+			"required": [
+				"project"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				}
+			}
+		},
+		"routines.list.result": {
+			"type": "object",
+			"required": [
+				"routines"
+			],
+			"properties": {
+				"routines": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"on",
+							"prompt",
+							"by",
+							"createdAt",
+							"runs"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"on": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "time"
+									},
+									{
+										"type": "string",
+										"const": "folder"
+									},
+									{
+										"type": "string",
+										"const": "email"
+									},
+									{
+										"type": "string",
+										"const": "webhook"
+									}
+								]
+							},
+							"prompt": {
+								"type": "string"
+							},
+							"cron": {
+								"type": "string"
+							},
+							"at": {
+								"type": "number"
+							},
+							"tz": {
+								"type": "string"
+							},
+							"folder": {
+								"type": "string"
+							},
+							"from": {
+								"type": "string"
+							},
+							"subject": {
+								"type": "string"
+							},
+							"by": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "lead"
+									},
+									{
+										"type": "string",
+										"const": "you"
+									}
+								]
+							},
+							"createdAt": {
+								"type": "string"
+							},
+							"next": {
+								"type": "number",
+								"description": "time: the next fire, epoch ms"
+							},
+							"lastRun": {
+								"type": "string"
+							},
+							"runs": {
+								"type": "number"
+							},
+							"lastConversation": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string",
+								"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+							},
+							"url": {
+								"type": "string",
+								"description": "webhook: where to POST"
+							}
+						}
+					}
+				}
+			}
+		},
+		"routines.add.params": {
+			"type": "object",
+			"required": [
+				"project",
+				"on",
+				"prompt"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				},
+				"on": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "time"
+						},
+						{
+							"type": "string",
+							"const": "folder"
+						},
+						{
+							"type": "string",
+							"const": "email"
+						},
+						{
+							"type": "string",
+							"const": "webhook"
+						}
+					]
+				},
+				"prompt": {
+					"type": "string"
+				},
+				"when": {
+					"type": "string"
+				},
+				"folder": {
+					"type": "string"
+				},
+				"from": {
+					"type": "string"
+				},
+				"subject": {
+					"type": "string"
+				}
+			}
+		},
+		"routines.add.result": {
+			"type": "object",
+			"required": [
+				"routine"
+			],
+			"properties": {
+				"routine": {
+					"type": "object",
+					"required": [
+						"id",
+						"on",
+						"prompt",
+						"by",
+						"createdAt",
+						"runs"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"on": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "time"
+								},
+								{
+									"type": "string",
+									"const": "folder"
+								},
+								{
+									"type": "string",
+									"const": "email"
+								},
+								{
+									"type": "string",
+									"const": "webhook"
+								}
+							]
+						},
+						"prompt": {
+							"type": "string"
+						},
+						"cron": {
+							"type": "string"
+						},
+						"at": {
+							"type": "number"
+						},
+						"tz": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"from": {
+							"type": "string"
+						},
+						"subject": {
+							"type": "string"
+						},
+						"by": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "lead"
+								},
+								{
+									"type": "string",
+									"const": "you"
+								}
+							]
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"next": {
+							"type": "number",
+							"description": "time: the next fire, epoch ms"
+						},
+						"lastRun": {
+							"type": "string"
+						},
+						"runs": {
+							"type": "number"
+						},
+						"lastConversation": {
+							"type": "string"
+						},
+						"label": {
+							"type": "string",
+							"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+						},
+						"url": {
+							"type": "string",
+							"description": "webhook: where to POST"
+						}
+					}
+				}
+			}
+		},
+		"routines.remove.params": {
+			"type": "object",
+			"required": [
+				"project",
+				"routineId"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				},
+				"routineId": {
+					"type": "string"
+				}
+			}
+		},
+		"routines.remove.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"routines.run.params": {
+			"type": "object",
+			"required": [
+				"project",
+				"routineId"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				},
+				"routineId": {
+					"type": "string"
+				}
+			}
+		},
+		"routines.run.result": {
+			"type": "object",
+			"required": [
+				"runId"
+			],
+			"properties": {
+				"runId": {
+					"type": "string"
 				}
 			}
 		},
@@ -34903,6 +35374,7 @@
 						"style",
 						"folder",
 						"memberMode",
+						"saved",
 						"createdAt",
 						"projects"
 					],
@@ -34998,6 +35470,18 @@
 									"const": "full_auto"
 								}
 							]
+						},
+						"saved": {
+							"type": "boolean",
+							"description": "Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1)"
+						},
+						"reviewLimit": {
+							"type": "number",
+							"description": "Times a task may be sent back before you're asked (default 3)"
+						},
+						"budgetPerJob": {
+							"type": "number",
+							"description": "USD one conversation's tasks may spend"
 						},
 						"createdAt": {
 							"type": "string"
@@ -35350,6 +35834,12 @@
 							}
 						},
 						"nextTask": {
+							"type": "number"
+						},
+						"reviewLimit": {
+							"type": "number"
+						},
+						"budgetPerJob": {
 							"type": "number"
 						},
 						"routines": {
@@ -35801,6 +36291,12 @@
 							}
 						},
 						"nextTask": {
+							"type": "number"
+						},
+						"reviewLimit": {
+							"type": "number"
+						},
+						"budgetPerJob": {
 							"type": "number"
 						},
 						"routines": {
@@ -36343,6 +36839,12 @@
 						"nextTask": {
 							"type": "number"
 						},
+						"reviewLimit": {
+							"type": "number"
+						},
+						"budgetPerJob": {
+							"type": "number"
+						},
 						"routines": {
 							"type": "array",
 							"items": {
@@ -36466,200 +36968,6 @@
 		"teams.remove.result": {
 			"type": "object",
 			"properties": {}
-		},
-		"teams.addRoutine.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"on",
-				"prompt"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"on": {
-					"anyOf": [
-						{
-							"type": "string",
-							"const": "time"
-						},
-						{
-							"type": "string",
-							"const": "folder"
-						},
-						{
-							"type": "string",
-							"const": "email"
-						},
-						{
-							"type": "string",
-							"const": "webhook"
-						}
-					]
-				},
-				"prompt": {
-					"type": "string"
-				},
-				"when": {
-					"type": "string"
-				},
-				"folder": {
-					"type": "string"
-				},
-				"from": {
-					"type": "string"
-				},
-				"subject": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.addRoutine.result": {
-			"type": "object",
-			"required": [
-				"routine"
-			],
-			"properties": {
-				"routine": {
-					"type": "object",
-					"required": [
-						"id",
-						"on",
-						"prompt",
-						"by",
-						"createdAt",
-						"runs"
-					],
-					"properties": {
-						"id": {
-							"type": "string"
-						},
-						"on": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "time"
-								},
-								{
-									"type": "string",
-									"const": "folder"
-								},
-								{
-									"type": "string",
-									"const": "email"
-								},
-								{
-									"type": "string",
-									"const": "webhook"
-								}
-							]
-						},
-						"prompt": {
-							"type": "string"
-						},
-						"cron": {
-							"type": "string"
-						},
-						"at": {
-							"type": "number"
-						},
-						"tz": {
-							"type": "string"
-						},
-						"folder": {
-							"type": "string"
-						},
-						"from": {
-							"type": "string"
-						},
-						"subject": {
-							"type": "string"
-						},
-						"by": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "lead"
-								},
-								{
-									"type": "string",
-									"const": "you"
-								}
-							]
-						},
-						"createdAt": {
-							"type": "string"
-						},
-						"next": {
-							"type": "number",
-							"description": "time: the next fire, epoch ms"
-						},
-						"lastRun": {
-							"type": "string"
-						},
-						"runs": {
-							"type": "number"
-						},
-						"lastConversation": {
-							"type": "string"
-						},
-						"label": {
-							"type": "string",
-							"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
-						},
-						"url": {
-							"type": "string",
-							"description": "webhook: where to POST"
-						}
-					}
-				}
-			}
-		},
-		"teams.removeRoutine.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"routineId"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"routineId": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.removeRoutine.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"teams.runRoutine.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"routineId"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"routineId": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.runRoutine.result": {
-			"type": "object",
-			"required": [
-				"runId"
-			],
-			"properties": {
-				"runId": {
-					"type": "string"
-				}
-			}
 		},
 		"teams.landing.params": {
 			"type": "object",

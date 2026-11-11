@@ -692,6 +692,10 @@ public struct TeamDefinition: Codable, Sendable, Hashable, Identifiable {
     public var id, name, template, style, folder, memberMode, createdAt: String
     public var roles: [TeamRole]
     public var model: String?
+    /// Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1).
+    public var saved: Bool
+    public var reviewLimit: Int?
+    public var budgetPerJob: Double?
     public var projects: [Place]
 }
 public struct TeamDefinitionsResult: Decodable, Sendable { public var definitions: [TeamDefinition] }
@@ -701,7 +705,13 @@ public struct UpdateTeamDefinitionParams: Encodable, Sendable {
     public var roles: [TeamRole]?
     /// "" clears the team's model.
     public var model: String?
-    public init(id: String, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil) { self.id = id; self.name = name; self.roles = roles; self.model = model }
+    public var saved: Bool?
+    public var reviewLimit: Int?
+    /// 0 clears it.
+    public var budgetPerJob: Double?
+    public init(id: String, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil, saved: Bool? = nil, reviewLimit: Int? = nil, budgetPerJob: Double? = nil) {
+        self.id = id; self.name = name; self.roles = roles; self.model = model; self.saved = saved; self.reviewLimit = reviewLimit; self.budgetPerJob = budgetPerJob
+    }
 }
 
 public struct TeamTask: Codable, Sendable, Hashable, Identifiable {
@@ -753,22 +763,30 @@ public struct TeamRoutine: Codable, Sendable, Hashable, Identifiable {
     public var label: String?
     public var url: String?
 }
-public struct AddTeamRoutineParams: Encodable, Sendable {
-    public var id, on, prompt: String
+/// A project's routine (docs/spec/21 AD5): `project` is the project's id.
+public struct AddRoutineParams: Encodable, Sendable {
+    public var project, on, prompt: String
     public var when, folder, from, subject: String?
-    public init(id: String, on: String, prompt: String, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil) {
-        self.id = id; self.on = on; self.prompt = prompt; self.when = when; self.folder = folder; self.from = from; self.subject = subject
+    public init(project: String, on: String, prompt: String, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil) {
+        self.project = project; self.on = on; self.prompt = prompt; self.when = when; self.folder = folder; self.from = from; self.subject = subject
     }
 }
+public struct RoutineParams: Encodable, Sendable {
+    public var project, routineId: String
+    public init(project: String, routineId: String) { self.project = project; self.routineId = routineId }
+}
+public struct ProjectParams: Encodable, Sendable { public var project: String; public init(project: String) { self.project = project } }
+public struct RoutinesResult: Decodable, Sendable { public var routines: [TeamRoutine] }
+public struct PromoteMemberParams: Encodable, Sendable {
+    public var id, roleId: String
+    public init(id: String, roleId: String) { self.id = id; self.roleId = roleId }
+}
+public struct PromoteMemberResult: Decodable, Sendable { public var agent: ContainerRef }
 public struct UpdateTeamParams: Encodable, Sendable {
     public var id: String
     public var testCommand: String?
     public var maxParallel: Int?
     public init(id: String, testCommand: String? = nil, maxParallel: Int? = nil) { self.id = id; self.testCommand = testCommand; self.maxParallel = maxParallel }
-}
-public struct TeamRoutineParams: Encodable, Sendable {
-    public var id, routineId: String
-    public init(id: String, routineId: String) { self.id = id; self.routineId = routineId }
 }
 
 public struct TeamInfo: Codable, Sendable, Hashable, Identifiable {

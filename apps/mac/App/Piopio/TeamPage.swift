@@ -27,6 +27,10 @@ struct TeamPage: View {
                     } actions: {
                         NeutralSegmented(selection: $tab, options: [("members", "Members"), ("instructions", "Instructions"), ("memory", "Memory"), ("projects", "Projects")])
                             .frame(width: 380)
+                        if !def.saved {
+                            Button("Save for reuse") { Task { try? await engine.updateTeamDefinition(def, saved: true) } }.buttonStyle(PillStyle())
+                                .help("List it under your teams, to use it in other projects")
+                        }
                         Button("Save as template…") { saving = def }.buttonStyle(PillStyle())
                             .help("A folder with TEAM.md and a card per member, to start other teams from, edit by hand or share")
                     }
@@ -53,6 +57,10 @@ struct TeamPage: View {
 
     private func subtitle(_ def: TeamDefinition) -> String {
         let n = def.projects.count
+        // A team that lives only in its project says so (docs/spec/21 AD1).
+        if !def.saved, let place = def.projects.first {
+            return "\(def.roles.count) members · only in \(URL(fileURLWithPath: place.cwd).lastPathComponent)"
+        }
         return "\(def.roles.count) members · works in \(n == 0 ? "no project yet" : n == 1 ? "1 project" : "\(n) projects")"
     }
 }
@@ -84,6 +92,7 @@ private struct TeamMembersEditor: View {
                     Spacer()
                     Button("Add member…") { adding = true }.buttonStyle(PillStyle())
                 }
+                settings
                 ForEach(def.roles) { role in card(role) }
                 if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
                 Text("Changes reach every project this team works in; tasks that already started keep how they began.")
@@ -94,10 +103,28 @@ private struct TeamMembersEditor: View {
             .frame(maxWidth: .infinity)
         }
         .sheet(item: $editing) { role in
-            MemberEditor(engine: engine, role: role, isNew: false, canRemove: role.kind != "lead", done: { editing = nil }, save: { save(replacing: role.id, with: $0) }, remove: { removeRole(role) })
+            MemberEditor(engine: engine, role: role, isNew: false, canRemove: role.kind != "lead", done: { editing = nil }, save: { save(replacing: role.id, with: $0) }, remove: { removeRole(role) },
+                         promote: role.agent == nil && (role.kind == "write" || role.kind == "review") ? { act { _ = try await engine.promoteMember(def, role); editing = nil } } : nil)
         }
         .sheet(isPresented: $adding) {
             MemberEditor(engine: engine, role: TeamRole(name: "", kind: "write", responsibility: ""), isNew: true, canRemove: false, done: { adding = false }, save: { save(replacing: nil, with: $0) }, remove: {})
+        }
+    }
+
+    /// Team settings (docs/spec/21 D1): how many times work may be sent back, and what one job may spend.
+    private var settings: some View {
+        HStack(spacing: 18) {
+            Stepper(value: Binding(get: { def.reviewLimit ?? 3 }, set: { n in act { try await engine.updateTeamDefinition(def, reviewLimit: n) } }), in: 1...10) {
+                Text("Sent back at most \(def.reviewLimit ?? 3) time\((def.reviewLimit ?? 3) == 1 ? "" : "s"), then ask me").font(.system(size: 13))
+            }
+            .fixedSize()
+            HStack(spacing: 6) {
+                Text("Budget per job").font(.system(size: 13))
+                TextField("No limit", value: Binding(get: { def.budgetPerJob }, set: { v in act { try await engine.updateTeamDefinition(def, budgetPerJob: v ?? 0) } }), format: .currency(code: "USD"))
+                    .textFieldStyle(.roundedBorder).frame(width: 90)
+                    .help("What one conversation's tasks may spend; new tasks wait once it's reached")
+            }
+            Spacer()
         }
     }
 
@@ -167,6 +194,8 @@ private struct MemberEditor: View {
     let done: () -> Void
     let save: (TeamRole) -> Void
     let remove: () -> Void
+    /// Make it one of your agents (docs/spec/21 AD3), for a team-only member.
+    var promote: (() -> Void)?
     @State private var pickingModel = false
 
     var body: some View {
@@ -208,6 +237,10 @@ private struct MemberEditor: View {
             }
             HStack {
                 if canRemove { Button("Remove member", role: .destructive, action: remove) }
+                if let promote {
+                    Button("Make it one of your agents", action: promote)
+                        .help("It becomes an agent of yours, with this role as its instructions; it stays on this team")
+                }
                 Spacer()
                 Button("Cancel", action: done).keyboardShortcut(.cancelAction)
                 Button(isNew ? "Add" : "Save") { save(role) }

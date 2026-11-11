@@ -125,10 +125,9 @@ private struct ProjectSettings: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 section("Who works here") { who }
-                if let team {
-                    section("Checks") { checks(team) }
-                    section("Routines") { TeamRoutinesList(engine: engine, team: team) }
-                }
+                if let team { section("Checks") { checks(team) } }
+                // A project's routines, with or without a team (docs/spec/21 AD5).
+                section("Routines") { ProjectRoutinesList(engine: engine, project: project, team: team) }
                 section("Instructions and notes") { files }
                 if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
             }
@@ -148,6 +147,9 @@ private struct ProjectSettings: View {
         }
     }
 
+    /// The team's definition: saved for reuse, or only here.
+    private var def: TeamDefinition? { team.flatMap { t in engine.teamDefinitions.first { $0.id == t.definitionId } } }
+
     @ViewBuilder private var who: some View {
         if let team {
             HStack(alignment: .top, spacing: 12) {
@@ -155,10 +157,17 @@ private struct ProjectSettings: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(team.name).font(.system(size: 13.5, weight: .semibold))
                     Text(team.roles.map(\.name).joined(separator: ", ")).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    if let def, !def.saved {
+                        Text("Only in this project. Save it to use it in other projects too.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    }
                     Text("Every conversation here is with its lead. It does small things itself and puts bigger work on the Board.")
                         .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)
+                if let def, !def.saved {
+                    Button("Save for reuse") { act { try await engine.updateTeamDefinition(def, saved: true) } }.buttonStyle(PillStyle(compact: true))
+                        .help("List it under your teams, to use it in other projects")
+                }
                 Button("Open team") { item = .team(team.definitionId ?? team.id) }.buttonStyle(PillStyle(compact: true))
                 Button("Remove…") { confirmRemove = true }.buttonStyle(PillStyle(compact: true))
             }
@@ -180,9 +189,9 @@ private struct ProjectSettings: View {
                 Spacer(minLength: 12)
                 Menu {
                     // Your teams first (docs/spec/20 P3): the same members, a board of its own here.
-                    if !engine.teamDefinitions.isEmpty {
+                    if engine.teamDefinitions.contains(where: \.saved) {
                         Section("Your teams") {
-                            ForEach(engine.teamDefinitions) { d in Button(d.name) { reuse(d) } }
+                            ForEach(engine.teamDefinitions.filter(\.saved)) { d in Button(d.name) { reuse(d) } }
                         }
                     }
                     Section("New, from a template") {

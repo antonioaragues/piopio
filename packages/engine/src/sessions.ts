@@ -1141,30 +1141,32 @@ export class Sessions {
 			board: () => teams.board(team().id, entry.ref.id),
 			message: (taskId, text) => teams.message(team().id, taskId, text),
 			verdict: (pass, notes) => teams.verdict(entry.ref.id, pass, notes),
+			// The project's routines (docs/spec/21 AD5): the lead sets them for the project it works in.
 			addRoutine: async (input) => {
-				const r = await teams.addRoutine(team().id, input, "lead");
-				const url = r.on === "webhook" ? teams.hookUrl?.(team().id, r.id) : undefined;
+				const project = teams.projectOf(team().id);
+				const r = await teams.addRoutine(project, input, "lead");
+				const url = r.on === "webhook" ? teams.hookUrl?.(project, r.id) : undefined;
 				return `Set ${r.id}: ${routineLabel(r)}${r.next ? `, first ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}.${url ? ` Its URL (POST, from this Mac): ${url}` : ""} The user sees it in the project.`;
 			},
-			routines: () => teams.routineList(team().id),
+			routines: () => teams.routineList(teams.projectOf(team().id)),
 			cancelRoutine: async (id) => {
-				const r = await teams.removeRoutine(team().id, id, "lead");
+				const r = await teams.removeRoutine(teams.projectOf(team().id), id);
 				return `Removed ${r.id}: ${routineLabel(r)}.`;
 			},
 		};
 	}
 
 	/** What the team runner needs from the catalog: sessions, their turns, git and the checks. */
-	teamHost(options: { stateFile: string; worktreesDir: string; log: (line: string) => void }): TeamHost {
+	teamHost(options: { stateFile: string; worktreesDir: string; log: (line: string) => void; project?: TeamHost["project"] }): TeamHost {
 		const answerOf = (runtime: Runtime) => {
 			const last = [...runtime.snapshot().items].reverse().find((i) => i.kind === "assistant");
 			return last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
 		};
 		return {
 			createSession: async ({ cwd, title, model, approvalMode, team }) => {
-				const ref = await this.create({ kind: "build", cwd, title, approvalMode, ...(model ? { model: model.includes(":") ? { provider: model.split(":")[0]!, id: model.split(":").slice(1).join(":") } : { provider: "openrouter", id: model } } : {}) });
+				const ref = await this.create({ kind: "build", cwd, title, ...(approvalMode ? { approvalMode } : {}), ...(model ? { model: model.includes(":") ? { provider: model.split(":")[0]!, id: model.split(":").slice(1).join(":") } : { provider: "openrouter", id: model } } : {}) });
 				const entry = this.entry(ref);
-				entry.team = { id: team.id, role: team.role, kind: team.kind, ...(team.taskId ? { taskId: team.taskId } : {}) };
+				if (team) entry.team = { id: team.id, role: team.role, kind: team.kind, ...(team.taskId ? { taskId: team.taskId } : {}) };
 				this.save();
 				this.changed(entry);
 				return ref.id;
@@ -1198,6 +1200,9 @@ export class Sessions {
 			addWorktree: (repo, path, branch, base) => addWorktree(repo, path, branch, base),
 			removeWorktree: (repo, path, branch, force) => removeWorktree(repo, path, branch, force),
 			run: (cwd, command) => runCommand(cwd, command),
+			...(options.project ? { project: options.project } : {}),
+			makeAgent: async ({ name, instructions, model }) => (await this.createAgent({ name, instructions, ...(model ? { model: model.includes(":") ? { provider: model.split(":")[0]!, id: model.split(":").slice(1).join(":") } : { provider: "openrouter", id: model } } : {}) })).id,
+			cost: async (id) => (await this.runtime({ kind: "build", id })).snapshot().state.usage?.costUsd ?? 0,
 			agent: (id) => {
 				try {
 					const { definition, instructions } = this.agentDefinition(id);
