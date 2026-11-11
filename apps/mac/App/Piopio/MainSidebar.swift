@@ -37,16 +37,15 @@ struct MainSidebar: View {
             .frame(height: Shell.barHeight)
             .contentShape(Rectangle())
             .gesture(WindowDragGesture())
-            // Search, Home and Needs you first, then Pinned, Projects, Agents and Conversations; all of it scrolls.
+            // Search and Home first (Home holds what waits on you, docs/spec/21 D2), then Pinned, Projects, Agents (your
+            // agents and saved teams, one section: design 1a) and Conversations; all of it scrolls.
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     searchRow
-                    navRow(.home, "Home", symbol: "house")
-                    navRow(.needsYou, "Needs you", symbol: "tray", count: engine.needsYouCount)
+                    navRow(.home, "Home", symbol: "house", count: engine.needsYouCount)
                     pinnedSection
                     if areas.showsProjects { projectsSection }
                     if areas.showsAgents { agentsSection }
-                    if areas.showsAgents { teamsSection }
                     if areas.showsChats { chatsSection }
                 }
                 .padding(.horizontal, 8)
@@ -145,7 +144,7 @@ struct MainSidebar: View {
     }
 
     @ViewBuilder
-    private func header(_ section: SidebarSection, total: Int, shown: Int, add: (() -> Void)?, addHelp: String = "") -> some View {
+    private func header(_ section: SidebarSection, total: Int, shown: Int, add: (() -> Void)?, addHelp: String = "", menu: [(String, () -> Void)] = []) -> some View {
         let isCollapsed = collapsed.contains(section.rawValue)
         HStack(spacing: 4) {
             Button { toggle(section) } label: {
@@ -164,6 +163,14 @@ struct MainSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .help(addHelp)
+            } else if !menu.isEmpty {
+                Menu {
+                    ForEach(Array(menu.enumerated()), id: \.offset) { _, entry in Button(entry.0, action: entry.1) }
+                } label: {
+                    Image(systemName: "plus").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 20, height: 20).contentShape(Rectangle())
+                }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .help("New agent or team")
             }
         }
         .padding(.leading, 8)
@@ -311,7 +318,8 @@ struct MainSidebar: View {
         let hasSessions = !engine.sessions(in: project).filter { $0.listed }.isEmpty
         let working = engine.team(in: project)?.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count ?? 0
         // The row opens the project's page (docs/spec/20 §5); on its page, it folds or unfolds its conversations.
-        return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil, working: working,
+        let crew = engine.team(in: project).map { TeamStack.colors($0.roles, team: $0.definitionId ?? $0.id) }
+        return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil, working: working, crew: crew,
                           toggle: {
                               if selected { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }
                               else { item = .project(project.id); if folded { setProject(project.id, collapsed: false) } }
@@ -378,43 +386,41 @@ struct MainSidebar: View {
     // MARK: Agents
 
     /// Teams (docs/spec/19): each opens its page; a dot while any of its tasks is running.
-    @ViewBuilder private var teamsSection: some View {
-        // Saved teams; one that lives only in a project shows there (docs/spec/21 AD1).
+    /// Agents (design 1a): your agents, then your saved teams. + makes either. A team that lives only in a project shows
+    /// on that project's row instead (docs/spec/21 AD1).
+    @ViewBuilder private var agentsSection: some View {
+        let agents = engine.agents
         let teams = engine.teamDefinitions.filter(\.saved)
-        // Teams are definitions (docs/spec/20 P3, P4): + makes one (described, or from a template); a project gets one
-        // in its Settings.
-        header(.teams, total: teams.count, shown: teams.count, add: { item = .start(.team) }, addHelp: "New team")
-        if !collapsed.contains(SidebarSection.teams.rawValue) {
+        let cap = Self.caps[.agents]!
+        header(.agents, total: agents.count + teams.count, shown: min(cap, agents.count) + teams.count, add: nil, menu: [("New agent", { item = .start(.agent) }), ("New team", { item = .start(.team) })])
+        if !collapsed.contains(SidebarSection.agents.rawValue) {
+            draftRow(.agent)
             if item == .start(.team) { draftRow(.team) }
-            ForEach(teams) { team in
-                let selected = item == .team(team.id)
-                let places = Set(team.projects.map(\.teamId))
-                let tasks = engine.teams.filter { places.contains($0.id) }.flatMap(\.tasks)
-                let working = tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
-                Button { item = .team(team.id) } label: {
-                    HStack(spacing: 10) {
-                        RowGlyph(symbol: "person.3")
-                        Text(team.name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                        Spacer(minLength: 4)
-                        if working > 0 { SidebarDot(status: .running).help("\(working) task\(working == 1 ? "" : "s") in progress") }
-                        else if tasks.contains(where: { $0.state == "blocked" }) { SidebarDot(status: .waiting).help("A task is blocked") }
-                    }
-                    .rowChrome(selected: selected)
-                }
-                .buttonStyle(.plain)
-            }
+            ForEach(agents.prefix(cap), id: \.ref.id) { agentRow($0) }
+            if agents.count > cap { more("\(agents.count - cap) more", .index(.agents)) }
+            ForEach(teams) { teamRow($0) }
         }
     }
 
-    @ViewBuilder private var agentsSection: some View {
-        let agents = engine.agents
-        let cap = Self.caps[.agents]!
-        header(.agents, total: agents.count, shown: min(cap, agents.count), add: { item = .start(.agent) }, addHelp: "New agent")
-        if !collapsed.contains(SidebarSection.agents.rawValue) {
-            draftRow(.agent)
-            ForEach(agents.prefix(cap), id: \.ref.id) { agentRow($0) }
-            if agents.count > cap { more("\(agents.count - cap) more", .index(.agents)) }
+    /// A saved team: its members as a stack, its name and how many they are; a dot while it works somewhere.
+    private func teamRow(_ team: TeamDefinition) -> some View {
+        let selected = item == .team(team.id)
+        let places = Set(team.projects.map(\.teamId))
+        let tasks = engine.teams.filter { places.contains($0.id) }.flatMap(\.tasks)
+        let working = tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
+        return Button { item = .team(team.id) } label: {
+            HStack(spacing: 10) {
+                TeamStack(colors: TeamStack.colors(team.roles, team: team.id)).frame(width: 18)
+                Text(team.name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Spacer(minLength: 4)
+                if working > 0 { SidebarDot(status: .running).help("\(working) task\(working == 1 ? "" : "s") in progress") }
+                else if tasks.contains(where: { $0.state == "blocked" }) { SidebarDot(status: .waiting).help("A task is blocked") }
+                else { Text("\(team.roles.count)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).monospacedDigit() }
+            }
+            .rowChrome(selected: selected)
         }
+        .buttonStyle(.plain)
+        .help("\(team.name): \(team.roles.map(\.name).joined(separator: ", "))")
     }
 
     private func agentRow(_ agent: SessionSummary) -> some View {
@@ -422,11 +428,12 @@ struct MainSidebar: View {
         let status = agent.agent?.status
         return Button { item = .agent(agent.ref.id) } label: {
             HStack(spacing: 10) {
-                RowGlyph(symbol: "smallcircle.circle")
+                SidebarAvatar(id: agent.ref.id, name: agent.title, glyph: agent.agent?.avatar).frame(width: 18)
                 Text(agent.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
                 if engine.liveStatus[agent.ref.key] == .running { SidebarDot(status: .running) }
-                else if let inbox = status?.inbox, inbox > 0 { SidebarDot(status: .waiting).help("Wrote to you") }
+                // Unread (design 1a): a blue dot when it wrote to you.
+                else if let inbox = status?.inbox, inbox > 0 { Circle().fill(Color.accentColor).frame(width: 7, height: 7).help("Wrote to you") }
                 else if status?.paused == true { Text("Paused").font(.system(size: 11)).foregroundStyle(Color.dsFg3) }
             }
             .help(Self.agentLine(agent))
@@ -660,6 +667,8 @@ private struct ProjectRow: View {
     let folded: Bool?
     /// Its team's tasks in progress (a dot, in place of the branch).
     var working = 0
+    /// Its team's members' colours (design 1a): a stack on the row.
+    var crew: [Color]?
     let toggle: () -> Void
     let start: () -> Void
     @State private var hovering = false
@@ -679,6 +688,7 @@ private struct ProjectRow: View {
                         Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
                     }
                     Spacer(minLength: 4)
+                    if let crew, !showsPlus { TeamStack(colors: crew).help("A team works here") }
                     if project.missing == true {
                         Text("missing").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                     } else if !showsPlus, working > 0 {

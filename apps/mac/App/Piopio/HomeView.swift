@@ -2,27 +2,52 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// Home, the landing screen and the one start (docs/spec/18 §4): a greeting, the box where you write and choose where it
-/// goes, then three short lists as plain rows: Needs you, Coming up and Recent. Empty lists are hidden.
+/// Home, the landing screen and the one start (docs/spec/18 §4), and the agenda of everyone who works for you
+/// (docs/spec/21 D2, design 5e): a greeting and the box where you write, then two columns. Left: what's waiting on you
+/// (with its action in the row) and what happened while you were away. Right: today, as a timeline of every routine,
+/// agents' and projects', with what's running now.
 struct HomeView: View {
     let engine: EngineController
     @Binding var item: SidebarItem
+    @State private var agenda: HomeAgenda?
+    /// Your last visit: "While you were away" starts there.
+    @AppStorage("homeLastVisit") private var lastVisit = ""
+    /// Two columns when there's room for them.
+    @State private var wide = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                greeting
-                AskBox(engine: engine, item: $item).padding(.top, 24)
-                needsYou
-                comingUp
-                recent
+                VStack(alignment: .leading, spacing: 0) {
+                    greeting
+                    AskBox(engine: engine, item: $item).padding(.top, 24)
+                }
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
+                Group {
+                    if wide {
+                        HStack(alignment: .top, spacing: 40) {
+                            VStack(alignment: .leading, spacing: 0) { waiting; away }.frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 0) { today }.frame(width: 300, alignment: .leading)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) { waiting; away; today }
+                    }
+                }
+                .padding(.top, 12)
+                .onGeometryChange(for: Bool.self) { $0.size.width >= 760 } action: { wide = $0 }
             }
             .padding(.horizontal, 32)
             .padding(.top, 72)
             .padding(.bottom, 48)
-            .frame(maxWidth: 704)
+            .frame(maxWidth: 980)
             .frame(maxWidth: .infinity)
         }
+        .task {
+            let since = lastVisit.isEmpty ? nil : lastVisit
+            agenda = await engine.homeAgenda(since: since)
+        }
+        .onDisappear { lastVisit = ISO8601DateFormatter().string(from: .now) }
     }
 
     // MARK: Greeting
@@ -46,56 +71,125 @@ struct HomeView: View {
         NSFullUserName().split(separator: " ").first.map(String.init) ?? NSUserName()
     }
 
-    // MARK: Lists
+    // MARK: Agenda
 
     private func sectionTitle(_ title: String, see: (String, () -> Void)? = nil) -> some View {
         HStack {
-            SectionLabel(title)
+            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)
             Spacer()
             if let see { Button(see.0, action: see.1).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
         }
-        .padding(.top, 36)
-        .padding(.bottom, 6)
+        .padding(.top, 32)
+        .padding(.bottom, 8)
     }
 
-    @ViewBuilder private var needsYou: some View {
+    /// Teams whose finished work waits to be merged (open the project's Board).
+    private var readyToMerge: [(team: TeamInfo, project: ProjectInfo, tasks: Int)] {
+        engine.teams.compactMap { t in
+            guard t.git != nil, !t.tasks.contains(where: { ["todo", "doing", "review", "integrating"].contains($0.state) }),
+                  let p = engine.projects.first(where: { $0.path == t.cwd }) else { return nil }
+            let n = t.tasks.filter { $0.state == "done" && $0.branch != nil && $0.landed == nil }.count
+            return n > 0 ? (t, p, n) : nil
+        }
+    }
+
+    @ViewBuilder private var waiting: some View {
         let entries = Array(engine.needsYou.reversed())
-        if !entries.isEmpty {
-            sectionTitle("Needs you", see: ("See all", { item = .needsYou }))
-            ForEach(entries.prefix(4)) { entry in
-                HomeRow(title: NeedsYouText.title(entry, engine: engine), meta: NeedsYouText.source(entry, engine: engine) + " · " + Self.age(entry.at), dot: true) {
-                    if let s = entry.session { item = engine.item(for: s.ref.id) ?? .needsYou } else { item = .needsYou }
+        let ready = readyToMerge
+        let count = entries.count + ready.count
+        if count > 0 {
+            sectionTitle("Waiting on you · \(count)", see: entries.count > 4 ? ("See all", { item = .needsYou }) : nil)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(entries.prefix(4)) { WaitingRow(engine: engine, entry: $0, item: $item) }
+                ForEach(ready, id: \.team.id) { r in
+                    AgendaLine(dot: .accentColor) {
+                        Text("\(r.project.name) · \(r.tasks) task\(r.tasks == 1 ? "" : "s") ready for \(r.team.git?.base ?? "main")").font(.system(size: 13.5))
+                    } trailing: {
+                        Button("Review") { UserDefaults.standard.set("board", forKey: "projectTab"); item = .project(r.project.id) }.buttonStyle(PillStyle(compact: true))
+                    }
                 }
             }
         }
     }
 
-    @ViewBuilder private var comingUp: some View {
-        let next = (Areas.shared.contains(.agents) ? engine.agents : []).filter { $0.agent?.status?.nextRun != nil && $0.agent?.status?.paused != true }.sorted { ($0.agent?.status?.nextRun ?? "") < ($1.agent?.status?.nextRun ?? "") }
-        if !next.isEmpty {
-            sectionTitle("Coming up")
-            ForEach(next.prefix(3), id: \.ref.id) { agent in
-                HomeRow(title: agent.title, meta: Self.at(agent.agent?.status?.nextRun ?? "")) { item = .agent(agent.ref.id) }
+    @ViewBuilder private var away: some View {
+        if let lines = agenda?.away, !lines.isEmpty {
+            sectionTitle("While you were away")
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.prefix(6).enumerated()), id: \.offset) { _, line in
+                    AgendaLine(dot: line.failed == true ? .dsWarn : line.quiet ? Color(white: 0.4) : .green) {
+                        (Text(line.source.name).foregroundStyle(line.quiet ? Color.dsFg3 : Color.dsFg) + Text(" \(line.text)").foregroundStyle(line.quiet ? Color.dsFg3 : Color.dsFg2))
+                            .font(.system(size: 13.5)).lineLimit(2)
+                    } trailing: {
+                        Text(Self.clock(line.at)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { open(line.source) }
+                }
             }
         }
     }
 
-    @ViewBuilder private var recent: some View {
-        let all = (engine.buildSessions.filter { $0.listed } + engine.threads).filter { Areas.shared.set.shows($0) }
-        let items = Array(all.sorted { $0.updatedAt > $1.updatedAt }.prefix(4))
-        if !items.isEmpty {
-            sectionTitle("Recent")
-            ForEach(items, id: \.ref.id) { s in
-                HomeRow(title: s.title, meta: "\(kind(s)) · \(BuildSessionView.relative(s.updatedAt))") { item = engine.item(for: s.ref.id) ?? .home }
+    @ViewBuilder private var today: some View {
+        sectionTitle("Today")
+        let rows = agenda?.today ?? []
+        if rows.isEmpty {
+            Text(agenda == nil ? "" : "Nothing planned today. Ask an agent to do something every morning, or give a project a routine.")
+                .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                    // Past midnight: what's next tomorrow, under a divider.
+                    if row.tomorrow == true, i == 0 || rows[i - 1].tomorrow != true {
+                        Text("Tomorrow").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color.dsFg3).padding(.leading, 12).padding(.top, 10).padding(.bottom, 2)
+                    }
+                    timelineRow(row)
+                }
+            }
+            .overlay(alignment: .leading) { Rectangle().fill(Color.dsLine).frame(width: 1).padding(.vertical, 6) }
+        }
+        if let held = agenda?.held, held > 0 {
+            Text("\(held) message\(held == 1 ? "" : "s") held until quiet hours end").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 12)
+        }
+    }
+
+    /// A timeline row (design 5e): the time (or "any" for an event), who and what; past rows grey, "now" highlighted.
+    private func timelineRow(_ row: HomeAgenda.Today) -> some View {
+        let past = ["done", "failed", "skipped"].contains(row.state)
+        let now = row.state == "running"
+        return Button { open(row.source) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(now ? "now" : row.at.map(Self.clock) ?? "any").font(.system(size: 12, weight: now ? .semibold : .regular).monospacedDigit())
+                    .foregroundStyle(now ? Color.accentColor : Color.dsFg3).frame(width: 40, alignment: .leading)
+                (Text(row.source.name).foregroundStyle(past ? Color.dsFg3 : Color.dsFg) + Text(row.label.isEmpty ? "" : " · \(row.label)").foregroundStyle(past ? Color.dsFg3 : Color.dsFg2))
+                    .font(.system(size: 13)).lineLimit(2).multilineTextAlignment(.leading)
+                Spacer(minLength: 4)
+                if row.state == "done" { Image(systemName: "checkmark").font(.system(size: 10)).foregroundStyle(Color.dsFg3) }
+                if row.state == "failed" { Image(systemName: "exclamationmark.triangle").font(.system(size: 10)).foregroundStyle(Color.dsWarn) }
+            }
+            .padding(.leading, 12).padding(.vertical, 6).padding(.trailing, 6)
+            .background(now ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func open(_ source: HomeAgenda.Source) {
+        switch source.kind {
+        case "agent": item = .agent(source.id)
+        case "project": item = .project(source.id)
+        default:
+            if let t = engine.teams.first(where: { $0.id == source.id }), let p = engine.projects.first(where: { $0.path == t.cwd }) {
+                UserDefaults.standard.set("board", forKey: "projectTab")
+                item = .project(p.id)
             }
         }
     }
 
-    private func kind(_ s: SessionSummary) -> String {
-        switch s.ref.kind {
-        case .build: engine.project(of: s)?.name ?? "Session"
-        default: s.debate != nil ? "Debate" : "Chat"
-        }
+    /// "8:00" in your time.
+    static func clock(_ iso: String) -> String {
+        let date = MainSidebar.date(iso)
+        return date.formatted(date: .omitted, time: .shortened)
     }
 
     /// "11h", "6d", "now".
@@ -116,32 +210,103 @@ struct HomeView: View {
     }
 }
 
-/// A Home row: an optional blue dot, the title, and where it's from with when, in fg3 on the right.
-private struct HomeRow: View {
-    let title: String
-    let meta: String
-    var dot = false
-    let open: () -> Void
-    @State private var hovering = false
+/// A line on Home's agenda: a dot, the text, and something on the right.
+private struct AgendaLine<Content: View, Trailing: View>: View {
+    var dot: Color = .accentColor
+    @ViewBuilder var content: Content
+    @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        Button(action: open) {
-            HStack(spacing: 10) {
-                if dot { Circle().fill(Color.accentColor).frame(width: 6, height: 6) }
-                Text(title).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(1)
-                Spacer(minLength: 16)
-                Text(meta).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-            }
-            .frame(height: 36)
-            .padding(.horizontal, 8)
-            .background(hovering ? Color.dsChip.opacity(0.6) : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-            .padding(.horizontal, -8)
-            .contentShape(Rectangle())
+        HStack(alignment: .center, spacing: 10) {
+            Circle().fill(dot).frame(width: 7, height: 7)
+            content
+            Spacer(minLength: 12)
+            trailing
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .frame(minHeight: 38)
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 }
+
+/// Something waiting on you, with its action in the row (design 5e): Allow, an answer, or Open.
+private struct WaitingRow: View {
+    let engine: EngineController
+    let entry: NeedsYouEntry
+    @Binding var item: SidebarItem
+    @State private var reply = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        AgendaLine(dot: entry.isApproval ? .dsWarn : .accentColor) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(2)
+                if let error { Text(error).font(.system(size: 11.5)).foregroundStyle(Color.dsWarn) }
+            }
+        } trailing: {
+            switch entry.kind {
+            case .approval:
+                Button("Not now") { decide(false) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                Button("Allow") { decide(true) }.buttonStyle(PillStyle(kind: .primary, compact: true))
+            case .message:
+                TextField("", text: $reply, prompt: Text("Answer here…").foregroundStyle(Color.dsFg3))
+                    .textFieldStyle(.plain).font(.system(size: 12.5)).frame(width: 160)
+                    .padding(.horizontal, 8).frame(height: 26)
+                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                    .onSubmit(send)
+            default:
+                Button("Open") { open() }.buttonStyle(PillStyle(compact: true))
+            }
+        }
+        .disabled(busy)
+    }
+
+    /// "Morning briefing wants to read Calendar", "Family helper: “Which supermarket?”".
+    private var line: String {
+        let source = NeedsYouText.source(entry, engine: engine)
+        let title = NeedsYouText.title(entry, engine: engine)
+        switch entry.kind {
+        case .approval: return "\(source) asks: \(title)"
+        case .message: return "\(source): “\(title)”"
+        case .buildPrompt: return "\(source) · \(title)"
+        default: return title
+        }
+    }
+
+    private func open() {
+        if let s = entry.session { item = engine.item(for: s.ref.id) ?? .needsYou }
+        else if let inbox = entry.inbox { item = .agent(inbox.agent.id) }
+        else { item = .needsYou }
+    }
+
+    private func decide(_ approve: Bool) {
+        guard let inbox = entry.inbox, let approval = inbox.approval else { return }
+        perform { try await engine.decide(inbox.agent, approvalId: approval.approvalId, approve: approve) }
+    }
+
+    private func send() {
+        let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let inbox = entry.inbox else { return }
+        reply = ""
+        let thread = engine.thread(ContainerRef(kind: .agent, id: inbox.agent.id))
+        perform {
+            await thread.open()
+            await thread.send(text)
+            await engine.markInboxRead([inbox])
+        }
+    }
+
+    private func perform(_ work: @escaping () async throws -> Void) {
+        busy = true
+        error = nil
+        Task {
+            do { try await work() } catch { self.error = (error as? EngineError)?.message ?? String(describing: error) }
+            busy = false
+        }
+    }
+}
+
 
 /// The one start (docs/spec/18 §4): write, and choose where it goes in the box itself. No project is a chat; a project
 /// with a folder is a conversation there, with permissions (Read only, Ask, Auto-edit, Full auto) said in a chip and in

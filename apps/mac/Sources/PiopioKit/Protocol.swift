@@ -750,6 +750,17 @@ public struct TeamLandParams: Encodable, Sendable {
 public struct TeamLandResult: Decodable, Sendable { public var commit: String?; public var compareUrl: String?; public var output: String? }
 
 /// What starts a team's work on its own (docs/spec/19 T1).
+/// Home's agenda (docs/spec/21 D2): today's timeline and what happened since your last visit.
+public struct HomeAgenda: Decodable, Sendable, Hashable {
+    public struct Source: Decodable, Sendable, Hashable { public var kind, id, name: String }
+    public struct Today: Decodable, Sendable, Hashable { public var at: String?; public var label: String; public var source: Source; public var state: String; public var tomorrow: Bool? }
+    public struct Away: Decodable, Sendable, Hashable { public var at: String; public var source: Source; public var text: String; public var costUsd: Double?; public var quiet: Bool; public var failed: Bool? }
+    public var today: [Today]
+    public var away: [Away]
+    public var held: Int
+}
+public struct HomeAgendaParams: Encodable, Sendable { public var since: String?; public init(since: String?) { self.since = since } }
+
 public struct TeamRoutine: Codable, Sendable, Hashable, Identifiable {
     public var id, on, prompt, by, createdAt: String
     public var cron: String?

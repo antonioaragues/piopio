@@ -43,6 +43,9 @@ import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
 import { routineLabel, type TeamRoutine } from "./teams/routines.js";
 import { TeamRunner, type Team } from "./teams/runner.js";
+import { nextFire } from "@piopio/runtime";
+import { buildAgenda } from "./agenda.js";
+import { systemZone } from "./teams/routines.js";
 import { draftTeam, readTemplates } from "./teams/library.js";
 import { TEAM_TEMPLATES } from "./teams/templates.js";
 import { TEMPLATES } from "@piopio/runtime";
@@ -788,6 +791,37 @@ export class Engine {
 			case "agents.conversations": {
 				const p = params as Params<"agents.conversations">;
 				return { people: await this.sessions.agentConversations(p.ref) } satisfies Result<"agents.conversations">;
+			}
+			case "home.agenda": {
+				const p = params as Params<"home.agenda">;
+				const agents = [];
+				for (const a of this.sessions.list("agent")) {
+					const runs = await this.sessions.agentRuns(a.ref).catch(() => undefined);
+					if (!runs) continue;
+					// Its own schedules read as the agent ("8:00 · Morning briefing"); a next time the runtime hasn't armed
+					// yet comes from the cron.
+					const schedules = (() => {
+						try {
+							return this.sessions.agentDefinition(a.ref.id).definition.schedules ?? [];
+						} catch {
+							return [];
+						}
+					})();
+					const upcoming = runs.upcoming.map((u) => {
+						if (u.kind !== "schedule") return u;
+						const s = schedules.find((x) => x.id === u.id);
+						const next = u.next ?? (s ? (() => { try { return new Date(nextFire(s.cron, s.tz ?? systemZone(), Date.now())).toISOString(); } catch { return undefined; } })() : undefined);
+						return { ...u, label: "", ...(next ? { next } : {}) };
+					});
+					agents.push({ id: a.ref.id, name: a.title, runs: runs.runs, upcoming, held: runs.outbox.length });
+				}
+				const projects = this.projects.list().map((x) => ({ id: x.id, name: x.name, routines: this.teams.routines(x.id) }));
+				const teams = this.teams.list().map((t) => {
+					const place = this.projects.projectFor(t.cwd);
+					const name = place ? this.projects.list().find((x) => x.id === place.id)?.name : undefined;
+					return { id: t.id, name: t.name, ...(place && name ? { project: { id: place.id, name } } : {}), tasks: t.tasks };
+				});
+				return buildAgenda({ now: Date.now(), tz: systemZone(), ...(p.since ? { since: Date.parse(p.since) } : {}), agents, projects, teams }) satisfies Result<"home.agenda">;
 			}
 			case "teams.templates":
 				return { templates: this.teams.templates().map((t) => ({ id: t.id, name: t.name, description: t.description, workplace: t.workplace, roles: t.roles, ...(t.source ? { source: t.source } : {}), ...(t.folder ? { folder: t.folder } : {}) })) } satisfies Result<"teams.templates">;

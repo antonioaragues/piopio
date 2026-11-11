@@ -1618,6 +1618,18 @@ export const methods = {
 			),
 		}),
 	},
+	/**
+	 * Home's agenda (docs/spec/21 D2): today's timeline (runs, what's next, event routines and work in progress) across
+	 * agents, projects and teams, and what happened since `since` (your last visit), one line per agent or team.
+	 */
+	"home.agenda": {
+		params: Type.Object({ since: Type.Optional(Type.String()) }),
+		result: Type.Object({
+			today: Type.Array(Type.Object({ at: Type.Optional(Type.String()), label: Type.String(), source: Type.Object({ kind: literals("agent", "project", "team"), id: Type.String(), name: Type.String() }), state: literals("done", "failed", "skipped", "running", "upcoming", "event"), tomorrow: Type.Optional(Type.Boolean({ description: "Upcoming after midnight, within the next 24 hours" })) })),
+			away: Type.Array(Type.Object({ at: Type.String(), source: Type.Object({ kind: literals("agent", "project", "team"), id: Type.String(), name: Type.String() }), text: Type.String(), costUsd: Type.Optional(Type.Number()), quiet: Type.Boolean(), failed: Type.Optional(Type.Boolean()) })),
+			held: Type.Number({ description: "Messages held by quiet hours or limits, across agents" }),
+		}),
+	},
 	/** Team templates (docs/spec/19): development, research, writing. */
 	"teams.templates": {
 		params: Type.Object({}),

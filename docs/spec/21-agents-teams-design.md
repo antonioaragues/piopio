@@ -119,3 +119,30 @@ and D6. D4 and D5 can swap.
   without a team.
 - **Not in D1:** tools for team-only members (the design's team settings): members keep Build's tools, with the team's
   approval mode. A job's cost doesn't include the lead's own conversation.
+
+## 8. D2 as built (2026-11-11)
+
+- **Sidebar (1a):** Search · Home · Projects · Agents · Conversations.
+  - **Home** carries the count of what waits on you; the Needs you row is gone (its page stays, reached from Home's "See
+    all").
+  - **Agents** lists your agents, then your saved teams. An agent row has an 18 pt rounded-square avatar in its colour
+    with its initial (or its glyph), and a blue dot when it wrote to you. A team row has its members as three
+    overlapping circles and how many they are. + offers New agent or New team. The Teams section is gone.
+  - **A project with a team** shows the team's stack on its row.
+  - **Colours:** an agent's comes from its id, among the design's five hues (D4 lets you choose); a team-only member
+    gets its own; the member that merges is grey (`AgentLook.swift`).
+- **Home (5e):** the greeting and the box stay on top; below, two columns (one when narrow).
+  - **Waiting on you · N:** each with its action in the row: "Allow" (and "Not now") for an approval, "Answer here…"
+    for an agent's question or message, "Review" for a team's work ready to merge (opens the project's Board), "Open"
+    for the rest.
+  - **While you were away:** one line per agent or team since your last visit to Home (or the last 12 hours), with a
+    dot for how it went; quiet runs ("had nothing new") are grey.
+  - **Today:** a timeline of agent runs and schedules, project routines and what teams are doing now, with a "now" row
+    highlighted. It runs to the same time tomorrow, under a "Tomorrow" divider, so late at night it still shows the
+    morning. Event routines ("when an email arrives") come last, as "any".
+  - **Held messages** are counted at the foot.
+- **Engine:** `home.agenda` (`engine/src/agenda.ts`) builds it from every agent's runs, schedules and held messages,
+  every project's routines and every team's tasks. An agent schedule the runtime hasn't armed yet gets its next time
+  from its cron.
+- **Not yet:** quiet hours by name in the footer (the design's "Quiet hours 22:30 – 7:30"): agents each have their own,
+  so Home only counts held messages.

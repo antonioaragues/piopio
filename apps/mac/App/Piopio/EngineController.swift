@@ -694,6 +694,11 @@ final class EngineController {
         await loadTeams()
     }
 
+    /// Home's agenda (docs/spec/21 D2): `since` is your last visit.
+    func homeAgenda(since: String?) async -> HomeAgenda? {
+        try? await client?.call("home.agenda", HomeAgendaParams(since: since), as: HomeAgenda.self)
+    }
+
     /// A project's routines (docs/spec/21 AD5): each run opens a session there, with the team's lead when it has one.
     func routines(in project: ProjectInfo) async -> [TeamRoutine] {
         (try? await client?.call("routines.list", ProjectParams(project: project.id), as: RoutinesResult.self).routines) ?? []

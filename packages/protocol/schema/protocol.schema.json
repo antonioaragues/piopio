@@ -33861,6 +33861,172 @@
 				}
 			}
 		},
+		"home.agenda.params": {
+			"type": "object",
+			"properties": {
+				"since": {
+					"type": "string"
+				}
+			}
+		},
+		"home.agenda.result": {
+			"type": "object",
+			"required": [
+				"today",
+				"away",
+				"held"
+			],
+			"properties": {
+				"today": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"label",
+							"source",
+							"state"
+						],
+						"properties": {
+							"at": {
+								"type": "string"
+							},
+							"label": {
+								"type": "string"
+							},
+							"source": {
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"name"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "agent"
+											},
+											{
+												"type": "string",
+												"const": "project"
+											},
+											{
+												"type": "string",
+												"const": "team"
+											}
+										]
+									},
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									}
+								}
+							},
+							"state": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "done"
+									},
+									{
+										"type": "string",
+										"const": "failed"
+									},
+									{
+										"type": "string",
+										"const": "skipped"
+									},
+									{
+										"type": "string",
+										"const": "running"
+									},
+									{
+										"type": "string",
+										"const": "upcoming"
+									},
+									{
+										"type": "string",
+										"const": "event"
+									}
+								]
+							},
+							"tomorrow": {
+								"type": "boolean",
+								"description": "Upcoming after midnight, within the next 24 hours"
+							}
+						}
+					}
+				},
+				"away": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"at",
+							"source",
+							"text",
+							"quiet"
+						],
+						"properties": {
+							"at": {
+								"type": "string"
+							},
+							"source": {
+								"type": "object",
+								"required": [
+									"kind",
+									"id",
+									"name"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "agent"
+											},
+											{
+												"type": "string",
+												"const": "project"
+											},
+											{
+												"type": "string",
+												"const": "team"
+											}
+										]
+									},
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									}
+								}
+							},
+							"text": {
+								"type": "string"
+							},
+							"costUsd": {
+								"type": "number"
+							},
+							"quiet": {
+								"type": "boolean"
+							},
+							"failed": {
+								"type": "boolean"
+							}
+						}
+					}
+				},
+				"held": {
+					"type": "number",
+					"description": "Messages held by quiet hours or limits, across agents"
+				}
+			}
+		},
 		"teams.templates.params": {
 			"type": "object",
 			"properties": {}
