@@ -28,7 +28,7 @@ import { writingExtension } from "./tools/writing.js";
 import type { AgentFiles } from "./agent-files.js";
 import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
-import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, validate, TEMPLATES, type AgentDefinition, type DefinitionError, type Watch } from "@piopio/runtime";
+import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, nextFire, validate, TEMPLATES, type AgentDefinition, type DefinitionError, type Watch } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import { DebateRuntime, validateDebate, type DebateRecord } from "./runtimes/debate.js";
@@ -780,6 +780,23 @@ export class Sessions {
 	async agentRuns(ref: ContainerRef) {
 		const { runs, outbox, upcoming } = await (await this.agent(ref)).runs();
 		const iso = (t: number) => new Date(t).toISOString();
+		// A schedule the runtime hasn't armed yet has no next time: it comes from its cron (Home, the agent page).
+		const schedules = (() => {
+			try {
+				return this.agentDefinition(ref.id).definition.schedules ?? [];
+			} catch {
+				return [];
+			}
+		})();
+		for (const u of upcoming) {
+			if (u.next || u.kind !== "schedule") continue;
+			const s = schedules.find((x) => x.id === u.id);
+			try {
+				if (s) u.next = nextFire(s.cron, s.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone, Date.now());
+			} catch {
+				// a cron that never fires
+			}
+		}
 		return {
 			runs: runs.map(({ conversationId: _c, deliverTo: _d, ...r }) => r),
 			outbox: outbox.map((o) => ({ id: o.id, to: o.to, text: o.text, notBefore: iso(o.notBefore), reason: o.reason })),

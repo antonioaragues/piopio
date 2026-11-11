@@ -120,7 +120,11 @@ export class AgentRuntime implements Runtime {
 			...(options.learnQuietMs ? { learnQuietMs: options.learnQuietMs } : {}),
 			...(options.onLearned ? { onLearned: options.onLearned } : {}),
 			onPeerLog: () => options.onActivity?.(),
-			onRun: () => options.onActivity?.(),
+			onRun: (run) => {
+				options.onActivity?.();
+				// Its owner's conversation shows each run as a divider (docs/spec/21 D3), placed when it fired.
+				for (const view of runtime?.live ?? []) if (view.isOwner) view.runLine(run, true);
+			},
 			onOutbound: (to, text, from) => {
 				options.onActivity?.();
 				options.onOutbound?.(to, text, from);
@@ -405,6 +409,7 @@ export class AgentView implements Runtime {
 		view.load(stream.snapshot as never, false);
 		for (const undo of await agent.core.safety.undos()) if (undo.conversationId === view.conversationId) view.undos.set(undo.id, undo);
 		for (const approval of await agent.core.safety.approvals(view.conversationId)) view.approval(approval, false);
+		if (view.isOwner) for (const run of (await agent.runs()).runs) view.runLine(run, false);
 		view.steps.snapshot(view.items());
 		agent.live.add(view);
 		await view.settings();
@@ -458,6 +463,51 @@ export class AgentView implements Runtime {
 			...(reply ? { reply } : {}),
 			...(d?.traceId ? { traceId: d.traceId } : {}),
 		};
+	}
+
+	/** The owner's conversation: where runs show as dividers. */
+	get isOwner(): boolean {
+		return !!this.contactId && this.contactId === ownerOf(this.agent.definition());
+	}
+
+	private readonly runLines = new Map<string, TimelineItem>();
+
+	/**
+	 * A run as a line in the owner's conversation (docs/spec/21 D3, design 2a): "Automatic run · nothing new, didn't
+	 * write · $0.0004"; a run that wrote shows its message after it. Placed when it fired; updated when it ends.
+	 */
+	runLine(run: RunRecord, live: boolean): void {
+		const how = run.kind === "manual" ? "Run now" : "Automatic run";
+		const short = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, 120);
+		const what =
+			run.status === "running"
+				? "working…"
+				: run.status === "skipped"
+					? "skipped: paused or over its budget"
+					: run.status === "failed"
+						? `failed${run.summary ? `: ${short(run.summary)}` : ""}`
+						: run.sent === 0
+							? "nothing new, didn't write"
+							: run.sent === 1
+								? "wrote to you"
+								: `wrote to you ${run.sent} times`;
+		const cost = run.costUsd ? ` · $${run.costUsd < 0.01 ? run.costUsd.toFixed(4) : run.costUsd.toFixed(2)}` : "";
+		const item: TimelineItem = {
+			kind: "system",
+			id: `run:${run.id}`,
+			at: run.firedAt,
+			level: run.status === "failed" ? "warn" : "info",
+			text: `${how} · ${what}${cost}`,
+			run: { id: run.id, status: run.status, sent: run.sent, ...(run.summary ? { summary: run.summary } : {}), ...(run.costUsd !== undefined ? { costUsd: run.costUsd } : {}) },
+		};
+		const had = this.runLines.has(item.id);
+		this.runLines.set(item.id, item);
+		if (had) {
+			if (live) this.emit([{ type: "item.updated", item }]);
+			return;
+		}
+		this.builder.insert(item, this.builder.firstAfter(run.firedAt), live);
+		if (live) this.emit(this.builder.flush());
 	}
 
 	/** An approval asked here, or its answer: one item, placed when it was asked. */
@@ -568,6 +618,7 @@ export class AgentView implements Runtime {
 			if (item.kind === "tool" && (item.tool === "ask_agent" || item.tool === "tell_agent")) return this.agentCall(item);
 			if (item.kind === "result" && item.callId.startsWith("learned:")) return this.learnedItem(item.callId.slice("learned:".length));
 			const approval = item.kind === "approval" ? this.approvals.get(item.approvalId) : undefined;
+			if (item.kind === "system" && this.runLines.has(item.id)) return this.runLines.get(item.id)!;
 			return approval ? this.approvalItem(approval) : item;
 		});
 	}

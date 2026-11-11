@@ -260,6 +260,9 @@ final class ThreadModel {
             Task { await continueDebate() }
         case .restoreCheckpoint(let id):
             if case .checkpoint(let c) = document.item(id) { restoring = c }
+        case .openSession(let id) where id.hasPrefix("run:"):
+            // An agent's run, from its line in the chat: the agent page shows it (docs/spec/21 D3).
+            NotificationCenter.default.post(name: .openAgentRun, object: id)
         case .openSession(let id):
             NotificationCenter.default.post(name: .selectBuildSession, object: id)
         case .openFile(let path, let line):

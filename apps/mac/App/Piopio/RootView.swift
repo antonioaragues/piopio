@@ -337,6 +337,8 @@ extension Notification.Name {
     /// Object: a folder URL to add, or nil to ask for one.
     static let openProject = Notification.Name("piopio.openProject")
     static let selectBuildSession = Notification.Name("piopio.selectBuildSession")
+    /// An agent's run, from its line in the chat (object: "run:<id>").
+    static let openAgentRun = Notification.Name("piopio.openAgentRun")
     /// Object: an approval id to show, or nil.
     static let openInbox = Notification.Name("piopio.openInbox")
     /// Object: a trace id between agents.

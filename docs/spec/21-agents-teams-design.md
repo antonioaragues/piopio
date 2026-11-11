@@ -146,3 +146,34 @@ and D6. D4 and D5 can swap.
   from its cron.
 - **Not yet:** quiet hours by name in the footer (the design's "Quiet hours 22:30 – 7:30"): agents each have their own,
   so Home only counts held messages.
+
+## 9. D3 as built (2026-11-11)
+
+- **The agent page (2a):** Chat · Setup. The info panel and the Activity tab are gone.
+  - **Header:** a 22 pt avatar, the name, its one line, "Paused" when it is; Chat | Setup, Run now, and ••• (Pause or
+    Resume, its other conversations, Reveal in Finder).
+  - **Glance strip:** Next ("Tomorrow 8:00 · weekdays", "When something happens", "Only when you ask"), Can ("Web ·
+    Memory · Message you", and its Mac apps), Reaches you ("In Piopio · Add Telegram"), This month ("$0.05 of $15"
+    with a bar, amber at 80%). Each opens its section in Setup.
+  - **Runs in the chat:** the engine puts a line in the owner's conversation for each run, when it fired: "Today 8:00 ·
+    Automatic run · nothing new, didn't write · $0.0004", "Run now · wrote to you", "… · failed: …". It updates live as
+    a run ends. A line opens to the run's last answer; "Open" shows the run's own conversation, with "‹ Your chat" to
+    come back. A run's message follows its line, so it no longer carries its own "Automatic run" note.
+  - **Composer:** "Reply, or ask it to change how it works…".
+  - **Already as designed:** the setup-change card with Undo (`set_up`'s result card) and inline permission requests
+    (approval items with Not now / Allow).
+- **Setup (2c):** the six questions on the left, with "History · View as file" at the foot.
+  - **What it does:** name, avatar, one line, instructions, model, thinking.
+  - **When it acts:** its schedules as sentences ("Weekdays at 8:00", the task, "Next: tomorrow at 8:00"); Edit shows
+    the cron as "Custom" and Remove. The reminders and event routines it set itself are listed too, with "Change…"
+    (asks it in the chat). "+ At a time" adds a schedule; "+ When an email arrives", "+ When a file appears" and "+ From
+    a link (webhook)" start the request in its chat. Quiet hours and time zone.
+  - **What it can use:** one list of tools and Mac apps, each Off · Asks · Allowed: Off leaves it out of `tools`, Asks
+    adds its rule to `policies.requireApproval` (`apple_<app>_*` for an app), Allowed removes it. Shortcuts.
+  - **Who it talks to:** channels (In Piopio; Telegram connected, or how to add it) and people and agents.
+  - **What it knows:** memory. **Limits:** budget, messages a day, urgent messages, unknown senders.
+- **Engine:** an agent's upcoming schedules always have a next time (from the cron when the runtime hasn't armed it
+  yet), for the strip, Setup and Home.
+- **Not yet:** run lines are quiet lines on the left, not centred dividers; a run opens to its last answer, not its
+  steps ("2 steps ›"); held messages aren't lines yet; routines have no on/off toggle (schedules have no "enabled"
+  field); event routines are added by asking.

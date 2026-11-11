@@ -277,9 +277,12 @@ extension ToolItem {
 
 public struct SystemItem: Codable, Sendable, Hashable {
     public enum Level: String, Codable, Sendable { case info, warn, error }
+    /// A run of an agent, shown in its owner's conversation as a line (docs/spec/21 D3); it opens as `run:<id>`.
+    public struct Run: Codable, Sendable, Hashable { public var id, status: String; public var sent: Int; public var summary: String?; public var costUsd: Double? }
     public var id, at: String
     public var level: Level
     public var text: String
+    public var run: Run?
 }
 
 public struct CompactionItem: Codable, Sendable, Hashable { public var id, at, summary: String }

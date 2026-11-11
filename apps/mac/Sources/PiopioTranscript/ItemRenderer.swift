@@ -62,7 +62,8 @@ nonisolated struct ItemRenderer: Sendable {
             let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: Self.thought(a.thinkingMs), detail: "", body: thinking))) }
             // A new agent's greeting (docs/spec/19 S2) reads as its first message, with no label.
-            if let o = a.outbound, o.from != "greeting" { out.append(note((o.from.hasPrefix("run_") ? "Automatic run" : "Sent on its own") + (Self.date(a.at).map { " · " + $0.formatted(date: .omitted, time: .shortened) } ?? ""))) }
+            // A run's message follows its run line (docs/spec/21 D3), which says so; others are marked here.
+            if let o = a.outbound, o.from != "greeting", !o.from.hasPrefix("run_") { out.append(note("Sent on its own" + (Self.date(a.at).map { " · " + $0.formatted(date: .omitted, time: .shortened) } ?? ""))) }
             for block in MarkdownStream(text: a.text).blocks { out.append(render(block)) }
             out.append(statusCard(a))
             if a.status != .streaming, !compact, !midTurn.contains(a.id) { out.append(answerFooter(a)) }
@@ -79,6 +80,17 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .tool(let t):
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root)))
+        case .system(let s) where s.run != nil:
+            // A run (docs/spec/21 D3, design 2a): one quiet line, "Today 8:00 · Automatic run · nothing new"; it opens to
+            // its last answer, and "Open" shows the run's own conversation.
+            let run = s.run!
+            let when = Self.date(s.at).map { Self.dayAndTime($0) } ?? ""
+            let title = when.isEmpty ? s.text : "\(when) · \(s.text)"
+            guard let summary = run.summary, !summary.isEmpty, run.status != "running" else { return note(title, dot: run.status == "failed" ? DS.amber : nil) }
+            let card = DisclosureCard(kind: .thinking, title: title, body: summary)
+            card.action = ("Open", .openSession("run:\(run.id)"))
+            card.failed = run.status == "failed"
+            return thinkingCard(card)
         case .system(let s):
             if s.level == .error { return errorCard(title: s.text, safe: "Nothing was lost.", actions: []) }
             return note(s.text)
@@ -889,6 +901,16 @@ nonisolated struct ItemRenderer: Sendable {
         let precise = ISO8601DateFormatter()
         precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return precise.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+    }
+
+    /// "Today 8:00", "Yesterday 21:00", "Fri 8:00", "3 Nov 8:00".
+    static func dayAndTime(_ date: Date, now: Date = .now) -> String {
+        let cal = Calendar.current
+        let time = date.formatted(date: .omitted, time: .shortened)
+        if cal.isDate(date, inSameDayAs: now) { return "Today \(time)" }
+        if let y = cal.date(byAdding: .day, value: -1, to: now), cal.isDate(date, inSameDayAs: y) { return "Yesterday \(time)" }
+        if let days = cal.dateComponents([.day], from: date, to: now).day, days < 7 { return "\(date.formatted(.dateTime.weekday(.abbreviated))) \(time)" }
+        return "\(date.formatted(.dateTime.day().month(.abbreviated))) \(time)"
     }
 
     /// "anthropic/claude-haiku-5.5" → "Haiku 5.5"; other ids lose only their provider.

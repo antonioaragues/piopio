@@ -3,12 +3,20 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The Setup tab (docs/design v2, 8a): a form over agent.json and instructions.md, grouped like System Settings, with a
-/// jump list on the left and "View as JSON" at its foot. Saving validates first; errors show at the top with their
-/// path. Each save is a commit in the folder's git history (the History group). Tools that don't work yet are hidden.
+/// The Setup tab (docs/spec/21 D3, design 2c): a form over agent.json and instructions.md, ordered by questions (What it
+/// does · When it acts · What it can use · Who it talks to · What it knows · Limits), with them on the left and "History ·
+/// View as file" at its foot. Saving validates first; errors show at the top with their path. Each save is a commit in
+/// the folder's git history.
 struct AgentDefinitionView: View {
     let engine: EngineController
     let summary: SessionSummary
+    /// The section to open at (a glance cell on the agent page).
+    @Binding var section: String?
+    /// Starts a request in its chat (routines set by asking).
+    var askInChat: (String) -> Void = { _ in }
+    @State private var runs: AgentRunsResult?
+    /// The schedule being edited (its cron shows, as "Custom").
+    @State private var editingSchedule: Int?
     @State private var loaded: AgentGetResult?
     @State private var def: AgentDef?
     @State private var original: AgentDef?
@@ -23,7 +31,7 @@ struct AgentDefinitionView: View {
 
     private var dirty: Bool { def != original || instructions != originalInstructions || (editingJSON && raw != rawText(original)) }
 
-    private static let groups = ["Instructions", "Model", "Abilities", "Mac apps", "Schedule", "People", "Limits", "Memory", "History"]
+    private static let groups = ["What it does", "When it acts", "What it can use", "Who it talks to", "What it knows", "Limits"]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,14 +49,38 @@ struct AgentDefinitionView: View {
                                     .padding(6)
                                     .settingsRows()
                             } else if def != nil {
-                                instructionsGroup.id("Instructions")
-                                modelGroup.id("Model")
-                                abilitiesGroup.id("Abilities")
-                                macAppsGroup.id("Mac apps")
-                                scheduleGroup.id("Schedule")
-                                peopleGroup.id("People")
-                                limitsGroup.id("Limits")
-                                memoryGroup.id("Memory")
+                                VStack(alignment: .leading, spacing: 22) {
+                                    question("What it does")
+                                    instructionsGroup
+                                    modelGroup
+                                }
+                                .id("What it does")
+                                VStack(alignment: .leading, spacing: 22) {
+                                    question("When it acts", "Routines it follows on its own. Ask it in the chat, or add one here.")
+                                    routinesGroup
+                                }
+                                .id("When it acts")
+                                VStack(alignment: .leading, spacing: 22) {
+                                    question("What it can use", "One list for every tool. Choose, per tool, whether it asks you first.")
+                                    toolsGroup
+                                }
+                                .id("What it can use")
+                                VStack(alignment: .leading, spacing: 22) {
+                                    question("Who it talks to")
+                                    channelsGroup
+                                    peopleGroup
+                                }
+                                .id("Who it talks to")
+                                VStack(alignment: .leading, spacing: 22) {
+                                    question("What it knows")
+                                    memoryGroup
+                                }
+                                .id("What it knows")
+                                VStack(alignment: .leading, spacing: 22) {
+                                    question("Limits")
+                                    limitsGroup
+                                }
+                                .id("Limits")
                             }
                             historyGroup.id("History")
                         }
@@ -63,7 +95,12 @@ struct AgentDefinitionView: View {
             }
             .padding(.leading, 28)
         }
-        .task(id: summary.ref.id) { await load() }
+        .task(id: summary.ref.id) {
+            await load()
+            runs = await engine.agentRuns(summary.ref)
+            if let section { jump = nil; DispatchQueue.main.async { jump = section } }
+        }
+        .onChange(of: section) { _, s in if let s { jump = nil; DispatchQueue.main.async { jump = s } } }
         .popover(isPresented: $pickingModel) {
             ModelPicker(engine: engine, selected: modelRef(def?.models.default), role: .agent) { ref in
                 def?.models.default = modelString(ref)
@@ -110,14 +147,18 @@ struct AgentDefinitionView: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            Button(editingJSON ? "Back to the form" : "View as JSON") {
-                if editingJSON, let parsed = parse(raw) { def = parsed } else if !editingJSON { raw = rawText(def) }
-                editingJSON.toggle()
+            HStack(spacing: 6) {
+                Button("History") { editingJSON = false; jump = nil; DispatchQueue.main.async { jump = "History" } }
+                Text("·")
+                Button(editingJSON ? "Back to the form" : "View as file") {
+                    if editingJSON, let parsed = parse(raw) { def = parsed } else if !editingJSON { raw = rawText(def) }
+                    editingJSON.toggle()
+                }
             }
             .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
             .padding(.horizontal, 10).padding(.bottom, 18)
         }
-        .frame(width: 170)
+        .frame(width: 180)
         .padding(.top, 20)
     }
 
@@ -133,10 +174,164 @@ struct AgentDefinitionView: View {
         .background(Color.dsFg2.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
     }
 
+    // MARK: Questions
+
+    private func question(_ title: String, _ subtitle: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Color.dsFg)
+            if let subtitle { Text(subtitle).font(.system(size: 13)).foregroundStyle(Color.dsFg2) }
+        }
+        .padding(.top, 8)
+    }
+
+    /// When it acts (design 2c): its schedules and the routines it set itself, as sentences, in one list; the cron only
+    /// when editing ("Custom"). Times are added here; events by asking it.
+    private var routinesGroup: some View {
+        SetupGroup("Routines") {
+            ForEach(Array((def?.schedules ?? []).enumerated()), id: \.offset) { i, s in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("At a time").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).frame(width: 74, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(CronText.describe(s.cron)).font(.system(size: 13.5, weight: .medium))
+                            if editingSchedule != i { Text(s.prompt).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(2) }
+                        }
+                        Spacer()
+                        if let next = runs?.upcoming.first(where: { $0.id == s.id })?.next {
+                            Text("Next: \(HomeView.at(next).lowercased())").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                        }
+                        Button(editingSchedule == i ? "Done" : "Edit") { editingSchedule = editingSchedule == i ? nil : i }
+                            .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    }
+                    if editingSchedule == i {
+                        HStack(spacing: 6) {
+                            Text("Custom").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            TextField("0 8 * * 1-5", text: scheduleBinding(i, \.cron)).textFieldStyle(.roundedBorder).frame(width: 120).font(.system(size: 12, design: .monospaced))
+                            Text("minute hour day month weekday").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                            Spacer()
+                            Button("Remove") { def?.schedules?.remove(at: i); editingSchedule = nil }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                        }
+                        TextField("What to do", text: scheduleBinding(i, \.prompt)).textFieldStyle(.roundedBorder)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+            }
+            // The ones it set itself (reminders and event routines): changed by asking it.
+            ForEach((runs?.upcoming ?? []).filter { $0.kind == "reminder" || $0.kind == "watch" }, id: \.id) { u in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(u.kind == "watch" ? "On an event" : "At a time").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).frame(width: 74, alignment: .leading)
+                    Text(u.label).font(.system(size: 13)).lineLimit(2)
+                    Spacer()
+                    if let next = u.next { Text("Next: \(HomeView.at(next).lowercased())").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                    Button("Change…") { askInChat("About the routine “\(u.label)”: ") }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+            }
+            HStack(spacing: 14) {
+                Button("+ At a time") {
+                    var list = def?.schedules ?? []
+                    list.append(.init(id: "schedule\(list.count + 1)", cron: "0 9 * * *", tz: TimeZone.current.identifier, prompt: "", deliverTo: "owner"))
+                    def?.schedules = list
+                    editingSchedule = list.count - 1
+                }
+                Button("+ When an email arrives") { askInChat("When an email from ") }
+                Button("+ When a file appears") { askInChat("When a file appears in ~/") }
+                Button("+ From a link (webhook)") { askInChat("Give me a link other apps can call; when it's called, ") }
+            }
+            .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 14).frame(height: 40, alignment: .leading)
+            SetupRow("Quiet hours", subtitle: "Messages wait until they end; urgent ones don't") {
+                TextField("22:30-07:30", text: policy(\.quietHours)).textFieldStyle(.roundedBorder).frame(width: 110)
+            }
+            SetupRow("Time zone", subtitle: def?.timezone == nil ? "From this Mac" : nil) {
+                TextField(TimeZone.current.identifier, text: Binding(get: { def?.timezone ?? "" }, set: { def?.timezone = $0.isEmpty ? nil : $0 }))
+                    .textFieldStyle(.roundedBorder).frame(width: 180)
+            }
+        }
+    }
+
+    /// One tool (or app) and whether it may use it: Off · Asks · Allowed (design 2c), in place of one approval mode.
+    private struct ToolChoice { let title: String; let detail: String; let tools: [String]; let apple: String? }
+
+    private static let toolChoices: [ToolChoice] = [
+        .init(title: "Search and read the web", detail: "", tools: ["web_search", "web_fetch"], apple: nil),
+        .init(title: "Remember things", detail: "remember, recall, forget", tools: ["memory"], apple: nil),
+        .init(title: "Send messages", detail: "to you, and to people it knows", tools: ["send_message"], apple: nil),
+        .init(title: "Set reminders and schedules", detail: "", tools: ["schedule"], apple: nil),
+        .init(title: "Reminders", detail: "read, add, tick", tools: [], apple: "reminders"),
+        .init(title: "Calendar", detail: "events and free time", tools: [], apple: "calendar"),
+        .init(title: "Contacts", detail: "look people up", tools: [], apple: "contacts"),
+        .init(title: "Notes", detail: "search, read, write", tools: [], apple: "notes"),
+        .init(title: "Music", detail: "play and control", tools: [], apple: "music"),
+    ]
+
+    private var toolsGroup: some View {
+        SetupGroup("Tools", footer: "Mac apps are served by Piopio while it's open; macOS asks once per app. Changes can be undone.") {
+            ForEach(Self.toolChoices, id: \.title) { c in
+                SetupRow(c.title, subtitle: c.detail.isEmpty ? nil : c.detail) {
+                    NeutralSegmented(selection: Binding(get: { level(c) }, set: { setLevel(c, $0) }), options: [("off", "Off"), ("asks", "Asks"), ("allowed", "Allowed")])
+                        .frame(width: 210)
+                }
+            }
+            SetupRow("Shortcuts", subtitle: "Names it may run, comma-separated") {
+                TextField("Log water, Morning routine", text: Binding(get: { def?.tools.shortcuts?.joined(separator: ", ") ?? "" }, set: { v in
+                    let names = v.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                    def?.tools.shortcuts = names.isEmpty ? nil : names
+                }))
+                .textFieldStyle(.roundedBorder).frame(width: 260)
+            }
+        }
+    }
+
+    /// The rules that make a choice ask first: its tools by name, or `apple_<app>_*`.
+    private func rules(_ c: ToolChoice) -> [String] { c.apple.map { ["apple_\($0)_*"] } ?? c.tools }
+
+    private func level(_ c: ToolChoice) -> String {
+        guard let def else { return "off" }
+        let on = c.apple.map { def.tools.apple?.contains($0) ?? false } ?? c.tools.contains { def.tools.builtin.contains($0) }
+        guard on else { return "off" }
+        let asks = (def.policies?.requireApproval ?? []).contains { rule in
+            rule == "*" || rules(c).contains { rule == $0 || rule.hasPrefix($0 + ":") } || (c.apple.map { rule.hasPrefix("apple_\($0)_") || rule == "apple_*" } ?? false)
+        }
+        return asks ? "asks" : "allowed"
+    }
+
+    private func setLevel(_ c: ToolChoice, _ value: String) {
+        guard var d = def else { return }
+        if let app = c.apple {
+            var apps = (d.tools.apple ?? []).filter { $0 != app }
+            if value != "off" { apps.append(app) }
+            d.tools.apple = apps.isEmpty ? nil : apps
+        } else {
+            d.tools.builtin.removeAll { c.tools.contains($0) }
+            if value != "off" { d.tools.builtin.append(contentsOf: c.tools) }
+        }
+        var p = d.policies ?? .init()
+        var list = (p.requireApproval ?? []).filter { rule in !rules(c).contains { rule == $0 || rule.hasPrefix($0 + ":") } && !(c.apple.map { rule.hasPrefix("apple_\($0)_") } ?? false) }
+        if value == "asks" { list.append(contentsOf: rules(c)) }
+        p.requireApproval = list.isEmpty ? nil : list
+        d.policies = p
+        def = d
+    }
+
+    /// Where it reaches you: Piopio, and Telegram once connected (connecting is a token pasted in its chat).
+    private var channelsGroup: some View {
+        SetupGroup("Channels") {
+            SetupRow("In Piopio", subtitle: "Its chat here, and notifications") { Text("Always").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+            if def?.channels?["telegram"] != nil {
+                SetupRow("Telegram", subtitle: "Messages reach you there too") { Text("Connected").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
+            } else {
+                SetupRow("Telegram", subtitle: "Make a bot with @BotFather, then paste its token in this agent's chat") {
+                    Button("Add Telegram") { askInChat("") }.buttonStyle(PillStyle(compact: true))
+                }
+            }
+        }
+    }
+
     // MARK: Groups
 
     private var instructionsGroup: some View {
-        SetupGroup("Instructions", trailing: "Markdown · \(instructions.count / 4) tokens") {
+        SetupGroup("Who it is and what it does", trailing: "Markdown · \(instructions.count / 4) tokens") {
             SetupRow("Name") {
                 HStack(spacing: 6) {
                     AvatarPicker(avatar: optional(\.avatar))
@@ -177,114 +372,8 @@ struct AgentDefinitionView: View {
         }
     }
 
-    /// The tools that work today, by what they let the agent do (the rest stay hidden until they arrive).
-    private static let abilities: [(title: String, tools: [String], ids: String)] = [
-        ("Search and read the web", ["web_search", "web_fetch"], "Web search, fetch pages"),
-        ("Remember things", ["memory"], "Remember, recall, forget"),
-        ("Send messages", ["send_message"], "send_message"),
-        ("Set reminders and schedules", ["schedule"], "schedule, list_schedules, cancel_schedule"),
-    ]
-
-    private var abilitiesGroup: some View {
-        SetupGroup("Abilities", footer: "HTTP requests, code and workspace files are coming later and stay hidden until then.") {
-            ForEach(Self.abilities, id: \.title) { a in
-                // On when any of its tools is: an agent.json can list web_fetch alone, and the engine runs exactly
-                // what's listed. Turning the toggle off removes them all; on adds them all.
-                let listed = a.tools.filter { def?.tools.builtin.contains($0) ?? false }
-                let on = !listed.isEmpty
-                SetupRow(a.title, subtitle: !on ? "Off" : listed.count < a.tools.count ? "Only \(listed.joined(separator: ", "))" : subtitle(for: a)) {
-                    HStack(spacing: 10) {
-                        if on {
-                            let asks = asksFirst(a.tools)
-                            Text(asks == nil ? "Allowed" : "Asks first").font(.system(size: 12)).foregroundStyle(asks == nil ? Color.dsFg3 : Color.dsAmber)
-                        }
-                        Toggle("", isOn: Binding(get: { on }, set: { value in
-                            guard var d = def else { return }
-                            d.tools.builtin.removeAll { a.tools.contains($0) }
-                            if value { d.tools.builtin.append(contentsOf: a.tools) }
-                            def = d
-                        }))
-                        .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                    }
-                }
-            }
-        }
-    }
-
-    /// The approval rule that makes these tools ask first, if any.
-    private func asksFirst(_ tools: [String]) -> String? {
-        (def?.policies?.requireApproval ?? []).first { rule in tools.contains { rule == $0 || rule.hasPrefix($0 + ":") || rule == "*" } }
-    }
-
-    private func subtitle(for a: (title: String, tools: [String], ids: String)) -> String {
-        if a.tools == ["send_message"], let rule = asksFirst(a.tools) {
-            return rule.hasSuffix("to_non_owner") ? "To you; to others asks first" : "Asks before each message"
-        }
-        return a.ids
-    }
-
-    private static let appleChoices: [(String, String, String)] = [
-        ("reminders", "Reminders", "Read, add, tick and reschedule"), ("calendar", "Calendar", "Events and free time, add and move"),
-        ("contacts", "Contacts", "Look people up (read only)"), ("notes", "Notes", "Search, read, write"), ("music", "Music", "Play and control"),
-    ]
-
-    private var macAppsGroup: some View {
-        SetupGroup("Mac apps", footer: "Served by Piopio while it's open; macOS asks once per app. Changes can be undone.") {
-            ForEach(Self.appleChoices, id: \.0) { id, title, sub in
-                SetupRow(title, subtitle: sub) {
-                    Toggle("", isOn: Binding(get: { def?.tools.apple?.contains(id) ?? false }, set: { on in
-                        guard var d = def else { return }
-                        var groups = (d.tools.apple ?? []).filter { $0 != id }
-                        if on { groups.append(id) }
-                        d.tools.apple = groups.isEmpty ? nil : groups
-                        def = d
-                    }))
-                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                }
-            }
-            SetupRow("Shortcuts", subtitle: "Names it may run, comma-separated") {
-                TextField("Log water, Morning routine", text: Binding(get: { def?.tools.shortcuts?.joined(separator: ", ") ?? "" }, set: { v in
-                    let names = v.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-                    def?.tools.shortcuts = names.isEmpty ? nil : names
-                }))
-                .textFieldStyle(.roundedBorder).frame(width: 260)
-            }
-        }
-    }
-
-    private var scheduleGroup: some View {
-        SetupGroup("Schedule", footer: "cron: minute hour day month weekday, in the agent's time zone. Activity shows each run.") {
-            ForEach(Array((def?.schedules ?? []).enumerated()), id: \.offset) { i, s in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
-                        Text(CronText.describe(s.cron)).font(.system(size: 13, weight: .medium))
-                        Spacer()
-                        TextField("0 8 * * 1-5", text: scheduleBinding(i, \.cron)).textFieldStyle(.roundedBorder).frame(width: 110).font(.system(size: 12, design: .monospaced))
-                        Button { def?.schedules?.remove(at: i) } label: { Image(systemName: "minus.circle") }.buttonStyle(.plain).foregroundStyle(Color.dsFg3)
-                    }
-                    TextField("What to do", text: scheduleBinding(i, \.prompt)).textFieldStyle(.roundedBorder)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-            }
-            Button("+ Add a schedule") {
-                var list = def?.schedules ?? []
-                list.append(.init(id: "schedule\(list.count + 1)", cron: "0 9 * * *", tz: TimeZone.current.identifier, prompt: "", deliverTo: "owner"))
-                def?.schedules = list
-            }
-            .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.accentColor)
-            .padding(.horizontal, 14).frame(height: 40, alignment: .leading)
-            SetupRow("Time zone") {
-                TextField(TimeZone.current.identifier, text: Binding(get: { def?.timezone ?? "" }, set: { def?.timezone = $0.isEmpty ? nil : $0 }))
-                    .textFieldStyle(.roundedBorder).frame(width: 180)
-            }
-            SetupRow("Quiet hours", subtitle: "Messages wait until they end") {
-                TextField("22:30-07:30", text: policy(\.quietHours)).textFieldStyle(.roundedBorder).frame(width: 110)
-            }
-        }
-    }
-
     private var peopleGroup: some View {
-        SetupGroup("People", footer: "The owner is who the agent works for; contacts only see their own memory.") {
+        SetupGroup("People and agents", footer: "The owner is who the agent works for; contacts only see their own memory.") {
             ForEach(Array((def?.contacts ?? []).enumerated()), id: \.offset) { i, _ in
                 HStack(spacing: 6) {
                     TextField("Name", text: contactBinding(i, \.name)).textFieldStyle(.roundedBorder).frame(width: 140)

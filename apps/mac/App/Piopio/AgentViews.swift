@@ -107,54 +107,49 @@ struct AgentPage: View {
     let summary: SessionSummary
     @Binding var selection: String?
     @AppStorage("agentTab") private var tab: Tab = .chat
-    @AppStorage("agentInfo") private var showInfo = true
-    /// Below `infoBesideWidth` the panel can't sit beside the conversation: Info opens it over the conversation
-    /// instead, and only for this visit (the saved `showInfo` is for wide windows).
-    @State private var infoOver = false
-    @State private var wide = true
-    private static let infoBesideWidth: CGFloat = 760
-    /// Whose conversation shows: the owner's (nil), a contact's (`person:<id>`), another agent's (`agent:<id>`).
+    /// Whose conversation shows: the owner's (nil), a contact's (`person:<id>`), another agent's (`agent:<id>`), or a
+    /// run's (`run:<id>`, from its line in the chat).
     @State private var conversation: String?
     @State private var people: [AgentPerson] = []
     @State private var runs: AgentRunsResult?
     @State private var def: AgentDef?
     @State private var instructions = ""
+    /// The Setup section a glance cell opens.
+    @State private var setupSection: String?
 
-    /// What the main area shows: the conversation, or the runs or the setup opened from the info panel.
+    /// Chat first, Setup for later (docs/spec/21 D3, design 2a). "Activity" is gone: runs are lines in the chat.
     enum Tab: String, CaseIterable { case chat = "Chat", activity = "Activity", setup = "Setup" }
-
-    private var infoPanel: some View {
-        AgentInfoPanel(engine: engine, summary: summary, def: def, instructions: instructions, runs: runs, tab: $tab) { await load() }
-            .frame(width: 300).sidePanel()
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             switch tab {
-            case .chat:
-                GeometryReader { proxy in
-                    HStack(spacing: 0) {
-                        chat
-                        if showInfo && wide { infoPanel }
-                    }
-                    .overlay(alignment: .trailing) {
-                        if infoOver && !wide {
-                            infoPanel.shadow(color: .black.opacity(0.12), radius: 12, x: -2).transition(.move(edge: .trailing))
-                        }
-                    }
-                    .onChange(of: proxy.size.width >= Self.infoBesideWidth, initial: true) { _, isWide in
-                        wide = isWide
-                        if isWide { infoOver = false }
-                    }
+            case .setup:
+                AgentDefinitionView(engine: engine, summary: summary, section: $setupSection) { text in
+                    // An event routine is set by asking (it has no form yet): the chat, with the request started.
+                    engine.thread(summary.ref).composerText = text
+                    conversation = nil
+                    tab = .chat
                 }
-            case .activity: AgentRunsView(engine: engine, summary: summary)
-            case .setup: AgentDefinitionView(engine: engine, summary: summary)
+            default:
+                glance
+                if let conversation { backBar(conversation) }
+                chat
             }
         }
         .task(id: summary.updatedAt) { await load() }
-        .onAppear { openSearchTarget() }
+        .onAppear {
+            if tab == .activity { tab = .chat }
+            openSearchTarget()
+            // PIOPIO_DEMO_SETUP_SECTION=<section>: captures open Setup there.
+            if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETUP_SECTION"] { setupSection = demo; tab = .setup }
+        }
         .onChange(of: engine.searchTarget?.id) { _, _ in openSearchTarget() }
+        .onReceive(NotificationCenter.default.publisher(for: .openAgentRun)) { note in
+            guard let id = note.object as? String else { return }
+            conversation = id
+            tab = .chat
+        }
     }
 
     private func openSearchTarget() {
@@ -183,278 +178,177 @@ struct AgentPage: View {
         }
     }
 
-    /// "Daily briefing  Next run tomorrow at 8:00", then Run now and the info toggle. In Activity or Setup the title is
-    /// a breadcrumb back to the conversation.
+    /// Back to your chat from a run, a contact's or another agent's conversation.
+    private func backBar(_ conversation: String) -> some View {
+        let person = people.first { $0.conversationId == conversation }
+        let what = conversation.hasPrefix("run:") ? (runs?.runs.first { "run:\($0.id)" == conversation }.map { "Run · \(HomeView.at($0.firedAt))" } ?? "A run")
+            : person.map { $0.role == "agent" ? "With \($0.name) (agent)" : "With \($0.name)" } ?? ""
+        return HStack(spacing: 8) {
+            Button { self.conversation = nil } label: { Label("Your chat", systemImage: "chevron.left").font(.system(size: 12.5)) }
+                .buttonStyle(.plain).foregroundStyle(Color.dsFg2)
+            Text(what).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+            Spacer()
+        }
+        .padding(.horizontal, 20).frame(height: 32)
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+    }
+
+    /// Avatar, name and its one line; Chat | Setup, Run now and the rest in a menu (design 2a).
     private var header: some View {
         PageHeader {
-            if tab == .chat {
-                PageTitle(name: summary.title, subtitle: statusLine)
-            } else {
-                HStack(spacing: 6) {
-                    Button(summary.title) { tab = .chat }.buttonStyle(.plain).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2)
-                    Text("/").font(.system(size: 13.5)).foregroundStyle(Color.dsFg3)
-                    Text(tab == .activity ? "Activity" : "Setup").font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
+            HStack(spacing: 10) {
+                SidebarAvatar(id: summary.ref.id, name: summary.title, glyph: summary.agent?.avatar, size: 22)
+                Text(summary.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)
+                if let line = summary.agent?.description ?? def?.description, !line.isEmpty {
+                    Text(line).font(.system(size: 13)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                }
+                if summary.agent?.status?.paused == true {
+                    Text("Paused").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6).padding(.vertical, 1).background(Color.dsChip, in: Capsule())
                 }
             }
         } actions: {
             if summary.agent?.invalid == true {
                 Button("Setup has errors") { tab = .setup }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
             }
-            if tab == .chat && people.count > 1 { personPicker }
-            // Views as icons (docs/design/session-panel): the info panel beside the conversation, and Activity and
-            // Setup in its place (the lit one goes back to the conversation).
-            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Info", on: tab == .chat && (wide ? showInfo : infoOver),
-                        help: "What it does, when, and what it can do") {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    if tab != .chat {
-                        tab = .chat
-                        if wide { showInfo = true } else { infoOver = true }
-                    } else if wide { showInfo.toggle() } else { infoOver.toggle() }
-                }
-            }
-            ToolbarIcon(symbol: "clock.arrow.circlepath", label: "Activity", on: tab == .activity, help: "Its runs: what fired, what it did, what it cost") {
-                tab = tab == .activity ? .chat : .activity
-            }
-            ToolbarIcon(symbol: "slider.horizontal.3", label: "Setup", on: tab == .setup, help: "Its full setup") {
-                tab = tab == .setup ? .chat : .setup
-            }
-            ToolbarIcon(symbol: "play", label: "Run now", help: "Run it now") { runNow() }
-            ToolbarDivider()
+            NeutralSegmented(selection: Binding(get: { tab == .setup ? "setup" : "chat" }, set: { tab = $0 == "setup" ? .setup : .chat }), options: [("chat", "Chat"), ("setup", "Setup")])
+                .frame(width: 150)
+            Button("Run now", action: runNow).buttonStyle(PillStyle(compact: true)).help("Run it now, as if its schedule fired")
             Menu {
                 if let status = summary.agent?.status {
                     Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
                     Divider()
                 }
+                let others = people.filter { $0.role != "owner" }
+                if !others.isEmpty {
+                    Menu("Conversations") {
+                        Button("Yours") { conversation = nil; tab = .chat }
+                        ForEach(others) { p in Button(p.role == "agent" ? "\(p.name) (agent)" : p.name) { conversation = p.conversationId; tab = .chat } }
+                    }
+                    Divider()
+                }
                 Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
             } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
                 .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-                .help("Pause, Finder")
+                .help("Pause, conversations, Finder")
         }
     }
 
-    /// "Next run tomorrow at 8:00", "Paused".
-    private var statusLine: String {
-        if summary.agent?.status?.paused == true { return "Paused" }
-        if let next = summary.agent?.status?.nextRun { return "Next run \(HomeView.at(next).prefix(1).lowercased() + HomeView.at(next).dropFirst())" }
-        return ""
+    // MARK: Glance
+
+    /// Four things at a glance (design 2a): when it acts next, what it can do, where it reaches you, what it spends.
+    /// Each opens its section in Setup.
+    private var glance: some View {
+        HStack(spacing: 0) {
+            cell("Next", section: "When it acts") { nextLine }
+            divider
+            cell("Can", section: "What it can use") { Text(canLine).lineLimit(1) }
+            divider
+            cell("Reaches you", section: "Who it talks to") { reachesLine }
+            divider
+            cell("This month", section: "Limits") { spendLine }
+        }
+        .frame(height: 58)
+        .overlay(alignment: .top) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 
-    private var personPicker: some View {
-        let current = people.first { $0.conversationId == conversation }
-        let ownerName = people.first { $0.role == "owner" }?.name ?? "you"
-        return Menu {
-            Button("\(ownerName) (you)") { conversation = nil }
-            let others = people.filter { $0.role != "owner" }
-            if !others.isEmpty {
-                Divider()
-                ForEach(others) { p in
-                    Button(p.role == "agent" ? "\(p.name) (agent)" : p.name) { conversation = p.conversationId }
-                }
-            }
+    private var divider: some View { Rectangle().fill(Color.dsLine).frame(width: 0.5) }
+
+    private func cell<V: View>(_ label: String, section: String, @ViewBuilder value: () -> V) -> some View {
+        Button {
+            setupSection = section
+            tab = .setup
         } label: {
-            Text(current.map { $0.role == "owner" ? "with \($0.name) (you)" : "with \($0.name)" } ?? "with \(ownerName) (you)")
+            VStack(alignment: .leading, spacing: 3) {
+                Text(label).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                value().font(.system(size: 13)).foregroundStyle(Color.dsFg)
+            }
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
-        .help("Whose conversation to show (contacts' are simulated here until channels arrive)")
+        .buttonStyle(.plain)
+        .help("Change it in Setup")
+    }
+
+    /// "Tomorrow 8:00 · weekdays", "When an email arrives", "Nothing scheduled".
+    @ViewBuilder private var nextLine: some View {
+        let timed = (runs?.upcoming ?? []).filter { $0.next != nil }.sorted { ($0.next ?? "") < ($1.next ?? "") }
+        if summary.agent?.status?.paused == true {
+            Text("Paused").foregroundStyle(Color.dsFg2)
+        } else if let first = timed.first, let next = first.next {
+            let schedule = def?.schedules?.first { $0.id == first.id }
+            (Text(HomeView.at(next).replacingOccurrences(of: " at ", with: " ")) + Text(schedule.flatMap { Self.cadence($0.cron) }.map { " · \($0)" } ?? "").foregroundStyle(Color.dsFg3))
+                .lineLimit(1)
+        } else if let next = summary.agent?.status?.nextRun {
+            Text(HomeView.at(next)).lineLimit(1)
+        } else if (runs?.upcoming ?? []).contains(where: { $0.kind == "watch" }) {
+            Text("When something happens").foregroundStyle(Color.dsFg2)
+        } else {
+            Text("Only when you ask").foregroundStyle(Color.dsFg2)
+        }
+    }
+
+    /// "weekdays", "every day", "Mondays": how often a cron fires, in a word or two.
+    static func cadence(_ cron: String) -> String? {
+        let f = cron.split(separator: " ").map(String.init)
+        guard f.count == 5, f[2] == "*", f[3] == "*" else { return nil }
+        switch f[4] {
+        case "*": return "every day"
+        case "1-5": return "weekdays"
+        case "0,6", "6,0": return "weekends"
+        default:
+            let names = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"]
+            return Int(f[4]).map { names[$0 % 7] }
+        }
+    }
+
+    /// "Web · Memory · Message you".
+    private var canLine: String {
+        guard let def else { return "…" }
+        var out: [String] = []
+        let tools = Set(def.tools.builtin)
+        if tools.contains("web_search") || tools.contains("web_fetch") { out.append("Web") }
+        if tools.contains("memory") { out.append("Memory") }
+        if tools.contains("send_message") { out.append("Message you") }
+        for app in def.tools.apple ?? [] { out.append(app.capitalized) }
+        return out.isEmpty ? "Only talk" : out.joined(separator: " · ")
+    }
+
+    /// "In Piopio · Add Telegram", or "In Piopio · Telegram".
+    private var reachesLine: some View {
+        let telegram = def?.channels?["telegram"] != nil
+        return (Text("In Piopio") + Text(telegram ? " · Telegram" : " · Add Telegram").foregroundStyle(telegram ? Color.dsFg : Color.accentColor)).lineLimit(1)
+    }
+
+    /// "$0.05 of $15", with a bar.
+    private var spendLine: some View {
+        let status = summary.agent?.status
+        let spent = status?.spendUsd ?? 0
+        let budget = status?.budgetUsd
+        return HStack(spacing: 8) {
+            Text(budget.map { "\(MainSidebar.money(spent)) of \(MainSidebar.money($0))" } ?? MainSidebar.money(spent)).lineLimit(1)
+            if let budget, budget > 0 {
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.dsChip)
+                    Capsule().fill(spent / budget >= 0.8 ? Color.dsAmber : Color.accentColor).frame(width: 80 * min(1, spent / budget))
+                }
+                .frame(width: 80, height: 4)
+            }
+        }
     }
 
     private func runNow() {
         Task {
             let upcoming = runs?.upcoming.first { $0.kind == "schedule" }
             _ = try? await engine.agentRunNow(summary.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
+            conversation = nil
+            tab = .chat
             await load()
         }
     }
 }
 
-/// The info panel (docs/design/grey 13a, regrouped by docs/design/summary/ia.html): who it is, Now (while it works),
-/// Made (last run, next), Context (Remembers), Setup (Does, When, Can with switches, Reaches, Runs on), and a footer
-/// with the model and what it cost this month.
-private struct AgentInfoPanel: View {
-    let engine: EngineController
-    let summary: SessionSummary
-    let def: AgentDef?
-    let instructions: String
-    let runs: AgentRunsResult?
-    @Binding var tab: AgentPage.Tab
-    let reload: () async -> Void
-    @State private var facts: [MemoryRecordInfo] = []
-    @State private var saving = false
-    @State private var error: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // docs/design/summary/ia.html: who it is, then the groups in order of attention (Now, Made, Context,
-            // Setup), each a card of verbs (SummaryCard.swift). For an agent the setup is its identity, so it's fuller.
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(summary.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg)
-                        if let line = def?.description ?? summary.agent?.description, !line.isEmpty {
-                            Text(line).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(.bottom, 2)
-                    now
-                    made
-                    if !facts.isEmpty {
-                        VStack(alignment: .leading, spacing: 9) {
-                            GroupHeader("Context") { SummaryLink("See all") { tab = .setup }.help("Everything it remembers") }
-                            CardRow("Remembers") {
-                                ForEach(facts.prefix(3)) { f in Text(f.text).font(.system(size: 13)).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
-                                if facts.count > 3 { Text("and \(facts.count - 3) more").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                            }
-                        }
-                        .summaryGroup()
-                    }
-                    VStack(alignment: .leading, spacing: 9) {
-                        GroupHeader("Setup") { SummaryLink("Edit") { tab = .setup }.help("Its instructions, schedule and tools") }
-                        CardRow("Does") {
-                            Text(does).font(.system(size: 13)).lineSpacing(2).lineLimit(6).fixedSize(horizontal: false, vertical: true)
-                        }
-                        CardRow("When") {
-                            let schedules = def?.schedules ?? []
-                            if schedules.isEmpty {
-                                Text("When you write to it").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-                            }
-                            ForEach(schedules) { s in Text(CronText.describe(s.cron)).font(.system(size: 13)) }
-                        }
-                        CardRow("Can") {
-                            ability("Search the web", ["web_search", "web_fetch"])
-                            ability("Remember things", ["memory"])
-                            ability("Message you", ["send_message"])
-                            ability("Set reminders", ["schedule"])
-                            if !(def?.tools.apple ?? []).isEmpty {
-                                row("Use Mac apps") { Text("\(def?.tools.apple?.count ?? 0)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
-                            }
-                        }
-                        CardRow("Reaches") { Text("You in Piopio").font(.system(size: 13)) }
-                        CardRow("Runs on") { Text("This Mac").font(.system(size: 13)) }
-                        if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
-                    }
-                    .padding(.vertical, 14)
-                }
-                .padding(.horizontal, 20).padding(.top, 18)
-            }
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(model).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(1)
-                    Spacer()
-                    Text(month).font(.system(size: 12)).foregroundStyle(Color.dsFg3).monospacedDigit()
-                }
-                AgentAvailability(engine: engine, summary: summary, hasMacTools: !(def?.tools.apple ?? []).isEmpty)
-            }
-            .padding(.horizontal, 20).padding(.vertical, 14)
-        }
-        .task(id: summary.updatedAt) { await loadFacts() }
-    }
-
-    // MARK: Now and Made
-
-    /// While it works on a run or waits for your approval.
-    @ViewBuilder private var now: some View {
-        let status = engine.thread(summary.ref).state?.status
-        if status == .running || status == .waitingApproval {
-            NowGroup(waiting: status == .waitingApproval, title: "Working",
-                     detail: status == .waitingApproval ? "It's asking in the conversation" : nil)
-        }
-    }
-
-    /// What its runs did: the last one, and when the next is.
-    @ViewBuilder private var made: some View {
-        let last = runs?.runs.first
-        let next = runs?.upcoming.compactMap(\.next).sorted().first
-        if last != nil || next != nil {
-            VStack(alignment: .leading, spacing: 9) {
-                GroupHeader("Made") {
-                    if last != nil { SummaryLink("See all") { tab = .activity }.help("Every run") }
-                }
-                if let last {
-                    CardRow("Last run") {
-                        Text(BuildSessionView.relative(last.firedAt)).font(.system(size: 13))
-                        Text(last.status == "done" ? (last.sent > 0 ? "sent \(last.sent) message\(last.sent == 1 ? "" : "s")" : "nothing to send") : last.status)
-                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    }
-                }
-                if let next {
-                    CardRow("Next") { Text(Self.when(next)).font(.system(size: 13)) }
-                }
-            }
-            .summaryGroup()
-        }
-    }
-
-    /// "Today 8:00", "Tomorrow 8:00", "Mon 10 Nov 8:00".
-    static func when(_ iso: String) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
-        let time = date.formatted(date: .omitted, time: .shortened)
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return "Today \(time)" }
-        if calendar.isDateInTomorrow(date) { return "Tomorrow \(time)" }
-        return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) + " " + time
-    }
-
-    private func row<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack {
-            Text(title).font(.system(size: 13)).foregroundStyle(Color.dsFg)
-            Spacer()
-            trailing()
-        }
-        .frame(minHeight: 22)
-    }
-
-    /// A switch for built-in tools; it saves the agent's definition (a commit in its history).
-    private func ability(_ title: String, _ tools: [String]) -> some View {
-        let on = !(def?.tools.builtin ?? []).filter(tools.contains).isEmpty
-        return row(title) {
-            Toggle("", isOn: Binding(get: { on }, set: { set(tools, $0, title) }))
-                .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(Color.dsInv).disabled(def == nil || saving)
-        }
-    }
-
-    private func set(_ tools: [String], _ on: Bool, _ title: String) {
-        guard var d = def else { return }
-        var builtin = d.tools.builtin.filter { !tools.contains($0) }
-        if on { builtin += tools }
-        d.tools.builtin = builtin
-        saving = true
-        error = nil
-        Task {
-            defer { saving = false }
-            do {
-                _ = try await engine.saveAgent(summary.ref, definition: d.json, instructions: instructions, message: "\(on ? "Allow" : "Stop"): \(title.lowercased())")
-                await reload()
-            } catch {
-                self.error = (error as? EngineError)?.message ?? String(describing: error)
-            }
-        }
-    }
-
-    /// The instructions' first paragraph, without Markdown headings.
-    private var does: String {
-        let paragraphs = instructions.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let first = paragraphs.first { !$0.isEmpty && !$0.hasPrefix("#") } ?? ""
-        return first.isEmpty ? "No instructions yet." : first.replacingOccurrences(of: "\n", with: " ")
-    }
-
-    private var model: String {
-        engine.model(modelRef(def?.models.default ?? summary.agent?.model)).map(ModelChip.short) ?? def?.models.default ?? "No model"
-    }
-
-    private var month: String {
-        guard let s = summary.agent?.status else { return "" }
-        let spent = s.spendUsd < 0.01 && s.spendUsd > 0 ? String(format: "$%.4f", s.spendUsd) : String(format: "$%.2f", s.spendUsd)
-        return (s.budgetUsd.map { "\(spent) of \(MainSidebar.money($0))" } ?? spent) + " this month"
-    }
-
-    private func loadFacts() async {
-        guard let memory = await engine.agentMemory(summary.ref), let owner = memory.partitions.first(where: { $0.id == "owner" }) else { return }
-        facts = (await engine.memoryList(provider: memory.provider, bank: owner.bank)?.records ?? []).filter { $0.kind != "message" }
-    }
-}
 
 /// "anthropic/claude-…" is an OpenRouter id; other providers are written "provider:model".
 func modelRef(_ id: String?) -> ModelRef? {

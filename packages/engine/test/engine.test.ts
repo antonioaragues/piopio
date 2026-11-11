@@ -1833,8 +1833,12 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 			["One more", "limit"],
 			["And another", "limit"],
 		]);
-		const items = await until(ownerItems, (xs) => xs.some((i) => i.kind === "system"));
-		expect(items.filter((i) => i.kind === "system").map((i) => (i.kind === "system" ? i.text : ""))).toEqual(["Helper reached its limit of 2 messages today; the rest wait until tomorrow."]);
+		const items = await until(ownerItems, (xs) => xs.some((i) => i.kind === "system" && !i.run));
+		expect(items.filter((i) => i.kind === "system" && !i.run).map((i) => (i.kind === "system" ? i.text : ""))).toEqual(["Helper reached its limit of 2 messages today; the rest wait until tomorrow."]);
+		const lines = items.flatMap((i) => (i.kind === "system" && i.run ? [i.text] : []));
+		// Each run is a line in the owner's conversation (docs/spec/21 D3), in order: the reminder and the trigger wrote;
+		// the held ones' messages haven't arrived.
+		expect(lines).toEqual(["Automatic run · wrote to you", "Automatic run · nothing new, didn't write", "Automatic run · wrote to you", "Run now · nothing new, didn't write", "Run now · nothing new, didn't write"]);
 		expect(outbound(items)).toHaveLength(2);
 	}, 60_000);
 });

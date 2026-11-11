@@ -217,6 +217,8 @@ export const SystemItem = Type.Object({
 	at: Type.String(),
 	level: literals("info", "warn", "error"),
 	text: Type.String(),
+	/** A run of the agent, shown in its owner's conversation as a divider (docs/spec/21 D3); opens as `run:<id>`. */
+	run: Type.Optional(Type.Object({ id: Type.String(), status: literals("running", "done", "failed", "skipped"), sent: Type.Number(), summary: Type.Optional(Type.String()), costUsd: Type.Optional(Type.Number()) })),
 });
 export const CompactionItem = Type.Object({
 	kind: Type.Literal("compaction"),

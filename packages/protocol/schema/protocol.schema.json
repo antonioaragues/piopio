@@ -678,6 +678,48 @@
 						},
 						"text": {
 							"type": "string"
+						},
+						"run": {
+							"type": "object",
+							"required": [
+								"id",
+								"status",
+								"sent"
+							],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"status": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "running"
+										},
+										{
+											"type": "string",
+											"const": "done"
+										},
+										{
+											"type": "string",
+											"const": "failed"
+										},
+										{
+											"type": "string",
+											"const": "skipped"
+										}
+									]
+								},
+								"sent": {
+									"type": "number"
+								},
+								"summary": {
+									"type": "string"
+								},
+								"costUsd": {
+									"type": "number"
+								}
+							}
 						}
 					}
 				},
@@ -2897,6 +2939,48 @@
 										},
 										"text": {
 											"type": "string"
+										},
+										"run": {
+											"type": "object",
+											"required": [
+												"id",
+												"status",
+												"sent"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "running"
+														},
+														{
+															"type": "string",
+															"const": "done"
+														},
+														{
+															"type": "string",
+															"const": "failed"
+														},
+														{
+															"type": "string",
+															"const": "skipped"
+														}
+													]
+												},
+												"sent": {
+													"type": "number"
+												},
+												"summary": {
+													"type": "string"
+												},
+												"costUsd": {
+													"type": "number"
+												}
+											}
 										}
 									}
 								},
@@ -4607,6 +4691,48 @@
 										},
 										"text": {
 											"type": "string"
+										},
+										"run": {
+											"type": "object",
+											"required": [
+												"id",
+												"status",
+												"sent"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "running"
+														},
+														{
+															"type": "string",
+															"const": "done"
+														},
+														{
+															"type": "string",
+															"const": "failed"
+														},
+														{
+															"type": "string",
+															"const": "skipped"
+														}
+													]
+												},
+												"sent": {
+													"type": "number"
+												},
+												"summary": {
+													"type": "string"
+												},
+												"costUsd": {
+													"type": "number"
+												}
+											}
 										}
 									}
 								},
@@ -6297,6 +6423,48 @@
 										},
 										"text": {
 											"type": "string"
+										},
+										"run": {
+											"type": "object",
+											"required": [
+												"id",
+												"status",
+												"sent"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"status": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "running"
+														},
+														{
+															"type": "string",
+															"const": "done"
+														},
+														{
+															"type": "string",
+															"const": "failed"
+														},
+														{
+															"type": "string",
+															"const": "skipped"
+														}
+													]
+												},
+												"sent": {
+													"type": "number"
+												},
+												"summary": {
+													"type": "string"
+												},
+												"costUsd": {
+													"type": "number"
+												}
+											}
 										}
 									}
 								},
@@ -8574,6 +8742,48 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"run": {
+														"type": "object",
+														"required": [
+															"id",
+															"status",
+															"sent"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "running"
+																	},
+																	{
+																		"type": "string",
+																		"const": "done"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "skipped"
+																	}
+																]
+															},
+															"sent": {
+																"type": "number"
+															},
+															"summary": {
+																"type": "string"
+															},
+															"costUsd": {
+																"type": "number"
+															}
+														}
 													}
 												}
 											},
@@ -10832,6 +11042,48 @@
 									},
 									"text": {
 										"type": "string"
+									},
+									"run": {
+										"type": "object",
+										"required": [
+											"id",
+											"status",
+											"sent"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "running"
+													},
+													{
+														"type": "string",
+														"const": "done"
+													},
+													{
+														"type": "string",
+														"const": "failed"
+													},
+													{
+														"type": "string",
+														"const": "skipped"
+													}
+												]
+											},
+											"sent": {
+												"type": "number"
+											},
+											"summary": {
+												"type": "string"
+											},
+											"costUsd": {
+												"type": "number"
+											}
+										}
 									}
 								}
 							},
@@ -13410,6 +13662,48 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"run": {
+														"type": "object",
+														"required": [
+															"id",
+															"status",
+															"sent"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "running"
+																	},
+																	{
+																		"type": "string",
+																		"const": "done"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "skipped"
+																	}
+																]
+															},
+															"sent": {
+																"type": "number"
+															},
+															"summary": {
+																"type": "string"
+															},
+															"costUsd": {
+																"type": "number"
+															}
+														}
 													}
 												}
 											},
@@ -15120,6 +15414,48 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"run": {
+														"type": "object",
+														"required": [
+															"id",
+															"status",
+															"sent"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "running"
+																	},
+																	{
+																		"type": "string",
+																		"const": "done"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "skipped"
+																	}
+																]
+															},
+															"sent": {
+																"type": "number"
+															},
+															"summary": {
+																"type": "string"
+															},
+															"costUsd": {
+																"type": "number"
+															}
+														}
 													}
 												}
 											},
@@ -16810,6 +17146,48 @@
 													},
 													"text": {
 														"type": "string"
+													},
+													"run": {
+														"type": "object",
+														"required": [
+															"id",
+															"status",
+															"sent"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "running"
+																	},
+																	{
+																		"type": "string",
+																		"const": "done"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	},
+																	{
+																		"type": "string",
+																		"const": "skipped"
+																	}
+																]
+															},
+															"sent": {
+																"type": "number"
+															},
+															"summary": {
+																"type": "string"
+															},
+															"costUsd": {
+																"type": "number"
+															}
+														}
 													}
 												}
 											},
@@ -19087,6 +19465,48 @@
 																},
 																"text": {
 																	"type": "string"
+																},
+																"run": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"status",
+																		"sent"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"status": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "running"
+																				},
+																				{
+																					"type": "string",
+																					"const": "done"
+																				},
+																				{
+																					"type": "string",
+																					"const": "failed"
+																				},
+																				{
+																					"type": "string",
+																					"const": "skipped"
+																				}
+																			]
+																		},
+																		"sent": {
+																			"type": "number"
+																		},
+																		"summary": {
+																			"type": "string"
+																		},
+																		"costUsd": {
+																			"type": "number"
+																		}
+																	}
 																}
 															}
 														},
@@ -22719,6 +23139,48 @@
 									},
 									"text": {
 										"type": "string"
+									},
+									"run": {
+										"type": "object",
+										"required": [
+											"id",
+											"status",
+											"sent"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"status": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "running"
+													},
+													{
+														"type": "string",
+														"const": "done"
+													},
+													{
+														"type": "string",
+														"const": "failed"
+													},
+													{
+														"type": "string",
+														"const": "skipped"
+													}
+												]
+											},
+											"sent": {
+												"type": "number"
+											},
+											"summary": {
+												"type": "string"
+											},
+											"costUsd": {
+												"type": "number"
+											}
+										}
 									}
 								}
 							},
@@ -25029,6 +25491,48 @@
 											},
 											"text": {
 												"type": "string"
+											},
+											"run": {
+												"type": "object",
+												"required": [
+													"id",
+													"status",
+													"sent"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "running"
+															},
+															{
+																"type": "string",
+																"const": "done"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															},
+															{
+																"type": "string",
+																"const": "skipped"
+															}
+														]
+													},
+													"sent": {
+														"type": "number"
+													},
+													"summary": {
+														"type": "string"
+													},
+													"costUsd": {
+														"type": "number"
+													}
+												}
 											}
 										}
 									},
