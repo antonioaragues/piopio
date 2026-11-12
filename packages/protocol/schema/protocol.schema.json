@@ -36825,8 +36825,176 @@
 				},
 				"agentsMd": {
 					"type": "boolean"
+				},
+				"language": {
+					"type": "string"
 				}
 			}
+		},
+		"teams.draftFor.params": {
+			"type": "object",
+			"required": [
+				"cwd"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				},
+				"request": {
+					"type": "string",
+					"description": "What the conversation asked for"
+				}
+			}
+		},
+		"teams.draftFor.result": {
+			"type": "object",
+			"required": [
+				"draft",
+				"found",
+				"suggestions"
+			],
+			"properties": {
+				"draft": {
+					"type": "object",
+					"required": [
+						"name",
+						"description",
+						"style",
+						"instructions",
+						"roles"
+					],
+					"properties": {
+						"name": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
+						},
+						"style": {
+							"type": "string"
+						},
+						"instructions": {
+							"type": "string"
+						},
+						"roles": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"name",
+									"kind",
+									"responsibility"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "lead"
+											},
+											{
+												"type": "string",
+												"const": "write"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrate"
+											}
+										]
+									},
+									"responsibility": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"model": {
+										"type": "string"
+									},
+									"agent": {
+										"type": "string",
+										"description": "An agent this member is: its instructions, and its model when the role has none"
+									}
+								}
+							}
+						}
+					}
+				},
+				"found": {
+					"type": "object",
+					"required": [
+						"git",
+						"agentsMd"
+					],
+					"properties": {
+						"git": {
+							"type": "boolean"
+						},
+						"checks": {
+							"type": "string"
+						},
+						"agentsMd": {
+							"type": "boolean"
+						},
+						"language": {
+							"type": "string"
+						}
+					}
+				},
+				"suggestions": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"role",
+							"agent",
+							"name"
+						],
+						"properties": {
+							"role": {
+								"type": "string",
+								"description": "A role id in the draft"
+							},
+							"agent": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"teams.adopt.params": {
+			"type": "object",
+			"required": [
+				"id",
+				"sessionId"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"sessionId": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.adopt.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"routines.list.params": {
 			"type": "object",
@@ -37903,6 +38071,63 @@
 				"template"
 			],
 			"properties": {
+				"roles": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"kind",
+							"responsibility"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"kind": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "lead"
+									},
+									{
+										"type": "string",
+										"const": "write"
+									},
+									{
+										"type": "string",
+										"const": "review"
+									},
+									{
+										"type": "string",
+										"const": "integrate"
+									}
+								]
+							},
+							"responsibility": {
+								"type": "string"
+							},
+							"done": {
+								"type": "string"
+							},
+							"model": {
+								"type": "string"
+							},
+							"agent": {
+								"type": "string",
+								"description": "An agent this member is: its instructions, and its model when the role has none"
+							}
+						}
+					},
+					"description": "Members in place of the template's (a draft, docs/spec/21 D7)"
+				},
+				"style": {
+					"type": "string"
+				},
 				"name": {
 					"type": "string"
 				},

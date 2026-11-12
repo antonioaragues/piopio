@@ -6,11 +6,24 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export type FitCheck = { git: boolean; checks?: string; agentsMd: boolean };
+export type FitCheck = { git: boolean; checks?: string; agentsMd: boolean; language?: string };
 
 export function fitCheck(cwd: string): FitCheck {
 	const checks = detectChecks(cwd);
-	return { git: existsSync(join(cwd, ".git")), ...(checks ? { checks } : {}), agentsMd: existsSync(join(cwd, "AGENTS.md")) };
+	const language = detectLanguage(cwd);
+	return { git: existsSync(join(cwd, ".git")), ...(checks ? { checks } : {}), agentsMd: existsSync(join(cwd, "AGENTS.md")), ...(language ? { language } : {}) };
+}
+
+/** What the project is written in, from its manifest: "TypeScript", "Swift", "Rust"… */
+export function detectLanguage(cwd: string): string | undefined {
+	if (existsSync(join(cwd, "Package.swift")) || existsSync(join(cwd, "project.yml"))) return "Swift";
+	if (existsSync(join(cwd, "Cargo.toml"))) return "Rust";
+	if (existsSync(join(cwd, "go.mod"))) return "Go";
+	if (existsSync(join(cwd, "pyproject.toml")) || existsSync(join(cwd, "requirements.txt"))) return "Python";
+	if (existsSync(join(cwd, "tsconfig.json"))) return "TypeScript";
+	if (existsSync(join(cwd, "package.json"))) return /"typescript"/.test(read(join(cwd, "package.json")) ?? "") ? "TypeScript" : "JavaScript";
+	if (existsSync(join(cwd, "Gemfile"))) return "Ruby";
+	return undefined;
 }
 
 const read = (path: string): string | undefined => {

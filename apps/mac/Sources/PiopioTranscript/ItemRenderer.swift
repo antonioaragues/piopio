@@ -46,6 +46,10 @@ nonisolated struct ItemRenderer: Sendable {
             let text = String(u.text.dropFirst(routine ? 10 : 8))
             // The plan block above the composer shows each task's state (docs/spec/21 AD9): only what's notable stays a
             // line here, a task sent back or blocked.
+            // The conversation became the lead's (docs/spec/21 D7): one line says so.
+            if !routine, text.hasPrefix("The user brought in "), let team = text.dropFirst(20).split(separator: ";").first {
+                return note("\(team) joined · the lead takes it from here")
+            }
             if !routine, !Self.notable(text) { return NSAttributedString() }
             let first = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? text
             let rest = text.dropFirst(first.count).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -81,6 +85,8 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .tool(let t) where t.tool == "ask_agent":
             return agentAnswer(t)
+        case .tool(let t) where (t.tool == "offer_team" || t.tool == "offer_repeat") && t.status == .done:
+            return offerCard(t)
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
         case .tool(let t) where t.tool == "present_files" && t.status == .done:
@@ -259,6 +265,42 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(NSAttributedString(string: lineSeparator + detail, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: undone ? DS.fg3 : DS.fg2]))
         }
         return card(m, .link, lineHeight: 1.5)
+    }
+
+    /// Piopio's offers (docs/spec/21 D7, design 5b-1, 5d-3): a team for work that divides, or a way to repeat something.
+    private func offerCard(_ t: ToolItem) -> NSAttributedString {
+        let m = NSMutableAttributedString()
+        let gap = NSAttributedString(string: "    ", attributes: [.font: small])
+        func title(_ text: String) {
+            m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: DS.accent, .baselineOffset: 1.5]))
+            m.append(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
+        }
+        func line(_ text: String, color: NSColor = DS.fg2) {
+            m.append(NSAttributedString(string: lineSeparator + text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: color]))
+        }
+        if t.tool == "offer_team" {
+            title("This could go faster with a team")
+            if let why = t.args?["why"]?.stringValue { line(why) }
+            if case .array(let parts)? = t.args?["parts"] { line(parts.compactMap(\.stringValue).joined(separator: " · "), color: DS.fg3) }
+            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            m.append(pill("Bring in a team", .offer(kind: "team", callId: t.callId), .primary))
+            m.append(gap)
+            m.append(pill("Do it here, one by one", .reply(text: "Do it here, one by one."), .secondary))
+        } else {
+            title("Make this happen on its own?")
+            let what = t.args?["what"]?.stringValue ?? ""
+            let when = t.args?["when"]?.stringValue ?? ""
+            line([when, what].filter { !$0.isEmpty }.joined(separator: ": "))
+            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            m.append(pill("Make it an agent", .offer(kind: "agent", callId: t.callId), .primary))
+            if t.args?["cron"]?.stringValue != nil {
+                m.append(gap)
+                m.append(pill("Just a routine here", .offer(kind: "routine", callId: t.callId), .secondary))
+            }
+            m.append(gap)
+            m.append(pill("No", .reply(text: "No, just this once."), .secondary))
+        }
+        return card(m, .approval, lineHeight: 1.6)
     }
 
     /// A board update worth a line in the lead's conversation (AD9): a task sent back, or blocked.

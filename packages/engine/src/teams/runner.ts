@@ -434,12 +434,14 @@ export class TeamRunner {
 
 	// ── Making a team ──
 
-	async create(params: { name: string; template: string; cwd?: string; folder: string; model?: string; goal?: string; testCommand?: string; memberMode?: ApprovalMode; maxParallel?: number; initGit?: boolean; definition?: string }): Promise<Team> {
-		// An existing team (a definition) in another project, or a new one from a template.
+	async create(params: { name: string; template: string; cwd?: string; folder: string; model?: string; goal?: string; testCommand?: string; memberMode?: ApprovalMode; maxParallel?: number; initGit?: boolean; definition?: string; roles?: Role[]; style?: string }): Promise<Team> {
+		// An existing team (a definition) in another project, a new one from a template, or from members (a draft read
+		// from the project, docs/spec/21 D7).
 		const reuse = params.definition ? this.definition(params.definition) : undefined;
 		const t: TeamTemplate | undefined = this.templates().find((x) => x.id === (reuse?.template ?? params.template));
-		if (!t && !reuse) throw new EngineError("INVALID", `No team template “${params.template}”.`);
-		const name = reuse?.name ?? (params.name.trim() || t!.name);
+		const roles = params.roles?.length ? checkRoles(params.roles) : undefined;
+		if (!t && !reuse && !roles) throw new EngineError("INVALID", `No team template “${params.template}”.`);
+		const name = reuse?.name ?? (params.name.trim() || t?.name || "Team");
 		const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
 		if (t?.workplace === "project" && !params.cwd) throw new EngineError("INVALID", `A ${t.name.toLowerCase()} works in a project: choose its folder.`);
 		const folder = reuse?.folder ?? params.folder;
@@ -456,9 +458,9 @@ export class TeamRunner {
 		const def: TeamDefinition = reuse ?? {
 			id: newDefId(),
 			name,
-			template: t!.id,
-			roles: t!.roles.map((r) => ({ ...r })),
-			style: t!.style,
+			template: t?.id ?? "custom",
+			roles: (roles ?? t!.roles).map((r) => ({ ...r })),
+			style: params.style?.trim() || t?.style || "Give each member the tasks that fit their role. Keep tasks small and independent, so several can run at once.",
 			folder,
 			...(params.model ? { model: params.model } : {}),
 			memberMode: params.memberMode ?? "auto_edit",

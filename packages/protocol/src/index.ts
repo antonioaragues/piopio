@@ -1661,8 +1661,19 @@ export const methods = {
 	/** What a team needs in a project (docs/spec/21 D6, design 5c-2): git, checks it can run, AGENTS.md. */
 	"teams.fitCheck": {
 		params: Type.Object({ cwd: Type.String() }),
-		result: Type.Object({ git: Type.Boolean(), checks: Type.Optional(Type.String({ description: "The test command found in the folder" })), agentsMd: Type.Boolean() }),
+		result: Type.Object({ git: Type.Boolean(), checks: Type.Optional(Type.String({ description: "The test command found in the folder" })), agentsMd: Type.Boolean(), language: Type.Optional(Type.String()) }),
 	},
+	/** A team for a project, read from it (docs/spec/21 D7, design 5b-2): a draft, what was found, your agents that fit. */
+	"teams.draftFor": {
+		params: Type.Object({ cwd: Type.String(), request: Type.Optional(Type.String({ description: "What the conversation asked for" })) }),
+		result: Type.Object({
+			draft: Type.Object({ name: Type.String(), description: Type.String(), style: Type.String(), instructions: Type.String(), roles: Type.Array(TeamRole) }),
+			found: Type.Object({ git: Type.Boolean(), checks: Type.Optional(Type.String()), agentsMd: Type.Boolean(), language: Type.Optional(Type.String()) }),
+			suggestions: Type.Array(Type.Object({ role: Type.String({ description: "A role id in the draft" }), agent: Type.String(), name: Type.String() })),
+		}),
+	},
+	/** A conversation with Piopio in the team's project becomes the lead's (docs/spec/21 D7, design 5b-3). */
+	"teams.adopt": { params: Type.Object({ id: Type.String(), sessionId: Type.String() }), result: Type.Object({}) },
 	/** A project's routines (docs/spec/21 AD5): each run opens a session there, with the team's lead when it has one. */
 	"routines.list": { params: Type.Object({ project: Type.String() }), result: Type.Object({ routines: Type.Array(TeamRoutine) }) },
 	"routines.add": {
@@ -1688,7 +1699,7 @@ export const methods = {
 	"teams.get": { params: Type.Object({ id: Type.String() }), result: Type.Object({ team: TeamInfo }) },
 	/** A team from a template; `cwd` is its project (development). With a goal, its lead starts on it. */
 	"teams.create": {
-		params: Type.Object({ name: Type.String(), template: Type.String(), cwd: Type.Optional(Type.String()), goal: Type.Optional(Type.String()), testCommand: Type.Optional(Type.String()), memberMode: Type.Optional(ApprovalMode), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })), model: Type.Optional(ModelRef), initGit: Type.Optional(Type.Boolean({ description: "A new project's folder: make it a git repo first, so tasks get branches" })), definition: Type.Optional(Type.String({ description: "An existing team (definition) to work in this project; else a new one from the template" })) }),
+		params: Type.Object({ roles: Type.Optional(Type.Array(TeamRole, { description: "Members in place of the template's (a draft, docs/spec/21 D7)" })), style: Type.Optional(Type.String()), name: Type.String(), template: Type.String(), cwd: Type.Optional(Type.String()), goal: Type.Optional(Type.String()), testCommand: Type.Optional(Type.String()), memberMode: Type.Optional(ApprovalMode), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })), model: Type.Optional(ModelRef), initGit: Type.Optional(Type.Boolean({ description: "A new project's folder: make it a git repo first, so tasks get branches" })), definition: Type.Optional(Type.String({ description: "An existing team (definition) to work in this project; else a new one from the template" })) }),
 		result: Type.Object({ team: TeamInfo }),
 	},
 	/** You add a card to the board (TD5). */

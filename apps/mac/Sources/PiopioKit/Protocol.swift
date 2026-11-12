@@ -770,7 +770,24 @@ public struct TeamJob: Decodable, Sendable, Hashable { public var cost: Double; 
 
 /// What a team needs in a project (docs/spec/21 D6): git, the checks found there, AGENTS.md.
 public struct FitCheckParams: Encodable, Sendable { public var cwd: String; public init(cwd: String) { self.cwd = cwd } }
-public struct FitCheck: Decodable, Sendable, Hashable { public var git: Bool; public var checks: String?; public var agentsMd: Bool }
+public struct FitCheck: Decodable, Sendable, Hashable { public var git: Bool; public var checks: String?; public var agentsMd: Bool; public var language: String? }
+
+/// "A team for piopio" (docs/spec/21 D7): a draft read from the project, what was found, your agents that fit.
+public struct DraftForParams: Encodable, Sendable {
+    public var cwd: String; public var request: String?
+    public init(cwd: String, request: String?) { self.cwd = cwd; self.request = request }
+}
+public struct DraftFor: Decodable, Sendable, Hashable {
+    public struct Suggestion: Decodable, Sendable, Hashable { public var role, agent, name: String }
+    public var draft: TeamDraft
+    public var found: FitCheck
+    public var suggestions: [Suggestion]
+}
+/// A conversation with Piopio becomes the team's lead's.
+public struct AdoptParams: Encodable, Sendable {
+    public var id, sessionId: String
+    public init(id: String, sessionId: String) { self.id = id; self.sessionId = sessionId }
+}
 
 /// What starts a team's work on its own (docs/spec/19 T1).
 /// Home's agenda (docs/spec/21 D2): today's timeline and what happened since your last visit.
@@ -881,8 +898,11 @@ public struct CreateTeamParams: Encodable, Sendable {
     public var initGit: Bool?
     /// An existing team (definition) to work in this project.
     public var definition: String?
-    public init(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, model: ModelRef?, initGit: Bool = false, definition: String? = nil) {
-        self.name = name; self.template = template; self.cwd = cwd; self.goal = goal; self.testCommand = testCommand; self.model = model; self.initGit = initGit ? true : nil; self.definition = definition
+    /// Members in place of the template's: a draft read from the project (docs/spec/21 D7).
+    public var roles: [TeamRole]?
+    public var style: String?
+    public init(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, model: ModelRef?, initGit: Bool = false, definition: String? = nil, roles: [TeamRole]? = nil, style: String? = nil) {
+        self.name = name; self.template = template; self.cwd = cwd; self.goal = goal; self.testCommand = testCommand; self.model = model; self.initGit = initGit ? true : nil; self.definition = definition; self.roles = roles; self.style = style
     }
 }
 public struct AddTeamTaskParams: Encodable, Sendable {

@@ -664,9 +664,9 @@ final class EngineController {
         teams.first { $0.cwd == project.path }
     }
 
-    func createTeam(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, initGit: Bool = false, definition: String? = nil) async throws -> TeamInfo {
+    func createTeam(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, initGit: Bool = false, definition: String? = nil, roles: [TeamRole]? = nil, style: String? = nil) async throws -> TeamInfo {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build), initGit: initGit, definition: definition), as: TeamResult.self).team
+        let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build), initGit: initGit, definition: definition, roles: roles, style: style), as: TeamResult.self).team
         await loadTeams()
         await loadProjects() // a team without a folder gets a project (docs/spec/20 PT2)
         try? await refreshCatalog()
@@ -738,6 +738,22 @@ final class EngineController {
     /// What a lead conversation's tasks cost so far, and the team's budget per job.
     func teamJob(_ team: TeamInfo, conversationId: String) async -> TeamJob? {
         try? await client?.call("teams.job", TeamJobParams(id: team.id, conversationId: conversationId), as: TeamJob.self)
+    }
+
+    /// A team for a project, read from it and from what was asked (docs/spec/21 D7).
+    func draftTeam(for project: ProjectInfo, request: String?) async throws -> DraftFor {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("teams.draftFor", DraftForParams(cwd: project.path, request: request), as: DraftFor.self)
+    }
+
+    /// The conversation becomes the team's lead's (docs/spec/21 D7): the open model goes, so it reopens with the lead.
+    func adopt(_ ref: ContainerRef, into team: TeamInfo) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        openThreads[ref.key]?.close()
+        openThreads[ref.key] = nil
+        _ = try await client.call("teams.adopt", AdoptParams(id: team.id, sessionId: ref.id), as: Empty.self)
+        try? await refreshCatalog()
+        await loadTeams()
     }
 
     /// Before a team works in a folder (docs/spec/21 D6): git, checks, AGENTS.md.

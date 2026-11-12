@@ -29,6 +29,7 @@ import type { WebOptions } from "../tools/web.js";
 import { buildPromptExtension } from "../tools/build-prompt.js";
 import { teamExtension, type TeamBridge } from "../teams/extension.js";
 import { consultExtension, type ConsultBridge } from "../consult.js";
+import { offersExtension, type OffersBridge } from "../offers.js";
 import { guardsExtension } from "../tools/guards.js";
 import { formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
@@ -81,6 +82,8 @@ export type BuildOpenOptions = {
 	team?: TeamBridge;
 	/** Your agents, asked from this conversation with ask_agent or @Name (docs/spec/21 D6). */
 	consult?: { bridge: ConsultBridge; from: () => string };
+	/** Piopio's offers in a project: a team for divisible work, an agent or a routine for repeated work (D7). */
+	offers?: OffersBridge;
 };
 
 export class BuildRuntime implements Runtime {
@@ -137,6 +140,7 @@ export class BuildRuntime implements Runtime {
 				guardsExtension(),
 				...(o.team ? [teamExtension(o.team)] : []),
 				...(o.consult ? [consultExtension(o.consult.bridge, o.consult.from)] : []),
+				...(o.offers ? [offersExtension(o.offers)] : []),
 				// Full access runs commands as before; otherwise they write only inside the project.
 				sandboxExtension({ enabled: () => (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" }, { shellPath: () => settingsManager.getShellPath() }),
 				approvalsExtension({

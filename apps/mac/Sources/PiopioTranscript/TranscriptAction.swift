@@ -50,6 +50,10 @@ public enum TranscriptAction: Equatable, Sendable {
     case continueAnswer
     /// A file you sent: the engine's copy, relative to the conversation's attachments folder (roadmap D8).
     case openAttachment(stored: String)
+    /// Answers a card by sending this text (an offer's "Do it here, one by one", docs/spec/21 D7).
+    case reply(text: String)
+    /// One of Piopio's offers taken: "team" (bring in a team), "agent" (make it an agent), "routine" (a routine here).
+    case offer(kind: String, callId: String)
     public enum PlanAnswer: String, Sendable { case approve, edit, revise }
 
     static let scheme = "piopio-action"
@@ -87,6 +91,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case .copyText(let text): c.host = "copy-text"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         case .continueAnswer: c.host = "continue-answer"
         case .openAttachment(let stored): c.host = "attachment"; c.queryItems = [URLQueryItem(name: "stored", value: stored)]
+        case .reply(let text): c.host = "reply"; c.queryItems = [URLQueryItem(name: "text", value: text)]
+        case .offer(let kind, let id): c.host = "offer"; c.queryItems = [URLQueryItem(name: "kind", value: kind), URLQueryItem(name: "call", value: id)]
         }
         return c.url!
     }
@@ -124,6 +130,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case "copy-text": guard let text = q("text") else { return nil }; self = .copyText(text)
         case "continue-answer": self = .continueAnswer
         case "attachment": guard let stored = q("stored") else { return nil }; self = .openAttachment(stored: stored)
+        case "reply": guard let text = q("text") else { return nil }; self = .reply(text: text)
+        case "offer": guard let kind = q("kind"), let id = q("call") else { return nil }; self = .offer(kind: kind, callId: id)
         default: return nil
         }
     }

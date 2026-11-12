@@ -97,7 +97,7 @@ test("the fit check: git, the checks it can run, AGENTS.md", async () => {
 	writeFileSync(join(folder, "AGENTS.md"), "# Agents\n");
 	writeFileSync(join(folder, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }));
 	writeFileSync(join(folder, "pnpm-lock.yaml"), "");
-	expect(await a.client.call("teams.fitCheck", { cwd: folder })).toEqual({ git: true, checks: "pnpm test", agentsMd: true });
+	expect(await a.client.call("teams.fitCheck", { cwd: folder })).toEqual({ git: true, checks: "pnpm test", agentsMd: true, language: "JavaScript" });
 
 	const other = realpathSync(mkdtempSync(join(tmpdir(), "piopio-d6-g-")));
 	writeFileSync(join(other, "package.json"), JSON.stringify({ scripts: { test: 'echo "Error: no test specified" && exit 1' } }));

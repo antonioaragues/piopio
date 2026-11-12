@@ -262,3 +262,31 @@ and D6. D4 and D5 can swap.
 - **Not yet:** switching an existing conversation to the lead or away from it (D7); the agent's avatar on its answer
   (a dot in its colour for now); "Save this team?" was checked in code, not in a capture (it needs a merge from the
   app).
+
+## 13. D7 as built (2026-11-13)
+
+- **Piopio offers, it doesn't decide** (5b-1, 5d-3). In a project conversation with Piopio (not a lead's or a
+  member's), two tools (`offers.ts`) show a card and stop the turn:
+  - `offer_team` (why, the parts), only while the project has no team: "This could go faster with a team", with
+    Bring in a team / Do it here, one by one. The second just answers with those words.
+  - `offer_repeat` (what, when in words, a cron): "Make this happen on its own?", with Make it an agent (Turn into an
+    agent's draft), Just a routine here (a project routine with that cron; the conversation is told it's set) and No.
+- **"A team for piopio"** (5b-2, `teams.draftFor`):
+  - The project is read for its language, checks and git (`fit.ts`). The background model drafts the members from
+    that and the request; without one, a code project gets the development template.
+  - Your agents are suggested where their name or line fits a member, reviewer first ("Code reviewer · suggested",
+    already swapped in), and each member's picker can swap in another or go back to "Only in this team".
+  - Checks come prefilled. The estimate ("About $0.20–0.60 for this request, with …") comes from the build model's
+    prices and the number of parts; it's hidden when the model has no prices.
+  - "Use Development team instead" for code projects.
+  - `teams.create` takes the drafted `roles` and `style`, so the team lives only in this project (template "custom").
+- **The conversation becomes the lead's** (5b-3, `teams.adopt`): same history, the lead's brief and the board's tools
+  from its next turn (the open runtime is closed and reopened; refused while it's answering). The lead is told to
+  plan what was asked; the transcript shows "Piopio team joined · the lead takes it from here", and the header and
+  pill say "with the lead".
+- **Tests:** `born.test.ts`: the offers, the draft from a TypeScript project with your reviewer suggested, a team
+  from the draft, no team offer once there is one, adopting (and refusing another project's conversation or a second
+  adopt).
+- **Not yet:** the offer cards keep their buttons after you answer (Bring in a team does nothing once there's a
+  team); the lead's planning and a run with a real model (the trial in §5 comes next); turning a lead's conversation
+  back into Piopio's.

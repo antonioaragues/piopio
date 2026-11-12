@@ -849,6 +849,38 @@ export class Sessions {
 		if (!result.saved && result.errors.length) throw new EngineError("INVALID", result.errors.map((e) => e.message).join(" "));
 	}
 
+	/** Your agents, for drafts that suggest them (docs/spec/21 D7). */
+	consultAgents() {
+		return this.consultBridge().agents();
+	}
+
+	/**
+	 * A conversation with Piopio becomes the team's lead's (docs/spec/21 D7, design 5b-3): same history, the board's
+	 * tools from its next turn. The lead is told to plan what was asked.
+	 */
+	async adoptLead(ref: ContainerRef, teamId: string): Promise<void> {
+		const entry = this.entry(ref);
+		const teams = this.teams;
+		if (!teams?.has(teamId)) throw new EngineError("NOT_FOUND", "No such team.");
+		const team = teams.get(teamId);
+		if (entry.ref.kind !== "build" || entry.parent) throw new EngineError("INVALID", "Only a project conversation can be the lead's.");
+		if (entry.team) throw new EngineError("INVALID", entry.team.kind === "lead" ? "It's already with the lead." : "A member's session can't be the lead's.");
+		if ((entry.projectPath ?? entry.cwd) !== team.cwd) throw new EngineError("INVALID", "The team works in another project.");
+		const open = this.open.get(ref.id);
+		if (open) {
+			const runtime = await open.catch(() => undefined);
+			if (runtime?.snapshot().state.status === "running") throw new EngineError("BUSY", "Wait for the answer to finish, or stop it.");
+			this.open.delete(ref.id);
+			await runtime?.close();
+		}
+		entry.team = { id: team.id, role: teams.leadRole(team.id).id, kind: "lead" };
+		this.save();
+		this.changed(entry);
+		const runtime = await this.runtime(ref);
+		await runtime.submit(`[Board] The user brought in ${team.name}; you lead it now, in this conversation. Plan what they asked above: put the parts on the board as tasks, then tell them in a sentence or two.`, { whenBusy: "followUp" });
+		this.touch(ref);
+	}
+
 	/** Answers your conversations wait for (docs/spec/21 D6), by request id. */
 	private readonly consulting = new Map<string, (reply: string) => void>();
 
@@ -1579,6 +1611,8 @@ export class Sessions {
 			...(entry.team && this.teams?.has(entry.team.id) ? { team: this.teamBridge(entry) } : {}),
 			// Your agents, from your conversations (not a member's task or a subagent): ask_agent and @Name.
 			...(!entry.parent && (!entry.team || entry.team.kind === "lead") ? { consult: { bridge: this.consultBridge(), from: () => entry.title } } : {}),
+			// Piopio's offers (docs/spec/21 D7): in a project conversation with Piopio, not a lead's or a member's.
+			...(!entry.parent && !entry.team && this.policy.projectFor(entry.projectPath ?? entry.cwd!) ? { offers: { canOfferTeam: () => !!this.teams && !this.teams.list().some((t) => t.cwd === (entry.projectPath ?? entry.cwd)) } } : {}),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			toolsOff: () => [...new Set([...(entry.toolsOff ?? []), ...((entry.parent && this.entries.get(entry.parent.id)?.toolsOff) || [])])],

@@ -72,6 +72,8 @@ struct BuildSessionView: View {
     @State private var reviewing = false
     @State private var reviewFile: String?
     @State private var git: GitModel?
+    /// "Bring in a team" from Piopio's offer (docs/spec/21 D7).
+    @State private var teamOffer: TeamOffer?
     @State private var committing = false
     @AppStorage("buildTerminal") private var showTerminal = false
 
@@ -211,6 +213,48 @@ struct BuildSessionView: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                 session.document.bottomInset = height + 40
             }
+        }
+        .sheet(item: $teamOffer) { offer in
+            if let project { TeamForProjectSheet(engine: engine, project: project, conversation: summary.ref, offer: offer) { teamOffer = nil } }
+        }
+        // PIOPIO_DEMO_OFFER=team: captures open the newest team offer's sheet.
+        .task {
+            guard ProcessInfo.processInfo.environment["PIOPIO_DEMO_OFFER"] == "team" else { return }
+            try? await Task.sleep(for: .seconds(2))
+            let offer = session.document.items.reversed().compactMap { if case .tool(let t) = $0, t.tool == "offer_team" { t.callId } else { nil } }.first
+            if let offer { takeOffer("team", call: offer) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .transcriptOffer)) { note in
+            guard note.object as? String == summary.ref.id, let kind = note.userInfo?["kind"] as? String, let call = note.userInfo?["call"] as? String else { return }
+            takeOffer(kind, call: call)
+        }
+    }
+
+    /// Piopio's offers (docs/spec/21 D7): a team for this project, an agent of its own, or a routine here.
+    private func takeOffer(_ kind: String, call: String) {
+        guard case .tool(let t)? = session.document.item("tool:\(call)") else { return }
+        switch kind {
+        case "team":
+            // Already taken: the project has its team (and this conversation, likely, its lead).
+            guard let project, engine.team(in: project) == nil else { return }
+            var parts: [String] = []
+            if case .array(let list)? = t.args?["parts"] { parts = list.compactMap(\.stringValue) }
+            let asked = session.document.items.compactMap { if case .user(let u) = $0 { u.text } else { nil } }.last ?? ""
+            teamOffer = TeamOffer(request: [asked, parts.isEmpty ? "" : "Parts: " + parts.joined(separator: ", ")].filter { !$0.isEmpty }.joined(separator: "\n"), parts: parts.count)
+        case "agent":
+            Task { try? await engine.turnIntoAgent(summary.ref) }
+        case "routine":
+            guard let project, let cron = t.args?["cron"]?.stringValue, let what = t.args?["what"]?.stringValue else { return }
+            let when = t.args?["when"]?.stringValue ?? cron
+            Task {
+                do {
+                    try await engine.addRoutine(project, on: "time", prompt: what, when: cron)
+                    await session.send("I set it as a routine in this project: \(when). Each run is a new conversation here.")
+                } catch {
+                    await session.send("Setting the routine failed: \((error as? EngineError)?.message ?? error.localizedDescription)")
+                }
+            }
+        default: break
         }
     }
 

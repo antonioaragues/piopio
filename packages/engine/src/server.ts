@@ -34,11 +34,12 @@ import { AgentFiles } from "./agent-files.js";
 import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
 import { groupSteps, StepsView } from "./timeline/steps.js";
 import { fitCheck } from "./teams/fit.js";
+import { draftFor } from "./teams/draft-for.js";
 import type { ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans and files handed over (they read as part of the conversation). */
-const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "propose_plan" || tool.tool === "present_files";
+const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_team" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
@@ -837,6 +838,8 @@ export class Engine {
 					...(p.maxParallel ? { maxParallel: p.maxParallel } : {}),
 					...(p.initGit ? { initGit: true } : {}),
 					...(p.definition ? { definition: p.definition } : {}),
+					...(p.roles?.length ? { roles: p.roles } : {}),
+					...(p.style ? { style: p.style } : {}),
 					...(p.model ? { model: p.model.provider === "openrouter" ? p.model.id : `${p.model.provider}:${p.model.id}` } : {}),
 				});
 				return { team: this.teamView(team) } satisfies Result<"teams.create">;
@@ -911,6 +914,15 @@ export class Engine {
 				const p = params as Params<"teams.promoteMember">;
 				const agent = await this.teams.promoteMember(p.id, p.roleId);
 				return { agent: { kind: "agent", id: agent } } satisfies Result<"teams.promoteMember">;
+			}
+			case "teams.draftFor": {
+				const p = params as Params<"teams.draftFor">;
+				return (await draftFor(p.cwd, p.request ?? "", (system, prompt) => this.hub.utility(system, prompt, "team-draft"), this.sessions.consultAgents())) satisfies Result<"teams.draftFor">;
+			}
+			case "teams.adopt": {
+				const p = params as Params<"teams.adopt">;
+				await this.sessions.adoptLead({ kind: "build", id: p.sessionId }, p.id);
+				return {} satisfies Result<"teams.adopt">;
 			}
 			case "teams.fitCheck": {
 				const p = params as Params<"teams.fitCheck">;

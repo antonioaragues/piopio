@@ -247,6 +247,11 @@ final class ThreadModel {
             break // handled by the document
         case .continueAnswer:
             Task { await send("Continue") }
+        case .reply(let text):
+            Task { await send(text) }
+        case .offer(let kind, let callId):
+            // Piopio's offers (docs/spec/21 D7): the conversation's page acts on them (a sheet, an agent, a routine).
+            NotificationCenter.default.post(name: .transcriptOffer, object: ref.id, userInfo: ["kind": kind, "call": callId])
         case .quote(let text):
             // Select and ask: the fragment as a Markdown quote, above what's already in the composer.
             draft = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }.joined(separator: "\n") + "\n\n"
