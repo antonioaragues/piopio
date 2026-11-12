@@ -202,3 +202,27 @@ and D6. D4 and D5 can swap.
 - **Fixed on the way:** opening a conversation didn't refresh views that read its items (the chips stayed empty).
 - **Not yet:** ⌘⇧N stays New Project (the design gives it to New agent); choosing an agent's colour; a team-only
   member's own page (5d-2, with D5); "this sounds like a job for an agent" in a conversation (5d-3, with D7).
+
+## 11. D5 as built (2026-11-12)
+
+- **Header** (3a): the team's colours, its name, and where it works ("Only in piopio" for a team born in a project,
+  "Works in piopio and 2 more" for a saved one); Members · TEAM.md · Notes · Projects; ••• holds Save for Reuse, Save
+  as Template…, Reveal Folder in Finder, and Remove Team when no project uses it.
+- **Members as the chain of work** (3a): four columns, Plans → Does tasks → Reviews → Merges. Each card has the
+  member's avatar and name, its role as a sentence ("Reviews every task. Sends it back if it's wrong."), and its model,
+  or "Is your agent Rita ↗" for one of your agents. A tag says `your agent` (filled in its colour) or `team only`. The
+  member who does tasks says how many run at once; the merger is a dashed card, "No model · automatic". An empty
+  column says what happens without it ("No one reviews: finished tasks are done.").
+- **The editor sits under the chain** (3a), not in a sheet: name, does tasks or reviews, responsible for, done means,
+  who it is (a new member or one of your agents), its model (or the team's); Make it one of your agents (team-only
+  members), Remove from team (not the lead). Save appears once something changed.
+- **Add member** (5f-2): your agents who aren't on the team yet, then "New, only in this team": a blank member or one
+  from a role in the templates. The new member opens in the editor.
+- **Team settings** (5f-3), the base for team-only members: what members may do without asking (`memberMode`, now
+  editable through `teams.updateDefinition`), review ("3 times, then ask me"), budget per job. The team model sits
+  above the chain.
+- **Projects** (3a): each project with what the team is doing there ("2 tasks doing · 1 waits for you", "Idle · last
+  task 3 days ago", "No tasks yet") and how many tasks run at once.
+- **Captures:** `PIOPIO_DEMO_MEMBER=<role id>` opens a member's editor; `add` opens Add member.
+- **Not yet:** a per-tool Off · Asks · Allowed list for members (the design's "Tools"; members keep one mode for now);
+  a team-only member's own page (5d-2); dragging members between columns.

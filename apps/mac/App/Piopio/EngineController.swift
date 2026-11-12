@@ -615,9 +615,9 @@ final class EngineController {
     }
 
     /// You edit a team (name, members, default model: "" clears it); every project it works in follows.
-    func updateTeamDefinition(_ def: TeamDefinition, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil, saved: Bool? = nil, reviewLimit: Int? = nil, budgetPerJob: Double? = nil) async throws {
+    func updateTeamDefinition(_ def: TeamDefinition, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil, saved: Bool? = nil, reviewLimit: Int? = nil, budgetPerJob: Double? = nil, memberMode: String? = nil) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.updateDefinition", UpdateTeamDefinitionParams(id: def.id, name: name, roles: roles, model: model, saved: saved, reviewLimit: reviewLimit, budgetPerJob: budgetPerJob), as: Empty.self)
+        _ = try await client.call("teams.updateDefinition", UpdateTeamDefinitionParams(id: def.id, name: name, roles: roles, model: model, saved: saved, reviewLimit: reviewLimit, budgetPerJob: budgetPerJob, memberMode: memberMode), as: Empty.self)
         await loadTeams()
     }
 

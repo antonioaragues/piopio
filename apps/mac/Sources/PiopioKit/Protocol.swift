@@ -719,8 +719,10 @@ public struct UpdateTeamDefinitionParams: Encodable, Sendable {
     public var reviewLimit: Int?
     /// 0 clears it.
     public var budgetPerJob: Double?
-    public init(id: String, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil, saved: Bool? = nil, reviewLimit: Int? = nil, budgetPerJob: Double? = nil) {
-        self.id = id; self.name = name; self.roles = roles; self.model = model; self.saved = saved; self.reviewLimit = reviewLimit; self.budgetPerJob = budgetPerJob
+    /// What its members may do on their own: read_only, ask, auto_edit or full_auto.
+    public var memberMode: String?
+    public init(id: String, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil, saved: Bool? = nil, reviewLimit: Int? = nil, budgetPerJob: Double? = nil, memberMode: String? = nil) {
+        self.id = id; self.name = name; self.roles = roles; self.model = model; self.saved = saved; self.reviewLimit = reviewLimit; self.budgetPerJob = budgetPerJob; self.memberMode = memberMode
     }
 }
 
