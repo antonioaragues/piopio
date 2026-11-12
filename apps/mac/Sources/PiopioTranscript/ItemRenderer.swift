@@ -70,6 +70,12 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .tool(let t) where t.tool == "ask_user":
             return questionCard(t)
+        case .tool(let t) where t.tool == "ask_owner":
+            // A new agent's question (docs/spec/21 D4): it reads as its message; its answers to tap are above the composer.
+            let out = NSMutableAttributedString()
+            if case .number(let n)? = t.args?["number"] { out.append(note("Question \(Int(n)) of 3")) }
+            for block in MarkdownStream(text: t.args?["question"]?.stringValue ?? "").blocks { out.append(render(block)) }
+            return out
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
         case .tool(let t) where t.tool == "present_files" && t.status == .done:

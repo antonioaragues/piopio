@@ -177,3 +177,28 @@ and D6. D4 and D5 can swap.
 - **Not yet:** run lines are quiet lines on the left, not centred dividers; a run opens to its last answer, not its
   steps ("2 steps ›"); held messages aren't lines yet; routines have no on/off toggle (schedules have no "enabled"
   field); event routines are added by asking.
+
+## 10. D4 as built (2026-11-12)
+
+- **A new agent starts by talking** (5a-1): Agents › + (and New Agent in the palette) makes an empty agent and opens
+  its chat. It's a draft: a dashed avatar and "New agent" in the header, "Draft" in the sidebar, no glance strip. The
+  engine greets with "What should I do for you?" and three ideas to tap (the greeting carries `suggestions`), and the
+  composer says "In your own words…". "Turn into an agent" from a conversation still opens the start page with its
+  draft.
+- **One question at a time** (5a-2): the interview asks with `ask_owner` (the question, two to four answers to tap,
+  its number). It shows as "Question 2 of 3" and the question in the chat, the same in the header, and its answers as
+  chips above the composer. Tapping one sends it; writing your own works too. The chips go once you answer.
+- **It comes alive** (5a-3): when `set_up` ends the interview, the name, avatar and line arrive in the header and the
+  sidebar together, and the avatar gets a soft ring for a moment. Its **identity card** sits above the composer: "I'm
+  Morning briefing", Rename · change icon, and Does · When · Uses (what asks first is marked "needs your OK") ·
+  Reaches, with "Looks good" and "Change something". It shows until you answer it.
+- **A trial run** (5a-4): "Looks good" runs it once now (`agents.runNow` with `trial`); its line in the chat says
+  "Trial run · …", and the strip then shows what's next.
+- **Routines in plain words:** a routine an agent sets itself carries its cron (`upcoming.cron`); its card reads
+  "Weekdays at 8:00", not the cron, and the strip adds "· weekdays".
+- **Join a team** (5d-1): on the agent's page, ••• › Join a Team…: the team, as what ("Reviews every task · replaces
+  QA", or a new member who does tasks), and what changes for it there (it keeps its instructions plus TEAM.md, uses its
+  own model unless the member has another, and writes what it learns to the team's notes, not its memory).
+- **Fixed on the way:** opening a conversation didn't refresh views that read its items (the chips stayed empty).
+- **Not yet:** ⌘⇧N stays New Project (the design gives it to New agent); choosing an agent's colour; a team-only
+  member's own page (5d-2, with D5); "this sounds like a job for an agent" in a conversation (5d-3, with D7).

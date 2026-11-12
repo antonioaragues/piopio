@@ -190,7 +190,7 @@ export const AssistantItem = Type.Object({
 	/** The provider's raw error, for "show details". */
 	errorDetail: Type.Optional(Type.String()),
 	/** An agent's message sent on its own (send_message), and where from: a run id or a person's conversation. */
-	outbound: Type.Optional(Type.Object({ from: Type.String() })),
+	outbound: Type.Optional(Type.Object({ from: Type.String(), suggestions: Type.Optional(Type.Array(Type.String(), { description: "Quick replies offered with it (a new agent's greeting)" })) })),
 	/** Debate threads: which participant wrote it. */
 	speaker: Type.Optional(Speaker),
 	/** How long it thought before answering or acting (measured live; absent for reloaded history). */
@@ -625,6 +625,8 @@ export const AgentInfo = Type.Object({
 	invalid: Type.Optional(Type.Boolean()),
 	/** Some tool calls wait for the owner (`policies.requireApproval`): the header's "Asks first". */
 	asksFirst: Type.Optional(Type.Boolean()),
+	/** Just made, still learning its job by talking (docs/spec/21 D4): shown as a draft. */
+	draft: Type.Optional(Type.Boolean()),
 	/** While the engine runs it: paused (AS4), this month's spend against the budget (AS3), Inbox items waiting. */
 	status: Type.Optional(Type.Object({ paused: Type.Boolean(), spendUsd: Type.Number(), budgetUsd: Type.Optional(Type.Number()), inbox: Type.Number(), nextRun: Type.Optional(Type.String()) })),
 });
@@ -1709,12 +1711,12 @@ export const methods = {
 			/** Messages held by quiet hours or the daily limit. */
 			outbox: Type.Array(Type.Object({ id: Type.String(), to: Type.String(), text: Type.String(), notBefore: Type.String(), reason: literals("quiet", "limit", "paused") })),
 			/** The schedules and reminders, with their next time. */
-			upcoming: Type.Array(Type.Object({ id: Type.String(), kind: literals("schedule", "heartbeat", "reminder", "watch"), label: Type.String(), next: Type.Optional(Type.String()) })),
+			upcoming: Type.Array(Type.Object({ id: Type.String(), kind: literals("schedule", "heartbeat", "reminder", "watch"), label: Type.String(), next: Type.Optional(Type.String()), cron: Type.Optional(Type.String({ description: "A repeating one's cron" })) })),
 		}),
 	},
 	/** Run now: a schedule from the definition (its prompt), or any prompt. */
 	"agents.runNow": {
-		params: Type.Object({ ref: ContainerRef, scheduleId: Type.Optional(Type.String()), prompt: Type.Optional(Type.String()) }),
+		params: Type.Object({ ref: ContainerRef, scheduleId: Type.Optional(Type.String()), prompt: Type.Optional(Type.String()), trial: Type.Optional(Type.Boolean({ description: "A trial run right after it's set up (docs/spec/21 D4)" })) }),
 		result: Type.Object({ runId: Type.String() }),
 	},
 	/** The agent's webhook triggers, with the local URLs to call (HMAC-signed path). */

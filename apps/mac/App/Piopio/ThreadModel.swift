@@ -118,6 +118,7 @@ final class ThreadModel {
             state = sub.snapshot.state
             await document.load(sub.snapshot)
             loaded = true
+            revision += 1 // the items are there: views that read them refresh
             if let pendingReveal {
                 self.pendingReveal = nil
                 document.reveal(pendingReveal)

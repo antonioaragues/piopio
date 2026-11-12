@@ -37,7 +37,7 @@ import type { ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans and files handed over (they read as part of the conversation). */
-const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "propose_plan" || tool.tool === "present_files";
+const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
@@ -934,7 +934,7 @@ export class Engine {
 			}
 			case "agents.runNow": {
 				const p = params as Params<"agents.runNow">;
-				const run = await (await this.sessions.agent(p.ref)).runNow(p.scheduleId, p.prompt);
+				const run = await (await this.sessions.agent(p.ref)).runNow(p.scheduleId, p.prompt, p.trial ?? false);
 				return { runId: run.id } satisfies Result<"agents.runNow">;
 			}
 			case "agents.triggers": {

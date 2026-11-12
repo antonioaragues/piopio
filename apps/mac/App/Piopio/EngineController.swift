@@ -777,9 +777,9 @@ final class EngineController {
         try? await client?.call("agents.runs", RefParams(ref: ref), as: AgentRunsResult.self)
     }
 
-    func agentRunNow(_ ref: ContainerRef, scheduleId: String? = nil, prompt: String? = nil) async throws -> String {
+    func agentRunNow(_ ref: ContainerRef, scheduleId: String? = nil, prompt: String? = nil, trial: Bool = false) async throws -> String {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        return try await client.call("agents.runNow", AgentRunNowParams(ref: ref, scheduleId: scheduleId, prompt: prompt), as: AgentRunNowResult.self).runId
+        return try await client.call("agents.runNow", AgentRunNowParams(ref: ref, scheduleId: scheduleId, prompt: prompt, trial: trial), as: AgentRunNowResult.self).runId
     }
 
     func agentTriggers(_ ref: ContainerRef) async -> [AgentTriggersResult.Trigger] {
@@ -885,7 +885,8 @@ final class EngineController {
             d.schedule = draft.schedule ?? ""
             d.template = nil
         }
-        NotificationCenter.default.post(name: .newAgent, object: nil)
+        // "form": the start page with the draft, not a new agent made by talking.
+        NotificationCenter.default.post(name: .newAgent, object: "form")
     }
 
     /// A conversation continues in a project folder (docs/spec/18 §5): a new conversation there, with this one's text

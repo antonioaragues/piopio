@@ -68,6 +68,23 @@ export function nextFire(cron: string, tz: string, after: number): number {
 	throw new Error(`“${cron}” doesn't fire in the next two years.`);
 }
 
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** A cron in plain words: "Weekdays at 8:00", "Every day at 9:30", "Mondays at 9:00"; other crons as they are. */
+export function cronLabel(cron: string): string {
+	const [m, h, dom, mon, dow] = cron.trim().split(/\s+/);
+	if (!/^\d+$/.test(m ?? "") || !/^\d+$/.test(h ?? "") || mon !== "*") return `On the schedule “${cron}”`;
+	const at = `${Number(h)}:${m!.padStart(2, "0")}`;
+	if (dom === "*") {
+		if (dow === "*") return `Every day at ${at}`;
+		if (dow === "1-5") return `Weekdays at ${at}`;
+		if (dow === "0,6" || dow === "6,0") return `Weekends at ${at}`;
+		if (/^[0-7]$/.test(dow ?? "")) return `${DAYS[Number(dow) % 7]}s at ${at}`;
+	}
+	if (/^\d+$/.test(dom ?? "") && dow === "*") return `Every month on day ${dom} at ${at}`;
+	return `On the schedule “${cron}”`;
+}
+
 const parseWindow = (window: string) => {
 	const [a, b] = window.split("-").map((s) => s.split(":").map(Number) as [number, number]);
 	return { start: a![0] * 60 + a![1], end: b![0] * 60 + b![1] };

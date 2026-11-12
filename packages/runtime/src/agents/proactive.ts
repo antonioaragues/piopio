@@ -10,7 +10,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { defineTask, defineTool, type ConversationId, type Harness, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
 import { cronError, type AgentDefinition } from "./definition.js";
 import type { ResultCard, UndoKind } from "./safety.js";
-import { dayOf, inWindow, nextDay, nextFire, nextHeartbeat, windowEnd } from "./time.js";
+import { cronLabel, dayOf, inWindow, nextDay, nextFire, nextHeartbeat, windowEnd } from "./time.js";
 
 export type RunKind = "schedule" | "heartbeat" | "reminder" | "trigger" | "manual";
 export type RunRecord = {
@@ -51,7 +51,7 @@ export type Watch = {
 export type Reminder = { id: string; prompt: string; deliverTo?: string; at?: number; cron?: string; tz?: string; createdAt: string; by: string };
 export type Outbound = { id: string; to: string; text: string; from: string; queuedAt: string; notBefore: number; reason: "quiet" | "limit" | "paused"; urgent?: boolean };
 /** A schedule, the heartbeat or a reminder, with its next fire (the Runs tab). */
-export type Upcoming = { id: string; kind: "schedule" | "heartbeat" | "reminder" | "watch"; label: string; next?: number };
+export type Upcoming = { id: string; kind: "schedule" | "heartbeat" | "reminder" | "watch"; label: string; next?: number; cron?: string };
 export type ProactiveState = {
 	runs?: RunRecord[];
 	reminders?: Reminder[];
@@ -343,9 +343,9 @@ export class Proactivity {
 			if (at) next.set((t.input as ScheduleInput).key, at);
 		}
 		const withNext = (key: string, u: Omit<Upcoming, "next">) => upcoming.push({ ...u, ...(next.has(key) ? { next: next.get(key)! } : {}) });
-		for (const s of this.def.schedules ?? []) withNext(`def:${s.id}`, { id: s.id, kind: "schedule", label: `${s.cron} · ${s.prompt}` });
+		for (const s of this.def.schedules ?? []) withNext(`def:${s.id}`, { id: s.id, kind: "schedule", label: `${s.cron} · ${s.prompt}`, cron: s.cron });
 		if (this.def.heartbeat) withNext("heartbeat", { id: "heartbeat", kind: "heartbeat", label: `Every ${this.def.heartbeat.every}${this.def.heartbeat.activeHours ? ` (${this.def.heartbeat.activeHours})` : ""}` });
-		for (const r of state.reminders ?? []) withNext(`rem:${r.id}`, { id: r.id, kind: "reminder", label: r.prompt });
+		for (const r of state.reminders ?? []) withNext(`rem:${r.id}`, { id: r.id, kind: "reminder", label: r.prompt, ...(r.cron ? { cron: r.cron } : {}) });
 		for (const w of state.watches ?? []) upcoming.push({ id: w.id, kind: "watch", label: `${watchLabel(w)} · ${w.prompt}` });
 		return { runs: [...(state.runs ?? [])].reverse(), outbox: state.outbox ?? [], upcoming };
 	}
@@ -508,9 +508,9 @@ export class Proactivity {
 	}
 
 	/** The agent's first words in the owner's conversation, written by the host, not the model (docs/spec/19 S2). */
-	async greet(text: string): Promise<void> {
+	async greet(text: string, suggestions?: string[]): Promise<void> {
 		const conversation = await this.host.person(this.owner);
-		await conversation.submit({ type: "write", entry: { kind: OUT_ENTRY, data: { text, from: "greeting" }, model: [{ role: "user", content: `(You opened the conversation with this message:)\n${text}`, timestamp: this.host.now() }] } } as never, this.host.context);
+		await conversation.submit({ type: "write", entry: { kind: OUT_ENTRY, data: { text, from: "greeting", ...(suggestions?.length ? { suggestions } : {}) }, model: [{ role: "user", content: `(You opened the conversation with this message:)\n${text}`, timestamp: this.host.now() }] } } as never, this.host.context);
 	}
 
 	/** A note in someone's conversation, the owner's by default (not a message from the agent, not counted). */
@@ -567,7 +567,7 @@ export class Proactivity {
 				await self.host.write((s) => void (s.reminders = [...(s.reminders ?? []), reminder]));
 				await self.reconcile();
 				const next = reminder.at ?? nextFire(reminder.cron!, self.tz, now);
-				const card: ResultCard = { kind: "reminder", title: reminder.cron ? `Every ${reminder.cron}` : `Reminder ${new Date(next).toISOString().slice(0, 16).replace("T", " ")} UTC`, detail: args.prompt };
+				const card: ResultCard = { kind: "reminder", title: reminder.cron ? cronLabel(reminder.cron) : `Reminder ${new Date(next).toISOString().slice(0, 16).replace("T", " ")} UTC`, detail: args.prompt };
 				const undo = await self.host.recordUndo?.("reminder.cancel", { id: reminder.id }, `the reminder “${args.prompt.slice(0, 60)}”`, api.conversationId);
 				return { output: [{ type: "text", text: `Scheduled ${reminder.id}: next ${new Date(next).toISOString().slice(0, 16).replace("T", " ")} UTC.` }], details: { id: reminder.id, next, card, ...(undo ? { undo } : {}) } as never };
 			},

@@ -227,7 +227,11 @@ struct Composer: View {
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         // An agent is set up by talking (docs/spec/21 D3): its chat says so.
-        if thread.ref.kind == .agent, thread.ref.conversationId == nil { return "Reply, or ask it to change how it works…" }
+        if thread.ref.kind == .agent, thread.ref.conversationId == nil {
+            // A new agent is still asking what it's for (docs/spec/21 D4).
+            let draft = engine.agents.first { $0.ref.id == thread.ref.id }?.agent?.draft == true
+            return draft ? "In your own words…" : "Reply, or ask it to change how it works…"
+        }
         if thread.document.lastItem != nil { return "Reply…" }
         if isBuild, engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.profile == .chat { return "Ask about these files, @mention one, or search the web…" }
         return isBuild ? "Ask, @mention files, or /command…" : "Message…"

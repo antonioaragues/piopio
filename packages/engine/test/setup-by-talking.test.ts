@@ -40,7 +40,18 @@ test("a new agent with nothing said greets, interviews and sets itself up; Undo 
 	expect(first.definition.interview).toBe(true);
 	// It speaks first: the greeting is in the owner's conversation before anyone writes.
 	const opened = await client.call("sessions.subscribe", { ref });
-	expect(JSON.stringify(opened.snapshot.items)).toContain("Hi Antonio! I'm your new agent. What would you like me to help with?");
+	// "What should I do for you?" with three ideas to tap (docs/spec/21 D4).
+	const greeting = (opened.snapshot.items as { kind: string; parts?: { text: string }[]; outbound?: { from: string; suggestions?: string[] } }[]).find((i) => i.outbound?.from === "greeting")!;
+	expect(greeting.parts![0]!.text).toBe("Hi Antonio! What should I do for you? Pick an idea, or tell me in your own words.");
+	expect(greeting.outbound!.suggestions).toEqual(["Every morning, tell me what's ahead", "Watch my email and warn me about bills", "Keep a shared list for the family"]);
+	// It's a draft until it sets itself up.
+	const listed = async () => ((await client.call("sessions.list", { kind: "agent" })).sessions as { ref: { id: string }; agent?: { draft?: boolean } }[]).find((x) => x.ref.id === ref.id)!;
+	expect((await listed()).agent?.draft).toBe(true);
+
+	// One question at a time, with answers to tap.
+	await client.call("sessions.submit", { ref, input: { text: `call: ask_owner | ${JSON.stringify({ question: "Where should I send it?", options: ["Here in Piopio", "Telegram", "Both"], number: 2 })}` } });
+	const asked = await until(async () => JSON.stringify((await client.call("sessions.open", { ref })).items), (s) => s.includes('"tool":"ask_owner"') && s.includes("Asked. Wait for their answer"));
+	expect(asked).toContain('"options":["Here in Piopio","Telegram","Both"]');
 
 	// The model, told it's new, sets itself up.
 	const setUp = { name: "Invoices", description: "Watches your invoices and tells you the amounts", avatar: "🧾", instructions: "When an invoice arrives, tell Antonio the amount and due date." };
@@ -49,6 +60,10 @@ test("a new agent with nothing said greets, interviews and sets itself up; Undo 
 	expect(done.definition).toMatchObject({ name: "Invoices", description: setUp.description, avatar: "🧾" });
 	expect(done.definition.interview).toBeUndefined();
 	expect(done.instructions).toBe("# Invoices\n\nWhen an invoice arrives, tell Antonio the amount and due date.\n");
+	expect((await until(listed, (x) => !x.agent?.draft)).agent?.draft).toBeUndefined();
+	// A trial run right after it's set up says so in the chat.
+	await client.call("agents.runNow", { ref, prompt: "Show me one now.", trial: true });
+	await until(() => client.call("sessions.open", { ref }), (s: { items: { kind: string; text?: string }[] }) => s.items.some((i) => i.kind === "system" && (i.text ?? "").startsWith("Trial run · ")));
 
 	// Its result card has Undo, which brings back the name and the instructions.
 	const items = (await until(() => client.call("sessions.open", { ref }), (s: { items: { kind: string }[] }) => s.items.some((i) => i.kind === "result"))).items as { kind: string; card?: { kind: string; title: string }; undo?: { id: string } }[];

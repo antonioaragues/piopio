@@ -703,9 +703,12 @@ export class Sessions {
 		if (interview) {
 			const owner = made.definition.contacts[0]!.name;
 			const hi = owner && owner !== "Owner" ? `Hi ${owner}!` : "Hi!";
-			await (await this.agent(entry.ref)).greet(
-				`${hi} I'm your new agent. What would you like me to help with? For example:\n\n1. A morning briefing: your calendar, the emails that need you, the weather\n2. Watching something and telling you when it changes\n3. Reminders, and keeping track of what you ask me\n4. Something else: tell me in your words`,
-			);
+			// "What should I do for you?" with three ideas to tap (docs/spec/21 D4, design 5a); or their own words.
+			await (await this.agent(entry.ref)).greet(`${hi} What should I do for you? Pick an idea, or tell me in your own words.`, [
+				"Every morning, tell me what's ahead",
+				"Watch my email and warn me about bills",
+				"Keep a shared list for the family",
+			]);
 		}
 		return entry.ref;
 	}
@@ -800,7 +803,7 @@ export class Sessions {
 		return {
 			runs: runs.map(({ conversationId: _c, deliverTo: _d, ...r }) => r),
 			outbox: outbox.map((o) => ({ id: o.id, to: o.to, text: o.text, notBefore: iso(o.notBefore), reason: o.reason })),
-			upcoming: upcoming.map((u) => ({ id: u.id, kind: u.kind, label: u.label, ...(u.next ? { next: iso(u.next) } : {}) })),
+			upcoming: upcoming.map((u) => ({ id: u.id, kind: u.kind, label: u.label, ...(u.next ? { next: iso(u.next) } : {}), ...(u.cron ? { cron: u.cron } : {}) })),
 		};
 	}
 
@@ -1050,6 +1053,7 @@ export class Sessions {
 		entry.agent = {
 			...(status ? { status } : {}),
 			...(def.policies?.requireApproval?.length ? { asksFirst: true } : {}),
+			...(def.interview ? { draft: true } : {}),
 			slug: def.slug,
 			...(def.avatar ? { avatar: def.avatar } : {}),
 			...(def.description ? { description: def.description } : {}),

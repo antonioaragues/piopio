@@ -392,7 +392,7 @@ struct MainSidebar: View {
         let agents = engine.agents
         let teams = engine.teamDefinitions.filter(\.saved)
         let cap = Self.caps[.agents]!
-        header(.agents, total: agents.count + teams.count, shown: min(cap, agents.count) + teams.count, add: nil, menu: [("New agent", { item = .start(.agent) }), ("New team", { item = .start(.team) })])
+        header(.agents, total: agents.count + teams.count, shown: min(cap, agents.count) + teams.count, add: nil, menu: [("New agent", { NotificationCenter.default.post(name: .newAgent, object: nil) }), ("New team", { item = .start(.team) })])
         if !collapsed.contains(SidebarSection.agents.rawValue) {
             draftRow(.agent)
             if item == .start(.team) { draftRow(.team) }
@@ -434,6 +434,7 @@ struct MainSidebar: View {
                 if engine.liveStatus[agent.ref.key] == .running { SidebarDot(status: .running) }
                 // Unread (design 1a): a blue dot when it wrote to you.
                 else if let inbox = status?.inbox, inbox > 0 { Circle().fill(Color.accentColor).frame(width: 7, height: 7).help("Wrote to you") }
+                else if agent.agent?.draft == true { Text("Draft").font(.system(size: 11)).foregroundStyle(Color.dsFg3) }
                 else if status?.paused == true { Text("Paused").font(.system(size: 11)).foregroundStyle(Color.dsFg3) }
             }
             .help(Self.agentLine(agent))

@@ -194,15 +194,16 @@ export class AgentRuntime implements Runtime {
 	}
 
 	/** Runs a schedule from the definition now, or any prompt (a manual run). */
-	async runNow(scheduleId?: string, prompt?: string): Promise<RunRecord> {
+	/** Now: a schedule, or a prompt. A trial run (right after it's set up, docs/spec/21 D4) says so in the chat. */
+	async runNow(scheduleId?: string, prompt?: string, trial = false): Promise<RunRecord> {
 		await this.ensureCredential();
 		if (scheduleId) {
 			const s = (this.options.definition().schedules ?? []).find((x) => x.id === scheduleId);
 			if (!s) throw new EngineError("NOT_FOUND", `No schedule “${scheduleId}”.`);
-			return this.core.proactive.startRun("manual", s.id, s.prompt, s.deliverTo);
+			return this.core.proactive.startRun("manual", trial ? "trial" : s.id, s.prompt, s.deliverTo);
 		}
 		if (!prompt?.trim()) throw new EngineError("INVALID", "Give a schedule or a prompt.");
-		return this.core.proactive.startRun("manual", "manual", prompt.trim());
+		return this.core.proactive.startRun("manual", trial ? "trial" : "manual", prompt.trim());
 	}
 
 	/** A webhook trigger fired: its prompt with the body in `{{body}}` runs (PR3). `deliveryId` makes a retry a no-op. */
@@ -229,8 +230,8 @@ export class AgentRuntime implements Runtime {
 	}
 
 	/** Its first words to the owner, written by the engine (an agent that interviews, docs/spec/19 S2). */
-	greet(text: string): Promise<void> {
-		return this.core.proactive.greet(text);
+	greet(text: string, suggestions?: string[]): Promise<void> {
+		return this.core.proactive.greet(text, suggestions);
 	}
 
 	/** The routines the agent set that wait for events. */
@@ -369,7 +370,7 @@ export class AgentView implements Runtime {
 	/** What the person said, for each turn still running (retained with the answer when it ends). */
 	private readonly pending: { said: string; itemCount: number }[] = [];
 	/** Messages the agent sent on its own (entry id → text and where from); shown as its, not the person's. */
-	private readonly outbound = new Map<string, { text: string; from: string }>();
+	private readonly outbound = new Map<string, { text: string; from: string; suggestions?: string[] }>();
 	/** This conversation's approvals, result cards (by tool call) and undo records. */
 	private readonly approvals = new Map<string, Approval>();
 	private readonly cards = new Map<string, { card: ResultCard; undo?: string }>();
@@ -477,7 +478,7 @@ export class AgentView implements Runtime {
 	 * write · $0.0004"; a run that wrote shows its message after it. Placed when it fired; updated when it ends.
 	 */
 	runLine(run: RunRecord, live: boolean): void {
-		const how = run.kind === "manual" ? "Run now" : "Automatic run";
+		const how = run.source === "trial" ? "Trial run" : run.kind === "manual" ? "Run now" : "Automatic run";
 		const short = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, 120);
 		const what =
 			run.status === "running"
@@ -546,7 +547,8 @@ export class AgentView implements Runtime {
 	/** Steps lines, each followed by the cards of what its tools changed (UI2: result cards stay visible). */
 	private group(items: readonly TimelineItem[]): TimelineItem[] {
 		const out: TimelineItem[] = [];
-		for (const item of groupSteps(items)) {
+		// A question to the owner stays on its own: the app shows it with answers to tap (docs/spec/21 D4).
+		for (const item of groupSteps(items, (tool) => tool.tool === "ask_owner")) {
 			out.push(item);
 			if (item.kind !== "steps") continue;
 			for (const tool of item.tools) {
@@ -584,7 +586,7 @@ export class AgentView implements Runtime {
 			}
 		}
 		if (entry.kind === OUT_ENTRY) {
-			const data = entry.data as { text: string; from: string };
+			const data = entry.data as { text: string; from: string; suggestions?: string[] };
 			this.outbound.set(id, data);
 			// The model reads it as a note; it arrives as a user message, or (as a write) only as an entry.
 			this.builder.user(id, data.text, entry.model?.[0]?.timestamp);
@@ -612,7 +614,7 @@ export class AgentView implements Runtime {
 	private items(): TimelineItem[] {
 		return this.builder.snapshot().items.map((item) => {
 			const out = item.kind === "user" ? this.outbound.get(item.id) : undefined;
-			if (out) return { kind: "assistant", id: item.id, at: item.at, parts: [{ type: "text", text: out.text }], status: "done", outbound: { from: out.from } };
+			if (out) return { kind: "assistant", id: item.id, at: item.at, parts: [{ type: "text", text: out.text }], status: "done", outbound: { from: out.from, ...(out.suggestions ? { suggestions: out.suggestions } : {}) } };
 			const msg = item.kind === "user" ? this.agentMsgs.get(item.id) : undefined;
 			if (msg) return { kind: "agent_msg", id: item.id, at: item.at, fromAgent: msg.from, toAgent: msg.to, text: msg.text, direction: "in", mode: msg.late ? "reply" : msg.mode, traceId: msg.traceId };
 			if (item.kind === "tool" && (item.tool === "ask_agent" || item.tool === "tell_agent")) return this.agentCall(item);

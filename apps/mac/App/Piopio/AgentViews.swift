@@ -116,6 +116,11 @@ struct AgentPage: View {
     @State private var instructions = ""
     /// The Setup section a glance cell opens.
     @State private var setupSection: String?
+    @State private var joining = false
+    /// Agents whose identity card you've answered (ids, comma-separated).
+    @AppStorage("agentIntroSeen") private var introSeen = ""
+    /// It just set itself up: its avatar animates in (design 5a-3).
+    @State private var alive = false
 
     /// Chat first, Setup for later (docs/spec/21 D3, design 2a). "Activity" is gone: runs are lines in the chat.
     enum Tab: String, CaseIterable { case chat = "Chat", activity = "Activity", setup = "Setup" }
@@ -132,7 +137,8 @@ struct AgentPage: View {
                     tab = .chat
                 }
             default:
-                glance
+                // A draft has nothing to glance at yet: just its question (design 5a-1).
+                if summary.agent?.draft != true { glance }
                 if let conversation { backBar(conversation) }
                 chat
             }
@@ -145,6 +151,13 @@ struct AgentPage: View {
             if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETUP_SECTION"] { setupSection = demo; tab = .setup }
         }
         .onChange(of: engine.searchTarget?.id) { _, _ in openSearchTarget() }
+        .sheet(isPresented: $joining) { JoinTeamSheet(engine: engine, agent: summary) { joining = false } }
+        // It comes alive (design 5a-3): its avatar and colour arrive with a soft ring, here and in the sidebar at once.
+        .onChange(of: summary.agent?.draft == true) { was, isDraft in
+            guard was, !isDraft else { return }
+            withAnimation(.spring(duration: 0.5, bounce: 0.35)) { alive = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { withAnimation(.easeOut(duration: 0.6)) { alive = false } }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openAgentRun)) { note in
             guard let id = note.object as? String else { return }
             conversation = id
@@ -174,7 +187,34 @@ struct AgentPage: View {
         } else if let conversation, let person, person.role != "owner" {
             AgentChat(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: conversation), simulated: person.name)
         } else {
-            AgentChat(engine: engine, ref: summary.ref, simulated: nil)
+            AgentChat(engine: engine, ref: summary.ref, simulated: nil, accessory: identityCard)
+        }
+    }
+
+    /// Its card once it has set itself up by talking (design 5a-3), until you answer it.
+    private var identityCard: AnyView? {
+        guard summary.agent?.draft != true, let def, !introSeen.split(separator: ",").contains(Substring(summary.ref.id)) else { return nil }
+        let thread = engine.thread(summary.ref)
+        _ = thread.revision
+        let setUpHere = thread.document.items.contains { if case .result(let r) = $0 { r.card.kind == "setup" } else { false } }
+        guard setUpHere, (runs?.runs ?? []).isEmpty else { return nil }
+        return AnyView(AgentIdentityCard(engine: engine, summary: summary, def: def, runs: runs, rename: {
+            setupSection = "What it does"
+            tab = .setup
+        }, looksGood: {
+            introSeen += (introSeen.isEmpty ? "" : ",") + summary.ref.id
+            trialRun()
+        }, change: {
+            introSeen += (introSeen.isEmpty ? "" : ",") + summary.ref.id
+        }))
+    }
+
+    /// A first run now, so you see how it looks (design 5a-4).
+    private func trialRun() {
+        Task {
+            let schedule = def?.schedules?.first
+            _ = try? await engine.agentRunNow(summary.ref, scheduleId: schedule?.id, prompt: schedule == nil ? "Do what you're set up for once, now, so I can see how it looks." : nil, trial: true)
+            await load()
         }
     }
 
@@ -197,8 +237,18 @@ struct AgentPage: View {
     private var header: some View {
         PageHeader {
             HStack(spacing: 10) {
-                SidebarAvatar(id: summary.ref.id, name: summary.title, glyph: summary.agent?.avatar, size: 22)
+                if summary.agent?.draft == true {
+                    // Not anyone yet: a dashed outline until it sets itself up.
+                    RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.dsFg3, style: StrokeStyle(lineWidth: 1, dash: [3, 2])).frame(width: 22, height: 22)
+                } else {
+                    SidebarAvatar(id: summary.ref.id, name: summary.title, glyph: summary.agent?.avatar, size: 22)
+                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(AgentHue.color(summary.ref.id).opacity(alive ? 0.18 : 0)).padding(-6))
+                        .scaleEffect(alive ? 1.12 : 1)
+                }
                 Text(summary.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)
+                if summary.agent?.draft == true, let q = AgentQuickReplies.question(engine.thread(summary.ref).document.items) {
+                    Text(q).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+                }
                 if let line = summary.agent?.description ?? def?.description, !line.isEmpty {
                     Text(line).font(.system(size: 13)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
@@ -226,10 +276,11 @@ struct AgentPage: View {
                     }
                     Divider()
                 }
+                Button("Join a Team…") { joining = true }
                 Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
             } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
                 .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-                .help("Pause, conversations, Finder")
+                .help("Pause, conversations, join a team, Finder")
         }
     }
 
@@ -278,7 +329,7 @@ struct AgentPage: View {
             Text("Paused").foregroundStyle(Color.dsFg2)
         } else if let first = timed.first, let next = first.next {
             let schedule = def?.schedules?.first { $0.id == first.id }
-            (Text(HomeView.at(next).replacingOccurrences(of: " at ", with: " ")) + Text(schedule.flatMap { Self.cadence($0.cron) }.map { " · \($0)" } ?? "").foregroundStyle(Color.dsFg3))
+            (Text(HomeView.at(next).replacingOccurrences(of: " at ", with: " ")) + Text((schedule?.cron ?? first.cron).flatMap(Self.cadence).map { " · \($0)" } ?? "").foregroundStyle(Color.dsFg3))
                 .lineLimit(1)
         } else if let next = summary.agent?.status?.nextRun {
             Text(HomeView.at(next)).lineLimit(1)
@@ -365,6 +416,8 @@ struct AgentChat: View {
     let ref: ContainerRef
     /// Set when you talk as a contact through the channel simulator.
     let simulated: String?
+    /// Shown above the composer (a new agent's identity card).
+    var accessory: AnyView?
 
     var body: some View {
         let thread = engine.thread(ref)
@@ -375,6 +428,9 @@ struct AgentChat: View {
                     Text("Simulator: you are writing as \(simulated). The agent treats it as their message.")
                         .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
+                if let accessory { accessory.padding(.horizontal, 40) }
+                // Answers to tap while a new agent learns its job (docs/spec/21 D4).
+                if simulated == nil, ref.conversationId == nil { AgentQuickReplies(thread: thread).padding(.horizontal, 40) }
                 Composer(engine: engine, thread: thread)
                     .frame(maxWidth: 680)
                     .padding(.horizontal, 40)

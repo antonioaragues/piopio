@@ -405,7 +405,19 @@ private struct StartSheets: ViewModifier {
                 item = .needsYou
                 if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in item = .start(.agent) }
+            // A new agent starts by talking (docs/spec/21 D4): an empty one that asks what it's for. "form" keeps the
+            // start page (a draft from a conversation).
+            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { note in
+                if note.object as? String == "form" { item = .start(.agent); return }
+                Task {
+                    if let ref = try? await engine.createAgent(name: "New agent", template: nil, avatar: "") {
+                        UserDefaults.standard.set("Chat", forKey: "agentTab")
+                        item = .agent(ref.id)
+                    } else {
+                        item = .start(.agent)
+                    }
+                }
+            }
             // New project is a start page too; its object, when a conversation asked, is that conversation.
             .onReceive(NotificationCenter.default.publisher(for: .newProject)) { note in
                 continuing = note.object as? ContainerRef

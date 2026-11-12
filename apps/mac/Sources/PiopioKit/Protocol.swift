@@ -160,7 +160,12 @@ public struct AssistantItem: Codable, Sendable, Hashable {
     public var errorKind: ErrorKind?
     public var errorDetail: String?
     /// An agent's message sent on its own (send_message), from a run (`run_…`) or a person's conversation.
-    public struct Outbound: Codable, Sendable, Hashable { public var from: String; public init(from: String) { self.from = from } }
+    public struct Outbound: Codable, Sendable, Hashable {
+        public var from: String
+        /// Quick replies offered with it (a new agent's greeting, docs/spec/21 D4).
+        public var suggestions: [String]?
+        public init(from: String, suggestions: [String]? = nil) { self.from = from; self.suggestions = suggestions }
+    }
     public var outbound: Outbound?
     /// Debate threads: which participant wrote it.
     public var speaker: Speaker?
@@ -611,6 +616,8 @@ public struct AgentInfo: Codable, Sendable, Hashable {
     public var invalid: Bool?
     /// Some tool calls wait for the owner: the header's "Asks first".
     public var asksFirst: Bool?
+    /// Just made, still learning its job by talking (docs/spec/21 D4).
+    public var draft: Bool?
     public struct Status: Codable, Sendable, Hashable { public var paused: Bool; public var spendUsd: Double; public var budgetUsd: Double?; public var inbox: Int; public var nextRun: String? }
     public var status: Status?
 }
@@ -885,14 +892,16 @@ public struct AgentRunsResult: Decodable, Sendable {
         public var costUsd: Double?
     }
     public struct Held: Decodable, Sendable, Hashable, Identifiable { public var id, to, text, notBefore, reason: String }
-    public struct Upcoming: Decodable, Sendable, Hashable, Identifiable { public var id, kind, label: String; public var next: String? }
+    public struct Upcoming: Decodable, Sendable, Hashable, Identifiable { public var id, kind, label: String; public var next: String?; public var cron: String? }
     public var runs: [Run]
     public var outbox: [Held]
     public var upcoming: [Upcoming]
 }
 public struct AgentRunNowParams: Encodable, Sendable {
     public var ref: ContainerRef; public var scheduleId: String?; public var prompt: String?
-    public init(ref: ContainerRef, scheduleId: String? = nil, prompt: String? = nil) { self.ref = ref; self.scheduleId = scheduleId; self.prompt = prompt }
+    /// A trial run right after it's set up (docs/spec/21 D4).
+    public var trial: Bool?
+    public init(ref: ContainerRef, scheduleId: String? = nil, prompt: String? = nil, trial: Bool = false) { self.ref = ref; self.scheduleId = scheduleId; self.prompt = prompt; self.trial = trial ? true : nil }
 }
 public struct AgentRunNowResult: Decodable, Sendable { public var runId: String }
 public struct AgentDecideParams: Encodable, Sendable {

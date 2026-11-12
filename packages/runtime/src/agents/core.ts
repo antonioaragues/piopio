@@ -96,8 +96,8 @@ export type SelfChange = { name?: string; description?: string; avatar?: string;
 
 /** While an agent is new (`interview`), how it learns its job: a short interview, then set_up (docs/spec/19 S2). */
 export const INTERVIEW_PROMPT = `You were just created and don't have a job yet. Learn it from your owner in a short interview, then set yourself up:
-- Ask at most three short questions, one at a time: what you're for (offer three or four numbered examples that fit what they said, plus "something else, in your words"), which apps, places or people it involves, and how they want to hear from you (here, or on Telegram).
-- Don't ask what you can decide yourself. A good default beats a question.
+- Ask at most three short questions, one at a time, each with ask_owner (the question, two to four short answers they can tap, and its number): what you're for if they haven't said, which apps, places or people it involves, and how they want to hear from you (here, on Telegram, or both). After ask_owner, stop and wait for their answer.
+- Don't ask what you can decide yourself. A good default beats a question: suggest one in the question ("what time? I'd suggest 8:00").
 - Then call set_up with a short name, a one-line description, an icon (one emoji) and your instructions: in the second person, with the standing details they told you.
 - Then set the routines it needs: schedule for times ("every weekday at 8"), watch for events (an email from someone, a file in a folder, a webhook). Say in one or two lines what you set up and when they'll hear from you.`;
 
@@ -606,10 +606,21 @@ export class AgentCore {
 				return { output: [{ type: "text", text: `${title}.` }], details: { card: { kind: "setup", title, ...(detail ? { detail } : {}) } satisfies ResultCard, undo } as never };
 			},
 		});
+		// One question to the owner with quick answers (docs/spec/21 D4): the app shows them as chips to tap.
+		const askOwner = defineTool({
+			name: "ask_owner",
+			description: "While you learn your job: ask your owner one short question, with two to four short answers they can tap (they can also write their own). Then stop and wait for the answer.",
+			parameters: Type.Object({
+				question: Type.String({ minLength: 1, maxLength: 200 }),
+				options: Type.Array(Type.String({ minLength: 1, maxLength: 40 }), { minItems: 2, maxItems: 4 }),
+				number: Type.Optional(Type.Integer({ minimum: 1, maximum: 3, description: "Which question this is, of three at most" })),
+			}),
+			execute: async () => ({ output: [{ type: "text", text: "Asked. Wait for their answer before you go on." }] }),
+		});
 		const p = this.proactive.tools;
 		return defineExtension({
 			name: "piopio-agent",
-			tools: [remember, recall, forget, setUp, p.send, p.schedule, p.list, p.cancel, p.watch, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
+			tools: [remember, recall, forget, setUp, askOwner, p.send, p.schedule, p.list, p.cancel, p.watch, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
 			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
 			hooks: [

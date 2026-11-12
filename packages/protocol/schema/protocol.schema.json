@@ -286,6 +286,13 @@
 							"properties": {
 								"from": {
 									"type": "string"
+								},
+								"suggestions": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									},
+									"description": "Quick replies offered with it (a new agent's greeting)"
 								}
 							}
 						},
@@ -2547,6 +2554,13 @@
 											"properties": {
 												"from": {
 													"type": "string"
+												},
+												"suggestions": {
+													"type": "array",
+													"items": {
+														"type": "string"
+													},
+													"description": "Quick replies offered with it (a new agent's greeting)"
 												}
 											}
 										},
@@ -4299,6 +4313,13 @@
 											"properties": {
 												"from": {
 													"type": "string"
+												},
+												"suggestions": {
+													"type": "array",
+													"items": {
+														"type": "string"
+													},
+													"description": "Quick replies offered with it (a new agent's greeting)"
 												}
 											}
 										},
@@ -6031,6 +6052,13 @@
 											"properties": {
 												"from": {
 													"type": "string"
+												},
+												"suggestions": {
+													"type": "array",
+													"items": {
+														"type": "string"
+													},
+													"description": "Quick replies offered with it (a new agent's greeting)"
 												}
 											}
 										},
@@ -8350,6 +8378,13 @@
 														"properties": {
 															"from": {
 																"type": "string"
+															},
+															"suggestions": {
+																"type": "array",
+																"items": {
+																	"type": "string"
+																},
+																"description": "Quick replies offered with it (a new agent's greeting)"
 															}
 														}
 													},
@@ -10650,6 +10685,13 @@
 										"properties": {
 											"from": {
 												"type": "string"
+											},
+											"suggestions": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												},
+												"description": "Quick replies offered with it (a new agent's greeting)"
 											}
 										}
 									},
@@ -12924,6 +12966,9 @@
 						"asksFirst": {
 							"type": "boolean"
 						},
+						"draft": {
+							"type": "boolean"
+						},
 						"status": {
 							"type": "object",
 							"required": [
@@ -13270,6 +13315,13 @@
 														"properties": {
 															"from": {
 																"type": "string"
+															},
+															"suggestions": {
+																"type": "array",
+																"items": {
+																	"type": "string"
+																},
+																"description": "Quick replies offered with it (a new agent's greeting)"
 															}
 														}
 													},
@@ -15022,6 +15074,13 @@
 														"properties": {
 															"from": {
 																"type": "string"
+															},
+															"suggestions": {
+																"type": "array",
+																"items": {
+																	"type": "string"
+																},
+																"description": "Quick replies offered with it (a new agent's greeting)"
 															}
 														}
 													},
@@ -16754,6 +16813,13 @@
 														"properties": {
 															"from": {
 																"type": "string"
+															},
+															"suggestions": {
+																"type": "array",
+																"items": {
+																	"type": "string"
+																},
+																"description": "Quick replies offered with it (a new agent's greeting)"
 															}
 														}
 													},
@@ -19073,6 +19139,13 @@
 																	"properties": {
 																		"from": {
 																			"type": "string"
+																		},
+																		"suggestions": {
+																			"type": "array",
+																			"items": {
+																				"type": "string"
+																			},
+																			"description": "Quick replies offered with it (a new agent's greeting)"
 																		}
 																	}
 																},
@@ -21436,6 +21509,9 @@
 									"asksFirst": {
 										"type": "boolean"
 									},
+									"draft": {
+										"type": "boolean"
+									},
 									"status": {
 										"type": "object",
 										"required": [
@@ -21979,6 +22055,9 @@
 										"type": "boolean"
 									},
 									"asksFirst": {
+										"type": "boolean"
+									},
+									"draft": {
 										"type": "boolean"
 									},
 									"status": {
@@ -22747,6 +22826,13 @@
 										"properties": {
 											"from": {
 												"type": "string"
+											},
+											"suggestions": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												},
+												"description": "Quick replies offered with it (a new agent's greeting)"
 											}
 										}
 									},
@@ -25099,6 +25185,13 @@
 												"properties": {
 													"from": {
 														"type": "string"
+													},
+													"suggestions": {
+														"type": "array",
+														"items": {
+															"type": "string"
+														},
+														"description": "Quick replies offered with it (a new agent's greeting)"
 													}
 												}
 											},
@@ -38024,6 +38117,10 @@
 							},
 							"next": {
 								"type": "string"
+							},
+							"cron": {
+								"type": "string",
+								"description": "A repeating one's cron"
 							}
 						}
 					}
@@ -38076,6 +38173,10 @@
 				},
 				"prompt": {
 					"type": "string"
+				},
+				"trial": {
+					"type": "boolean",
+					"description": "A trial run right after it's set up (docs/spec/21 D4)"
 				}
 			}
 		},
