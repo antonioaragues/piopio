@@ -163,7 +163,12 @@ private struct AddTeamTask: View {
 struct TeamLandingCard: View {
     let engine: EngineController
     let team: TeamInfo
+    /// In a lead conversation (docs/spec/21 D6, design 5b-4): a green card with what its tasks cost.
+    var conversation: String? = nil
+    var onMerged: (() -> Void)? = nil
     @State private var landing: TeamLanding?
+    @State private var job: TeamJob?
+    @State private var showingFiles = false
     @State private var busy = false
     @State private var confirming = false
     @State private var note: (text: String, warn: Bool)?
@@ -174,10 +179,69 @@ struct TeamLandingCard: View {
     var body: some View {
         // A stack, not a Group: an empty Group has nothing to run the task on.
         VStack(alignment: .leading, spacing: 0) {
-            if let landing, landing.ahead > 0 { card(landing) }
+            if let landing, landing.ahead > 0 { if conversation != nil { conversationCard(landing) } else { card(landing) } }
             else if let note { line(note.text, warn: note.warn).frame(maxWidth: .infinity, alignment: .leading) }
         }
-        .task(id: key) { landing = await engine.teamLanding(team) }
+        .task(id: key) {
+            landing = await engine.teamLanding(team)
+            if let conversation { job = await engine.teamJob(team, conversationId: conversation) }
+        }
+    }
+
+    /// The design's green: oklch(0.66 0.14 150) on a dark green.
+    private static let green = Color(red: 0.36, green: 0.66, blue: 0.42)
+
+    /// "Ready for main · 3 tasks · 14 files · checks passed · $0.36", with Merge, See changes and Push for a PR.
+    private func conversationCard(_ l: TeamLanding) -> some View {
+        var meta = [count(l.tasks.count, "task"), count(l.files.count, "file")]
+        if team.testCommand?.isEmpty == false { meta.append("checks passed") }
+        if let cost = job?.cost, cost > 0 { meta.append(cost < 0.01 ? "<$0.01" : String(format: "$%.2f", cost)) }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Self.green)
+                Text("Ready for \(l.base)").font(.system(size: 13.5, weight: .semibold))
+                Text(meta.joined(separator: " · ")).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg2)
+                Spacer(minLength: 0)
+                if busy { ProgressView().controlSize(.small) }
+            }
+            HStack(spacing: 8) {
+                Button("Merge into \(l.base)") { confirming = true }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                Button("See changes") { showingFiles = true }.buttonStyle(PillStyle(compact: true))
+                    .popover(isPresented: $showingFiles, arrowEdge: .bottom) { files(l) }
+                if l.remote != nil { Button("Push for a PR") { Task { await land("push") } }.buttonStyle(PillStyle(compact: true)) }
+                Spacer()
+            }
+            if l.behind > 0 { line("\(l.base) has \(count(l.behind, "commit")) the team doesn't. If they touch the same files, the merge stops and changes nothing.", warn: false) }
+            if let note { line(note.text, warn: note.warn) }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Self.green.opacity(0.1)))
+        .background(Color.dsWin, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Self.green, lineWidth: 1))
+        .disabled(busy)
+        .alert("Merge \(l.branch) into \(l.base)?", isPresented: $confirming) {
+            Button("Merge") { Task { await land("merge") } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(count(l.tasks.count, "task")), \(count(l.files.count, "file")). The team keeps working from there.")
+        }
+    }
+
+    private func files(_ l: TeamLanding) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(l.files, id: \.path) { f in
+                HStack(spacing: 8) {
+                    Text(f.path).font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.head)
+                    Spacer(minLength: 12)
+                    if f.added > 0 { Text("+\(f.added)").foregroundStyle(Color.dsGreen) }
+                    if f.removed > 0 { Text("−\(f.removed)").foregroundStyle(Color.dsRed) }
+                }
+                .font(.system(size: 12).monospacedDigit())
+            }
+        }
+        .padding(12)
+        .frame(width: 380)
     }
 
     private func card(_ l: TeamLanding) -> some View {
@@ -241,6 +305,7 @@ struct TeamLandingCard: View {
                 note = ("Pushed \(team.git?.branch ?? "the team's branch")\(result.compareUrl != nil ? ": create the pull request in your browser." : ".")", false)
             } else {
                 note = ("Merged into \(team.git?.base ?? "the project")\(result.commit.map { " (\($0))" } ?? ""). The lead knows.", false)
+                onMerged?()
             }
         } catch {
             note = ((error as? EngineError)?.message ?? error.localizedDescription, true)

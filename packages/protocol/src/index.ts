@@ -73,6 +73,13 @@ export const ToolDetails = Type.Union([
 		edited: Type.Optional(Type.Boolean()),
 		note: Type.Optional(Type.String()),
 	}),
+	/** One of your agents asked from a conversation (docs/spec/21 D6): who, whether an @mention brought it in, and how it went. */
+	Type.Object({
+		type: Type.Literal("agent"),
+		agent: Type.Object({ id: Type.String(), name: Type.String() }),
+		joined: Type.Optional(Type.Boolean({ description: "Brought in with @Name for this message" })),
+		status: Type.Optional(literals("replied", "no_reply", "failed")),
+	}),
 ]);
 export type ToolDetails = Static<typeof ToolDetails>;
 
@@ -1651,6 +1658,11 @@ export const methods = {
 	"teams.promoteMember": { params: Type.Object({ id: Type.String(), roleId: Type.String() }), result: Type.Object({ agent: ContainerRef }) },
 	/** What a conversation's tasks have cost (a job), against the team's budget per job. */
 	"teams.job": { params: Type.Object({ id: Type.String(), conversationId: Type.String() }), result: Type.Object({ cost: Type.Number(), tasks: Type.Number(), budget: Type.Optional(Type.Number()) }) },
+	/** What a team needs in a project (docs/spec/21 D6, design 5c-2): git, checks it can run, AGENTS.md. */
+	"teams.fitCheck": {
+		params: Type.Object({ cwd: Type.String() }),
+		result: Type.Object({ git: Type.Boolean(), checks: Type.Optional(Type.String({ description: "The test command found in the folder" })), agentsMd: Type.Boolean() }),
+	},
 	/** A project's routines (docs/spec/21 AD5): each run opens a session there, with the team's lead when it has one. */
 	"routines.list": { params: Type.Object({ project: Type.String() }), result: Type.Object({ routines: Type.Array(TeamRoutine) }) },
 	"routines.add": {

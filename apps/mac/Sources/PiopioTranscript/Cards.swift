@@ -18,6 +18,8 @@ extension NSAttributedString.Key {
     static let piopioFooter = NSAttributedString.Key("piopio.footer")
     static let piopioFooterLink = NSAttributedString.Key("piopio.footerLink")
     static let piopioFooterColor = NSAttributedString.Key("piopio.footerColor")
+    /// A quote's rule in another colour (an agent's answer, docs/spec/21 D6).
+    static let piopioCardTint = NSAttributedString.Key("piopio.cardTint")
 }
 
 public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, link, note, pills, divider, approval }
@@ -91,8 +93,9 @@ final class CardLayoutFragment: NSTextLayoutFragment {
             fill(context, rect, DS.card, radius: DS.Radius.card)
             stroke(context, rect, DS.line, radius: DS.Radius.card)
         case .quote:
-            context.setFillColor(DS.line.cgColor)
-            context.fill(CGRect(x: rect.minX, y: rect.minY, width: 3, height: rect.height))
+            let tint = (textElement as? NSTextParagraph)?.attributedString.attribute(.piopioCardTint, at: 0, effectiveRange: nil) as? NSColor
+            context.setFillColor((tint ?? DS.line).cgColor)
+            context.fill(CGRect(x: rect.minX, y: rect.minY, width: tint == nil ? 3 : 2, height: rect.height))
         case .user:
             fill(context, rect, DS.bubble, radius: 12)
         case .note:

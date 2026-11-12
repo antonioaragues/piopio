@@ -761,6 +761,17 @@ public struct TeamLandParams: Encodable, Sendable {
 }
 public struct TeamLandResult: Decodable, Sendable { public var commit: String?; public var compareUrl: String?; public var output: String? }
 
+/// What a lead conversation's tasks cost (docs/spec/21 D1): the merge card's "$0.36".
+public struct TeamJobParams: Encodable, Sendable {
+    public var id, conversationId: String
+    public init(id: String, conversationId: String) { self.id = id; self.conversationId = conversationId }
+}
+public struct TeamJob: Decodable, Sendable, Hashable { public var cost: Double; public var tasks: Int; public var budget: Double? }
+
+/// What a team needs in a project (docs/spec/21 D6): git, the checks found there, AGENTS.md.
+public struct FitCheckParams: Encodable, Sendable { public var cwd: String; public init(cwd: String) { self.cwd = cwd } }
+public struct FitCheck: Decodable, Sendable, Hashable { public var git: Bool; public var checks: String?; public var agentsMd: Bool }
+
 /// What starts a team's work on its own (docs/spec/19 T1).
 /// Home's agenda (docs/spec/21 D2): today's timeline and what happened since your last visit.
 public struct HomeAgenda: Decodable, Sendable, Hashable {

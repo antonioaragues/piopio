@@ -16,6 +16,8 @@ import { defineTool, type ConversationId, type Harness } from "@earendil-works/p
 import type { AgentDefinition } from "./definition.js";
 
 export const AGENT_ENTRY = "piopio.agent-msg";
+/** The sender of what the owner's conversations ask an agent (`@Name`, ask_agent): Piopio, for the owner. */
+export const PIOPIO_CONVERSATIONS = "piopio";
 
 export type AgentRef = { id: string; name: string };
 export type Envelope = {
@@ -232,7 +234,8 @@ export class Peers {
 		const accept = this.def.acceptFrom;
 		const dir = await this.host.directory();
 		const sender = dir.find((a) => a.id === envelope.from.id);
-		if (accept && !accept.includes(envelope.from.id) && !(sender && accept.includes(sender.slug))) throw new Error(`${this.def.name} doesn't accept messages from ${envelope.from.name}.`);
+		// Piopio asks for the owner, from one of their conversations (docs/spec/21 D6): always let in.
+		if (envelope.from.id !== PIOPIO_CONVERSATIONS && accept && !accept.includes(envelope.from.id) && !(sender && accept.includes(sender.slug))) throw new Error(`${this.def.name} doesn't accept messages from ${envelope.from.name}.`);
 		if (envelope.hop > MAX_HOPS) throw new Error("Too many hops.");
 		const gate = await this.host.gate();
 		if (!gate.ok) throw new Error(gate.message);

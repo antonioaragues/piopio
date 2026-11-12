@@ -41,6 +41,7 @@ import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
 import { runCommand, type TeamHost, type TeamRunner } from "./teams/runner.js";
 import type { TeamBridge } from "./teams/extension.js";
+import type { ConsultBridge } from "./consult.js";
 import { routineLabel } from "./teams/routines.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { SdkEventMapper } from "./timeline/pi-sdk.js";
@@ -848,6 +849,52 @@ export class Sessions {
 		if (!result.saved && result.errors.length) throw new EngineError("INVALID", result.errors.map((e) => e.message).join(" "));
 	}
 
+	/** Answers your conversations wait for (docs/spec/21 D6), by request id. */
+	private readonly consulting = new Map<string, (reply: string) => void>();
+
+	/** Your agents, asked from a conversation: each answers in its conversation with Piopio. */
+	private consultBridge(): ConsultBridge {
+		return {
+			agents: () =>
+				[...this.entries.values()].flatMap((e) => {
+					if (e.ref.kind !== "agent") return [];
+					try {
+						const def = this.agentDefinition(e.ref.id).definition;
+						return def.interview ? [] : [{ id: e.ref.id, name: def.name, ...(def.description ? { description: def.description } : {}) }];
+					} catch {
+						return [];
+					}
+				}),
+			ask: async (agentId, message, from) => {
+				const def = this.agentDefinition(agentId).definition;
+				const requestId = `amsg_${randomUUID().slice(0, 12)}`;
+				const envelope: Envelope = {
+					id: requestId,
+					mode: "ask",
+					from: { id: "piopio", name: "Piopio" },
+					to: { id: agentId, name: def.name },
+					text: `For the user, from their conversation “${from}”:\n\n${message}`,
+					traceId: `tr_${randomUUID().slice(0, 12)}`,
+					hop: 1,
+					requestId,
+					at: new Date().toISOString(),
+				};
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				const answer = new Promise<string | undefined>((resolve) => {
+					this.consulting.set(requestId, resolve);
+					timer = setTimeout(() => resolve(undefined), this.agentAskTimeoutMs ?? 10 * 60_000);
+				});
+				try {
+					await (await this.agent({ kind: "agent", id: agentId })).core.peers.receive(envelope);
+					return await answer;
+				} finally {
+					clearTimeout(timer);
+					this.consulting.delete(requestId);
+				}
+			},
+		};
+	}
+
 	/** Agents reaching each other in this engine (06 §7 AA7): who they are, delivery, a trace's cost, shared memory. */
 	private peerHost() {
 		const agents = () => [...this.entries.values()].filter((e) => e.ref.kind === "agent");
@@ -865,6 +912,11 @@ export class Sessions {
 					return def ? [{ id: def.id, slug: def.slug, name: def.name, ...(def.acceptFrom ? { acceptFrom: def.acceptFrom } : {}) }] : [];
 				}),
 			deliver: async (to: string, envelope: Envelope) => {
+				// An answer to one of your conversations (consultBridge).
+				if (to === "piopio" && envelope.mode === "reply") {
+					this.consulting.get(envelope.requestId ?? "")?.(envelope.text);
+					return;
+				}
 				if (this.entries.get(to)?.ref.kind !== "agent") throw new Error("No such agent.");
 				await (await this.agent({ kind: "agent", id: to })).core.peers.receive(envelope);
 			},
@@ -1525,6 +1577,8 @@ export class Sessions {
 			},
 			...(entry.parent || entry.team ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
 			...(entry.team && this.teams?.has(entry.team.id) ? { team: this.teamBridge(entry) } : {}),
+			// Your agents, from your conversations (not a member's task or a subagent): ask_agent and @Name.
+			...(!entry.parent && (!entry.team || entry.team.kind === "lead") ? { consult: { bridge: this.consultBridge(), from: () => entry.title } } : {}),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			toolsOff: () => [...new Set([...(entry.toolsOff ?? []), ...((entry.parent && this.entries.get(entry.parent.id)?.toolsOff) || [])])],

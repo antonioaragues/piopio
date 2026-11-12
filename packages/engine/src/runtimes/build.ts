@@ -28,6 +28,7 @@ import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
 import { buildPromptExtension } from "../tools/build-prompt.js";
 import { teamExtension, type TeamBridge } from "../teams/extension.js";
+import { consultExtension, type ConsultBridge } from "../consult.js";
 import { guardsExtension } from "../tools/guards.js";
 import { formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
@@ -78,6 +79,8 @@ export type BuildOpenOptions = {
 	runTask?: SubagentBridge["run"];
 	/** A team's session: the lead's board tools, or a reviewer's verdict (docs/spec/19). */
 	team?: TeamBridge;
+	/** Your agents, asked from this conversation with ask_agent or @Name (docs/spec/21 D6). */
+	consult?: { bridge: ConsultBridge; from: () => string };
 };
 
 export class BuildRuntime implements Runtime {
@@ -133,6 +136,7 @@ export class BuildRuntime implements Runtime {
 				notesExtension(o.cwd),
 				guardsExtension(),
 				...(o.team ? [teamExtension(o.team)] : []),
+				...(o.consult ? [consultExtension(o.consult.bridge, o.consult.from)] : []),
 				// Full access runs commands as before; otherwise they write only inside the project.
 				sandboxExtension({ enabled: () => (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" }, { shellPath: () => settingsManager.getShellPath() }),
 				approvalsExtension({

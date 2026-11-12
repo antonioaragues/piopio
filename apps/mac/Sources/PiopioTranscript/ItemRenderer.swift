@@ -44,6 +44,9 @@ nonisolated struct ItemRenderer: Sendable {
             if compact { return NSAttributedString() }
             let routine = u.text.hasPrefix("[Routine] ")
             let text = String(u.text.dropFirst(routine ? 10 : 8))
+            // The plan block above the composer shows each task's state (docs/spec/21 AD9): only what's notable stays a
+            // line here, a task sent back or blocked.
+            if !routine, !Self.notable(text) { return NSAttributedString() }
             let first = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? text
             let rest = text.dropFirst(first.count).trimmingCharacters(in: .whitespacesAndNewlines)
             let title = (routine ? "Routine · " : "Board · ") + first
@@ -76,6 +79,8 @@ nonisolated struct ItemRenderer: Sendable {
             if case .number(let n)? = t.args?["number"] { out.append(note("Question \(Int(n)) of 3")) }
             for block in MarkdownStream(text: t.args?["question"]?.stringValue ?? "").blocks { out.append(render(block)) }
             return out
+        case .tool(let t) where t.tool == "ask_agent":
+            return agentAnswer(t)
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
         case .tool(let t) where t.tool == "present_files" && t.status == .done:
@@ -254,6 +259,39 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(NSAttributedString(string: lineSeparator + detail, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: undone ? DS.fg3 : DS.fg2]))
         }
         return card(m, .link, lineHeight: 1.5)
+    }
+
+    /// A board update worth a line in the lead's conversation (AD9): a task sent back, or blocked.
+    static func notable(_ boardText: String) -> Bool {
+        let first = boardText.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? boardText
+        return first.contains(" went back to ") || first.contains(" is blocked")
+    }
+
+    /// One of your agents, asked from a conversation (docs/spec/21 D6, design 5c-2): "Rita · joined for this message"
+    /// when `@Rita` brought her in, else "Asked Rita"; her answer indented under a rule in her colour.
+    private func agentAnswer(_ t: ToolItem) -> NSAttributedString {
+        let agent = t.details?["agent"]
+        let name = agent?["name"]?.stringValue ?? t.args?["agent"]?.stringValue ?? "Agent"
+        let id = agent?["id"]?.stringValue ?? ""
+        var joined = false
+        if case .bool(let j)? = t.details?["joined"] { joined = j }
+        let tint = id.isEmpty ? DS.fg3 : AgentPalette.color(id)
+        let head = NSMutableAttributedString()
+        head.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: tint, .baselineOffset: 1]))
+        head.append(NSAttributedString(string: joined ? name : "Asked \(name)", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
+        let state: String? = switch t.status {
+        case .running, .pendingApproval: "  thinking…"
+        default: joined ? "  joined for this message" : nil
+        }
+        if let state { head.append(NSAttributedString(string: state, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg3])) }
+        let out = NSMutableAttributedString(attributedString: line(head, paragraph(spacing: 4, before: 8)))
+        let answer = (t.output ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.status != .running, !answer.isEmpty else { return out }
+        let p = paragraph(spacing: 14, before: 2, indent: 14, tail: 0)
+        let body = NSMutableAttributedString(attributedString: card(Inline.ns(answer.replacingOccurrences(of: "\n", with: lineSeparator), font: self.body, color: t.status == .error ? DS.fg2 : DS.fg), .quote, paragraphStyle: p))
+        body.addAttribute(.piopioCardTint, value: tint, range: NSRange(location: 0, length: body.length))
+        out.append(body)
+        return out
     }
 
     /// A message to or from another agent (06-agents §7 AA5): who, what, the answer once it comes, and the trace.
@@ -1106,6 +1144,23 @@ private extension String {
 
 /// What the app calls each model ("DeepSeek V4.1 Flash 1017" for "deepseek-v4.1-flash-1017"), so a message's footer names
 /// it as the composer's chip does. The app fills it from the engine's catalog; unknown ids fall back to the id.
+/// An agent's colour (docs/spec/21, design 1a): one of five hues, stable for its id. The app's avatars use the same.
+public enum AgentPalette {
+    /// The design's five hues (oklch 0.72 0.12 H, H = 70, 150, 190, 255, 300), as sRGB.
+    public static let rgb: [(Double, Double, Double)] = [(0.86, 0.66, 0.38), (0.49, 0.78, 0.52), (0.36, 0.76, 0.76), (0.46, 0.66, 0.95), (0.72, 0.59, 0.93)]
+
+    public static func index(_ id: String) -> Int {
+        var h: UInt32 = 5381
+        for b in id.utf8 { h = (h &* 33) ^ UInt32(b) }
+        return Int(h % UInt32(rgb.count))
+    }
+
+    static func color(_ id: String) -> NSColor {
+        let (r, g, b) = rgb[index(id)]
+        return NSColor(srgbRed: r, green: g, blue: b, alpha: 1)
+    }
+}
+
 public enum ModelNames {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var names: [String: String] = [:]

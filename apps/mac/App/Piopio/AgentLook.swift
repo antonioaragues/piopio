@@ -1,27 +1,18 @@
 import PiopioKit
+import PiopioTranscript
 import SwiftUI
 
 // One visual language for agents, teams and projects (docs/spec/21, design 1a): a colour, an avatar and a role verb.
 // An agent's colour comes from its id for now (D4 lets you choose it); a team shows its members as a small stack.
 
 enum AgentHue {
-    /// The design's five hues (oklch 0.72 0.12 H, H = 70, 150, 190, 255, 300), as sRGB.
-    static let palette: [Color] = [
-        Color(red: 0.86, green: 0.66, blue: 0.38), // amber
-        Color(red: 0.49, green: 0.78, blue: 0.52), // green
-        Color(red: 0.36, green: 0.76, blue: 0.76), // teal
-        Color(red: 0.46, green: 0.66, blue: 0.95), // blue
-        Color(red: 0.72, green: 0.59, blue: 0.93), // violet
-    ]
+    /// The design's five hues (amber, green, teal, blue, violet), shared with the transcript (AgentPalette).
+    static let palette: [Color] = AgentPalette.rgb.map { Color(red: $0.0, green: $0.1, blue: $0.2) }
     /// Members with no model (CI) and system rows.
     static let system = Color(white: 0.4)
 
     /// A stable colour for an id (an agent's, or a team-only member's).
-    static func color(_ id: String) -> Color {
-        var h: UInt32 = 5381
-        for b in id.utf8 { h = (h &* 33) ^ UInt32(b) }
-        return palette[Int(h % UInt32(palette.count))]
-    }
+    static func color(_ id: String) -> Color { palette[AgentPalette.index(id)] }
 
     /// A team member's colour: its agent's when it is one of yours, else its own; grey for the one that merges.
     static func color(_ role: TeamRole, team: String) -> Color {

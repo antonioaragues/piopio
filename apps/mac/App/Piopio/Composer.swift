@@ -174,6 +174,8 @@ struct Composer: View {
                     AttachButton(pick: pickFiles, help: isBuild ? "Mention files or folders (⌘U)" : "Add files, photos or folders (⌘U)")
                 }
                 if isBuild { EditModeChip(engine: engine, thread: thread) }
+                // Who answers here (docs/spec/21 D6, design 5c-1): only in a project with a team.
+                if isBuild { WhoChip(engine: engine, thread: thread) }
                 if thread.debate != nil { Text("Debate").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6) }
                 Spacer(minLength: 6)
                 if let debate = thread.debate, debate.status == .running {
@@ -513,6 +515,40 @@ struct ComposerChipStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { ChipStyle().makeBody(configuration: configuration) }
 }
 
+/// "with the lead ⌄" (docs/spec/21 D6, design 5c-1): in a project with a team, who answers this conversation. The lead
+/// plans with the team; Piopio alone works on its own, with no board. A conversation keeps who it began with, so the
+/// other choice starts a new one.
+struct WhoChip: View {
+    let engine: EngineController
+    let thread: ThreadModel
+
+    var body: some View {
+        let summary = engine.buildSessions.first { $0.ref.id == thread.ref.id }
+        let project = summary.flatMap { s in engine.projects.first { $0.path == (s.projectPath ?? s.cwd) } }
+        let team = project.flatMap { engine.team(in: $0) }
+        if let summary, let project, let team, summary.team == nil || summary.team?.kind == "lead" {
+            let lead = summary.team?.kind == "lead"
+            Menu {
+                Section(lead ? "This conversation is with \(team.name)'s lead" : "This conversation is with Piopio alone") {
+                    Button(lead ? "New Conversation with Piopio Alone" : "New Conversation with the Lead") {
+                        // The start page picks the team by default; this asks it not to.
+                        if lead { UserDefaults.standard.set(project.id, forKey: "startWithPiopio") }
+                        NotificationCenter.default.post(name: .newBuildSession, object: project.id)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(lead ? "with the lead" : "with Piopio")
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+                }
+                .font(.system(size: 12.5))
+            }
+            .menuStyle(.button).buttonStyle(ComposerChipStyle()).menuIndicator(.hidden).fixedSize()
+            .help(lead ? "The lead does small things itself and puts bigger work on the board" : "Works on its own: no board")
+        }
+    }
+}
+
 /// What the conversation may do in its folder (docs/spec/18 §4): Read only, Ask, Auto-edit, Full auto (below a divider),
 /// and Plan. Switching into or out of Read only changes the tools live; the history stays.
 struct EditModeChip: View {
@@ -573,9 +609,12 @@ enum Suggestion: Hashable, Identifiable {
     case conversation(id: String, title: String)
     case builtIn(BuiltInCommand)
     case command(SessionCommand)
+    /// One of your agents, brought in for this message (docs/spec/21 D6).
+    case agent(id: String, name: String)
 
     var id: String {
         switch self {
+        case .agent(let id, _): "agent:\(id)"
         case .file(let f): "file:\(f.path)"
         case .conversation(let id, _): "conversation:\(id)"
         case .builtIn(let c): "piopio:\(c.name)"
@@ -656,10 +695,15 @@ extension Composer {
             .filter { $0.ref.id != thread.ref.id && ($0.projectPath ?? $0.cwd) == project && $0.title.localizedCaseInsensitiveContains(query) }
             .prefix(4)
             .map { Suggestion.conversation(id: $0.ref.id, title: $0.title) }
+        // Your agents first: `@Rita` brings her in for this message.
+        let agents = engine.agents
+            .filter { $0.agent?.draft != true && (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)) }
+            .prefix(4)
+            .map { Suggestion.agent(id: $0.ref.id, name: $0.title) }
         Task {
             let files = await thread.files(matching: query)
             guard mentionQuery == query else { return } // typing moved on
-            suggestions = Array((files.map(Suggestion.file) + conversations).prefix(12))
+            suggestions = Array((agents + files.map(Suggestion.file) + conversations).prefix(12))
             highlighted = 0
         }
     }
@@ -676,6 +720,9 @@ extension Composer {
 
     func accept(_ suggestion: Suggestion) {
         switch suggestion {
+        case .agent(_, let name):
+            if let query = mentionQuery { text.removeLast(query.count + 1) }
+            text += "@\(name) "
         case .file(let f):
             if let query = mentionQuery { text.removeLast(query.count + 1) }
             text += "@\(f.path)\(f.kind == .folder ? "/" : "") "
@@ -720,12 +767,14 @@ extension Composer {
         case .conversation(_, let title): title
         case .builtIn(let c): "/\(c.name)"
         case .command(let c): "/\(c.name)" + (c.hint.map { " \($0)" } ?? "")
+        case .agent(_, let name): "@\(name)"
         }
     }
 
     private func subtitle(_ s: Suggestion) -> String {
         switch s {
         case .file: ""
+        case .agent: "Your agent · joins for this message"
         case .conversation: isBuild ? "Conversation in this project, read as background" : "Another chat, sent along as background"
         case .builtIn(let c): c.summary
         case .command(let c): c.description.isEmpty ? (c.kind == .skill ? "Skill" : c.kind == .template ? "Prompt template" : "Extension command") : c.description
@@ -736,6 +785,7 @@ extension Composer {
         let name: String = switch s {
         case .file(let f): f.kind == .folder ? "folder" : "doc"
         case .conversation: "bubble.left.and.text.bubble.right"
+        case .agent: "person.crop.circle"
         case .builtIn: "command"
         case .command(let c): c.kind == .skill ? "sparkles" : c.kind == .template ? "text.badge.plus" : "puzzlepiece.extension"
         }

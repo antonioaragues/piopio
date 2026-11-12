@@ -287,6 +287,11 @@ struct ConversationStart: View {
         guard !teamChosen, case .newSession(let id) = item, targetRaw == "project:" + id,
               let project = engine.projects.first(where: { $0.id == id }), let team = engine.team(in: project) else { return }
         teamChosen = true
+        // "New conversation with Piopio alone" from a lead's composer (docs/spec/21 D6).
+        if UserDefaults.standard.string(forKey: "startWithPiopio") == id {
+            UserDefaults.standard.removeObject(forKey: "startWithPiopio")
+            return
+        }
         targetRaw = "team:" + team.id
     }
 }

@@ -735,6 +735,16 @@ final class EngineController {
         return try? await client?.call("teams.landing", TeamIdParams(id: team.id), as: TeamLanding.self)
     }
 
+    /// What a lead conversation's tasks cost so far, and the team's budget per job.
+    func teamJob(_ team: TeamInfo, conversationId: String) async -> TeamJob? {
+        try? await client?.call("teams.job", TeamJobParams(id: team.id, conversationId: conversationId), as: TeamJob.self)
+    }
+
+    /// Before a team works in a folder (docs/spec/21 D6): git, checks, AGENTS.md.
+    func fitCheck(_ cwd: String) async -> FitCheck? {
+        try? await client?.call("teams.fitCheck", FitCheckParams(cwd: cwd), as: FitCheck.self)
+    }
+
     /// Merges the team's branch into the project's ("merge"), or pushes it for a pull request ("push").
     func landTeam(_ team: TeamInfo, action: String) async throws -> TeamLandResult {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }

@@ -633,6 +633,54 @@
 											"type": "string"
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"type",
+										"agent"
+									],
+									"properties": {
+										"type": {
+											"type": "string",
+											"const": "agent"
+										},
+										"agent": {
+											"type": "object",
+											"required": [
+												"id",
+												"name"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												}
+											}
+										},
+										"joined": {
+											"type": "boolean",
+											"description": "Brought in with @Name for this message"
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "replied"
+												},
+												{
+													"type": "string",
+													"const": "no_reply"
+												},
+												{
+													"type": "string",
+													"const": "failed"
+												}
+											]
+										}
+									}
 								}
 							]
 						},
@@ -1279,6 +1327,54 @@
 													},
 													"note": {
 														"type": "string"
+													}
+												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"agent"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "agent"
+													},
+													"agent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"joined": {
+														"type": "boolean",
+														"description": "Brought in with @Name for this message"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "no_reply"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
 													}
 												}
 											}
@@ -2901,6 +2997,54 @@
 															"type": "string"
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"agent"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "agent"
+														},
+														"agent": {
+															"type": "object",
+															"required": [
+																"id",
+																"name"
+															],
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																}
+															}
+														},
+														"joined": {
+															"type": "boolean",
+															"description": "Brought in with @Name for this message"
+														},
+														"status": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "replied"
+																},
+																{
+																	"type": "string",
+																	"const": "no_reply"
+																},
+																{
+																	"type": "string",
+																	"const": "failed"
+																}
+															]
+														}
+													}
 												}
 											]
 										},
@@ -3547,6 +3691,54 @@
 																	},
 																	"note": {
 																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"agent"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "agent"
+																	},
+																	"agent": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			}
+																		}
+																	},
+																	"joined": {
+																		"type": "boolean",
+																		"description": "Brought in with @Name for this message"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "replied"
+																			},
+																			{
+																				"type": "string",
+																				"const": "no_reply"
+																			},
+																			{
+																				"type": "string",
+																				"const": "failed"
+																			}
+																		]
 																	}
 																}
 															}
@@ -4660,6 +4852,54 @@
 															"type": "string"
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"agent"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "agent"
+														},
+														"agent": {
+															"type": "object",
+															"required": [
+																"id",
+																"name"
+															],
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																}
+															}
+														},
+														"joined": {
+															"type": "boolean",
+															"description": "Brought in with @Name for this message"
+														},
+														"status": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "replied"
+																},
+																{
+																	"type": "string",
+																	"const": "no_reply"
+																},
+																{
+																	"type": "string",
+																	"const": "failed"
+																}
+															]
+														}
+													}
 												}
 											]
 										},
@@ -5306,6 +5546,54 @@
 																	},
 																	"note": {
 																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"agent"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "agent"
+																	},
+																	"agent": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			}
+																		}
+																	},
+																	"joined": {
+																		"type": "boolean",
+																		"description": "Brought in with @Name for this message"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "replied"
+																			},
+																			{
+																				"type": "string",
+																				"const": "no_reply"
+																			},
+																			{
+																				"type": "string",
+																				"const": "failed"
+																			}
+																		]
 																	}
 																}
 															}
@@ -6399,6 +6687,54 @@
 															"type": "string"
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"agent"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "agent"
+														},
+														"agent": {
+															"type": "object",
+															"required": [
+																"id",
+																"name"
+															],
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																}
+															}
+														},
+														"joined": {
+															"type": "boolean",
+															"description": "Brought in with @Name for this message"
+														},
+														"status": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "replied"
+																},
+																{
+																	"type": "string",
+																	"const": "no_reply"
+																},
+																{
+																	"type": "string",
+																	"const": "failed"
+																}
+															]
+														}
+													}
 												}
 											]
 										},
@@ -7045,6 +7381,54 @@
 																	},
 																	"note": {
 																		"type": "string"
+																	}
+																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"agent"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "agent"
+																	},
+																	"agent": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			}
+																		}
+																	},
+																	"joined": {
+																		"type": "boolean",
+																		"description": "Brought in with @Name for this message"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "replied"
+																			},
+																			{
+																				"type": "string",
+																				"const": "no_reply"
+																			},
+																			{
+																				"type": "string",
+																				"const": "failed"
+																			}
+																		]
 																	}
 																}
 															}
@@ -8725,6 +9109,54 @@
 																		"type": "string"
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"agent"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "agent"
+																	},
+																	"agent": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			}
+																		}
+																	},
+																	"joined": {
+																		"type": "boolean",
+																		"description": "Brought in with @Name for this message"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "replied"
+																			},
+																			{
+																				"type": "string",
+																				"const": "no_reply"
+																			},
+																			{
+																				"type": "string",
+																				"const": "failed"
+																			}
+																		]
+																	}
+																}
 															}
 														]
 													},
@@ -9371,6 +9803,54 @@
 																				},
 																				"note": {
 																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"agent"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "agent"
+																				},
+																				"agent": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						}
+																					}
+																				},
+																				"joined": {
+																					"type": "boolean",
+																					"description": "Brought in with @Name for this message"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "replied"
+																						},
+																						{
+																							"type": "string",
+																							"const": "no_reply"
+																						},
+																						{
+																							"type": "string",
+																							"const": "failed"
+																						}
+																					]
 																				}
 																			}
 																		}
@@ -11032,6 +11512,54 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"agent"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "agent"
+													},
+													"agent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"joined": {
+														"type": "boolean",
+														"description": "Brought in with @Name for this message"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "no_reply"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													}
+												}
 											}
 										]
 									},
@@ -11678,6 +12206,54 @@
 																},
 																"note": {
 																	"type": "string"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"agent"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "agent"
+																},
+																"agent": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"name"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"name": {
+																			"type": "string"
+																		}
+																	}
+																},
+																"joined": {
+																	"type": "boolean",
+																	"description": "Brought in with @Name for this message"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "replied"
+																		},
+																		{
+																			"type": "string",
+																			"const": "no_reply"
+																		},
+																		{
+																			"type": "string",
+																			"const": "failed"
+																		}
+																	]
 																}
 															}
 														}
@@ -13662,6 +14238,54 @@
 																		"type": "string"
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"agent"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "agent"
+																	},
+																	"agent": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			}
+																		}
+																	},
+																	"joined": {
+																		"type": "boolean",
+																		"description": "Brought in with @Name for this message"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "replied"
+																			},
+																			{
+																				"type": "string",
+																				"const": "no_reply"
+																			},
+																			{
+																				"type": "string",
+																				"const": "failed"
+																			}
+																		]
+																	}
+																}
 															}
 														]
 													},
@@ -14308,6 +14932,54 @@
 																				},
 																				"note": {
 																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"agent"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "agent"
+																				},
+																				"agent": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						}
+																					}
+																				},
+																				"joined": {
+																					"type": "boolean",
+																					"description": "Brought in with @Name for this message"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "replied"
+																						},
+																						{
+																							"type": "string",
+																							"const": "no_reply"
+																						},
+																						{
+																							"type": "string",
+																							"const": "failed"
+																						}
+																					]
 																				}
 																			}
 																		}
@@ -15421,6 +16093,54 @@
 																		"type": "string"
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"agent"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "agent"
+																	},
+																	"agent": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			}
+																		}
+																	},
+																	"joined": {
+																		"type": "boolean",
+																		"description": "Brought in with @Name for this message"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "replied"
+																			},
+																			{
+																				"type": "string",
+																				"const": "no_reply"
+																			},
+																			{
+																				"type": "string",
+																				"const": "failed"
+																			}
+																		]
+																	}
+																}
 															}
 														]
 													},
@@ -16067,6 +16787,54 @@
 																				},
 																				"note": {
 																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"agent"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "agent"
+																				},
+																				"agent": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						}
+																					}
+																				},
+																				"joined": {
+																					"type": "boolean",
+																					"description": "Brought in with @Name for this message"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "replied"
+																						},
+																						{
+																							"type": "string",
+																							"const": "no_reply"
+																						},
+																						{
+																							"type": "string",
+																							"const": "failed"
+																						}
+																					]
 																				}
 																			}
 																		}
@@ -17160,6 +17928,54 @@
 																		"type": "string"
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"agent"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "agent"
+																	},
+																	"agent": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			}
+																		}
+																	},
+																	"joined": {
+																		"type": "boolean",
+																		"description": "Brought in with @Name for this message"
+																	},
+																	"status": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "replied"
+																			},
+																			{
+																				"type": "string",
+																				"const": "no_reply"
+																			},
+																			{
+																				"type": "string",
+																				"const": "failed"
+																			}
+																		]
+																	}
+																}
 															}
 														]
 													},
@@ -17806,6 +18622,54 @@
 																				},
 																				"note": {
 																					"type": "string"
+																				}
+																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"agent"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "agent"
+																				},
+																				"agent": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						}
+																					}
+																				},
+																				"joined": {
+																					"type": "boolean",
+																					"description": "Brought in with @Name for this message"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "replied"
+																						},
+																						{
+																							"type": "string",
+																							"const": "no_reply"
+																						},
+																						{
+																							"type": "string",
+																							"const": "failed"
+																						}
+																					]
 																				}
 																			}
 																		}
@@ -19486,6 +20350,54 @@
 																					"type": "string"
 																				}
 																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"agent"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "agent"
+																				},
+																				"agent": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						}
+																					}
+																				},
+																				"joined": {
+																					"type": "boolean",
+																					"description": "Brought in with @Name for this message"
+																				},
+																				"status": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "replied"
+																						},
+																						{
+																							"type": "string",
+																							"const": "no_reply"
+																						},
+																						{
+																							"type": "string",
+																							"const": "failed"
+																						}
+																					]
+																				}
+																			}
 																		}
 																	]
 																},
@@ -20132,6 +21044,54 @@
 																							},
 																							"note": {
 																								"type": "string"
+																							}
+																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"agent"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "agent"
+																							},
+																							"agent": {
+																								"type": "object",
+																								"required": [
+																									"id",
+																									"name"
+																								],
+																								"properties": {
+																									"id": {
+																										"type": "string"
+																									},
+																									"name": {
+																										"type": "string"
+																									}
+																								}
+																							},
+																							"joined": {
+																								"type": "boolean",
+																								"description": "Brought in with @Name for this message"
+																							},
+																							"status": {
+																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "replied"
+																									},
+																									{
+																										"type": "string",
+																										"const": "no_reply"
+																									},
+																									{
+																										"type": "string",
+																										"const": "failed"
+																									}
+																								]
 																							}
 																						}
 																					}
@@ -23173,6 +24133,54 @@
 														"type": "string"
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"agent"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "agent"
+													},
+													"agent": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														}
+													},
+													"joined": {
+														"type": "boolean",
+														"description": "Brought in with @Name for this message"
+													},
+													"status": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "replied"
+															},
+															{
+																"type": "string",
+																"const": "no_reply"
+															},
+															{
+																"type": "string",
+																"const": "failed"
+															}
+														]
+													}
+												}
 											}
 										]
 									},
@@ -23819,6 +24827,54 @@
 																},
 																"note": {
 																	"type": "string"
+																}
+															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"agent"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "agent"
+																},
+																"agent": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"name"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"name": {
+																			"type": "string"
+																		}
+																	}
+																},
+																"joined": {
+																	"type": "boolean",
+																	"description": "Brought in with @Name for this message"
+																},
+																"status": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "replied"
+																		},
+																		{
+																			"type": "string",
+																			"const": "no_reply"
+																		},
+																		{
+																			"type": "string",
+																			"const": "failed"
+																		}
+																	]
 																}
 															}
 														}
@@ -25532,6 +26588,54 @@
 																"type": "string"
 															}
 														}
+													},
+													{
+														"type": "object",
+														"required": [
+															"type",
+															"agent"
+														],
+														"properties": {
+															"type": {
+																"type": "string",
+																"const": "agent"
+															},
+															"agent": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	}
+																}
+															},
+															"joined": {
+																"type": "boolean",
+																"description": "Brought in with @Name for this message"
+															},
+															"status": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "replied"
+																	},
+																	{
+																		"type": "string",
+																		"const": "no_reply"
+																	},
+																	{
+																		"type": "string",
+																		"const": "failed"
+																	}
+																]
+															}
+														}
 													}
 												]
 											},
@@ -26178,6 +27282,54 @@
 																		},
 																		"note": {
 																			"type": "string"
+																		}
+																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"agent"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "agent"
+																		},
+																		"agent": {
+																			"type": "object",
+																			"required": [
+																				"id",
+																				"name"
+																			],
+																			"properties": {
+																				"id": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				}
+																			}
+																		},
+																		"joined": {
+																			"type": "boolean",
+																			"description": "Brought in with @Name for this message"
+																		},
+																		"status": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "replied"
+																				},
+																				{
+																					"type": "string",
+																					"const": "no_reply"
+																				},
+																				{
+																					"type": "string",
+																					"const": "failed"
+																				}
+																			]
 																		}
 																	}
 																}
@@ -35643,6 +36795,36 @@
 				},
 				"budget": {
 					"type": "number"
+				}
+			}
+		},
+		"teams.fitCheck.params": {
+			"type": "object",
+			"required": [
+				"cwd"
+			],
+			"properties": {
+				"cwd": {
+					"type": "string"
+				}
+			}
+		},
+		"teams.fitCheck.result": {
+			"type": "object",
+			"required": [
+				"git",
+				"agentsMd"
+			],
+			"properties": {
+				"git": {
+					"type": "boolean"
+				},
+				"checks": {
+					"type": "string",
+					"description": "The test command found in the folder"
+				},
+				"agentsMd": {
+					"type": "boolean"
 				}
 			}
 		},

@@ -33,11 +33,12 @@ import { exportMemory, MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
 import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
 import { groupSteps, StepsView } from "./timeline/steps.js";
+import { fitCheck } from "./teams/fit.js";
 import type { ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans and files handed over (they read as part of the conversation). */
-const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "propose_plan" || tool.tool === "present_files";
+const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
@@ -910,6 +911,10 @@ export class Engine {
 				const p = params as Params<"teams.promoteMember">;
 				const agent = await this.teams.promoteMember(p.id, p.roleId);
 				return { agent: { kind: "agent", id: agent } } satisfies Result<"teams.promoteMember">;
+			}
+			case "teams.fitCheck": {
+				const p = params as Params<"teams.fitCheck">;
+				return fitCheck(p.cwd) satisfies Result<"teams.fitCheck">;
 			}
 			case "teams.job": {
 				const p = params as Params<"teams.job">;

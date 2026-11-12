@@ -202,8 +202,8 @@ struct BuildSessionView: View {
                 if !session.prompts.isEmpty {
                     PromptStack(session: session).frame(maxWidth: 680)
                 }
-                // A lead conversation's tasks (docs/spec/20 §4), live from the board.
-                if let team = leadTeam { ConversationTasks(engine: engine, team: team, conversationId: summary.ref.id) }
+                // A lead conversation's plan (docs/spec/21 D6): its tasks live from the board, then the merge card.
+                if let team = leadTeam { ConversationPlan(engine: engine, team: team, conversationId: summary.ref.id) }
                 Composer(engine: engine, thread: session).frame(maxWidth: 680)
             }
             .padding(.horizontal, 40)

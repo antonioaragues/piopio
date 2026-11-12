@@ -226,3 +226,39 @@ and D6. D4 and D5 can swap.
 - **Captures:** `PIOPIO_DEMO_MEMBER=<role id>` opens a member's editor; `add` opens Add member.
 - **Not yet:** a per-tool Off · Asks · Allowed list for members (the design's "Tools"; members keep one mode for now);
   a team-only member's own page (5d-2); dragging members between columns.
+
+## 12. D6 as built (2026-11-13)
+
+- **Who works here** (4a): two radio cards, Piopio alone ("Each conversation works on its own") and A team, with a
+  mini chain (Tech lead → Builder ×3 → QA → CI in 16pt avatars) and a menu: Open Team, Save for Reuse, Remove from
+  Project. Without a team, the menu is "Choose a team" (your teams, then templates), and "No team fits? Describe one
+  for this project…" opens the team start page. Choosing Piopio alone asks before removing the team.
+- **How the team works here:** Tasks at once and Checks (monospace). Routines follow, with or without a team.
+  AGENTS.md and NOTES.md show "Edited 2 days ago" with Open, or Create (a short starter file).
+- **The fit check** (5c-2), before a team starts in a folder (`teams.fitCheck`): git ("Start git", ticked), the checks
+  found in the folder (`pnpm test`, `swift test`, `cargo test`, `go test ./...`, `pytest`, `make test`; editable),
+  and AGENTS.md ("Write one with Piopio": a conversation with Piopio alone in the project writes it). Then Cancel / Add
+  to project.
+- **The empty Board** (4b): your teams and templates, each "Use here" (through the fit check), or "Or describe one…".
+- **"with the lead ⌄"** (5c-1) in the composer of a project with a team. A conversation keeps who it began with, so
+  the menu starts a new one with the other (Piopio alone or the lead). Turning an existing conversation into the
+  lead's is D7.
+- **@mentions** (5c-2): `@` lists your agents first ("Your agent · joins for this message"). Conversations with
+  Piopio and with a lead have `ask_agent`, and the prompt lists your agents. A message with `@Rita` tells the model to
+  ask her first. Rita answers in her own conversation with Piopio (her instructions, model and memory; it isn't one of
+  her people, and `acceptFrom` doesn't apply to it), and the answer comes back to the conversation. It shows as "●
+  Rita · joined for this message", or "Asked Rita" when the model chose to, with the answer indented under a 2pt rule
+  in her colour. Members' task sessions don't get the tool.
+- **The plan is one live block** (5b-3, AD9) above the composer: "Plan · 3 tasks · 1 approved, 1 blocked, 1
+  building", a row per task with its dot, member and state (waiting, building, in review, merging, approved, merged,
+  blocked). A row opens the task's session; Board opens the project's board. In the transcript, board updates stay a
+  line only when a task was sent back or blocked.
+- **The merge card in the conversation** (5b-4): once nothing of this conversation's is on the board, a green card:
+  "Ready for main · 3 tasks · 2 files · checks passed · $0.36", with Merge into main, See changes (the files with
+  +/−) and Push for a PR. It counts the whole team branch, since that's what merges. After a merge, a team that lives
+  only here asks "This team stays on piopio. Use it elsewhere too?": Save as "App team" / Keep it here only.
+- **Agent colours** come from one palette shared by the app and the transcript (`AgentPalette`).
+- **Captures:** `PIOPIO_DEMO_FIT=<template id>` opens the fit check on a project page.
+- **Not yet:** switching an existing conversation to the lead or away from it (D7); the agent's avatar on its answer
+  (a dot in its colour for now); "Save this team?" was checked in code, not in a capture (it needs a merge from the
+  app).
