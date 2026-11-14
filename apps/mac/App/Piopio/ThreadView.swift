@@ -54,10 +54,7 @@ struct ThreadView: View {
                     .allowsHitTesting(false)
                 VStack(spacing: 8) {
                     if !thread.isFollowing {
-                        Button { thread.scrollToLatest() } label: {
-                            Label("Jump to latest", systemImage: "arrow.down").font(.system(size: 12, weight: .medium))
-                        }
-                        .buttonStyle(PillStyle(kind: .toolbar, compact: true))
+                        JumpToLatestButton { thread.scrollToLatest() }
                     }
                     Composer(engine: engine, thread: thread).frame(maxWidth: 680)
                 }

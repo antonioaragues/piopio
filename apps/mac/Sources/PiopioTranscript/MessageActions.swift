@@ -37,6 +37,9 @@ public final class MessageActions: @unchecked Sendable {
     var copied = false
     /// Remember this was used on this answer (the button shows a check).
     var remembered = false
+    /// A popover from this row is open (Remember this, Rewind): the row stays while it does, though the pointer has
+    /// left the message, or the popover would close with it.
+    var popoverOpen = false
     @ObservationIgnored weak var document: TranscriptDocument?
 
     init(itemId: String, role: Role, text: String) {
@@ -87,7 +90,7 @@ struct ActionsRow: View {
     var body: some View {
         HStack(spacing: 0) {
             if actions.role == .user { Spacer(minLength: 0) }
-            if actions.visible || actions.copied { buttons.transition(.opacity) }
+            if actions.visible || actions.copied || actions.popoverOpen { buttons.transition(.opacity) }
             if actions.visible { info.padding(.leading, 6).transition(.opacity) }
             if actions.role == .answer { Spacer(minLength: 0) }
         }
@@ -122,6 +125,7 @@ struct ActionsRow: View {
                 .popover(isPresented: $rewinding, arrowEdge: .bottom) {
                     RewindPopover(itemId: actions.itemId, document: actions.document) { rewinding = false }
                 }
+                .onChange(of: rewinding) { _, open in actions.popoverOpen = open }
             }
         } else {
             if let destination = actions.document?.rememberDestination { RememberButton(actions: actions, destination: destination) }
@@ -280,6 +284,7 @@ struct RememberButton: View {
             }
             .padding(14)
         }
+        .onChange(of: open) { _, open in actions.popoverOpen = open }
     }
 
     /// The answer's first paragraph as plain text, at most about 280 characters (cut at a sentence when it can).

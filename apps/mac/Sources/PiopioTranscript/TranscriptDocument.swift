@@ -152,6 +152,44 @@ public final class TranscriptDocument {
         onAction?(action)
     }
 
+    // MARK: Copy button
+
+    /// A code card's Copy button, and what it reads for a moment after a click. Same length, so the swap leaves the
+    /// segments' lengths alone.
+    nonisolated static let copyLabel = "\u{2009}Copy\u{2009}"
+    nonisolated static let copiedLabel = "Copied"
+
+    /// The Copy button under `index` reads "Copied" for a moment (a code card's header: the pill tagged `.button`).
+    func flashCopied(at index: Int) {
+        guard index < storage.length,
+              storage.attribute(.piopioPill, at: index, effectiveRange: nil) as? String == PillStyle.button.rawValue else { return }
+        var range = NSRange()
+        _ = storage.attribute(.piopioPill, at: index, longestEffectiveRange: &range, in: NSRange(location: 0, length: storage.length))
+        guard (storage.string as NSString).substring(with: range) == Self.copyLabel else { return }
+        // Found again by its token: older messages may load above it while it shows.
+        let token = UUID().uuidString
+        swapLabel(range, to: Self.copiedLabel, color: DS.fg, token: token)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard let self else { return }
+            var found: NSRange?
+            self.storage.enumerateAttribute(.piopioCopyToken, in: NSRange(location: 0, length: self.storage.length)) { value, run, stop in
+                if value as? String == token { found = run; stop.pointee = true }
+            }
+            if let found { self.swapLabel(found, to: Self.copyLabel, color: DS.fg2, token: nil) }
+        }
+    }
+
+    private func swapLabel(_ range: NSRange, to label: String, color: NSColor, token: String?) {
+        guard label.utf16.count == range.length else { return }
+        var attrs = storage.attributes(at: range.location, effectiveRange: nil)
+        attrs[.foregroundColor] = color
+        attrs[.piopioCopyToken] = token
+        storage.beginEditing()
+        storage.replaceCharacters(in: range, with: NSAttributedString(string: label, attributes: attrs))
+        storage.endEditing()
+    }
+
     // MARK: Loading
 
     /// Replaces the document with a snapshot: the newest window is built off the main thread.
@@ -442,6 +480,15 @@ public final class TranscriptDocument {
             guard abs(style.headIndent - indent) > 0.5 else { return }
             style.headIndent = indent
             style.firstLineHeadIndent = indent
+            storage.addAttribute(.paragraphStyle, value: style, range: run)
+        }
+        // Code cards: the Copy button sits at the right edge, on a right tab stop fitted to the column.
+        storage.enumerateAttribute(.piopioRightTab, in: range) { value, run, _ in
+            guard let inset = (value as? NSNumber).map({ CGFloat($0.doubleValue) }),
+                  let style = (storage.attribute(.paragraphStyle, at: run.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { return }
+            let location = column - inset
+            guard style.tabStops.count != 1 || abs(style.tabStops[0].location - location) > 0.5 else { return }
+            style.tabStops = [NSTextTab(textAlignment: .right, location: location)]
             storage.addAttribute(.paragraphStyle, value: style, range: run)
         }
         storage.endEditing()
@@ -812,6 +859,7 @@ private final class LinkHandler: NSObject, NSTextViewDelegate {
         let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))
         guard let url, let action = TranscriptAction(url: url) else { return false } // regular links open in the browser
         document?.handle(action)
+        if case .copyText = action { document?.flashCopied(at: charIndex) }
         return true
     }
 }

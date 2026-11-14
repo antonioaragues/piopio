@@ -119,6 +119,30 @@ extension View {
 
 /// Buttons (docs/design/grey): one black action per view (`.primary` / `.strong`: inv, radius 8); everything else is
 /// plain text in fg2 (`.secondary`) or a ghost button that gets a grey fill on hover (`.toolbar`, radius 6).
+/// "Jump to latest" over the thread: an opaque pill with a hairline and a soft shadow, so it reads over the text
+/// scrolling under it.
+struct JumpToLatestButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Label("Jump to latest", systemImage: "arrow.down")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(hovering ? Color.dsFg : Color.dsFg2)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .background(Color.dsPill, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color(nsColor: DS.glassEdge), lineWidth: 1))
+                .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Scroll to the newest message")
+    }
+}
+
 struct PillStyle: ButtonStyle {
     enum Kind { case toolbar, secondary, primary, strong }
     var kind: Kind = .secondary

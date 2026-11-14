@@ -609,6 +609,8 @@ nonisolated struct ItemRenderer: Sendable {
         }
         let p = paragraph(spacing: 10)
         p.alignment = .right
+        // The chip reaches past its text: keep its right edge on the bubble's.
+        p.tailIndent = -9
         p.lineHeightMultiple = 1.9
         return line(m, p)
     }
@@ -1055,19 +1057,23 @@ nonisolated struct ItemRenderer: Sendable {
             if !compact, language == nil || ["text", "txt", "plaintext", "markdown", "md"].contains(language!.lowercased()), let table = TableContent.spaced(code) {
                 return attachmentParagraph(TableAttachment(table: table))
             }
-            // The header: what it is, and Copy.
+            // The header: what it is on the left, a Copy button on the right (a right tab the document fits to the column).
             let m = NSMutableAttributedString()
             let label: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg3]
-            if let language { m.append(NSAttributedString(string: language + "  ·  ", attributes: label)) }
-            m.append(NSAttributedString(string: "Copy", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg2, .link: TranscriptAction.copyText(code).url]))
+            m.append(NSAttributedString(string: (language ?? "") + "\t", attributes: label))
+            m.append(NSAttributedString(string: TranscriptDocument.copyLabel, attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .medium), .foregroundColor: DS.fg2, .link: TranscriptAction.copyText(code).url, .piopioPill: PillStyle.button.rawValue, .toolTip: "Copy code"]))
             m.append(NSAttributedString(string: lineSeparator, attributes: label))
             m.append(NSAttributedString(string: lineSeparator, attributes: [.font: NSFont.systemFont(ofSize: 4)]))
             let start = m.length
-            m.append(NSAttributedString(string: code.replacingOccurrences(of: "\n", with: lineSeparator), attributes: [.font: mono, .foregroundColor: DS.fg]))
-            for (range, token) in Highlighter.tokens(code) where NSMaxRange(range) + start <= m.length {
+            // Tabs show as spaces: the header's right tab stop would catch them.
+            let shown = code.replacingOccurrences(of: "\t", with: "    ")
+            m.append(NSAttributedString(string: shown.replacingOccurrences(of: "\n", with: lineSeparator), attributes: [.font: mono, .foregroundColor: DS.fg]))
+            for (range, token) in Highlighter.tokens(shown) where NSMaxRange(range) + start <= m.length {
                 m.addAttribute(.foregroundColor, value: Highlighter.color(token), range: NSRange(location: range.location + start, length: range.length))
             }
-            return card(m, .code, lineHeight: 1.25)
+            let coded = NSMutableAttributedString(attributedString: card(m, .code, lineHeight: 1.25))
+            coded.addAttribute(.piopioRightTab, value: NSNumber(value: Double(CardLayoutFragment.padding + 4)), range: NSRange(location: 0, length: coded.length))
+            return coded
         case .table(let header, _, let rows):
             if compact {
                 // Quick Chat's narrow panel keeps the plain, monospaced form.

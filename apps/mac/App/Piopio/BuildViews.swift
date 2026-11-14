@@ -196,10 +196,7 @@ struct BuildSessionView: View {
                 .allowsHitTesting(false)
             VStack(spacing: 8) {
                 if !session.isFollowing {
-                    Button { session.scrollToLatest() } label: {
-                        Label("Jump to latest", systemImage: "arrow.down").font(.system(size: 12, weight: .medium))
-                    }
-                    .buttonStyle(PillStyle(kind: .toolbar, compact: true))
+                    JumpToLatestButton { session.scrollToLatest() }
                 }
                 if !session.prompts.isEmpty {
                     PromptStack(session: session).frame(maxWidth: 680)

@@ -20,11 +20,16 @@ extension NSAttributedString.Key {
     static let piopioFooterColor = NSAttributedString.Key("piopio.footerColor")
     /// A quote's rule in another colour (an agent's answer, docs/spec/21 D6).
     static let piopioCardTint = NSAttributedString.Key("piopio.cardTint")
+    /// A right-aligned tab stop this far from the column's right edge (a code card's Copy button); the document sets
+    /// it per column width.
+    static let piopioRightTab = NSAttributedString.Key("piopio.rightTab")
+    /// Marks a Copy button showing "Copied", to find it again when it goes back.
+    static let piopioCopyToken = NSAttributedString.Key("piopio.copyToken")
 }
 
 public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, link, note, pills, divider, approval }
 
-enum PillStyle: String { case primary, secondary, file, code }
+enum PillStyle: String { case primary, secondary, file, code, button }
 
 let lineSeparator = "\u{2028}"
 
@@ -133,8 +138,22 @@ final class CardLayoutFragment: NSTextLayoutFragment {
                     fill(context, CGRect(x: rect.minX - 3, y: rect.maxY - h + 1.5, width: rect.width + 6, height: h), DS.inv, radius: 6)
                 case .secondary: break
                 case .file:
-                    fill(context, rect, DS.card, radius: 8)
-                    stroke(context, rect, DS.line, radius: 8)
+                    // Sized from the name's font at the baseline, like code chips: the chip line is tall, and its bounds
+                    // would leave the name sitting at the bottom of the chip.
+                    let font = NSFont.systemFont(ofSize: 12.5, weight: .medium)
+                    let baseline = b.minY + line.glyphOrigin.y + point.y
+                    let pad: CGFloat = 7
+                    let chip = CGRect(x: rect.minX - 4, y: baseline - font.ascender - pad, width: rect.width + 8, height: font.ascender - font.descender + pad * 2)
+                    fill(context, chip, DS.card, radius: DS.Radius.button)
+                    stroke(context, chip, DS.line, radius: DS.Radius.button)
+                case .button:
+                    // A small bordered button (a code card's Copy).
+                    let font = paragraph.attribute(.font, at: start, effectiveRange: nil) as? NSFont ?? .systemFont(ofSize: 12)
+                    let baseline = b.minY + line.glyphOrigin.y + point.y
+                    let pad: CGFloat = 4
+                    let button = CGRect(x: rect.minX - 4, y: baseline - font.ascender - pad, width: rect.width + 8, height: font.ascender - font.descender + pad * 2)
+                    fill(context, button, DS.card, radius: DS.Radius.selector)
+                    stroke(context, button, DS.line, radius: DS.Radius.selector)
                 case .code:
                     // Inline code and project paths (chat v3): chip fill, radius 5, a little air around the text. Sized
                     // from the chip's own font at its baseline: tall lines put their extra space above the text, so the

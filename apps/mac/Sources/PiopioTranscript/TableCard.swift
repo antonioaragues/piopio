@@ -11,11 +11,13 @@ struct TableContent: Sendable {
     let header: [String]
     let rows: [[String]]
 
-    static var cellFont: NSFont { NSFont.systemFont(ofSize: 13) }
-    static var headerFont: NSFont { NSFont.systemFont(ofSize: 12, weight: .semibold) }
-    static var firstColumnFont: NSFont { NSFont.systemFont(ofSize: 13, weight: .medium) }
-    static let padH: CGFloat = 12
-    static let padV: CGFloat = 8
+    // The header reads at the body's size, not smaller; it's set apart by its fill and weight.
+    static var cellFont: NSFont { NSFont.systemFont(ofSize: DS.transcriptSize) }
+    static var headerFont: NSFont { NSFont.systemFont(ofSize: DS.transcriptSize, weight: .semibold) }
+    static var firstColumnFont: NSFont { NSFont.systemFont(ofSize: DS.transcriptSize, weight: .medium) }
+    static let padH: CGFloat = 14
+    static let padV: CGFloat = 9
+    static let radius: CGFloat = DS.Radius.card
 
     var columns: Int { max(header.count, rows.map(\.count).max() ?? 0) }
 
@@ -51,7 +53,7 @@ struct TableContent: Sendable {
     }
 
     func height(width: CGFloat) -> CGFloat {
-        heights(widths: widths(for: width)).reduce(0, +) + 2
+        heights(widths: widths(for: width)).reduce(0, +)
     }
 
     /// The cell's text without Markdown's emphasis marks (what's measured; the view renders the marks).
@@ -152,15 +154,26 @@ struct TableCardView: View {
         GeometryReader { geo in
             let widths = table.widths(for: geo.size.width)
             let heights = table.heights(widths: widths)
-            VStack(alignment: .leading, spacing: 0) {
-                row(table.header, widths: widths, height: heights[0], header: true)
-                ForEach(Array(table.rows.enumerated()), id: \.offset) { r, cells in
-                    Rectangle().fill(Color(nsColor: DS.line)).frame(height: 0.5)
-                    row(cells, widths: widths, height: heights[r + 1] - 0.5, header: false)
+            let shape = RoundedRectangle(cornerRadius: TableContent.radius, style: .continuous)
+            // The header's fill runs to the border and into the first row, with no rule under it; hairlines only
+            // between the rows below (each takes its point from the row it sits on).
+            ZStack(alignment: .topLeading) {
+                Color(nsColor: DS.card)
+                // Rounded at the top with the card, square where it meets the first row.
+                UnevenRoundedRectangle(topLeadingRadius: TableContent.radius, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: TableContent.radius, style: .continuous)
+                    .fill(Color(nsColor: DS.bubble))
+                    .frame(width: geo.size.width, height: heights[0])
+                VStack(alignment: .leading, spacing: 0) {
+                    row(table.header, widths: widths, height: heights[0], header: true)
+                    ForEach(Array(table.rows.enumerated()), id: \.offset) { r, cells in
+                        if r > 0 { Rectangle().fill(Color(nsColor: DS.line)).frame(height: 1) }
+                        row(cells, widths: widths, height: heights[r + 1] - (r > 0 ? 1 : 0), header: false)
+                    }
                 }
             }
-            .overlay(alignment: .top) { Rectangle().fill(Color(nsColor: DS.line)).frame(height: 0.5) }
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Color(nsColor: DS.line), lineWidth: 1))
         }
     }
 
@@ -169,7 +182,7 @@ struct TableCardView: View {
             ForEach(widths.indices, id: \.self) { c in
                 Text(Self.inline(table.cell(cells, c)))
                     .font(Font(header ? TableContent.headerFont : c == 0 ? TableContent.firstColumnFont : TableContent.cellFont))
-                    .foregroundStyle(Color(nsColor: header ? DS.fg3 : DS.fg))
+                    .foregroundStyle(Color(nsColor: DS.fg))
                     .lineSpacing(1)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, TableContent.padH)
