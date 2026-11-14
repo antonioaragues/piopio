@@ -1,6 +1,6 @@
 # 24 — Side conversations
 
-Status: decisions SC1–SC9 confirmed by the user 2026-11-12; the open questions of §9 remain; nothing here is built. "Side conversation" is a working name (SCQ1). Reference: the Claude
+Status: decisions SC1–SC9 confirmed by the user 2026-11-12; the questions of §9 decided 2026-11-14; nothing here is built. Reference: the Claude
 desktop app, which opens a separate session when a request has nothing to do with the one you're in
 ([the card](../design/side-conversations/reference-card.png), [the note back](../design/side-conversations/reference-note.png)).
 
@@ -59,7 +59,7 @@ words or your click.**
 | SC3 | **Three ways to start, all yours:** *offered* (you asked for the work; the card asks where), *asked* (you said "separately"; starts now), *proposed* (Piopio's idea; a card you may start). | Let the model start what it proposes within a budget, as a team lead does (TD3). Not here: a lead was given a job; this is unasked work. |
 | SC4 | **A side conversation is an ordinary conversation** of the same kind, in the same project, listed under its parent. Not a new container kind. | A lighter "sub-thread" drawn inside the parent's transcript: keeps you in one place, but brings back two subjects in one history. |
 | SC5 | **Same project, same or narrower permissions, same "who"** (Piopio, an agent, or the team's lead, 20 PT6) as the parent. It can't give itself more than its parent has. | Let the brief choose. |
-| SC6 | **Work that changes files in a git project gets its own worktree** (BP5); read-only work shares the folder. In a folder without git it shares the folder and is told which files are its own (SCQ4). | Always share the folder: simpler, and two conversations overwrite each other. |
+| SC6 | **Work that changes files in a git project gets its own worktree** (BP5); read-only work shares the folder. In a folder without git it shares the folder, is told which files are its own, and edits to files changed on disk since it read them are refused (SCQ4). | Always share the folder: simpler, and two conversations overwrite each other. |
 | SC7 | **It reports back with a short note, which may wake the parent** when the parent is idle and no other side conversation of its own is still working. | Notes only shown, never read by the model (SD1 ships this way first). |
 | SC8 | **Your conversations only.** Loose chats, project conversations, and lead conversations. Not agents' conversations with other people, not debates. | — |
 | SC9 | **Manual first, noticing second** (as CF5 did for moving): `/side`, a message action and "asked" ship before offers and proposals. | Ship the noticing first; it's the part that needs tuning on real use. |
@@ -216,33 +216,34 @@ With the scripted model and a fake clock:
 
 | Milestone | Scope | You can |
 |---|---|---|
-| **SD1 · By hand and by asking** | `/side`, the message action, `side_start` when you ask in words; links, the card with its live line, the Started-from bar, sidebar nesting, the panel section; notes shown but not read by the model. | Say "do that in its own conversation" and watch it work beside this one. |
+| **SD1 · By hand and by asking** | `/side`, the message action, `side_start` when you ask in words; links, the card with its live line, the Started-from bar, sidebar nesting, the panel section; the stale-edit check for shared folders (SCQ4); notes shown but not read by the model. | Say "do that in its own conversation" and watch it work beside this one. |
 | **SD2 · It reports back** | Notes wake the parent (SC7) with batching and the loop guard; `side_send`, `side_read`, `side_stop`; "Side conversations now" in context; finishing from the card. | Ask for two things, keep working, and get "both done, merged?" here. |
-| **SD3 · It notices** | The rule of §3, `side_offer`, `side_propose` and `side_dismiss`, expiry, the settings. A replay set of ~60 real messages from this repo's conversations (half continuations, half new tasks), as the Notebook routing replay did. | Change subject and be asked where it goes. Accept: ≥ 90% of new tasks offered, and at most 1 false offer in 20 continuations, on the default models. |
+| **SD3 · It notices** | The rule of §3, `side_offer`, `side_propose` and `side_dismiss`, expiry, the settings, "Don't ask again" after three (SCQ3), the project chip on loose chats' offers (SCQ5). A replay set of ~60 real messages from this repo's conversations (half continuations, half new tasks), as the Notebook routing replay did. | Change subject and be asked where it goes. Accept: ≥ 90% of new tasks offered, and at most 1 false offer in 20 continuations, on the default models. |
 | **SD4 · Hand-off mid-task** | A new subject while a turn runs: the running task moves to a side conversation (`copy` plus the remaining plan; in a worktree project it commits first and starts from that tip) and this one answers. | Interrupt without losing the work in flight. |
-| **Later** | Open beside (split view) · a utility-model check before the turn (SCQ2) · a side conversation in the cloud or in another project ("in the api repo") · agents' own conversations · Watchdog W1–W5 (17 §4) on side conversations. | |
+| **Later** | Open beside (split view) · a utility-model check before the turn, if SD3's replay asks for it (SCQ2) · a side conversation in the cloud or in another project ("in the api repo") · agents' own conversations · Watchdog W1–W5 (17 §4) on side conversations. | |
 
 SD1 and SD2 need nothing that isn't built. SD3 is prompt work on top; it should wait for a week of using SD1–SD2 by
 hand, which also produces the replay set.
 
-## 9. Open questions
+## 9. Questions decided (2026-11-14)
 
-- SCQ1 · **The name.** "Side conversation", "Sub-thread", "Branch" (taken by forks), "Spin-off"? The app says
-  "conversation" everywhere (CF1), so "side conversation" reads naturally, and `/side` is short.
-- SCQ2 · **A check before the turn?** With small or local models the rule of §3 may be ignored or late. The utility
-  model (on-device, AQ7) could judge "same subject or new?" from the title, the last exchange and the new message,
-  and put the card up before the main model runs. Proposed: measure SD3 first.
-- SCQ3 · **Ask every time?** After a few New conversation answers in a row, offer "Don't ask again" (which sets
-  *Always start*)? Proposed: yes, after three.
-- SCQ4 · **Folders without git** (most ~/Piopio projects). Sharing the folder is fine for documents until two
-  conversations edit the same file. Proposed: share, name the files in the brief, and add a check
-  that refuses an edit to a file changed on disk since the conversation last read it (there's none today; the edit
-  tool only fails when its old text no longer matches).
-- SCQ5 · **Loose chats.** A side conversation of a chat with no project is another loose chat. If its brief is
-  plainly about a known project ("in piopio, …"), should the offer card carry a project chip so it starts there
-  (a Continue-in in one step)? Proposed: yes, in SD3.
-- SCQ6 · **Lead conversations.** In a project with a team, an unrelated request becomes a new lead conversation
-  (PT6) rather than a board task. Is that the right line between "another job for the team" (board) and "another
-  subject" (side)? Proposed: the lead decides; the board is for parts of the job in front of it.
-- SCQ7 · **Should a done side conversation fold away?** Archive it automatically some days after its note was read,
-  keeping the card as the way back. Proposed: no auto-archive in v1.
+All seven went with the proposal.
+
+- SCQ1 · **The name: "side conversation"**, and `/side`. It reads naturally where the app says "conversation"
+  everywhere (CF1); "Branch" stays with forks.
+- SCQ2 · **No check before the turn yet.** SD1–SD3 ship with the prompt rule of §3 alone; SD3's replay set measures how
+  often small and local models miss or are late, and that decides whether the utility model (on-device, AQ7) judges
+  "same subject or new?" before the main model runs (Later, §8).
+- SCQ3 · **Ask every time, with a way out after three.** After three New conversation answers in a row, the card offers
+  "Don't ask again", which sets *Always start*; Settings turns it back. Ships with the offers, in SD3.
+- SCQ4 · **Folders without git share the folder, with a stale-edit check.** The brief names the files that are the side
+  conversation's own, and an edit to a file changed on disk since that conversation last read it is refused, so it
+  reads again first (today the edit tool only fails when its old text no longer matches). The check ships in SD1 and
+  serves any two conversations in one folder, not only side ones.
+- SCQ5 · **Loose chats get a project chip, in SD3.** When a loose chat's side brief is plainly about a known project
+  ("in piopio, …"), the offer card carries that project's chip, which you can change or clear: a Continue-in in one
+  step. Before SD3 a loose chat's side conversation stays loose.
+- SCQ6 · **In a team project, the lead decides.** Parts of the job in front of it go on the board; another subject
+  becomes a new lead conversation (PT6), offered as any side conversation is.
+- SCQ7 · **No auto-archive in v1.** A done side conversation stays until you archive it; the card in the parent stays
+  the way back. Revisit after real use.

@@ -71,7 +71,6 @@ The table at the foot of this page says none are open; that was true on 2026-10-
 | 21 §6 | What a "job" is for the budget; the team estimate; agent page width; Telegram on the strip |
 | 22 §11 | One profile with your sign-ins; where the pane lives; agents with your sign-ins; browser before computer use |
 | 23 §10 | Attended only; browsers see-only; full control as its own milestone; keeping pictures |
-| 24 §9 | SCQ1–SCQ7: the name, a check before the turn, folders without git, loose chats, lead conversations |
 | 17 §8 | DPQ1–DPQ6, most of them moot since TD2; DPQ6 (the off-track check) still stands |
 | 16 §8 | DQ1–DQ3: the name, you as reviewer, remembering a result |
 | 14 §6 | Q1 and Q3, which gate M4 and M5 |
