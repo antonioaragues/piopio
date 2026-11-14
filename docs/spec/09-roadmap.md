@@ -4,6 +4,87 @@ Current implementation and acceptance status: [../status.md](../status.md). The 
 
 Solo developer, no deadline (X9). **Start with the easiest mode.** Each phase ends with something usable every day.
 
+## Where things stand (2026-11-12)
+
+A map of everything open, by track, and a proposed order. The order is a proposal to confirm; the rest of this page
+(phases, backlog) is unchanged below and is the detail behind it.
+
+**The pattern:** six areas are built and tested with the scripted model, and none has passed its real-use acceptance
+(all eight boxes in [status.md](../status.md) are open). Meanwhile five specs were opened in the last ten days
+(19–24), three of them with nothing built. The risk isn't missing features; it's breadth that hasn't been used.
+
+### Tracks
+
+| Track | Specs | Built | Left |
+|---|---|---|---|
+| **A · Make it real** | [status](../status.md), [acceptance](../acceptance.md) | Scripted tests, captures, one real-model team trial (20 §14) | The eight acceptance items; real providers (ChatGPT sign-in, a real Ollama/LiteLLM); real Google and Microsoft accounts; sleep/wake schedules; VoiceOver |
+| **B · Agents and teams** | 06, 19, 20, 21 | 19 T0–T2; 20 P1–P4; 21 D1–D4 | 21 **D5** the team page, **D6** working with a team (`@mentions`, plan block, merge card), **D7** teams born in a project; the "not yet" lists of D2–D4; the real-model trial after D6–D7 |
+| **C · Conversations** | 18, 24, 17, 16 | 18 phases 1–3; Debate DB1–DB2 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the rest of 17 became teams, TD2); Debate **DB3** |
+| **D · Reach** (what the model can touch) | 22, 23, 12, 10 | Connectors C1; providers P0–P1 | Browser **W0–W4**; computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); MCP Apps (D6); image generation (D11) |
+| **E · Cloud and channels** | 13, 19 T3–T4 | Spikes S4 and S7 (go); Telegram from the Mac | 13 **5.1–5.5**: deploy, Telegram by webhook, Mac Bridge, WhatsApp. Nothing is on a real account |
+| **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8, which 17 DP5 and 24's Create PR wait for); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
+| **G · Memory** | 14 | M0–M3 | **M4** past chats, **M5** project lessons, **M6** Hindsight |
+| **H · Small things** | Backlog below | Most of batch 1 and 2 | Voice input (D5), a composer that keeps formatting (D7), web search visible everywhere (D12), Q2 worktree wording, Q3 context files, Q4 where things run, F1 3D |
+
+### Proposed order
+
+One build track at a time, plus Track A running beside it as use, not as building.
+
+**Now**
+1. **Finish spec 21: D5, D6, D7,** then its real-model trial. It's mid-flight: the agent pages follow the new design
+   and the team pages don't yet.
+2. **Track A alongside:** do the day's real work in Piopio and tick the acceptance boxes as they pass. What breaks
+   goes ahead of new features.
+
+**Next**
+3. **Side conversations SD1–SD2** (24) with **Watchdog DP1** (17). Neither needs anything unbuilt, both help daily
+   use at once, and the report bridge they add also serves teams.
+4. **Browser W0, then W1 and W4** (22). W0 is a small go/no-go that also answers computer use's open question
+   (images in tool results). W4, the project preview, is the part Build needs most.
+5. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on team, worktree and
+   side-conversation cards.
+
+**Later** (each waits for something)
+- **Cloud 5.1–5.5 and WhatsApp:** for agents proven locally first (Track A's schedule item) and your Cloudflare
+  account.
+- **Browser W2–W3, computer use U0–U4:** after W1 shows how often reading alone is enough.
+- **Side conversations SD3–SD4:** after a week of SD1–SD2 by hand, which produces the replay set.
+- **Connectors C2–C3:** after Piopio's own Google and Microsoft OAuth apps exist.
+- **Memory M4–M6, Debate DB3, notarization and Sparkle:** when daily use asks for them, or when someone else is
+  about to install it.
+
+**Parked** (no spec work until something above is done): image generation, voice, MCP Apps, the connector
+marketplace, concept → 3D, rooms and side-by-side agents, cloud sandboxes, the iOS companion.
+
+### Only you can do
+- Register Piopio's Google and Microsoft OAuth apps (12, C1's "not done yet").
+- A Cloudflare account and API token (13, before 5.2); a Telegram bot per cloud agent; for WhatsApp, a Meta app, a
+  Business account and a number.
+- Developer ID and notarization (Phase 0's open item).
+- A real ChatGPT sign-in and a real local server (10's "not verified").
+
+### Questions waiting for you
+The table at the foot of this page says none are open; that was true on 2026-10-18. Open today:
+
+| Where | What |
+|---|---|
+| 21 §6 | What a "job" is for the budget; the team estimate; agent page width; Telegram on the strip |
+| 22 §11 | One profile with your sign-ins; where the pane lives; agents with your sign-ins; browser before computer use |
+| 23 §10 | Attended only; browsers see-only; full control as its own milestone; keeping pictures |
+| 24 §9 | SCQ1–SCQ7: the name, a check before the turn, folders without git, loose chats, lead conversations |
+| 17 §8 | DPQ1–DPQ6, most of them moot since TD2; DPQ6 (the off-track check) still stands |
+| 16 §8 | DQ1–DQ3: the name, you as reviewer, remembering a result |
+| 14 §6 | Q1 and Q3, which gate M4 and M5 |
+| Below | Q2 worktree wording, Q3 context files, Q4 where things run, Q5 (moot: notebooks are gone) |
+
+### Housekeeping this page needs
+- **IDs collide.** "D1–D7" is 21's phases, the backlog's design items and the storage decisions; "B", "S" and "Q"
+  repeat too. Proposed: backlog items become BL-n; specs keep their own prefixes.
+- **The backlog mixes done and open.** Proposed: move fixed items to [history](../history/milestones.md) and keep
+  only what's open.
+- **The phase table stopped describing the work** after Phase 4: most of what happened since is under "outside a
+  phase". Proposed: keep the table as history and make the tracks above the working view.
+
 ## Why Chat Threads first
 - **Smallest UI surface:** no file system, git, diffs or safety model.
 - It still builds **most of the shared foundation**: app shell, Local Engine sidecar, Engine Protocol, transcript renderer, composer, model picker, cost tracking, search.
@@ -26,7 +107,7 @@ Each phase ends with something usable every day. What each milestone delivered, 
 
 **Spikes:** S1–S5 in Phase 0; S6 Hindsight as an opt-in memory provider; S7 the cloud harness (go); S8 the memory review. Reports are in [../spikes](../spikes), [packages/cloud](../../packages/cloud/README.md) and [14-memory](14-memory.md).
 
-**Work that started outside a phase:** onboarding and areas ([15](15-onboarding-and-areas.md)); conversation first ([18](18-conversation-first.md), phases 1–3 built 2026-11-07); what came from deepseek-harness (Build's sandbox, `/goal`, `present_files`, earlier conversations, auto review, Claude Code and Codex as subagents); Dispatch ([17](17-dispatch.md), planned); Debate ([16](16-debate.md), review and debate styles built).
+**Work that started outside a phase:** onboarding and areas ([15](15-onboarding-and-areas.md)); conversation first ([18](18-conversation-first.md), phases 1–3 built 2026-11-07); what came from deepseek-harness (Build's sandbox, `/goal`, `present_files`, earlier conversations, auto review, Claude Code and Codex as subagents); Dispatch ([17](17-dispatch.md), planned); Debate ([16](16-debate.md), review and debate styles built); side conversations ([24](24-side-conversations.md), decided 2026-11-12, not built).
 
 ## Backlog from the v2 review (2026-10-22)
 Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
@@ -68,7 +149,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - D7 · A composer that keeps formatting: pasting Markdown (or rich text) today loses it. Show it formatted while typing, or at least keep the Markdown source intact and preview it.
 - D8 · A file viewer for Markdown (rendered), PDF, images and more, used everywhere: chat attachments, notebook files, Build's Files tab. Build's `FileViewer` (`BuildFiles.swift`) showed files as text. **Built 2026-11-05** (`FileView.swift`): one viewer shows Markdown rendered in a reading column (Rendered | Source), PDFs as continuous pages with the page count, images fitted (double-click for actual size, pixel size shown), code and text with line numbers, highlighting and the target line marked, and anything else through Quick Look. Used by Build's file viewer (Edit and Open in an editor stay for text; PDFs and images get Reveal in Finder and Open), a folder chat's preview panel, and a notebook's files (the Files sheet and the right column's rows now open the file). Files you send in a conversation (chats, notebooks, agents, debates) open too: the engine keeps a copy in `<home>/attachments/<conversation>/`, the original when the app says where it is on this Mac (a PDF stays a PDF, an image keeps its full size) and otherwise what was sent; a branched chat copies them and deleting the conversation removes them. Their chips in the transcript and the rows in a chat's Summary open the viewer. Files sent before this have no copy, so their chips don't open.
 - D9 · Custom skills: create, edit and enable skills from the app. Today skills are read from `~/.pi/agent/skills` and enabled pi packages (`tools/chat-resources.ts`), offered as `/skill:name`, with no UI to make or manage them.
-- D10 · Computer use: let agents and chats drive the Mac's screen (screenshots, clicks, typing), with approvals. Builds on Mac apps as tools (4.5). **Spike done 2026-10-22:** [11-computer-use.md](11-computer-use.md) recommends accessibility-first tools built on Peekaboo's Swift automation kit, reached through `app.tool`.
+- D10 · Computer use: let agents and chats drive the Mac's screen (screenshots, clicks, typing), with approvals. Builds on Mac apps as tools (4.5). **Spike done 2026-10-22:** [11-computer-use.md](11-computer-use.md) recommends accessibility-first tools built on Peekaboo's Swift automation kit, reached through `app.tool`. **Design drafted 2026-11-12:** [23-computer-use.md](23-computer-use.md) (Mac apps) and [22-browser.md](22-browser.md) (websites, in a built-in browser that is also Build's web preview).
 - D11 · Image generation in Chat (and as an agent ability), through a provider that offers it (see D2).
 - D12 · Web search: Chat has it already (OpenRouter web plugin, CQ3) and agents have `web_search`. Check it's on and visible in Build sessions, notebooks and the composer, and make it obvious when a turn searched the web.
 

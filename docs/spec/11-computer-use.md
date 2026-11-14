@@ -2,6 +2,8 @@
 
 Roadmap backlog D10: let agents and chats see the Mac's screen and act on it (click, type, scroll), with approvals. This spike checks which models can do it, what pi gives us, which open-source projects are worth reusing, and recommends a path. Nothing is built yet.
 
+**2026-11-12:** the design that follows from this spike is [23-computer-use.md](23-computer-use.md); websites go through the built-in browser, [22-browser.md](22-browser.md).
+
 ## 1. Models
 
 | Provider | How it works | Through Piopio today |
