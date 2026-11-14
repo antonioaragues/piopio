@@ -2,7 +2,7 @@
 import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { appendFileSync, existsSync, unlinkSync, chmodSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, unlinkSync, chmodSync, statSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
@@ -41,7 +41,6 @@ import type { ToolItem } from "@piopio/protocol";
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans and files handed over (they read as part of the conversation). */
 const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_team" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
-import { BROWSER_SERVER, BrowserServer } from "./browser.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
 import { routineLabel, type TeamRoutine } from "./teams/routines.js";
@@ -84,8 +83,6 @@ export type EngineOptions = {
 	/** Telegram's API (tests: a fake one) and how long a poll waits. */
 	telegram?: { fetch?: typeof fetch; pollSeconds?: number; retryMs?: number };
 	log?: (line: string) => void;
-	/** Run Piopio's browser (Playwright MCP, docs/spec/22 §13) and seed it into pi's mcp.json. Off in tests. */
-	browser?: boolean;
 };
 
 import { InputReceipts } from "./requests.js";
@@ -100,7 +97,6 @@ export class Engine {
 	readonly sessions: Sessions;
 	readonly projects: Projects;
 	readonly mcp: McpConfig;
-	private readonly browser?: BrowserServer;
 	readonly settings: Settings;
 	readonly aboutMe: AboutMe;
 	readonly chatMcp: ChatMcp;
@@ -177,7 +173,6 @@ export class Engine {
 		const agentDir = options.piAgentDir ?? getAgentDir();
 		this.projects = new Projects(options.paths.projectsIndex, agentDir, options.paths.projectsRoot, join(options.paths.home, "projects"));
 		this.mcp = new McpConfig(agentDir);
-		if (options.browser) this.browser = new BrowserServer(options.paths.home, this.mcp, this.log);
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
 		this.hub.utilityChoice = () => this.settings.get().models?.utility;
 		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings, async (provider) => {
@@ -285,16 +280,8 @@ export class Engine {
 		this.token = loadOrCreateToken(this.options.paths);
 		await this.hub.ready();
 		await this.aboutMe.migrate().catch((error) => this.log(`About me: couldn't bring in the old doc: ${(error as Error).message}`));
-		// Piopio's browser: added to MCP servers once (and on for chats), then run while it's there and on. Before the
-		// socket opens: the app opens a chat as soon as it connects, and the chat connects to its MCP servers then.
-		if (this.browser) {
-			try {
-				if (await this.browser.seed()) this.setChat(BROWSER_SERVER, true);
-				await this.browser.sync();
-			} catch (error) {
-				this.log(`Browser: ${(error as Error).message}`);
-			}
-		}
+		// The interim browser (Playwright MCP, 2026-11-14) is gone: take out what it left (docs/spec/22 §13).
+		this.removeInterimBrowser();
 		this.server = createServer((stream) => this.accept(new RpcConnectionFor(stream)));
 		await new Promise<void>((resolve, reject) => {
 			this.server!.once("error", reject);
@@ -331,6 +318,25 @@ export class Engine {
 			const facts = (await this.memory.builtin.list(bank, { kinds: ["fact"], limit: 500 }).catch(() => undefined))?.records ?? [];
 			if (facts.length) appendFileSync(notes, `\n${facts.map((f) => `- ${f.text}`).join("\n")}\n`);
 			this.memory.builtin.wipe(bank);
+		}
+	}
+
+	/** The interim browser's `browser` entry in pi's mcp.json (if it still points at its port), its chat switch and its folder. */
+	private removeInterimBrowser(): void {
+		const dir = join(this.options.paths.home, "browser");
+		const stateFile = join(dir, "state.json");
+		if (!existsSync(stateFile)) return;
+		try {
+			const { port } = JSON.parse(readFileSync(stateFile, "utf8")) as { port?: number };
+			const entry = this.mcp.globalServers().find((s) => s.name === "browser");
+			if (port && entry?.server.url === `http://127.0.0.1:${port}/mcp`) {
+				this.mcp.remove("global", undefined, "browser");
+				this.setChat("browser", false);
+			}
+			rmSync(dir, { recursive: true, force: true });
+			this.log("Browser: removed the interim Playwright browser");
+		} catch (error) {
+			this.log(`Browser: couldn't remove the interim one: ${(error as Error).message}`);
 		}
 	}
 
@@ -400,7 +406,6 @@ export class Engine {
 		this.inputReceipts.close();
 		this.hub.extraCosts.close();
 		await this.chatMcp.close();
-		await this.browser?.stop();
 		await this.memory.reset();
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
 	}
@@ -436,11 +441,14 @@ export class Engine {
 				}, writer);
 				// The Mac app serves Apple app tools (§3.12); only a client that says so is asked.
 				if (p.services?.includes("app.tool")) {
-					unregisterTools = this.app.addToolServer(async (call) => {
-						const res = await conn.request("app.tool", call);
-						if (!Value.Check(reverseMethods["app.tool"].result, res)) throw new Error("The app's answer wasn't understood.");
-						return res;
-					});
+					unregisterTools = this.app.addToolServer(
+						async (call) => {
+							const res = await conn.request("app.tool", call);
+							if (!Value.Check(reverseMethods["app.tool"].result, res)) throw new Error("The app's answer wasn't understood.");
+							return res;
+						},
+						{ browser: p.services.includes("browser") },
+					);
 				}
 				return this.hello();
 			}
@@ -735,19 +743,13 @@ export class Engine {
 			case "mcp.remove": {
 				const p = params as Params<"mcp.remove">;
 				this.mcp.remove(p.scope, p.cwd ? this.folder(p) : undefined, p.name);
-				if (p.scope === "global") {
-					await this.browser?.sync();
-					void this.chatMcp.reset();
-				}
+				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
 			}
 			case "mcp.setEnabled": {
 				const p = params as Params<"mcp.setEnabled">;
 				this.mcp.setEnabled(p.scope, p.cwd ? this.folder(p) : undefined, p.name, p.enabled);
-				if (p.scope === "global") {
-					await this.browser?.sync();
-					void this.chatMcp.reset();
-				}
+				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
 			}
 			case "packages.preview":

@@ -1,5 +1,6 @@
 /** Build runtime: one pi-coding-agent SDK session, persisted as a pi CLI-compatible JSONL file. */
 import { codingConnectorsExtension } from "../connectors/extension.js";
+import { codingBrowserExtension, type BrowserCall } from "../tools/browser-tools.js";
 import { groupOf } from "../connectors/permissions.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import {
@@ -42,6 +43,8 @@ const CHECKPOINT_ENTRY = "piopio.checkpoint";
 const REVIEW_ENTRY = "piopio.review";
 
 export type BuildOpenOptions = {
+	/** The browser's tools (docs/spec/22), run by the Mac app for this session. */
+	browser?: BrowserCall;
 	/** Connected apps: their tools, asking through Build's approval prompt before a change. */
 	connectors?: ConnectorHub;
 	/** Connectors and MCP servers this session turned off ("connector:<id>", "mcp:<server>"). */
@@ -137,6 +140,7 @@ export class BuildRuntime implements Runtime {
 				// Before approvals: a server turned off here is refused without asking.
 				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
 				notesExtension(o.cwd),
+				...(o.browser ? [codingBrowserExtension(o.browser)] : []),
 				guardsExtension(),
 				...(o.team ? [teamExtension(o.team)] : []),
 				...(o.consult ? [consultExtension(o.consult.bridge, o.consult.from)] : []),

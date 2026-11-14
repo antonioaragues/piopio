@@ -1008,7 +1008,7 @@ export const methods = {
 			token: Type.String(),
 			client: Type.String(),
 			protocolVersion: Type.String(),
-			/** Reverse requests this client answers besides `secrets.get` (§3.12): `app.tool`, `secrets.set` (also `secrets.delete`). */
+			/** Reverse requests this client answers besides `secrets.get` (§3.12): `app.tool`, `secrets.set` (also `secrets.delete`); `browser` when its `app.tool` runs the browser tools (22-browser). */
 			services: Type.Optional(Type.Array(Type.String())),
 		}),
 		result: Type.Object({ engineId: Type.String(), kind: Type.Union([Type.Literal("local"), Type.Literal("cloud")]), version: Type.String(), protocolVersion: Type.String(), capabilities: EngineCapabilities }),
@@ -1863,14 +1863,17 @@ export const reverseMethods = {
 		result: Type.Object({}),
 	},
 	/**
-	 * An Apple app tool, run by the Mac app with the user's permissions (06-agents §4.1). The app checks `groups`
-	 * (and `shortcuts`) again. `undo` is the call that reverses a change (§4.2).
+	 * A tool only the Mac app can run with the user's permissions: Apple apps for agents (06-agents §4.1), the browser
+	 * for conversations and Build (22-browser §8). The app checks `groups` (and `shortcuts`) again. `agent` asks for an
+	 * agent; `ref` for a conversation or Build session (the browser keeps tabs per `ref`). `undo` is the call that
+	 * reverses a change (§4.2); `images` are screenshots the model sees.
 	 */
 	"app.tool": {
 		params: Type.Object({
 			name: Type.String(),
 			args: Type.Unknown(),
-			agent: Type.Object({ id: Type.String(), name: Type.String() }),
+			agent: Type.Optional(Type.Object({ id: Type.String(), name: Type.String() })),
+			ref: Type.Optional(ContainerRef),
 			groups: Type.Array(Type.String()),
 			shortcuts: Type.Array(Type.String()),
 		}),
@@ -1878,6 +1881,7 @@ export const reverseMethods = {
 			ok: Type.Boolean(),
 			/** What the model reads. */
 			output: Type.String(),
+			images: Type.Optional(Type.Array(Type.Object({ mimeType: Type.String(), data: Type.String() }))),
 			card: Type.Optional(Type.Object({ kind: literals("reminder", "event", "contact", "note", "music", "shortcut"), title: Type.String(), detail: Type.Optional(Type.String()) })),
 			undo: Type.Optional(Type.Object({ name: Type.String(), args: Type.Unknown(), title: Type.String() })),
 		}),

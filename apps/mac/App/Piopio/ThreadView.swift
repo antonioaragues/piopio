@@ -30,9 +30,18 @@ struct ThreadView: View {
         .task { await thread.open() }
     }
 
+    private var browserOpen: Bool { BrowserCenter.shared.openPanels.contains(summary.ref.id) }
+
     private var conversation: some View {
         HStack(spacing: 0) {
             chatColumn
+            // The Browser panel (docs/spec/22 §5): opens by itself when the model browses here.
+            if browserOpen {
+                BrowserPanel(refID: summary.ref.id)
+                    .frame(width: 560)
+                    .sidePanel()
+                    .transition(.move(edge: .trailing))
+            }
             if showSummary || Self.demoSummary {
                 ChatSummaryPanel(engine: engine, thread: thread, summary: summary)
                     .frame(width: 290)
@@ -82,6 +91,12 @@ struct ThreadView: View {
     private var header: some View {
         PageHeader(summary.title, subtitle: subtitle) {
             if let debate = thread.debate { debateControls(debate) } else {
+                ToolbarIcon(symbol: "globe", label: "Browser", on: browserOpen,
+                            help: browserOpen ? "Hide the browser" : "Browser: the pages this chat opened, and yours") {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
+                    }
+                }
                 ToolbarIcon(symbol: "list.bullet.rectangle", label: "Summary", on: showSummary || Self.demoSummary,
                             help: showSummary ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
                     withAnimation(.easeOut(duration: 0.15)) { showSummary.toggle() }

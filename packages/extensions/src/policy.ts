@@ -30,7 +30,8 @@ const USER_TOOLS = new Set(["ask_user", "notify_user", "present_files", "update_
 const RUNNERS = new Set(["npm", "pnpm", "yarn", "npx", "bun", "bunx", "deno", "node", "cargo", "go", "swift", "make", "python", "python3", "uv", "pip", "git", "docker", "xcodebuild", "gradle", "mvn", "dotnet", "bundle", "rake"]);
 
 /** Tools that only read, whatever the session: allowed in Read only. */
-const READ_ONLY_TOOLS = new Set(["web_search", "web_fetch", "todo", "propose_plan", "read_skill", "task"]);
+// The browser's reading tools (docs/spec/22 W1) are network reads like web_fetch.
+const READ_ONLY_TOOLS = new Set(["web_search", "web_fetch", "todo", "propose_plan", "read_skill", "task", "browser_open", "browser_read", "browser_map", "browser_find", "browser_screenshot", "browser_scroll", "browser_back", "browser_tabs", "browser_wait"]);
 
 export function decide(mode: ApprovalMode, tool: string, input: Record<string, unknown>, cwd: string, rules: readonly Rule[], home = homedir(), readOnlyTool: (tool: string) => boolean = () => false): Decision {
 	if (USER_TOOLS.has(tool)) return { action: "allow" };

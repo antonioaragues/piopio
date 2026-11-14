@@ -117,6 +117,8 @@ struct BuildSessionView: View {
                         if let cwd = summary.cwd {
                             FilesPanel(engine: engine, session: session, summary: summary, cwd: cwd, filter: $filesFilter, preview: $previewing, mention: mention)
                         }
+                    case .browser:
+                        BrowserPanel(refID: summary.ref.id)
                     case .inspector:
                         InspectorPanel(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
                                        committing: $committing, onReview: review, onRead: {
@@ -126,8 +128,16 @@ struct BuildSessionView: View {
                                        })
                     }
                 }
-                .frame(width: 300)
+                .frame(width: inspectorTab == .browser ? 560 : 300)
                 .sidePanel()
+            }
+        }
+        // The model opened a page here: show the Browser view (docs/spec/22 §5).
+        .onChange(of: BrowserCenter.shared.reveals[summary.ref.id]) { _, count in
+            guard count != nil else { return }
+            withAnimation(.easeOut(duration: 0.15)) {
+                inspectorTab = .browser
+                showInspector = true
             }
         }
         .task { await session.open() }
@@ -336,6 +346,7 @@ struct BuildSessionView: View {
             HStack(spacing: 2) {
                 viewButton(.inspector)
                 viewButton(.files)
+                viewButton(.browser)
                 if !chatLens {
                     Button { showTerminal.toggle() } label: { Image(systemName: "apple.terminal") }
                         .buttonStyle(IconButtonStyle(on: showTerminal))
@@ -400,12 +411,13 @@ struct BuildSessionView: View {
 
 /// The right column's panels, each an icon in the session toolbar (docs/design/inspector, option 5a).
 enum SessionPanel: String, CaseIterable {
-    case inspector = "Inspector", files = "Files"
+    case inspector = "Inspector", files = "Files", browser = "Browser"
 
     var symbol: String {
         switch self {
         case .inspector: "sidebar.right"
         case .files: "folder"
+        case .browser: "globe"
         }
     }
 
@@ -413,6 +425,7 @@ enum SessionPanel: String, CaseIterable {
         switch self {
         case .inspector: "Inspector: the session and its changes (⌘I)"
         case .files: "Files: the project, with what it touched (⌘P)"
+        case .browser: "Browser: the pages this session opened, and yours"
         }
     }
 }

@@ -9,13 +9,14 @@ import { AppUnavailable } from "@piopio/runtime";
 export type AppToolRequester = (params: ReverseParams<"app.tool">) => Promise<ReverseResult<"app.tool">>;
 
 export class AppServices {
-	private tools: AppToolRequester[] = [];
+	private tools: { requester: AppToolRequester; browser: boolean }[] = [];
 
-	/** A client that answers `app.tool`; returns an unregister function. */
-	addToolServer(requester: AppToolRequester): () => void {
-		this.tools.push(requester);
+	/** A client that answers `app.tool` (and the browser's tools, when it said `browser`); returns an unregister function. */
+	addToolServer(requester: AppToolRequester, options: { browser?: boolean } = {}): () => void {
+		const entry = { requester, browser: options.browser ?? false };
+		this.tools.push(entry);
 		return () => {
-			this.tools = this.tools.filter((r) => r !== requester);
+			this.tools = this.tools.filter((r) => r !== entry);
 		};
 	}
 
@@ -25,7 +26,8 @@ export class AppServices {
 
 	async tool(params: ReverseParams<"app.tool">): Promise<ReverseResult<"app.tool">> {
 		let last: unknown;
-		for (const requester of [...this.tools].reverse()) {
+		const browser = params.groups.includes("browser");
+		for (const { requester } of [...this.tools].reverse().filter((t) => !browser || t.browser)) {
 			try {
 				return await requester(params);
 			} catch (error) {

@@ -1104,17 +1104,49 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		await expect(a.client.call("mcp.add", { scope: "global", name: "bad name", command: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 	}, 60_000);
 
-	test("Piopio's browser is in a chat opened right after the engine starts (docs/spec/22 §13)", async () => {
-		const a = await start(undefined, true, { browser: true });
-		expect(JSON.parse(readFileSync(join(a.home, "pi-agent", "mcp.json"), "utf8")).mcpServers.browser).toMatchObject({ exposure: "deferred" });
+	test("the browser's tools go to the app that runs the browser, with the conversation's ref (docs/spec/22 W1)", async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-browser-")));
+		await a.client.call("projects.add", { path: folder });
 		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
 		await a.client.call("sessions.subscribe", { ref });
-		// The core tools are declared from the start; the rest are found with tool_search.
-		await a.client.call("sessions.submit", { ref, input: { text: 'call: mcp__browser__browser_tabs | {"action":"list"}' } });
-		// Declared: the call reaches Playwright (done here; an error where no Chrome is installed, as on CI).
-		expect((await finishedTools(a, ref, 1))[0]).toMatchObject({ tool: "mcp__browser__browser_tabs" });
-		await a.client.call("sessions.submit", { ref, input: { text: 'call: tool_search | {"query":"drag and drop between elements"}' } });
-		expect((await finishedTools(a, ref, 2))[1]).toMatchObject({ tool: "tool_search", status: "done", output: expect.stringContaining("mcp__browser__browser_drag") });
+		const open = 'call: browser_open | {"url":"https://example.com/"}';
+
+		// No app: the tool says so. An app that doesn't run the browser doesn't count.
+		await a.client.call("sessions.submit", { ref, input: { text: open } });
+		expect((await finishedTools(a, ref, 1))[0]).toMatchObject({ tool: "browser_open", status: "error", output: expect.stringContaining("Piopio isn't open") });
+		const paths = enginePaths(a.home);
+		const old = await TestClient.connect(paths.socket);
+		await old.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "old app", protocolVersion: "1.0", services: ["app.tool"] });
+		old.appTool = () => ({ ok: true, output: "the wrong app" });
+		await a.client.call("sessions.submit", { ref, input: { text: open } });
+		expect((await finishedTools(a, ref, 2))[1]).toMatchObject({ status: "error", output: expect.stringContaining("Piopio isn't open") });
+
+		// The app runs it: text and a screenshot come back; it learns which conversation asked.
+		const app = await TestClient.connect(paths.socket);
+		await app.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "fake app", protocolVersion: "1.0", services: ["app.tool", "browser"] });
+		const calls: any[] = [];
+		const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+		app.appTool = (p) => {
+			calls.push(p);
+			if (p.name === "browser_open") return { ok: true, output: 'Example Domain · https://example.com/\n[e1] link "Learn more" @(320,240)' };
+			if (p.name === "browser_screenshot") return { ok: true, output: "The visible page.", images: [{ mimeType: "image/png", data: png }] };
+			throw new Error(`unexpected ${p.name}`);
+		};
+		await a.client.call("sessions.submit", { ref, input: { text: open } });
+		expect((await finishedTools(a, ref, 3))[2]).toMatchObject({ tool: "browser_open", status: "done", output: expect.stringContaining('[e1] link "Learn more"') });
+		expect(calls[0]).toMatchObject({ name: "browser_open", args: { url: "https://example.com/" }, ref: { kind: "thread", id: ref.id }, groups: ["browser"] });
+		await a.client.call("sessions.submit", { ref, input: { text: "call: browser_screenshot | {}" } });
+		expect((await finishedTools(a, ref, 4))[3]).toMatchObject({ tool: "browser_screenshot", status: "done" });
+
+		// Build sessions have them too, under their own ref.
+		const build = (await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: "full_auto" })).ref;
+		await a.client.call("sessions.subscribe", { ref: build });
+		await a.client.call("sessions.submit", { ref: build, input: { text: open } });
+		expect((await finishedTools(a, build, 1))[0]).toMatchObject({ tool: "browser_open", status: "done" });
+		expect(calls.at(-1)).toMatchObject({ name: "browser_open", ref: { kind: "build", id: build.id } });
+		old.close();
+		app.close();
 	}, 60_000);
 
 	test("a conversation turns an MCP server off for itself: refused in a Build session, gone from a chat, back when on again", async () => {

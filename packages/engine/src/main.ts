@@ -13,8 +13,6 @@ const engine = new Engine({
 	onShutdown: () => void shutdown("backup or restore"),
 	paths: enginePaths(),
 	faux: process.env.PIOPIO_FAUX === "1",
-	// Piopio's browser (Playwright MCP): not with the scripted model (captures, smoke tests), or with PIOPIO_BROWSER=0.
-	browser: process.env.PIOPIO_FAUX !== "1" && process.env.PIOPIO_BROWSER !== "0",
 	...(process.env.PIOPIO_PI_SESSION_DIR ? { piSessionDir: process.env.PIOPIO_PI_SESSION_DIR } : {}),
 	...(process.env.PIOPIO_PI_AGENT_DIR ? { piAgentDir: process.env.PIOPIO_PI_AGENT_DIR } : {}),
 	// Dev and captures with the scripted model only: point connected apps at a fake server (JSON, see ConnectorEndpoints).

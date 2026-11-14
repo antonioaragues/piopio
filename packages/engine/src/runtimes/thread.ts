@@ -16,6 +16,7 @@ import { computeBranches, type ConversationNode, type ViewEntry } from "./branch
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 import { attachChatMcp, type ChatMcp } from "../tools/mcp-chat.js";
+import { durableBrowserExtension, type BrowserCall } from "../tools/browser-tools.js";
 import { CONNECTORS_EXTENSION, durableConnectorsExtension, waitFor, type CallSite } from "../connectors/extension.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import type { Confirm } from "../connectors/tools.js";
@@ -33,6 +34,8 @@ export type BranchState = { active?: string; activity: Record<string, number> };
 type RawEntry = { id: string | number; kind: string; conversationId: string | number; data?: unknown; model?: { role: string; content: unknown }[] };
 
 export type ThreadOpenOptions = {
+	/** The browser's tools (docs/spec/22), run by the Mac app for this conversation. */
+	browser?: BrowserCall;
 	ref: ContainerRef;
 	file: string;
 	hub: ModelHub;
@@ -98,6 +101,7 @@ export class ThreadRuntime implements Runtime {
 		const webExtension = createWebExtension(options.hub, { ...options.webOptions, scope: options.ref.id }) as unknown as Extension;
 		registry.install(webExtension as never);
 		for (const e of options.extensions ?? []) registry.install(e as never);
+		if (options.browser) registry.install(durableBrowserExtension(options.browser) as never);
 		// The clock, the repeated-call nudge and the trim of oversized results (@piopio/runtime context/).
 		registry.install(contextGuardsExtension() as never);
 		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp, offFilter(options.toolsOff, "mcp")) : undefined;

@@ -1,7 +1,8 @@
 # 22 — The built-in browser
 
 Status: draft, 2026-11-12. **2026-11-14: Playwright MCP built in as an interim browser (§13). 2026-11-15: the user
-chose this design (WebKit in the app) as the browser; §11 decided as proposed. W1 replaces the interim one.** Companion to [23-computer-use.md](23-computer-use.md): the browser
+chose this design (WebKit in the app) as the browser; §11 decided as proposed. W1 built 2026-11-15 (§14) and the
+interim one removed.** Companion to [23-computer-use.md](23-computer-use.md): the browser
 is for websites, computer use is for Mac apps. §8 here holds the plumbing both share. Covers roadmap items B10 (web
 preview) and part of D10.
 
@@ -284,8 +285,10 @@ screenshots as images, tabs, console and network.
   to Chrome; a token would need Playwright to support one.
 - Tried with Sonnet in a chat on 2026-11-15 (Hacker News): it works; not tried in Build.
 
-**Interim.** On 2026-11-15 the user chose §1–§12 (WebKit in the app) over making this one Piopio's own. It stays until
-W1 reads pages; W1 removes it, its seeding and the `browser` entry it wrote to `mcp.json` (if still ours).
+**Interim.** On 2026-11-15 the user chose §1–§12 (WebKit in the app) over making this one Piopio's own. Removed with W1
+(§14): the engine deletes its `browser` entry from `mcp.json` (if it still points at its port), its chat switch and
+`<home>/browser/`. What it added to chats' MCP stays: deferred servers named in the prompt, per-tool `toolExposure`,
+and retrying a server that didn't answer.
 
 **Local models can't see screenshots:** custom endpoints are declared text-only (`endpoints.ts`), so pi replaces a
 tool result's image with "(see attached image)". OpenRouter models that take images and ChatGPT sign-in get them.
@@ -296,4 +299,36 @@ world reaches shadow DOM and same-origin frames, and cross-origin frames by thei
 `WKWebsiteDataStore(forIdentifier:)` stores stay apart and persist across launches. A window off screen or never shown
 is throttled to 1 animation frame a second (`inactiveSchedulingPolicy = .none` doesn't help); an on-screen window at
 alpha 0 that ignores the mouse runs at full speed. The real-site run didn't finish.
+
+## 14. W1 as built (2026-11-15)
+
+**Engine.** `tools/browser-tools.ts`: `browser_open`, `_read`, `_map`, `_find`, `_screenshot`, `_scroll`, `_back`,
+`_tabs` and `_wait`, defined once with an extension for chats (pi-durable) and one for Build (pi-coding-agent), and a
+prompt section. Each call goes to the app as `app.tool` with the conversation's `ref` and `groups: ["browser"]`;
+`app.tool` now takes `ref` (with `agent` optional) and answers `images`. Only an app that says `browser` in
+`engine.hello` is asked; with none, the tool says Piopio isn't open. `browser_open` refuses anything but http(s) and
+local or private addresses before asking the app (as `web_fetch`). In Build the tools count as network reads (like
+`web_fetch`): they run in Read only and Auto-edit, and ask in Ask.
+
+**App.** `Browser.swift`: `BrowserCenter` keeps each conversation's tabs (`BrowserSession`, `BrowserTab`), all in one
+persistent `WKWebsiteDataStore(forIdentifier:)`: your profile (BW5). The page script (`BrowserScript.swift`, from W0)
+runs in an isolated content world: the map (refs keyed to the element, `@(x,y)`, secret fields left out and named),
+reading as markdown (headings, lists, links, tables, code; a selector reads every match), scrolling, waiting for text.
+Screenshots are JPEG, at most 1280 px wide. Tabs no panel shows live in a transparent window on screen (alpha 0,
+ignores the mouse) so pages run at full speed (W0). The user agent ends like Safari's. Links to other schemes and to
+local addresses aren't followed; downloads, camera and microphone are refused; pop-ups open as tabs (up to 8);
+`alert`/`confirm`/`prompt` are answered by Piopio and reported to the model.
+
+**Panel.** `BrowserPanel.swift`: a Browser view (globe) in a chat's toolbar and in Build's right column (560 pt):
+tabs when there are several, back / forward / reload, the address (or a search), a new tab, and the page itself,
+which you can use. It opens by itself the first time the model browses in that conversation.
+
+**Checked.** Engine tests: the calls reach only an app that runs the browser, with the conversation's or the Build
+session's ref; the URL check; the interim browser's removal. In the app, with a copy (own bundle id, scripted model,
+temporary data): open, read, find, scroll, screenshot, a second tab, the tab list and wait on Wikipedia, Hacker News
+and BBC News; a local address refused; the panel opening by itself (capture). Not yet with a real model.
+
+**Not in W1:** acting (W2); a folded "Browsed 4 pages" line (each call is its own tool row); Settings › Browser (clear
+the profile); closing a conversation's tabs when it's archived; offering `browser_screenshot` only to models that see
+images; reading pages that lay out with tables (Hacker News) reads cramped.
 

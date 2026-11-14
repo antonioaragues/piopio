@@ -2,6 +2,7 @@
  * Session catalog + open runtimes. Phase 0 keeps the catalog in a JSON index;
  * it moves to catalog.db (SQLite + FTS) with the Phase 1 sidebar.
  */
+import { browserCaller, type BrowserCall } from "./tools/browser-tools.js";
 import type { ConnectorHub } from "./connectors/hub.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
@@ -1169,6 +1170,12 @@ export class Sessions {
 		return aboutMe ? [aboutMe, this.writing] : [this.writing];
 	}
 
+	/** The browser for a conversation or Build session, through the Mac app (docs/spec/22). */
+	private browserFor(ref: ContainerRef): { browser?: BrowserCall } {
+		const app = this.agentHost?.app;
+		return app ? { browser: browserCaller(app, ref, { allowPrivate: this.webOptions.allowPrivate ?? false }) } : {};
+	}
+
 	private chatExtras(kind: "thread"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {
 		if (!this.chat) return {};
 		const aboutMe = this.aboutMeFor(kind)!;
@@ -1573,6 +1580,7 @@ export class Sessions {
 				extensions: [...(this.chatExtras("thread").extensions ?? []), ...(this.historyBridge(entry) ? [historyExtension(this.historyBridge(entry)!) as unknown as Extension] : [])],
 				...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
 				...(this.connectors ? { connectors: this.connectors } : {}),
+				...this.browserFor(entry.ref),
 				toolsOff: () => entry.toolsOff ?? [],
 			});
 		}
@@ -1591,6 +1599,7 @@ export class Sessions {
 			},
 			checkpoints: this.checkpoints,
 			webOptions: this.webOptions,
+			...this.browserFor(entry.ref),
 			sandbox: () => this.chat?.settings.get().build?.sandbox !== false,
 			// Auto review on the session's own model (Settings › Approvals; off by default).
 			review: async (command, request) => {

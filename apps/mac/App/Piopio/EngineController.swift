@@ -272,6 +272,10 @@ final class EngineController {
         let scripted = faux, temporarySecrets = scriptedSecrets
         await client.setReverseHandler { method, params in
             // Apple app tools for agents (06-agents §4.1), run with this app's permissions.
+            // The browser's tools for conversations and Build sessions (docs/spec/22).
+            if method == "app.tool", params["groups"]?.arrayValue?.contains(where: { $0.stringValue == "browser" }) == true {
+                return await BrowserCenter.shared.handle(params)
+            }
             if method == "app.tool" { return await AppleTools.shared.handle(params) }
             // Provider sign-ins and refreshed tokens (docs/spec/10 §10): the Keychain is the store.
             if method == "secrets.set", let name = params["name"]?.stringValue, let value = params["value"]?.stringValue {
@@ -289,7 +293,7 @@ final class EngineController {
         }
         let hello: HelloResult
         do {
-            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"), services: ["app.tool", "secrets.set"])
+            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"), services: ["app.tool", "secrets.set", "browser"])
         } catch {
             await client.close()
             return nil
