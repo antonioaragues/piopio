@@ -31,6 +31,8 @@ const RUNNERS = new Set(["npm", "pnpm", "yarn", "npx", "bun", "bunx", "deno", "n
 
 /** Tools that only read, whatever the session: allowed in Read only. */
 // The browser's reading tools (docs/spec/22 W1) are network reads like web_fetch.
+/** The browser's acting tools (docs/spec/22 W2): each site asks first on its own, so Build's modes only keep them out of Read only. */
+const BROWSER_ACT_TOOLS = new Set(["browser_click", "browser_type", "browser_select", "browser_key"]);
 const READ_ONLY_TOOLS = new Set(["web_search", "web_fetch", "todo", "propose_plan", "read_skill", "task", "browser_open", "browser_read", "browser_map", "browser_find", "browser_screenshot", "browser_scroll", "browser_back", "browser_tabs", "browser_wait"]);
 
 export function decide(mode: ApprovalMode, tool: string, input: Record<string, unknown>, cwd: string, rules: readonly Rule[], home = homedir(), readOnlyTool: (tool: string) => boolean = () => false): Decision {
@@ -48,6 +50,10 @@ export function decide(mode: ApprovalMode, tool: string, input: Record<string, u
 	// Another agent (Claude Code, Codex) changes files on its own, so Ask asks first; the other modes map onto its own.
 	if (tool === "task" && typeof input.agent === "string" && input.agent !== "piopio" && mode === "ask") {
 		return { action: "ask", reason: "Hands the task to another agent, which changes files without asking" };
+	}
+
+	if (BROWSER_ACT_TOOLS.has(tool)) {
+		return mode === "read_only" ? { action: "ask", reason: "Read only: clicking and typing on a page may change something" } : { action: "allow" };
 	}
 
 	if (mode === "read_only") {

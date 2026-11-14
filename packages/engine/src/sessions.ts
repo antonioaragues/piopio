@@ -2,7 +2,7 @@
  * Session catalog + open runtimes. Phase 0 keeps the catalog in a JSON index;
  * it moves to catalog.db (SQLite + FTS) with the Phase 1 sidebar.
  */
-import { browserCaller, type BrowserCall } from "./tools/browser-tools.js";
+import { browserCaller, type BrowserCall, type BrowserSites } from "./tools/browser-tools.js";
 import type { ConnectorHub } from "./connectors/hub.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
@@ -1170,10 +1170,13 @@ export class Sessions {
 		return aboutMe ? [aboutMe, this.writing] : [this.writing];
 	}
 
+	/** Sites the browser may act on (docs/spec/22 §4.4); set by the engine. */
+	browserSites?: BrowserSites;
+
 	/** The browser for a conversation or Build session, through the Mac app (docs/spec/22). */
 	private browserFor(ref: ContainerRef): { browser?: BrowserCall } {
 		const app = this.agentHost?.app;
-		return app ? { browser: browserCaller(app, ref, { allowPrivate: this.webOptions.allowPrivate ?? false }) } : {};
+		return app ? { browser: browserCaller(app, ref, { allowPrivate: this.webOptions.allowPrivate ?? false, ...(this.browserSites ? { sites: this.browserSites } : {}) }) } : {};
 	}
 
 	private chatExtras(kind: "thread"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {

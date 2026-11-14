@@ -9,7 +9,7 @@ struct SettingsView: View {
     @State private var section: Section = Section(demo: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", memory = "Memory", approvals = "Approvals", mcp = "MCP servers", extensions = "Extensions", engines = "This Mac & cloud", data = "Backup & costs"
+        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", memory = "Memory", approvals = "Approvals", mcp = "MCP servers", browser = "Browser", extensions = "Extensions", engines = "This Mac & cloud", data = "Backup & costs"
         var id: String { rawValue }
         init?(demo: String) {
             switch demo {
@@ -18,7 +18,7 @@ struct SettingsView: View {
             default: self.init(rawValue: demo)
             }
         }
-        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .connectors, .chat, .memory, .approvals, .data]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
+        static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .connectors, .chat, .browser, .memory, .approvals, .data]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
         var icon: (String, Color) {
             switch self {
             case .data: ("externaldrive.fill", .blue)
@@ -30,6 +30,7 @@ struct SettingsView: View {
             case .extensions: ("shippingbox.fill", .indigo)
             case .approvals: ("checkmark.shield.fill", .orange)
             case .mcp: ("puzzlepiece.extension.fill", .purple)
+            case .browser: ("globe", .blue)
             case .engines: ("cpu.fill", .green)
             }
         }
@@ -80,6 +81,7 @@ struct SettingsView: View {
                     case .extensions: ExtensionsPane(engine: engine)
                     case .approvals: ApprovalsPane(engine: engine)
                     case .mcp: McpPane(engine: engine)
+                    case .browser: BrowserSettingsPane(engine: engine)
                     case .engines: EnginesPane(engine: engine)
                     }
                 }

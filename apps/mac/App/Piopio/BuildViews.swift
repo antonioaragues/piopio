@@ -118,7 +118,7 @@ struct BuildSessionView: View {
                             FilesPanel(engine: engine, session: session, summary: summary, cwd: cwd, filter: $filesFilter, preview: $previewing, mention: mention)
                         }
                     case .browser:
-                        BrowserPanel(refID: summary.ref.id)
+                        BrowserPanel(refID: summary.ref.id) { Task { await session.stop() } }
                     case .inspector:
                         InspectorPanel(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
                                        committing: $committing, onReview: review, onRead: {

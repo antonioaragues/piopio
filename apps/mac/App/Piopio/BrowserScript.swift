@@ -272,11 +272,86 @@ enum BrowserScript {
 		return { text, truncated };
 	}
 
+	// Where to click a ref, re-resolved now: scrolled into view, with what's on top of that point (pi-browser-harness's
+	// check, through open shadow roots).
+	function point(ref) {
+		const el = resolve(ref);
+		if (!el) return { error: "stale" };
+		el.scrollIntoView({ block: "center", inline: "center" });
+		const r = el.getBoundingClientRect();
+		const x = r.left + r.width / 2, y = r.top + r.height / 2;
+		let top = document.elementFromPoint(x, y);
+		while (top?.shadowRoot) {
+			const inner = top.shadowRoot.elementFromPoint(x, y);
+			if (!inner || inner === top) break;
+			top = inner;
+		}
+		const within = (a, b) => { for (let n = b; n; n = n.parentNode || n.host) if (n === a) return true; return false; };
+		const covered = !!top && top !== el && !within(el, top) && !within(top, el);
+		return { x, y, secret: isSecret(el), covered, coveredBy: covered ? clean(top.tagName.toLowerCase() + " " + (top.innerText || top.getAttribute("aria-label") || ""), 60) : undefined,
+			tag: el.tagName, editable: el.isContentEditable || ["INPUT", "TEXTAREA"].includes(el.tagName), name: nameOf(el, el.ownerDocument), role: isInteractive(el) || el.tagName.toLowerCase() };
+	}
+
+	function secretAtFocus() {
+		const el = document.activeElement;
+		return !!el && isSecret(el);
+	}
+
+	// Selects a field's text, so typing replaces it.
+	function selectContents(ref) {
+		const el = resolve(ref);
+		if (!el) return { error: "stale" };
+		if (typeof el.select === "function") el.select();
+		else if (el.isContentEditable) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+		return { ok: true };
+	}
+
+	function value(ref) {
+		const el = resolve(ref);
+		if (!el) return { error: "stale" };
+		if (isSecret(el)) return { error: "secret" };
+		return { value: "value" in el ? el.value : el.innerText, focused: el.ownerDocument.activeElement === el };
+	}
+
+	// The fallback when typed keys didn't take (some frameworks): the native setter, then input and change events.
+	function setValue(ref, text) {
+		const el = resolve(ref);
+		if (!el) return { error: "stale" };
+		if (isSecret(el)) return { error: "secret" };
+		if (el.isContentEditable) el.innerText = text;
+		else {
+			const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+			Object.getOwnPropertyDescriptor(proto, "value").set.call(el, text);
+		}
+		el.dispatchEvent(new Event("input", { bubbles: true }));
+		el.dispatchEvent(new Event("change", { bubbles: true }));
+		return { value: "value" in el ? el.value : el.innerText };
+	}
+
+	function choose(ref, wanted) {
+		const el = resolve(ref);
+		if (!el) return { error: "stale" };
+		if (el.tagName !== "SELECT") return { error: "not a select" };
+		const w = String(wanted).trim().toLowerCase();
+		const opt = [...el.options].find((o) => o.value.toLowerCase() === w) || [...el.options].find((o) => o.text.trim().toLowerCase() === w) || [...el.options].find((o) => o.text.trim().toLowerCase().includes(w));
+		if (!opt) return { error: "no option", options: [...el.options].slice(0, 30).map((o) => o.text.trim()) };
+		el.value = opt.value;
+		el.dispatchEvent(new Event("input", { bubbles: true }));
+		el.dispatchEvent(new Event("change", { bubbles: true }));
+		return { value: opt.text.trim() };
+	}
+
+	function checked(ref) {
+		const el = resolve(ref);
+		if (!el) return { error: "stale" };
+		return { checked: el.checked ?? el.getAttribute("aria-checked") === "true" };
+	}
+
 	function hasText(text) {
 		return (document.body?.innerText || "").toLowerCase().includes(String(text).toLowerCase());
 	}
 
-	globalThis.__piopio = { map, rect, scroll, read, hasText };
+	globalThis.__piopio = { map, rect, scroll, read, hasText, point, secretAtFocus, selectContents, value, setValue, choose, checked };
 })();
 """##
 }

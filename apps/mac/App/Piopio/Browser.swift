@@ -90,9 +90,14 @@ final class BrowserCenter {
             return Self.reply(ok: false, "The browser is for conversations and Build sessions.")
         }
         let session = session(id)
+        let sites = params["sites"]?.arrayValue?.compactMap(\.stringValue) ?? []
         do {
-            let r = try await session.run(name, args)
+            let r = try await session.run(name, args, sites: sites)
             return Self.reply(ok: true, r.text, images: r.images)
+        } catch let need as NeedsSite {
+            var o: [String: JSONValue] = ["ok": .bool(false), "output": .string("Acting on \(need.site) needs the user's permission.")]
+            o["needsSite"] = .string(need.site)
+            return .object(o)
         } catch let error as BrowserError {
             return Self.reply(ok: false, error.message)
         } catch {
@@ -108,6 +113,23 @@ final class BrowserCenter {
 }
 
 struct BrowserError: Error { let message: String }
+/// Acting on this site needs the user's permission first (the engine asks, then calls again).
+struct NeedsSite: Error { let site: String }
+
+/// The registrable domain of a URL ("mail.example.com" → "example.com"): what a permission is for (spec 22 §4.1).
+/// A short list of two-part public suffixes stands in for the full Public Suffix List.
+func browserSite(of url: URL?) -> String? {
+    guard let host = url?.host()?.lowercased(), !host.isEmpty else { return nil }
+    if host.allSatisfy({ $0.isNumber || $0 == "." || $0 == ":" }) || host.contains(":") { return host }
+    let labels = host.split(separator: ".").map(String.init)
+    guard labels.count > 2 else { return labels.joined(separator: ".") }
+    let lastTwo = labels.suffix(2).joined(separator: ".")
+    let twoPart: Set<String> = ["co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "ne.jp", "or.jp",
+                                "com.br", "com.mx", "com.ar", "co.in", "co.za", "com.tr", "com.cn", "com.hk", "com.sg", "co.kr", "com.es", "gob.es",
+                                "com.pt", "github.io", "herokuapp.com", "vercel.app", "netlify.app", "pages.dev", "workers.dev", "web.app",
+                                "firebaseapp.com", "blogspot.com", "azurewebsites.net", "cloudfront.net", "onrender.com", "fly.dev"]
+    return twoPart.contains(lastTwo) ? labels.suffix(3).joined(separator: ".") : lastTwo
+}
 
 /// One conversation's tabs.
 @MainActor @Observable
@@ -149,7 +171,21 @@ final class BrowserSession {
 
     // MARK: Tools
 
-    func run(_ name: String, _ a: JSONValue) async throws -> (text: String, images: [(mime: String, data: String)]) {
+    /// When the model last acted here, for the panel's "Piopio is browsing" bar.
+    var acting = false
+    var lastActed: Date?
+
+    func run(_ name: String, _ a: JSONValue, sites: [String] = []) async throws -> (text: String, images: [(mime: String, data: String)]) {
+        if ["browser_click", "browser_type", "browser_select", "browser_key"].contains(name) {
+            let tab = try active()
+            // The page actually showing (the user may have gone elsewhere in the panel), checked against the grants.
+            guard let site = browserSite(of: tab.view.url) else { throw BrowserError(message: "No page is open: use browser_open first.") }
+            guard sites.contains(site) else { throw NeedsSite(site: site) }
+            acting = true
+            center.reveal(id)
+            defer { acting = false; lastActed = Date() }
+            return (try await tab.act(name, a), [])
+        }
         switch name {
         case "browser_open":
             guard let raw = a["url"]?.stringValue, let url = URL(string: raw), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
@@ -227,7 +263,7 @@ final class BrowserSession {
 
 /// One tab: a web view, how its last load went, and what dialogs the page showed.
 @MainActor @Observable
-final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate {
+final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     let id: String
     @ObservationIgnored unowned let session: BrowserSession
     let view: WKWebView
@@ -300,6 +336,177 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate {
         return text + "\n\nThe page showed (Piopio dismissed them): " + dialogs.joined(separator: " · ")
     }
 
+    // MARK: Acting (W2)
+
+    func act(_ name: String, _ a: JSONValue) async throws -> String {
+        let before = try await map("viewport")
+        let beforeURL = view.url
+        var said: String
+        switch name {
+        case "browser_click":
+            if let ref = a["ref"]?.stringValue {
+                let p = try await target(ref)
+                if p["covered"] == .bool(true) {
+                    throw BrowserError(message: "\(ref) is covered by \(p["coveredBy"]?.stringValue ?? "something") (a banner or a dialog?): close that first, or scroll.")
+                }
+                click(x: p["x"]?.numberValue ?? 0, y: p["y"]?.numberValue ?? 0, count: a["double"] == .bool(true) ? 2 : 1)
+                said = "Clicked \(ref) \(p["role"]?.stringValue ?? "") “\(p["name"]?.stringValue ?? "")”."
+            } else if let x = a["x"]?.numberValue, let y = a["y"]?.numberValue {
+                click(x: x, y: y, count: a["double"] == .bool(true) ? 2 : 1)
+                said = "Clicked at (\(Int(x)), \(Int(y)))."
+            } else {
+                throw BrowserError(message: "Say what to click: a ref from the map, or x and y.")
+            }
+        case "browser_type":
+            guard let ref = a["ref"]?.stringValue, let text = a["text"]?.stringValue else { throw BrowserError(message: "Say which field (ref) and the text.") }
+            let p = try await target(ref)
+            if p["secret"] == .bool(true) { throw Self.handOff }
+            if p["covered"] == .bool(true) { throw BrowserError(message: "\(ref) is covered by \(p["coveredBy"]?.stringValue ?? "something"): close that first.") }
+            click(x: p["x"]?.numberValue ?? 0, y: p["y"]?.numberValue ?? 0, count: 1)
+            try await Task.sleep(for: .milliseconds(150))
+            // A click can move focus elsewhere (a sign-in pop-up's password field): never type into a secret field.
+            if (try? await call("return __piopio.secretAtFocus()").boolValue) == true { throw Self.handOff }
+            if a["append"] != .bool(true) { _ = try await call("return __piopio.selectContents(ref)", ["ref": ref]) }
+            keys(text)
+            try await Task.sleep(for: .milliseconds(200))
+            var read = try await call("return __piopio.value(ref)", ["ref": ref])
+            var how = ""
+            let expected = a["append"] == .bool(true) ? nil : text
+            if let expected, read["value"]?.stringValue != expected {
+                read = try await call("return __piopio.setValue(ref, text)", ["ref": ref, "text": text])
+                how = " (the page didn't take the keys, so Piopio set the value)"
+            }
+            said = "Typed into \(ref) “\(p["name"]?.stringValue ?? "")”\(how). It now reads: “\(read["value"]?.stringValue ?? "")”."
+            if a["submit"] == .bool(true) {
+                press("Enter")
+                said += " Pressed Return."
+            }
+        case "browser_select":
+            guard let ref = a["ref"]?.stringValue, let wanted = a["value"] else { throw BrowserError(message: "Say which element (ref) and the value.") }
+            let p = try await target(ref)
+            if case .bool(let on) = wanted {
+                let now = try await call("return __piopio.checked(ref)", ["ref": ref])["checked"]?.boolValue ?? false
+                if now != on { click(x: p["x"]?.numberValue ?? 0, y: p["y"]?.numberValue ?? 0, count: 1) }
+                try await Task.sleep(for: .milliseconds(150))
+                let after = try await call("return __piopio.checked(ref)", ["ref": ref])["checked"]?.boolValue ?? false
+                said = "\(ref) “\(p["name"]?.stringValue ?? "")” is now \(after ? "checked" : "unchecked")."
+            } else {
+                let r = try await call("return __piopio.choose(ref, value)", ["ref": ref, "value": wanted.stringValue ?? ""])
+                if r["error"]?.stringValue == "no option" {
+                    throw BrowserError(message: "No option like “\(wanted.stringValue ?? "")”. The options: \((r["options"]?.arrayValue ?? []).compactMap(\.stringValue).joined(separator: " · "))")
+                }
+                if r["error"] != nil { throw BrowserError(message: "\(ref) isn't a list to choose from: click it, or type into it.") }
+                said = "Chose “\(r["value"]?.stringValue ?? "")” in \(ref)."
+            }
+        case "browser_key":
+            let keys = (a["keys"]?.stringValue ?? "").split(separator: " ").map(String.init)
+            guard !keys.isEmpty else { throw BrowserError(message: "Say which keys.") }
+            if (try? await call("return __piopio.secretAtFocus()").boolValue) == true, keys.contains(where: { $0.count == 1 }) { throw Self.handOff }
+            for key in keys { press(key) }
+            said = "Pressed \(keys.joined(separator: " "))."
+        default:
+            throw BrowserError(message: "Unknown browser tool \(name).")
+        }
+        return withDialogs(said + "\n\n" + (try await changes(since: before, url: beforeURL)))
+    }
+
+    static let handOff = BrowserError(message: "That's a password, code or payment field: the user fills it, never Piopio. Ask them to do it in the Browser panel, and continue when they say it's done.")
+
+    /// Re-resolves a ref to where it is now (scrolled into view).
+    private func target(_ ref: String) async throws -> JSONValue {
+        let p = try await call("return __piopio.point(ref)", ["ref": ref])
+        if p["error"] != nil { throw BrowserError(message: "\(ref) isn't on the page any more: map the page again for fresh refs.") }
+        return p
+    }
+
+    /// What the action did: a new page, or the map's lines that appeared and went.
+    private func changes(since before: String, url: URL?) async throws -> String {
+        try await Task.sleep(for: .milliseconds(350))
+        let deadline = Date().addingTimeInterval(15)
+        while view.isLoading && Date() < deadline { try await Task.sleep(for: .milliseconds(100)) }
+        if view.url != url {
+            try await Task.sleep(for: .milliseconds(600))
+            return "Now on \(header)\n\n\(try await map("viewport"))"
+        }
+        let after = try await map("viewport")
+        let strip = { (line: Substring) in line.replacing(/\ @\(-?\d+,-?\d+\)$/, with: "") }
+        let old = Set(before.split(separator: "\n").map(strip)), new = Set(after.split(separator: "\n").map(strip))
+        let added = after.split(separator: "\n").filter { !old.contains(strip($0)) }
+        let gone = before.split(separator: "\n").filter { !new.contains(strip($0)) }
+        if added.isEmpty && gone.isEmpty { return "Nothing on the screen changed. If something should have, wait, or read the page." }
+        var lines = ["Page changes:"]
+        lines += added.prefix(30).map { "+ \($0)" }
+        if added.count > 30 { lines.append("+ (\(added.count - 30) more)") }
+        lines += gone.prefix(15).map { "- \(strip($0))" }
+        if gone.count > 15 { lines.append("- (\(gone.count - 15) more)") }
+        return lines.joined(separator: "\n")
+    }
+
+    // Real events, sent straight to the web view: pages see trusted input, in the panel or in the transparent window
+    // alike, and nothing depends on which view has the keyboard (W0, spec 22 §13).
+
+    @ObservationIgnored private var eventNumber = 1
+
+    private func click(x: Double, y: Double, count: Int) {
+        let point = view.convert(NSPoint(x: x, y: y), to: nil)
+        for n in 1...count {
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                eventNumber += 1
+                guard let e = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                 windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: eventNumber, clickCount: n, pressure: type == .leftMouseDown ? 1 : 0) else { continue }
+                if type == .leftMouseDown { view.mouseDown(with: e) } else { view.mouseUp(with: e) }
+            }
+        }
+    }
+
+    private func keys(_ text: String) {
+        for ch in text {
+            if ch == "\n" { press("Enter"); continue }
+            send(characters: String(ch), keyCode: 0, modifiers: [])
+        }
+    }
+
+    /// One key, by name ("Enter", "ArrowDown", "cmd+a").
+    private func press(_ spec: String) {
+        var parts = spec.split(separator: "+").map { String($0) }
+        let name = parts.removeLast()
+        var flags: NSEvent.ModifierFlags = []
+        for m in parts {
+            switch m.lowercased() {
+            case "cmd", "command", "meta": flags.insert(.command)
+            case "shift": flags.insert(.shift)
+            case "alt", "option": flags.insert(.option)
+            case "ctrl", "control": flags.insert(.control)
+            default: break
+            }
+        }
+        let special: [String: (String, UInt16)] = [
+            "enter": ("\r", 36), "return": ("\r", 36), "tab": ("\t", 48), "escape": ("\u{1b}", 53), "esc": ("\u{1b}", 53),
+            "backspace": ("\u{7f}", 51), "delete": (String(UnicodeScalar(NSDeleteFunctionKey)!), 117), "space": (" ", 49),
+            "arrowleft": (String(UnicodeScalar(NSLeftArrowFunctionKey)!), 123), "arrowright": (String(UnicodeScalar(NSRightArrowFunctionKey)!), 124),
+            "arrowdown": (String(UnicodeScalar(NSDownArrowFunctionKey)!), 125), "arrowup": (String(UnicodeScalar(NSUpArrowFunctionKey)!), 126),
+            "pageup": (String(UnicodeScalar(NSPageUpFunctionKey)!), 116), "pagedown": (String(UnicodeScalar(NSPageDownFunctionKey)!), 121),
+            "home": (String(UnicodeScalar(NSHomeFunctionKey)!), 115), "end": (String(UnicodeScalar(NSEndFunctionKey)!), 119),
+        ]
+        if let (chars, code) = special[name.lowercased()] { send(characters: chars, keyCode: code, modifiers: flags) }
+        else { send(characters: name.count == 1 ? name.lowercased() : name, keyCode: 0, modifiers: flags) }
+    }
+
+    private func send(characters: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let e = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: view.window?.windowNumber ?? 0, context: nil, characters: characters,
+                                           charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode) else { continue }
+            if type == .keyDown {
+                // Shortcuts (cmd+a) go through key equivalents first, as the window would send them.
+                if !modifiers.intersection([.command, .control]).isEmpty, view.performKeyEquivalent(with: e) { continue }
+                view.keyDown(with: e)
+            } else {
+                view.keyUp(with: e)
+            }
+        }
+    }
+
     // MARK: Scripts
 
     /// Runs a function body in the isolated world (the page script is there already; defined again if the page
@@ -351,17 +558,47 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate {
             dialogs.append("a link to \(host), a local address, was not followed")
             return .cancel
         }
-        return .allow
+        return navigationAction.shouldPerformDownload ? .download : .allow
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
         if navigationResponse.isForMainFrame { status = (navigationResponse.response as? HTTPURLResponse)?.statusCode }
-        // Downloads ask first (W2); until then they don't happen.
-        if !navigationResponse.canShowMIMEType {
-            dialogs.append("a download (\(navigationResponse.response.suggestedFilename ?? "a file")) was not saved")
-            return .cancel
+        // What the browser can't show is a download, and downloads ask (spec 22 §4.1).
+        return navigationResponse.canShowMIMEType ? .allow : .download
+    }
+
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { download.delegate = self }
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { download.delegate = self }
+
+    // MARK: WKDownloadDelegate
+
+    /// Asks before saving: the file and the site. Yes saves it in Downloads; it's never opened or run.
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String) async -> URL? {
+        loadingNow = false
+        let site = browserSite(of: download.originalRequest?.url) ?? "a site"
+        let alert = NSAlert()
+        alert.messageText = "Save “\(suggestedFilename)” from \(site)?"
+        alert.informativeText = "The browser in Piopio wants to download it. It goes to your Downloads folder and isn't opened."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Don't Save")
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            dialogs.append("a download (\(suggestedFilename)) was not saved: the user said no")
+            return nil
         }
-        return .allow
+        let folder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        var url = folder.appending(path: suggestedFilename)
+        let base = url.deletingPathExtension().lastPathComponent, ext = url.pathExtension
+        var n = 2
+        while FileManager.default.fileExists(atPath: url.path) {
+            url = folder.appending(path: ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
+            n += 1
+        }
+        dialogs.append("downloaded \(suggestedFilename) to \(url.path) (the user allowed it)")
+        return url
+    }
+
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        dialogs.append("a download failed: \(error.localizedDescription)")
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loadingNow = false }
@@ -401,8 +638,20 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate {
         return nil
     }
 
+    /// Choosing a file to upload is always yours: the system's panel, which names the site (spec 22 §4.1).
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo) async -> [URL]? {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.message = "Choose what to upload to \(browserSite(of: frame.request.url) ?? "this site")"
+        panel.prompt = "Upload"
+        let urls = panel.runModal() == .OK ? panel.urls : nil
+        dialogs.append(urls.map { "the user chose \($0.count) file\($0.count == 1 ? "" : "s") to upload" } ?? "the user didn't choose a file to upload")
+        return urls
+    }
+
     /// Camera, microphone and the like are denied while the model reads (spec 22 §4.1).
-    func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType) async -> WKPermissionDecision {
+    func webView(_ webView: WKWebView, decideMediaCapturePermissionsFor origin: WKSecurityOrigin, initiatedBy frame: WKFrameInfo, type: WKMediaCaptureType) async -> WKPermissionDecision {
         .deny
     }
 

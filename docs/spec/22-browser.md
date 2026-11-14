@@ -2,7 +2,7 @@
 
 Status: draft, 2026-11-12. **2026-11-14: Playwright MCP built in as an interim browser (§13). 2026-11-15: the user
 chose this design (WebKit in the app) as the browser; §11 decided as proposed. W1 built 2026-11-15 (§14) and the
-interim one removed.** Companion to [23-computer-use.md](23-computer-use.md): the browser
+interim one removed. W2 built 2026-11-15 (§15).** Companion to [23-computer-use.md](23-computer-use.md): the browser
 is for websites, computer use is for Mac apps. §8 here holds the plumbing both share. Covers roadmap items B10 (web
 preview) and part of D10.
 
@@ -331,4 +331,41 @@ and BBC News; a local address refused; the panel opening by itself (capture). No
 **Not in W1:** acting (W2); a folded "Browsed 4 pages" line (each call is its own tool row); Settings › Browser (clear
 the profile); closing a conversation's tabs when it's archived; offering `browser_screenshot` only to models that see
 images; reading pages that lay out with tables (Hacker News) reads cramped.
+
+## 15. W2 as built (2026-11-15)
+
+**Acting.** `browser_click` (a ref, or x and y; `double`), `browser_type` (replaces unless `append`; `submit` presses
+Return), `browser_select` (an option by value or text; a checkbox or radio with true or false) and `browser_key`
+("Enter", "ArrowDown", "cmd+a"…). The app re-resolves the ref, scrolls it into view and refuses when something covers
+it (it names what). Clicks and keys are real events sent straight to the web view (W0), so they work in the panel and
+in the transparent window alike and never type into the composer. Typing reads the field back; when the page didn't
+take the keys it sets the value with the native setter and says so. Each action answers with what changed: the new
+page with its map, or the map's lines that appeared (+) and went (−).
+
+**Per site (BW3, §4.4).** The engine keeps the sites: Always allowed and Blocked in `<home>/browser-sites.json`, and
+each conversation's in memory (until the engine restarts). It sends the allowed ones with every acting call; the app
+compares them with the registrable domain of the page actually showing (a short list of two-part suffixes stands in
+for the Public Suffix List) and, if it isn't there, does nothing and answers `needsSite`. The engine then asks: in a
+chat, a card (Allow · Deny · "Allow, don't ask again", which saves the site); in Build, Build's approval prompt. A
+blocked site is refused without asking; a denial tells the model not to try another way. In Build, the approval mode
+no longer asks per acting tool (the site asks); Read only still keeps them out.
+
+**Yours (BW4, §4.3).** Typing into a password, one-time-code or card field is refused, also when a click or Tab moved
+the focus there, with the instruction to ask the user. Hand-offs are that message and the prompt: the model tells you
+to sign in, solve the check or pay in the panel and waits for you to say so; there is no paused run or Hand back button.
+
+**Panel.** "Piopio is browsing" with Stop (it stops the conversation's turn) while the model acts and for six
+seconds after. Downloads ask ("Save X from site?") and go to Downloads, never opened; choosing a file to upload is the
+system's panel, naming the site. Settings › Browser lists Always allowed and Blocked sites (remove, block one), and
+Clear… deletes the profile's cookies, storage and cache.
+
+**Checked.** Engine: Allow is per conversation, "don't ask again" keeps the site and Settings lists it, Deny, blocked
+without asking (`acting asks per site…`); policy (`the browser reads like web_fetch…`). In the app copy with the
+scripted model: the httpbin.org order form filled and sent (name with an accent, a radio, a checkbox, a textarea,
+Submit; the server got exactly that), the card before the first action on each site, GitHub's password field refused
+after Tab; captures of the bar and Settings › Browser. Not yet with a real model, and downloads and uploads only built.
+
+**Not in W2:** "Ask before each submit" (§4.4) and a built-in list of blocked sites; taking over by clicking in the
+page (Stop is the way); downloads into the conversation's files; secret fields blurred in screenshots; site levels
+for agents (W3).
 

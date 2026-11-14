@@ -5,6 +5,8 @@ import WebKit
 /// which you can use too. It opens by itself the first time the model browses in the conversation.
 struct BrowserPanel: View {
     let refID: String
+    /// Stops the conversation's turn (the bar's Stop): the model stops browsing and you have the page.
+    var onStop: (() -> Void)?
     @State private var address = ""
 
     var body: some View {
@@ -12,6 +14,7 @@ struct BrowserPanel: View {
         VStack(spacing: 0) {
             if session.tabs.count > 1 { tabStrip(session) }
             toolbar(session)
+            drivingBar(session)
             Divider()
             if let tab = session.current {
                 BrowserWebView(tab: tab).id(ObjectIdentifier(tab))
@@ -27,6 +30,26 @@ struct BrowserPanel: View {
         }
         .onChange(of: session.current?.url) { _, url in address = url?.absoluteString ?? "" }
         .onAppear { address = session.current?.url?.absoluteString ?? "" }
+    }
+
+    /// "Piopio is browsing" while the model clicks and types here, and a few seconds after (spec 22 §5).
+    private func drivingBar(_ session: BrowserSession) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            if session.acting || session.lastActed.map({ context.date.timeIntervalSince($0) < 6 }) == true {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.mini)
+                    Text("Piopio is browsing").font(.system(size: 12, weight: .medium))
+                    Spacer()
+                    if let onStop {
+                        Button("Stop") { onStop() }
+                            .controlSize(.small)
+                            .help("Stop the model here; the page stays as it is, for you")
+                    }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Color.accentColor.opacity(0.10))
+            }
+        }
     }
 
     private func tabStrip(_ session: BrowserSession) -> some View {

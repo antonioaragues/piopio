@@ -140,7 +140,14 @@ export class BuildRuntime implements Runtime {
 				// Before approvals: a server turned off here is refused without asking.
 				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
 				notesExtension(o.cwd),
-				...(o.browser ? [codingBrowserExtension(o.browser)] : []),
+				...(o.browser
+					? [
+							codingBrowserExtension(o.browser, (callId, signal) => async (request) => {
+								const response = await broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId }, signal);
+								return { approved: response?.decision === "allow" || response?.decision === "always", ...(response?.decision === "always" ? { always: true } : {}), ...(response?.text ? { reason: response.text } : {}) };
+							}),
+						]
+					: []),
 				guardsExtension(),
 				...(o.team ? [teamExtension(o.team)] : []),
 				...(o.consult ? [consultExtension(o.consult.bridge, o.consult.from)] : []),

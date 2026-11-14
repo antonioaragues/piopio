@@ -68,8 +68,9 @@ Steps, pass criteria, evidence and a results table for each item: [acceptance.md
   Home is the one start, with the project and permissions in the box; Read only replaces the Chat lens (folders
   of documents start in it); a chat can continue in a project folder or move into a project without one.
 - Agent definitions refuse fields that nothing runs yet (http_request, codemode, files, tools.mcp, channels) on save.
-- The browser (spec 22 W1, §14) reads pages: a WebKit view per conversation tab, in your profile, shown in the
-  conversation's Browser panel. It can't click or type yet (W2). It needs the app open.
+- The browser (spec 22 W1–W2, §14–15): a WebKit view per conversation tab, in your profile, shown in the
+  conversation's Browser panel. It reads freely; clicking and typing ask per site (Settings › Browser keeps the
+  answers). Passwords, codes and card details are always yours. It needs the app open; agents don't have it yet.
 - Cloud and channels remain separate roadmap work. The phases and what each one still needs are in
   [09-roadmap.md](spec/09-roadmap.md); what each milestone delivered, with dates, is in
   [history/milestones.md](history/milestones.md).

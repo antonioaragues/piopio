@@ -1405,6 +1405,16 @@ export const methods = {
 	/** File viewer quick edit (BR4). */
 	"projects.writeFile": { params: Type.Object({ cwd: Type.String(), path: Type.String(), content: Type.String() }), result: Type.Object({}) },
 	/** MCP servers from pi's mcp.json files: global (~/.pi/agent/mcp.json), and the project's (.pi/mcp.json) when `cwd` is given. */
+	/** The browser's sites (docs/spec/22 §4.4): those you always allow the model to act on, and those you blocked. */
+	"browser.sites": {
+		params: Type.Object({}),
+		result: Type.Object({ sites: Type.Array(Type.Object({ site: Type.String(), level: literals("allowed", "blocked") })) }),
+	},
+	/** Sets a site's level; "ask" removes it from both lists (the default: acting asks per conversation). */
+	"browser.setSite": {
+		params: Type.Object({ site: Type.String(), level: literals("allowed", "blocked", "ask") }),
+		result: Type.Object({}),
+	},
 	"mcp.list": {
 		params: Type.Object({ cwd: Type.Optional(Type.String()) }),
 		result: Type.Object({ servers: Type.Array(McpServerInfo), errors: Type.Array(Type.String()) }),
@@ -1874,6 +1884,8 @@ export const reverseMethods = {
 			args: Type.Unknown(),
 			agent: Type.Optional(Type.Object({ id: Type.String(), name: Type.String() })),
 			ref: Type.Optional(ContainerRef),
+			/** Browser: the sites (registrable domains) the model may act on now (22 §4.1). */
+			sites: Type.Optional(Type.Array(Type.String())),
 			groups: Type.Array(Type.String()),
 			shortcuts: Type.Array(Type.String()),
 		}),
@@ -1882,6 +1894,8 @@ export const reverseMethods = {
 			/** What the model reads. */
 			output: Type.String(),
 			images: Type.Optional(Type.Array(Type.Object({ mimeType: Type.String(), data: Type.String() }))),
+			/** Browser: nothing was done; acting needs the user's permission for this site first. */
+			needsSite: Type.Optional(Type.String()),
 			card: Type.Optional(Type.Object({ kind: literals("reminder", "event", "contact", "note", "music", "shortcut"), title: Type.String(), detail: Type.Optional(Type.String()) })),
 			undo: Type.Optional(Type.Object({ name: Type.String(), args: Type.Unknown(), title: Type.String() })),
 		}),

@@ -1149,6 +1149,77 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		app.close();
 	}, 60_000);
 
+	test("acting asks per site: Allow is this conversation, don't ask again keeps it, blocked never asks (docs/spec/22 W2)", async () => {
+		const a = await start();
+		const paths = enginePaths(a.home);
+		const app = await TestClient.connect(paths.socket);
+		await app.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "fake app", protocolVersion: "1.0", services: ["app.tool", "browser"] });
+		let site = "example.com";
+		const done: string[] = [];
+		app.appTool = (p) => {
+			if (!(p.sites ?? []).includes(site)) return { ok: false, output: "", needsSite: site };
+			done.push(`${p.name} on ${site}`);
+			return { ok: true, output: `Clicked ${p.args.ref}.` };
+		};
+		// Each card's latest state.
+		const approvals = () => [
+			...new Map(
+				a.client.events
+					.flatMap((n) => n.events)
+					.filter((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "approval")
+					.map((e) => (e as { item: { approvalId: string; status: string; title: string; always: string } }).item)
+					.map((item) => [item.approvalId, item] as const),
+			).values(),
+		];
+		const click = 'call: browser_click | {"ref":"e3"}';
+		const until = async (ready: () => boolean) => {
+			for (let i = 0; i < 200 && !ready(); i++) await new Promise((r) => setTimeout(r, 50));
+			expect(ready()).toBe(true);
+		};
+		const thread = async () => {
+			const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+			await a.client.call("sessions.subscribe", { ref });
+			return ref;
+		};
+
+		// The first click on a site asks; Allow lets it act in this conversation without asking again.
+		const one = await thread();
+		await a.client.call("sessions.submit", { ref: one, input: { text: click } });
+		await until(() => approvals().some((x) => x.status === "pending"));
+		const first = approvals().find((x) => x.status === "pending")!;
+		expect(first).toMatchObject({ title: "Let Piopio click and type on example.com", always: "Always allow example.com" });
+		expect(done).toEqual([]);
+		await a.client.call("sessions.decide", { ref: one, approvalId: first.approvalId, approve: true });
+		expect((await finishedTools(a, one, 1))[0]).toMatchObject({ tool: "browser_click", status: "done", output: "Clicked e3." });
+		await a.client.call("sessions.submit", { ref: one, input: { text: click } });
+		expect((await finishedTools(a, one, 2))[1]).toMatchObject({ status: "done" });
+		expect(approvals().filter((x) => x.status === "pending")).toEqual([]);
+
+		// Another conversation asks again; Deny tells the model not to try another way.
+		const two = await thread();
+		await a.client.call("sessions.submit", { ref: two, input: { text: click } });
+		await until(() => approvals().filter((x) => x.status === "pending").length === 1);
+		await a.client.call("sessions.decide", { ref: two, approvalId: approvals().find((x) => x.status === "pending")!.approvalId, approve: false });
+		expect((await finishedTools(a, two, 1))[0]).toMatchObject({ status: "error", output: expect.stringContaining("didn't let Piopio act on example.com") });
+
+		// "Don't ask again" keeps the site for every conversation, and Settings lists it.
+		await a.client.call("sessions.submit", { ref: two, input: { text: click } });
+		await until(() => approvals().filter((x) => x.status === "pending").length === 1);
+		await a.client.call("sessions.decide", { ref: two, approvalId: approvals().find((x) => x.status === "pending")!.approvalId, approve: true, always: true });
+		expect((await finishedTools(a, two, 2))[1]).toMatchObject({ status: "done" });
+		expect((await a.client.call("browser.sites", {})).sites).toEqual([{ site: "example.com", level: "allowed" }]);
+
+		// A blocked site is refused without asking; reading tools never send sites.
+		site = "bank.example";
+		await a.client.call("browser.setSite", { site: "bank.example", level: "blocked" });
+		await a.client.call("sessions.submit", { ref: two, input: { text: click } });
+		expect((await finishedTools(a, two, 3))[2]).toMatchObject({ status: "error", output: expect.stringContaining("blocked in Settings") });
+		expect(approvals().filter((x) => x.status === "pending")).toEqual([]);
+		await a.client.call("browser.setSite", { site: "example.com", level: "ask" });
+		expect((await a.client.call("browser.sites", {})).sites).toEqual([{ site: "bank.example", level: "blocked" }]);
+		app.close();
+	}, 60_000);
+
 	test("a conversation turns an MCP server off for itself: refused in a Build session, gone from a chat, back when on again", async () => {
 		const a = await start();
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-mcp-")));

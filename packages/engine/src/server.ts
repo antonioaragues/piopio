@@ -41,6 +41,7 @@ import type { ToolItem } from "@piopio/protocol";
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans and files handed over (they read as part of the conversation). */
 const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_team" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
+import { BrowserSites } from "./tools/browser-tools.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
 import { routineLabel, type TeamRoutine } from "./teams/routines.js";
@@ -97,6 +98,7 @@ export class Engine {
 	readonly sessions: Sessions;
 	readonly projects: Projects;
 	readonly mcp: McpConfig;
+	private readonly browserSites: BrowserSites;
 	readonly settings: Settings;
 	readonly aboutMe: AboutMe;
 	readonly chatMcp: ChatMcp;
@@ -173,6 +175,7 @@ export class Engine {
 		const agentDir = options.piAgentDir ?? getAgentDir();
 		this.projects = new Projects(options.paths.projectsIndex, agentDir, options.paths.projectsRoot, join(options.paths.home, "projects"));
 		this.mcp = new McpConfig(agentDir);
+		this.browserSites = new BrowserSites(join(options.paths.home, "browser-sites.json"));
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
 		this.hub.utilityChoice = () => this.settings.get().models?.utility;
 		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings, async (provider) => {
@@ -189,6 +192,7 @@ export class Engine {
 		this.packages.onChange(() => void this.chatResources.reload());
 		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp, resources: this.chatResources };
 		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory, app: this.app };
+		this.sessions.browserSites = this.browserSites;
 		if (options.agentAskTimeoutMs) this.sessions.agentAskTimeoutMs = options.agentAskTimeoutMs;
 		if (options.agentLearn) this.sessions.agentLearn = options.agentLearn;
 		// Agents on Telegram from this Mac (docs/spec/19 S4): polling, so no webhook or cloud.
@@ -699,6 +703,13 @@ export class Engine {
 			case "projects.writeFile": {
 				const p = params as Params<"projects.writeFile">;
 				await writeProjectFile(this.folder(p), p.path, p.content);
+				return {};
+			}
+			case "browser.sites":
+				return { sites: this.browserSites.list() } satisfies Result<"browser.sites">;
+			case "browser.setSite": {
+				const p = params as Params<"browser.setSite">;
+				this.browserSites.set(p.site, p.level);
 				return {};
 			}
 			case "mcp.list": {

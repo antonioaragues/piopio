@@ -33,6 +33,13 @@ group("modes (docs/spec/05-build §6)", () => {
 		expect(run("ask", "bash", { command: "git status" }, rules)).toBe("ask");
 		expect(run("full_auto", "bash", { command: "rm -rf build" })).toBe("allow");
 	});
+	test("the browser reads like web_fetch; acting asks per site, so the modes only keep it out of Read only (docs/spec/22)", () => {
+		expect(decide("read_only", "browser_read", {}, cwd, [], home)).toEqual({ action: "allow" });
+		expect(decide("ask", "browser_open", { url: "https://x" }, cwd, [], home)).toMatchObject({ action: "ask" });
+		for (const mode of ["ask", "auto_edit", "full_auto"] as const) expect(decide(mode, "browser_click", { ref: "e1" }, cwd, [], home)).toEqual({ action: "allow" });
+		expect(decide("read_only", "browser_type", { ref: "e1", text: "x" }, cwd, [], home)).toMatchObject({ action: "ask", reason: expect.stringContaining("Read only") });
+	});
+
 	test("network and extension tools ask only in ask mode; tool rules allow them", () => {
 		expect(run("auto_edit", "web_fetch", { url: "https://x" })).toBe("allow");
 		expect(decide("ask", "web_fetch", { url: "https://x" }, cwd, [], home)).toEqual({ action: "ask", rule: { kind: "tool", pattern: "web_fetch" } });

@@ -16,7 +16,7 @@ import { computeBranches, type ConversationNode, type ViewEntry } from "./branch
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 import { attachChatMcp, type ChatMcp } from "../tools/mcp-chat.js";
-import { durableBrowserExtension, type BrowserCall } from "../tools/browser-tools.js";
+import { durableBrowserExtension, type BrowserAsk, type BrowserCall } from "../tools/browser-tools.js";
 import { CONNECTORS_EXTENSION, durableConnectorsExtension, waitFor, type CallSite } from "../connectors/extension.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import type { Confirm } from "../connectors/tools.js";
@@ -101,7 +101,7 @@ export class ThreadRuntime implements Runtime {
 		const webExtension = createWebExtension(options.hub, { ...options.webOptions, scope: options.ref.id }) as unknown as Extension;
 		registry.install(webExtension as never);
 		for (const e of options.extensions ?? []) registry.install(e as never);
-		if (options.browser) registry.install(durableBrowserExtension(options.browser) as never);
+		if (options.browser) registry.install(durableBrowserExtension(options.browser, (site) => runtime!.browserAsk(site)) as never);
 		// The clock, the repeated-call nudge and the trim of oversized results (@piopio/runtime context/).
 		registry.install(contextGuardsExtension() as never);
 		const detachMcp = options.mcp ? await attachChatMcp(registry as never, options.mcp, offFilter(options.toolsOff, "mcp")) : undefined;
@@ -162,8 +162,20 @@ export class ThreadRuntime implements Runtime {
 	/** Asks in this thread before a connector changes something: an approval card until answered or stopped. */
 	confirmFor(site: CallSite): Confirm {
 		return async (request) => {
-			const id = `conn_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 			const label = this.connectors?.definition(request.connector)?.name ?? request.connector;
+			return this.approval(site, { tool: request.tool, title: request.title, args: request.args, always: request.canAllowAlways ? `Don't ask again for this in ${label}` : "" });
+		};
+	}
+
+	/** Asks in this thread before the browser acts on a site for the first time (docs/spec/22 §4.4). */
+	browserAsk(site: CallSite): BrowserAsk {
+		return (request) => this.approval(site, { tool: request.tool, title: request.title, args: request.args, always: `Always allow ${request.site}` });
+	}
+
+	/** An approval card (Allow · Deny · Allow, don't ask again) until answered, or the turn stops. */
+	private async approval(site: CallSite, request: { tool: string; title: string; args: Record<string, unknown>; always: string }): Promise<{ approved: boolean; always?: boolean; reason?: string }> {
+		{
+			const id = `conn_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 			const item: ApprovalItem = {
 				kind: "approval",
 				id: `approval:${id}`,
@@ -174,7 +186,7 @@ export class ThreadRuntime implements Runtime {
 				args: request.args,
 				status: "pending",
 				expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
-				always: request.canAllowAlways ? `Don't ask again for this in ${label}` : "",
+				always: request.always,
 				source: "connector",
 			};
 			const decided = new Promise<{ approved: boolean; always?: boolean; reason?: string }>((resolve) => this.approvals.set(id, { item, resolve }));
@@ -186,7 +198,7 @@ export class ThreadRuntime implements Runtime {
 				this.settle(id, "cancelled");
 				throw error;
 			}
-		};
+		}
 	}
 
 	private settle(id: string, status: ApprovalItem["status"], reason?: string): void {

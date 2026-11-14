@@ -37,7 +37,7 @@ struct ThreadView: View {
             chatColumn
             // The Browser panel (docs/spec/22 §5): opens by itself when the model browses here.
             if browserOpen {
-                BrowserPanel(refID: summary.ref.id)
+                BrowserPanel(refID: summary.ref.id) { Task { await thread.stop() } }
                     .frame(width: 560)
                     .sidePanel()
                     .transition(.move(edge: .trailing))
