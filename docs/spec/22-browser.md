@@ -1,6 +1,7 @@
 # 22 — The built-in browser
 
-Status: draft, 2026-11-12; nothing here is built. Companion to [23-computer-use.md](23-computer-use.md): the browser
+Status: draft, 2026-11-12. **2026-11-14: Playwright MCP built in as an interim browser (§13). 2026-11-15: the user
+chose this design (WebKit in the app) as the browser; §11 decided as proposed. W1 replaces the interim one.** Companion to [23-computer-use.md](23-computer-use.md): the browser
 is for websites, computer use is for Mac apps. §8 here holds the plumbing both share. Covers roadmap items B10 (web
 preview) and part of D10.
 
@@ -219,7 +220,7 @@ W1 can ship without W2; each later one is useful on its own.
 - Filling a saved sign-in from the Keychain on your approval, without the model seeing it.
 - Pick an element, record a flow as a routine, saved pages as conversation files, reader view, a content blocker.
 
-## 11. Questions for you
+## 11. Questions for you (decided 2026-11-15, as proposed)
 1. **BW5:** should your conversations use one profile with your sign-ins (proposed), or start clean each time?
 2. **Where the pane lives:** a tab in the right column (proposed), or a full page of its own in the sidebar?
 3. **Agents with your sign-ins:** allow it with a warning (proposed), or never?
@@ -235,3 +236,64 @@ W1 can ship without W2; each later one is useful on its own.
 - How many real sites refuse or degrade for WebKit that isn't Safari (user-agent checks, bot detection). If W0 finds
   this is common, BW1's Chromium alternative comes back.
 - Cloudflare Browser Rendering's current limits and price.
+
+## 13. As built (2026-11-14): Playwright MCP, built in
+
+Decided with the user on 2026-11-14: instead of building BW1's WebKit browser, ship an existing Chromium one, on by
+default. What was looked at first (npm, 2026-11-14): about 30 pi packages for the browser, every one Chromium
+(agent-browser, CDP to your own Chrome, Playwright, chrome-devtools-mcp); none hosts a browser inside an app.
+
+**Why Playwright MCP and not a pi package.** pi packages' extensions load only in Build; chats run on pi-durable and
+reach MCP servers instead. An MCP server works in both, through what already exists (Settings › MCP servers, Build's
+approvals). `@playwright/mcp` (Microsoft, Apache-2.0, ~10M downloads a week) has the contract the pi packages
+converged on: an accessibility snapshot with `[ref=eN]`, actions by ref, `browser_find` to search a big page,
+screenshots as images, tabs, console and network.
+
+**How it runs** (`packages/engine/src/browser.ts`):
+- The engine runs **one** Playwright MCP server over local HTTP (`127.0.0.1`, a port chosen once and kept in
+  `<home>/browser/state.json`), driving the Mac's **Chrome** (else Edge, Brave or Chromium), **visible**, with its
+  own persistent profile in `<home>/browser/profile`. You watch it work, and you sign in in that window yourself; the
+  sign-in stays. Every client shares that one Chrome and its tabs (a persistent profile opens in one Chrome only).
+- On first launch it's **seeded into pi's `~/.pi/agent/mcp.json` as `browser`** (`exposure: "deferred"`,
+  `browser_run_code_unsafe` hidden) and turned on for chats. From then on it's an ordinary MCP server: Settings › MCP
+  servers shows it, turns it off (the engine stops the server) or deletes it (Piopio doesn't add it back). An entry
+  of your own called `browser` is left alone. The pi CLI sees it too, while the app's engine runs.
+- Chrome closes after **5 minutes without a browser call** (`--idle-timeout`; decided with the user 2026-11-15
+  instead of asking the model to close it) and opens again on the next call, still signed in.
+- Options: `--snapshot-mode none` (actions return the URL and title; the model asks for `browser_snapshot` or
+  `browser_find`, because a whole page can be 600k characters and Playwright otherwise writes it to a file a chat
+  can't read), `--codegen none`, `--file-paths absolute`, console at warning level, output capped at 50 MB.
+- **Fourteen core tools are declared from the start** (navigate, back, snapshot, find, click, type, fill_form,
+  select_option, press_key, screenshot, tabs, wait_for, handle_dialog, close; per-tool `toolExposure: "direct"`);
+  the rest are found with `tool_search`. The first real run (2026-11-15, Hacker News, Sonnet) needed two searches to
+  reach `browser_snapshot`, and each search changed the tools and lost the prompt cache: about $0.18 for three
+  stories. It also read the URL-and-title answer of `browser_navigate` as an empty page, so the description now
+  says actions return only that. Installs seeded earlier get both on the next launch (`state.json` version 2).
+- Chats list their deferred MCP servers in the prompt (`serversSection` in `tools/mcp-chat.ts`), since
+  `tool_search` doesn't say what's behind it; Build already had pi's `mcp_servers` section.
+- The release bundle ships `@playwright/mcp`, `playwright` and `playwright-core` in `engine/node_modules` (+23 MB,
+  no browsers). Off with the scripted model and with `PIOPIO_BROWSER=0`.
+
+**What's not there (compared with §1–§12):**
+- **Approvals per site** (BW3) and secret fields (BW4) aren't enforced. In Build, each browser tool is an MCP tool:
+  Ask asks per tool, Auto-edit runs it. **In chats nothing asks** (chat MCP has no approvals); the server's
+  description tells the model to stop before sending, buying or sharing, and to leave passwords to you.
+- No pane in the app: the browser is Chrome's own window. No folded "Browsed 4 pages" line beyond the usual tool rows.
+- Agents don't get it (agents have no MCP yet). Build sessions share your signed-in profile (no per-project one, §6).
+- The HTTP server answers any process on this Mac, with the browser's sign-ins. Same as the pi packages that attach
+  to Chrome; a token would need Playwright to support one.
+- Tried with Sonnet in a chat on 2026-11-15 (Hacker News): it works; not tried in Build.
+
+**Interim.** On 2026-11-15 the user chose §1–§12 (WebKit in the app) over making this one Piopio's own. It stays until
+W1 reads pages; W1 removes it, its seeding and the `browser` entry it wrote to `mcp.json` (if still ours).
+
+**Local models can't see screenshots:** custom endpoints are declared text-only (`endpoints.ts`), so pi replaces a
+tool result's image with "(see attached image)". OpenRouter models that take images and ChatGPT sign-in get them.
+
+**What the stopped WebKit spike (W0) measured**, for if §1–§12 come back: a `WKWebView` takes trusted clicks and
+keys sent straight to the view in any window (on screen, off screen, never shown); a page map from an isolated content
+world reaches shadow DOM and same-origin frames, and cross-origin frames by their `WKFrameInfo`; two
+`WKWebsiteDataStore(forIdentifier:)` stores stay apart and persist across launches. A window off screen or never shown
+is throttled to 1 animation frame a second (`inactiveSchedulingPolicy = .none` doesn't help); an on-screen window at
+alpha 0 that ignores the mouse runs at full speed. The real-site run didn't finish.
+

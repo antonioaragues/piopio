@@ -68,6 +68,9 @@ Steps, pass criteria, evidence and a results table for each item: [acceptance.md
   Home is the one start, with the project and permissions in the box; Read only replaces the Chat lens (folders
   of documents start in it); a chat can continue in a project folder or move into a project without one.
 - Agent definitions refuse fields that nothing runs yet (http_request, codemode, files, tools.mcp, channels) on save.
+- Piopio's browser (spec 22 §13) is Playwright MCP, seeded once into `~/.pi/agent/mcp.json` as `browser` and run by
+  the engine: a visible Chrome with its own profile, shared by every conversation. In chats its actions don't ask
+  first; in Build they follow the approval mode. It needs Chrome (or Edge, Brave, Chromium) installed.
 - Cloud and channels remain separate roadmap work. The phases and what each one still needs are in
   [09-roadmap.md](spec/09-roadmap.md); what each milestone delivered, with dates, is in
   [history/milestones.md](history/milestones.md).

@@ -41,6 +41,7 @@ import type { ToolItem } from "@piopio/protocol";
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans and files handed over (they read as part of the conversation). */
 const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_team" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files";
 import { AppServices } from "./app-services.js";
+import { BROWSER_SERVER, BrowserServer } from "./browser.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
 import { routineLabel, type TeamRoutine } from "./teams/routines.js";
@@ -83,6 +84,8 @@ export type EngineOptions = {
 	/** Telegram's API (tests: a fake one) and how long a poll waits. */
 	telegram?: { fetch?: typeof fetch; pollSeconds?: number; retryMs?: number };
 	log?: (line: string) => void;
+	/** Run Piopio's browser (Playwright MCP, docs/spec/22 §13) and seed it into pi's mcp.json. Off in tests. */
+	browser?: boolean;
 };
 
 import { InputReceipts } from "./requests.js";
@@ -97,6 +100,7 @@ export class Engine {
 	readonly sessions: Sessions;
 	readonly projects: Projects;
 	readonly mcp: McpConfig;
+	private readonly browser?: BrowserServer;
 	readonly settings: Settings;
 	readonly aboutMe: AboutMe;
 	readonly chatMcp: ChatMcp;
@@ -173,6 +177,7 @@ export class Engine {
 		const agentDir = options.piAgentDir ?? getAgentDir();
 		this.projects = new Projects(options.paths.projectsIndex, agentDir, options.paths.projectsRoot, join(options.paths.home, "projects"));
 		this.mcp = new McpConfig(agentDir);
+		if (options.browser) this.browser = new BrowserServer(options.paths.home, this.mcp, this.log);
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
 		this.hub.utilityChoice = () => this.settings.get().models?.utility;
 		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings, async (provider) => {
@@ -280,6 +285,16 @@ export class Engine {
 		this.token = loadOrCreateToken(this.options.paths);
 		await this.hub.ready();
 		await this.aboutMe.migrate().catch((error) => this.log(`About me: couldn't bring in the old doc: ${(error as Error).message}`));
+		// Piopio's browser: added to MCP servers once (and on for chats), then run while it's there and on. Before the
+		// socket opens: the app opens a chat as soon as it connects, and the chat connects to its MCP servers then.
+		if (this.browser) {
+			try {
+				if (await this.browser.seed()) this.setChat(BROWSER_SERVER, true);
+				await this.browser.sync();
+			} catch (error) {
+				this.log(`Browser: ${(error as Error).message}`);
+			}
+		}
 		this.server = createServer((stream) => this.accept(new RpcConnectionFor(stream)));
 		await new Promise<void>((resolve, reject) => {
 			this.server!.once("error", reject);
@@ -385,6 +400,7 @@ export class Engine {
 		this.inputReceipts.close();
 		this.hub.extraCosts.close();
 		await this.chatMcp.close();
+		await this.browser?.stop();
 		await this.memory.reset();
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
 	}
@@ -719,13 +735,19 @@ export class Engine {
 			case "mcp.remove": {
 				const p = params as Params<"mcp.remove">;
 				this.mcp.remove(p.scope, p.cwd ? this.folder(p) : undefined, p.name);
-				if (p.scope === "global") void this.chatMcp.reset();
+				if (p.scope === "global") {
+					await this.browser?.sync();
+					void this.chatMcp.reset();
+				}
 				return {};
 			}
 			case "mcp.setEnabled": {
 				const p = params as Params<"mcp.setEnabled">;
 				this.mcp.setEnabled(p.scope, p.cwd ? this.folder(p) : undefined, p.name, p.enabled);
-				if (p.scope === "global") void this.chatMcp.reset();
+				if (p.scope === "global") {
+					await this.browser?.sync();
+					void this.chatMcp.reset();
+				}
 				return {};
 			}
 			case "packages.preview":

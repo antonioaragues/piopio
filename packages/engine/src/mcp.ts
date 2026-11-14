@@ -121,6 +121,26 @@ export class McpConfig {
 		});
 	}
 
+	/** Writes a global server as given, only when none has that name (Piopio's built-in ones). True when written. */
+	seedGlobal(name: string, server: RawServer): boolean {
+		let written = false;
+		this.edit("global", undefined, (file) => {
+			file.mcpServers ??= {};
+			if (file.mcpServers[name]) return;
+			file.mcpServers[name] = server;
+			written = true;
+		});
+		return written;
+	}
+
+	/** Changes some fields of a global server, if it still exists. */
+	patchGlobal(name: string, patch: Partial<RawServer>): void {
+		this.edit("global", undefined, (file) => {
+			const server = file.mcpServers?.[name];
+			if (server) Object.assign(server, patch);
+		});
+	}
+
 	remove(scope: Scope, cwd: string | undefined, name: string): void {
 		this.edit(scope, cwd, (file) => {
 			if (!file.mcpServers?.[name]) throw new EngineError("NOT_FOUND", `No MCP server “${name}”.`);

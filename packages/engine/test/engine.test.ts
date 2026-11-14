@@ -1104,6 +1104,19 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		await expect(a.client.call("mcp.add", { scope: "global", name: "bad name", command: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 	}, 60_000);
 
+	test("Piopio's browser is in a chat opened right after the engine starts (docs/spec/22 §13)", async () => {
+		const a = await start(undefined, true, { browser: true });
+		expect(JSON.parse(readFileSync(join(a.home, "pi-agent", "mcp.json"), "utf8")).mcpServers.browser).toMatchObject({ exposure: "deferred" });
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		// The core tools are declared from the start; the rest are found with tool_search.
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: mcp__browser__browser_tabs | {"action":"list"}' } });
+		// Declared: the call reaches Playwright (done here; an error where no Chrome is installed, as on CI).
+		expect((await finishedTools(a, ref, 1))[0]).toMatchObject({ tool: "mcp__browser__browser_tabs" });
+		await a.client.call("sessions.submit", { ref, input: { text: 'call: tool_search | {"query":"drag and drop between elements"}' } });
+		expect((await finishedTools(a, ref, 2))[1]).toMatchObject({ tool: "tool_search", status: "done", output: expect.stringContaining("mcp__browser__browser_drag") });
+	}, 60_000);
+
 	test("a conversation turns an MCP server off for itself: refused in a Build session, gone from a chat, back when on again", async () => {
 		const a = await start();
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-mcp-")));

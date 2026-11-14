@@ -75,4 +75,11 @@ for (const [root, files] of [
 	const target = join(out, "node_modules", root.slice(root.lastIndexOf("node_modules/") + "node_modules/".length));
 	for (const file of files) cpSync(join(root, file), join(target, file));
 }
+// Piopio's browser (src/browser.ts): Playwright MCP runs as its own node process from node_modules beside main.js,
+// so it ships as installed, with the two Playwright packages it loads (no browsers: it drives the Mac's Chrome).
+const playwrightMcp = packageRoot("@playwright/mcp");
+for (const root of [playwrightMcp, packageRoot("playwright", playwrightMcp), packageRoot("playwright-core", playwrightMcp)]) {
+	const name = root.slice(root.lastIndexOf("node_modules/") + "node_modules/".length);
+	cpSync(root, join(out, "node_modules", name), { recursive: true, dereference: true, filter: (src) => !src.slice(root.length).startsWith("/node_modules") });
+}
 console.log(out);

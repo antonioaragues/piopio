@@ -7,7 +7,7 @@
  * server. Tools turned off for a server (pi's `toolExposure`: "hidden") stay out.
  */
 import { Type } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, type Extension } from "@earendil-works/pi-durable";
+import { defineExtension, defineTool, section, type Extension } from "@earendil-works/pi-durable";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -17,7 +17,7 @@ import { hiddenTools, type McpConfig, type RawServer } from "../mcp.js";
 export const MCP_EXTENSION = "piopio-mcp";
 const CONNECT_TIMEOUT_MS = 15_000;
 
-type Connected = { name: string; client: Client; tools: { name: string; description?: string; inputSchema: unknown }[]; direct: boolean };
+type Connected = { name: string; client: Client; tools: { name: string; description?: string; inputSchema: unknown; direct: boolean }[]; description?: string };
 
 /** Shared by every runtime: one connection per server, made when a conversation first needs the tools. */
 export class ChatMcp {
@@ -25,6 +25,8 @@ export class ChatMcp {
 	private listeners = new Set<() => void>();
 	readonly toolSearch = createToolSearchExtension() as unknown as Extension;
 	errors: string[] = [];
+	/** Retries after a server didn't connect (it may still be starting); reset once one connects. */
+	private retries = 0;
 
 	constructor(
 		private readonly config: McpConfig,
@@ -50,7 +52,7 @@ export class ChatMcp {
 					name: `mcp__${s.name}__${t.name}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64),
 					description: t.description ?? `${t.name} (MCP server ${s.name})`,
 					parameters: Type.Unsafe<Record<string, unknown>>((t.inputSchema as object) ?? { type: "object", properties: {} }),
-					...(s.direct ? {} : { deferred: true as const }),
+					...(t.direct ? {} : { deferred: true as const }),
 					execute: async (args) => {
 						const result = (await s.client.callTool({ name: t.name, arguments: args as Record<string, unknown> })) as { content?: { type: string; text?: string; data?: string; mimeType?: string }[]; isError?: boolean };
 						type Block = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
@@ -62,7 +64,10 @@ export class ChatMcp {
 				}),
 			),
 		);
-		return defineExtension({ name: MCP_EXTENSION, tools }) as unknown as Extension;
+		// tool_search doesn't say which servers are behind it, so the prompt names them (as pi's mcp_servers section does in Build).
+		const deferred = servers.filter((s) => s.tools.some((t) => !t.direct));
+		const sections = deferred.length ? [section("mcp_servers", () => serversSection(deferred))] : [];
+		return defineExtension({ name: MCP_EXTENSION, tools, sections }) as unknown as Extension;
 	}
 
 	/** Servers or the setting changed: drop the connections; runtimes reinstall the extension. */
@@ -97,15 +102,37 @@ export class ChatMcp {
 					await withTimeout(client.connect(transport(server)), CONNECT_TIMEOUT_MS);
 					const { tools } = await withTimeout(client.listTools(), CONNECT_TIMEOUT_MS);
 					const hidden = new Set(hiddenTools(server));
-					return { name, client, tools: tools.filter((t) => !hidden.has(t.name)), direct: server.exposure === "direct" } as Connected;
+					// pi's exposure: the server's, unless `toolExposure` says otherwise for one tool ("direct", "deferred").
+					const direct = (tool: string) => (server.toolExposure?.[tool] ?? server.exposure) === "direct";
+					return {
+						name,
+						client,
+						tools: tools.filter((t) => !hidden.has(t.name)).map((t) => ({ ...t, direct: direct(t.name) })),
+						...(server.description ? { description: server.description } : {}),
+					} as Connected;
 				} catch (error) {
 					this.errors.push(`${name}: ${(error as Error).message}`);
 					return undefined;
 				}
 			}),
 		);
-		return results.filter((r): r is Connected => Boolean(r));
+		const connected = results.filter((r): r is Connected => Boolean(r));
+		// A server that didn't answer is tried again a little later (it may have been starting, like Piopio's
+		// browser), instead of staying out until the settings change: reset() reconnects and reinstalls the tools.
+		if (this.errors.length && this.retries < 5) {
+			const attempt = ++this.retries;
+			setTimeout(() => void (this.retries === attempt && this.reset()), 2_000 * attempt).unref();
+		} else if (!this.errors.length) {
+			this.retries = 0;
+		}
+		return connected;
 	}
+}
+
+/** The deferred servers, one line each, with how to reach their tools. */
+export function serversSection(servers: readonly { name: string; description?: string }[]): string {
+	const lines = servers.map((s) => `- ${s.name}${s.description ? `: ${s.description.replace(/\s+/g, " ").trim()}` : ""}`);
+	return ["# MCP servers", "", "Some or all of these servers' tools aren't listed above; load them with `tool_search` (search for the server's name or what you need).", "", ...lines].join("\n");
 }
 
 export function transport(server: RawServer, stderr: "ignore" | "pipe" = "ignore") {

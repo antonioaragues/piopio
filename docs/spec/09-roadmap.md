@@ -18,9 +18,9 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 | Track | Specs | Built | Left |
 |---|---|---|---|
 | **A · Make it real** | [status](../status.md), [acceptance](../acceptance.md) | Scripted tests, captures, one real-model team trial (20 §14) | The eight acceptance items; real providers (ChatGPT sign-in, a real Ollama/LiteLLM); real Google and Microsoft accounts; sleep/wake schedules; VoiceOver |
-| **B · Agents and teams** | 06, 19, 20, 21 | 19 T0–T2; 20 P1–P4; 21 D1–D4 | 21 **D5** the team page, **D6** working with a team (`@mentions`, plan block, merge card), **D7** teams born in a project; the "not yet" lists of D2–D4; the real-model trial after D6–D7 |
+| **B · Agents and teams** | 06, 19, 20, 21 | 19 T0–T2; 20 P1–P4; 21 D1–D7 | The "not yet" lists of D2–D7; the real-model trial |
 | **C · Conversations** | 18, 24, 17, 16 | 18 phases 1–3; Debate DB1–DB2 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the rest of 17 became teams, TD2); Debate **DB3** |
-| **D · Reach** (what the model can touch) | 22, 23, 12, 10 | Connectors C1; providers P0–P1 | Browser **W0–W4**; computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); MCP Apps (D6); image generation (D11) |
+| **D · Reach** (what the model can touch) | 22, 23, 12, 10 | Connectors C1; providers P0–P1; Playwright MCP as the interim browser (22 §13) | Browser **W1–W4** in WebKit (22, chosen 2026-11-15); computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); MCP Apps (D6); image generation (D11) |
 | **E · Cloud and channels** | 13, 19 T3–T4 | Spikes S4 and S7 (go); Telegram from the Mac | 13 **5.1–5.5**: deploy, Telegram by webhook, Mac Bridge, WhatsApp. Nothing is on a real account |
 | **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8, which 17 DP5 and 24's Create PR wait for); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
 | **G · Memory** | 14 | M0–M3 | **M4** past chats, **M5** project lessons, **M6** Hindsight |
@@ -39,8 +39,8 @@ One build track at a time, plus Track A running beside it as use, not as buildin
 **Next**
 3. **Side conversations SD1–SD2** (24) with **Watchdog DP1** (17). Neither needs anything unbuilt, both help daily
    use at once, and the report bridge they add also serves teams.
-4. **Browser W0, then W1 and W4** (22). W0 is a small go/no-go that also answers computer use's open question
-   (images in tool results). W4, the project preview, is the part Build needs most.
+4. **Browser W1, then W2 and W4** (22, WebKit in the app; decided 2026-11-15). Until W1 reads pages, Playwright MCP
+   is the interim browser (22 §13), and W0's spike results stand in for W0.
 5. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on team, worktree and
    side-conversation cards.
 
@@ -69,7 +69,6 @@ The table at the foot of this page says none are open; that was true on 2026-10-
 | Where | What |
 |---|---|
 | 21 §6 | What a "job" is for the budget; the team estimate; agent page width; Telegram on the strip |
-| 22 §11 | One profile with your sign-ins; where the pane lives; agents with your sign-ins; browser before computer use |
 | 23 §10 | Attended only; browsers see-only; full control as its own milestone; keeping pictures |
 | 17 §8 | DPQ1–DPQ6, most of them moot since TD2; DPQ6 (the off-track check) still stands |
 | 16 §8 | DQ1–DQ3: the name, you as reviewer, remembering a result |
