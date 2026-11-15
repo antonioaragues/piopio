@@ -175,7 +175,7 @@ struct CommandPalette: View {
         hits.filter { hit in
             guard hit.kind != .title else { return false }
             switch hit.ref.kind {
-            case .thread, .space: return Areas.shared.contains(.chat)
+            case .thread: return Areas.shared.contains(.chat)
             case .build: return Areas.shared.contains(.build)
             case .agent: return Areas.shared.contains(.agents)
             }

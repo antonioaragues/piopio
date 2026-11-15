@@ -17,12 +17,11 @@ struct ToolChoice: Identifiable, Hashable {
 }
 
 @MainActor enum ToolChoices {
-    /// Which kinds a conversation has: connectors in chats and Build sessions; MCP in chats, notebooks and Build.
+    /// Which kinds a conversation has: connectors in chats and Build sessions; MCP in chats and Build.
     static func supports(_ ref: ContainerRef, debate: Bool) -> (apps: Bool, mcp: Bool) {
         switch ref.kind {
         case .thread: (!debate, !debate)
         case .build: (true, true)
-        case .space: (false, true)
         case .agent: (false, false)
         }
     }

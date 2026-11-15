@@ -253,8 +253,8 @@ struct AboutMeEditor: View {
     private func setShare(_ value: Share) {
         let patch: SettingsPatch.AboutMe = switch value {
         case .nobody: .init(enabled: false)
-        case .chats: .init(enabled: true, inThreads: true, inSpaces: true, inAgents: false)
-        case .agents: .init(enabled: true, inThreads: true, inSpaces: true, inAgents: true)
+        case .chats: .init(enabled: true, inThreads: true, inAgents: false)
+        case .agents: .init(enabled: true, inThreads: true, inAgents: true)
         }
         Task { await engine.updateSettings(SettingsPatch(aboutMe: patch)) }
     }

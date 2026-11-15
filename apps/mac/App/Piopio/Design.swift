@@ -53,7 +53,7 @@ struct Chick: View {
     }
 }
 
-/// A project's or notebook's mark in lists: a 16pt outline glyph in fg2 (no colored tiles in the grey design).
+/// A project's mark in lists: a 16pt outline glyph in fg2 (no colored tiles in the grey design).
 struct InitialTile: View {
     let name: String
     var size: CGFloat = 18
@@ -237,7 +237,7 @@ private struct IconButtonBody: View {
 }
 
 /// A toolbar view icon (docs/design/session-panel): it shows or hides a view, and is lit while that view shows.
-/// Build sessions, chats, notebooks and agents all put their views first, then a divider and ···.
+/// Build sessions, chats and agents all put their views first, then a divider and ···.
 struct ToolbarIcon: View {
     let symbol: String
     let label: String

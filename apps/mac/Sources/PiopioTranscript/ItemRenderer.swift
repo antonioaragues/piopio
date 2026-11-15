@@ -116,10 +116,6 @@ nonisolated struct ItemRenderer: Sendable {
         case .checkpoint:
             // Saved silently before every message (chat v3, 14b): rewinding is an action on your message.
             return NSAttributedString()
-        case .routing(let r):
-            return routingCard(r)
-        case .memory(let m):
-            return memoryNote(m)
         case .steps(let s):
             return attachmentParagraph(DisclosureAttachment(card: Self.stepsCard(s, root: root)))
         case .approval(let a):
@@ -524,70 +520,6 @@ nonisolated struct ItemRenderer: Sendable {
         return out
     }
 
-    /// "✎ Saved 2 facts to notebook memory · Undo" (docs/design v2, 4a), or a topic's proposal with Save and Dismiss.
-    /// The facts themselves show on hover.
-    private func memoryNote(_ m: MemoryItem) -> NSAttributedString {
-        let facts = (m.added.map { "“\($0)”" } + m.removed.map { "removed “\($0)”" }).joined(separator: ", ")
-        let count = m.added.count + m.removed.count
-        let n = m.removed.isEmpty ? (count == 1 ? "1 fact" : "\(count) facts") : (count == 1 ? "1 change" : "\(count) changes")
-        let lead: String = switch (m.action, m.status) {
-        case (_, .failed): "Memory not changed: \(m.reason ?? "the change failed")"
-        case (_, .undone): "Undone: \(n) no longer in memory"
-        case (.saved, _): m.removed.isEmpty ? "Saved \(n) to notebook memory" : "Updated notebook memory · \(n)"
-        case (.proposed, .pending): "Suggested for memory: \(facts)"
-        case (.proposed, .saved): "Saved \(n) to notebook memory"
-        case (.proposed, .dismissed): "Dismissed: \(facts)"
-        case (.proposed, _): "Suggested: \(facts)"
-        }
-        let m2 = NSMutableAttributedString(string: lead, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3, .toolTip: facts])
-        if !compact {
-            let link: (String, TranscriptAction) -> NSAttributedString = { title, action in
-                NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2, .link: action.url])
-            }
-            if m.status == .saved, let revision = m.revisionId {
-                m2.append(NSAttributedString(string: " · ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
-                m2.append(link("undo", .undoMemory(revisionId: revision)))
-            } else if m.status == .pending, let proposal = m.proposalId {
-                m2.append(NSAttributedString(string: "   ", attributes: [.font: small]))
-                m2.append(link("Save", .decideMemory(proposalId: proposal, accept: true)))
-                m2.append(NSAttributedString(string: "   ", attributes: [.font: small]))
-                m2.append(link("Dismiss", .decideMemory(proposalId: proposal, accept: false)))
-            }
-        }
-        if let reason = m.reason, m.action == .proposed, m.status == .pending {
-            m2.append(NSAttributedString(string: lineSeparator + reason, attributes: [.font: NSFont.systemFont(ofSize: 11.5), .foregroundColor: DS.fg3]))
-        }
-        return line(m2, paragraph(spacing: 14, before: 4))
-    }
-
-    /// Where the organizer sent a message (docs/design/grey 13e): one grey line under it, right-aligned like the
-    /// message: "New topic: Muebles · Open · Change". The reply lives in the topic.
-    private func routingCard(_ r: RoutingItem) -> NSAttributedString {
-        let status: String? = switch r.status {
-        case .thinking: "thinking…"
-        case .replying: "replying…"
-        case .needsYou: "needs you"
-        case .failed: "failed"
-        case .replied: nil
-        }
-        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg3]
-        let m = NSMutableAttributedString(string: r.decision == .create ? "New topic: " : "Sent to ", attributes: attrs)
-        m.addAttribute(.toolTip, value: r.preview ?? r.reason, range: NSRange(location: 0, length: m.length))
-        m.append(NSAttributedString(string: r.topicTitle, attributes: attrs))
-        if let status { m.append(NSAttributedString(string: " · \(status)", attributes: attrs)) }
-        if !compact, !r.topicId.isEmpty {
-            m.append(NSAttributedString(string: " · ", attributes: attrs))
-            m.append(NSAttributedString(string: "open", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2, .link: TranscriptAction.openTopic(topicId: r.topicId, itemId: r.replyItemId).url]))
-            if !r.message.isEmpty, r.status != .failed {
-                m.append(NSAttributedString(string: " · ", attributes: attrs))
-                m.append(NSAttributedString(string: "change", attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg2, .link: TranscriptAction.wrongTopic(itemId: r.id).url, .toolTip: "Send this to another topic"]))
-            }
-        }
-        let p = paragraph(spacing: 14, before: 2)
-        p.alignment = .right
-        return line(m, p)
-    }
-
     // MARK: Messages
 
     /// Files sent with a message: right-aligned chips above the bubble.
@@ -961,7 +893,6 @@ nonisolated struct ItemRenderer: Sendable {
         actions.canEdit = versions || build
         actions.canRewind = build
         actions.branch = versions ? u.branch : nil
-        actions.note = u.direct == true ? "direct" : nil
         actions.at = Self.date(u.at)
         return actionsLine(actions, spacing: 2)
     }

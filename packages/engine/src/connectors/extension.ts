@@ -1,5 +1,5 @@
 /**
- * Connector tools as extensions: for pi-durable (chats, notebooks, agents) and for pi-coding-agent (Build).
+ * Connector tools as extensions: for pi-durable (chats, agents) and for pi-coding-agent (Build).
  * Each runtime passes how it asks before a change (`confirm`).
  */
 import { awaitWithContext, type Context } from "@earendil-works/chord/context";

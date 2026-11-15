@@ -24,8 +24,6 @@ public final class MessageActions: @unchecked Sendable {
     var canRewind = false
     /// A thread's message versions: "‹ 2 / 3 ›".
     var branch: BranchInfo?
-    /// "direct" (a notebook topic message typed there).
-    var note: String?
     /// "Haiku 5.5", with the full model, cost and tokens in its tooltip.
     var meta = ""
     var metaHelp: String?
@@ -114,7 +112,6 @@ struct ActionsRow: View {
     }
 
     @ViewBuilder private var buttons: some View {
-        if let note = actions.note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).padding(.trailing, 6) }
         if let b = actions.branch, actions.role == .user { branchSwitcher(b) }
         if actions.role == .answer { CopyMenu(actions: actions) } else { IconButton(symbol: actions.copied ? "checkmark" : "doc.on.doc", help: "Copy") { copy() } }
         if actions.role == .user {

@@ -6,7 +6,7 @@ import Foundation
 public let protocolVersion = "1.0"
 public let secretOpenRouter = "provider.openrouter.apiKey"
 
-public enum ContainerKind: String, Codable, Sendable { case build, thread, space, agent }
+public enum ContainerKind: String, Codable, Sendable { case build, thread, agent }
 
 public struct ContainerRef: Codable, Sendable, Hashable {
     public var kind: ContainerKind
@@ -72,8 +72,6 @@ public struct UserItem: Codable, Sendable, Hashable {
     public var id, at, text: String
     public var attachments: [AttachmentInfo]?
     public var branch: BranchInfo?
-    /// A Space topic: typed in the topic itself, not routed from Main.
-    public var direct: Bool?
     public init(id: String, at: String, text: String, attachments: [AttachmentInfo]? = nil, branch: BranchInfo? = nil) {
         self.id = id; self.at = at; self.text = text; self.attachments = attachments; self.branch = branch
     }
@@ -327,33 +325,6 @@ public struct RestoreParams: Encodable, Sendable {
 }
 public struct RestoreResult: Decodable, Sendable { public var files: [FileChange] }
 
-/// A Space's Main: where the organizer (or you) sent a message. The reply lives in the topic.
-public struct RoutingItem: Codable, Sendable, Hashable {
-    public enum Decision: String, Codable, Sendable { case route, create }
-    public enum Status: String, Codable, Sendable { case thinking, replying, replied, needsYou = "needs_you", failed }
-    public var id, at: String
-    public var decision: Decision
-    public var topicId, topicTitle, reason, message: String
-    public var status: Status
-    public var preview: String?
-    public var replyItemId: String?
-    public var forced: Bool?
-    public var movedFrom: String?
-}
-
-/// A change to a Space's memory: saved by the organizer (Undo), or proposed by a topic (Save, Dismiss).
-public struct MemoryItem: Codable, Sendable, Hashable {
-    public enum Action: String, Codable, Sendable { case saved, proposed }
-    public enum Status: String, Codable, Sendable { case saved, undone, pending, dismissed, failed }
-    public var id, at: String
-    public var action: Action
-    public var added, removed: [String]
-    public var reason: String?
-    public var status: Status
-    public var revisionId: String?
-    public var proposalId: String?
-}
-
 /// A turn's tool calls as one line (agents' conversations, 06-agents UI2).
 public struct StepsItem: Codable, Sendable, Hashable {
     public var id, at: String
@@ -413,8 +384,6 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
     case system(SystemItem)
     case compaction(CompactionItem)
     case checkpoint(CheckpointItem)
-    case routing(RoutingItem)
-    case memory(MemoryItem)
     case steps(StepsItem)
     case approval(ApprovalItem)
     case result(ResultItem)
@@ -432,8 +401,6 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case "system": self = .system(try SystemItem(from: decoder))
         case "compaction": self = .compaction(try CompactionItem(from: decoder))
         case "checkpoint": self = .checkpoint(try CheckpointItem(from: decoder))
-        case "routing": self = .routing(try RoutingItem(from: decoder))
-        case "memory": self = .memory(try MemoryItem(from: decoder))
         case "steps": self = .steps(try StepsItem(from: decoder))
         case "approval": self = .approval(try ApprovalItem(from: decoder))
         case "result": self = .result(try ResultItem(from: decoder))
@@ -452,8 +419,6 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .system(let v): try c.encode("system", forKey: .kind); try v.encode(to: encoder)
         case .compaction(let v): try c.encode("compaction", forKey: .kind); try v.encode(to: encoder)
         case .checkpoint(let v): try c.encode("checkpoint", forKey: .kind); try v.encode(to: encoder)
-        case .routing(let v): try c.encode("routing", forKey: .kind); try v.encode(to: encoder)
-        case .memory(let v): try c.encode("memory", forKey: .kind); try v.encode(to: encoder)
         case .steps(let v): try c.encode("steps", forKey: .kind); try v.encode(to: encoder)
         case .approval(let v): try c.encode("approval", forKey: .kind); try v.encode(to: encoder)
         case .result(let v): try c.encode("result", forKey: .kind); try v.encode(to: encoder)
@@ -470,8 +435,6 @@ public enum TimelineItem: Codable, Sendable, Hashable, Identifiable {
         case .system(let v): v.id
         case .compaction(let v): v.id
         case .checkpoint(let v): v.id
-        case .routing(let v): v.id
-        case .memory(let v): v.id
         case .steps(let v): v.id
         case .approval(let v): v.id
         case .result(let v): v.id
@@ -587,12 +550,6 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// Project sessions: "build" (coding) or "chat" (knowledge assistant).
     public enum Profile: String, Codable, Sendable { case build, chat }
     public var profile: Profile?
-    /// Spaces: the topics, most recently active first, and the Space's instructions.
-    public var topics: [TopicInfo]?
-    public var instructions: String?
-    public var space: SpaceInfo?
-    /// Threads: a Space it seems to belong in (04-chat S11).
-    public var suggestion: SpaceSuggestion?
     /// Next messages suggested after the latest answer (docs/design v2 "You could also").
     public var followUps: [String]?
     /// Connectors and MCP servers turned off in this conversation only ("connector:<id>", "mcp:<server>").
@@ -1051,8 +1008,6 @@ public struct MemoryBanksResult: Decodable, Sendable, Equatable {
     }
     public var banks: [Bank]
     public var agents: [Agent]
-    /// Before docs/spec/18 phase 2; no longer sent.
-    public var notebooks: Int?
     public var bytes: Int
 }
 public struct MemoryHistoryParams: Encodable, Sendable { public var provider, bank: String; public init(provider: String = "builtin", bank: String) { self.provider = provider; self.bank = bank } }
@@ -1065,14 +1020,6 @@ public struct MemoryExportResult: Decodable, Sendable { public var files: [Strin
 public struct MemoryWipeParams: Encodable, Sendable { public var bank: String; public init(bank: String) { self.bank = bank } }
 public struct MemoryCountResult: Decodable, Sendable { public var records: Int?; public var pending: Int? }
 public struct MemoryLearningParams: Encodable, Sendable { public var ref: ContainerRef; public var learn: Bool; public init(ref: ContainerRef, learn: Bool) { self.ref = ref; self.learn = learn } }
-
-public struct SpaceSuggestion: Codable, Sendable, Hashable {
-    public var spaceId: String
-    public var spaceTitle: String
-    public var topicId: String?
-    public var topicTitle: String?
-    public var reason: String
-}
 
 /// The built-in memory's semantic search (docs/spec/14-memory M1): on, or why not, and how much is indexed.
 public struct MemoryStatus: Decodable, Sendable, Equatable {
@@ -1119,8 +1066,8 @@ public struct EngineSettings: Codable, Sendable, Hashable {
         public init(utility: UtilityChoice? = nil) { self.utility = utility }
     }
     public var models: Models?
-    public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var suggestSpaces: Bool; public var followUps: Bool? }
-    public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads, inSpaces: Bool; public var inAgents: Bool?; public var provider: String }
+    public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var followUps: Bool? }
+    public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads: Bool; public var inAgents: Bool?; public var provider: String }
     public struct Memory: Codable, Sendable, Hashable {
         public var providers: [McpMemoryProvider]
         /// Search by meaning through OpenRouter (off: by words, on this Mac).
@@ -1198,13 +1145,13 @@ public struct MemoryRecallResult: Decodable, Sendable { public struct Hit: Decod
 
 public struct SettingsPatch: Encodable, Sendable {
     public struct Chat: Encodable, Sendable {
-        public var mcp: Bool?; public var suggestSpaces: Bool?; public var followUps: Bool?
-        public init(mcp: Bool? = nil, suggestSpaces: Bool? = nil, followUps: Bool? = nil) { self.mcp = mcp; self.suggestSpaces = suggestSpaces; self.followUps = followUps }
+        public var mcp: Bool?; public var followUps: Bool?
+        public init(mcp: Bool? = nil, followUps: Bool? = nil) { self.mcp = mcp; self.followUps = followUps }
     }
     public struct AboutMe: Encodable, Sendable {
-        public var enabled, capture, inThreads, inSpaces, inAgents: Bool?
+        public var enabled, capture, inThreads, inAgents: Bool?
         public var provider: String?
-        public init(enabled: Bool? = nil, capture: Bool? = nil, inThreads: Bool? = nil, inSpaces: Bool? = nil, inAgents: Bool? = nil, provider: String? = nil) { self.enabled = enabled; self.capture = capture; self.inThreads = inThreads; self.inSpaces = inSpaces; self.inAgents = inAgents; self.provider = provider }
+        public init(enabled: Bool? = nil, capture: Bool? = nil, inThreads: Bool? = nil, inAgents: Bool? = nil, provider: String? = nil) { self.enabled = enabled; self.capture = capture; self.inThreads = inThreads; self.inAgents = inAgents; self.provider = provider }
     }
     public struct Memory: Encodable, Sendable {
         public var providers: [McpMemoryProvider]?
@@ -1231,53 +1178,8 @@ public struct ContinueInParams: Encodable, Sendable {
     public var approvalMode: ApprovalMode?
     public init(ref: ContainerRef, cwd: String, approvalMode: ApprovalMode? = nil) { self.ref = ref; self.cwd = cwd; self.approvalMode = approvalMode }
 }
-public struct ImportThreadsParams: Encodable, Sendable {
-    public var ref: ContainerRef; public var threads: [ContainerRef]; public var topicId: String?; public var keepThreads: Bool?
-    public init(ref: ContainerRef, threads: [ContainerRef], topicId: String? = nil, keepThreads: Bool? = nil) { self.ref = ref; self.threads = threads; self.topicId = topicId; self.keepThreads = keepThreads }
-}
-public struct ImportThreadsResult: Decodable, Sendable { public var topicIds: [String] }
-
-/// A Space's header numbers and settings (04-chat S7, §3.6).
-public struct SpaceInfo: Codable, Sendable, Hashable {
-    public var costUsd: Double
-    public var files: Int
-    public var memoryLines: Int
-    public var organizerModel: ModelRef?
-    public var memory: Bool
-    public var autoTidy: Bool
-}
-
 extension SessionSummary: Identifiable {
     public var id: String { ref.key }
-}
-
-/// A Space topic (04-chat S6).
-public struct TopicInfo: Codable, Sendable, Hashable, Identifiable {
-    /// The topic's conversation id.
-    public var id: String
-    public var title: String
-    public var brief: String?
-    public var summary: String?
-    public var lastActiveAt: String
-    public var archived: Bool?
-    public var unread: Bool?
-    public var running: Bool?
-}
-
-public struct RerouteParams: Encodable, Sendable {
-    public var ref: ContainerRef; public var itemId: String; public var toTopicId: String?; public var newTopic: String?
-    public init(ref: ContainerRef, itemId: String, toTopicId: String? = nil, newTopic: String? = nil) { self.ref = ref; self.itemId = itemId; self.toTopicId = toTopicId; self.newTopic = newTopic }
-}
-public struct SpaceConfigureParams: Encodable, Sendable {
-    public var ref: ContainerRef
-    public var instructions: String?
-    public var organizerModel: ModelRef?
-    public var topicModel: ModelRef?
-    public var memory: Bool?
-    public var autoTidy: Bool?
-    public init(ref: ContainerRef, instructions: String? = nil, organizerModel: ModelRef? = nil, topicModel: ModelRef? = nil, memory: Bool? = nil, autoTidy: Bool? = nil) {
-        self.ref = ref; self.instructions = instructions; self.organizerModel = organizerModel; self.topicModel = topicModel; self.memory = memory; self.autoTidy = autoTidy
-    }
 }
 
 public struct MemoryRevision: Codable, Sendable, Hashable, Identifiable {
@@ -1291,26 +1193,10 @@ public struct MemoryRevision: Codable, Sendable, Hashable, Identifiable {
 public struct MemoryResult: Decodable, Sendable {
     public var text: String
     public var revisions: [MemoryRevision]
-    /// Notebooks: changes topics proposed that wait for you.
-    public struct Proposal: Decodable, Sendable, Hashable, Identifiable { public var id, at, topicId, title: String; public var added, removed: [String]; public var reason: String }
-    public var proposals: [Proposal]?
     /// About me: the provider it lives in, and whether that provider can list what it stored.
     public var provider: String?
     public var limited: Bool?
 }
-public struct MemorySetParams: Encodable, Sendable { public var ref: ContainerRef; public var text: String; public init(ref: ContainerRef, text: String) { self.ref = ref; self.text = text } }
-public struct RevisionParams: Encodable, Sendable { public var ref: ContainerRef; public var revisionId: String; public init(ref: ContainerRef, revisionId: String) { self.ref = ref; self.revisionId = revisionId } }
-public struct DecideParams: Encodable, Sendable { public var ref: ContainerRef; public var proposalId: String; public var accept: Bool; public init(ref: ContainerRef, proposalId: String, accept: Bool) { self.ref = ref; self.proposalId = proposalId; self.accept = accept } }
-public struct TopicRenameParams: Encodable, Sendable { public var ref: ContainerRef; public var title: String; public init(ref: ContainerRef, title: String) { self.ref = ref; self.title = title } }
-public struct TopicArchiveParams: Encodable, Sendable { public var ref: ContainerRef; public var archived: Bool; public init(ref: ContainerRef, archived: Bool) { self.ref = ref; self.archived = archived } }
-public struct TopicMergeParams: Encodable, Sendable { public var ref: ContainerRef; public var into: String; public init(ref: ContainerRef, into: String) { self.ref = ref; self.into = into } }
-public struct SpaceFile: Codable, Sendable, Hashable, Identifiable { public var name: String; public var size: Double; public var addedAt: String; public var id: String { name } }
-public struct SpaceFilesResult: Decodable, Sendable { public var files: [SpaceFile] }
-public struct SpaceFileAddParams: Encodable, Sendable {
-    public var ref: ContainerRef; public var name: String; public var path: String?; public var text: String?; public var extracted: String?
-    public init(ref: ContainerRef, name: String, path: String? = nil, text: String? = nil, extracted: String? = nil) { self.ref = ref; self.name = name; self.path = path; self.text = text; self.extracted = extracted }
-}
-public struct SpaceFileParams: Encodable, Sendable { public var ref: ContainerRef; public var name: String; public init(ref: ContainerRef, name: String) { self.ref = ref; self.name = name } }
 
 // MARK: Method params / results
 

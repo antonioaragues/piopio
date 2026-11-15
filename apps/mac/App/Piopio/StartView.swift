@@ -21,8 +21,6 @@ import SwiftUI
         var instructions = ""
         var avatar = ""
         var template: String?
-        /// Before docs/spec/18 phase 2: chats to bring into a new notebook (read from old drafts, unused).
-        var threads: [String] = []
         /// An agent's schedule as a cron; empty for none.
         var schedule = ""
 
@@ -37,7 +35,6 @@ import SwiftUI
             instructions = try c.decodeIfPresent(String.self, forKey: .instructions) ?? ""
             avatar = try c.decodeIfPresent(String.self, forKey: .avatar) ?? ""
             template = try c.decodeIfPresent(String.self, forKey: .template)
-            threads = try c.decodeIfPresent([String].self, forKey: .threads) ?? []
             schedule = try c.decodeIfPresent(String.self, forKey: .schedule) ?? ""
         }
     }

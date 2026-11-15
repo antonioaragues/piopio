@@ -3,8 +3,8 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-// Settings › Connectors (design handoff c0–c4, docs/spec/12-connectors): connect an app once and any chat, notebook
-// or agent can use it. The page lists connected accounts; each opens its page (what it may do, its calendars);
+// Settings › Connectors (design handoff c0–c4, docs/spec/12-connectors): connect an app once and any chat, Build
+// session or agent can use it. The page lists connected accounts; each opens its page (what it may do, its calendars);
 // adding happens in a sheet with the catalog and a connect step that sets permissions before signing in.
 
 /// Signing in to an app: the browser opens; this follows until done or failed.

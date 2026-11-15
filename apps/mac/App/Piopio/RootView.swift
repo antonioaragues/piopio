@@ -285,7 +285,6 @@ struct RootView: View {
         switch hit.ref.kind {
         case .thread: itemRaw = SidebarItem.chat(hit.ref.id).raw
         case .build: itemRaw = SidebarItem.session(hit.ref.id).raw
-        case .space: return // notebooks are gone (docs/spec/18 phase 2)
         case .agent: itemRaw = SidebarItem.agent(hit.ref.id).raw
         }
         if let found = hit.itemId { engine.thread(hit.ref).reveal(found) }

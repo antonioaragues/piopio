@@ -1466,7 +1466,7 @@ describe("Chat: About me and MCP (milestone 3.4)", () => {
 
 	test("About me: off by default, then shown and captured; MCP servers reach conversations when allowed", async () => {
 		const a = await start();
-		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, suggestSpaces: false, followUps: true }, aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" }, memory: { providers: [] } });
+		expect(await a.client.call("settings.get", {})).toEqual({ chat: { mcp: false, followUps: true }, aboutMe: { enabled: false, capture: false, inThreads: true, provider: "builtin" }, memory: { providers: [] } });
 		const tools = (s: Snapshot) => s.items.flatMap((i) => (i.kind === "tool" ? [i] : []));
 
 		let t = await thread(a, 'call: remember_about_me | {"add":["Lives in Valencia"],"section":"Home"}');

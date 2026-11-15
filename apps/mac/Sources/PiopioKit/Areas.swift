@@ -67,7 +67,7 @@ public enum WelcomeGate: Equatable, Sendable {
     /// Done or skipped before.
     case done
 
-    /// `hasHistory`: a model is connected, or there are projects, chats, notebooks or agents.
+    /// `hasHistory`: a model is connected, or there are projects, chats or agents.
     public static func decide(done: Bool, hasHistory: Bool, forced: Bool = false) -> WelcomeGate {
         if forced { return .show }
         if done { return .done }

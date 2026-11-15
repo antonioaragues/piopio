@@ -17,14 +17,6 @@ public enum TranscriptAction: Equatable, Sendable {
     case openFile(path: String, line: Int?)
     /// A path chip in an answer: shows the file in the inspector's Files tab.
     case revealFile(path: String)
-    /// Opens a Space topic, at the reply when known.
-    case openTopic(topicId: String, itemId: String?)
-    /// Wrong topic: choose where a routed message should have gone.
-    case wrongTopic(itemId: String)
-    /// Takes a memory change back.
-    case undoMemory(revisionId: String)
-    /// Saves or dismisses a topic's memory proposal.
-    case decideMemory(proposalId: String, accept: Bool)
     /// Answers an agent's approval request (06-agents §9).
     case decideApproval(approvalId: String, approve: Bool)
     /// Opens the approval in the Inbox, to edit what it does before approving.
@@ -74,10 +66,6 @@ public enum TranscriptAction: Equatable, Sendable {
         case .openSession(let id): c.host = "session"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .revealFile(let path): c.host = "reveal"; c.queryItems = [URLQueryItem(name: "path", value: path)]
         case .openFile(let path, let line): c.host = "file"; c.queryItems = [URLQueryItem(name: "path", value: path)] + (line.map { [URLQueryItem(name: "line", value: "\($0)")] } ?? [])
-        case .openTopic(let topic, let item): c.host = "topic"; c.queryItems = [URLQueryItem(name: "id", value: topic)] + (item.map { [URLQueryItem(name: "item", value: $0)] } ?? [])
-        case .wrongTopic(let id): c.host = "wrong-topic"; c.queryItems = [URLQueryItem(name: "item", value: id)]
-        case .undoMemory(let id): c.host = "undo-memory"; c.queryItems = [URLQueryItem(name: "revision", value: id)]
-        case .decideMemory(let id, let accept): c.host = "decide-memory"; c.queryItems = [URLQueryItem(name: "proposal", value: id), URLQueryItem(name: "accept", value: accept ? "1" : "0")]
         case .decideApproval(let id, let approve): c.host = "approval"; c.queryItems = [URLQueryItem(name: "id", value: id), URLQueryItem(name: "approve", value: approve ? "1" : "0")]
         case .editApproval(let id): c.host = "edit-approval"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .undoChange(let id): c.host = "undo"; c.queryItems = [URLQueryItem(name: "id", value: id)]
@@ -113,10 +101,6 @@ public enum TranscriptAction: Equatable, Sendable {
         case "session": guard let id = q("id") else { return nil }; self = .openSession(id)
         case "file": guard let path = q("path") else { return nil }; self = .openFile(path: path, line: q("line").flatMap(Int.init))
         case "reveal": guard let path = q("path") else { return nil }; self = .revealFile(path: path)
-        case "topic": guard let id = q("id") else { return nil }; self = .openTopic(topicId: id, itemId: q("item"))
-        case "wrong-topic": guard let id = q("item") else { return nil }; self = .wrongTopic(itemId: id)
-        case "undo-memory": guard let id = q("revision") else { return nil }; self = .undoMemory(revisionId: id)
-        case "decide-memory": guard let id = q("proposal") else { return nil }; self = .decideMemory(proposalId: id, accept: q("accept") == "1")
         case "approval": guard let id = q("id") else { return nil }; self = .decideApproval(approvalId: id, approve: q("approve") == "1")
         case "edit-approval": guard let id = q("id") else { return nil }; self = .editApproval(approvalId: id)
         case "undo": guard let id = q("id") else { return nil }; self = .undoChange(undoId: id)

@@ -1,5 +1,5 @@
 /**
- * How answers are written in chats, notebooks and agents (feedback 2026-10-26): no em dashes, and comparisons as
+ * How answers are written in chats and agents (feedback 2026-10-26): no em dashes, and comparisons as
  * Markdown tables, which the app draws as real tables (a table drawn with spaces in a code block wraps into a mess).
  */
 import { defineExtension, section } from "@earendil-works/pi-durable";

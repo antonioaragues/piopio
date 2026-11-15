@@ -15,8 +15,7 @@ export const PROTOCOL_VERSION = "1.0";
 
 // ── Common ──────────────────────────────────────────────────────────────────
 
-/** `space`: a notebook, from before docs/spec/18 phase 2; none are created or shown any more. */
-export const ContainerKind = literals("build", "thread", "space", "agent");
+export const ContainerKind = literals("build", "thread", "agent");
 export type ContainerKind = Static<typeof ContainerKind>;
 
 export const ContainerRef = Type.Object({ kind: ContainerKind, id: Type.String(), conversationId: Type.Optional(Type.String()) });
@@ -121,8 +120,6 @@ export const UserItem = Type.Object({
 	text: Type.String(),
 	attachments: Type.Optional(Type.Array(AttachmentInfo)),
 	branch: Type.Optional(BranchInfo),
-	/** A Space topic: typed in the topic itself, not routed from Main (04-chat S4). */
-	direct: Type.Optional(Type.Boolean()),
 });
 
 /** Why a model request failed, so clients can offer the right fix. */
@@ -246,46 +243,6 @@ export const CheckpointItem = Type.Object({
 	files: Type.Optional(Type.Number()),
 });
 
-/** A Space's Main: where the organizer sent a message (04-chat §3.4). The reply lives in the topic. */
-export const RoutingItem = Type.Object({
-	kind: Type.Literal("routing"),
-	id: Type.String(),
-	at: Type.String(),
-	decision: literals("route", "create"),
-	/** The topic's conversation id. */
-	topicId: Type.String(),
-	topicTitle: Type.String(),
-	reason: Type.String(),
-	/** The message as the topic got it. */
-	message: Type.String(),
-	/** Live: the topic is working on it, writing, answered, asked you something, or failed. */
-	status: literals("thinking", "replying", "replied", "needs_you", "failed"),
-	/** One line of the reply. */
-	preview: Type.Optional(Type.String()),
-	/** The reply's item in the topic, for Open. */
-	replyItemId: Type.Optional(Type.String()),
-	/** You chose the topic (@topic, /new) instead of the organizer. */
-	forced: Type.Optional(Type.Boolean()),
-	/** Moved here with Wrong topic: the topic it was first sent to. */
-	movedFrom: Type.Optional(Type.String()),
-});
-export type RoutingItem = Static<typeof RoutingItem>;
-
-/** A change to a Space's memory: saved by the organizer (Undo), or proposed by a topic (Save, Dismiss). 04-chat S8. */
-export const MemoryItem = Type.Object({
-	kind: Type.Literal("memory"),
-	id: Type.String(),
-	at: Type.String(),
-	action: literals("saved", "proposed"),
-	added: Type.Array(Type.String()),
-	removed: Type.Array(Type.String()),
-	reason: Type.Optional(Type.String()),
-	status: literals("saved", "undone", "pending", "dismissed", "failed"),
-	revisionId: Type.Optional(Type.String()),
-	proposalId: Type.Optional(Type.String()),
-});
-export type MemoryItem = Static<typeof MemoryItem>;
-
 /** A turn's tool calls as one line, "Worked 18s · 2 steps" (06-agents §12 UI2): agents' conversations. */
 export const StepsItem = Type.Object({
 	kind: Type.Literal("steps"),
@@ -363,7 +320,7 @@ export const DebateItem = Type.Object({
 	costUsd: Type.Optional(Type.Number()),
 });
 export type DebateItem = Static<typeof DebateItem>;
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, RoutingItem, MemoryItem, StepsItem, ApprovalItem, ResultItem, AgentMsgItem, DebateItem]);
+export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, StepsItem, ApprovalItem, ResultItem, AgentMsgItem, DebateItem]);
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
@@ -525,17 +482,15 @@ export const EngineSettings = Type.Object({
 	/** Background model work (07-shared §1.3). Unset: automatic. */
 	models: Type.Optional(
 		Type.Object({
-			/** Titles, topic summaries, suggested replies, notebook suggestions, commit messages, learned facts. */
+			/** Titles, summaries, suggested replies, commit messages, learned facts. */
 			utility: Type.Optional(UtilityChoice),
 		}),
 	),
 	chat: Type.Object({
 		/** Before per-server choices: every global server that's on is used in chats too. */
 		mcp: Type.Boolean(),
-		/** The global MCP servers chats and notebooks use (Settings › MCP servers, per server). Absent: `mcp` decides. */
+		/** The global MCP servers chats use (Settings › MCP servers, per server). Absent: `mcp` decides. */
 		mcpServers: Type.Optional(Type.Array(Type.String())),
-		/** Suggest moving a thread into a Space (04-chat S11). */
-		suggestSpaces: Type.Boolean(),
 		/** After an answer, suggest a few next messages (docs/design v2 "You could also"). */
 		followUps: Type.Optional(Type.Boolean()),
 	}),
@@ -554,7 +509,6 @@ export const EngineSettings = Type.Object({
 		/** The agents may add facts (`remember_about_me`). */
 		capture: Type.Boolean(),
 		inThreads: Type.Boolean(),
-		inSpaces: Type.Boolean(),
 		/** Agents read it too (Settings › Chat, "Share with … + Agents"). */
 		inAgents: Type.Optional(Type.Boolean()),
 		/** Where About me lives: "builtin", or an MCP memory provider's id. */
@@ -767,7 +721,7 @@ export const ConnectorInfo = Type.Object({
 	needsSecret: Type.Boolean(),
 	setupHelp: Type.String(),
 	connecting: Type.Boolean(),
-	/** Its tools are offered in chats, notebooks and Build (agents always get them). */
+	/** Its tools are offered in chats and Build (agents always get them). */
 	chats: Type.Boolean(),
 	accounts: Type.Array(Type.Object({ id: Type.String(), label: Type.String(), addedAt: Type.String(), problem: Type.Optional(Type.String()) })),
 	/** What it can do, grouped as Settings shows it: each capability's tools and whether it runs, asks first or is off. */
@@ -836,7 +790,7 @@ export const McpServerInfo = Type.Object({
 	env: Type.Optional(Type.Array(Type.String())),
 	/** Tools turned off (pi's `toolExposure`: "hidden"). */
 	hiddenTools: Type.Optional(Type.Array(Type.String())),
-	/** Global servers: chats and notebooks use it too. */
+	/** Global servers: chats use it too. */
 	chat: Type.Optional(Type.Boolean()),
 });
 export type McpServerInfo = Static<typeof McpServerInfo>;
@@ -1264,7 +1218,7 @@ export const methods = {
 		params: Type.Object({ accountId: Type.String(), calendarId: Type.String(), enabled: Type.Boolean() }),
 		result: Type.Object({}),
 	},
-	/** Answers a connector approval in a chat, notebook topic or Build session. `always`: don't ask again for that write. */
+	/** Answers a connector approval in a chat or Build session. `always`: don't ask again for that write. */
 	"sessions.decide": {
 		params: Type.Object({ ref: ContainerRef, approvalId: Type.String(), approve: Type.Boolean(), always: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.String()) }),
 		result: Type.Object({ status: literals("pending", "approved", "denied", "expired", "cancelled") }),
@@ -1431,7 +1385,7 @@ export const methods = {
 			description: Type.Optional(Type.String()),
 			/** Off for Build (pi's `enabled: false`). */
 			enabled: Type.Optional(Type.Boolean()),
-			/** Global servers: use in chats and notebooks too. */
+			/** Global servers: use in chats too. */
 			chat: Type.Optional(Type.Boolean()),
 		}),
 		result: Type.Object({}),
@@ -1446,7 +1400,7 @@ export const methods = {
 		params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String(), refresh: Type.Optional(Type.Boolean()) }),
 		result: McpProbe,
 	},
-	/** A global server in chats and notebooks, or not. */
+	/** A global server in chats, or not. */
 	"mcp.setChat": { params: Type.Object({ name: Type.String(), chat: Type.Boolean() }), result: Type.Object({}) },
 	/** One of a server's tools on or off. */
 	"mcp.setTool": {

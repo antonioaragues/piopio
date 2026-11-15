@@ -300,7 +300,6 @@ extension AreaSet {
     func shows(_ summary: SessionSummary) -> Bool {
         switch summary.ref.kind {
         case .build: showsSession(chatProfile: summary.profile == .chat)
-        case .space: false // notebooks are gone (docs/spec/18 phase 2)
         case .agent: showsAgents
         default: showsChats
         }

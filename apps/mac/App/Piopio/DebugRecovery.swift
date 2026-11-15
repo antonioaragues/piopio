@@ -67,12 +67,11 @@ import PiopioKit
         }
         NSApp.terminate(nil)
     }
-    private static func settled(_ engine: EngineController, ref: ContainerRef, routed: Bool = false) async throws -> Snapshot {
+    private static func settled(_ engine: EngineController, ref: ContainerRef) async throws -> Snapshot {
         for _ in 0..<200 {
             guard let client = engine.client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "disconnected") }
             let snapshot = try await client.call("sessions.open", RefParams(ref: ref), as: Snapshot.self)
             let finished = snapshot.items.contains { item in
-                if routed { if case .routing(let r) = item { return r.status == .replied }; return false }
                 if case .assistant(let a) = item { return a.status == .done }; return false
             }
             if snapshot.state.status == .idle && finished { return snapshot }

@@ -2,7 +2,7 @@ import AppKit
 import PiopioKit
 import SwiftUI
 
-// Small helpers several views share (they lived with the notebooks until docs/spec/18 phase 2).
+// Small helpers several views share.
 
 /// An NSMenuItem that runs a closure (menus built in code).
 final class ClosureMenuItem: NSMenuItem {

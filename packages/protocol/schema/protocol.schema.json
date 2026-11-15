@@ -22,10 +22,6 @@
 						},
 						{
 							"type": "string",
-							"const": "space"
-						},
-						{
-							"type": "string",
 							"const": "agent"
 						}
 					]
@@ -118,9 +114,6 @@
 									"type": "string"
 								}
 							}
-						},
-						"direct": {
-							"type": "boolean"
 						}
 					}
 				},
@@ -830,173 +823,6 @@
 						},
 						"files": {
 							"type": "number"
-						}
-					}
-				},
-				{
-					"type": "object",
-					"required": [
-						"kind",
-						"id",
-						"at",
-						"decision",
-						"topicId",
-						"topicTitle",
-						"reason",
-						"message",
-						"status"
-					],
-					"properties": {
-						"kind": {
-							"type": "string",
-							"const": "routing"
-						},
-						"id": {
-							"type": "string"
-						},
-						"at": {
-							"type": "string"
-						},
-						"decision": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "route"
-								},
-								{
-									"type": "string",
-									"const": "create"
-								}
-							]
-						},
-						"topicId": {
-							"type": "string"
-						},
-						"topicTitle": {
-							"type": "string"
-						},
-						"reason": {
-							"type": "string"
-						},
-						"message": {
-							"type": "string"
-						},
-						"status": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "thinking"
-								},
-								{
-									"type": "string",
-									"const": "replying"
-								},
-								{
-									"type": "string",
-									"const": "replied"
-								},
-								{
-									"type": "string",
-									"const": "needs_you"
-								},
-								{
-									"type": "string",
-									"const": "failed"
-								}
-							]
-						},
-						"preview": {
-							"type": "string"
-						},
-						"replyItemId": {
-							"type": "string"
-						},
-						"forced": {
-							"type": "boolean"
-						},
-						"movedFrom": {
-							"type": "string"
-						}
-					}
-				},
-				{
-					"type": "object",
-					"required": [
-						"kind",
-						"id",
-						"at",
-						"action",
-						"added",
-						"removed",
-						"status"
-					],
-					"properties": {
-						"kind": {
-							"type": "string",
-							"const": "memory"
-						},
-						"id": {
-							"type": "string"
-						},
-						"at": {
-							"type": "string"
-						},
-						"action": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "saved"
-								},
-								{
-									"type": "string",
-									"const": "proposed"
-								}
-							]
-						},
-						"added": {
-							"type": "array",
-							"items": {
-								"type": "string"
-							}
-						},
-						"removed": {
-							"type": "array",
-							"items": {
-								"type": "string"
-							}
-						},
-						"reason": {
-							"type": "string"
-						},
-						"status": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "saved"
-								},
-								{
-									"type": "string",
-									"const": "undone"
-								},
-								{
-									"type": "string",
-									"const": "pending"
-								},
-								{
-									"type": "string",
-									"const": "dismissed"
-								},
-								{
-									"type": "string",
-									"const": "failed"
-								}
-							]
-						},
-						"revisionId": {
-							"type": "string"
-						},
-						"proposalId": {
-							"type": "string"
 						}
 					}
 				},
@@ -2482,9 +2308,6 @@
 													"type": "string"
 												}
 											}
-										},
-										"direct": {
-											"type": "boolean"
 										}
 									}
 								},
@@ -3194,173 +3017,6 @@
 										},
 										"files": {
 											"type": "number"
-										}
-									}
-								},
-								{
-									"type": "object",
-									"required": [
-										"kind",
-										"id",
-										"at",
-										"decision",
-										"topicId",
-										"topicTitle",
-										"reason",
-										"message",
-										"status"
-									],
-									"properties": {
-										"kind": {
-											"type": "string",
-											"const": "routing"
-										},
-										"id": {
-											"type": "string"
-										},
-										"at": {
-											"type": "string"
-										},
-										"decision": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "route"
-												},
-												{
-													"type": "string",
-													"const": "create"
-												}
-											]
-										},
-										"topicId": {
-											"type": "string"
-										},
-										"topicTitle": {
-											"type": "string"
-										},
-										"reason": {
-											"type": "string"
-										},
-										"message": {
-											"type": "string"
-										},
-										"status": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "thinking"
-												},
-												{
-													"type": "string",
-													"const": "replying"
-												},
-												{
-													"type": "string",
-													"const": "replied"
-												},
-												{
-													"type": "string",
-													"const": "needs_you"
-												},
-												{
-													"type": "string",
-													"const": "failed"
-												}
-											]
-										},
-										"preview": {
-											"type": "string"
-										},
-										"replyItemId": {
-											"type": "string"
-										},
-										"forced": {
-											"type": "boolean"
-										},
-										"movedFrom": {
-											"type": "string"
-										}
-									}
-								},
-								{
-									"type": "object",
-									"required": [
-										"kind",
-										"id",
-										"at",
-										"action",
-										"added",
-										"removed",
-										"status"
-									],
-									"properties": {
-										"kind": {
-											"type": "string",
-											"const": "memory"
-										},
-										"id": {
-											"type": "string"
-										},
-										"at": {
-											"type": "string"
-										},
-										"action": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "saved"
-												},
-												{
-													"type": "string",
-													"const": "proposed"
-												}
-											]
-										},
-										"added": {
-											"type": "array",
-											"items": {
-												"type": "string"
-											}
-										},
-										"removed": {
-											"type": "array",
-											"items": {
-												"type": "string"
-											}
-										},
-										"reason": {
-											"type": "string"
-										},
-										"status": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "saved"
-												},
-												{
-													"type": "string",
-													"const": "undone"
-												},
-												{
-													"type": "string",
-													"const": "pending"
-												},
-												{
-													"type": "string",
-													"const": "dismissed"
-												},
-												{
-													"type": "string",
-													"const": "failed"
-												}
-											]
-										},
-										"revisionId": {
-											"type": "string"
-										},
-										"proposalId": {
-											"type": "string"
 										}
 									}
 								},
@@ -4337,9 +3993,6 @@
 													"type": "string"
 												}
 											}
-										},
-										"direct": {
-											"type": "boolean"
 										}
 									}
 								},
@@ -5049,173 +4702,6 @@
 										},
 										"files": {
 											"type": "number"
-										}
-									}
-								},
-								{
-									"type": "object",
-									"required": [
-										"kind",
-										"id",
-										"at",
-										"decision",
-										"topicId",
-										"topicTitle",
-										"reason",
-										"message",
-										"status"
-									],
-									"properties": {
-										"kind": {
-											"type": "string",
-											"const": "routing"
-										},
-										"id": {
-											"type": "string"
-										},
-										"at": {
-											"type": "string"
-										},
-										"decision": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "route"
-												},
-												{
-													"type": "string",
-													"const": "create"
-												}
-											]
-										},
-										"topicId": {
-											"type": "string"
-										},
-										"topicTitle": {
-											"type": "string"
-										},
-										"reason": {
-											"type": "string"
-										},
-										"message": {
-											"type": "string"
-										},
-										"status": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "thinking"
-												},
-												{
-													"type": "string",
-													"const": "replying"
-												},
-												{
-													"type": "string",
-													"const": "replied"
-												},
-												{
-													"type": "string",
-													"const": "needs_you"
-												},
-												{
-													"type": "string",
-													"const": "failed"
-												}
-											]
-										},
-										"preview": {
-											"type": "string"
-										},
-										"replyItemId": {
-											"type": "string"
-										},
-										"forced": {
-											"type": "boolean"
-										},
-										"movedFrom": {
-											"type": "string"
-										}
-									}
-								},
-								{
-									"type": "object",
-									"required": [
-										"kind",
-										"id",
-										"at",
-										"action",
-										"added",
-										"removed",
-										"status"
-									],
-									"properties": {
-										"kind": {
-											"type": "string",
-											"const": "memory"
-										},
-										"id": {
-											"type": "string"
-										},
-										"at": {
-											"type": "string"
-										},
-										"action": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "saved"
-												},
-												{
-													"type": "string",
-													"const": "proposed"
-												}
-											]
-										},
-										"added": {
-											"type": "array",
-											"items": {
-												"type": "string"
-											}
-										},
-										"removed": {
-											"type": "array",
-											"items": {
-												"type": "string"
-											}
-										},
-										"reason": {
-											"type": "string"
-										},
-										"status": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "saved"
-												},
-												{
-													"type": "string",
-													"const": "undone"
-												},
-												{
-													"type": "string",
-													"const": "pending"
-												},
-												{
-													"type": "string",
-													"const": "dismissed"
-												},
-												{
-													"type": "string",
-													"const": "failed"
-												}
-											]
-										},
-										"revisionId": {
-											"type": "string"
-										},
-										"proposalId": {
-											"type": "string"
 										}
 									}
 								},
@@ -6172,9 +5658,6 @@
 													"type": "string"
 												}
 											}
-										},
-										"direct": {
-											"type": "boolean"
 										}
 									}
 								},
@@ -6884,173 +6367,6 @@
 										},
 										"files": {
 											"type": "number"
-										}
-									}
-								},
-								{
-									"type": "object",
-									"required": [
-										"kind",
-										"id",
-										"at",
-										"decision",
-										"topicId",
-										"topicTitle",
-										"reason",
-										"message",
-										"status"
-									],
-									"properties": {
-										"kind": {
-											"type": "string",
-											"const": "routing"
-										},
-										"id": {
-											"type": "string"
-										},
-										"at": {
-											"type": "string"
-										},
-										"decision": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "route"
-												},
-												{
-													"type": "string",
-													"const": "create"
-												}
-											]
-										},
-										"topicId": {
-											"type": "string"
-										},
-										"topicTitle": {
-											"type": "string"
-										},
-										"reason": {
-											"type": "string"
-										},
-										"message": {
-											"type": "string"
-										},
-										"status": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "thinking"
-												},
-												{
-													"type": "string",
-													"const": "replying"
-												},
-												{
-													"type": "string",
-													"const": "replied"
-												},
-												{
-													"type": "string",
-													"const": "needs_you"
-												},
-												{
-													"type": "string",
-													"const": "failed"
-												}
-											]
-										},
-										"preview": {
-											"type": "string"
-										},
-										"replyItemId": {
-											"type": "string"
-										},
-										"forced": {
-											"type": "boolean"
-										},
-										"movedFrom": {
-											"type": "string"
-										}
-									}
-								},
-								{
-									"type": "object",
-									"required": [
-										"kind",
-										"id",
-										"at",
-										"action",
-										"added",
-										"removed",
-										"status"
-									],
-									"properties": {
-										"kind": {
-											"type": "string",
-											"const": "memory"
-										},
-										"id": {
-											"type": "string"
-										},
-										"at": {
-											"type": "string"
-										},
-										"action": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "saved"
-												},
-												{
-													"type": "string",
-													"const": "proposed"
-												}
-											]
-										},
-										"added": {
-											"type": "array",
-											"items": {
-												"type": "string"
-											}
-										},
-										"removed": {
-											"type": "array",
-											"items": {
-												"type": "string"
-											}
-										},
-										"reason": {
-											"type": "string"
-										},
-										"status": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "saved"
-												},
-												{
-													"type": "string",
-													"const": "undone"
-												},
-												{
-													"type": "string",
-													"const": "pending"
-												},
-												{
-													"type": "string",
-													"const": "dismissed"
-												},
-												{
-													"type": "string",
-													"const": "failed"
-												}
-											]
-										},
-										"revisionId": {
-											"type": "string"
-										},
-										"proposalId": {
-											"type": "string"
 										}
 									}
 								},
@@ -8496,10 +7812,6 @@
 												},
 												{
 													"type": "string",
-													"const": "space"
-												},
-												{
-													"type": "string",
 													"const": "agent"
 												}
 											]
@@ -8594,9 +7906,6 @@
 																"type": "string"
 															}
 														}
-													},
-													"direct": {
-														"type": "boolean"
 													}
 												}
 											},
@@ -9306,173 +8615,6 @@
 													},
 													"files": {
 														"type": "number"
-													}
-												}
-											},
-											{
-												"type": "object",
-												"required": [
-													"kind",
-													"id",
-													"at",
-													"decision",
-													"topicId",
-													"topicTitle",
-													"reason",
-													"message",
-													"status"
-												],
-												"properties": {
-													"kind": {
-														"type": "string",
-														"const": "routing"
-													},
-													"id": {
-														"type": "string"
-													},
-													"at": {
-														"type": "string"
-													},
-													"decision": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "route"
-															},
-															{
-																"type": "string",
-																"const": "create"
-															}
-														]
-													},
-													"topicId": {
-														"type": "string"
-													},
-													"topicTitle": {
-														"type": "string"
-													},
-													"reason": {
-														"type": "string"
-													},
-													"message": {
-														"type": "string"
-													},
-													"status": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "thinking"
-															},
-															{
-																"type": "string",
-																"const": "replying"
-															},
-															{
-																"type": "string",
-																"const": "replied"
-															},
-															{
-																"type": "string",
-																"const": "needs_you"
-															},
-															{
-																"type": "string",
-																"const": "failed"
-															}
-														]
-													},
-													"preview": {
-														"type": "string"
-													},
-													"replyItemId": {
-														"type": "string"
-													},
-													"forced": {
-														"type": "boolean"
-													},
-													"movedFrom": {
-														"type": "string"
-													}
-												}
-											},
-											{
-												"type": "object",
-												"required": [
-													"kind",
-													"id",
-													"at",
-													"action",
-													"added",
-													"removed",
-													"status"
-												],
-												"properties": {
-													"kind": {
-														"type": "string",
-														"const": "memory"
-													},
-													"id": {
-														"type": "string"
-													},
-													"at": {
-														"type": "string"
-													},
-													"action": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "saved"
-															},
-															{
-																"type": "string",
-																"const": "proposed"
-															}
-														]
-													},
-													"added": {
-														"type": "array",
-														"items": {
-															"type": "string"
-														}
-													},
-													"removed": {
-														"type": "array",
-														"items": {
-															"type": "string"
-														}
-													},
-													"reason": {
-														"type": "string"
-													},
-													"status": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "saved"
-															},
-															{
-																"type": "string",
-																"const": "undone"
-															},
-															{
-																"type": "string",
-																"const": "pending"
-															},
-															{
-																"type": "string",
-																"const": "dismissed"
-															},
-															{
-																"type": "string",
-																"const": "failed"
-															}
-														]
-													},
-													"revisionId": {
-														"type": "string"
-													},
-													"proposalId": {
-														"type": "string"
 													}
 												}
 											},
@@ -10899,10 +10041,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -10997,9 +10135,6 @@
 												"type": "string"
 											}
 										}
-									},
-									"direct": {
-										"type": "boolean"
 									}
 								}
 							},
@@ -11709,173 +10844,6 @@
 									},
 									"files": {
 										"type": "number"
-									}
-								}
-							},
-							{
-								"type": "object",
-								"required": [
-									"kind",
-									"id",
-									"at",
-									"decision",
-									"topicId",
-									"topicTitle",
-									"reason",
-									"message",
-									"status"
-								],
-								"properties": {
-									"kind": {
-										"type": "string",
-										"const": "routing"
-									},
-									"id": {
-										"type": "string"
-									},
-									"at": {
-										"type": "string"
-									},
-									"decision": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "route"
-											},
-											{
-												"type": "string",
-												"const": "create"
-											}
-										]
-									},
-									"topicId": {
-										"type": "string"
-									},
-									"topicTitle": {
-										"type": "string"
-									},
-									"reason": {
-										"type": "string"
-									},
-									"message": {
-										"type": "string"
-									},
-									"status": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "thinking"
-											},
-											{
-												"type": "string",
-												"const": "replying"
-											},
-											{
-												"type": "string",
-												"const": "replied"
-											},
-											{
-												"type": "string",
-												"const": "needs_you"
-											},
-											{
-												"type": "string",
-												"const": "failed"
-											}
-										]
-									},
-									"preview": {
-										"type": "string"
-									},
-									"replyItemId": {
-										"type": "string"
-									},
-									"forced": {
-										"type": "boolean"
-									},
-									"movedFrom": {
-										"type": "string"
-									}
-								}
-							},
-							{
-								"type": "object",
-								"required": [
-									"kind",
-									"id",
-									"at",
-									"action",
-									"added",
-									"removed",
-									"status"
-								],
-								"properties": {
-									"kind": {
-										"type": "string",
-										"const": "memory"
-									},
-									"id": {
-										"type": "string"
-									},
-									"at": {
-										"type": "string"
-									},
-									"action": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "saved"
-											},
-											{
-												"type": "string",
-												"const": "proposed"
-											}
-										]
-									},
-									"added": {
-										"type": "array",
-										"items": {
-											"type": "string"
-										}
-									},
-									"removed": {
-										"type": "array",
-										"items": {
-											"type": "string"
-										}
-									},
-									"reason": {
-										"type": "string"
-									},
-									"status": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "saved"
-											},
-											{
-												"type": "string",
-												"const": "undone"
-											},
-											{
-												"type": "string",
-												"const": "pending"
-											},
-											{
-												"type": "string",
-												"const": "dismissed"
-											},
-											{
-												"type": "string",
-												"const": "failed"
-											}
-										]
-									},
-									"revisionId": {
-										"type": "string"
-									},
-									"proposalId": {
-										"type": "string"
 									}
 								}
 							},
@@ -13299,10 +12267,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -13723,9 +12687,6 @@
 																"type": "string"
 															}
 														}
-													},
-													"direct": {
-														"type": "boolean"
 													}
 												}
 											},
@@ -14435,173 +13396,6 @@
 													},
 													"files": {
 														"type": "number"
-													}
-												}
-											},
-											{
-												"type": "object",
-												"required": [
-													"kind",
-													"id",
-													"at",
-													"decision",
-													"topicId",
-													"topicTitle",
-													"reason",
-													"message",
-													"status"
-												],
-												"properties": {
-													"kind": {
-														"type": "string",
-														"const": "routing"
-													},
-													"id": {
-														"type": "string"
-													},
-													"at": {
-														"type": "string"
-													},
-													"decision": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "route"
-															},
-															{
-																"type": "string",
-																"const": "create"
-															}
-														]
-													},
-													"topicId": {
-														"type": "string"
-													},
-													"topicTitle": {
-														"type": "string"
-													},
-													"reason": {
-														"type": "string"
-													},
-													"message": {
-														"type": "string"
-													},
-													"status": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "thinking"
-															},
-															{
-																"type": "string",
-																"const": "replying"
-															},
-															{
-																"type": "string",
-																"const": "replied"
-															},
-															{
-																"type": "string",
-																"const": "needs_you"
-															},
-															{
-																"type": "string",
-																"const": "failed"
-															}
-														]
-													},
-													"preview": {
-														"type": "string"
-													},
-													"replyItemId": {
-														"type": "string"
-													},
-													"forced": {
-														"type": "boolean"
-													},
-													"movedFrom": {
-														"type": "string"
-													}
-												}
-											},
-											{
-												"type": "object",
-												"required": [
-													"kind",
-													"id",
-													"at",
-													"action",
-													"added",
-													"removed",
-													"status"
-												],
-												"properties": {
-													"kind": {
-														"type": "string",
-														"const": "memory"
-													},
-													"id": {
-														"type": "string"
-													},
-													"at": {
-														"type": "string"
-													},
-													"action": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "saved"
-															},
-															{
-																"type": "string",
-																"const": "proposed"
-															}
-														]
-													},
-													"added": {
-														"type": "array",
-														"items": {
-															"type": "string"
-														}
-													},
-													"removed": {
-														"type": "array",
-														"items": {
-															"type": "string"
-														}
-													},
-													"reason": {
-														"type": "string"
-													},
-													"status": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "saved"
-															},
-															{
-																"type": "string",
-																"const": "undone"
-															},
-															{
-																"type": "string",
-																"const": "pending"
-															},
-															{
-																"type": "string",
-																"const": "dismissed"
-															},
-															{
-																"type": "string",
-																"const": "failed"
-															}
-														]
-													},
-													"revisionId": {
-														"type": "string"
-													},
-													"proposalId": {
-														"type": "string"
 													}
 												}
 											},
@@ -15578,9 +14372,6 @@
 																"type": "string"
 															}
 														}
-													},
-													"direct": {
-														"type": "boolean"
 													}
 												}
 											},
@@ -16290,173 +15081,6 @@
 													},
 													"files": {
 														"type": "number"
-													}
-												}
-											},
-											{
-												"type": "object",
-												"required": [
-													"kind",
-													"id",
-													"at",
-													"decision",
-													"topicId",
-													"topicTitle",
-													"reason",
-													"message",
-													"status"
-												],
-												"properties": {
-													"kind": {
-														"type": "string",
-														"const": "routing"
-													},
-													"id": {
-														"type": "string"
-													},
-													"at": {
-														"type": "string"
-													},
-													"decision": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "route"
-															},
-															{
-																"type": "string",
-																"const": "create"
-															}
-														]
-													},
-													"topicId": {
-														"type": "string"
-													},
-													"topicTitle": {
-														"type": "string"
-													},
-													"reason": {
-														"type": "string"
-													},
-													"message": {
-														"type": "string"
-													},
-													"status": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "thinking"
-															},
-															{
-																"type": "string",
-																"const": "replying"
-															},
-															{
-																"type": "string",
-																"const": "replied"
-															},
-															{
-																"type": "string",
-																"const": "needs_you"
-															},
-															{
-																"type": "string",
-																"const": "failed"
-															}
-														]
-													},
-													"preview": {
-														"type": "string"
-													},
-													"replyItemId": {
-														"type": "string"
-													},
-													"forced": {
-														"type": "boolean"
-													},
-													"movedFrom": {
-														"type": "string"
-													}
-												}
-											},
-											{
-												"type": "object",
-												"required": [
-													"kind",
-													"id",
-													"at",
-													"action",
-													"added",
-													"removed",
-													"status"
-												],
-												"properties": {
-													"kind": {
-														"type": "string",
-														"const": "memory"
-													},
-													"id": {
-														"type": "string"
-													},
-													"at": {
-														"type": "string"
-													},
-													"action": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "saved"
-															},
-															{
-																"type": "string",
-																"const": "proposed"
-															}
-														]
-													},
-													"added": {
-														"type": "array",
-														"items": {
-															"type": "string"
-														}
-													},
-													"removed": {
-														"type": "array",
-														"items": {
-															"type": "string"
-														}
-													},
-													"reason": {
-														"type": "string"
-													},
-													"status": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "saved"
-															},
-															{
-																"type": "string",
-																"const": "undone"
-															},
-															{
-																"type": "string",
-																"const": "pending"
-															},
-															{
-																"type": "string",
-																"const": "dismissed"
-															},
-															{
-																"type": "string",
-																"const": "failed"
-															}
-														]
-													},
-													"revisionId": {
-														"type": "string"
-													},
-													"proposalId": {
-														"type": "string"
 													}
 												}
 											},
@@ -17413,9 +16037,6 @@
 																"type": "string"
 															}
 														}
-													},
-													"direct": {
-														"type": "boolean"
 													}
 												}
 											},
@@ -18125,173 +16746,6 @@
 													},
 													"files": {
 														"type": "number"
-													}
-												}
-											},
-											{
-												"type": "object",
-												"required": [
-													"kind",
-													"id",
-													"at",
-													"decision",
-													"topicId",
-													"topicTitle",
-													"reason",
-													"message",
-													"status"
-												],
-												"properties": {
-													"kind": {
-														"type": "string",
-														"const": "routing"
-													},
-													"id": {
-														"type": "string"
-													},
-													"at": {
-														"type": "string"
-													},
-													"decision": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "route"
-															},
-															{
-																"type": "string",
-																"const": "create"
-															}
-														]
-													},
-													"topicId": {
-														"type": "string"
-													},
-													"topicTitle": {
-														"type": "string"
-													},
-													"reason": {
-														"type": "string"
-													},
-													"message": {
-														"type": "string"
-													},
-													"status": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "thinking"
-															},
-															{
-																"type": "string",
-																"const": "replying"
-															},
-															{
-																"type": "string",
-																"const": "replied"
-															},
-															{
-																"type": "string",
-																"const": "needs_you"
-															},
-															{
-																"type": "string",
-																"const": "failed"
-															}
-														]
-													},
-													"preview": {
-														"type": "string"
-													},
-													"replyItemId": {
-														"type": "string"
-													},
-													"forced": {
-														"type": "boolean"
-													},
-													"movedFrom": {
-														"type": "string"
-													}
-												}
-											},
-											{
-												"type": "object",
-												"required": [
-													"kind",
-													"id",
-													"at",
-													"action",
-													"added",
-													"removed",
-													"status"
-												],
-												"properties": {
-													"kind": {
-														"type": "string",
-														"const": "memory"
-													},
-													"id": {
-														"type": "string"
-													},
-													"at": {
-														"type": "string"
-													},
-													"action": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "saved"
-															},
-															{
-																"type": "string",
-																"const": "proposed"
-															}
-														]
-													},
-													"added": {
-														"type": "array",
-														"items": {
-															"type": "string"
-														}
-													},
-													"removed": {
-														"type": "array",
-														"items": {
-															"type": "string"
-														}
-													},
-													"reason": {
-														"type": "string"
-													},
-													"status": {
-														"anyOf": [
-															{
-																"type": "string",
-																"const": "saved"
-															},
-															{
-																"type": "string",
-																"const": "undone"
-															},
-															{
-																"type": "string",
-																"const": "pending"
-															},
-															{
-																"type": "string",
-																"const": "dismissed"
-															},
-															{
-																"type": "string",
-																"const": "failed"
-															}
-														]
-													},
-													"revisionId": {
-														"type": "string"
-													},
-													"proposalId": {
-														"type": "string"
 													}
 												}
 											},
@@ -19737,10 +18191,6 @@
 															},
 															{
 																"type": "string",
-																"const": "space"
-															},
-															{
-																"type": "string",
 																"const": "agent"
 															}
 														]
@@ -19835,9 +18285,6 @@
 																			"type": "string"
 																		}
 																	}
-																},
-																"direct": {
-																	"type": "boolean"
 																}
 															}
 														},
@@ -20547,173 +18994,6 @@
 																},
 																"files": {
 																	"type": "number"
-																}
-															}
-														},
-														{
-															"type": "object",
-															"required": [
-																"kind",
-																"id",
-																"at",
-																"decision",
-																"topicId",
-																"topicTitle",
-																"reason",
-																"message",
-																"status"
-															],
-															"properties": {
-																"kind": {
-																	"type": "string",
-																	"const": "routing"
-																},
-																"id": {
-																	"type": "string"
-																},
-																"at": {
-																	"type": "string"
-																},
-																"decision": {
-																	"anyOf": [
-																		{
-																			"type": "string",
-																			"const": "route"
-																		},
-																		{
-																			"type": "string",
-																			"const": "create"
-																		}
-																	]
-																},
-																"topicId": {
-																	"type": "string"
-																},
-																"topicTitle": {
-																	"type": "string"
-																},
-																"reason": {
-																	"type": "string"
-																},
-																"message": {
-																	"type": "string"
-																},
-																"status": {
-																	"anyOf": [
-																		{
-																			"type": "string",
-																			"const": "thinking"
-																		},
-																		{
-																			"type": "string",
-																			"const": "replying"
-																		},
-																		{
-																			"type": "string",
-																			"const": "replied"
-																		},
-																		{
-																			"type": "string",
-																			"const": "needs_you"
-																		},
-																		{
-																			"type": "string",
-																			"const": "failed"
-																		}
-																	]
-																},
-																"preview": {
-																	"type": "string"
-																},
-																"replyItemId": {
-																	"type": "string"
-																},
-																"forced": {
-																	"type": "boolean"
-																},
-																"movedFrom": {
-																	"type": "string"
-																}
-															}
-														},
-														{
-															"type": "object",
-															"required": [
-																"kind",
-																"id",
-																"at",
-																"action",
-																"added",
-																"removed",
-																"status"
-															],
-															"properties": {
-																"kind": {
-																	"type": "string",
-																	"const": "memory"
-																},
-																"id": {
-																	"type": "string"
-																},
-																"at": {
-																	"type": "string"
-																},
-																"action": {
-																	"anyOf": [
-																		{
-																			"type": "string",
-																			"const": "saved"
-																		},
-																		{
-																			"type": "string",
-																			"const": "proposed"
-																		}
-																	]
-																},
-																"added": {
-																	"type": "array",
-																	"items": {
-																		"type": "string"
-																	}
-																},
-																"removed": {
-																	"type": "array",
-																	"items": {
-																		"type": "string"
-																	}
-																},
-																"reason": {
-																	"type": "string"
-																},
-																"status": {
-																	"anyOf": [
-																		{
-																			"type": "string",
-																			"const": "saved"
-																		},
-																		{
-																			"type": "string",
-																			"const": "undone"
-																		},
-																		{
-																			"type": "string",
-																			"const": "pending"
-																		},
-																		{
-																			"type": "string",
-																			"const": "dismissed"
-																		},
-																		{
-																			"type": "string",
-																			"const": "failed"
-																		}
-																	]
-																},
-																"revisionId": {
-																	"type": "string"
-																},
-																"proposalId": {
-																	"type": "string"
 																}
 															}
 														},
@@ -22226,10 +20506,6 @@
 											},
 											{
 												"type": "string",
-												"const": "space"
-											},
-											{
-												"type": "string",
 												"const": "agent"
 											}
 										]
@@ -22563,10 +20839,6 @@
 									},
 									{
 										"type": "string",
-										"const": "space"
-									},
-									{
-										"type": "string",
 										"const": "agent"
 									}
 								]
@@ -22659,10 +20931,6 @@
 									},
 									{
 										"type": "string",
-										"const": "space"
-									},
-									{
-										"type": "string",
 										"const": "agent"
 									}
 								]
@@ -22728,10 +20996,6 @@
 						},
 						{
 							"type": "string",
-							"const": "space"
-						},
-						{
-							"type": "string",
 							"const": "agent"
 						}
 					]
@@ -22771,10 +21035,6 @@
 											{
 												"type": "string",
 												"const": "thread"
-											},
-											{
-												"type": "string",
-												"const": "space"
 											},
 											{
 												"type": "string",
@@ -23118,10 +21378,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -23181,10 +21437,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -23429,10 +21681,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -23469,10 +21717,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -23517,10 +21761,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -23618,9 +21858,6 @@
 												"type": "string"
 											}
 										}
-									},
-									"direct": {
-										"type": "boolean"
 									}
 								}
 							},
@@ -24330,173 +22567,6 @@
 									},
 									"files": {
 										"type": "number"
-									}
-								}
-							},
-							{
-								"type": "object",
-								"required": [
-									"kind",
-									"id",
-									"at",
-									"decision",
-									"topicId",
-									"topicTitle",
-									"reason",
-									"message",
-									"status"
-								],
-								"properties": {
-									"kind": {
-										"type": "string",
-										"const": "routing"
-									},
-									"id": {
-										"type": "string"
-									},
-									"at": {
-										"type": "string"
-									},
-									"decision": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "route"
-											},
-											{
-												"type": "string",
-												"const": "create"
-											}
-										]
-									},
-									"topicId": {
-										"type": "string"
-									},
-									"topicTitle": {
-										"type": "string"
-									},
-									"reason": {
-										"type": "string"
-									},
-									"message": {
-										"type": "string"
-									},
-									"status": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "thinking"
-											},
-											{
-												"type": "string",
-												"const": "replying"
-											},
-											{
-												"type": "string",
-												"const": "replied"
-											},
-											{
-												"type": "string",
-												"const": "needs_you"
-											},
-											{
-												"type": "string",
-												"const": "failed"
-											}
-										]
-									},
-									"preview": {
-										"type": "string"
-									},
-									"replyItemId": {
-										"type": "string"
-									},
-									"forced": {
-										"type": "boolean"
-									},
-									"movedFrom": {
-										"type": "string"
-									}
-								}
-							},
-							{
-								"type": "object",
-								"required": [
-									"kind",
-									"id",
-									"at",
-									"action",
-									"added",
-									"removed",
-									"status"
-								],
-								"properties": {
-									"kind": {
-										"type": "string",
-										"const": "memory"
-									},
-									"id": {
-										"type": "string"
-									},
-									"at": {
-										"type": "string"
-									},
-									"action": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "saved"
-											},
-											{
-												"type": "string",
-												"const": "proposed"
-											}
-										]
-									},
-									"added": {
-										"type": "array",
-										"items": {
-											"type": "string"
-										}
-									},
-									"removed": {
-										"type": "array",
-										"items": {
-											"type": "string"
-										}
-									},
-									"reason": {
-										"type": "string"
-									},
-									"status": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "saved"
-											},
-											{
-												"type": "string",
-												"const": "undone"
-											},
-											{
-												"type": "string",
-												"const": "pending"
-											},
-											{
-												"type": "string",
-												"const": "dismissed"
-											},
-											{
-												"type": "string",
-												"const": "failed"
-											}
-										]
-									},
-									"revisionId": {
-										"type": "string"
-									},
-									"proposalId": {
-										"type": "string"
 									}
 								}
 							},
@@ -25917,10 +23987,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -25972,10 +24038,6 @@
 										{
 											"type": "string",
 											"const": "thread"
-										},
-										{
-											"type": "string",
-											"const": "space"
 										},
 										{
 											"type": "string",
@@ -26073,9 +24135,6 @@
 														"type": "string"
 													}
 												}
-											},
-											"direct": {
-												"type": "boolean"
 											}
 										}
 									},
@@ -26785,173 +24844,6 @@
 											},
 											"files": {
 												"type": "number"
-											}
-										}
-									},
-									{
-										"type": "object",
-										"required": [
-											"kind",
-											"id",
-											"at",
-											"decision",
-											"topicId",
-											"topicTitle",
-											"reason",
-											"message",
-											"status"
-										],
-										"properties": {
-											"kind": {
-												"type": "string",
-												"const": "routing"
-											},
-											"id": {
-												"type": "string"
-											},
-											"at": {
-												"type": "string"
-											},
-											"decision": {
-												"anyOf": [
-													{
-														"type": "string",
-														"const": "route"
-													},
-													{
-														"type": "string",
-														"const": "create"
-													}
-												]
-											},
-											"topicId": {
-												"type": "string"
-											},
-											"topicTitle": {
-												"type": "string"
-											},
-											"reason": {
-												"type": "string"
-											},
-											"message": {
-												"type": "string"
-											},
-											"status": {
-												"anyOf": [
-													{
-														"type": "string",
-														"const": "thinking"
-													},
-													{
-														"type": "string",
-														"const": "replying"
-													},
-													{
-														"type": "string",
-														"const": "replied"
-													},
-													{
-														"type": "string",
-														"const": "needs_you"
-													},
-													{
-														"type": "string",
-														"const": "failed"
-													}
-												]
-											},
-											"preview": {
-												"type": "string"
-											},
-											"replyItemId": {
-												"type": "string"
-											},
-											"forced": {
-												"type": "boolean"
-											},
-											"movedFrom": {
-												"type": "string"
-											}
-										}
-									},
-									{
-										"type": "object",
-										"required": [
-											"kind",
-											"id",
-											"at",
-											"action",
-											"added",
-											"removed",
-											"status"
-										],
-										"properties": {
-											"kind": {
-												"type": "string",
-												"const": "memory"
-											},
-											"id": {
-												"type": "string"
-											},
-											"at": {
-												"type": "string"
-											},
-											"action": {
-												"anyOf": [
-													{
-														"type": "string",
-														"const": "saved"
-													},
-													{
-														"type": "string",
-														"const": "proposed"
-													}
-												]
-											},
-											"added": {
-												"type": "array",
-												"items": {
-													"type": "string"
-												}
-											},
-											"removed": {
-												"type": "array",
-												"items": {
-													"type": "string"
-												}
-											},
-											"reason": {
-												"type": "string"
-											},
-											"status": {
-												"anyOf": [
-													{
-														"type": "string",
-														"const": "saved"
-													},
-													{
-														"type": "string",
-														"const": "undone"
-													},
-													{
-														"type": "string",
-														"const": "pending"
-													},
-													{
-														"type": "string",
-														"const": "dismissed"
-													},
-													{
-														"type": "string",
-														"const": "failed"
-													}
-												]
-											},
-											"revisionId": {
-												"type": "string"
-											},
-											"proposalId": {
-												"type": "string"
 											}
 										}
 									},
@@ -28390,10 +26282,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -28547,10 +26435,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -28591,10 +26475,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -28644,10 +26524,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -28690,10 +26566,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -28750,10 +26622,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -28798,10 +26666,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -28852,10 +26716,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -28898,10 +26758,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -28939,10 +26795,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -28992,10 +26844,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -29037,10 +26885,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -29115,10 +26959,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -29216,10 +27056,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -29266,10 +27102,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -29309,10 +27141,6 @@
 						{
 							"type": "string",
 							"const": "thread"
-						},
-						{
-							"type": "string",
-							"const": "space"
 						},
 						{
 							"type": "string",
@@ -29356,10 +27184,6 @@
 											{
 												"type": "string",
 												"const": "thread"
-											},
-											{
-												"type": "string",
-												"const": "space"
 											},
 											{
 												"type": "string",
@@ -29435,10 +27259,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -30577,10 +28397,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -31113,10 +28929,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -31549,10 +29361,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -31659,10 +29467,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -31726,10 +29530,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -31832,10 +29632,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -32251,10 +30047,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -32343,10 +30135,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -32429,10 +30217,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -32480,10 +30264,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -32670,6 +30450,77 @@
 			}
 		},
 		"projects.writeFile.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"browser.sites.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"browser.sites.result": {
+			"type": "object",
+			"required": [
+				"sites"
+			],
+			"properties": {
+				"sites": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"site",
+							"level"
+						],
+						"properties": {
+							"site": {
+								"type": "string"
+							},
+							"level": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "allowed"
+									},
+									{
+										"type": "string",
+										"const": "blocked"
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		"browser.setSite.params": {
+			"type": "object",
+			"required": [
+				"site",
+				"level"
+			],
+			"properties": {
+				"site": {
+					"type": "string"
+				},
+				"level": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "allowed"
+						},
+						{
+							"type": "string",
+							"const": "blocked"
+						},
+						{
+							"type": "string",
+							"const": "ask"
+						}
+					]
+				}
+			}
+		},
+		"browser.setSite.result": {
 			"type": "object",
 			"properties": {}
 		},
@@ -33180,10 +31031,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -33288,10 +31135,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -33406,8 +31249,7 @@
 				"chat": {
 					"type": "object",
 					"required": [
-						"mcp",
-						"suggestSpaces"
+						"mcp"
 					],
 					"properties": {
 						"mcp": {
@@ -33418,9 +31260,6 @@
 							"items": {
 								"type": "string"
 							}
-						},
-						"suggestSpaces": {
-							"type": "boolean"
 						},
 						"followUps": {
 							"type": "boolean"
@@ -33444,7 +31283,6 @@
 						"enabled",
 						"capture",
 						"inThreads",
-						"inSpaces",
 						"provider"
 					],
 					"properties": {
@@ -33455,9 +31293,6 @@
 							"type": "boolean"
 						},
 						"inThreads": {
-							"type": "boolean"
-						},
-						"inSpaces": {
 							"type": "boolean"
 						},
 						"inAgents": {
@@ -33680,9 +31515,6 @@
 								"type": "string"
 							}
 						},
-						"suggestSpaces": {
-							"type": "boolean"
-						},
 						"followUps": {
 							"type": "boolean"
 						}
@@ -33698,9 +31530,6 @@
 							"type": "boolean"
 						},
 						"inThreads": {
-							"type": "boolean"
-						},
-						"inSpaces": {
 							"type": "boolean"
 						},
 						"inAgents": {
@@ -33916,8 +31745,7 @@
 				"chat": {
 					"type": "object",
 					"required": [
-						"mcp",
-						"suggestSpaces"
+						"mcp"
 					],
 					"properties": {
 						"mcp": {
@@ -33928,9 +31756,6 @@
 							"items": {
 								"type": "string"
 							}
-						},
-						"suggestSpaces": {
-							"type": "boolean"
 						},
 						"followUps": {
 							"type": "boolean"
@@ -33954,7 +31779,6 @@
 						"enabled",
 						"capture",
 						"inThreads",
-						"inSpaces",
 						"provider"
 					],
 					"properties": {
@@ -33965,9 +31789,6 @@
 							"type": "boolean"
 						},
 						"inThreads": {
-							"type": "boolean"
-						},
-						"inSpaces": {
 							"type": "boolean"
 						},
 						"inAgents": {
@@ -34548,10 +32369,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -35169,10 +32986,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -35209,10 +33022,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -35316,10 +33125,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -35393,10 +33198,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -36744,10 +34545,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -39335,10 +37132,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -39559,10 +37352,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -39620,10 +37409,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -39691,10 +37476,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -39783,10 +37564,6 @@
 								},
 								{
 									"type": "string",
-									"const": "space"
-								},
-								{
-									"type": "string",
 									"const": "agent"
 								}
 							]
@@ -39831,10 +37608,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -39908,10 +37681,6 @@
 											{
 												"type": "string",
 												"const": "thread"
-											},
-											{
-												"type": "string",
-												"const": "space"
 											},
 											{
 												"type": "string",
@@ -40107,10 +37876,6 @@
 								{
 									"type": "string",
 									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "space"
 								},
 								{
 									"type": "string",
@@ -40443,7 +38208,6 @@
 			"required": [
 				"name",
 				"args",
-				"agent",
 				"groups",
 				"shortcuts"
 			],
@@ -40465,6 +38229,43 @@
 						"name": {
 							"type": "string"
 						}
+					}
+				},
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"sites": {
+					"type": "array",
+					"items": {
+						"type": "string"
 					}
 				},
 				"groups": {
@@ -40492,6 +38293,27 @@
 					"type": "boolean"
 				},
 				"output": {
+					"type": "string"
+				},
+				"images": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"mimeType",
+							"data"
+						],
+						"properties": {
+							"mimeType": {
+								"type": "string"
+							},
+							"data": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"needsSite": {
 					"type": "string"
 				},
 				"card": {

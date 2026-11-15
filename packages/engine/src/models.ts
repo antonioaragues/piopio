@@ -1,6 +1,6 @@
 /**
  * Model access shared by every runtime (docs/spec/10-model-providers §10): one pi ModelRuntime, used by
- * pi-durable (chats, notebooks, agents) and pi-coding-agent (Build) alike, with its credentials in the app's
+ * pi-durable (chats, agents) and pi-coding-agent (Build) alike, with its credentials in the app's
  * Keychain (`KeychainCredentialStore`). Providers are whatever pi supports; the OpenAI API alias lets an
  * OpenAI key sit next to ChatGPT sign-in.
  */
@@ -359,8 +359,8 @@ export class ModelHub {
 	onProvidersChanged?: () => void;
 
 	/**
-	 * One-off request for background work (07-shared §1.3): titles, topic summaries, suggested replies, notebook
-	 * suggestions, commit messages and learned facts. Automatic by default: the provider the conversation already uses
+	 * One-off request for background work (07-shared §1.3): titles, summaries, suggested replies,
+	 * commit messages and learned facts. Automatic by default: the provider the conversation already uses
 	 * (`model`), its small model when it has one (Haiku on OpenRouter), else that same model, so a chat on a local
 	 * model stays local and one on OpenRouter uses OpenRouter. Without a conversation (commit messages), the default
 	 * model's provider; with no provider connected, Apple's on-device model when it's there. The user can pin another

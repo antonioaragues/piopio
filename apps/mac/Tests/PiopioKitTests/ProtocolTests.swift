@@ -66,7 +66,7 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
 }
 
 @Test func utilityChoicesMatchTheEngine() throws {
-    let base = #""chat":{"mcp":false,"suggestSpaces":true},"aboutMe":{"enabled":false,"capture":false,"inThreads":true,"inSpaces":true,"provider":"builtin"},"memory":{"providers":[]}"#
+    let base = #""chat":{"mcp":false},"aboutMe":{"enabled":false,"capture":false,"inThreads":true,"provider":"builtin"},"memory":{"providers":[]}"#
     #expect(try decode("{\(base)}", as: EngineSettings.self).models == nil)
     #expect(try decode(#"{"models":{"utility":"auto"},"# + base + "}", as: EngineSettings.self).models?.utility == .auto)
     #expect(try decode(#"{"models":{"utility":"on_device"},"# + base + "}", as: EngineSettings.self).models?.utility == .onDevice)

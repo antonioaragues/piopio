@@ -1,6 +1,6 @@
 /**
  * Connectors (docs/spec/12-connectors): apps you connect once — Google Calendar, Outlook — whose data any chat,
- * notebook, Build session or agent can use. A connector says how to sign in and what it can do; the tools come
+ * Build session or agent can use. A connector says how to sign in and what it can do; the tools come
  * from capabilities (a calendar, a mailbox) that several connectors implement, so "check my calendar" reads every
  * connected calendar in one call.
  */

@@ -7,7 +7,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 // One file viewer for every place that shows a file (roadmap D8): Build's Files and the file cards, a folder chat's
-// preview, and a notebook's files. Markdown is rendered (with its source a click away), PDFs and images are shown as
+// preview, and files you sent. Markdown is rendered (with its source a click away), PDFs and images are shown as
 // themselves, code and text get line numbers and highlighting, and anything else goes through Quick Look.
 
 enum FileKind {
@@ -310,7 +310,7 @@ struct FileViewerSheet: ViewModifier {
     }
 }
 
-/// A file in a sheet (a notebook's files, files you sent): its name and size, Open with the default app, Reveal in Finder, Done.
+/// A file in a sheet (files you sent): its name and size, Open with the default app, Reveal in Finder, Done.
 struct FileSheet: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss

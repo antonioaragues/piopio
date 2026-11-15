@@ -1,14 +1,13 @@
 /**
- * Engine-wide settings the app changes in Settings (07-shared §7): Chat's MCP servers and Thread → Space
- * suggestions, and the "About me" memory (07-shared §5). Kept in `<home>/settings.json`.
+ * Engine-wide settings the app changes in Settings (07-shared §7): Chat's MCP servers and follow-up suggestions,
+ * and the "About me" memory (07-shared §5). Kept in `<home>/settings.json`.
  */
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import type { EngineSettings } from "@piopio/protocol";
 
 export const DEFAULT_SETTINGS: EngineSettings = {
-	// suggestSpaces and aboutMe.inSpaces: kept for older apps; notebooks are gone (docs/spec/18 phase 2).
-	chat: { mcp: false, suggestSpaces: false, followUps: true },
-	aboutMe: { enabled: false, capture: false, inThreads: true, inSpaces: true, provider: "builtin" },
+	chat: { mcp: false, followUps: true },
+	aboutMe: { enabled: false, capture: false, inThreads: true, provider: "builtin" },
 	memory: { providers: [] },
 };
 
@@ -20,6 +19,9 @@ export class Settings {
 
 	constructor(private readonly file: string) {
 		const saved = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as SettingsPatch) : {};
+		// Notebook settings from before docs/spec/18 phase 2, still in older files.
+		delete (saved.chat as Record<string, unknown> | undefined)?.suggestSpaces;
+		delete (saved.aboutMe as Record<string, unknown> | undefined)?.inSpaces;
 		// Only `utility` (a `learning` choice existed for a day, 2026-11-06).
 		const models = saved.models?.utility ? { utility: saved.models.utility } : undefined;
 		this.value = { ...(models ? { models } : {}), ...(saved.build ? { build: saved.build } : {}), chat: { ...DEFAULT_SETTINGS.chat, ...saved.chat }, aboutMe: { ...DEFAULT_SETTINGS.aboutMe, ...saved.aboutMe }, memory: { ...DEFAULT_SETTINGS.memory, ...saved.memory } };

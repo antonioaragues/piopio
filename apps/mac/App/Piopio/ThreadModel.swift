@@ -279,8 +279,6 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .viewFile, object: url)
         case .revealFile(let path):
             NotificationCenter.default.post(name: .revealInInspector, object: RevealTarget(sessionId: ref.id, path: path))
-        case .openTopic, .wrongTopic, .undoMemory, .decideMemory:
-            break // notebook cards (routing, notebook memory); notebooks are gone (docs/spec/18 phase 2)
         case .decideApproval(let approvalId, let approve):
             Task { do { try await engine?.decide(ref, approvalId: approvalId, approve: approve) } catch { report(error) } }
         case .allowAlways(let approvalId):
