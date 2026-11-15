@@ -16,7 +16,10 @@ type Lens = "build" | "chat";
  * `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both. `folder: false` and `instructions`:
  * a project without a folder, before CF4. Both are read once to migrate, then dropped.
  */
-type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string };
+type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[] };
+
+/** A folder linked to a project (docs/spec/18 §18): read only, or edited under the project's permissions. */
+export type LinkedFolder = { path: string; edit: boolean };
 
 
 const AGENTS_TEMPLATE = (name: string, instructions?: string) =>
@@ -177,9 +180,14 @@ export class Projects {
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; lenses?: Lens[] }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; lenses?: Lens[]; linkFolder?: LinkedFolder; unlinkFolder?: string }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
+		if (change.linkFolder) this.link(entry, change.linkFolder);
+		if (change.unlinkFolder) {
+			entry.folders = (entry.folders ?? []).filter((f) => f.path !== change.unlinkFolder);
+			if (!entry.folders.length) delete entry.folders;
+		}
 		if (change.approvalMode) entry.approvalMode = change.approvalMode;
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
 		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
@@ -207,6 +215,30 @@ export class Projects {
 
 	rulesFor(cwd: string): ApprovalRule[] {
 		return this.entryFor(cwd)?.rules ?? [];
+	}
+
+	/** The folders linked to the project that contains `cwd` (18 §18), the ones still on disk. */
+	foldersFor(cwd: string): LinkedFolder[] {
+		return (this.entryFor(cwd)?.folders ?? []).filter((f) => existsSync(f.path));
+	}
+
+	/** Adds a folder, or changes its access. Not the project's own folder, one inside it, or one that holds it. */
+	private link(entry: StoredProject, folder: LinkedFolder): void {
+		if (!isAbsolute(folder.path)) throw new EngineError("INVALID", "Folder paths must be absolute.");
+		let real: string;
+		try {
+			real = realpathSync(resolve(folder.path));
+			if (!statSync(real).isDirectory()) throw new Error("not a folder");
+		} catch {
+			throw new EngineError("INVALID", `Not a folder: ${folder.path}`);
+		}
+		const within = (a: string, b: string) => a === b || a.startsWith(`${b}/`);
+		if (within(real, entry.path)) throw new EngineError("INVALID", "That folder is already part of the project.");
+		if (within(entry.path, real)) throw new EngineError("INVALID", "That folder contains the project. Open it as a project instead.");
+		entry.folders ??= [];
+		const existing = entry.folders.find((f) => f.path === real);
+		if (existing) existing.edit = folder.edit;
+		else entry.folders.push({ path: real, edit: folder.edit });
 	}
 
 	/** "Always allow": adds a rule to the project that contains `cwd` (no duplicates). */
@@ -239,8 +271,14 @@ export class Projects {
 
 function describe(stored: StoredProject): Omit<ProjectInfo, "trust" | "needsTrust"> {
 	// `lenses` stays in the protocol for older apps: every project now does both (the permissions decide).
-	const { folder: _f, instructions: _i, lenses: _l, ...rest } = stored;
-	const p = { ...rest, approvalMode: stored.approvalMode ?? "auto_edit", rules: stored.rules ?? [], lenses: ["build", "chat"] as Lens[] };
+	const { folder: _f, instructions: _i, lenses: _l, folders, ...rest } = stored;
+	const p = {
+		...rest,
+		approvalMode: stored.approvalMode ?? "auto_edit",
+		rules: stored.rules ?? [],
+		lenses: ["build", "chat"] as Lens[],
+		...(folders?.length ? { folders: folders.map((f) => (existsSync(f.path) ? f : { ...f, missing: true })) } : {}),
+	};
 	if (!existsSync(p.path)) return { ...p, piConfig: false, missing: true };
 	const branch = gitBranch(p.path);
 	const contextFile = ["AGENTS.md", "CLAUDE.md"].find((name) => existsSync(join(p.path, name)));

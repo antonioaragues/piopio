@@ -316,10 +316,23 @@ struct AskBox: View {
     @Binding var item: SidebarItem
     /// The New conversation page's quick picks under the box (docs/spec/18 §16): "Or in" the three latest projects.
     var quickPicks = false
+    /// On a project's page (18 §18): the box starts in that project, with its own target and draft, apart from Home's.
+    var projectId: String?
     @State private var text = ""
     /// "chat", "project:<id>" or "agent:<id>"; the start routes set it (⌘N, ⌘O, a project's +).
     /// Back to "chat" (no project) after each send, so a loose question never lands in the last project.
-    @AppStorage("homeTarget") private var targetRaw = "chat"
+    @AppStorage private var targetRaw: String
+
+    init(engine: EngineController, item: Binding<SidebarItem>, quickPicks: Bool = false, projectId: String? = nil) {
+        self.engine = engine
+        _item = item
+        self.quickPicks = quickPicks
+        self.projectId = projectId
+        _targetRaw = AppStorage(wrappedValue: projectId.map { "project:" + $0 } ?? "chat", projectId.map { "projectBoxTarget:" + $0 } ?? "homeTarget")
+    }
+
+    /// Where the draft is kept: Home's box and the start pages share "home"; a project page has its own.
+    private var draftKey: String { projectId.map { "project:" + $0 } ?? "home" }
     @State private var pendingChat: ContainerRef?
     @State private var sending = false
     @State private var sendError: String?
@@ -342,7 +355,7 @@ struct AskBox: View {
         }
     }
     private func saveHomeDraft() {
-        do { try DraftStore(home: engine.home).save(ComposerDraft(text: text, destination: pendingChat), for: "home") }
+        do { try DraftStore(home: engine.home).save(ComposerDraft(text: text, destination: pendingChat), for: draftKey) }
         catch { sendError = "Couldn't save this draft: \(error.localizedDescription)" }
     }
     @State private var showModels = false
@@ -431,7 +444,9 @@ struct AskBox: View {
         .onChange(of: text) { _, t in mention(t); saveHomeDraft() }
         .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder; plan = false }
         .onAppear {
-            if let saved = DraftStore(home: engine.home).load("home") { text = saved.text; pendingChat = saved.destination }
+            // A project page's box starts in its project each time it opens.
+            if let projectId { targetRaw = "project:" + projectId }
+            if let saved = DraftStore(home: engine.home).load(draftKey) { text = saved.text; pendingChat = saved.destination }
             if case .project = target, project == nil { target = .chat }
             if case .agent = target, agent == nil { target = .chat }
             focused = true
@@ -507,7 +522,10 @@ struct AskBox: View {
         case .branch: " · on a new branch"
         case .worktree: " · in its own worktree"
         }
-        return "In \(project.name)\(place) · \(plan ? "plans first; changes only after you approve the plan" : effectiveMode.line)"
+        // Linked folders (18 §18): counted, so you see what a new conversation is given before you send.
+        let linked = (project.folders ?? []).filter { $0.missing != true }.count
+        let also = linked == 0 ? "" : " and \(linked) linked folder\(linked == 1 ? "" : "s")"
+        return "In \(project.name)\(also)\(place) · \(plan ? "plans first; changes only after you approve the plan" : effectiveMode.line)"
     }
 
     /// The three projects used last (by their latest conversation), for the quick picks.

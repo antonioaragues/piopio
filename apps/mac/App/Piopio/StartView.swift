@@ -260,18 +260,15 @@ struct ConversationStart: View {
         }
     }
 
-    /// "Instructions for every conversation here go in AGENTS.md. Write them": the project's Settings, where AGENTS.md
-    /// opens.
+    /// "Instructions for every conversation here go in AGENTS.md. Write them": the project's page, whose column shows
+    /// them with Edit (18 §18).
     private func instructionsLine(_ p: ProjectInfo) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "doc.text").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
             Text("Instructions for every conversation here go in AGENTS.md.").foregroundStyle(Color.dsFg3)
-            Button("Write them") {
-                UserDefaults.standard.set("settings", forKey: "projectTab")
-                item = .project(p.id)
-            }
+            Button("Write them") { item = .project(p.id) }
             .buttonStyle(.plain).foregroundStyle(Color.accentColor)
-            .help("Open \(p.name)'s Settings, where AGENTS.md and NOTES.md are")
+            .help("Open \(p.name)'s page, where AGENTS.md and NOTES.md are")
         }
         .font(.system(size: 12.5))
         .padding(.leading, 14)

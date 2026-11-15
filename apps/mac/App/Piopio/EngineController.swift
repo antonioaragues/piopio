@@ -977,6 +977,19 @@ final class EngineController {
         _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, approvalMode: mode), as: ProjectsAddResult.self)
     }
 
+    /// Links a folder on the Mac to the project, or changes whether it can be edited (docs/spec/18 §18).
+    func linkFolder(_ url: URL, edit: Bool, to project: ProjectInfo) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
+        _ = try await client.call("projects.configure", ProjectsConfigureParams(id: project.id, linkFolder: .init(path: url.path, edit: edit)), as: ProjectsAddResult.self)
+        await loadProjects()
+    }
+
+    /// Unlinks a folder from the project. Nothing on disk changes.
+    func unlinkFolder(_ path: String, from project: ProjectInfo) async {
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, unlinkFolder: path), as: ProjectsAddResult.self)
+        await loadProjects()
+    }
+
     /// pi project trust (saved in ~/.pi/agent/trust.json, shared with the pi CLI).
     func setTrust(_ trusted: Bool, for project: ProjectInfo) async {
         _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, trust: trusted), as: ProjectsAddResult.self)

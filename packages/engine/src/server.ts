@@ -263,6 +263,7 @@ export class Engine {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
 			modeFor: (cwd) => this.projects.modeFor(cwd),
 			rulesFor: (cwd) => this.projects.rulesFor(cwd),
+			foldersFor: (cwd) => this.projects.foldersFor(cwd),
 			addRule: (cwd, rule) => this.projects.addRule(cwd, rule),
 		};
 		this.projects.onChange((projects) => {
@@ -633,7 +634,7 @@ export class Engine {
 			}
 			case "projects.configure": {
 				const p = params as Params<"projects.configure">;
-				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}) };
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}), ...(p.linkFolder ? { linkFolder: p.linkFolder } : {}), ...(p.unlinkFolder ? { unlinkFolder: p.unlinkFolder } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
 			}
 			case "projects.create": {
@@ -680,7 +681,12 @@ export class Engine {
 			}
 			case "projects.files": {
 				const p = params as Params<"projects.files">;
-				return { files: await searchFiles(this.folder(p), p.query, p.limit ?? 30) } satisfies Result<"projects.files">;
+				const limit = p.limit ?? 30;
+				const own = await searchFiles(this.folder(p), p.query, limit);
+				// Linked folders (18 §18): their matches too, as absolute paths, once something is typed.
+				const linked = p.query.trim() ? (await Promise.all(this.projects.foldersFor(p.cwd).map(async (f) => (await searchFiles(f.path, p.query, 8)).map((m) => ({ ...m, path: join(f.path, m.path) }))))).flat() : [];
+				const room = Math.max(limit - Math.min(linked.length, Math.ceil(limit / 2)), 0);
+				return { files: [...own.slice(0, room), ...linked].slice(0, limit) } satisfies Result<"projects.files">;
 			}
 			case "projects.listDir": {
 				const p = params as Params<"projects.listDir">;

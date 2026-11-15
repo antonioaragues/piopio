@@ -683,6 +683,11 @@ export const ProjectInfo = Type.Object({
 	lenses: Type.Array(literals("build", "chat")),
 	/** The folder no longer exists. */
 	missing: Type.Optional(Type.Boolean()),
+	/**
+	 * Other folders on the Mac linked to the project (docs/spec/18 §18): every conversation here is told about them and
+	 * @ finds their files. `edit`: they follow the project's permissions like its own folder; otherwise read only.
+	 */
+	folders: Type.Optional(Type.Array(Type.Object({ path: Type.String(), edit: Type.Boolean(), missing: Type.Optional(Type.Boolean()) }))),
 });
 export type ProjectInfo = Static<typeof ProjectInfo>;
 
@@ -1184,6 +1189,10 @@ export const methods = {
 			removeRule: Type.Optional(Type.String()),
 			trust: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])),
 			lenses: Type.Optional(Type.Array(literals("build", "chat"))),
+			/** Links a folder (absolute), or changes whether it can be edited when it's already linked (18 §18). */
+			linkFolder: Type.Optional(Type.Object({ path: Type.String(), edit: Type.Boolean() })),
+			/** Unlinks a folder (its path as `folders` lists it). Nothing on disk changes. */
+			unlinkFolder: Type.Optional(Type.String()),
 		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},

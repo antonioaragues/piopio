@@ -518,3 +518,19 @@ have, in a link at the bottom. The user picked proposal A of three
 **Kept:** the New project page, only for when the Projects section is hidden (the Projects area off).
 **Not built:** "let the first conversation draft them" from the mockup; drafting AGENTS.md from a message needs engine
 work.
+
+## 18. The project page, and folders linked to a project (2026-11-15)
+
+**Why:** the project page was three tabs (Conversations · Board · Settings), and a project could only use one folder,
+so a project made in ~/Piopio couldn't reach the folders where your things already are. The user picked proposal A of
+three ([docs/design/project-page/proposals.html](../design/project-page/proposals.html)) for its discoverability: what
+the project is stays visible, not behind a panel.
+
+| ID | Decision |
+|---|---|
+| CF17 | **The project page is a home, not tabs.** On the left: the name, where it is (path · branch · who · permissions), the box (in this project, with its own target and draft, apart from Home's), a team's board as one line ("Board · 2 doing · 1 in review · Open ›"), and the conversations as a hairline list. On the right, a 300 pt column in the Summary panel's blocks, open by default (a toolbar button hides it): Instructions and Notes (a few lines of AGENTS.md / NOTES.md, with Edit), Folders, and Project (who works here, the permissions new conversations start in, routines). Board and Settings open in place with "‹ Project" to go back; Settings is in the … menu, with Reveal in Finder and Remove from Piopio. |
+| CF18 | **A project can link other folders on the Mac.** Nothing is copied or moved. Each is **Read only** (the default) or **Can edit**. Add them from the column (Add folder…, several at once) or by dropping folders from Finder on the column or on the project's row in the sidebar. A folder that is the project's own, inside it, or holds it can't be linked. |
+| CF19 | **What a linked folder does.** Every turn, the model is told the folders and what it may do in each. `@` searches them too (absolute paths). A Can edit folder is written to like the project's own folder: without asking in Auto-edit and Full auto (path rules), writable in the sandbox, and still asking in Ask; Read only can't. Writing to a Read only folder asks, as anywhere outside the project. The line under the box counts them: "In Tesis and 2 linked folders · …". |
+
+**Not built:** adding a folder to a single conversation from the box's `+`. Instructions and notes always stay in the
+project's own folder.

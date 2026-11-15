@@ -83,6 +83,8 @@ export type BuildOpenOptions = {
 	piAgentDir?: string;
 	/** Approval mode and the project's rules, read on every tool call (they can change mid-session). */
 	approvals: { mode(): ApprovalMode; rules(): readonly ApprovalRule[]; addRule(rule: Rule): void };
+	/** Folders linked to the project (docs/spec/18 §18), read on every turn. */
+	folders?: () => readonly { path: string; edit: boolean }[];
 	/** Shadow-git snapshots of the working tree (docs/spec/05-build §7). */
 	checkpoints: CheckpointStore;
 	/** The session needs the user (a new prompt) or told them something (notify_user). */
@@ -160,6 +162,7 @@ export class BuildRuntime implements Runtime {
 				// Before approvals: a server turned off here is refused without asking.
 				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
 				notesExtension(o.cwd),
+				...(o.folders ? [linkedFoldersExtension(o.folders)] : []),
 				...(o.browser
 					? [
 							codingBrowserExtension(o.browser, (callId, signal) => async (request) => {
@@ -173,7 +176,14 @@ export class BuildRuntime implements Runtime {
 				...(o.consult ? [consultExtension(o.consult.bridge, o.consult.from)] : []),
 				...(o.offers ? [offersExtension(o.offers)] : []),
 				// Full access runs commands as before; otherwise they write only inside the project.
-				sandboxExtension({ enabled: () => (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" }, { shellPath: () => settingsManager.getShellPath() }),
+				sandboxExtension(
+					{
+						enabled: () => (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto",
+						// Linked folders that can be edited are writable like the project's own (18 §18).
+						extraRoots: () => (o.folders?.() ?? []).filter((f) => f.edit).map((f) => f.path),
+					},
+					{ shellPath: () => settingsManager.getShellPath() },
+				),
 				approvalsExtension({
 					mode: o.approvals.mode,
 					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),
@@ -971,6 +981,23 @@ export function notesExtension(cwd: string): ExtensionFactory {
 			const shown = notes.length > MAX_NOTES ? `${notes.slice(0, MAX_NOTES)}\n\n[… the rest is in ${NOTES_FILE}]` : notes;
 			return {
 				systemPrompt: `${event.systemPrompt}\n\nThis project keeps shared notes in ${NOTES_FILE}, read by every conversation here. When something comes up that later conversations will need (a decision, a number, a date, a preference), add it to ${NOTES_FILE} as one short line, if you can edit files. The notes now:\n\n${shown}`,
+			};
+		});
+	};
+}
+
+/**
+ * Folders linked to the project (docs/spec/18 §18): every turn, the model is told where they are and whether it may
+ * change them. Read is allowed anywhere already; writing to a read-only one asks, as anywhere outside the project.
+ */
+export function linkedFoldersExtension(folders: () => readonly { path: string; edit: boolean }[]): ExtensionFactory {
+	return (pi) => {
+		pi.on("before_agent_start", (event) => {
+			const list = folders();
+			if (!list.length) return undefined;
+			const lines = list.map((f) => `- ${f.path} (${f.edit ? "part of the project: you may change files here, under the same permissions" : "read only: read and search it, but don't change anything there"})`);
+			return {
+				systemPrompt: `${event.systemPrompt}\n\nBesides its own folder, this project uses these folders on the Mac. Use their absolute paths; look in them when the task concerns what they hold:\n${lines.join("\n")}`,
 			};
 		});
 	};

@@ -355,7 +355,8 @@ struct MainSidebar: View {
                           toggle: {
                               if selected { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }
                               else { item = .project(project.id); if folded { setProject(project.id, collapsed: false) } }
-                          }) {
+                          },
+                          link: { urls in linkFolders(urls, to: project) }) {
             NotificationCenter.default.post(name: .newBuildSession, object: project.id)
         }
         .contextMenu {
@@ -370,6 +371,17 @@ struct MainSidebar: View {
                 Task { await engine.removeProject(project) }
             }
         }
+    }
+
+    /// Folders dropped on a project's row are linked to it, read only (docs/spec/18 §18); its page shows them.
+    private func linkFolders(_ urls: [URL], to project: ProjectInfo) -> Bool {
+        let dirs = urls.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+        guard !dirs.isEmpty, project.missing != true else { return false }
+        Task {
+            for url in dirs { try? await engine.linkFolder(url, edit: false, to: project) }
+            item = .project(project.id)
+        }
+        return true
     }
 
     private func sessionRow(_ s: SessionSummary, indent: Bool) -> some View {
@@ -660,8 +672,11 @@ private struct ProjectRow: View {
     /// Its team's members' colours (design 1a): a stack on the row.
     var crew: [Color]?
     let toggle: () -> Void
+    /// Folders dropped from Finder: linked to the project (18 §18).
+    var link: (([URL]) -> Bool)?
     let start: () -> Void
     @State private var hovering = false
+    @State private var dropping = false
     @FocusState private var plusFocused: Bool
 
     private var showsPlus: Bool { plus != nil && (isOpen || hovering || plusFocused) }
@@ -711,6 +726,15 @@ private struct ProjectRow: View {
             }
         }
         .onHover { hovering = $0 }
+        .overlay {
+            if dropping {
+                RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous).strokeBorder(Color.accentColor.opacity(0.7), lineWidth: 1.5)
+                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
+                    .allowsHitTesting(false)
+            }
+        }
+        .dropDestination(for: URL.self) { urls, _ in link?(urls) ?? false } isTargeted: { dropping = $0 && link != nil }
+        .help(dropping ? "Link to \(project.name)" : "")
     }
 }
 

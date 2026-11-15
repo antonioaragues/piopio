@@ -77,6 +77,8 @@ export type ApprovalPolicy = {
 	modeFor(cwd: string): ApprovalMode;
 	rulesFor(cwd: string): ApprovalRule[];
 	addRule(cwd: string, rule: { kind: ApprovalRule["kind"]; pattern: string }): void;
+	/** Folders linked to the project (docs/spec/18 §18). */
+	foldersFor?(cwd: string): { path: string; edit: boolean }[];
 };
 
 export const newId = (prefix: string) => `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 20)}`;
@@ -1533,9 +1535,17 @@ export class Sessions {
 			...this.piOverrides,
 			approvals: {
 				mode: () => entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? entry.cwd!),
-				rules: () => this.policy.rulesFor(entry.projectPath ?? entry.cwd!),
+				// Linked folders that can be edited (18 §18) are written to as the project's own folder is: without asking in
+				// Auto-edit and Full auto; Ask still asks, and Read only can't.
+				rules: () => {
+					const place = entry.projectPath ?? entry.cwd!;
+					const mode = entry.approvalMode ?? this.policy.modeFor(place);
+					const linked = mode === "auto_edit" || mode === "full_auto" ? (this.policy.foldersFor?.(place) ?? []).filter((f) => f.edit) : [];
+					return [...this.policy.rulesFor(place), ...linked.map((f) => ({ id: `linked:${f.path}`, kind: "path" as const, pattern: `${f.path}/**`, createdAt: "" }))];
+				},
 				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
 			},
+			folders: () => this.policy.foldersFor?.(entry.projectPath ?? entry.cwd!) ?? [],
 			checkpoints: this.checkpoints,
 			webOptions: this.webOptions,
 			...this.browserFor(entry.ref),

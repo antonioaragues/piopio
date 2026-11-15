@@ -1656,8 +1656,13 @@ public struct ProjectsConfigureParams: Encodable, Sendable {
     public var removeRule: String?
     public var trust: Bool?
     public var lenses: [ProjectInfo.Lens]?
-    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, lenses: [ProjectInfo.Lens]? = nil) {
+    public struct LinkFolder: Encodable, Sendable { public var path: String; public var edit: Bool; public init(path: String, edit: Bool) { self.path = path; self.edit = edit } }
+    /// Links a folder, or changes whether it can be edited (docs/spec/18 §18).
+    public var linkFolder: LinkFolder?
+    public var unlinkFolder: String?
+    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, lenses: [ProjectInfo.Lens]? = nil, linkFolder: LinkFolder? = nil, unlinkFolder: String? = nil) {
         self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust; self.lenses = lenses
+        self.linkFolder = linkFolder; self.unlinkFolder = unlinkFolder
     }
 }
 
@@ -1703,6 +1708,9 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public enum Lens: String, Codable, Sendable { case build, chat }
     public var lenses: [Lens]
     public var missing: Bool?
+    /// Other folders on the Mac linked to the project (docs/spec/18 §18): read only, or edited under its permissions.
+    public struct LinkedFolder: Codable, Sendable, Hashable { public var path: String; public var edit: Bool; public var missing: Bool? }
+    public var folders: [LinkedFolder]?
 }
 
 /// New project: a folder in ~/Piopio with AGENTS.md (`instructions`) and NOTES.md.

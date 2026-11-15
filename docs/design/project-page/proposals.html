@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Page</title>
+<style>
+:root {
+  --win: #FCFCFB; --side: #F4F4F2; --card: #FFFFFF; --bubble: #F0F0ED; --sel: #EAEAE6; --field: #FFFFFF;
+  --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --inv: #1F1F1E; --invfg: #FFFFFF;
+  --line: rgba(0,0,0,.09); --accent: #2F6FEB; --wash: rgba(47,111,235,.10); --page: #E9E9E5; --light: #DADAD6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29; --sel: #333331; --field: #252524;
+    --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --inv: #ECECEA; --invfg: #1E1E1D;
+    --line: rgba(255,255,255,.10); --accent: #5B8DF0; --wash: rgba(91,141,240,.16); --page: #121211; --light: #3A3A38;
+  }
+}
+:root[data-theme="dark"] {
+  --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29; --sel: #333331; --field: #252524;
+  --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --inv: #ECECEA; --invfg: #1E1E1D;
+  --line: rgba(255,255,255,.10); --accent: #5B8DF0; --wash: rgba(91,141,240,.16); --page: #121211; --light: #3A3A38;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--fg);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 48px 16px 96px; }
+h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; }
+.lede { color: var(--fg2); font-size: 15px; max-width: 800px; margin: 0 0 18px; }
+.lede b, .sum b { color: var(--fg); }
+.box { max-width: 900px; margin: 0 0 48px; padding: 18px 20px; border-radius: 12px; background: var(--win); box-shadow: 0 0 0 .5px var(--line); }
+.box h2 { margin: 0 0 6px; font-size: 17px; }
+.box p { color: var(--fg2); font-size: 13.5px; margin: 0 0 10px; }
+.box table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 6px 0 4px; }
+.box td, .box th { text-align: left; padding: 7px 10px 7px 0; border-top: .5px solid var(--line); vertical-align: top; }
+.box th { color: var(--fg3); font-weight: 500; font-size: 12px; border-top: 0; }
+.box td:first-child { white-space: nowrap; font-weight: 500; }
+.box td { color: var(--fg2); }
+section.prop { margin: 0 0 72px; }
+.prop-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.prop-head .k { font-size: 12px; color: var(--fg3); font-weight: 600; letter-spacing: .04em; }
+.prop-head h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; }
+.prop .sum { color: var(--fg2); font-size: 14px; margin: 0 0 18px; max-width: 860px; }
+.frames { display: grid; gap: 18px; }
+.cap { font-size: 12px; color: var(--fg3); margin: 8px 2px 0; max-width: 1000px; }
+.scroller { overflow-x: auto; padding-bottom: 4px; }
+
+.win { width: 1120px; height: 660px; background: var(--win); border-radius: 12px; overflow: hidden; display: flex;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.18), 0 18px 50px rgba(0,0,0,.14); position: relative; }
+.sb { width: 232px; background: var(--side); border-right: .5px solid var(--line); display: flex; flex-direction: column; flex: none; }
+.tb { height: 48px; display: flex; align-items: center; padding: 0 12px 0 16px; gap: 8px; flex: none; }
+.lights { display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--light); display: block; }
+.sp { flex: 1; }
+.ib { width: 26px; height: 26px; display: grid; place-items: center; color: var(--fg2); border-radius: 6px; }
+.ib.on { background: var(--sel); color: var(--fg); }
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 13px; height: 13px; }
+.rows { padding: 0 8px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 7px; font-size: 13px; height: 28px; white-space: nowrap; }
+.row svg { color: var(--fg2); }
+.row.sel { background: var(--sel); }
+.row .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.row .m { color: var(--fg3); font-size: 11.5px; }
+.row .mono { color: var(--fg3); font: 11px ui-monospace, Menlo, monospace; }
+.row.sub { padding-left: 34px; }
+.row.b { font-weight: 500; }
+.sec { display: flex; align-items: center; padding: 14px 16px 4px; color: var(--fg3); font-size: 12px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.ring { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--fg3); border-right-color: transparent; flex: none; }
+
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.mtb { height: 48px; flex: none; display: flex; align-items: center; padding: 0 14px 0 20px; gap: 8px; }
+.mtb .title { font-weight: 600; font-size: 13.5px; }
+.mtb .subt { color: var(--fg3); font-size: 12px; }
+.body { flex: 1; display: flex; min-height: 0; }
+.content { flex: 1; overflow: hidden; min-width: 0; }
+.panel { width: 290px; flex: none; border-left: .5px solid var(--line); padding: 16px 18px; overflow: hidden; }
+
+.black { background: var(--inv); color: var(--invfg); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.textbtn { color: var(--fg2); font-size: 13px; }
+.link { color: var(--accent); }
+
+.comp { background: var(--field); border-radius: 16px; box-shadow: 0 0 0 .5px var(--line), 0 2px 10px rgba(0,0,0,.05); padding: 12px 14px 10px; }
+.comp .ph { color: var(--fg3); font-size: 14px; padding: 2px 2px 14px; }
+.comp .bar { display: flex; align-items: center; gap: 4px; color: var(--fg2); font-size: 12.5px; }
+.selr { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; color: var(--fg2); white-space: nowrap; }
+.send { width: 28px; height: 28px; border-radius: 50%; background: var(--sel); color: var(--fg3); display: grid; place-items: center; margin-left: 6px; }
+.where { color: var(--fg3); font-size: 12px; margin: 8px 4px 0; }
+
+.ph-title { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.meta { color: var(--fg3); font-size: 12.5px; margin-top: 3px; display: flex; gap: 6px; align-items: center; }
+.h4 { font-size: 12px; color: var(--fg3); font-weight: 500; margin: 0 0 6px; display: flex; align-items: center; }
+.h4 .r { margin-left: auto; color: var(--fg2); font-weight: 400; }
+.conv { display: flex; align-items: center; gap: 10px; height: 46px; border-top: .5px solid var(--line); }
+.conv:last-child { border-bottom: .5px solid var(--line); }
+.conv .nm { flex: 1; min-width: 0; font-size: 13.5px; }
+.conv .nm small { display: block; color: var(--fg3); font-size: 12px; }
+.conv .w { color: var(--fg3); font-size: 12px; }
+
+/* side info */
+.grp { margin-bottom: 18px; }
+.grp .gh { font-size: 12px; color: var(--fg3); margin-bottom: 6px; display: flex; align-items: center; }
+.grp .gh .r { margin-left: auto; color: var(--fg2); }
+.quote { font-size: 12.5px; color: var(--fg2); line-height: 1.5; border-left: 1.5px solid var(--line); padding-left: 10px; }
+.fold { display: flex; align-items: center; gap: 8px; height: 30px; font-size: 13px; }
+.fold svg { color: var(--fg2); }
+.fold .pth { color: var(--fg3); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.fold .acc { color: var(--fg3); font-size: 11.5px; white-space: nowrap; }
+.fold .acc.ed { color: var(--fg2); }
+.fold .nmw { white-space: nowrap; }
+.add { color: var(--fg2); font-size: 12.5px; display: flex; align-items: center; gap: 6px; height: 26px; }
+.kv { display: flex; align-items: center; height: 28px; font-size: 13px; }
+.kv .k2 { color: var(--fg2); }
+.kv .v { margin-left: auto; color: var(--fg); }
+.kv .v.g { color: var(--fg3); }
+.strip { display: flex; align-items: center; gap: 16px; padding: 10px 14px; border-radius: 10px; background: var(--bubble); font-size: 12.5px; color: var(--fg2); margin-bottom: 22px; }
+.strip b { color: var(--fg); font-weight: 600; }
+
+/* B tabs */
+.ttabs { display: flex; gap: 22px; font-size: 13.5px; margin-top: 16px; border-bottom: .5px solid var(--line); }
+.ttabs span { padding-bottom: 9px; color: var(--fg3); }
+.ttabs span.on { color: var(--fg); box-shadow: inset 0 -1.5px 0 var(--fg); }
+.ttabs span small { color: var(--fg3); font-size: 12px; margin-left: 4px; }
+.ctxgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 22px; }
+.ftable .fr { display: grid; grid-template-columns: 22px 1fr 110px; align-items: center; height: 44px; border-top: .5px solid var(--line); font-size: 13.5px; gap: 8px; }
+.ftable .fr:last-of-type { border-bottom: .5px solid var(--line); }
+.ftable .fr small { display: block; color: var(--fg3); font-size: 11.5px; }
+.ftable .fr .acc { text-align: right; color: var(--fg2); font-size: 12.5px; }
+.ftable .fr svg { color: var(--fg2); }
+.doc { border-radius: 10px; box-shadow: 0 0 0 .5px var(--line); background: var(--card); padding: 12px 14px; font: 12.5px/1.6 ui-monospace, Menlo, monospace; color: var(--fg2); height: 168px; overflow: hidden; }
+.doc b { color: var(--fg); font-weight: 600; }
+
+/* drop hint */
+.drop { position: absolute; z-index: 4; border-radius: 7px; box-shadow: 0 0 0 1.5px var(--accent); background: var(--wash); }
+.drag { position: absolute; z-index: 5; display: flex; align-items: center; gap: 6px; background: var(--card); box-shadow: 0 6px 18px rgba(0,0,0,.18); border-radius: 7px; padding: 5px 9px; font-size: 12.5px; opacity: .95; }
+.dragnote { position: absolute; z-index: 5; font-size: 11.5px; color: var(--accent); }
+
+.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; max-width: 980px; }
+.notes h5 { margin: 0 0 6px; font-size: 12.5px; }
+.notes ul { margin: 0; padding-left: 18px; color: var(--fg2); font-size: 13px; }
+.notes li { margin-bottom: 4px; }
+.verdict { margin-top: 48px; padding-top: 24px; border-top: .5px solid var(--line); max-width: 860px; }
+.verdict h2 { font-size: 18px; margin: 0 0 8px; }
+.verdict p { color: var(--fg2); font-size: 14px; margin: 0 0 8px; }
+.verdict b { color: var(--fg); }
+@media (max-width: 700px) { .notes { grid-template-columns: 1fr; } .wrap { padding-top: 28px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5V10h-4v3.5H2.5z"/></symbol>
+  <symbol id="agents" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13.5c.4-2.4 2.1-3.8 4.2-3.8s3.8 1.4 4.2 3.8"/><circle cx="11.3" cy="5" r="1.9"/><path d="M11.6 8.8c1.6.2 2.6 1.4 2.9 3.2"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5c0-.6.4-1 1-1h3.2l1.3 1.5H13c.6 0 1 .4 1 1V12c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/></symbol>
+  <symbol id="link" viewBox="0 0 16 16"><path d="M7 9a2.5 2.5 0 0 0 3.5 0l2-2A2.5 2.5 0 0 0 9 3.5l-.7.7"/><path d="M9 7a2.5 2.5 0 0 0-3.5 0l-2 2A2.5 2.5 0 0 0 7 12.5l.7-.7"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="compose" viewBox="0 0 16 16"><path d="M13 9v4H3V3h4"/><path d="M11.5 2.5 13.5 4.5 8 10H6V8z"/></symbol>
+  <symbol id="sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6.5 3v10"/></symbol>
+  <symbol id="summary" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M5 6.3h.01M7 6.3h4M5 9.7h.01M7 9.7h4"/></symbol>
+  <symbol id="up" viewBox="0 0 16 16"><path d="M8 13V3.5M4 7.5l4-4 4 4"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2"/></symbol>
+  <symbol id="doc" viewBox="0 0 16 16"><path d="M4 2h5.5L12 4.5V14H4z"/><path d="M6 8h4M6 10.5h4"/></symbol>
+  <symbol id="board" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10M10 3v10"/></symbol>
+  <symbol id="clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></symbol>
+  <symbol id="right" viewBox="0 0 16 16"><path d="M6.5 4.5 10 8l-3.5 3.5"/></symbol>
+  <symbol id="more" viewBox="0 0 16 16"><circle cx="4" cy="8" r=".6"/><circle cx="8" cy="8" r=".6"/><circle cx="12" cy="8" r=".6"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1>The project page</h1>
+  <p class="lede">Two things: how a project can take <b>folders you already have on this Mac</b>, and three ways to show a selected project without the Conversations · Board · Settings tabs.</p>
+
+  <div class="box">
+    <h2>Folders as context</h2>
+    <p>A project keeps its own folder (in ~/Piopio, or the one you opened) and can <b>link other folders</b>: your thesis in Documents, a reference repo, a folder of PDFs. Nothing is copied or moved; the project just knows they're part of it. Each linked folder is <b>Read only</b> by default, or <b>Can edit</b>.</p>
+    <table>
+      <tr><th>What</th><th>How it works</th></tr>
+      <tr><td>Add one</td><td>"Add folder…" where the project lists its folders (every design below has that list), or drag a folder from Finder onto the project's row in the sidebar.</td></tr>
+      <tr><td>Read only</td><td>Already possible: Piopio lets a conversation read anywhere. What's new is that every conversation in the project is <i>told</i> the folder is there, and @ finds its files.</td></tr>
+      <tr><td>Can edit</td><td>The folder joins the project's sandbox and permissions, so edits there follow the same mode (Ask, Auto-edit…) as the project's own folder, instead of asking every time.</td></tr>
+      <tr><td>One conversation only</td><td>The box's + gets "Add folder…": that conversation reads it, the project doesn't keep it. Same as attaching a file, but a whole folder.</td></tr>
+      <tr><td>Notes and instructions</td><td>Stay in the project's own folder (AGENTS.md, NOTES.md), never in a linked one, so linking a repo doesn't change it.</td></tr>
+    </table>
+  </div>
+
+  <!-- ============================== A ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">A</span><h2>A project home, in two columns</h2></div>
+    <p class="sum">One page, no tabs. On the left, the box to start a conversation here and the conversations under it. On the right, a quiet column with <b>what the project is</b>: instructions, notes, folders, who works here, routines. A team's board shows as one line above the conversations that opens the full board. Settings that are rarely changed (permissions, checks) sit behind the … menu.</p>
+    <div class="frames"><div>
+      <div class="scroller"><div class="win">
+        <div class="sb">
+          <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+          <div class="rows">
+            <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+            <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+            <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+          </div>
+          <div class="sec">Projects</div>
+          <div class="rows">
+            <div class="row sel b"><svg class="i"><use href="#folder"/></svg><span class="t">Tesis</span><span class="ring"></span></div>
+            <div class="row sub"><span class="t">Chapter 3 outline</span><span class="dot"></span></div>
+            <div class="row sub"><span class="t">Check the citations</span></div>
+            <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+            <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+          </div>
+          <div class="sec">Conversations</div>
+          <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+        </div>
+        <div class="main">
+          <div class="mtb"><span class="sp"></span><span class="ib"><svg class="i"><use href="#more"/></svg></span></div>
+          <div class="body">
+            <div class="content" style="padding:6px 36px 0 44px">
+              <p class="ph-title">Tesis</p>
+              <div class="meta"><svg class="i s"><use href="#folder"/></svg>~/Piopio/Tesis · with Piopio · Auto-edit</div>
+              <div style="margin:22px 0 26px">
+                <div class="comp"><div class="ph">What should we do in Tesis?</div><div class="bar"><span class="selr"><svg class="i"><use href="#plus"/></svg></span><span class="selr"><svg class="i"><use href="#folder"/></svg>Tesis</span><span class="selr">Auto-edit</span><span class="sp"></span><span class="selr">Opus 5.5 · High</span><span class="send"><svg class="i"><use href="#up"/></svg></span></div></div>
+              </div>
+              <div class="h4">Conversations<span class="r">All 14</span></div>
+              <div>
+                <div class="conv"><span class="nm">Chapter 3 outline<small>Waiting on you · 4 min ago</small></span><span class="dot"></span></div>
+                <div class="conv"><span class="nm">Check the citations<small>Running · read 12 files in Bibliografía</small></span><span class="ring"></span></div>
+                <div class="conv"><span class="nm">Summarise the Ramírez 2024 paper<small>Yesterday</small></span></div>
+                <div class="conv"><span class="nm">Plan for the methods section<small>Nov 11</small></span></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="grp"><div class="gh">Instructions<span class="r">Edit</span></div>
+                <div class="quote">A PhD thesis on soil microbiomes, in Spanish. Cite in APA 7. Never change the data in Datos/.</div></div>
+              <div class="grp"><div class="gh">Notes<span class="r">Open</span></div>
+                <div class="quote">Chapter 2 is final. Supervisor wants the methods before Dec 1.</div></div>
+              <div class="grp"><div class="gh">Folders</div>
+                <div class="fold"><svg class="i"><use href="#folder"/></svg><span class="nmw">Tesis</span><span class="pth">~/Piopio/Tesis</span><span class="acc ed">Its own</span></div>
+                <div class="fold"><svg class="i"><use href="#link"/></svg><span class="nmw">Bibliografía</span><span class="pth">~/Documents/…</span><span class="acc">Read only</span></div>
+                <div class="fold"><svg class="i"><use href="#link"/></svg><span class="nmw">Datos</span><span class="pth">~/Lab/2026</span><span class="acc">Read only</span></div>
+                <div class="add"><svg class="i s"><use href="#plus"/></svg>Add folder…</div>
+              </div>
+              <div class="grp"><div class="gh">Who works here</div>
+                <div class="kv"><span class="k2">Piopio</span><span class="v g">Change</span></div></div>
+              <div class="grp"><div class="gh">Routines</div>
+                <div class="fold"><svg class="i"><use href="#clock"/></svg>Fridays 18:00 · weekly progress note</div>
+                <div class="add"><svg class="i s"><use href="#plus"/></svg>Add routine…</div></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <p class="cap">A1 · With a team, a line appears above Conversations: "Board · 2 doing · 1 in review · 5 done   Open ›", and Who works here shows the team. The … menu holds Permissions, Checks, Reveal in Finder and Remove.</p>
+    </div></div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>Everything about the project is visible at once, without hunting through tabs.</li><li>Starting a conversation is the first thing on the page, like every other New.</li><li>Folders have an obvious home, next to the instructions they work with.</li></ul></div>
+      <div><h5>Costs</h5><ul><li>The right column is a second place for things that also live in a session's Summary panel.</li><li>The Board loses its tab; with a busy team, one line may feel too small, and the full board is a click away.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ============================== B ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">B</span><h2>Quiet tabs, with a Context tab</h2></div>
+    <p class="sum">Keep separate views, but make them text: the name large, and under it Conversations · Context · Board · Settings in plain type with a thin underline on the current one, like a document's sections rather than a segmented control. A new <b>Context</b> tab gathers what conversations here are given: the folders, AGENTS.md and NOTES.md, edited in place. Settings keeps only who works here, routines, permissions and checks. Board appears only with a team.</p>
+    <div class="frames"><div>
+      <div class="scroller"><div class="win">
+        <div class="sb">
+          <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+          <div class="rows">
+            <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+            <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+            <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+          </div>
+          <div class="sec">Projects</div>
+          <div class="rows">
+            <div class="row sel b"><svg class="i"><use href="#folder"/></svg><span class="t">Tesis</span></div>
+            <div class="row sub"><span class="t">Chapter 3 outline</span><span class="dot"></span></div>
+            <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+            <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+          </div>
+          <div class="drop" style="left:8px; top:221px; width:216px; height:28px"></div>
+          <div class="drag" style="left:92px; top:240px"><svg class="i s"><use href="#folder"/></svg>Bibliografía <span style="color:var(--accent)">· link to piopio</span></div>
+          <div class="sec">Conversations</div>
+          <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+        </div>
+        <div class="main">
+          <div class="mtb"></div>
+          <div class="content" style="padding:8px 48px 0">
+            <div style="display:flex; align-items:flex-start">
+              <div><p class="ph-title">Tesis</p><div class="meta">~/Piopio/Tesis · with Piopio</div></div>
+              <span class="sp"></span><span class="black">New conversation <small style="opacity:.6">⌘N</small></span>
+            </div>
+            <div class="ttabs"><span>Conversations<small>14</small></span><span class="on">Context</span><span>Settings</span></div>
+            <div class="ctxgrid">
+              <div>
+                <div class="h4">Folders<span class="r">Add folder…</span></div>
+                <div class="ftable">
+                  <div class="fr"><svg class="i"><use href="#folder"/></svg><span>Tesis<small>~/Piopio/Tesis · its own folder</small></span><span class="acc">Can edit</span></div>
+                  <div class="fr"><svg class="i"><use href="#link"/></svg><span>Bibliografía<small>~/Documents/Bibliografía · 214 PDFs</small></span><span class="acc">Read only</span></div>
+                  <div class="fr"><svg class="i"><use href="#link"/></svg><span>Datos<small>~/Lab/2026/Datos</small></span><span class="acc">Read only</span></div>
+                </div>
+                <p style="color:var(--fg3); font-size:12px; margin:10px 0 0">Every conversation here is told about these folders and can find their files with @. Read only folders are never changed.</p>
+              </div>
+              <div>
+                <div class="h4">Instructions · AGENTS.md<span class="r">Open in editor</span></div>
+                <div class="doc"><b># Tesis</b><br><br>A PhD thesis on soil microbiomes, in Spanish.<br>Cite in APA 7; the bibliography is in Bibliografía/.<br>Never change anything in Datos/.<br>Chapters live in capitulos/, one file each.</div>
+                <div class="h4" style="margin-top:16px">Notes · NOTES.md<span class="r">6 entries</span></div>
+                <div class="quote">Chapter 2 is final. Supervisor wants the methods before Dec 1.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <p class="cap">B1 · The Context tab, while a folder is dragged from Finder onto the project in the sidebar (B, A and C all accept that drop). Conversations is a hairline list like A's; Settings keeps its current sections minus instructions and notes.</p>
+    </div></div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>The smallest change to how it works now; only the look changes, plus one tab.</li><li>"Context" is one clear answer to "what does every conversation here know?"</li><li>Room to edit AGENTS.md in place instead of opening a file row.</li></ul></div>
+      <div><h5>Costs</h5><ul><li>Still tabs: you have to know which one hides a thing.</li><li>Starting a conversation is a button, not the box: one more step than the rest of the app.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ============================== C ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">C</span><h2>The project is its start page, with a Summary panel</h2></div>
+    <p class="sum">No project page at all. Clicking a project opens its <b>New conversation</b> page, the same one its + opens, with the project's latest conversations listed under the box to pick up. Everything about the project lives in the <b>Summary</b> panel on the right (⌘I), the one sessions and chats already have: folders, instructions, notes, who works here, routines, and Board when a team works here.</p>
+    <div class="frames"><div>
+      <div class="scroller"><div class="win">
+        <div class="sb">
+          <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+          <div class="rows">
+            <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+            <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+            <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+          </div>
+          <div class="sec">Projects</div>
+          <div class="rows">
+            <div class="row sel b"><svg class="i"><use href="#folder"/></svg><span class="t">Tesis</span><span class="ring"></span></div>
+            <div class="row sub"><span class="t">Chapter 3 outline</span><span class="dot"></span></div>
+            <div class="row sub"><span class="t">Check the citations</span><span class="ring"></span></div>
+            <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+            <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+          </div>
+          <div class="sec">Conversations</div>
+          <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+        </div>
+        <div class="main">
+          <div class="mtb"><span class="title">Tesis</span><span class="subt">~/Piopio/Tesis</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#folder"/></svg></span><span class="ib on"><svg class="i"><use href="#summary"/></svg></span></div>
+          <div class="body">
+            <div class="content" style="display:flex; justify-content:center; padding-top:70px">
+              <div style="width:560px">
+                <p class="ph-title" style="font-size:30px">What's next in Tesis?</p>
+                <div style="margin:20px 0 0"><div class="comp"><div class="ph">Ask, or describe a task…</div><div class="bar"><span class="selr"><svg class="i"><use href="#plus"/></svg></span><span class="selr"><svg class="i"><use href="#folder"/></svg>Tesis</span><span class="selr">Auto-edit</span><span class="sp"></span><span class="selr">Opus 5.5 · High</span><span class="send"><svg class="i"><use href="#up"/></svg></span></div></div></div>
+                <div class="where">In Tesis and 2 linked folders · can edit its own files; asks before commands</div>
+                <div style="margin-top:30px"><div class="h4">Pick up<span class="r">All 14</span></div>
+                  <div class="conv"><span class="nm">Chapter 3 outline<small>Waiting on you · 4 min ago</small></span><span class="dot"></span></div>
+                  <div class="conv"><span class="nm">Check the citations<small>Running</small></span><span class="ring"></span></div>
+                  <div class="conv"><span class="nm">Summarise the Ramírez 2024 paper<small>Yesterday</small></span></div>
+                </div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="grp"><div class="gh">Folders<span class="r">Add…</span></div>
+                <div class="fold"><svg class="i"><use href="#folder"/></svg><span class="nmw">Tesis</span><span class="pth"></span><span class="acc ed">Can edit</span></div>
+                <div class="fold"><svg class="i"><use href="#link"/></svg><span class="nmw">Bibliografía</span><span class="pth"></span><span class="acc">Read only</span></div>
+                <div class="fold"><svg class="i"><use href="#link"/></svg><span class="nmw">Datos</span><span class="pth"></span><span class="acc">Read only</span></div>
+              </div>
+              <div class="grp"><div class="gh">Instructions<span class="r">Edit</span></div>
+                <div class="quote">A PhD thesis on soil microbiomes, in Spanish. Cite in APA 7…</div></div>
+              <div class="grp"><div class="gh">Notes<span class="r">Open</span></div>
+                <div class="quote">Chapter 2 is final. Supervisor wants the methods before Dec 1.</div></div>
+              <div class="grp"><div class="gh">Project</div>
+                <div class="kv"><span class="k2">Who works here</span><span class="v">Piopio</span></div>
+                <div class="kv"><span class="k2">New conversations</span><span class="v">Auto-edit</span></div>
+                <div class="kv"><span class="k2">Routines</span><span class="v">1 ›</span></div>
+                <div class="kv"><span class="k2">Checks</span><span class="v g">None</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <p class="cap">C1 · The line under the box counts the linked folders, so you see what a new conversation will be given before you send. With a team, the panel starts with "Board · 2 doing · 1 in review ›", which opens the board full width; Routines › opens its list in the panel.</p>
+    </div></div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>One less kind of page: a project, a session and a chat all read the same, with the Summary panel for "what is this".</li><li>Clicking a project does what you most often want, start or pick up a conversation, instead of showing a page about it.</li><li>The folders are shown where a new conversation is about to start, and the line under the box says how many it gets.</li></ul></div>
+      <div><h5>Costs</h5><ul><li>The project's + and its row now open the same page; the + becomes a shortcut, not a different place.</li><li>The Summary panel has to be open to see the project's details; a first-time user may not look there.</li><li>The Board is a step further away for teams.</li></ul></div>
+    </div>
+  </section>
+
+  <div class="verdict">
+    <h2>My pick</h2>
+    <p><b>C.</b> It removes a page instead of redesigning it. Sessions and chats already use the Summary panel for "what is this", and a project would too. Clicking a project lands where you'd go next anyway: the box, and the conversations to pick up. Linked folders show where they matter: in the panel, and counted in the line under the box before you send.</p>
+    <p><b>A</b> if you want a project to feel like a place with its own home page. <b>B</b> if you'd rather keep the views and only make them quieter; its Context tab is also the easiest way to ship linked folders first.</p>
+    <p>Whichever you choose, linked folders are the same piece of work: a list on each project (Read only or Can edit), a line in every conversation's prompt naming them, @ search across them, and editable ones added to the sandbox and the permission rules.</p>
+  </div>
+</div>
+</body>
+</html>
