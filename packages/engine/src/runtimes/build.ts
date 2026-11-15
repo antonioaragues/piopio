@@ -456,18 +456,58 @@ export class BuildRuntime implements Runtime {
 			else await this.session.followUp(text);
 			return { disposition: "queued" as const };
 		}
+		// pi refuses a prompt while a compaction runs (the Compact button, or an extension's): it waits for it instead.
+		if (this.session.isCompacting || this.waiting.length > 0) {
+			if (options.whenBusy === "reject") throw new EngineError("BUSY", "The session is compacting.");
+			this.waiting.push(text);
+			this.showWaiting();
+			if (this.waiting.length === 1) void this.session.waitForIdle().then(() => this.sendWaiting());
+			return { disposition: "queued" as const };
+		}
+		this.start(text);
+		return { disposition: "started" as const };
+	}
+
+	/** Messages sent during a compaction, in order; shown in the queue until it ends. */
+	private waiting: string[] = [];
+
+	private showWaiting(): void {
+		this.builder.setState({ queue: this.waiting.map((text, i) => ({ id: `wait:${i}`, mode: "followUp" as const, text })) });
+		this.emitter.emit(this.builder.flush());
+	}
+
+	private sendWaiting(): void {
+		const [first, ...rest] = this.waiting.splice(0);
+		this.showWaiting();
+		if (first === undefined) return;
+		this.start(first);
+		// The run just started takes the rest as follow-ups, as if they had been sent while it ran.
+		for (const text of rest) void this.session.followUp(text);
+	}
+
+	private start(text: string): void {
 		// prompt() resolves when the run settles; progress arrives through events.
 		this.session.prompt(text).catch((error: unknown) => {
 			this.builder.system(`sys:${Date.now()}`, "error", error instanceof Error ? error.message : String(error));
 			this.builder.setState({ status: "idle" });
 			this.emitter.emit(this.builder.flush());
 		});
-		return { disposition: "started" as const };
 	}
 
+	/**
+	 * Stop: pi's abort keeps queued messages for the next prompt, which would send them along with whatever the user
+	 * writes next. Stop drops them and says which, so nothing goes out that the user didn't see go.
+	 */
 	async abort(): Promise<void> {
 		this.broker.cancelAll();
+		const { steering, followUp } = this.session.clearQueue();
+		const dropped = [...this.waiting.splice(0), ...steering, ...followUp];
 		await this.session.abort();
+		if (dropped.length === 0) return;
+		const quote = (t: string) => `“${t.length > 80 ? `${t.slice(0, 79)}…` : t}”`;
+		this.builder.system(`sys:${Date.now()}`, "info", `Stopped. Not sent: ${dropped.map(quote).join(", ")}`);
+		this.builder.setState({ queue: [] });
+		this.emitter.emit(this.builder.flush());
 	}
 
 	/**
