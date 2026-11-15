@@ -25,7 +25,7 @@ struct HomeView: View {
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
                 Group {
-                    if wide {
+                    if wide && hasToday {
                         HStack(alignment: .top, spacing: 40) {
                             VStack(alignment: .leading, spacing: 0) { waiting; away }.frame(maxWidth: .infinity, alignment: .leading)
                             VStack(alignment: .leading, spacing: 0) { today }.frame(width: 300, alignment: .leading)
@@ -130,13 +130,13 @@ struct HomeView: View {
         }
     }
 
+    /// Today shows only when something is on it: an empty column beside an empty Home reads as a stray note.
+    private var hasToday: Bool { !(agenda?.today ?? []).isEmpty || (agenda?.held ?? 0) > 0 }
+
     @ViewBuilder private var today: some View {
-        sectionTitle("Today")
         let rows = agenda?.today ?? []
-        if rows.isEmpty {
-            Text(agenda == nil ? "" : "Nothing planned today. Ask an agent to do something every morning, or give a project a routine.")
-                .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
-        } else {
+        if hasToday { sectionTitle("Today") }
+        if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                     // Past midnight: what's next tomorrow, under a divider.
