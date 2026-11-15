@@ -3,12 +3,11 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-// The Inspector (docs/design/inspector, options 2a and 4a): Build's right-hand panel with two tabs, Session (Setup,
-// Read, Plan) and Changes (a timeline by commit), and the footer every panel shares (context and cost, nowhere else).
+// The Inspector (docs/design/inspector, options 2a and 4a): Build's right-hand panel, one column (Setup, Read,
+// Changes, Plan; the Session and Changes tabs became one on 2026-11-15), and the footer every panel shares (context
+// and cost, nowhere else).
 
-enum InspectorTab: String { case session, changes }
-
-/// The Inspector: its tabs, the open tab's body, the shared footer. The tab is kept per session.
+/// The Inspector: its column and the shared footer. Whether Changes is open is kept per session.
 struct InspectorPanel: View {
     let engine: EngineController
     let session: ThreadModel
@@ -20,80 +19,40 @@ struct InspectorPanel: View {
     let onReview: (String?) -> Void
     /// "Read" opens the Files panel on the files it touched.
     let onRead: () -> Void
-    @State private var tab: InspectorTab
+    @State private var changesOpen: Bool
     @State private var files: [FileChange] = []
 
     init(engine: EngineController, session: ThreadModel, summary: SessionSummary, project: ProjectInfo?, git: GitModel?, chatLens: Bool,
          committing: Binding<Bool>, onReview: @escaping (String?) -> Void, onRead: @escaping () -> Void) {
         self.engine = engine; self.session = session; self.summary = summary; self.project = project; self.git = git
         self.chatLens = chatLens; self._committing = committing; self.onReview = onReview; self.onRead = onRead
-        // PIOPIO_DEMO_INSPECTOR_TAB=changes: captures open on that tab.
-        let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_INSPECTOR_TAB"].flatMap(InspectorTab.init)
-        _tab = State(initialValue: chatLens ? .session : demo ?? Self.remembered(summary.ref.id))
+        // PIOPIO_DEMO_INSPECTOR_CHANGES=1: captures open with Changes unfolded.
+        let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_INSPECTOR_CHANGES"] == "1"
+        _changesOpen = State(initialValue: demo || Self.remembered(summary.ref.id))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            InspectorTabBar(tab: $tab, changes: chatLens ? nil : files.count)
             ScrollView {
-                switch tab {
-                case .session:
-                    SessionTab(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
-                               committing: $committing, onRead: onRead)
-                case .changes:
-                    ChangesTab(engine: engine, session: session, summary: summary, git: git, files: files,
-                               commit: !chatLens && git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil,
-                               onReview: onReview)
-                }
+                SessionTab(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
+                           committing: $committing, files: files, changesOpen: $changesOpen, onReview: onReview, onRead: onRead)
+                    .padding(.top, 4)
             }
             InspectorFooter(thread: session)
         }
         .task(id: session.revision / 4) { files = await session.changes(since: .session) } // events arrive in quick batches
         .onChange(of: session.state?.status) { _, _ in Task { files = await session.changes(since: .session) } }
-        .onChange(of: tab) { _, tab in Self.remember(tab, for: summary.ref.id) }
+        .onChange(of: changesOpen) { _, open in Self.remember(open, for: summary.ref.id) }
     }
 
-    private static func remembered(_ id: String) -> InspectorTab {
-        ((UserDefaults.standard.dictionary(forKey: "inspectorTabs") as? [String: String])?[id]).flatMap(InspectorTab.init) ?? .session
+    private static func remembered(_ id: String) -> Bool {
+        (UserDefaults.standard.dictionary(forKey: "inspectorChangesOpen") as? [String: Bool])?[id] ?? false
     }
 
-    private static func remember(_ tab: InspectorTab, for id: String) {
-        var all = (UserDefaults.standard.dictionary(forKey: "inspectorTabs") as? [String: String]) ?? [:]
-        all[id] = tab.rawValue
-        UserDefaults.standard.set(all, forKey: "inspectorTabs")
-    }
-}
-
-/// Session · Changes 38. The active tab is semibold with a 2 pt underline; Changes is left out where there's no git.
-struct InspectorTabBar: View {
-    @Binding var tab: InspectorTab
-    /// The Changes tab's count; nil hides the tab.
-    let changes: Int?
-
-    var body: some View {
-        HStack(spacing: 18) {
-            item(.session, "Session", count: nil)
-            if let changes { item(.changes, "Changes", count: changes) }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 14)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-    }
-
-    private func item(_ value: InspectorTab, _ title: String, count: Int?) -> some View {
-        let on = tab == value
-        return Button { tab = value } label: {
-            HStack(spacing: 5) {
-                Text(title).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(on ? Color.dsFg : Color.dsFg3)
-                if let count, count > 0 { Text("\(count)").font(.system(size: 13).monospacedDigit()).foregroundStyle(Color.dsFg3) }
-            }
-            .padding(.bottom, 10)
-            .overlay(alignment: .bottom) { if on { Rectangle().fill(Color.dsFg).frame(height: 2) } }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? [.isSelected] : [])
+    private static func remember(_ open: Bool, for id: String) {
+        var all = (UserDefaults.standard.dictionary(forKey: "inspectorChangesOpen") as? [String: Bool]) ?? [:]
+        all[id] = open ? true : nil
+        UserDefaults.standard.set(all, forKey: "inspectorChangesOpen")
     }
 }
 
@@ -147,7 +106,7 @@ extension View {
 
 // MARK: Session
 
-/// Setup, then what it read, then the plan (4a's order).
+/// Setup, then what it read, what it changed (not in a chat's lens), then the plan (4a's order).
 struct SessionTab: View {
     let engine: EngineController
     let session: ThreadModel
@@ -156,12 +115,22 @@ struct SessionTab: View {
     let git: GitModel?
     let chatLens: Bool
     @Binding var committing: Bool
+    /// What the session changed since it started (committed or not).
+    let files: [FileChange]
+    @Binding var changesOpen: Bool
+    let onReview: (String?) -> Void
     let onRead: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             setup.inspectorBlock()
             read.inspectorBlock()
+            if !chatLens {
+                ChangesBlock(engine: engine, session: session, summary: summary, git: git, files: files,
+                             commit: git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil,
+                             onReview: onReview, open: $changesOpen)
+                    .inspectorBlock()
+            }
             PlanBlock(session: session).inspectorBlock(last: true)
         }
         .padding(.horizontal, 18)
@@ -195,11 +164,18 @@ struct SessionTab: View {
     private var projectValue: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             let name = project?.name ?? summary.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "—"
-            Button(name) { if let cwd = summary.cwd { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) } }
-                .buttonStyle(.plain).font(.system(size: 13)).lineLimit(1).help(summary.cwd ?? "")
+            // Text, not a Button: a button's taller frame and baseline set this row lower than Runs on and Tools.
+            Text(name).font(.system(size: 13)).lineLimit(1).help(summary.cwd ?? "")
+                .onTapGesture { if let cwd = summary.cwd { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) } }
+                .accessibilityAddTraits(.isButton).accessibilityHint("Reveal in Finder")
             if let git, git.status?.repo == true {
                 Text("· \(git.status?.branch ?? summary.worktree?.branch ?? "HEAD")").font(.system(size: 13)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                if !chatLens { GitMenu(git: git, engine: engine, summary: summary, committing: $committing, inRow: true) }
+                // The menu's 28 pt button floats over a 1 pt line on the baseline, so the row is as tall as its text,
+                // like Runs on and Tools.
+                if !chatLens {
+                    Color.clear.frame(width: 16, height: 1)
+                        .overlay { GitMenu(git: git, engine: engine, summary: summary, committing: $committing, inRow: true).offset(y: -4) }
+                }
             } else if summary.cwd != nil {
                 Text("· no git").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
             }

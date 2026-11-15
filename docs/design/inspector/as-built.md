@@ -9,14 +9,16 @@ The handoff is in [README.md](README.md); the canvas is `Harness Panel Proposals
   - A blue dot sits on Inspector while the session waits on you.
   - "Open in <editor>" moved into `…` in an earlier change.
 - **Inspector** (`Inspector.swift`):
-  - `InspectorPanel` holds the tabs. The tab is remembered per session (`inspectorTabs` in defaults).
-  - **Session tab:** Setup (Project · branch with the git menu, Runs on, and Tools, which unfolds into the old Uses
-    and Skills switches), Read, and the plan's three states.
+  - **One column (2026-11-15; it had Session and Changes tabs):** Setup (Project · branch with the git menu, Runs
+    on, and Tools, which unfolds into the old Uses and Skills switches), Read, Changes, and the plan's three states.
+  - Whether Changes is open is remembered per session (`inspectorChangesOpen` in defaults); it starts closed.
+    `PIOPIO_DEMO_INSPECTOR_CHANGES=1` opens it for captures.
   - **Shared footer:** `InspectorFooter`.
-- **Changes tab** (`InspectorChanges.swift`):
-  - On top, the header: files, commits, +/−, and how many are new.
-  - Then the timeline: Not saved yet, then the commits since the session started, newest first and open. Three are
-    shown before "N earlier commits".
+- **Changes** (`InspectorChanges.swift`, `ChangesBlock`):
+  - Closed, a row like Read: "38 files · 9 commits ›" ("Nothing yet" when there's nothing). The › turns down when
+    it's open.
+  - Open: +/−, how many are new and Review all (when the session changed files), then the timeline: Not saved yet,
+    then the commits since the session started, newest first and open. Three are shown before "N earlier commits".
   - A file opens the diff review.
   - Right-click a file in Not saved yet to revert it.
 - **Files** (`FilesPanel.swift`):
@@ -24,7 +26,7 @@ The handoff is in [README.md](README.md); the canvas is `Harness Panel Proposals
   - The tree marks files N (new), M (changed) or R (read), and folders with a dot when something inside was touched.
   - **Touched** is what this agent did with its own tools: the files it read and the ones it wrote or edited. It isn't
     everything that changed in the folder since the session started, which in a long session also counts your
-    commits, other agents' work and what commands changed. The Changes tab shows all of that.
+    commits, other agents' work and what commands changed. Changes shows all of that.
   - At the bottom, the legend.
   - Clicking a file shows its preview in the panel: Diff or File, Open in editor, Mention in chat.
 - **Engine:**
@@ -35,7 +37,7 @@ The handoff is in [README.md](README.md); the canvas is `Harness Panel Proposals
 
 - **Terminal stays the drawer under the conversation,** not a right-hand panel. It doesn't close the Inspector or
   Files, so the three buttons aren't mutually exclusive.
-- **The old Summary rows the handoff drops are gone:** Now, Made (now the Changes tab), You gave, Follows, and the
+- **The old Summary rows the handoff drops are gone:** Now, Made (now Changes), You gave, Follows, and the
   Context group. The old Changes view's list of turns is gone too; Rewind to here stays on each message.
 - **The wide file preview beside the conversation is gone.** Path chips, file cards and Read open the Files panel's
   preview instead, as 3a shows.

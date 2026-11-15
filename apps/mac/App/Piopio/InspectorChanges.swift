@@ -3,10 +3,11 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The Inspector's Changes tab (2a): what the session changed, as a timeline. On top, how much ("38 files · 9
-/// commits", +/−, how many are new); then what isn't saved yet, then each commit since the session started, newest
-/// first and open, three before "N earlier commits". A file opens its diff. Without git, one node with the files.
-struct ChangesTab: View {
+/// The Inspector's Changes block (2a, folded into the one column on 2026-11-15): a row like Read ("38 files · 9
+/// commits ›") that unfolds into the timeline. Open: +/−, how many are new and Review all; then what isn't saved yet,
+/// then each commit since the session started, newest first and open, three before "N earlier commits". A file opens
+/// its diff. Without git, one node with the files.
+struct ChangesBlock: View {
     let engine: EngineController
     let session: ThreadModel
     let summary: SessionSummary
@@ -16,6 +17,8 @@ struct ChangesTab: View {
     /// Commit…, when there's something to commit.
     let commit: (() -> Void)?
     let onReview: (String?) -> Void
+    /// Unfolded; kept per session by the Inspector.
+    @Binding var open: Bool
     @State private var commits: [GitCommit] = []
     @State private var expanded: Set<String> = []
     @State private var collapsedNewest = false
@@ -26,14 +29,19 @@ struct ChangesTab: View {
     private var repo: Bool { git?.status?.repo == true }
     private var unsaved: [GitFile] { repo ? (git?.status?.files ?? []) : [] }
 
+    /// Nothing to unfold: no files changed, nothing unsaved, no commits.
+    private var nothing: Bool { files.isEmpty && unsaved.isEmpty && commits.isEmpty }
+    /// Open, the timeline ends with a node rather than "N earlier commits".
+    private var endsWithNode: Bool { !repo || showEarlier || commits.count <= Self.shownCommits }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            VStack(alignment: .leading, spacing: 0) {
+            row
+            if open && !nothing {
+                // Totals only when this session changed files (commits made elsewhere don't count).
+                if files.isEmpty { Spacer().frame(height: 14) } else { totals.padding(.top, 12).padding(.bottom, 14) }
                 if !repo {
-                    if files.isEmpty { empty } else { sessionNode }
-                } else if unsaved.isEmpty && commits.isEmpty {
-                    empty
+                    sessionNode
                 } else {
                     if !unsaved.isEmpty { unsavedNode(last: commits.isEmpty) }
                     let visible = showEarlier ? commits : Array(commits.prefix(Self.shownCommits))
@@ -47,8 +55,9 @@ struct ChangesTab: View {
                     }
                 }
             }
-            .padding(.horizontal, 18).padding(.vertical, 14)
         }
+        // The last node's own 16 pt gap would double the block's.
+        .padding(.bottom, open && !nothing && endsWithNode ? -16 : 0)
         .task(id: session.revision / 4) { await loadCommits() }
         .onChange(of: git?.status) { _, _ in Task { await loadCommits() } }
         .alert("Revert \(reverting ?? "")?", isPresented: Binding(get: { reverting != nil }, set: { if !$0 { reverting = nil } })) {
@@ -59,33 +68,49 @@ struct ChangesTab: View {
         }
     }
 
-    // MARK: Header
+    // MARK: Row
 
-    private var header: some View {
-        let added = files.reduce(0) { $0 + $1.added }, removed = files.reduce(0) { $0 + $1.removed }
-        let new = files.filter { $0.status == .added }.count
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(Self.count(files.count, "file") + (repo ? " · " + Self.count(commits.count, "commit") : ""))
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer(minLength: 8)
-                if !files.isEmpty { SummaryLink("Review all") { onReview(nil) }.help("Every change, as a diff") }
-            }
-            HStack(spacing: 6) {
-                DiffCounts(added: added, removed: removed)
-                Spacer(minLength: 8)
-                if new > 0 {
-                    Circle().fill(Color.dsGreen).frame(width: 6, height: 6)
-                    Text("\(new) new").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+    /// "Changes   38 files · 9 commits ›", like Read; the › turns down when it's open.
+    private var row: some View {
+        var parts: [String] = []
+        if !files.isEmpty { parts.append(Self.count(files.count, "file")) }
+        if !commits.isEmpty { parts.append(Self.count(commits.count, "commit")) }
+        if parts.isEmpty, !unsaved.isEmpty { parts.append("\(unsaved.count) not saved") }
+        return HStack(alignment: .firstTextBaseline) {
+            Text("Changes").font(.system(size: 13, weight: .semibold))
+            Spacer(minLength: 8)
+            if nothing {
+                Text("Nothing yet").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+            } else {
+                Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(parts.joined(separator: " · "))
+                        Text("›").rotationEffect(.degrees(open ? 90 : 0))
+                    }
+                    .font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .help(open ? "Hide the changes" : "What it changed: what isn't saved yet, and each commit")
+                .accessibilityLabel("Changes, \(parts.joined(separator: ", "))")
+                .accessibilityValue(open ? "expanded" : "collapsed")
             }
         }
-        .padding(.horizontal, 18).padding(.vertical, 14)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 
-    private var empty: some View {
-        Text("Nothing changed yet.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+    /// Open: +A −D, how many files are new, Review all.
+    private var totals: some View {
+        let added = files.reduce(0) { $0 + $1.added }, removed = files.reduce(0) { $0 + $1.removed }
+        let new = files.filter { $0.status == .added }.count
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            DiffCounts(added: added, removed: removed)
+            if new > 0 {
+                Circle().fill(Color.dsGreen).frame(width: 6, height: 6)
+                Text("\(new) new").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            }
+            Spacer(minLength: 8)
+            if !files.isEmpty { SummaryLink("Review all") { onReview(nil) }.help("Every change, as a diff") }
+        }
     }
 
     // MARK: Nodes
