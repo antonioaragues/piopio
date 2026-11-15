@@ -115,7 +115,7 @@ struct ThreadView: View {
                     if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
                 }
             }
-            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Summary", on: summaryShown,
+            ToolbarIcon(symbol: "sidebar.right", label: "Summary", on: summaryShown,
                         help: summaryShown ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
                 withAnimation(.easeOut(duration: 0.15)) {
                     // With the Browser in the panel, Summary swaps it out rather than hiding a column you can't see.
