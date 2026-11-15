@@ -5,7 +5,9 @@ The handoff is in [README.md](README.md); the canvas is `Harness Panel Proposals
 ## Where it lives
 
 - **Toolbar** (`BuildViews.swift`, `SessionPanel`):
-  - The icons are Inspector (`sidebar.right`, ⌘I) and Files (`folder`, ⌘P), then Terminal, a divider, and `…`.
+  - The icons are Summary (`list.bullet.rectangle`, ⌘I) and Files (`folder`, ⌘P), then Terminal, a divider, and `…`.
+    On 2026-11-15 the Inspector took the chat's name and icon, Summary: `sidebar.right` read as "open the side
+    panel", which Files and the Browser do too.
   - A blue dot sits on Inspector while the session waits on you.
   - "Open in <editor>" moved into `…` in an earlier change.
 - **Inspector** (`Inspector.swift`):

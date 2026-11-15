@@ -320,7 +320,7 @@ struct BuildSessionView: View {
         let on = showInspector && inspectorTab == view
         // A blue dot on Inspector while something waits on you (an approval, a question, a command the sandbox stopped).
         let needsYou = view == .inspector && session.state?.status == .waitingApproval
-        return ToolbarIcon(symbol: view.symbol, label: view.rawValue, on: on, help: on ? "Hide \(view.rawValue.lowercased())" : view.help) { show(view) }
+        return ToolbarIcon(symbol: view.symbol, label: view.title, on: on, help: on ? "Hide the \(view.title.lowercased())" : view.help) { show(view) }
             .overlay(alignment: .topTrailing) {
                 if needsYou {
                     Circle().fill(Color.accentColor).frame(width: 7, height: 7)
@@ -409,13 +409,17 @@ struct BuildSessionView: View {
 }
 
 
-/// The right column's panels, each an icon in the session toolbar (docs/design/inspector, option 5a).
+/// The right column's panels, each an icon in the session toolbar (docs/design/inspector, option 5a). The raw value
+/// is what's saved; the Inspector is called Summary, as in chats (2026-11-15).
 enum SessionPanel: String, CaseIterable {
     case inspector = "Inspector", files = "Files", browser = "Browser"
 
+    var title: String { self == .inspector ? "Summary" : rawValue }
+
+    /// The same icons as a chat's toolbar. Not sidebar.right: Files and the Browser open the side panel too.
     var symbol: String {
         switch self {
-        case .inspector: "sidebar.right"
+        case .inspector: "list.bullet.rectangle"
         case .files: "folder"
         case .browser: "globe"
         }
@@ -423,7 +427,7 @@ enum SessionPanel: String, CaseIterable {
 
     var help: String {
         switch self {
-        case .inspector: "Inspector: the session and its changes (⌘I)"
+        case .inspector: "Summary: setup, what it read and changed, and the plan (⌘I)"
         case .files: "Files: the project, with what it touched (⌘P)"
         case .browser: "Browser: the pages this session opened, and yours"
         }
