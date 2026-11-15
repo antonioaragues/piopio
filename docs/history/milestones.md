@@ -317,3 +317,13 @@ Planned in [17-dispatch.md](../spec/17-dispatch.md): DP1 Watchdog rules, DP2–D
 ## Debate (2026-10-29)
 Two models work on one goal until they agree: an author writes a draft, a reviewer raises objections, and it ends with the agreed draft or a clear list of what's still disputed. A debate is a thread run by a new debate runtime, with one pi-durable conversation per model. Milestones DB1 (Review style, engine), DB2 (Review style, app), DB3 (Debate and Judged styles), then an agent recipe later. **DB1 and DB2 built 2026-10-29** (§9 of the spec); prompts not yet tuned with real models. See [16-debate](../spec/16-debate.md).
 
+
+## From reading T3 Code (2026-11-15)
+After a look at T3 Code (pingdotgg/t3code), which also drives pi:
+- **Two races at pi's edges, fixed:** a message sent while a compaction ran came back as an error and was lost; it
+  now waits in the queue until the compaction ends. Stop left queued messages in pi's queue, so they went out with
+  the next message; Stop now drops them and says which weren't sent.
+- **Notebooks, the rest removed:** the `space` kind, routing and notebook-memory cards, the Space types the app still
+  declared, and the notebook settings.
+- **Debate removed:** its runtime, start page, panel, transcript cards and protocol. A debate thread from before opens
+  as a chat with its author.

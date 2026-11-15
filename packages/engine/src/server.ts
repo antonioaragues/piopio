@@ -573,16 +573,6 @@ export class Engine {
 				await (await this.sessions.runtime(p.ref)).abort();
 				return {};
 			}
-			case "sessions.debate.continue": {
-				const p = params as Params<"sessions.debate.continue">;
-				await (await this.sessions.debate(p.ref)).continueDebate(p.rounds);
-				return {};
-			}
-			case "sessions.debate.stop": {
-				const p = params as Params<"sessions.debate.stop">;
-				await (await this.sessions.debate(p.ref)).stopDebate();
-				return {};
-			}
 			case "sessions.edit": {
 				const p = params as Params<"sessions.edit">;
 				await this.capability(p.ref, "edit").then((r) => r.edit!(p.itemId, p.text));

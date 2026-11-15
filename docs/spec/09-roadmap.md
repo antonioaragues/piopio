@@ -19,7 +19,7 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 |---|---|---|---|
 | **A · Make it real** | [status](../status.md), [acceptance](../acceptance.md) | Scripted tests, captures, one real-model team trial (20 §14) | The eight acceptance items; real providers (ChatGPT sign-in, a real Ollama/LiteLLM); real Google and Microsoft accounts; sleep/wake schedules; VoiceOver |
 | **B · Agents and teams** | 06, 19, 20, 21 | 19 T0–T2; 20 P1–P4; 21 D1–D7 | The "not yet" lists of D2–D7; the real-model trial |
-| **C · Conversations** | 18, 24, 17, 16 | 18 phases 1–3; Debate DB1–DB2 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the rest of 17 became teams, TD2); Debate **DB3** |
+| **C · Conversations** | 18, 24, 17 | 18 phases 1–3 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the rest of 17 became teams, TD2). Debate (16) was removed 2026-11-15 |
 | **D · Reach** (what the model can touch) | 22, 23, 12, 10 | Connectors C1; providers P0–P1; browser **W1–W2** (22 §14–15) | Browser **W3–W4**; computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); MCP Apps (D6); image generation (D11) |
 | **E · Cloud and channels** | 13, 19 T3–T4 | Spikes S4 and S7 (go); Telegram from the Mac | 13 **5.1–5.5**: deploy, Telegram by webhook, Mac Bridge, WhatsApp. Nothing is on a real account |
 | **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8, which 17 DP5 and 24's Create PR wait for); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
@@ -50,7 +50,7 @@ One build track at a time, plus Track A running beside it as use, not as buildin
 - **Browser W2–W3, computer use U0–U4:** after W1 shows how often reading alone is enough.
 - **Side conversations SD3–SD4:** after a week of SD1–SD2 by hand, which produces the replay set.
 - **Connectors C2–C3:** after Piopio's own Google and Microsoft OAuth apps exist.
-- **Memory M4–M6, Debate DB3, notarization and Sparkle:** when daily use asks for them, or when someone else is
+- **Memory M4–M6, notarization and Sparkle:** when daily use asks for them, or when someone else is
   about to install it.
 
 **Parked** (no spec work until something above is done): image generation, voice, MCP Apps, the connector
@@ -105,7 +105,7 @@ Each phase ends with something usable every day. What each milestone delivered, 
 
 **Spikes:** S1–S5 in Phase 0; S6 Hindsight as an opt-in memory provider; S7 the cloud harness (go); S8 the memory review. Reports are in [../spikes](../spikes), [packages/cloud](../../packages/cloud/README.md) and [14-memory](14-memory.md).
 
-**Work that started outside a phase:** onboarding and areas ([15](15-onboarding-and-areas.md)); conversation first ([18](18-conversation-first.md), phases 1–3 built 2026-11-07); what came from deepseek-harness (Build's sandbox, `/goal`, `present_files`, earlier conversations, auto review, Claude Code and Codex as subagents); Dispatch ([17](17-dispatch.md), planned); Debate ([16](16-debate.md), review and debate styles built); side conversations ([24](24-side-conversations.md), decided 2026-11-12, not built).
+**Work that started outside a phase:** onboarding and areas ([15](15-onboarding-and-areas.md)); conversation first ([18](18-conversation-first.md), phases 1–3 built 2026-11-07); what came from deepseek-harness (Build's sandbox, `/goal`, `present_files`, earlier conversations, auto review, Claude Code and Codex as subagents); Dispatch ([17](17-dispatch.md), planned); Debate ([16](16-debate.md), built, then removed 2026-11-15); side conversations ([24](24-side-conversations.md), decided 2026-11-12, not built).
 
 ## Backlog from the v2 review (2026-10-22)
 Noted by the user after using the v2 redesign. Not scheduled into a phase yet.

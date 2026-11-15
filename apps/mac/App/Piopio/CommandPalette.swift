@@ -195,7 +195,6 @@ struct CommandPalette: View {
             rows += [
                 Row(id: "c:new", icon: "square.and.pencil", title: "New Conversation", trailing: "⌘N") { newThread(); close() },
                 Row(id: "c:project", icon: "folder.badge.plus", title: "New Project", trailing: "⇧⌘N") { close(); NotificationCenter.default.post(name: .newProject, object: nil) },
-                Row(id: "c:debate", icon: "person.2.wave.2", title: "New Debate", trailing: "⌥⌘N") { close(); NotificationCenter.default.post(name: .newDebate, object: nil) },
                 Row(id: "c:quick", icon: "bolt", title: "Quick Chat", trailing: QuickChatController.shortcutLabel) { QuickChatController.shared?.show(); close() },
             ]
         }

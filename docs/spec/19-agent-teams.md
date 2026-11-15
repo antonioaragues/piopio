@@ -63,7 +63,7 @@ Teams are a layer on top. What you get without asking for any of it stays as sim
 | Turn a conversation into an agent (a drafted definition) | `sessions.agentDraft`, 18 §12 | Built |
 | Agent Builder that interviews first (AD5) | 06 §2 | Designed; the start page + draft exist |
 | Subagents in Build (`task`), also Claude Code / Codex | `extensions/subagents.ts` | Built; **blocks its parent** |
-| Debate: author + reviewer until they agree | 16-debate | Built |
+| Debate: author + reviewer until they agree | 16-debate | Built, removed 2026-11-15 |
 | Dispatch: a router for Build sessions, non-blocking subagents, Watchdog | 17-dispatch | Planned |
 | Agent in a Durable Object (alarms, eviction, memory) | `packages/cloud`, spike S7 | Spike passed; nothing deployed |
 | Telegram, WhatsApp | 13 §5.3, §5.5 | Planned |

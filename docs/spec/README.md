@@ -20,7 +20,7 @@ Piopio is a native macOS app on top of the **pi** agent harnesses (`pi-coding-ag
 | [13-cloud-engine.md](13-cloud-engine.md) | Phase 5 plan: agents in the cloud (Cloudflare), Telegram and WhatsApp |
 | [14-memory.md](14-memory.md) | Memory spike S8: projects evaluated, semantic search and learned facts, Settings › Memory, milestones |
 | [15-onboarding-and-areas.md](15-onboarding-and-areas.md) | First-run welcome that asks what Piopio is for you; Build, Chat and Agents as areas you turn on and off |
-| [16-debate.md](16-debate.md) | Debate: two models work on one goal (author and reviewer, or two sides and a judge) until they agree; planned |
+| [16-debate.md](16-debate.md) | Debate: two models work on one goal until they agree. **Removed 2026-11-15**; kept as history |
 | [17-dispatch.md](17-dispatch.md) | Dispatch: one place in Build that hands work to background sessions and reports back; Watchdog, non-blocking subagents, PR events; planned |
 | [18-conversation-first.md](18-conversation-first.md) | Conversation first: one way to start, the project and permissions as composer chips, notebooks become projects, and a project is always a folder (New project makes one in ~/Piopio, with AGENTS.md and NOTES.md); decided 2026-11-07, CF4 revised 2026-11-08 |
 | [19-agent-teams.md](19-agent-teams.md) | Agent teams: make agents and teams from a conversation, a lead that hands tasks to specialists on a shared board, teams that build in real workplaces, running on the Mac or in your cloud, reachable from Telegram and WhatsApp; Dispatch becomes the default team; draft 2026-11-09 |

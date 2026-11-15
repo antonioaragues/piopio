@@ -65,9 +65,7 @@ final class ThreadModel {
 
     init(ref: ContainerRef, engine: EngineController, notifies: Bool = true, compact: Bool = false) {
         let root = ref.kind == .build ? engine.buildSessions.first { $0.ref.id == ref.id }?.cwd : nil
-        // Debates have no versions to switch between: the moderator decides who answers next (docs/spec/16-debate).
-        let debate = ref.kind == .thread && engine.threads.first { $0.ref.id == ref.id }?.debate != nil
-        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread && !debate, build: ref.kind == .build, root: root)
+        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread, build: ref.kind == .build, root: root)
         draftStore = DraftStore(home: engine.home)
         draftWriter = DraftWriter(store: draftStore)
         self.ref = ref
@@ -257,13 +255,6 @@ final class ThreadModel {
             draft = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }.joined(separator: "\n") + "\n\n"
         case .remember(let text):
             Task { do { try await remember(text) } catch { report(error) } }
-        case .copyDraft(let id):
-            if case .debate(let d) = document.item(id), let draft = d.draft {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(draft, forType: .string)
-            }
-        case .continueDebate:
-            Task { await continueDebate() }
         case .restoreCheckpoint(let id):
             if case .checkpoint(let c) = document.item(id) { restoring = c }
         case .openSession(let id) where id.hasPrefix("run:"):
@@ -371,15 +362,6 @@ final class ThreadModel {
 
     func stop() async {
         _ = try? await engine?.client?.call("sessions.abort", RefParams(ref: ref), as: Empty.self)
-    }
-
-    /// Debates: where it stands (the panel), more rounds after it ended, or end it now.
-    var debate: DebateState? { state?.debate }
-    func continueDebate(rounds: Int? = nil) async {
-        do { _ = try await engine?.client?.call("sessions.debate.continue", DebateContinueParams(ref: ref, rounds: rounds), as: Empty.self) } catch { report(error) }
-    }
-    func stopDebate() async {
-        do { _ = try await engine?.client?.call("sessions.debate.stop", RefParams(ref: ref), as: Empty.self) } catch { report(error) }
     }
 
     func setModel(_ model: ModelRef) async {

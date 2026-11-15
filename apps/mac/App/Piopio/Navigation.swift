@@ -72,7 +72,7 @@ enum SidebarItem: Hashable {
 
 /// What a start page makes.
 enum StartKind: String, CaseIterable, Hashable {
-    case chat, debate, agent, project, team
+    case chat, agent, project, team
 }
 
 enum SidebarSection: String, CaseIterable, Identifiable {

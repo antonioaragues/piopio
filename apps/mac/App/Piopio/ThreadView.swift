@@ -9,7 +9,6 @@ struct ThreadView: View {
     let engine: EngineController
     let thread: ThreadModel
     let summary: SessionSummary
-    @AppStorage("debate.panel") private var showPanel = true
     /// The Summary column (docs/design/session-panel, step 4), shown or hidden for every chat.
     @AppStorage("chat.summary") private var showSummary = false
     /// PIOPIO_DEMO_CHAT_SUMMARY=1: show the column without changing the saved choice (captures).
@@ -17,17 +16,8 @@ struct ThreadView: View {
     @State private var showCosts = false
 
     var body: some View {
-        Group {
-            if let debate = thread.debate {
-                VStack(spacing: 0) {
-                    header
-                    DebateLayout(engine: engine, thread: thread, debate: debate, showPane: showPanel)
-                }
-            } else {
-                conversation
-            }
-        }
-        .task { await thread.open() }
+        conversation
+            .task { await thread.open() }
     }
 
     private var browserOpen: Bool { BrowserCenter.shared.openPanels.contains(summary.ref.id) }
@@ -90,19 +80,17 @@ struct ThreadView: View {
 
     private var header: some View {
         PageHeader(summary.title, subtitle: subtitle) {
-            if let debate = thread.debate { debateControls(debate) } else {
-                ToolbarIcon(symbol: "globe", label: "Browser", on: browserOpen,
-                            help: browserOpen ? "Hide the browser" : "Browser: the pages this chat opened, and yours") {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
-                    }
+            ToolbarIcon(symbol: "globe", label: "Browser", on: browserOpen,
+                        help: browserOpen ? "Hide the browser" : "Browser: the pages this chat opened, and yours") {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
                 }
-                ToolbarIcon(symbol: "list.bullet.rectangle", label: "Summary", on: showSummary || Self.demoSummary,
-                            help: showSummary ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
-                    withAnimation(.easeOut(duration: 0.15)) { showSummary.toggle() }
-                }
-                moveMenu
             }
+            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Summary", on: showSummary || Self.demoSummary,
+                        help: showSummary ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
+                withAnimation(.easeOut(duration: 0.15)) { showSummary.toggle() }
+            }
+            moveMenu
             ToolbarDivider()
             Menu {
                 Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
@@ -112,11 +100,9 @@ struct ThreadView: View {
                 Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
                 Divider()
                 Button("Cost…") { showCosts = true }
-                if thread.debate == nil {
-                    Divider()
-                    Button("Turn into an Agent…") { run { try await engine.turnIntoAgent(summary.ref) } }
-                        .help("An agent that does this on its own, on a schedule or when you message it. You review it before it's created.")
-                }
+                Divider()
+                Button("Turn into an Agent…") { run { try await engine.turnIntoAgent(summary.ref) } }
+                    .help("An agent that does this on its own, on a schedule or when you message it. You review it before it's created.")
             } label: {
                 Image(systemName: "ellipsis").accessibilityLabel("More")
             }
@@ -154,40 +140,12 @@ struct ThreadView: View {
             .help("Continue in a project: a new conversation in its folder, with this one's history")
     }
 
-    /// Debates: stop it while it runs, add rounds once it ended, and show or hide the draft panel.
-    @ViewBuilder private func debateControls(_ debate: DebateState) -> some View {
-        if debate.status == .running {
-            Button("Stop debate") { Task { await thread.stopDebate() } }
-                .buttonStyle(PillStyle(kind: .toolbar)).help("End it now and keep the latest draft")
-        } else if debate.status != .agreed {
-            Button("Keep going") { Task { await thread.continueDebate() } }
-                .buttonStyle(PillStyle(kind: .toolbar)).help("Add as many rounds again as it started with")
-        }
-        ToolbarIcon(symbol: "doc.text", label: "Draft", on: showPanel, help: showPanel ? "Hide the draft" : "The draft and objections") { showPanel.toggle() }
-    }
-
     private var subtitle: String {
-        if let debate = thread.debate { return debateSubtitle(debate) }
         let place = "Chat"
         var parts = [place, BuildSessionView.relative(summary.updatedAt)]
         let files = thread.attachmentCount
         if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
         if thread.state?.status == .running { parts.append("answering…") }
-        return parts.joined(separator: " · ")
-    }
-
-    /// "Debate · Round 2 of 6 · GPT-5 reviewing…".
-    private func debateSubtitle(_ debate: DebateState) -> String {
-        var parts = ["Debate"]
-        switch debate.status {
-        case .running:
-            parts.append("Round \(debate.round) of \(debate.maxRounds)")
-            if let turn = debate.turn { parts.append("\(debate.label(turn)) \(turn == .author ? "writing" : "reviewing")…") }
-        case .agreed: parts.append("Agreed in round \(debate.round)")
-        case .noAgreement: parts.append("No agreement after \(debate.round) rounds")
-        case .stopped: parts.append("Stopped in round \(debate.round)")
-        }
-        if debate.status != .running, thread.state?.status == .running { parts.append("answering…") }
         return parts.joined(separator: " · ")
     }
 }

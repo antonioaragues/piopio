@@ -1,5 +1,8 @@
 # 16 — Debate
 
+> **Removed 2026-11-15.** Debate was its own runtime, start page and panel for something daily use didn't ask for.
+> Its code is gone; a debate thread from before opens as a chat with its author. This page stays as history.
+
 Written 2026-10-29. DB1 and DB2 (Review style, engine and app) built the same day; see §9.
 
 ## 1. The experience

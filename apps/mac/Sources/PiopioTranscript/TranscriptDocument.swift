@@ -319,7 +319,7 @@ public final class TranscriptDocument {
         var lastText: String?
         for item in items {
             switch item {
-            case .user, .debate: lastText = nil // a debate turn's summary ends that turn
+            case .user: lastText = nil
             case .assistant(let a) where !a.text.isEmpty:
                 if let previous = lastText { out.insert(previous) }
                 lastText = a.id
@@ -906,15 +906,6 @@ extension TranscriptDocument {
         textView.mouseMoved(with: event)
         let current = NSCursor.current
         return current == .arrow ? "arrow" : current == .iBeam ? "ibeam" : "other"
-    }
-
-    /// Shows a whole Markdown document instead of a conversation (a debate's artifact), always rendered.
-    public func showDocument(_ markdown: String) {
-        var prose = ItemRenderer()
-        prose.prose = true
-        textView.textStorage?.setAttributedString(prose.render(MarkdownStream(text: markdown).blocks))
-        layoutColumn(force: true)
-        scrollView.contentView.scroll(to: .zero)
     }
 }
 

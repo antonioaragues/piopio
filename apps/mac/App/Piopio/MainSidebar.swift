@@ -486,7 +486,6 @@ struct MainSidebar: View {
         header(.chats, total: threads.count, shown: min(cap, threads.count), add: { NotificationCenter.default.post(name: .newChat, object: nil) }, addHelp: "New conversation (⌘N)")
         if !collapsed.contains(SidebarSection.chats.rawValue) {
             draftRow(.chat)
-            draftRow(.debate)
             ForEach(threads.prefix(cap), id: \.ref.id) { chatRow($0) }
             if threads.count > cap { more("\(threads.count - cap) earlier", .index(.chats)) }
         }
@@ -496,7 +495,7 @@ struct MainSidebar: View {
         let selected = item == .chat(thread.ref.id)
         return Button { item = .chat(thread.ref.id) } label: {
             HStack(spacing: 10) {
-                RowGlyph(symbol: thread.debate != nil ? "person.2" : "bubble.left").help(thread.debate != nil ? "Debate" : "")
+                RowGlyph(symbol: "bubble.left")
                 Text(thread.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
                 if engine.liveStatus[thread.ref.id] == .running { SidebarDot(status: .running) }
@@ -508,7 +507,7 @@ struct MainSidebar: View {
             Button("Rename…") { newTitle = thread.title; renaming = thread }
             pinButton(.chat(thread.ref.id))
             Divider()
-            if thread.debate == nil { ContinueInMenu(engine: engine, ref: thread.ref) { Text("Continue in") } }
+            ContinueInMenu(engine: engine, ref: thread.ref) { Text("Continue in") }
             Divider()
             Button("Delete", role: .destructive) {
                 if selected { item = .home }
@@ -594,7 +593,6 @@ struct NewMenu: View {
             }
             if areas.contains(.chat) {
                 Button { NotificationCenter.default.post(name: .newProject, object: nil) } label: { Text("Project"); Text("A folder with shared instructions and notes") }
-                Button { NotificationCenter.default.post(name: .newDebate, object: nil) } label: { Text("Debate"); Text("Two models work on it until they agree") }
             }
             if areas.contains(.agents) {
                 Button { NotificationCenter.default.post(name: .newAgent, object: nil) } label: { Text("Agent"); Text("Runs on its own") }

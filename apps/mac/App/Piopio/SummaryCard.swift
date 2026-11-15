@@ -149,7 +149,7 @@ struct UsesRow: View {
     @State private var open = false
 
     var body: some View {
-        let choices = ToolChoices.compute(engine: engine, ref: summary.ref, debate: summary.debate != nil, servers: servers)
+        let choices = ToolChoices.compute(engine: engine, ref: summary.ref, servers: servers)
         let off = Set(summary.toolsOff ?? [])
         let on = choices.filter { $0.available && !off.contains($0.id) }
         let names = (web && thread.webEnabled ? ["the web"] : []) + on.map(\.title)

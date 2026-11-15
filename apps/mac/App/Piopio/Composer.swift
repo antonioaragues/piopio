@@ -32,7 +32,7 @@ struct Composer: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(thread.queue, id: \.id) { item in
                 HStack(spacing: 8) {
-                    Text(thread.debate?.status == .running ? "Next round" : item.mode == .steer ? "Steering" : "Queued").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+                    Text(item.mode == .steer ? "Steering" : "Queued").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
                     Text(item.text ?? "Queued message").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
                     Spacer()
                     if let queued = item.text {
@@ -176,13 +176,8 @@ struct Composer: View {
                 if isBuild { EditModeChip(engine: engine, thread: thread) }
                 // Who answers here (docs/spec/21 D6, design 5c-1): only in a project with a team.
                 if isBuild { WhoChip(engine: engine, thread: thread) }
-                if thread.debate != nil { Text("Debate").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6) }
                 Spacer(minLength: 6)
-                if let debate = thread.debate, debate.status == .running {
-                    Text("Round \(debate.round) of up to \(debate.maxRounds)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6)
-                } else {
-                    ModelChip(engine: engine, thread: thread)
-                }
+                ModelChip(engine: engine, thread: thread)
                 let stopping = thread.isRunning && text.isEmpty
                 // While it works, the keys next to the button that uses them: esc stops it, ⌥↩ steers with what you typed.
                 if thread.isRunning {
@@ -222,10 +217,6 @@ struct Composer: View {
 
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
-        if let debate = thread.debate {
-            if debate.status == .running { return "Add a note for the next round…" }
-            if !thread.isRunning { return "Ask for changes to the draft…" }
-        }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         // An agent is set up by talking (docs/spec/21 D3): its chat says so.

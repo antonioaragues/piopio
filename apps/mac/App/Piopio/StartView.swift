@@ -13,7 +13,7 @@ import SwiftUI
     static let shared = StartDrafts()
 
     struct Draft: Codable, Equatable {
-        /// The message (chat), the question (debate) or the instructions (agent).
+        /// The message (chat) or the instructions (agent).
         var text = ""
         /// An agent's name.
         var name = ""
@@ -100,7 +100,6 @@ extension StartKind {
     var title: String {
         switch self {
         case .chat: "New conversation"
-        case .debate: "New debate"
         case .agent: "New agent"
         case .project: "New project"
         case .team: "New team"
@@ -110,7 +109,6 @@ extension StartKind {
     var symbol: String {
         switch self {
         case .chat: "bubble.left"
-        case .debate: "person.2"
         case .agent: "smallcircle.circle"
         case .project: "folder"
         case .team: "person.3"
@@ -130,11 +128,6 @@ private enum StartStyle {
     /// The kind tile and selected things: a soft wash of the accent.
     static let accentWash = Color.accentColor.opacity(0.12)
     static let accentFaint = Color.accentColor.opacity(0.06)
-    /// The debate's settings strip.
-    static let strip = Color.dsBubble
-    /// The two debaters' badges.
-    static let sideA = Color.accentColor
-    static let sideB = Color.orange
 }
 
 // MARK: Motion: the start page's composer becomes the conversation's
@@ -180,7 +173,7 @@ enum StartMotion {
 
 // MARK: Page
 
-/// The start page for one kind. Chat and debate are one page with a mode switch.
+/// The start page for one kind.
 struct StartView: View {
     let engine: EngineController
     let kind: StartKind
@@ -189,13 +182,13 @@ struct StartView: View {
     var body: some View {
         StartColumn(top: kind == .agent ? 112 : 128) {
             switch kind {
-            case .chat, .debate: ChatStart(engine: engine, mode: kind, item: $item)
+            case .chat: ChatStart(engine: engine, item: $item)
             case .agent: AgentStart(engine: engine, item: $item)
             case .project: EmptyView() // RootView shows NewProjectPage, with the conversation it continues
             case .team: EmptyView() // RootView shows TeamStart
             }
         }
-        .id(kind == .debate ? StartKind.chat : kind)
+        .id(kind)
     }
 }
 
@@ -602,12 +595,12 @@ private func age(_ iso: String) -> String {
     return "\(Int(seconds / 86_400)) d"
 }
 
-// MARK: Chat and debate
+// MARK: Chat
 
-/// New chat, with a Chat | Debate switch in the composer. The text stays when you switch.
+/// New chat.
 private struct ChatStart: View {
     let engine: EngineController
-    let mode: StartKind
+    private let mode = StartKind.chat
     @Binding var item: SidebarItem
     private var drafts: StartDrafts { .shared }
     @State private var attachments: [PendingAttachment] = []
@@ -619,68 +612,35 @@ private struct ChatStart: View {
     @State private var error: String?
     /// The chat made for a message that then failed to send, so Retry doesn't make another.
     @State private var pending: ContainerRef?
-    // Debate
-    @State private var author: ModelRef?
-    @State private var reviewer: ModelRef?
-    @AppStorage("debate.rounds") private var rounds = 6
-    @AppStorage("debate.reviewer") private var lastReviewer = ""
-    @State private var picking: DebateRole?
     @FocusState private var focus: StartField?
 
     enum Context: Hashable { case project(String) }
 
-    private var debate: Bool { mode == .debate }
     private var text: String { drafts[mode].text }
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canSend: Bool { !sending && !trimmed.isEmpty && (!debate || (author != nil && reviewer != nil)) }
+    private var canSend: Bool { !sending && !trimmed.isEmpty }
 
     var body: some View {
-        StartHeader(kind: mode, description: debate
-            ? "One model answers, the other critiques it, round by round, until they agree. You get the agreed answer and any points they never settled."
-            : "A conversation keeps its own history. Move it into a project whenever it grows into a subject.") {
-            TitleText(text: debate ? "What should they work out?" : "What's on your mind?")
+        StartHeader(kind: mode, description: "A conversation keeps its own history. Move it into a project whenever it grows into a subject.") {
+            TitleText(text: "What's on your mind?")
         }
         VStack(alignment: .leading, spacing: 12) {
             ComposerCard {
-                AnyView(CardText(placeholder: debate ? "A question or decision worth a second opinion…" : "Ask anything…", text: drafts.binding(mode, \.text), focused: $focus, returnSubmits: true, submit: send))
+                AnyView(CardText(placeholder: "Ask anything…", text: drafts.binding(mode, \.text), focused: $focus, returnSubmits: true, submit: send))
             } extra: {
                 if !attachments.isEmpty { attachmentTiles.padding(.horizontal, 20).padding(.top, 8) }
-                if debate { debateStrip.padding(.horizontal, 12).padding(.top, 12) }
             } leading: {
-                if !debate { AttachButton(pick: attach, size: 36) }
-                ModeSwitch(mode: mode) { switchMode(to: $0) }
+                AttachButton(pick: attach, size: 36)
             } action: {
-                if debate {
-                    MainAction(title: "Start debate ↩", busy: sending, enabled: canSend, action: send)
-                } else {
-                    modelSelector
-                    sendButton
-                }
+                modelSelector
+                sendButton
             }
             StartError(text: error)
         }
-        if debate {
-            if let author, let reviewer, family(author) == family(reviewer) {
-                Label("Models from different makers catch more of each other's blind spots.", systemImage: "lightbulb")
-                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-            }
-            Hints(items: ["Each round runs both models, so a debate uses more than a chat" + (estimate.map { " (about \($0) at most)" } ?? "") + ".", "You can step in between rounds."])
-        } else {
-            contextSection
-            Hints(items: ["\(QuickChatShortcut.current.label) Quick Chat from any app", "↩ send", "⇧↩ new line"])
-        }
+        contextSection
+        Hints(items: ["\(QuickChatShortcut.current.label) Quick Chat from any app", "↩ send", "⇧↩ new line"])
         Color.clear.frame(height: 0)
-            .onAppear {
-                defaults()
-                focus = .text
-            }
-            .onChange(of: text) { _, t in
-                // "/debate" switches to Debate, with what follows as the question.
-                if !debate, t.hasPrefix("/debate") {
-                    drafts.update(.chat) { $0.text = String(t.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
-                    switchMode(to: .debate)
-                }
-            }
+            .onAppear { focus = .text }
     }
 
     // MARK: Chat
@@ -739,93 +699,11 @@ private struct ChatStart: View {
         }
     }
 
-    // MARK: Debate
-
-    /// [A · model] vs [B · model] ⇄ · Until they agree · max N rounds.
-    private var debateStrip: some View {
-        HStack(spacing: 8) {
-            side(.author, badge: "A", tint: StartStyle.sideA, $author)
-            Text("vs").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-            side(.reviewer, badge: "B", tint: StartStyle.sideB, $reviewer)
-            Button { (author, reviewer) = (reviewer, author) } label: { Image(systemName: "arrow.left.arrow.right").font(.system(size: 12)) }
-                .buttonStyle(IconButtonStyle(size: 30))
-                .help("Swap who answers and who critiques").accessibilityLabel("Swap models")
-            Spacer(minLength: 8)
-            Menu {
-                ForEach(2...12, id: \.self) { n in Button("Up to \(n) rounds") { rounds = n } }
-            } label: {
-                FooterSelector(symbol: "checkmark", title: "Until they agree · max \(rounds) rounds")
-            }
-            .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
-            .help("It stops as soon as they agree")
-        }
-        .padding(.horizontal, 8)
-        .background(StartStyle.strip, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private func side(_ role: DebateRole, badge: String, tint: Color, _ model: Binding<ModelRef?>) -> some View {
-        Button { picking = role } label: {
-            HStack(spacing: 6) {
-                Text(badge).font(.system(size: 11, weight: .bold)).foregroundStyle(tint)
-                    .frame(width: 20, height: 20)
-                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                FooterSelector(symbol: nil, title: modelLabel(model.wrappedValue))
-            }
-        }
-        .buttonStyle(SelectorStyle())
-        .help(role == .author ? "A answers first and revises" : "B critiques each answer until it agrees")
-        .accessibilityLabel("\(badge): \(modelLabel(model.wrappedValue))")
-        .popover(isPresented: Binding(get: { picking == role }, set: { if !$0 { picking = nil } }), arrowEdge: .bottom) {
-            ModelPicker(engine: engine, selected: model.wrappedValue) { m in model.wrappedValue = m; picking = nil }
-        }
-    }
-
     private func modelLabel(_ ref: ModelRef?) -> String {
         engine.model(ref).map(ModelChip.short) ?? ref?.id ?? "Choose a model"
     }
 
-    /// The maker: "anthropic" in "anthropic/claude-…", else the provider.
-    private func family(_ m: ModelRef) -> String {
-        m.id.contains("/") ? String(m.id.split(separator: "/")[0]) : m.provider
-    }
-
-    /// The Chat model answers; the last reviewer critiques, or a model from another maker.
-    private func defaults() {
-        author = author ?? engine.preferredModel
-        guard reviewer == nil else { return }
-        let parts = lastReviewer.split(separator: "|", maxSplits: 1).map(String.init)
-        if parts.count == 2, engine.model(ModelRef(provider: parts[0], id: parts[1])) != nil {
-            reviewer = ModelRef(provider: parts[0], id: parts[1])
-        } else if let author {
-            let other = engine.models.first { family(ModelRef(provider: $0.provider, id: $0.id)) != family(author) && $0.provider != "faux" }
-            reviewer = other.map { ModelRef(provider: $0.provider, id: $0.id) } ?? author
-        }
-    }
-
-    /// Up to `rounds` rounds of a one-page answer: each side's context grows by one exchange a round.
-    private var estimate: String? {
-        guard let a = engine.model(author), let r = engine.model(reviewer) else { return nil }
-        var usd = 0.0
-        for round in 1...rounds {
-            let n = Double(round)
-            usd += (2_000 + n * 2_200) * a.pricing.input / 1e6 + 1_400 * a.pricing.output / 1e6
-            usd += (3_000 + n * 1_200) * r.pricing.input / 1e6 + 600 * r.pricing.output / 1e6
-        }
-        guard usd > 0 else { return nil }
-        return usd < 0.01 ? "<$0.01" : String(format: "$%.2f", usd)
-    }
-
     // MARK: Actions
-
-    /// The text moves with you; the draft you leave goes, so no stray draft row is left behind.
-    private func switchMode(to target: StartKind) {
-        guard target != mode else { return }
-        let carried = drafts[mode].text
-        drafts.clear(mode)
-        if !carried.isEmpty { drafts.update(target) { $0.text = carried } }
-        error = nil
-        item = .start(target)
-    }
 
     /// The +: files, or a folder's readable files (as the conversation's + does), from one panel.
     private func attach() {
@@ -850,7 +728,7 @@ private struct ChatStart: View {
         sending = true
         Task {
             defer { sending = false }
-            if debate { await startDebate() } else { await sendChat() }
+            await sendChat()
         }
     }
 
@@ -886,55 +764,6 @@ private struct ChatStart: View {
         drafts.clear(.chat)
         attachments = []
         pending = nil
-    }
-
-    private func startDebate() async {
-        guard let author, let reviewer else { return }
-        let config = DebateConfig(goal: trimmed, criteria: nil, participants: [.init(role: .author, model: author), .init(role: .reviewer, model: reviewer)], maxRounds: rounds)
-        do {
-            let ref = try await engine.createDebate(config)
-            lastReviewer = "\(reviewer.provider)|\(reviewer.id)"
-            drafts.clear(.debate)
-            morph(to: .chat(ref.id), $item)
-        } catch {
-            self.error = ((error as? EngineError)?.message ?? error.localizedDescription) + " Nothing was started, and your question is kept."
-        }
-    }
-}
-
-/// Chat | Debate, as a radio group: click, or ← → once it has focus.
-private struct ModeSwitch: View {
-    let mode: StartKind
-    let pick: (StartKind) -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            segment(.chat, "Chat")
-            segment(.debate, "Debate")
-        }
-        .padding(2)
-        .background(Color.dsTrack, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .focusable()
-        .focusEffectDisabled()
-        .onKeyPress(.leftArrow) { pick(.chat); return .handled }
-        .onKeyPress(.rightArrow) { pick(.debate); return .handled }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Mode")
-    }
-
-    private func segment(_ kind: StartKind, _ title: String) -> some View {
-        let on = mode == kind
-        return Button { pick(kind) } label: {
-            Text(title).font(.system(size: 13, weight: on ? .medium : .regular))
-                .foregroundStyle(on ? Color.dsFg : Color.dsFg2)
-                .padding(.horizontal, 12).frame(height: 30)
-                .background(on ? Color.dsSeg : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(on ? Color.dsLine : .clear, lineWidth: 0.5))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? [.isSelected] : [])
-        .accessibilityHint(kind == .debate ? "Two models work on it until they agree" : "One model answers")
     }
 }
 

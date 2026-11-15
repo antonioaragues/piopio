@@ -395,7 +395,6 @@ private struct StartSheets: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .newDebate)) { _ in item = .start(.debate) }
             .onReceive(NotificationCenter.default.publisher(for: .openTrace)) { note in
                 if let id = note.object as? String { trace = TraceTarget(id: id) }
             }

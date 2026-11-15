@@ -18,17 +18,17 @@ struct ToolChoice: Identifiable, Hashable {
 
 @MainActor enum ToolChoices {
     /// Which kinds a conversation has: connectors in chats and Build sessions; MCP in chats and Build.
-    static func supports(_ ref: ContainerRef, debate: Bool) -> (apps: Bool, mcp: Bool) {
+    static func supports(_ ref: ContainerRef) -> (apps: Bool, mcp: Bool) {
         switch ref.kind {
-        case .thread: (!debate, !debate)
+        case .thread: (true, true)
         case .build: (true, true)
         case .agent: (false, false)
         }
     }
 
     /// The choices for a conversation, from the connected apps and the MCP servers (`mcp.list` for its folder).
-    static func compute(engine: EngineController, ref: ContainerRef, debate: Bool, servers: [McpServerInfo]) -> [ToolChoice] {
-        let kinds = supports(ref, debate: debate)
+    static func compute(engine: EngineController, ref: ContainerRef, servers: [McpServerInfo]) -> [ToolChoice] {
+        let kinds = supports(ref)
         var out: [ToolChoice] = []
         if kinds.apps {
             for app in engine.connectors where !app.accounts.isEmpty {

@@ -33,9 +33,6 @@ public enum TranscriptAction: Equatable, Sendable {
     case quote(text: String)
     /// Remember this: a fact to save to memory (About me in chats, the agent's memory of the person in agents).
     case remember(text: String)
-    /// A debate's result card: copy its final draft, or add rounds (docs/spec/16-debate).
-    case copyDraft(itemId: String)
-    case continueDebate
     /// Copies a code block.
     case copyText(String)
     /// Stopped · continue: asks the model to carry on.
@@ -74,8 +71,6 @@ public enum TranscriptAction: Equatable, Sendable {
         case .plan(let id, let answer): c.host = "plan"; c.queryItems = [URLQueryItem(name: "call", value: id), URLQueryItem(name: "answer", value: answer.rawValue)]
         case .quote(let text): c.host = "quote"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         case .remember(let text): c.host = "remember"; c.queryItems = [URLQueryItem(name: "text", value: text)]
-        case .copyDraft(let id): c.host = "copy-draft"; c.queryItems = [URLQueryItem(name: "item", value: id)]
-        case .continueDebate: c.host = "continue-debate"
         case .copyText(let text): c.host = "copy-text"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         case .continueAnswer: c.host = "continue-answer"
         case .openAttachment(let stored): c.host = "attachment"; c.queryItems = [URLQueryItem(name: "stored", value: stored)]
@@ -109,8 +104,6 @@ public enum TranscriptAction: Equatable, Sendable {
         case "plan": guard let id = q("call"), let answer = q("answer").flatMap(PlanAnswer.init(rawValue:)) else { return nil }; self = .plan(callId: id, answer: answer)
         case "quote": guard let text = q("text") else { return nil }; self = .quote(text: text)
         case "remember": guard let text = q("text") else { return nil }; self = .remember(text: text)
-        case "copy-draft": guard let id = q("item") else { return nil }; self = .copyDraft(itemId: id)
-        case "continue-debate": self = .continueDebate
         case "copy-text": guard let text = q("text") else { return nil }; self = .copyText(text)
         case "continue-answer": self = .continueAnswer
         case "attachment": guard let stored = q("stored") else { return nil }; self = .openAttachment(stored: stored)

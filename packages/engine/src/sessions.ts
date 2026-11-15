@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFi
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, ContainerRef, DebateConfig, ModelRef, ProjectInfo, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, ProjectInfo, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
@@ -32,7 +32,6 @@ import type { MemoryProviders } from "./memory.js";
 import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, nextFire, validate, TEMPLATES, type AgentDefinition, type DefinitionError, type Watch } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
-import { DebateRuntime, validateDebate, type DebateRecord } from "./runtimes/debate.js";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
@@ -64,8 +63,6 @@ type CatalogEntry = SessionSummary & {
 	planMode?: boolean;
 	/** Agents: the definition folder. */
 	agentFolder?: string;
-	/** Debate threads (docs/spec/16-debate). */
-	debate?: DebateRecord;
 };
 
 /** At most this many subagents run at once per session (docs/spec/05-build §4). */
@@ -143,6 +140,8 @@ export class Sessions {
 				if ((e.ref.kind as string) === "space") continue;
 				// Projects without a folder are folders now (CF4); their conversations stay, as conversations.
 				delete (e as { projectId?: string }).projectId;
+				// Debates are gone (2026-11-15): a debate thread opens as a chat with its author.
+				delete (e as { debate?: unknown }).debate;
 				this.entries.set(e.ref.id, e);
 			}
 		}
@@ -213,11 +212,10 @@ export class Sessions {
 
 	/**
 	 * What a conversation may look into with search_conversations / read_conversation (tools/history.ts): a Build
-	 * session, the other sessions of its project; a chat without a project, the other chats without one. Not agents
-	 * or debates.
+	 * session, the other sessions of its project; a chat without a project, the other chats without one. Not agents.
 	 */
 	historyBridge(entry: CatalogEntry): HistoryBridge | undefined {
-		const scopeOf = (e: CatalogEntry) => (e.ref.kind === "build" ? `build:${e.projectPath ?? e.cwd}` : e.ref.kind === "thread" && !e.projectPath && !e.debate ? "chats" : undefined);
+		const scopeOf = (e: CatalogEntry) => (e.ref.kind === "build" ? `build:${e.projectPath ?? e.cwd}` : e.ref.kind === "thread" && !e.projectPath ? "chats" : undefined);
 		const scope = scopeOf(entry);
 		if (!scope) return undefined;
 		const mine = (id: string) => {
@@ -423,15 +421,12 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; debate?: DebateConfig; team?: string }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; team?: string }): Promise<ContainerRef> {
 		// A conversation with a team's lead (docs/spec/20 PT4): in its project, with the board's tools.
 		const lead = params.team ? this.teams?.leadRole(params.team) : undefined;
 		if (params.team && (params.kind !== "build" || !lead)) throw new EngineError("INVALID", "A team's conversation is a folder conversation in its project.");
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.planMode && params.kind !== "build") throw new EngineError("INVALID", "Only folder conversations support Plan mode.");
-		if (params.debate && params.kind !== "thread") throw new EngineError("INVALID", "Only threads can be debates.");
-		if (params.debate) validateDebate(params.debate, this.hub);
-		const author = params.debate?.participants.find((p) => p.role === "author");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
 		const ref: ContainerRef = { kind: params.kind, id: newId(params.kind === "thread" ? "thr" : "ses") };
 		// Build: a new branch in the project, or a worktree of its own (BP5) under <data>/worktrees/<project>/<session>.
@@ -451,17 +446,16 @@ export class Sessions {
 		const now = new Date().toISOString();
 		const entry: CatalogEntry = {
 			ref,
-			title: params.title?.trim() || (params.debate ? titleFrom(params.debate.goal) : "") || (params.kind === "thread" ? "New thread" : "New session"),
+			title: params.title?.trim() || (params.kind === "thread" ? "New thread" : "New session"),
 			createdAt: now,
 			updatedAt: now,
-			model: author?.model ?? params.model ?? this.hub.defaultModel,
+			model: params.model ?? this.hub.defaultModel,
 			...(cwd ? { cwd } : {}),
 			...(worktree ? { projectPath: params.cwd!, worktree } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.planMode ? { planMode: true } : {}),
 			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
 			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
-			...(params.debate ? { debate: { config: params.debate, status: "running" as const, maxRounds: params.debate.maxRounds, endings: [] } } : {}),
 			...(params.team && lead ? { team: { id: params.team, role: lead.id, kind: "lead" as const } } : {}),
 		};
 		this.entries.set(ref.id, entry);
@@ -1357,13 +1351,6 @@ export class Sessions {
 		runtime.respond(promptId, response);
 	}
 
-	/** Debate threads: Keep going, or end the debate now. */
-	async debate(ref: ContainerRef): Promise<DebateRuntime> {
-		const runtime = await this.runtime(ref);
-		if (!(runtime instanceof DebateRuntime)) throw new EngineError("INVALID", "This thread isn't a debate.");
-		return runtime;
-	}
-
 	/** Called after a submit: bumps recency and auto-titles from the first input. */
 	touch(ref: ContainerRef, firstInput?: string): void {
 		const entry = this.entries.get(ref.id);
@@ -1509,7 +1496,7 @@ export class Sessions {
 				}
 			}
 			const idle = events.some((e) => e.type === "state" && e.state.status === "idle");
-			if ((entry.ref.kind === "thread" || entry.ref.kind === "build") && idle && !entry.debate) void this.suggestFollowUps(entry, runtime);
+			if ((entry.ref.kind === "thread" || entry.ref.kind === "build") && idle) void this.suggestFollowUps(entry, runtime);
 		});
 		return runtime;
 	}
@@ -1545,24 +1532,6 @@ export class Sessions {
 				...(this.hookUrl ? { watchUrl: (watchId: string) => this.hookUrl!(id, watchId) } : {}),
 				onWatches: () => void this.watchers?.sync().catch(() => undefined),
 				updateSelf: (change) => this.updateAgentSelf(id, change),
-			});
-		}
-		if (entry.ref.kind === "thread" && entry.debate) {
-			return DebateRuntime.open({
-				ref: entry.ref,
-				file: entry.file!,
-				hub: this.hub,
-				record: entry.debate,
-				onRecord: (record) => {
-					const changed = record.status !== entry.debate?.status;
-					entry.debate = record;
-					if (record.config.participants.find((p) => p.role === "author")?.model) entry.model = record.config.participants.find((p) => p.role === "author")!.model;
-					this.save();
-					if (changed) this.changed(entry);
-				},
-				web: entry.web ?? true,
-				webOptions: this.webOptions,
-				...(this.chatExtras("thread").extensions ? { extensions: this.chatExtras("thread").extensions } : {}),
 			});
 		}
 		if (entry.ref.kind === "thread") {
@@ -1643,8 +1612,8 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, debate, ...rest }: CatalogEntry): SessionSummary {
-	return { ...rest, ...(debate ? { debate: { status: debate.status } } : {}) };
+function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, ...rest }: CatalogEntry): SessionSummary {
+	return rest;
 }
 
 /** What a subagent is doing, for its task card. */

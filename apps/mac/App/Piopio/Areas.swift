@@ -280,7 +280,7 @@ extension AreaSet {
         case .newSession: showsProjects
         case .start(let kind):
             switch kind {
-            case .chat, .debate: showsChats
+            case .chat: showsChats
             case .agent, .team: showsAgents
             case .project: showsProjects
             }
