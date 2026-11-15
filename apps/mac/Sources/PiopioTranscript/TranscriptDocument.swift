@@ -880,6 +880,8 @@ private final class HoverTracker: NSResponder {
 
     override func mouseExited(with event: NSEvent) {
         document?.hover(at: nil)
+        // Leaving for the sidebar or a panel: views there that set no cursor of their own would keep the I-beam.
+        (document?.textView as? TranscriptTextView)?.arrowIfNeeded(event)
     }
 }
 
