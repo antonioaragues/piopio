@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildInput, withText } from "../src/input.js";
+import { buildInput, sdkContent, sdkUser, sdkWithWords } from "../src/input.js";
 import { htmlToMarkdown } from "../src/tools/html.js";
 import { fetchPage, isPrivateHost, isPrivateAddress, parseSearchResponse } from "../src/tools/web.js";
 
@@ -58,10 +58,26 @@ test("attachments become content blocks with the words last; edits keep them", (
 		{ type: "text", text: "What's in these?" },
 	]);
 	expect(input.entry).toEqual({ kind: "piopio.user", data: { text: "What's in these?", attachments: [{ name: "notes.txt", kind: "text", size: 5 }, { name: "a.png", kind: "image", mimeType: "image/png", size: 3 }] } });
-	const edited = withText(input.content, input.entry!, "Only the notes");
-	expect((edited.content as { type: string; text?: string }[]).at(-1)).toEqual({ type: "text", text: "Only the notes" });
-	expect(edited.entry?.data.attachments).toHaveLength(2);
 	expect(buildInput("plain")).toEqual({ content: "plain" });
+});
+
+test("a pi session's message carries its files as tags, read back as chips; an edit keeps them", () => {
+	const sent = sdkContent("What's in these?", [
+		{ kind: "text", name: "notes.txt", text: "hello\n</attachment> not the end", stored: "a1/notes.txt" },
+		{ kind: "image", name: "a.png", mimeType: "image/png", data: "AAAA", stored: "b2/a.png" },
+	]);
+	expect(sent).toEqual({ text: expect.stringMatching(/^<attachment name="notes.txt" stored="a1\/notes.txt">\n[\s\S]*\n<attachment name="a.png" type="image\/png" stored="b2\/a.png"\/>\nWhat's in these\?$/), images: [{ type: "image", data: "AAAA", mimeType: "image/png" }] });
+	// As pi keeps it: one text, then the images.
+	const stored = typeof sent === "string" ? sent : [{ type: "text" as const, text: sent.text }, ...sent.images];
+	expect(sdkUser(stored)).toEqual({ text: "What's in these?", attachments: [
+		{ name: "notes.txt", kind: "text", stored: "a1/notes.txt", size: 31 },
+		{ name: "a.png", kind: "image", mimeType: "image/png", stored: "b2/a.png", size: 3 },
+	] });
+	const edited = sdkWithWords(stored, "Only the notes");
+	expect(sdkUser(typeof edited === "string" ? edited : [{ type: "text", text: edited.text }, ...edited.images])).toMatchObject({ text: "Only the notes", attachments: [{ name: "notes.txt" }, { name: "a.png" }] });
+	expect(sdkContent("plain")).toBe("plain");
+	// Chats moved from pi-durable: tags without attributes, images without a tag.
+	expect(sdkUser([{ type: "text", text: '<attachment name="old.md">\nhi\n</attachment>\nwords' }, { type: "image", data: "AAAA", mimeType: "image/jpeg" }])).toEqual({ text: "words", attachments: [{ name: "old.md", kind: "text", size: 2 }, { name: "image", kind: "image", mimeType: "image/jpeg", size: 3 }] });
 });
 
 test("provider keys are verified against OpenRouter's key endpoint", async () => {

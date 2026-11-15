@@ -154,6 +154,15 @@ export class TimelineBuilder {
 
 	// ── Incremental ────────────────────────────────────────────────────────
 
+	/** A message of yours shown as you typed it (a `/command` pi expanded before sending). */
+	setUserText(id: string, text: string, emit = true): void {
+		const at = this.index.get(id);
+		const item = at === undefined ? undefined : this.items[at];
+		if (!item || item.kind !== "user" || item.text === text) return;
+		item.text = text;
+		if (emit) this.pending.push({ type: "item.updated", item: structuredClone(item) });
+	}
+
 	user(id: string, text: string, at?: number, attachments?: AttachmentInfo[]): void {
 		if (this.index.has(id)) return;
 		const item: TimelineItem = { kind: "user", id, at: iso(at), text, ...(attachments?.length ? { attachments } : {}) };

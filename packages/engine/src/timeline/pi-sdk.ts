@@ -1,5 +1,15 @@
 /** Maps pi-coding-agent `AgentSessionEvent`s onto the timeline builder. */
+import { sdkUser, type ContentBlock } from "../input.js";
 import { contentText, customText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
+
+/** A session's messages for `TimelineBuilder.reset`: each user message as its words, with its files as chips. */
+export function sdkMessages(messages: readonly PiMessage[]): PiMessage[] {
+	return messages.map((m) => {
+		if (m.role !== "user" || typeof m.content === "string") return m;
+		const { text, attachments } = sdkUser(m.content as unknown as ContentBlock[]);
+		return { ...m, content: text, ...(attachments.length ? { attachments } : {}) } as PiMessage;
+	});
+}
 
 type AnyEvent = { type: string; [key: string]: unknown };
 
@@ -30,7 +40,10 @@ export class SdkEventMapper {
 			case "message_start": {
 				const message = event.message as PiMessage;
 				const id = SdkEventMapper.idOf(this.nextIndex++);
-				if (message.role === "user") b.user(id, contentText(message.content as string | PiContentBlock[]), message.timestamp as number | undefined);
+				if (message.role === "user") {
+					const { text, attachments } = sdkUser(message.content as unknown as ContentBlock[]);
+					b.user(id, text, message.timestamp as number | undefined, attachments);
+				}
 				else if (message.role === "assistant") b.assistantStart(id, (message as { model?: string }).model);
 				else if (message.role === "custom" && (message as { display?: boolean }).display) b.system(id, "info", customText(message));
 				break;

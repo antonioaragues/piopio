@@ -14,7 +14,7 @@ export const PI_PREAMBLE =
 	"You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
 
 /** pi's documentation section: paths into node_modules, only useful to someone extending pi. */
-const PI_DOCS = /\n\n<docs>\n[\s\S]*?\n<\/docs>/;
+export const PI_DOCS = /\n\n<docs>\n[\s\S]*?\n<\/docs>/;
 
 export function piopioPreamble(model?: string): string {
 	const powered = model ? `, powered by ${/\bmodel$/i.test(model) ? model : `the ${model} model`}` : "";

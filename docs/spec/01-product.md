@@ -31,7 +31,7 @@ One native Mac home for working with AI agents, built on the pi harnesses and th
 | **Project** | A folder on disk (usually a git repo). Shared by Build and Chat (folder lens). |
 | **Session** | A unit of agent work with its own history. Its kind decides the runtime (see below). |
 | **Build session** | A `pi-coding-agent` session inside a Project. Stored as a pi JSONL session file. |
-| **Thread** | A free-standing chat. One `pi-durable` session (root conversation + forks). |
+| **Thread** | A free-standing chat. Since 2026-11-15 a `pi-coding-agent` session in a folder of its own, with a chat's tools (docs/spec/18 §15); before, one `pi-durable` session. |
 | **Space** | A Chat container backed by **one** `pi-durable` session. Has a **Main** conversation (front door) where the **Organizer** routes messages to **Topics** (other conversations in the same session). |
 | **Topic** | A conversation inside a Space about one subject. |
 | **Agent** | A persistent persona defined by an **Agent Definition**, running on pi-durable, reachable through **Channels**, with memory, schedules and triggers. |
@@ -48,11 +48,11 @@ One native Mac home for working with AI agents, built on the pi harnesses and th
 |---|---|---|---|
 | Build session (Project) | `@earendil-works/pi-coding-agent` SDK | pi JSONL in `~/.pi/agent/sessions/` (CLI-compatible) | Later (cloud sandboxes) |
 | Chat-lens session (Project) | `pi-coding-agent` SDK with the "chat" tool profile | same | No (bound to a local folder) |
-| Thread | `@earendil-works/pi-durable` | one SQLite file per thread | Later ("move to cloud") |
+| Thread | `pi-coding-agent` SDK with the chat profile (since 2026-11-15) | pi JSONL in `<home>/chats/`, its folder in `<home>/scratch/` | No |
 | Space | `pi-durable` | one SQLite file per space | Later |
 | Agent | `pi-durable` | Local: SQLite file. Cloud: Durable Object SQLite | **Yes (primary)** |
 
-Rule of thumb: **work on a local folder → pi-coding-agent. Folder-less, long-lived or cloud-portable → pi-durable.**
+Rule of thumb (since 2026-11-15): **a conversation → pi-coding-agent, with a project or without one. An agent (long-lived, cloud-portable) → pi-durable.**
 
 ## 6. Scope
 

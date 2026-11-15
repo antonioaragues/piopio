@@ -45,7 +45,7 @@ makes one in ~/Piopio. Agents keep their own section. Notebooks stop being their
 
 | Thing | What it is | Runtime (unchanged; never shown) |
 |---|---|---|
-| **Conversation, no project** | Today's chat | pi-durable thread |
+| **Conversation, no project** | Today's chat | pi-coding-agent in a folder of its own (since 2026-11-15, §15); a pi-durable thread before |
 | **Conversation in a project** | Today's Build session; Read only is today's Chat lens | pi-coding-agent |
 | **Project** | A folder and its conversations: instructions in AGENTS.md, shared notes in NOTES.md, its files | — |
 | **Agent** | A conversation that lives on its own: identity, contacts, schedules, channels, memory | pi-durable agent |
@@ -463,3 +463,25 @@ centered start page in the main window again, as they did before phase 1.
 - **Kept:** the box is Home's (`AskBox`), so Plan, permissions, Work on, `@` and the morph into the conversation's
   composer work the same from both. Home keeps its box too.
 
+## 15. One engine for conversations (2026-11-15)
+
+**Why:** a conversation without a project ran on pi-durable and one in a project on pi-coding-agent: two runtimes, two
+storage formats and two ways to search and read history, for what the app shows as one thing. T3 Code (pingdotgg/t3code)
+runs every thread on the same agent, giving a thread without a project a folder of its own.
+
+**What changed:**
+- A chat is a pi SDK session (BuildRuntime with a **chat profile**), its file in `<home>/chats/`, run in
+  `<home>/scratch/<id>/`. The app still knows it as a `thread`; the folder isn't shown.
+- **Same tools as before:** web search and pages, connected apps, MCP servers on for chats (the others are refused),
+  the browser, About me, earlier chats (`@conversation`, as a CHAT chip), skills (pi's own; `read` opens a skill's files
+  only) and `/templates` (shown as typed). No file or command tools, no approval modes; a connector change or a browser
+  action asks with a card in the transcript, as before.
+- **Files** go in the message itself, tagged, so the session file is all there is; their chips still open the kept copy.
+  Folder conversations take files now too.
+- **Versions** (edit, retry, ‹ 1 / 2 ›) are pi's session tree.
+- **Old chats move once**, when the engine starts (`migrate-chats.ts`): the branch they showed, with their files and
+  `/commands`. Other branches and approval cards stay behind in the old SQLite file, which is kept until the chat is
+  deleted.
+- An MCP server turned off in a chat is refused when called, as in a folder conversation, instead of being hidden.
+
+**Not changed:** agents stay on pi-durable. "Continue in" still makes a new conversation in the project's folder.

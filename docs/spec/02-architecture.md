@@ -12,7 +12,7 @@
 ┌──────────── Local Engine (Node, bundled) ──────────┐   ┌──────── Cloud Engine (user's Cloudflare) ────────┐
 │ engine-core: catalog DB, routing, approvals, FTS   │   │ Worker "piopio-cloud"                             │
 │ ├─ BuildRuntime   → pi-coding-agent SDK            │   │ ├─ Gateway: auth, Engine Protocol over WS         │
-│ ├─ ThreadRuntime  → pi-durable (Node SQLite)       │   │ ├─ Channel webhooks (Telegram, WhatsApp)          │
+│ ├─ Chats → BuildRuntime, chat profile (pi SDK)     │   │ ├─ Channel webhooks (Telegram, WhatsApp)          │
 │ ├─ SpaceRuntime   → pi-durable (Node SQLite)       │   │ ├─ RegistryDO (agents, routing, secrets, deploys) │
 │ ├─ AgentRuntime   → pi-durable (Node SQLite) [dev] │   │ ├─ AgentDO × N → PiHarness (pi-durable)           │
 │ ├─ Git/GitHub, FS watch, checkpoints               │   │ └─ R2 (attachments), optional Sandbox/Containers  │

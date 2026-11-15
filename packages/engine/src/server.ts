@@ -26,7 +26,7 @@ import { Projects } from "./projects.js";
 import { Sessions } from "./sessions.js";
 import { ABOUT_ME_BANK, AboutMe } from "./about-me.js";
 import { Settings } from "./settings.js";
-import { ChatMcp } from "./tools/mcp-chat.js";
+import { notInChat } from "./tools/mcp-chat.js";
 import { ChatResources } from "./tools/chat-resources.js";
 import { Packages } from "./packages.js";
 import { exportMemory, MemoryProviders } from "./memory.js";
@@ -101,7 +101,6 @@ export class Engine {
 	private readonly browserSites: BrowserSites;
 	readonly settings: Settings;
 	readonly aboutMe: AboutMe;
-	readonly chatMcp: ChatMcp;
 	private readonly mcpStatus = new McpStatus();
 	readonly packages: Packages;
 	readonly chatResources: ChatResources;
@@ -186,11 +185,13 @@ export class Engine {
 		setTimeout(() => this.memory.fill(), 15_000).unref();
 		void this.notesFromMemory();
 		this.aboutMe = new AboutMe(this.memory, this.settings, join(options.paths.home, "about-me.json"));
-		this.chatMcp = new ChatMcp(this.mcp, (name, server) => this.inChat(name, server));
 		this.packages = new Packages(agentDir);
 		this.chatResources = new ChatResources(agentDir);
-		this.packages.onChange(() => void this.chatResources.reload());
-		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcp: this.chatMcp, resources: this.chatResources };
+		this.packages.onChange(() => {
+			void this.chatResources.reload();
+			void this.sessions.reloadResources();
+		});
+		this.sessions.chat = { settings: this.settings, aboutMe: this.aboutMe, mcpOff: () => notInChat(this.mcp, (name, server) => this.inChat(name, server)), resources: this.chatResources };
 		this.sessions.agentHost = { files: new AgentFiles(options.agentsDir), memory: this.memory, app: this.app };
 		this.sessions.browserSites = this.browserSites;
 		if (options.agentAskTimeoutMs) this.sessions.agentAskTimeoutMs = options.agentAskTimeoutMs;
@@ -258,9 +259,6 @@ export class Engine {
 		this.teams.hookUrl = (team, routine) => (this.hooks.port ? this.hooks.url(team, routine) : undefined);
 		this.teams.onRoutines = () => void this.watchers.sync().catch(() => undefined);
 		this.sessions.hookUrl = (agent, trigger) => this.hooks.url(agent, trigger);
-		this.settings.onChange((next, previous) => {
-			if (next.chat.mcp !== previous.chat.mcp || JSON.stringify(next.chat.mcpServers) !== JSON.stringify(previous.chat.mcpServers)) void this.chatMcp.reset();
-		});
 		this.sessions.policy = {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
 			modeFor: (cwd) => this.projects.modeFor(cwd),
@@ -284,6 +282,9 @@ export class Engine {
 		this.token = loadOrCreateToken(this.options.paths);
 		await this.hub.ready();
 		await this.aboutMe.migrate().catch((error) => this.log(`About me: couldn't bring in the old doc: ${(error as Error).message}`));
+		// Chats from before one engine for conversations (2026-11-15) move to pi sessions first.
+		const moved = await this.sessions.migrateChats(this.log);
+		if (moved) this.log(`Moved ${moved} chat${moved === 1 ? "" : "s"} to the new engine.`);
 		// The interim browser (Playwright MCP, 2026-11-14) is gone: take out what it left (docs/spec/22 §13).
 		this.removeInterimBrowser();
 		this.server = createServer((stream) => this.accept(new RpcConnectionFor(stream)));
@@ -409,7 +410,6 @@ export class Engine {
 		await this.sessions.closeAll();
 		this.inputReceipts.close();
 		this.hub.extraCosts.close();
-		await this.chatMcp.close();
 		await this.memory.reset();
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
 	}
@@ -563,7 +563,7 @@ export class Engine {
 				const { disposition } = await runtime.submit(p.input.text, {
 					whenBusy: p.whenBusy ?? "followUp",
 					...(p.clientRequestId ? { requestId: p.clientRequestId } : {}),
-					...(p.input.attachments ? { attachments: p.ref.kind === "build" ? p.input.attachments : keepAttachments(this.options.paths.home, p.ref.id, p.input.attachments) } : {}),
+					...(p.input.attachments ? { attachments: keepAttachments(this.options.paths.home, p.ref.id, p.input.attachments) } : {}),
 				});
 				this.sessions.touch(p.ref, isFirst ? p.input.text : undefined);
 				return { accepted: true, disposition } satisfies Result<"sessions.submit">;
@@ -658,7 +658,7 @@ export class Engine {
 			}
 			case "sessions.commands": {
 				const p = params as Params<"sessions.commands">;
-				if (p.ref.kind !== "build") return { commands: await this.sessions.chatCommands() } satisfies Result<"sessions.commands">;
+				if (p.ref.kind === "agent") return { commands: await this.sessions.chatCommands() } satisfies Result<"sessions.commands">;
 				return { commands: (await this.sessions.build(p.ref)).commands() } satisfies Result<"sessions.commands">;
 			}
 			case "sessions.rewind": {
@@ -714,7 +714,6 @@ export class Engine {
 				this.mcp.add(scope, cwd ? this.folder({ cwd }) : undefined, name, server);
 				if (scope === "global") {
 					if (chat !== undefined) this.setChat(name, chat);
-					void this.chatMcp.reset();
 				}
 				return {};
 			}
@@ -736,7 +735,6 @@ export class Engine {
 			case "mcp.setTool": {
 				const p = params as Params<"mcp.setTool">;
 				this.mcp.setTool(p.scope, p.cwd ? this.folder(p) : undefined, p.name, p.tool, p.enabled);
-				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
 			}
 			case "mcp.detect":
@@ -744,13 +742,11 @@ export class Engine {
 			case "mcp.remove": {
 				const p = params as Params<"mcp.remove">;
 				this.mcp.remove(p.scope, p.cwd ? this.folder(p) : undefined, p.name);
-				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
 			}
 			case "mcp.setEnabled": {
 				const p = params as Params<"mcp.setEnabled">;
 				this.mcp.setEnabled(p.scope, p.cwd ? this.folder(p) : undefined, p.name, p.enabled);
-				if (p.scope === "global") void this.chatMcp.reset();
 				return {};
 			}
 			case "packages.preview":

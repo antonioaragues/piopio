@@ -17,13 +17,16 @@ import {
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
-import type { ApprovalRule, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
+import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage } from "../timeline/builder.js";
-import { SdkEventMapper } from "../timeline/pi-sdk.js";
+import { sdkMessages, SdkEventMapper } from "../timeline/pi-sdk.js";
+import { chatPromptExtension } from "../tools/chat-prompt.js";
+import { sdkAsSent, sdkContent, sdkUser, sdkWithWords, TYPED_ENTRY, type ContentBlock, type SdkInput } from "../input.js";
 import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat-profile.js";
 import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
@@ -32,10 +35,26 @@ import { teamExtension, type TeamBridge } from "../teams/extension.js";
 import { consultExtension, type ConsultBridge } from "../consult.js";
 import { offersExtension, type OffersBridge } from "../offers.js";
 import { guardsExtension } from "../tools/guards.js";
-import { formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
+import { CONVERSATION_MIME, formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
+
+type Input = SdkInput;
+
+/**
+ * A conversation without a project (docs/spec/18; one engine for conversations since 2026-11-15): a pi SDK session in
+ * a folder of its own, with a chat's tools (the web, connected apps, MCP servers, the browser, About me) and none of a
+ * folder conversation's: no files, commands, plans or approval modes. A connector change or a browser action asks with
+ * a card in the transcript, as chats always did.
+ */
+export type ChatProfile = {
+	/** The web tools, on or off for this conversation. */
+	web: () => boolean;
+	setWeb: (on: boolean) => void;
+	/** More extensions: About me. */
+	extensions?: ExtensionFactory[];
+};
 
 /** pi session entry type for checkpoints (kept in the session file, not sent to the model). */
 const CHECKPOINT_ENTRY = "piopio.checkpoint";
@@ -43,6 +62,8 @@ const CHECKPOINT_ENTRY = "piopio.checkpoint";
 const REVIEW_ENTRY = "piopio.review";
 
 export type BuildOpenOptions = {
+	/** A chat rather than a folder conversation (see ChatProfile). */
+	chat?: ChatProfile;
 	/** The browser's tools (docs/spec/22), run by the Mac app for this session. */
 	browser?: BrowserCall;
 	/** Connected apps: their tools, asking through Build's approval prompt before a change. */
@@ -104,6 +125,7 @@ export class BuildRuntime implements Runtime {
 		private readonly cwd: string,
 		private readonly checkpoints: CheckpointStore,
 		private readonly plan: BuildOpenOptions["plan"],
+		private readonly chat?: ChatProfile,
 	) {
 		this.builder = new TimelineBuilder(ref);
 	}
@@ -127,12 +149,10 @@ export class BuildRuntime implements Runtime {
 			cwd: o.cwd,
 			agentDir,
 			settingsManager,
-			extensionFactories: [
+			extensionFactories: o.chat ? chatFactories(o, () => runtime) : [
 				// The pi CLI's built-ins (MCP servers, and codemode / tool search through which MCP tools are
 				// reached). Replaceable: a user extension that registers the same tools or /mcp takes over.
-				{ name: "codemode", factory: createCodemodeExtension(), replaceable: true, builtin: true },
-				{ name: "tool-search", factory: createToolSearchExtension(), replaceable: true, builtin: true },
-				{ name: "mcp", factory: createMcpExtension(), replaceable: true, builtin: true },
+				...piBuiltins(),
 				// First, so the snapshot is taken before anything else can change files.
 				checkpointsExtension({ snapshot: async (callId) => void (await runtime?.takeCheckpoint(callId)) }),
 				// Piopio's prompt in place of pi's preamble and docs, before the extensions that add to the prompt.
@@ -254,7 +274,10 @@ export class BuildRuntime implements Runtime {
 			resourceLoader,
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
-		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan);
+		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan, o.chat);
+		runtime.connectors = o.connectors;
+		runtime.toolsOff = o.toolsOff;
+		if (o.thinking) runtime.thinkingChosen = o.thinking;
 		if (o.history) runtime.history = o.history;
 		broker.onAdded = (prompt) => o.onAttention?.("waiting", prompt.detail ? `${prompt.title}: ${prompt.detail}` : prompt.title);
 		const bound = runtime;
@@ -263,6 +286,11 @@ export class BuildRuntime implements Runtime {
 		runtime.attach();
 		return runtime;
 	}
+
+	private connectors?: ConnectorHub;
+	private toolsOff?: () => string[];
+	/** The thinking level you picked (a chat shows "default" until then). */
+	private thinkingChosen?: string;
 
 	/** What you last asked, for auto review. */
 	lastUserText(): string | undefined {
@@ -286,6 +314,64 @@ export class BuildRuntime implements Runtime {
 
 	respond(promptId: string, response: PromptResponse): void {
 		this.broker.respond(promptId, response);
+	}
+
+	// ── A chat's cards (ChatProfile) ────────────────────────────────────────
+
+	private readonly approvals = new Map<string, { item: ApprovalItem; resolve: (answer: { approved: boolean; always?: boolean; reason?: string }) => void }>();
+
+	/** The folders of the skills pi found, which a chat's `read` may open. */
+	skillDirs(): string[] {
+		return this.session.resourceLoader.getSkills().skills.map((s) => s.baseDir);
+	}
+
+	/** A card in the transcript (Allow · Deny · Allow, don't ask again) until answered, or the turn stops. */
+	approvalCard(_callId: string, signal: AbortSignal | undefined, request: { tool: string; title: string; args: Record<string, unknown>; always: string }): Promise<{ approved: boolean; always?: boolean; reason?: string }> {
+		const id = `conn_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+		const item: ApprovalItem = {
+			kind: "approval",
+			id: `approval:${id}`,
+			at: new Date().toISOString(),
+			approvalId: id,
+			tool: request.tool,
+			title: request.title,
+			args: request.args,
+			status: "pending",
+			expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+			always: request.always,
+			source: "connector",
+		};
+		return new Promise((resolve) => {
+			this.approvals.set(id, { item, resolve });
+			this.builder.insert(item);
+			this.emitter.emit(this.builder.flush());
+			signal?.addEventListener(
+				"abort",
+				() => {
+					this.settle(id, "cancelled");
+					resolve({ approved: false, reason: "The turn was stopped." });
+				},
+				{ once: true },
+			);
+		});
+	}
+
+	private settle(id: string, status: ApprovalItem["status"], reason?: string): void {
+		const pending = this.approvals.get(id);
+		if (!pending) return;
+		this.approvals.delete(id);
+		pending.item.status = status;
+		if (reason) pending.item.reason = reason;
+		this.emitter.emit([{ type: "item.updated", item: structuredClone(pending.item) }]);
+	}
+
+	/** The user's answer to a card (`sessions.decide`). */
+	async decide(approvalId: string, decision: { approve: boolean; always?: boolean; reason?: string }): Promise<ApprovalItem["status"]> {
+		const pending = this.approvals.get(approvalId);
+		if (!pending) throw new EngineError("NOT_FOUND", "That request was already answered or has gone.");
+		pending.resolve({ approved: decision.approve, ...(decision.always ? { always: true } : {}), ...(decision.reason ? { reason: decision.reason } : {}) });
+		this.settle(approvalId, decision.approve ? "approved" : "denied", decision.reason);
+		return decision.approve ? "approved" : "denied";
 	}
 
 	// ── Checkpoints (docs/spec/05-build §7) ────────────────────────────────
@@ -363,7 +449,7 @@ export class BuildRuntime implements Runtime {
 	 */
 	private rebuild(emit: boolean): void {
 		const messages = this.session.messages as unknown as PiMessage[];
-		this.builder.reset(messages, (i) => SdkEventMapper.idOf(i), false);
+		this.builder.reset(sdkMessages(messages), (i) => SdkEventMapper.idOf(i), false);
 		for (const entry of this.session.sessionManager.getBranch()) {
 			if (entry.type === "custom" && entry.customType === REVIEW_ENTRY) {
 				const { callId, reason } = entry.data as { callId: string; reason: string };
@@ -374,7 +460,9 @@ export class BuildRuntime implements Runtime {
 			const { beforeCallId, ...item } = entry.data as CheckpointItem & { beforeCallId?: string };
 			this.builder.checkpoint(item, beforeCallId ? `tool:${beforeCallId}` : this.builder.firstAfter(item.at), false);
 		}
-		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, approvalMode: this.approvalMode(), planMode: this.plan.active(), prompts: this.broker.list(), ...this.context() });
+		this.showTyped(false);
+		this.builder.annotateBranches(this.versions(), false);
+		this.builder.setState({ ...this.settings(), prompts: this.broker.list(), ...this.context() });
 		this.mapper = new SdkEventMapper(this.builder, messages.length);
 		if (emit) {
 			this.builder.flush();
@@ -403,6 +491,12 @@ export class BuildRuntime implements Runtime {
 			record?.(event);
 			this.mapper.apply(event as never);
 			if (event.type === "message_end" || event.type === "agent_settled") this.builder.setState(this.context());
+			// A new message of yours may stand beside an earlier version (an edit, a retry): refresh the switchers once
+			// pi has written it (after its message_end).
+			if ((event.type === "message_start" && (event as { message?: PiMessage }).message?.role !== "user") || event.type === "agent_settled") {
+				this.showTyped(true);
+				this.builder.annotateBranches(this.versions());
+			}
 			this.emitter.emit(this.builder.flush());
 			// Compaction replaces older messages with a summary: renumber from the session.
 			if (event.type === "compaction_end") this.rebuild(true);
@@ -447,32 +541,71 @@ export class BuildRuntime implements Runtime {
 	}
 
 	async submit(raw: string, options: SubmitOptions) {
-		if (options.attachments?.length) throw new EngineError("INVALID", "Build sessions don't take attachments yet; mention files with @ instead.");
 		await this.hub.ensureCredential(this.model.provider);
-		const text = await this.expandReferences(raw);
+		// A chat's tools follow what's connected and turned off here (they can change between messages).
+		if (this.chat) this.applyMode();
+		const { text, attachments } = this.chat ? await this.chatReferences(raw) : { text: await this.expandReferences(raw), attachments: [] };
+		const input = await this.inputOf(text, [...(options.attachments ?? []), ...attachments]);
 		if (this.session.isStreaming) {
 			if (options.whenBusy === "reject") throw new EngineError("BUSY", "The session is busy.");
-			if (options.whenBusy === "steer") await this.session.steer(text);
-			else await this.session.followUp(text);
+			await this.queue(input, options.whenBusy === "steer" ? "steer" : "followUp");
 			return { disposition: "queued" as const };
 		}
 		// pi refuses a prompt while a compaction runs (the Compact button, or an extension's): it waits for it instead.
 		if (this.session.isCompacting || this.waiting.length > 0) {
 			if (options.whenBusy === "reject") throw new EngineError("BUSY", "The session is compacting.");
-			this.waiting.push(text);
+			this.waiting.push(input);
 			this.showWaiting();
 			if (this.waiting.length === 1) void this.session.waitForIdle().then(() => this.sendWaiting());
 			return { disposition: "queued" as const };
 		}
-		this.start(text);
+		this.start(input);
 		return { disposition: "started" as const };
 	}
 
+	/**
+	 * `@conversation:<id>` in a chat: each one goes with the message as a file framed as background (a CHAT chip), and the
+	 * mention reads as its title, so an edit or a retry sends it again.
+	 */
+	private async chatReferences(text: string): Promise<{ text: string; attachments: NonNullable<SubmitOptions["attachments"]> }> {
+		const ids = [...new Set([...text.matchAll(/@conversation:([A-Za-z0-9_-]+)/g)].map((m) => m[1]!))];
+		if (ids.length === 0 || !this.history) return { text, attachments: [] };
+		const attachments: NonNullable<SubmitOptions["attachments"]> = [];
+		let out = text;
+		for (const id of ids) {
+			const c = await this.history.read(id).catch(() => undefined);
+			if (c) {
+				attachments.push({ kind: "text", name: c.title, mimeType: CONVERSATION_MIME, text: formatConversation(id, c) });
+				out = out.replaceAll(`@conversation:${id}`, `“${c.title}”`);
+			} else out = out.replaceAll(`@conversation:${id}`, `@conversation:${id} (not found among your chats)`);
+		}
+		return { text: out, attachments };
+	}
+
+	/** The words alone, or with the files sent along (in the message itself: `sdkContent`). */
+	private async inputOf(text: string, attachments: SubmitOptions["attachments"]): Promise<Input> {
+		if (!attachments?.length) return text;
+		if (attachments.some((a) => a.kind === "image")) {
+			const model = (await this.hub.buildRuntime()).getModel(this.model.provider, this.model.id);
+			if (model && !model.input.includes("image")) throw new EngineError("INVALID", `${model.name} can't read images. Pick a model with vision.`);
+		}
+		return sdkContent(text, attachments);
+	}
+
+	private async queue(input: Input, mode: "steer" | "followUp"): Promise<void> {
+		const [text, images] = typeof input === "string" ? [input, undefined] : [input.text, input.images];
+		await (mode === "steer" ? this.session.steer(text, images) : this.session.followUp(text, images));
+	}
+
 	/** Messages sent during a compaction, in order; shown in the queue until it ends. */
-	private waiting: string[] = [];
+	private waiting: Input[] = [];
+
+	private static words(input: Input): string {
+		return typeof input === "string" ? input : sdkUser([{ type: "text", text: input.text }, ...input.images]).text;
+	}
 
 	private showWaiting(): void {
-		this.builder.setState({ queue: this.waiting.map((text, i) => ({ id: `wait:${i}`, mode: "followUp" as const, text })) });
+		this.builder.setState({ queue: this.waiting.map((input, i) => ({ id: `wait:${i}`, mode: "followUp" as const, text: BuildRuntime.words(input) })) });
 		this.emitter.emit(this.builder.flush());
 	}
 
@@ -482,16 +615,42 @@ export class BuildRuntime implements Runtime {
 		if (first === undefined) return;
 		this.start(first);
 		// The run just started takes the rest as follow-ups, as if they had been sent while it ran.
-		for (const text of rest) void this.session.followUp(text);
+		for (const input of rest) void this.queue(input, "followUp");
 	}
 
-	private start(text: string): void {
-		// prompt() resolves when the run settles; progress arrives through events.
-		this.session.prompt(text).catch((error: unknown) => {
+	private start(input: Input): void {
+		if (typeof input === "string" && input.startsWith("/")) this.typed.push(input);
+		// The run resolves when it settles; progress arrives through events.
+		const run = typeof input === "string" ? this.session.prompt(input) : this.session.prompt(input.text, { images: input.images, expandPromptTemplates: false });
+		run.catch((error: unknown) => {
+			if (typeof input === "string" && this.typed.includes(input)) this.typed.splice(this.typed.lastIndexOf(input), 1);
 			this.builder.system(`sys:${Date.now()}`, "error", error instanceof Error ? error.message : String(error));
 			this.builder.setState({ status: "idle" });
 			this.emitter.emit(this.builder.flush());
 		});
+	}
+
+	/** Withdraws one queued message (`steer:<n>`, `follow:<n>`, or `wait:<n>` during a compaction). */
+	async removeQueued(queueId: string): Promise<void> {
+		const [kind, n] = queueId.split(":");
+		const i = Number(n);
+		if (kind === "wait") {
+			if (!(i >= 0 && i < this.waiting.length)) throw new EngineError("NOT_FOUND", "That message is no longer queued.");
+			this.waiting.splice(i, 1);
+			this.showWaiting();
+			return;
+		}
+		const { steering, followUp } = this.session.clearQueue();
+		const list = kind === "steer" ? steering : followUp;
+		const found = i >= 0 && i < list.length;
+		if (found) list.splice(i, 1);
+		// The rest go back in order; if the run ended meanwhile, the first of them starts the next one.
+		const rest: [string, "steer" | "followUp"][] = [...steering.map((t) => [t, "steer"] as [string, "steer"]), ...followUp.map((t) => [t, "followUp"] as [string, "followUp"])];
+		for (const [text, mode] of rest) {
+			if (this.session.isStreaming) await this.queue(text, mode);
+			else this.start(text);
+		}
+		if (!found) throw new EngineError("NOT_FOUND", "That message is no longer queued.");
 	}
 
 	/**
@@ -501,7 +660,7 @@ export class BuildRuntime implements Runtime {
 	async abort(): Promise<void> {
 		this.broker.cancelAll();
 		const { steering, followUp } = this.session.clearQueue();
-		const dropped = [...this.waiting.splice(0), ...steering, ...followUp];
+		const dropped = [...this.waiting.splice(0).map(BuildRuntime.words), ...steering, ...followUp];
 		await this.session.abort();
 		if (dropped.length === 0) return;
 		const quote = (t: string) => `“${t.length > 80 ? `${t.slice(0, 79)}…` : t}”`;
@@ -524,6 +683,17 @@ export class BuildRuntime implements Runtime {
 	 * the web tools; any other mode the other way round. Live: the next model request sees them (no reopen).
 	 */
 	applyMode(): void {
+		if (this.chat) {
+			const off = new Set([...CHAT_OFF, ...(this.chat.web() ? [] : ["web_search", "web_fetch"])]);
+			// A connected app's tools only while one of its accounts is on here (as a chat always offered them).
+			const apps = this.connectors;
+			const appOff = (id: string) => this.toolsOff?.().includes(`connector:${id}`) ?? false;
+			const calendars = apps ? apps.calendars("chat", appOff).length > 0 : false;
+			const mailboxes = apps ? apps.mailboxes("chat", appOff).length > 0 : false;
+			const wanted = (name: string) => !off.has(name) && (!name.startsWith("calendar_") || calendars) && (!name.startsWith("mail_") || mailboxes);
+			this.session.setActiveToolsByName(this.session.getAllTools().map((t) => t.name).filter(wanted));
+			return;
+		}
 		const readOnly = this.approvalMode() === "read_only";
 		const known = new Set(this.session.getAllTools().map((t) => t.name));
 		const active = new Set(this.session.getActiveToolNames());
@@ -532,17 +702,29 @@ export class BuildRuntime implements Runtime {
 		this.session.setActiveToolsByName([...active]);
 	}
 
-	async configure(change: { model?: ModelRef; thinking?: string; approvalMode?: ApprovalMode; planMode?: boolean }): Promise<void> {
-		if (change.planMode !== undefined) this.plan.setActive(change.planMode);
-		if (change.approvalMode) this.applyMode();
+	/** What the session state says about its settings: a chat's (model, thinking, web), or a folder conversation's. */
+	private settings() {
+		// A chat says "default" until you pick a level, as chats always did.
+		if (this.chat) return { model: this.model, thinking: this.thinkingChosen ?? "default", tools: { web: this.chat.web() } };
+		return { model: this.model, thinking: this.session.thinkingLevel, approvalMode: this.approvalMode(), planMode: this.plan.active() };
+	}
+
+	async configure(change: { model?: ModelRef; thinking?: string; approvalMode?: ApprovalMode; planMode?: boolean; web?: boolean }): Promise<void> {
+		if (change.planMode !== undefined && !this.chat) this.plan.setActive(change.planMode);
+		if (change.web !== undefined && this.chat) this.chat.setWeb(change.web);
+		if (change.approvalMode || change.web !== undefined) this.applyMode();
 		if (change.model) {
 			const model = (await this.hub.buildRuntime()).getModel(change.model.provider, change.model.id);
 			if (!model) throw new EngineError("INVALID", `Unknown model ${change.model.provider}/${change.model.id}`);
 			await this.session.setModel(model);
 			this.model = change.model;
 		}
-		if (change.thinking) this.session.setThinkingLevel(change.thinking as never);
-		this.builder.setState({ model: this.model, thinking: this.session.thinkingLevel, approvalMode: this.approvalMode(), planMode: this.plan.active(), ...this.context() });
+		// "default" (a chat's menu): the level pi starts with.
+		if (change.thinking) {
+			this.thinkingChosen = change.thinking === "default" ? undefined : change.thinking;
+			if (change.thinking !== "default") this.session.setThinkingLevel(change.thinking as never);
+		}
+		this.builder.setState({ ...this.settings(), ...this.context() });
 		this.emitter.emit(this.builder.flush());
 	}
 
@@ -629,10 +811,102 @@ export class BuildRuntime implements Runtime {
 		return { files: changed, turns, ...(result.editorText ? { editorText: result.editorText } : {}) };
 	}
 
-	/** Retry: the conversation goes back to before the turn's message and asks it again (files stay as they are). */
+	// ── Versions of a message (a chat's ‹ 1 / 2 ›; pi's session tree) ───────
+
+	/** Retry: the turn's message again, as it was sent (its files too), as a new version beside it (files stay as they are). */
 	async regenerate(itemId: string): Promise<void> {
-		const { editorText } = await this.rewind(itemId, false, false);
-		if (editorText) await this.submit(editorText, { whenBusy: "reject" } as SubmitOptions);
+		await this.again(itemId, sdkAsSent);
+	}
+
+	/** Your message with new words (its files stay): a new version beside the old one, answered again. */
+	async edit(itemId: string, text: string): Promise<void> {
+		await this.again(itemId, (content) => sdkWithWords(content, text));
+	}
+
+	private async again(itemId: string, change: (content: string | ContentBlock[]) => Input): Promise<void> {
+		if (this.session.isStreaming) throw new EngineError("BUSY", "Stop the agent before asking again.");
+		const { index, items } = this.turnOf(itemId);
+		const entryId = this.userEntry(items, index);
+		const entry = this.session.sessionManager.getEntry(entryId) as { message?: { content?: string | ContentBlock[] } } | undefined;
+		const content = entry?.message?.content ?? "";
+		await this.session.navigateTree(entryId);
+		this.rebuild(true);
+		this.start(change(content));
+	}
+
+	/** Shows another version (`BranchInfo.previous` / `next`: the newest end of that version). */
+	async switchBranch(branch: string): Promise<void> {
+		if (this.session.isStreaming) throw new EngineError("BUSY", "Stop the agent before switching versions.");
+		if (!this.session.sessionManager.getEntry(branch)) throw new EngineError("NOT_FOUND", `No version ${branch}`);
+		await this.session.navigateTree(branch);
+		this.rebuild(true);
+	}
+
+	/** Your messages on the path, oldest first, with the user items they show as (matched from the end: compaction). */
+	private userPath(): { entry: TreeEntry; itemId: string }[] {
+		const onPath = (this.session.sessionManager.getBranch() as unknown as TreeEntry[]).filter(isUserEntry);
+		const items = this.builder.currentItems.filter((i) => i.kind === "user");
+		return onPath.flatMap((entry, k) => {
+			const item = items[items.length - onPath.length + k];
+			return item ? [{ entry, itemId: item.id }] : [];
+		});
+	}
+
+	/** `/commands` sent and not yet written down (in order): each one belongs to the next message of yours pi writes. */
+	private readonly typed: string[] = [];
+
+	/** Messages that were a `/command`: noted once pi has written them, and shown as typed. */
+	private showTyped(emit: boolean): void {
+		const sm = this.session.sessionManager;
+		const branch = sm.getBranch() as unknown as TreeEntry[];
+		const noted = new Map(branch.flatMap((e) => (e.type === "custom" && e.customType === TYPED_ENTRY ? [[(e.data as { entryId: string }).entryId, (e.data as { text: string }).text] as const] : [])));
+		if (this.typed.length) {
+			const last = [...branch].reverse().find(isUserEntry);
+			if (last && !noted.has(last.id)) {
+				const text = this.typed.shift()!;
+				sm.appendCustomEntry(TYPED_ENTRY, { text, entryId: last.id });
+				noted.set(last.id, text);
+			}
+		}
+		for (const { entry, itemId } of this.userPath()) {
+			const typed = noted.get(entry.id);
+			if (typed) this.builder.setUserText(itemId, typed, emit);
+		}
+	}
+
+	/** For each message of yours with other versions (the same place in the tree): which one this is, and its neighbours. */
+	private versions(): Map<string, BranchInfo> {
+		const sm = this.session.sessionManager;
+		type Entry = TreeEntry;
+		const isUser = isUserEntry;
+		const children = (id: string | null) => (id ? (sm.getChildren(id) as unknown as Entry[]) : sm.getTree().map((n) => n.entry as unknown as Entry));
+		// Where versions part: the first entry above that isn't a note (a typed command, a model change), and what follows it.
+		const forkPoint = (e: Entry): string | null => {
+			let id = e.parentId;
+			while (id) {
+				const parent = sm.getEntry(id) as unknown as Entry | undefined;
+				if (!parent || !isNote(parent)) break;
+				id = parent.parentId;
+			}
+			return id;
+		};
+		const versionsAt = (id: string | null): Entry[] => children(id).flatMap((c) => (isNote(c) ? versionsAt(c.id) : isUser(c) ? [c] : []));
+		const newest = (id: string): string => {
+			for (;;) {
+				const kids = sm.getChildren(id) as unknown as Entry[];
+				if (kids.length === 0) return id;
+				id = kids.reduce((a, b) => (b.timestamp > a.timestamp ? b : a)).id;
+			}
+		};
+		const out = new Map<string, BranchInfo>();
+		for (const { entry, itemId } of this.userPath()) {
+			const around = versionsAt(forkPoint(entry));
+			if (around.length < 2) continue;
+			around.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+			const i = around.findIndex((e) => e.id === entry.id);
+			out.set(itemId, { index: i, count: around.length, ...(i > 0 ? { previous: newest(around[i - 1]!.id) } : {}), ...(i < around.length - 1 ? { next: newest(around[i + 1]!.id) } : {}) });
+		}
+		return out;
 	}
 
 	/** Fork from here: a new pi session file with the conversation up to the end of this item's turn. */
@@ -648,6 +922,13 @@ export class BuildRuntime implements Runtime {
 		const path = SessionManager.open(file).createBranchedSession(leaf.id);
 		if (!path) throw new EngineError("INVALID", "Couldn't create the new session.");
 		return path;
+	}
+
+	/** Reads pi's resources again (a package was installed, turned off or removed), as pi's /reload does; not mid-run. */
+	async reloadResources(): Promise<void> {
+		if (this.session.isStreaming || this.session.isCompacting) return;
+		await this.session.reload();
+		this.applyMode();
 	}
 
 	async compact(): Promise<void> {
@@ -700,6 +981,66 @@ export function notesExtension(cwd: string): ExtensionFactory {
  * session, so their tools are refused here instead, through pi's tool pipeline (codemode scripts included), and the
  * model is told which servers are off. Turning a server back on takes effect with the next call.
  */
+/** An entry of pi's session tree, as Piopio reads it. */
+type TreeEntry = { id: string; parentId: string | null; type: string; timestamp: string; customType?: string; data?: unknown; message?: PiMessage };
+
+const isUserEntry = (e: TreeEntry) => e.type === "message" && e.message?.role === "user";
+
+/** Entries that aren't part of the conversation: Piopio's notes, pi's model and thinking changes, labels. */
+const isNote = (e: TreeEntry | undefined) => !!e && (e.message?.role === "system" || !["message", "custom_message", "compaction", "branch_summary"].includes(e.type));
+
+/** The pi CLI's MCP servers, and codemode / tool search through which their tools are reached. */
+function piBuiltins() {
+	return [
+		{ name: "codemode", factory: createCodemodeExtension(), replaceable: true, builtin: true },
+		{ name: "tool-search", factory: createToolSearchExtension(), replaceable: true, builtin: true },
+		{ name: "mcp", factory: createMcpExtension(), replaceable: true, builtin: true },
+	];
+}
+
+/** pi's tools a chat doesn't get: it has no folder of the user's to look in or change (`read` stays, for skills). */
+const CHAT_OFF = ["bash", "powershell", "edit", "write", "grep", "find", "ls"];
+
+/** A chat's extensions (ChatProfile): its prompt and tools, and cards in the transcript where Build would ask. */
+function chatFactories(o: BuildOpenOptions, runtime: () => BuildRuntime | undefined) {
+	const card = (callId: string, signal: AbortSignal | undefined) => (request: { tool: string; title: string; args: Record<string, unknown>; always: string }) => runtime()!.approvalCard(callId, signal, request);
+	return [
+		...piBuiltins(),
+		chatPromptExtension(o.chat!.web),
+		...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
+		skillsOnlyRead(o.cwd, () => runtime()?.skillDirs() ?? []),
+		...(o.browser ? [codingBrowserExtension(o.browser, (callId, signal) => (request) => card(callId, signal)({ ...request, always: `Always allow ${request.site}` }))] : []),
+		guardsExtension(),
+		chatProfileExtension(o.hub, o.webOptions, () => false),
+		...(o.connectors
+			? [
+					codingConnectorsExtension(
+						o.connectors,
+						(callId, signal) => (request) => {
+							const label = o.connectors!.definition(request.connector)?.name ?? request.connector;
+							return card(callId, signal)({ tool: request.tool, title: request.title, args: request.args, always: request.canAllowAlways ? `Don't ask again for this in ${label}` : "" });
+						},
+						(id) => o.toolsOff?.().includes(`connector:${id}`) ?? false,
+					),
+				]
+			: []),
+		...(o.history ? [historySdkExtension(o.history)] : []),
+		...(o.chat!.extensions ?? []),
+	];
+}
+
+/** `read` in a chat: a skill's files only (pi lists the skills for the model to read). */
+function skillsOnlyRead(cwd: string, dirs: () => readonly string[]): ExtensionFactory {
+	return (pi) => {
+		pi.on("tool_call", (event) => {
+			if (event.toolName !== "read") return undefined;
+			const raw = String((event.input as { path?: unknown }).path ?? "");
+			const path = resolve(cwd, raw.startsWith("~/") ? join(homedir(), raw.slice(2)) : raw);
+			return dirs().some((d) => path === d || path.startsWith(`${d}/`)) ? undefined : { block: true, reason: "In a conversation without a project, read opens a skill's files only." };
+		});
+	};
+}
+
 function mcpOffExtension(toolsOff: () => string[]): ExtensionFactory {
 	const servers = () => toolsOff().flatMap((t) => (t.startsWith("mcp:") ? [t.slice(4)] : []));
 	return (pi) => {

@@ -9,7 +9,7 @@ import type { ModelHub } from "../models.js";
 import { runWebFetch, runWebSearch, webSection, type WebOptions } from "./web.js";
 
 /** What Read only takes away from a Build session, and what it adds. */
-export const READ_ONLY_OFF = ["bash", "edit", "write"];
+export const READ_ONLY_OFF = ["bash", "powershell", "edit", "write"];
 export const READ_ONLY_ON = ["grep", "find", "ls", "web_search", "web_fetch"];
 
 const KNOWLEDGE_PROMPT = `

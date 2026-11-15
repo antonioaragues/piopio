@@ -27,3 +27,4 @@ DerivedData/
 apps/mac/App/Piopio.xcodeproj/
 apps/mac/App/build/
 .cache/
+!packages/engine/test/fixtures/*.sqlite

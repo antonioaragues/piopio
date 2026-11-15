@@ -1245,20 +1245,15 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		await a.client.call("sessions.submit", { ref, input: { text: call } });
 		expect((await finishedTools(a, ref, 2))[1]).toMatchObject({ status: "done", output: expect.stringContaining("echo: hi") });
 
-		// A chat: the server's tools aren't offered while it's off here.
+		// A chat (the same pi session since 2026-11-15): refused while it's off here, too.
 		const chat = (await a.client.call("sessions.create", { kind: "thread" })).ref;
 		await a.client.call("sessions.configure", { ref: chat, toolsOff: ["mcp:test"] });
 		await a.client.call("sessions.subscribe", { ref: chat });
 		await a.client.call("sessions.submit", { ref: chat, input: { text: call } });
-		let items: Snapshot["items"] = [];
-		for (let i = 0; i < 100 && !items.some((x) => x.kind === "assistant" && x.status === "done"); i++) {
-			await new Promise((r) => setTimeout(r, 100));
-			items = ((await a.client.call("sessions.open", { ref: chat })) as Snapshot).items;
-		}
-		expect(items.some((x) => x.kind === "tool")).toBe(false); // not offered, so never called
+		expect((await finishedTools(a, chat, 1))[0]).toMatchObject({ tool: "mcp__test__echo", status: "error", output: expect.stringContaining("turned off in this conversation") });
 		await a.client.call("sessions.configure", { ref: chat, toolsOff: [] });
 		await a.client.call("sessions.submit", { ref: chat, input: { text: call } });
-		expect((await finishedTools(a, chat, 1))[0]).toMatchObject({ status: "done", output: "echo: hi" });
+		expect((await finishedTools(a, chat, 2))[1]).toMatchObject({ status: "done", output: expect.stringContaining("echo: hi") });
 	}, 90_000);
 
 	test("Settings › MCP servers: a server is started to list its tools, used in chats per server, tools turned off one by one", async () => {
@@ -1278,7 +1273,11 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		await a.client.call("mcp.setTool", { scope: "global", name: "echo", tool: "echo", enabled: true });
 		await a.client.call("mcp.setChat", { name: "echo", chat: false });
 		expect((await a.client.call("mcp.list", {})).servers[0].chat).toBe(false);
-		expect(await a.engine.chatMcp.extension()).toBeUndefined();
+		// Not for chats any more: a chat's pi session refuses its tools.
+		const chat = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		await a.client.call("sessions.subscribe", { ref: chat });
+		await a.client.call("sessions.submit", { ref: chat, input: { text: 'call: mcp__echo__echo | {"text":"hi"}' } });
+		expect((await finishedTools(a, chat, 1))[0]).toMatchObject({ status: "error" });
 	}, 60_000);
 
 	test("servers configured in other apps are found, never imported on their own", () => {
@@ -1544,9 +1543,14 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 			["user", "/summarize report 50"],
 			["assistant", "Echo: Summarize report in 50 words."],
 		]);
-		await a.client.call("sessions.submit", { ref, input: { text: 'call: read_skill | {"name":"greet"}' } });
+		// A chat reads a skill as pi does, with `read`, which opens a skill's files and nothing else.
+		await a.client.call("sessions.submit", { ref, input: { text: `call: read | ${JSON.stringify({ path: join(pkg, "skills", "greet", "SKILL.md") })}` } });
 		snap = await idleWith(a, ref, (s) => s.state.status === "idle" && s.items.some((i) => i.kind === "tool" && i.status === "done"));
-		expect(snap.items.find((i) => i.kind === "tool")).toMatchObject({ tool: "read_skill", output: expect.stringContaining("Bon dia!") });
+		expect(snap.items.find((i) => i.kind === "tool")).toMatchObject({ tool: "read", output: expect.stringContaining("Bon dia!") });
+		await a.client.call("sessions.submit", { ref, input: { text: `call: read | ${JSON.stringify({ path: join(pkg, "package.json") })}` } });
+		snap = await idleWith(a, ref, (s) => s.state.status === "idle" && s.items.filter((i) => i.kind === "tool").length === 2 && s.items.some((i) => i.kind === "tool" && i.status === "error"));
+		expect(snap.items.filter((i) => i.kind === "tool")[1]).toMatchObject({ tool: "read", status: "error", output: expect.stringContaining("a skill's files only") });
+		expect(texts(snap).filter(([kind]) => kind === "user").map(([, text]) => text)).toEqual(["/summarize report 50", expect.stringContaining("call: read"), expect.stringContaining("call: read")]);
 
 		const skill = installed!.resources.skills[0]!.path;
 		await a.client.call("packages.setResource", { source, kind: "skills", path: skill, enabled: false });
@@ -2549,10 +2553,11 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 			await new Promise((r) => setTimeout(r, 100));
 			items = ((await a.client.call("sessions.open", { ref })) as Snapshot).items;
 		}
-		expect(items.some((x) => x.kind === "tool")).toBe(false); // the calendar tools aren't offered here
+		// The calendar tools aren't offered here: the scripted model calls one anyway, and pi has no such tool.
+		expect(items.filter((x) => x.kind === "tool")).toMatchObject([{ tool: "calendar_events", status: "error", output: expect.stringContaining("not found") }]);
 		await a.client.call("sessions.configure", { ref, toolsOff: [] });
 		await a.client.call("sessions.submit", { ref, input: { text: call } });
-		expect((await finishedTools(a, ref, 1))[0]?.output).toContain("Dentist");
+		expect((await finishedTools(a, ref, 2))[1]?.output).toContain("Dentist");
 		apps.close();
 	}, 30_000);
 

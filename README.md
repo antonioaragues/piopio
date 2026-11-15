@@ -31,7 +31,7 @@
 
 ---
 
-Piopio is a front-end for the [pi](https://pi.dev) agent harnesses (`pi-coding-agent` and `pi-durable`). It brings coding sessions, everyday chat and long-running personal agents into one SwiftUI app, with conversations and memory stored on your Mac and credentials in the macOS Keychain.
+Piopio is a front-end for the [pi](https://pi.dev) agent harnesses: `pi-coding-agent` for every conversation and `pi-durable` for agents. It brings coding sessions, everyday chat and long-running personal agents into one SwiftUI app, with conversations and memory stored on your Mac and credentials in the macOS Keychain.
 
 > [!NOTE]
 > **Personal alpha.** Build, conversations and projects, and local Agents are implemented (phases 1–4). Cloud is experimental. Real-provider compatibility, OS permissions and daily-use reliability still need broader validation. See [docs/status.md](docs/status.md) for what has and hasn't been checked.
@@ -64,8 +64,8 @@ Piopio is a front-end for the [pi](https://pi.dev) agent harnesses (`pi-coding-a
 ```mermaid
 flowchart LR
   app["Piopio.app<br/>(SwiftUI)"] -- "JSON-RPC over<br/>a Unix socket" --> engine["Local engine<br/>(Node)"]
-  engine --> durable["pi-durable<br/>Chat & Agents threads"]
-  engine --> coding["pi-coding-agent<br/>Build sessions"]
+  engine --> durable["pi-durable<br/>Agents"]
+  engine --> coding["pi-coding-agent<br/>Conversations"]
   durable & coding --> models["Model providers<br/>(remote or local)"]
   app -.-> keychain[("macOS Keychain")]
 ```
@@ -80,7 +80,7 @@ The app talks to a local Node engine that hosts both pi runtimes. Release builds
 | `apps/mac/App` | The SwiftUI app (`project.yml` → XcodeGen; the `.xcodeproj` is generated, not committed) |
 | `apps/mac` | Swift package: `PiopioKit` (engine client, protocol types, Keychain, streaming markdown), `PiopioTranscript` (windowed TextKit 2 transcript), `piopio-cli`, and `TranscriptLab` (spike S2 benchmarks) |
 | `packages/protocol` | Engine Protocol schemas (TypeBox → JSON Schema) |
-| `packages/engine` | Local Engine: Node daemon hosting pi-durable (Threads) and pi-coding-agent (Build) behind JSON-RPC over a Unix socket |
+| `packages/engine` | Local Engine: Node daemon hosting pi-coding-agent (every conversation, with or without a project) and pi-durable (agents) behind JSON-RPC over a Unix socket |
 | `packages/runtime` | Shared agent runtime, proactivity, safety and memory |
 | `packages/extensions` | Build approvals, plans, checkpoints, todos, notifications and subagents |
 | `packages/cloud` | Cloudflare Worker/Durable Object spikes; not a production cloud service |

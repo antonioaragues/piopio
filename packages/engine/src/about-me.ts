@@ -7,6 +7,7 @@
  */
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { Type } from "@earendil-works/pi-ai";
+import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { BuiltinMemory, MemoryEvent, MemoryProvider, MemoryRecord } from "@piopio/runtime";
 import type { MemoryProviders } from "./memory.js";
@@ -237,6 +238,42 @@ export function aboutMeExtension(store: AboutMe, settings: Settings, kind: "thre
 			}),
 		],
 	});
+}
+
+/** The same for chats on the pi SDK (docs/spec/18, one engine for conversations): the section, and the capture tool. */
+export function aboutMeSdkExtension(store: AboutMe, settings: Settings): ExtensionFactory {
+	const applies = () => {
+		const s = settings.get().aboutMe;
+		return s.enabled && s.inThreads;
+	};
+	return (pi) => {
+		pi.on("before_agent_start", async (event) => {
+			if (!applies()) return undefined;
+			const capture = settings.get().aboutMe.capture ? "\nWhen the user tells you something lasting about themselves, save it with remember_about_me." : "";
+			const text = `What the user wants you to know about them (their “About me”):\n${memoryPrompt(await store.promptText().catch(() => ""), "(nothing yet)")}${capture}`;
+			return { systemPrompt: `${event.systemPrompt}\n\n${text}` };
+		});
+		pi.registerTool(
+			defineCodingTool({
+				name: "remember_about_me",
+				label: "Remember about you",
+				description: "Save a lasting fact about the user (who they are, their preferences, their situation) to their “About me” memory, which every conversation reads. Only for facts that will matter again; the user sees every change.",
+				promptSnippet: "remember_about_me: save a lasting fact about the user",
+				parameters: Type.Object({
+					add: Type.Optional(Type.Array(Type.String(), { description: "Facts to add, one sentence each" })),
+					remove: Type.Optional(Type.Array(Type.String(), { description: "Facts that are wrong or outdated" })),
+					section: Type.Optional(Type.String({ description: "Heading, e.g. Work, Preferences, Family. Default: Notes" })),
+				}) as never,
+				async execute(_id, params) {
+					const args = params as { add?: string[]; remove?: string[]; section?: string };
+					if (!applies() || !settings.get().aboutMe.capture) return { content: [{ type: "text", text: "Saving to About me is off. The user can turn it on in Settings › Chat." }], details: {}, isError: true };
+					const change = await store.patch("agent", args.add ?? [], args.remove ?? [], args.section);
+					const text = change.added.length || change.removed.length ? `Saved to About me: ${change.summary}.` : "Nothing changed: already known, or not found.";
+					return { content: [{ type: "text", text }], details: { added: change.added, removed: change.removed } as Record<string, unknown> };
+				},
+			}),
+		);
+	};
 }
 
 /** "Added “x”; removed “y”": a change, said in a line. */

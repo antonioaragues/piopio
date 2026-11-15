@@ -121,26 +121,5 @@ export function historySdkExtension(bridge: HistoryBridge): ExtensionFactory {
 	};
 }
 
-/** For chats (pi-durable). */
-export function historyExtension(bridge: HistoryBridge) {
-	return defineExtension({
-		name: HISTORY_EXTENSION,
-		tools: [
-			defineTool({
-				name: "search_conversations",
-				description: searchDescription(bridge.scope),
-				parameters: searchParams,
-				execute: async (args) => ({ output: [{ type: "text", text: await runSearch(bridge, args) }] }),
-			}),
-			defineTool({
-				name: "read_conversation",
-				description: readDescription(bridge.scope),
-				parameters: readParams,
-				execute: async (args) => {
-					const r = await runRead(bridge, args);
-					return { output: [{ type: "text", text: r.text }], ...(r.isError ? { isError: true } : {}) };
-				},
-			}),
-		],
-	});
-}
+/** The media type of an earlier conversation sent along with a chat message (its chip reads "CHAT"). */
+export const CONVERSATION_MIME = "text/x-piopio-conversation";

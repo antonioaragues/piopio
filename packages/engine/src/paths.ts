@@ -10,7 +10,12 @@ export type EnginePaths = {
 	lockFile: string;
 	catalogIndex: string;
 	projectsIndex: string;
+	/** Chats from before 2026-11-15 (pi-durable SQLite files), kept after they moved to `chatsDir`. */
 	threadsDir: string;
+	/** Chats' pi session files (one engine for conversations, 2026-11-15). */
+	chatsDir: string;
+	/** Each chat's own folder, where its pi session runs (empty: chats have no file tools). */
+	scratchDir: string;
 	logsDir: string;
 	/** Where New project makes its folders (docs/spec/18 CF4): ~/Piopio, or inside `home` when it isn't the default. */
 	projectsRoot: string;
@@ -28,6 +33,8 @@ export function enginePaths(home = process.env.PIOPIO_HOME ?? DEFAULT_HOME): Eng
 		catalogIndex: join(home, "sessions.json"),
 		projectsIndex: join(home, "projects.json"),
 		threadsDir: join(home, "threads"),
+		chatsDir: join(home, "chats"),
+		scratchDir: join(home, "scratch"),
 		logsDir: join(home, "logs"),
 		// A test copy (another PIOPIO_HOME) keeps its project folders with its data, not in the user's ~/Piopio.
 		projectsRoot: process.env.PIOPIO_PROJECTS_DIR ?? (home === DEFAULT_HOME ? join(homedir(), "Piopio") : join(home, "Piopio")),
@@ -35,7 +42,7 @@ export function enginePaths(home = process.env.PIOPIO_HOME ?? DEFAULT_HOME): Eng
 }
 
 export function ensureDirs(paths: EnginePaths): void {
-	for (const dir of [paths.home, paths.threadsDir, paths.logsDir]) mkdirSync(dir, { recursive: true, mode: 0o700 });
+	for (const dir of [paths.home, paths.chatsDir, paths.scratchDir, paths.logsDir]) mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
 
 /** Reads the shared engine token, creating it (0600) on first run. */

@@ -20,9 +20,8 @@ import { BuildRuntime } from "./runtimes/build.js";
 import { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
-import { aboutMeExtension, type AboutMe } from "./about-me.js";
+import { aboutMeExtension, aboutMeSdkExtension, type AboutMe } from "./about-me.js";
 import type { Settings } from "./settings.js";
-import type { ChatMcp } from "./tools/mcp-chat.js";
 import type { ChatResources } from "./tools/chat-resources.js";
 import { AgentRuntime, type AgentOpenOptions } from "./runtimes/agent.js";
 import { writingExtension } from "./tools/writing.js";
@@ -31,11 +30,10 @@ import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
 import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, nextFire, validate, TEMPLATES, type AgentDefinition, type DefinitionError, type Watch } from "@piopio/runtime";
 import type { Extension } from "@earendil-works/pi-durable";
-import { ThreadRuntime, type BranchState } from "./runtimes/thread.js";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
-import { historyExtension, type HistoryBridge } from "./tools/history.js";
+import type { HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
@@ -44,18 +42,22 @@ import type { TeamBridge } from "./teams/extension.js";
 import type { ConsultBridge } from "./consult.js";
 import { routineLabel } from "./teams/routines.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
-import { SdkEventMapper } from "./timeline/pi-sdk.js";
+import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
+import { migrateChat } from "./migrate-chats.js";
 import type { SessionEvent } from "@piopio/protocol";
 
 type CatalogEntry = SessionSummary & {
 	thinking?: string;
 	file?: string;
 	sessionFile?: string;
+	/** Chats moved from pi-durable (2026-11-15): the old SQLite file, kept until the chat is deleted. */
+	migratedFrom?: string;
 	/** Original CLI file for recovered history; avoid importing a duplicate after restore. */
 	restoredFromSessionFile?: string;
 	/** The pi session file was seen on disk, so its disappearance means it was deleted. */
 	onDisk?: boolean;
-	branches?: BranchState;
+	/** Chats before 2026-11-15: the branch a pi-durable chat showed (read once, by the migration). */
+	branches?: { active?: string };
 	web?: boolean;
 	/** Build: the session's approval mode (new sessions take their project's). */
 	approvalMode?: ApprovalMode;
@@ -92,12 +94,11 @@ export class Sessions {
 	readonly checkpoints: CheckpointStore;
 	policy: ApprovalPolicy = { projectFor: () => undefined, modeFor: () => "auto_edit", rulesFor: () => [], addRule: () => {} };
 	/** Settings, About me and MCP for conversations (set by the engine). */
-	chat?: { settings: Settings; aboutMe: AboutMe; mcp: ChatMcp; resources: ChatResources };
+	chat?: { settings: Settings; aboutMe: AboutMe; mcpOff: () => string[]; resources: ChatResources };
 	/** Agent folders and memory (set by the engine). */
 	agentHost?: { files: AgentFiles; memory: MemoryProviders; app?: AppServices };
 	/** Each agent's last valid definition, as the runtime uses it. */
 	private definitions = new Map<string, { definition: AgentDefinition; instructions: string }>();
-	private skillsExtension?: Extension;
 	private aboutMeExtensions = new Map<"thread" | "agent", Extension>();
 	/** A Build session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (change: { ref: ContainerRef; title: string; kind: "waiting" | "notify"; message: string }) => void;
@@ -180,7 +181,6 @@ export class Sessions {
 			const list = [...new Set(change.toolsOff.filter((t) => /^(connector|mcp):.+/.test(t)))].sort();
 			if (list.length) entry.toolsOff = list;
 			else delete entry.toolsOff;
-			this.chat?.mcp.refresh();
 		}
 		if (this.open.has(ref.id)) await (await this.runtime(ref)).configure(change);
 		if (change.web !== undefined) entry.web = change.web;
@@ -247,10 +247,10 @@ export class Sessions {
 	private async itemsOf(entry: CatalogEntry): Promise<readonly TimelineItem[]> {
 		const open = this.open.get(entry.ref.id);
 		if (open) return (await open).snapshot().items;
-		if (entry.ref.kind === "build") {
+		if (entry.ref.kind === "build" || entry.ref.kind === "thread") {
 			if (!entry.sessionFile || !existsSync(entry.sessionFile)) return [];
 			const builder = new TimelineBuilder(entry.ref);
-			builder.reset(SessionManager.open(entry.sessionFile).buildSessionContext().messages as unknown as PiMessage[], (index) => SdkEventMapper.idOf(index), false);
+			builder.reset(sdkMessages(SessionManager.open(entry.sessionFile).buildSessionContext().messages as unknown as PiMessage[]), (index) => SdkEventMapper.idOf(index), false);
 			return builder.snapshot().items;
 		}
 		const runtime = await this.runtime(entry.ref);
@@ -278,11 +278,11 @@ export class Sessions {
 
 	private async indexContainer(entry: CatalogEntry): Promise<void> {
 		// Searching unopened Build history must not load project extensions or require a provider key.
-		if (entry.ref.kind === "build" && !this.open.has(entry.ref.id)) {
+		if ((entry.ref.kind === "build" || entry.ref.kind === "thread") && !this.open.has(entry.ref.id)) {
 			if (!entry.sessionFile || !existsSync(entry.sessionFile)) return;
 			const builder = new TimelineBuilder(entry.ref);
 			const messages = SessionManager.open(entry.sessionFile).buildSessionContext().messages as unknown as PiMessage[];
-			builder.reset(messages, index => SdkEventMapper.idOf(index), false);
+			builder.reset(sdkMessages(messages), index => SdkEventMapper.idOf(index), false);
 			this.search.setDestination(entry.ref.id, entry.ref, entry.title, entry.updatedAt);
 			this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, builder.snapshot().items);
 			this.searchReady.add(entry.ref.id);
@@ -354,34 +354,19 @@ export class Sessions {
 			this.changed(copy);
 			return copy.ref;
 		}
-		if (ref.kind !== "thread" || !source.file) throw new EngineError("INVALID", "Only threads can be branched into a new session for now.");
-		const runtime = await this.runtime(ref);
+		if (ref.kind !== "thread") throw new EngineError("INVALID", "Only conversations can be branched into a new one.");
+		const runtime = await this.build(ref);
 		if (runtime.snapshot().state.status === "running") throw new EngineError("BUSY", "Wait for the answer to finish before branching into a new thread.");
-		const copy: CatalogEntry = {
-			...structuredClone(source),
-			ref: { kind: "thread", id: newId("thr") },
-			title: `${source.title} (branch)`,
-			createdAt: new Date().toISOString(),
-			updatedAt: new Date().toISOString(),
-			branches: { ...(source.branches?.active ? { active: source.branches.active } : {}), activity: {} },
-		};
-		copy.file = join(this.paths.threadsDir, `${copy.ref.id}.sqlite`);
+		// pi writes the branched session file next to this one, in chatsDir.
+		const file = runtime.forkFile(itemId);
+		const now = new Date().toISOString();
+		const copy: CatalogEntry = { ...structuredClone(source), ref: { kind: "thread", id: newId("thr") }, title: `${source.title} (branch)`, createdAt: now, updatedAt: now, sessionFile: file };
+		delete copy.file;
+		delete copy.continuedIn;
+		copy.cwd = this.scratch(copy.ref.id);
 		copyAttachments(this.paths.home, ref.id, copy.ref.id);
-		const db = new DatabaseSync(source.file, { readOnly: true });
-		try {
-			db.exec(`VACUUM INTO '${copy.file.replaceAll("'", "''")}'`);
-		} finally {
-			db.close();
-		}
 		this.entries.set(copy.ref.id, copy);
 		this.save();
-		try {
-			const forked = (await this.runtime(copy.ref)) as ThreadRuntime;
-			await forked.startAt(itemId);
-		} catch (error) {
-			await this.delete(copy.ref).catch(() => undefined);
-			throw error;
-		}
 		this.changed(copy);
 		return copy.ref;
 	}
@@ -400,8 +385,12 @@ export class Sessions {
 		const runtime = this.open.get(ref.id);
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
-		if (entry.file) for (const suffix of ["", "-wal", "-shm"]) rmSync(entry.file + suffix, { force: true });
-		if (entry.sessionFile && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
+		for (const old of [entry.file, entry.migratedFrom]) if (old) for (const suffix of ["", "-wal", "-shm"]) rmSync(old + suffix, { force: true });
+		if (entry.ref.kind === "thread") {
+			// A chat's files are Piopio's own (chatsDir, scratchDir): they go, as a chat's history always did.
+			if (entry.sessionFile) rmSync(entry.sessionFile, { force: true });
+			if (entry.cwd && resolve(entry.cwd).startsWith(`${resolve(this.paths.scratchDir)}/`)) rmSync(entry.cwd, { recursive: true, force: true });
+		} else if (entry.sessionFile && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
 		if (entry.ref.kind === "agent") {
 			this.agentHost?.memory.builtin.dropBanks(`${entry.ref.id}/`);
 			if (entry.agentFolder) this.agentHost?.files.trash(entry.agentFolder, this.piOverrides.trashDir);
@@ -455,7 +444,7 @@ export class Sessions {
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.planMode ? { planMode: true } : {}),
 			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
-			...(params.kind === "thread" ? { file: join(this.paths.threadsDir, `${ref.id}.sqlite`) } : {}),
+			...(params.kind === "thread" ? { cwd: this.scratch(ref.id) } : {}),
 			...(params.team && lead ? { team: { id: params.team, role: lead.id, kind: "lead" as const } } : {}),
 		};
 		this.entries.set(ref.id, entry);
@@ -1173,15 +1162,6 @@ export class Sessions {
 		return app ? { browser: browserCaller(app, ref, { allowPrivate: this.webOptions.allowPrivate ?? false, ...(this.browserSites ? { sites: this.browserSites } : {}) }) } : {};
 	}
 
-	private chatExtras(kind: "thread"): { extensions?: Extension[]; mcp?: ChatMcp; expand?: (text: string) => string | undefined } {
-		if (!this.chat) return {};
-		const aboutMe = this.aboutMeFor(kind)!;
-		const resources = this.chat.resources;
-		this.skillsExtension ??= resources.extension() as unknown as Extension;
-		this.writing ??= writingExtension() as unknown as Extension;
-		return { extensions: [aboutMe, this.skillsExtension, this.writing], mcp: this.chat.mcp, expand: (text) => resources.expand(text) };
-	}
-
 	/** `/commands` of a conversation: prompt templates and skills from pi's folder and packages. */
 	async chatCommands() {
 		await this.chat?.resources.ready();
@@ -1327,6 +1307,14 @@ export class Sessions {
 		};
 	}
 
+	/** pi's resources changed (packages): open conversations read them again. */
+	async reloadResources(): Promise<void> {
+		for (const pending of this.open.values()) {
+			const runtime = await pending.catch(() => undefined);
+			if (runtime instanceof BuildRuntime) await runtime.reloadResources().catch(() => undefined);
+		}
+	}
+
 	/** A Build session's runtime (checkpoints, approvals). */
 	async build(ref: ContainerRef): Promise<BuildRuntime> {
 		const runtime = await this.runtime(ref);
@@ -1341,7 +1329,7 @@ export class Sessions {
 	/** The user's answer to a connector approval in a chat. */
 	async decide(ref: ContainerRef, approvalId: string, decision: { approve: boolean; always?: boolean; reason?: string }) {
 		const runtime = await this.runtime(ref);
-		if (!(runtime instanceof ThreadRuntime)) throw new EngineError("INVALID", "Only chats ask this way.");
+		if (!(runtime instanceof BuildRuntime) || ref.kind !== "thread") throw new EngineError("INVALID", "Only chats ask this way.");
 		return runtime.decide(approvalId, decision);
 	}
 
@@ -1534,28 +1522,7 @@ export class Sessions {
 				updateSelf: (change) => this.updateAgentSelf(id, change),
 			});
 		}
-		if (entry.ref.kind === "thread") {
-			return ThreadRuntime.open({
-				ref: entry.ref,
-				file: entry.file!,
-				hub: this.hub,
-				model,
-				...(entry.thinking ? { thinking: entry.thinking } : {}),
-				...(entry.branches ? { branches: entry.branches } : {}),
-				onBranchState: (state) => {
-					entry.branches = state;
-					this.save();
-				},
-				web: entry.web ?? true,
-				webOptions: this.webOptions,
-				...this.chatExtras("thread"),
-				extensions: [...(this.chatExtras("thread").extensions ?? []), ...(this.historyBridge(entry) ? [historyExtension(this.historyBridge(entry)!) as unknown as Extension] : [])],
-				...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
-				...(this.connectors ? { connectors: this.connectors } : {}),
-				...this.browserFor(entry.ref),
-				toolsOff: () => entry.toolsOff ?? [],
-			});
-		}
+		if (entry.ref.kind === "thread") return this.openChat(entry, model);
 		const runtime = await BuildRuntime.open({
 			ref: entry.ref,
 			hub: this.hub,
@@ -1605,6 +1572,83 @@ export class Sessions {
 		return runtime;
 	}
 
+	// ── Chats: conversations without a project (one engine for conversations, 2026-11-15) ─────────
+
+	/**
+	 * Chats from before 2026-11-15 (pi-durable SQLite files) move to pi sessions, once, before the engine serves anything
+	 * (migrate-chats.ts). The old file stays where it was until the chat is deleted. A chat that can't be read is left as
+	 * it was and tried again next start.
+	 */
+	async migrateChats(log: (line: string) => void = () => {}): Promise<number> {
+		let moved = 0;
+		for (const entry of [...this.entries.values()]) {
+			if (entry.ref.kind !== "thread" || !entry.file || entry.sessionFile) continue;
+			const cwd = this.scratch(entry.ref.id);
+			try {
+				const file = await migrateChat(entry.file, entry.branches?.active, this.hub, cwd, this.paths.chatsDir);
+				entry.cwd = cwd;
+				entry.migratedFrom = entry.file;
+				if (file) entry.sessionFile = file;
+				delete entry.file;
+				delete entry.branches;
+				moved++;
+			} catch (error) {
+				log(`Couldn't move the chat “${entry.title}” (${entry.ref.id}) to the new engine: ${(error as Error).message}`);
+			}
+		}
+		if (moved) this.save();
+		return moved;
+	}
+
+	/** A chat's own folder, where its pi session runs. */
+	private scratch(id: string): string {
+		const dir = join(this.paths.scratchDir, id);
+		mkdirSync(dir, { recursive: true, mode: 0o700 });
+		return dir;
+	}
+
+	/** A chat on the pi SDK, with a chat's tools (BuildRuntime's ChatProfile); its session file is in `chatsDir`. */
+	private async openChat(entry: CatalogEntry, model: ModelRef): Promise<Runtime> {
+		const cwd = entry.cwd && existsSync(entry.cwd) ? entry.cwd : this.scratch(entry.ref.id);
+		if (entry.cwd !== cwd) entry.cwd = cwd;
+		this.aboutMeSdk ??= this.chat ? aboutMeSdkExtension(this.chat.aboutMe, this.chat.settings) : undefined;
+		const runtime = await BuildRuntime.open({
+			ref: entry.ref,
+			hub: this.hub,
+			cwd,
+			model,
+			...(entry.thinking ? { thinking: entry.thinking } : {}),
+			...(entry.sessionFile ? { sessionFile: entry.sessionFile } : {}),
+			piSessionDir: this.paths.chatsDir,
+			...(this.piOverrides.piAgentDir ? { piAgentDir: this.piOverrides.piAgentDir } : {}),
+			// Nothing in a chat goes through approval modes: it has no file or command tools.
+			approvals: { mode: () => "full_auto", rules: () => [], addRule: () => {} },
+			checkpoints: this.checkpoints,
+			plan: { active: () => false, setActive: () => {} },
+			webOptions: this.webOptions,
+			...this.browserFor(entry.ref),
+			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
+			...(this.connectors ? { connectors: this.connectors } : {}),
+			// Global MCP servers that aren't on for chats (Settings › MCP servers) are refused, as are those turned off here.
+			toolsOff: () => [...(entry.toolsOff ?? []), ...(this.chat?.mcpOff() ?? []).map((name) => `mcp:${name}`)],
+			chat: {
+				web: () => entry.web ?? true,
+				setWeb: (on) => {
+					entry.web = on;
+					this.save();
+				},
+				...(this.aboutMeSdk ? { extensions: [this.aboutMeSdk] } : {}),
+			},
+		});
+		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {
+			entry.sessionFile = runtime.sessionFile;
+			this.save();
+		}
+		return runtime;
+	}
+
+	private aboutMeSdk?: ReturnType<typeof aboutMeSdkExtension>;
+
 	private save(): void {
 		const tmp = `${this.paths.catalogIndex}.tmp`;
 		writeFileSync(tmp, JSON.stringify([...this.entries.values()], null, "\t"));
@@ -1612,7 +1656,9 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, ...rest }: CatalogEntry): SessionSummary {
+	// A chat's folder is the engine's: the app knows a chat by having no project.
+	if (rest.ref.kind === "thread") delete rest.cwd;
 	return rest;
 }
 

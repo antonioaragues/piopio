@@ -6,7 +6,7 @@ import { defineExtension, section } from "@earendil-works/pi-durable";
 
 export const WRITING_EXTENSION = "piopio-writing";
 
-const WRITING = `Writing style:
+export const WRITING = `Writing style:
 - Never use em dashes (—) or en dashes (–) as punctuation. Use a comma, a colon, parentheses, or a new sentence instead.
 - For a comparison of several things across several dimensions, use a Markdown table (| … | … |). Never draw a table with spaces or box characters inside a code block; keep code blocks for code.`;
 

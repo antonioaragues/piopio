@@ -1,12 +1,12 @@
 # Current status — personal alpha
 
-Updated 2026-11-08. This is a personal-use application. Implementation milestones describe available code;
+Updated 2026-11-15. This is a personal-use application. Implementation milestones describe available code;
 they do not establish that every provider, OS permission flow or production service has been validated.
 
 | Area | Implemented | Acceptance still pending |
 |---|---|---|
 | Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents, sandboxed commands, `/goal`, auto review, Claude Code/Codex tasks | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations; cargo inside the sandbox; a real Codex task |
-| Chat | Streaming, attachments, branches, export, Quick Chat, New project makes a folder in ~/Piopio (AGENTS.md, shared NOTES.md), global search | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability |
+| Chat | Streaming, attachments, branches, export, Quick Chat, New project makes a folder in ~/Piopio (AGENTS.md, shared NOTES.md), global search; since 2026-11-15 on the same engine as folder conversations (pi-coding-agent), old chats moved at start | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability; moving a real set of old chats |
 | Local Agents | Definitions, conversations, memory, schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
 | Distribution | Bundled engine/Node, release scripts, background engine and update infrastructure | Developer ID/notarization/Gatekeeper validation and public distribution |
@@ -55,6 +55,8 @@ Steps, pass criteria, evidence and a results table for each item: [acceptance.md
   caches; `outside_project` asks. Full auto, `edit`/`write` (path checks only), MCP servers and the terminal tab aren't
   sandboxed. File paths are judged where they really are (symlinks resolved), and subagents keep their parent's
   profile and tools turned off. Unknown shell syntax asks again.
+- Chats run on pi-coding-agent since 2026-11-15 (spec 18 §15), each in a folder of its own with no file or command tools.
+  Old chats moved once, keeping the branch they showed; their other branches stay in the old SQLite file.
 - Search covers active conversation branches. It is not a source-code index or an index of every historical branch.
 - Agents on this Mac cannot run while it is asleep/off. Mac-app tools need the native app and OS permissions.
 - Additional request costs are recorded from this version onward. Unknown pricing is excluded, not treated as free.

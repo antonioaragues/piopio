@@ -227,26 +227,6 @@ export function browserCaller(app: AppServices, ref: ContainerRef, options: { al
 	};
 }
 
-/** Chats (pi-durable). `askFor` shows an approval card in the conversation. */
-export function durableBrowserExtension(call: BrowserCall, askFor?: (site: CallSite) => BrowserAsk) {
-	const tools = BROWSER_TOOLS.map((tool) =>
-		defineTool({
-			name: tool.name,
-			description: tool.description,
-			parameters: tool.parameters,
-			execute: async (args, api, context) => {
-				const ask = askFor?.({ conversationId: String(api.conversationId), callId: api.callId, context });
-				const r = await call(tool.name, args as Record<string, unknown>, ask);
-				return {
-					output: [{ type: "text" as const, text: r.text }, ...r.images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))],
-					...(r.isError ? { isError: true } : {}),
-				};
-			},
-		}),
-	);
-	return defineExtension({ name: BROWSER_EXTENSION, tools, sections: [section("browser", () => SECTION)] });
-}
-
 /** Build sessions (pi-coding-agent). `askFor` asks through Build's approval prompt. */
 export function codingBrowserExtension(call: BrowserCall, askFor?: (callId: string, signal: AbortSignal | undefined) => BrowserAsk): ExtensionFactory {
 	return (pi) => {

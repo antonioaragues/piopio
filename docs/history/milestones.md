@@ -327,3 +327,5 @@ After a look at T3 Code (pingdotgg/t3code), which also drives pi:
   declared, and the notebook settings.
 - **Debate removed:** its runtime, start page, panel, transcript cards and protocol. A debate thread from before opens
   as a chat with its author.
+- **One engine for conversations:** chats run on pi-coding-agent like folder conversations, in a folder of their own,
+  with the same tools as before (docs/spec/18 §15). Old chats move once, at start; the old engine for chats is gone.
