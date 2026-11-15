@@ -418,10 +418,17 @@ private struct StartSheets: ViewModifier {
                     }
                 }
             }
-            // New project is a start page too; its object, when a conversation asked, is that conversation.
+            // New project is named in the sidebar (docs/spec/18 §17); its object, when a conversation asked, is that
+            // conversation. The page stays for when the Projects section is hidden.
             .onReceive(NotificationCenter.default.publisher(for: .newProject)) { note in
-                continuing = note.object as? ContainerRef
-                item = .start(.project)
+                let from = note.object as? ContainerRef
+                if Areas.shared.set.showsProjects {
+                    UserDefaults.standard.set(false, forKey: "sidebarCollapsed")
+                    ProjectNaming.shared.begin(continuing: from)
+                } else {
+                    continuing = from
+                    item = .start(.project)
+                }
             }
             // File › Turn Conversation into Agent…: the open conversation (docs/spec/18 phase 3).
             .onReceive(NotificationCenter.default.publisher(for: .turnIntoAgent)) { _ in

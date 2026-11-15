@@ -45,6 +45,15 @@ enum DebugAutomation {
                 NotificationCenter.default.post(name: .selectItem, object: raw)
             }
         }
+        // PIOPIO_DEMO_NAME_PROJECT=<name>: New project after the item delay (+1 s), named in the sidebar; with a name, it's
+        // typed and made ("1": the empty row, waiting for a name).
+        if let name = env["PIOPIO_DEMO_NAME_PROJECT"] {
+            Task {
+                try? await Task.sleep(for: .seconds((Double(env["PIOPIO_DEMO_ITEM_DELAY"] ?? "") ?? 10) + 1))
+                if name != "1" { ProjectNaming.shared.demoName = name }
+                NotificationCenter.default.post(name: .newProject, object: nil)
+            }
+        }
         // PIOPIO_DEMO_RESIZE=<width>: resize the main window to this width after 5 s (layout after a resize).
         if let width = env["PIOPIO_DEMO_RESIZE"].flatMap(Double.init) {
             Task {

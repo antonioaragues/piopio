@@ -502,3 +502,19 @@ your work, when they are things you set up once and that then run on their own. 
 | CF13 | **Quick picks under the box** on the New conversation page, with no project chosen: "Or in piopio · BioGen · financial_ia", the three latest projects (from proposal C). Home doesn't show them. |
 
 **Not now:** the location selector (This Mac / Cloud) waits for the cloud engine (CF7); the mockups draw it greyed.
+
+## 17. Adding a project from the sidebar (2026-11-15)
+
+**Why:** the New project page put a large instructions box first and hid the more common case, a folder you already
+have, in a link at the bottom. The user picked proposal A of three
+([docs/design/new-project/proposals.html](../design/new-project/proposals.html)).
+
+| ID | Decision |
+|---|---|
+| CF14 | **The Projects `+` stays, and opens a menu:** New Project (an empty folder in ~/Piopio), Open Folder… (⌘O), and the folders this Mac already has (git repos in the usual places and folders pi worked in, minus existing projects): four in the menu, more under More Folders. A folder opens as a project and lands on its New conversation. |
+| CF15 | **New Project is named in place,** like a new folder in Finder: a row at the top of Projects with the name field focused and "Makes ~/Piopio/Name" under it. Return makes the folder (with AGENTS.md and NOTES.md, as before) and opens its New conversation; Esc, or leaving the field empty, cancels and nothing is made. ⇧⌘N, File › New Project…, the palette, the box's popover and Continue in › New Project… all open this row (the sidebar and the Projects section open if they were hidden). From Continue in, the conversation continues in the new folder. |
+| CF16 | **Instructions come after.** A project made this way shows, on its New conversation page until its first conversation, "Instructions for every conversation here go in AGENTS.md. Write them", which opens the project's Settings. Who works here (Piopio or a team) is chosen there too, no longer at creation. |
+
+**Kept:** the New project page, only for when the Projects section is hidden (the Projects area off).
+**Not built:** "let the first conversation draft them" from the mockup; drafting AGENTS.md from a message needs engine
+work.

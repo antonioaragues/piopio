@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Project</title>
+<style>
+:root {
+  --win: #FCFCFB; --side: #F4F4F2; --card: #FFFFFF; --bubble: #F0F0ED; --sel: #EAEAE6; --field: #FFFFFF;
+  --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --inv: #1F1F1E; --invfg: #FFFFFF;
+  --line: rgba(0,0,0,.09); --accent: #2F6FEB; --wash: rgba(47,111,235,.10); --page: #E9E9E5; --light: #DADAD6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29; --sel: #333331; --field: #252524;
+    --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --inv: #ECECEA; --invfg: #1E1E1D;
+    --line: rgba(255,255,255,.10); --accent: #5B8DF0; --wash: rgba(91,141,240,.16); --page: #121211; --light: #3A3A38;
+  }
+}
+:root[data-theme="dark"] {
+  --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29; --sel: #333331; --field: #252524;
+  --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --inv: #ECECEA; --invfg: #1E1E1D;
+  --line: rgba(255,255,255,.10); --accent: #5B8DF0; --wash: rgba(91,141,240,.16); --page: #121211; --light: #3A3A38;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--fg);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 48px 16px 96px; }
+h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; }
+.lede { color: var(--fg2); font-size: 15px; max-width: 780px; margin: 0 0 12px; }
+.shared { color: var(--fg2); font-size: 13.5px; max-width: 780px; margin: 0 0 40px; padding-left: 14px; border-left: 1.5px solid var(--line); }
+.shared b { color: var(--fg); font-weight: 600; }
+section.prop { margin: 0 0 72px; }
+.prop-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.prop-head .k { font-size: 12px; color: var(--fg3); font-weight: 600; letter-spacing: .04em; }
+.prop-head h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; }
+.prop .sum { color: var(--fg2); font-size: 14px; margin: 0 0 18px; max-width: 840px; }
+.frames { display: grid; gap: 18px; }
+.cap { font-size: 12px; color: var(--fg3); margin: 8px 2px 0; max-width: 1000px; }
+.scroller { overflow-x: auto; padding-bottom: 4px; }
+
+.win { width: 1120px; height: 640px; background: var(--win); border-radius: 12px; overflow: hidden; display: flex;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.18), 0 18px 50px rgba(0,0,0,.14); position: relative; }
+.win.short { height: 500px; }
+.sb { width: 248px; background: var(--side); border-right: .5px solid var(--line); display: flex; flex-direction: column; flex: none; position: relative; }
+.tb { height: 48px; display: flex; align-items: center; padding: 0 12px 0 16px; gap: 8px; flex: none; }
+.lights { display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--light); display: block; }
+.tb .sp { flex: 1; }
+.ib { width: 26px; height: 26px; display: grid; place-items: center; color: var(--fg2); border-radius: 6px; }
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 13px; height: 13px; }
+svg.i.l { width: 22px; height: 22px; stroke-width: 1.3; }
+.rows { padding: 0 8px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 7px; font-size: 13px; height: 28px; white-space: nowrap; }
+.row svg { color: var(--fg2); }
+.row.sel { background: var(--sel); }
+.row .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.row .m { color: var(--fg3); font-size: 11.5px; }
+.row .mono { color: var(--fg3); font: 11px ui-monospace, Menlo, monospace; }
+.row.sub { padding-left: 34px; }
+.row.edit .t { background: var(--field); box-shadow: 0 0 0 1px var(--accent); border-radius: 4px; padding: 1px 4px; margin-left: -4px; }
+.row.edit .t span { background: var(--wash); }
+.sec { display: flex; align-items: center; padding: 14px 16px 4px; color: var(--fg3); font-size: 12px; }
+.sec .sp { flex: 1; }
+.sec .plus { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 5px; color: var(--fg3); }
+.sec .plus.on { background: var(--sel); color: var(--fg); }
+.foot { margin-top: auto; height: 50px; display: flex; align-items: center; gap: 10px; padding: 0 14px; }
+.av { width: 24px; height: 24px; border-radius: 50%; background: var(--sel); display: grid; place-items: center; font-size: 11px; color: var(--fg2); flex: none; }
+.foot .nm { flex: 1; font-size: 12.5px; line-height: 1.2; }
+.foot .nm small { display: block; color: var(--fg3); font-size: 11px; }
+
+.main { flex: 1; display: flex; flex-direction: column; position: relative; min-width: 0; }
+.center { flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 84px; }
+.col { width: 640px; position: relative; }
+.kind { display: flex; align-items: center; gap: 10px; color: var(--fg2); font-size: 14px; margin-bottom: 14px; }
+.kind .tile { width: 26px; height: 26px; border-radius: 7px; background: var(--wash); color: var(--accent); display: grid; place-items: center; }
+.title { font-size: 32px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 8px; }
+.title.ph { color: var(--fg3); }
+.title .caret { display: inline-block; width: 2px; height: 32px; background: var(--fg); vertical-align: -5px; margin-right: 2px; }
+.desc { color: var(--fg2); font-size: 14.5px; margin: 0 0 22px; }
+
+.comp { background: var(--field); border-radius: 16px; box-shadow: 0 0 0 .5px var(--line), 0 2px 10px rgba(0,0,0,.05); padding: 12px 14px 10px; }
+.comp .ph { color: var(--fg3); font-size: 14px; padding: 2px 2px 16px; }
+.comp .ph.typed { color: var(--fg); }
+.comp .bar { display: flex; align-items: center; gap: 4px; color: var(--fg2); font-size: 12.5px; }
+.comp .bar .sp { flex: 1; }
+.selr { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; color: var(--fg2); white-space: nowrap; }
+.selr.hov { background: var(--sel); color: var(--fg); }
+.send { width: 28px; height: 28px; border-radius: 50%; background: var(--sel); color: var(--fg3); display: grid; place-items: center; margin-left: 6px; }
+.send.on { background: var(--inv); color: var(--invfg); }
+.black { background: var(--inv); color: var(--invfg); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
+.black.off { background: var(--sel); color: var(--fg3); }
+.black small { opacity: .6; font-size: 12px; }
+.textbtn { color: var(--fg2); font-size: 13px; }
+.where { color: var(--fg3); font-size: 12px; margin: 9px 4px 0; }
+.where code { font: 11.5px ui-monospace, Menlo, monospace; }
+
+.menu { position: absolute; background: var(--field); border-radius: 12px; box-shadow: 0 0 0 .5px var(--line), 0 10px 30px rgba(0,0,0,.14); padding: 6px; z-index: 5; }
+.menu .mh { font-size: 11.5px; color: var(--fg3); padding: 6px 8px 3px; }
+.menu .mi { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 7px; font-size: 13px; white-space: nowrap; }
+.menu .mi.hl { background: var(--sel); }
+.menu .mi svg { color: var(--fg2); }
+.menu .mi .d { color: var(--fg3); font-size: 12px; margin-left: auto; padding-left: 16px; }
+.menu .mi .sub { color: var(--fg3); font-size: 11.5px; display: block; line-height: 1.2; }
+.menu .mi .mono { color: var(--fg3); font: 11px ui-monospace, Menlo, monospace; margin-left: auto; padding-left: 14px; }
+.menu hr { border: 0; border-top: .5px solid var(--line); margin: 5px 4px; }
+
+.list h4 { margin: 30px 0 6px; font-size: 12.5px; color: var(--fg3); font-weight: 500; display: flex; }
+.list h4 span { margin-left: auto; color: var(--fg2); font-weight: 400; }
+.lrow { display: flex; align-items: center; gap: 10px; height: 38px; border-bottom: .5px solid var(--line); font-size: 13.5px; }
+.lrow:first-of-type { border-top: .5px solid var(--line); }
+.lrow svg { color: var(--fg2); }
+.lrow .p { color: var(--fg3); font-size: 12px; }
+.lrow .mono { margin-left: auto; color: var(--fg3); font: 11.5px ui-monospace, Menlo, monospace; width: 110px; }
+.lrow .m { color: var(--fg3); font-size: 12px; width: 80px; text-align: right; }
+
+.banner { display: flex; align-items: center; gap: 10px; color: var(--fg2); font-size: 12.5px; margin-top: 12px; padding: 0 4px; }
+.banner a { color: var(--accent); text-decoration: none; }
+
+/* C: two doors */
+.doors { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-radius: 14px; box-shadow: 0 0 0 .5px var(--line); background: var(--field); overflow: hidden; }
+.door { padding: 18px 20px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 300px; }
+.door + .door { border-left: .5px solid var(--line); }
+.door h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.door h3 svg { color: var(--fg2); }
+.door .dd { color: var(--fg3); font-size: 12.5px; margin: -4px 0 4px; }
+.door.on { background: var(--win); }
+.field { border-radius: 8px; box-shadow: 0 0 0 .5px var(--line); background: var(--card); padding: 7px 10px; font-size: 14px; }
+.field.focus { box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--wash); }
+.field .ph { color: var(--fg3); }
+.kv { display: flex; align-items: center; font-size: 12.5px; color: var(--fg2); gap: 8px; height: 26px; }
+.kv .k2 { color: var(--fg3); width: 60px; }
+.kv code { font: 12px ui-monospace, Menlo, monospace; color: var(--fg2); }
+.drop { border: 1px dashed var(--line); border-radius: 10px; height: 64px; display: grid; place-items: center; color: var(--fg3); font-size: 12.5px; }
+.mini { font-size: 13px; }
+.mini .lrow { height: 32px; font-size: 13px; }
+.mini .lrow:first-of-type { border-top: 0; }
+.doorfoot { display: flex; align-items: center; margin-top: 16px; gap: 14px; }
+.doorfoot .sp { flex: 1; }
+
+.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; max-width: 980px; }
+.notes h5 { margin: 0 0 6px; font-size: 12.5px; }
+.notes ul { margin: 0; padding-left: 18px; color: var(--fg2); font-size: 13px; }
+.notes li { margin-bottom: 4px; }
+.verdict { margin-top: 48px; padding-top: 24px; border-top: .5px solid var(--line); max-width: 840px; }
+.verdict h2 { font-size: 18px; margin: 0 0 8px; }
+.verdict p { color: var(--fg2); font-size: 14px; margin: 0 0 8px; }
+.verdict b { color: var(--fg); }
+@media (max-width: 700px) { .notes { grid-template-columns: 1fr; } .wrap { padding-top: 28px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5V10h-4v3.5H2.5z"/></symbol>
+  <symbol id="agents" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13.5c.4-2.4 2.1-3.8 4.2-3.8s3.8 1.4 4.2 3.8"/><circle cx="11.3" cy="5" r="1.9"/><path d="M11.6 8.8c1.6.2 2.6 1.4 2.9 3.2"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5c0-.6.4-1 1-1h3.2l1.3 1.5H13c.6 0 1 .4 1 1V12c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/></symbol>
+  <symbol id="folderplus" viewBox="0 0 16 16"><path d="M2 4.5c0-.6.4-1 1-1h3.2l1.3 1.5H13c.6 0 1 .4 1 1V12c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/><path d="M8 7.3v4M6 9.3h4"/></symbol>
+  <symbol id="open" viewBox="0 0 16 16"><path d="M2 4.5c0-.6.4-1 1-1h3.2l1.3 1.5H12c.6 0 1 .4 1 1v1"/><path d="M2 12.5 3.6 8c.1-.3.4-.5.7-.5H14l-1.7 5z"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="compose" viewBox="0 0 16 16"><path d="M13 9v4H3V3h4"/><path d="M11.5 2.5 13.5 4.5 8 10H6V8z"/></symbol>
+  <symbol id="sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6.5 3v10"/></symbol>
+  <symbol id="up" viewBox="0 0 16 16"><path d="M8 13V3.5M4 7.5l4-4 4 4"/></symbol>
+  <symbol id="bubble" viewBox="0 0 16 16"><path d="M3 3.5h10v7H7l-3 2.5v-2.5H3z"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2"/></symbol>
+  <symbol id="doc" viewBox="0 0 16 16"><path d="M4 2h5.5L12 4.5V14H4z"/><path d="M6 8h4M6 10.5h4"/></symbol>
+  <symbol id="right" viewBox="0 0 16 16"><path d="M6.5 4.5 10 8l-3.5 3.5"/></symbol>
+  <symbol id="branch" viewBox="0 0 16 16"><circle cx="5" cy="4" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="11" cy="6" r="1.5"/><path d="M5 5.5v5M11 7.5c0 2-2 2.5-6 3"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1>Adding a project</h1>
+  <p class="lede"><b>Keep the + on Projects.</b> It's the only visible way to add one: ⇧⌘N, the File menu and the palette are invisible, and "New project…" is inside the box's popover. The page it opens is the problem. Opening a folder you already have is the most common case, but it's a small link at the bottom. A large empty instructions box comes first, and Who works here reads as a sentence with nothing to click.</p>
+  <p class="shared">What all three do: <b>both ways in are first-class</b>, a new folder in ~/Piopio or one you already have (with the git repos and pi folders Piopio already finds on this Mac). <b>Instructions stop being a required-looking box</b>: AGENTS.md gets written from what you say, or later. <b>Who works here</b> is a plain selector (Piopio, or a team) that defaults to Piopio. Everything ends in the project's New conversation, as today.</p>
+
+  <!-- ============================== A ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">A</span><h2>A menu, and the name in place</h2></div>
+    <p class="sum">No page at all. The + opens a short menu: New project, Open folder…, and the folders this Mac already has. New project adds a row to the sidebar with its name selected, like a new folder in Finder; Return makes ~/Piopio/Name and opens its New conversation. Instructions come later, from a line on that page.</p>
+    <div class="frames">
+      <div>
+        <div class="scroller"><div class="win short">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+              <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+            </div>
+            <div class="sec">Projects<span class="sp"></span><span class="plus on"><svg class="i s"><use href="#plus"/></svg></span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+            </div>
+            <div class="sec">Conversations</div>
+            <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+            <div class="menu" style="left:196px; top:150px; width:330px">
+              <div class="mi hl"><svg class="i"><use href="#folderplus"/></svg><span>New project<span class="sub">An empty folder in ~/Piopio</span></span><span class="d">⇧⌘N</span></div>
+              <div class="mi"><svg class="i"><use href="#open"/></svg><span>Open folder…<span class="sub">One you already have</span></span><span class="d">⌘O</span></div>
+              <hr>
+              <div class="mh">On this Mac</div>
+              <div class="mi"><svg class="i"><use href="#folder"/></svg>financial_ia<span class="mono">main</span></div>
+              <div class="mi"><svg class="i"><use href="#folder"/></svg>pi-durable<span class="mono">dev</span></div>
+              <div class="mi"><svg class="i"><use href="#folder"/></svg>Tesis<span class="mono"></span></div>
+              <div class="mi">More folders<span class="d"><svg class="i s"><use href="#right"/></svg></span></div>
+            </div>
+          </div>
+          <div class="main"><div class="center" style="padding-top:120px"><div class="col" style="width:560px">
+            <p class="title" style="font-size:28px">What's on your mind?</p>
+            <div class="comp"><div class="ph">Ask anything, or @ a project or an agent…</div><div class="bar"><span class="selr"><svg class="i"><use href="#plus"/></svg></span><span class="selr"><svg class="i"><use href="#bubble"/></svg>No project</span><span class="sp"></span><span class="selr">Opus 5.5 · High</span><span class="send"><svg class="i"><use href="#up"/></svg></span></div></div>
+          </div></div></div>
+        </div></div>
+        <p class="cap">A1 · The Projects + opens a menu, not a page. The folders it lists are the ones the project menu in the box already finds: git repos in the usual places and folders pi has worked in.</p>
+      </div>
+      <div>
+        <div class="scroller"><div class="win short">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+              <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+            </div>
+            <div class="sec">Projects<span class="sp"></span><span class="plus"><svg class="i s"><use href="#plus"/></svg></span></div>
+            <div class="rows">
+              <div class="row sel edit"><svg class="i"><use href="#folder"/></svg><span class="t"><span>Kitchen renovation</span></span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+            </div>
+            <div class="sec">Conversations</div>
+            <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+          </div>
+          <div class="main"><div class="center" style="padding-top:96px"><div class="col" style="width:560px">
+            <div class="kind"><span class="tile"><svg class="i s"><use href="#folder"/></svg></span>Kitchen renovation</div>
+            <p class="title" style="font-size:28px">New conversation</p>
+            <div class="comp"><div class="ph">What should we do in Kitchen renovation?</div><div class="bar"><span class="selr"><svg class="i"><use href="#plus"/></svg></span><span class="selr"><svg class="i"><use href="#folder"/></svg>Kitchen renovation</span><span class="selr">Auto-edit</span><span class="sp"></span><span class="selr">Opus 5.5 · High</span><span class="send"><svg class="i"><use href="#up"/></svg></span></div></div>
+            <div class="where">In Kitchen renovation · can edit files; asks before commands</div>
+            <div class="banner"><svg class="i s"><use href="#doc"/></svg>No instructions yet. <a>Write them</a> or <a>let the first conversation draft them</a>.</div>
+          </div></div></div>
+        </div></div>
+        <p class="cap">A2 · You type the name in the sidebar and press Return; the folder exists, and its New conversation opens. Esc cancels and nothing is made. The line under the box offers the instructions (AGENTS.md); Who works here is in the project's Settings.</p>
+      </div>
+    </div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>The fastest: two keystrokes and a name. No page to read.</li><li>Opening an existing folder is one click from the +, with the likely ones listed.</li><li>Feels like the Mac (Finder, Notes, Mail all name a new folder in place).</li></ul></div>
+      <div><h5>Costs</h5><ul><li>Choosing a team at creation moves to Settings. That's fine for most people; worse for anyone starting a project for a team.</li><li>Continue in › New project needs a different flow: there's no sidebar row to rename from there. It would use the same menu, then the name sheet.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ============================== B ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">B</span><h2>The first message makes the project</h2></div>
+    <p class="sum">The + opens the New conversation page, the same one as every other New, in "new project" mode. The name is the title, and the box asks what the project is about. Sending makes the folder, writes AGENTS.md from that message and starts the first conversation. Folders you already have are listed underneath, so opening one sits on the same page.</p>
+    <div class="frames">
+      <div>
+        <div class="scroller"><div class="win">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+              <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+            </div>
+            <div class="sec">Projects<span class="sp"></span><span class="plus on"><svg class="i s"><use href="#plus"/></svg></span></div>
+            <div class="rows">
+              <div class="row sel"><svg class="i"><use href="#folderplus"/></svg><span class="t" style="color:var(--fg2)">Kitchen renovation</span><span class="m">Draft</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+            </div>
+            <div class="sec">Conversations</div>
+            <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+            <div class="foot"><span class="av">A</span><span class="nm">Antonio<small>This Mac</small></span><svg class="i" style="color:var(--fg2)"><use href="#gear"/></svg></div>
+          </div>
+          <div class="main"><div class="center" style="padding-top:70px"><div class="col">
+            <div class="kind"><span class="tile"><svg class="i s"><use href="#folderplus"/></svg></span>New project</div>
+            <p class="title">Kitchen renovation<span class="caret"></span></p>
+            <p class="desc">A folder for a subject, its files, and the notes its conversations share.</p>
+            <div class="comp">
+              <div class="ph typed">We're redoing the kitchen by June. Keep the budget under 18k, track quotes from the three contractors and the decisions we make.</div>
+              <div class="bar"><span class="selr"><svg class="i"><use href="#plus"/></svg></span><span class="selr hov"><svg class="i"><use href="#agents"/></svg>Piopio</span><span class="selr">Auto-edit</span><span class="sp"></span><span class="selr">Opus 5.5 · High</span><span class="send on"><svg class="i"><use href="#up"/></svg></span></div>
+            </div>
+            <div class="where">Makes <code>~/Piopio/Kitchen renovation</code> · this message becomes its instructions (AGENTS.md) and its first conversation</div>
+            <div class="list">
+              <h4>Or open a folder you already have<span>Choose… ⌘O</span></h4>
+              <div class="lrow"><svg class="i"><use href="#folder"/></svg>financial_ia<span class="p">~/Proyectos</span><span class="mono">main</span><span class="m">Yesterday</span></div>
+              <div class="lrow"><svg class="i"><use href="#folder"/></svg>pi-durable<span class="p">~/Proyectos</span><span class="mono">dev</span><span class="m">Nov 9</span></div>
+              <div class="lrow"><svg class="i"><use href="#folder"/></svg>Tesis<span class="p">~/Documents</span><span class="mono"></span><span class="m">Oct 28</span></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <p class="cap">B1 · "Piopio" in the bar is Who works here (Piopio, or one of your teams). With nothing typed, ⌘↩ makes the project empty. Clicking a folder below opens it as a project and turns the page into its New conversation, keeping what you typed.</p>
+      </div>
+    </div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>The same page and box as every New (spec 18 §16): one place to learn, and Plan, permissions, the model and attachments work as everywhere.</li><li>No empty instructions box: you describe the project the way you'd start talking about it.</li><li>Both ways in are on one screen, with the folders you'd likely pick.</li></ul></div>
+      <div><h5>Costs</h5><ul><li>Writing AGENTS.md from a message is new engine work (a drafted file you can review, as agents do when they set themselves up by talking).</li><li>One page doing two things: if the folder list grows long, it competes with the box.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ============================== C ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">C</span><h2>Two doors, side by side</h2></div>
+    <p class="sum">Today's page, rebuilt around the choice it hides: <b>Open a folder</b> and <b>Start a new one</b> as two equal halves. The new side is a name field and where it goes; instructions and team fold away under one line each. The black button follows the side you're on.</p>
+    <div class="frames">
+      <div>
+        <div class="scroller"><div class="win">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+              <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+            </div>
+            <div class="sec">Projects<span class="sp"></span><span class="plus on"><svg class="i s"><use href="#plus"/></svg></span></div>
+            <div class="rows">
+              <div class="row sel"><svg class="i"><use href="#folderplus"/></svg><span class="t" style="color:var(--fg2)">New project</span><span class="m">Draft</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+            </div>
+            <div class="sec">Conversations</div>
+            <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+            <div class="foot"><span class="av">A</span><span class="nm">Antonio<small>This Mac</small></span><svg class="i" style="color:var(--fg2)"><use href="#gear"/></svg></div>
+          </div>
+          <div class="main"><div class="center" style="padding-top:64px"><div class="col" style="width:720px">
+            <div class="kind"><span class="tile"><svg class="i s"><use href="#folder"/></svg></span>Projects</div>
+            <p class="title">Add a project</p>
+            <p class="desc">A project is a folder. Its conversations work on its files and share its notes.</p>
+            <div class="doors">
+              <div class="door">
+                <h3><svg class="i"><use href="#open"/></svg>Open a folder</h3>
+                <p class="dd">A repo, a folder of documents, anything you already have.</p>
+                <div class="drop">Drop a folder here, or Choose… ⌘O</div>
+                <div class="mini">
+                  <div class="lrow"><svg class="i"><use href="#folder"/></svg>financial_ia<span class="mono" style="width:auto">main</span></div>
+                  <div class="lrow"><svg class="i"><use href="#folder"/></svg>pi-durable<span class="mono" style="width:auto">dev</span></div>
+                  <div class="lrow"><svg class="i"><use href="#folder"/></svg>Tesis<span class="mono" style="width:auto"></span></div>
+                </div>
+              </div>
+              <div class="door on">
+                <h3><svg class="i"><use href="#folderplus"/></svg>Start a new one</h3>
+                <p class="dd">An empty folder, for a subject rather than code.</p>
+                <div class="field focus">Kitchen renovation</div>
+                <div class="kv"><span class="k2">Folder</span><code>~/Piopio/Kitchen renovation</code></div>
+                <div class="kv"><span class="k2">Who</span><span class="selr hov" style="margin-left:-6px">Piopio</span></div>
+                <div class="kv"><span class="k2"></span><span style="color:var(--fg2)">+ Instructions</span><span style="color:var(--fg3)">· optional, AGENTS.md</span></div>
+              </div>
+            </div>
+            <div class="doorfoot"><span class="textbtn">Back</span><span class="sp"></span><span class="black">Create project <small>⌘↩</small></span></div>
+          </div></div></div>
+        </div></div>
+        <p class="cap">C1 · Clicking a folder on the left opens it straight away (it's the black action for that side). Typing a name on the right makes the button "Create project". "+ Instructions" opens a text box inside the card.</p>
+      </div>
+    </div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>The closest to what's built: the same fields, laid out so the two choices are equal.</li><li>Keeps choosing a team at creation, and Continue in › New project works unchanged.</li><li>No engine work.</li></ul></div>
+      <div><h5>Costs</h5><ul><li>Still a form to fill before anything happens, which spec 18 tries to avoid ("you always start by writing").</li><li>Two cards is more chrome than grey ink usually allows.</li></ul></div>
+    </div>
+  </section>
+
+  <div class="verdict">
+    <h2>My pick</h2>
+    <p><b>A</b>, the menu, with B's line for the instructions. Most projects start from a folder you already have, and the menu gets you there in one click with the likely folders listed. A new folder only needs a name, typed where the project will live. Instructions are better written once there's a conversation to write them from, so a line on the project's first page offers them. A is also the least to build: the folder scan, Open folder and creating ~/Piopio/Name all exist.</p>
+    <p>Choose <b>B</b> if you want New to stay one page for everything, and are happy to have the engine draft AGENTS.md from the first message. <b>C</b> is the safe redesign if you'd rather not change the flow at all.</p>
+  </div>
+</div>
+</body>
+</html>

@@ -235,6 +235,10 @@ struct ConversationStart: View {
                 if let (place, crew) = whoChoice { who(place, crew) }
             }
             AskBox(engine: engine, item: $item, quickPicks: true)
+            // A project just made in the sidebar (docs/spec/18 §17): its instructions are written here, or later.
+            if let project, team == nil, ProjectNaming.shared.fresh.contains(project.id), engine.sessions(in: project).isEmpty {
+                instructionsLine(project)
+            }
         }
         .onExitCommand { back?() }
         // A project with a team (docs/spec/19 §10): its work goes to the team, once the team is known.
@@ -254,6 +258,23 @@ struct ConversationStart: View {
             let next: SidebarItem = raw.hasPrefix("project:") ? .newSession(String(raw.dropFirst(8))) : .start(.chat)
             if next != item { item = next }
         }
+    }
+
+    /// "Instructions for every conversation here go in AGENTS.md. Write them": the project's Settings, where AGENTS.md
+    /// opens.
+    private func instructionsLine(_ p: ProjectInfo) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "doc.text").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+            Text("Instructions for every conversation here go in AGENTS.md.").foregroundStyle(Color.dsFg3)
+            Button("Write them") {
+                UserDefaults.standard.set("settings", forKey: "projectTab")
+                item = .project(p.id)
+            }
+            .buttonStyle(.plain).foregroundStyle(Color.accentColor)
+            .help("Open \(p.name)'s Settings, where AGENTS.md and NOTES.md are")
+        }
+        .font(.system(size: 12.5))
+        .padding(.leading, 14)
     }
 
     /// A project with a team (docs/spec/20 §4): who answers this conversation, visible and per conversation.

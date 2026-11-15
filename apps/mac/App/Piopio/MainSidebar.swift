@@ -17,6 +17,9 @@ struct MainSidebar: View {
     @AppStorage("pinnedItems") private var pinnedRaw = ""
     @State private var showingEarlier: Set<String> = []
     @State private var renaming: SessionSummary?
+    /// Folders on this Mac that aren't projects yet, for the Projects + menu (docs/spec/18 §17).
+    @State private var recentFolders: [RecentFolder] = []
+    private var naming: ProjectNaming { ProjectNaming.shared }
     @State private var newTitle = ""
     private var areas: AreaSet { Areas.shared.set }
 
@@ -56,6 +59,14 @@ struct MainSidebar: View {
         }
         .onChange(of: item) { _, _ in
             if let id = openProjectId, collapsedProjects.contains(id) { setProject(id, collapsed: false) }
+        }
+        // Naming a new project shows Projects, even when its section was folded.
+        .onChange(of: naming.active) { _, on in
+            if on, collapsed.contains(SidebarSection.projects.rawValue) { toggle(.projects) }
+        }
+        .task(id: engine.projects.map(\.path)) {
+            let known = Set(engine.projects.map(\.path))
+            recentFolders = await Task.detached { RecentFolder.scan().filter { !known.contains($0.url.path) } }.value
         }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Title", text: $newTitle)
@@ -144,7 +155,7 @@ struct MainSidebar: View {
     }
 
     @ViewBuilder
-    private func header(_ section: SidebarSection, total: Int, shown: Int, add: (() -> Void)?, addHelp: String = "") -> some View {
+    private func header(_ section: SidebarSection, total: Int, shown: Int, add: (() -> Void)?, addHelp: String = "", addMenu: AnyView? = nil) -> some View {
         let isCollapsed = collapsed.contains(section.rawValue)
         HStack(spacing: 4) {
             Button { toggle(section) } label: {
@@ -163,6 +174,8 @@ struct MainSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .help(addHelp)
+            } else if let addMenu {
+                addMenu
             }
         }
         .padding(.leading, 8)
@@ -230,14 +243,41 @@ struct MainSidebar: View {
         let cap = Self.caps[.projects]!
         let pinnedHere = Set(pinned)
         let shown = Array(projects.prefix(cap))
-        header(.projects, total: projects.count, shown: shown.count, add: { NotificationCenter.default.post(name: .newProject, object: nil) }, addHelp: "New project (⇧⌘N)")
+        // + is a menu (docs/spec/18 §17): a new folder, one you have, or one this Mac already has.
+        header(.projects, total: projects.count, shown: shown.count, add: nil, addMenu: AnyView(ProjectsAddMenu(recent: recentFolders)))
         if !collapsed.contains(SidebarSection.projects.rawValue) {
             draftRow(.project)
+            if naming.active {
+                NewProjectRow(error: naming.error, busy: naming.busy, commit: createProject, cancel: { naming.cancel() })
+            }
             ForEach(shown) { project in
                 if !pinnedHere.contains(SidebarItem.project(project.id).raw) { projectRow(project) }
                 projectSessions(project)
             }
             if projects.count > cap { more("\(projects.count - cap) more projects", .index(.projects)) }
+        }
+    }
+
+    /// Makes ~/Piopio/<name> (with its AGENTS.md and NOTES.md) and opens its New conversation; or, when a conversation
+    /// asked (Continue in › New Project…), goes back to it and continues it there.
+    private func createProject(_ name: String) {
+        let from = naming.continuing
+        naming.busy = true
+        naming.error = nil
+        Task {
+            defer { naming.busy = false }
+            do {
+                let project = try await engine.createProject(name: name)
+                naming.finish(project)
+                if let from {
+                    item = engine.item(for: from.id) ?? .chat(from.id)
+                    ContinueInMenu<EmptyView>.continueIn(engine, from, project)
+                } else {
+                    NotificationCenter.default.post(name: .newBuildSession, object: project.id)
+                }
+            } catch {
+                naming.error = ((error as? EngineError)?.message ?? error.localizedDescription) + " Nothing was made."
+            }
         }
     }
 
@@ -671,5 +711,122 @@ private struct ProjectRow: View {
             }
         }
         .onHover { hovering = $0 }
+    }
+}
+
+/// New project, named in the sidebar (docs/spec/18 §17): ⇧⌘N, the Projects + menu, the box's popover and Continue in ›
+/// New Project… all start it. `continuing` is the conversation to move there once it's made; `fresh` are projects made
+/// this session, whose first page offers to write their instructions.
+@MainActor @Observable final class ProjectNaming {
+    static let shared = ProjectNaming()
+    private(set) var active = false
+    private(set) var continuing: ContainerRef?
+    var busy = false
+    var error: String?
+    private(set) var fresh: Set<String> = []
+    /// Captures (PIOPIO_DEMO_NAME_PROJECT): a name the row types and makes as it appears.
+    var demoName: String?
+
+    func begin(continuing ref: ContainerRef?) {
+        continuing = ref
+        error = nil
+        active = true
+    }
+
+    func cancel() {
+        guard !busy else { return }
+        active = false
+        continuing = nil
+        error = nil
+    }
+
+    func finish(_ project: ProjectInfo) {
+        fresh.insert(project.id)
+        active = false
+        continuing = nil
+        error = nil
+    }
+}
+
+/// The Projects + (docs/spec/18 §17): New Project, Open Folder…, and the folders this Mac already has (git repos in the
+/// usual places and folders pi worked in), the first four in the menu and the rest under More Folders.
+private struct ProjectsAddMenu: View {
+    let recent: [RecentFolder]
+
+    var body: some View {
+        Menu {
+            Button { NotificationCenter.default.post(name: .newProject, object: nil) } label: { Text("New Project"); Text("An empty folder in ~/Piopio") }
+            Button { NotificationCenter.default.post(name: .openProject, object: nil) } label: { Text("Open Folder…"); Text("One you already have") }
+            if !recent.isEmpty {
+                Section("On This Mac") {
+                    ForEach(recent.prefix(4)) { folder($0) }
+                    if recent.count > 4 {
+                        Menu("More Folders") { ForEach(recent.dropFirst(4).prefix(16)) { folder($0) } }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "plus").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 20, height: 20).contentShape(Rectangle())
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .help("New project or open a folder")
+        .accessibilityLabel("Add a project")
+    }
+
+    private func folder(_ f: RecentFolder) -> some View {
+        Button { NotificationCenter.default.post(name: .openProject, object: f.url) } label: {
+            Text(f.url.lastPathComponent)
+            Text(f.branch.map { "\(f.path) · \($0)" } ?? f.path)
+        }
+    }
+}
+
+/// The new project's row, named in place like a new folder in Finder: Return makes it, Esc (or leaving it empty)
+/// cancels and nothing is made.
+private struct NewProjectRow: View {
+    let error: String?
+    let busy: Bool
+    let commit: (String) -> Void
+    let cancel: () -> Void
+    @State private var name = ""
+    @FocusState private var focused: Bool
+
+    private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 10) {
+                RowGlyph(symbol: "folder.badge.plus")
+                TextField("", text: $name, prompt: Text("Project name").foregroundStyle(Color.dsFg3))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .focused($focused)
+                    .onSubmit { if !trimmed.isEmpty { commit(trimmed) } }
+                    .onExitCommand(perform: cancel)
+                    .disabled(busy)
+                    .accessibilityLabel("New project name")
+                    .help("Return makes the folder; Esc cancels")
+                if busy { ProgressView().controlSize(.mini) }
+            }
+            .padding(.leading, 8).padding(.trailing, 8)
+            .frame(height: 29)
+            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous).strokeBorder(Color.accentColor.opacity(0.7), lineWidth: 1))
+            // Where it goes; Return makes it and Esc cancels, as in Finder (the row's help says so).
+            Text(error ?? "Makes ~/Piopio/\(trimmed.isEmpty ? "Name" : trimmed.replacingOccurrences(of: "/", with: "-"))")
+                .font(.system(size: 11)).foregroundStyle(error == nil ? Color.dsFg3 : Color.dsFg2)
+                .lineLimit(error == nil ? 1 : 3).truncationMode(.middle)
+                .padding(.leading, 36).padding(.bottom, 4)
+        }
+        .onAppear {
+            DispatchQueue.main.async { focused = true }
+            if let demo = ProjectNaming.shared.demoName {
+                ProjectNaming.shared.demoName = nil
+                name = demo
+                Task { try? await Task.sleep(for: .seconds(1)); commit(demo) }
+            }
+        }
+        // Clicking away from an empty name gives up, as Finder does with nothing typed.
+        .onChange(of: focused) { _, on in if !on && trimmed.isEmpty && !busy { cancel() } }
     }
 }
