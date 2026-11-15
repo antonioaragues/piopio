@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New and Agents</title>
+<style>
+:root {
+  --win: #FCFCFB; --side: #F4F4F2; --card: #FFFFFF; --bubble: #F0F0ED; --sel: #EAEAE6; --field: #FFFFFF;
+  --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --inv: #1F1F1E; --invfg: #FFFFFF;
+  --line: rgba(0,0,0,.09); --accent: #2F6FEB; --page: #E9E9E5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29; --sel: #333331; --field: #252524;
+    --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --inv: #ECECEA; --invfg: #1E1E1D;
+    --line: rgba(255,255,255,.10); --accent: #5B8DF0; --page: #121211;
+  }
+}
+:root[data-theme="dark"] {
+  --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29; --sel: #333331; --field: #252524;
+  --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --inv: #ECECEA; --invfg: #1E1E1D;
+  --line: rgba(255,255,255,.10); --accent: #5B8DF0; --page: #121211;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--fg);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 48px 16px 96px; }
+h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; }
+.lede { color: var(--fg2); font-size: 15px; max-width: 760px; margin: 0 0 12px; }
+.shared { color: var(--fg2); font-size: 13.5px; max-width: 760px; margin: 0 0 40px; padding-left: 14px; border-left: 1.5px solid var(--line); }
+.shared b { color: var(--fg); font-weight: 600; }
+section.prop { margin: 0 0 72px; }
+.prop-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.prop-head .k { font-size: 12px; color: var(--fg3); font-weight: 600; letter-spacing: .04em; }
+.prop-head h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; }
+.prop .sum { color: var(--fg2); font-size: 14px; margin: 0 0 18px; max-width: 820px; }
+.frames { display: grid; gap: 18px; }
+.cap { font-size: 12px; color: var(--fg3); margin: 8px 2px 0; }
+.scroller { overflow-x: auto; padding-bottom: 4px; }
+
+/* window */
+.win { width: 1120px; height: 640px; background: var(--win); border-radius: 12px; overflow: hidden; display: flex;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.18), 0 18px 50px rgba(0,0,0,.14); position: relative; }
+.win.short { height: 470px; }
+.sb { width: 248px; background: var(--side); border-right: .5px solid var(--line); display: flex; flex-direction: column; flex: none; position: relative; overflow: hidden; }
+.tb { height: 48px; display: flex; align-items: center; padding: 0 12px 0 16px; gap: 8px; flex: none; }
+.lights { display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: #DADAD6; display: block; }
+:root[data-theme="dark"] .lights i { background: #3A3A38; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lights i { background: #3A3A38; } }
+.tb .sp { flex: 1; }
+.ib { width: 26px; height: 26px; display: grid; place-items: center; color: var(--fg2); border-radius: 6px; }
+.ib.on { background: var(--sel); color: var(--fg); }
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 13px; height: 13px; }
+.rows { padding: 0 8px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 7px; color: var(--fg); font-size: 13px; height: 28px; white-space: nowrap; }
+.row svg { color: var(--fg2); }
+.row.sel { background: var(--sel); }
+.row .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.row .m { color: var(--fg3); font-size: 11.5px; }
+.row .n { color: var(--fg2); font-size: 12px; }
+.row.sub { padding-left: 34px; color: var(--fg); }
+.row.draft .t { color: var(--fg); }
+.row.draft .m { font-size: 11px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.ring { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--fg3); border-right-color: transparent; flex: none; }
+.sec { display: flex; align-items: center; padding: 14px 16px 4px; color: var(--fg3); font-size: 12px; }
+.sec .sp { flex: 1; }
+.sec svg { color: var(--fg3); }
+.foot { margin-top: auto; height: 50px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-top: .5px solid transparent; }
+.av { width: 24px; height: 24px; border-radius: 50%; background: var(--sel); display: grid; place-items: center; font-size: 11px; color: var(--fg2); flex: none; }
+.foot .nm { flex: 1; font-size: 12.5px; line-height: 1.2; }
+.foot .nm small { display: block; color: var(--fg3); font-size: 11px; }
+.newbtn { margin: 2px 8px 6px; display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 8px; background: var(--card); box-shadow: 0 0 0 .5px var(--line), 0 1px 2px rgba(0,0,0,.04); font-size: 13px; }
+.newbtn .t { flex: 1; }
+.newbtn .m { color: var(--fg3); font-size: 11.5px; }
+
+.main { flex: 1; display: flex; flex-direction: column; position: relative; min-width: 0; }
+.mtb { height: 48px; flex: none; display: flex; align-items: center; padding: 0 16px; gap: 10px; }
+.mtb .title { font-weight: 600; font-size: 13.5px; }
+.mtb .subt { color: var(--fg3); font-size: 12px; }
+.mtb .sp { flex: 1; }
+.center { flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 88px; }
+.col { width: 620px; }
+.greet { font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 22px; }
+.greet small { display: block; font-size: 14px; font-weight: 400; color: var(--fg3); letter-spacing: 0; margin-top: 4px; }
+
+/* composer */
+.comp { background: var(--field); border-radius: 16px; box-shadow: 0 0 0 .5px var(--line), 0 2px 10px rgba(0,0,0,.05); padding: 12px 14px 10px; }
+.comp .ph { color: var(--fg3); font-size: 14px; padding: 2px 2px 14px; }
+.comp .ph.typed { color: var(--fg); }
+.comp .bar { display: flex; align-items: center; gap: 4px; color: var(--fg2); font-size: 12.5px; }
+.comp .bar .sp { flex: 1; }
+.selr { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; color: var(--fg2); white-space: nowrap; }
+.selr.hov { background: var(--sel); color: var(--fg); }
+.selr.off { color: var(--fg3); opacity: .55; }
+.send { width: 28px; height: 28px; border-radius: 50%; background: var(--sel); color: var(--fg3); display: grid; place-items: center; margin-left: 6px; }
+.send.on { background: var(--inv); color: var(--invfg); }
+.where { color: var(--fg3); font-size: 12px; margin: 9px 4px 0; }
+.below { margin-top: 34px; }
+.below h4 { margin: 0 0 6px; font-size: 12px; color: var(--fg3); font-weight: 500; }
+.lrow { display: flex; align-items: center; gap: 10px; height: 30px; border-bottom: .5px solid var(--line); font-size: 13px; }
+.lrow .m { margin-left: auto; color: var(--fg3); font-size: 12px; }
+
+/* menus */
+.menu { position: absolute; background: var(--field); border-radius: 12px; box-shadow: 0 0 0 .5px var(--line), 0 10px 30px rgba(0,0,0,.14); padding: 6px; z-index: 5; }
+.menu .mh { font-size: 11.5px; color: var(--fg3); padding: 6px 8px 3px; }
+.menu .mi { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 7px; font-size: 13px; white-space: nowrap; }
+.menu .mi.hl { background: var(--sel); }
+.menu .mi svg { color: var(--fg2); }
+.menu .mi .d { color: var(--fg3); font-size: 12px; margin-left: auto; padding-left: 16px; }
+.menu .mi .ck { margin-left: auto; color: var(--fg); }
+.menu hr { border: 0; border-top: .5px solid var(--line); margin: 5px 4px; }
+.menu .search { display: flex; align-items: center; gap: 8px; padding: 6px 8px 8px; color: var(--fg3); font-size: 13px; border-bottom: .5px solid var(--line); margin-bottom: 4px; }
+
+/* B: destination card */
+.dest { width: 460px; background: var(--field); border-radius: 14px; box-shadow: 0 0 0 .5px var(--line), 0 6px 22px rgba(0,0,0,.07); overflow: hidden; }
+.dest .di { display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 42px; font-size: 14px; }
+.dest .di svg { color: var(--fg2); }
+.dest .di .d { color: var(--fg3); font-size: 12px; }
+.dest .di .ck { margin-left: auto; }
+.dest .di.hl { background: var(--bubble); }
+.dest .df { border-top: .5px solid var(--line); display: flex; align-items: center; gap: 4px; padding: 0 10px; height: 44px; color: var(--fg2); font-size: 13px; }
+.dest .df .sp { flex: 1; }
+.bottomcomp { position: absolute; left: 0; right: 0; bottom: 22px; display: flex; flex-direction: column; align-items: center; }
+.bottomcomp .comp { width: 700px; }
+.bottomcomp .opts { width: 700px; display: flex; gap: 2px; margin-top: 8px; font-size: 12.5px; color: var(--fg2); }
+.bottomcomp .opts .sp { flex: 1; }
+
+/* C: sentence header */
+.sent { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.35; margin: 0 0 22px; }
+.sent .w { color: var(--fg); border-bottom: 1.5px dotted var(--fg3); padding: 0 1px; }
+.sent .w.off { color: var(--fg3); border-bottom-color: transparent; }
+.picks { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 14px; font-size: 13px; color: var(--fg2); }
+.picks span { display: inline-flex; align-items: center; gap: 6px; }
+.picks .lbl { color: var(--fg3); }
+
+/* agents pages */
+.apage { flex: 1; padding: 28px 40px; overflow: hidden; }
+.ahead { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.ahead h3 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+.ahead .sp { flex: 1; }
+.black { background: var(--inv); color: var(--invfg); border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+.textbtn { color: var(--fg2); font-size: 13px; }
+.adesc { color: var(--fg3); font-size: 13px; margin: 0 0 18px; }
+.seg { display: inline-flex; background: var(--bubble); border-radius: 8px; padding: 2px; margin-bottom: 14px; }
+.seg span { padding: 3px 12px; border-radius: 6px; font-size: 12.5px; color: var(--fg2); }
+.seg span.on { background: var(--card); color: var(--fg); box-shadow: 0 0 0 .5px var(--line); }
+.arow { display: grid; grid-template-columns: 32px 1fr 190px 110px; align-items: center; gap: 12px; height: 52px; border-bottom: .5px solid var(--line); }
+.arow .nm { font-size: 13.5px; font-weight: 500; }
+.arow .nm small { display: block; font-weight: 400; color: var(--fg3); font-size: 12px; }
+.arow .c { color: var(--fg2); font-size: 12.5px; }
+.arow .st { color: var(--fg3); font-size: 12px; display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.ava { width: 30px; height: 30px; border-radius: 50%; background: var(--bubble); display: grid; place-items: center; color: var(--fg2); }
+.ghead { font-size: 12px; color: var(--fg3); margin: 22px 0 8px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.tile { border-radius: 12px; box-shadow: 0 0 0 .5px var(--line); padding: 14px; background: var(--win); display: flex; flex-direction: column; gap: 8px; min-height: 108px; }
+.tile .top { display: flex; align-items: center; gap: 10px; }
+.tile .nm { font-weight: 600; font-size: 13.5px; }
+.tile .ds { color: var(--fg2); font-size: 12.5px; }
+.tile .st { color: var(--fg3); font-size: 12px; margin-top: auto; display: flex; align-items: center; gap: 6px; }
+.tile.add { box-shadow: none; border: 1px dashed var(--line); align-items: center; justify-content: center; color: var(--fg3); }
+
+/* C: the agents sidebar sliding in */
+.backrow { display: flex; align-items: center; gap: 8px; padding: 2px 16px 8px; font-size: 13px; color: var(--fg2); }
+.backrow b { color: var(--fg); font-weight: 600; font-size: 14px; }
+.agentconv { flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 22px; }
+.msg { width: 600px; margin-bottom: 14px; font-size: 14px; line-height: 1.6; }
+.msg.u { display: flex; justify-content: flex-end; }
+.msg.u span { background: var(--bubble); border-radius: 12px; padding: 8px 14px; max-width: 80%; }
+.msg .meta { color: var(--fg3); font-size: 12px; margin-bottom: 4px; }
+.note { position: absolute; font-size: 11.5px; color: var(--accent); display: flex; align-items: center; gap: 6px; z-index: 6; white-space: nowrap; }
+.note::before { content: ""; width: 18px; height: 1px; background: var(--accent); }
+.note.l::before { order: 2; }
+
+.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; max-width: 980px; }
+.notes h5 { margin: 0 0 6px; font-size: 12.5px; }
+.notes ul { margin: 0; padding-left: 18px; color: var(--fg2); font-size: 13px; }
+.notes li { margin-bottom: 4px; }
+.verdict { margin-top: 48px; padding-top: 24px; border-top: .5px solid var(--line); max-width: 820px; }
+.verdict h2 { font-size: 18px; margin: 0 0 8px; }
+.verdict p { color: var(--fg2); font-size: 14px; margin: 0 0 8px; }
+@media (max-width: 700px) { .notes { grid-template-columns: 1fr; } .wrap { padding-top: 28px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5V10h-4v3.5H2.5z"/></symbol>
+  <symbol id="inbox" viewBox="0 0 16 16"><path d="M2 9.5 3.8 3h8.4L14 9.5V13H2z"/><path d="M2 9.5h3.5l1 1.5h3l1-1.5H14"/></symbol>
+  <symbol id="agents" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13.5c.4-2.4 2.1-3.8 4.2-3.8s3.8 1.4 4.2 3.8"/><circle cx="11.3" cy="5" r="1.9"/><path d="M11.6 8.8c1.6.2 2.6 1.4 2.9 3.2"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5c0-.6.4-1 1-1h3.2l1.3 1.5H13c.6 0 1 .4 1 1V12c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="compose" viewBox="0 0 16 16"><path d="M13 9v4H3V3h4"/><path d="M11.5 2.5 13.5 4.5 8 10H6V8z"/></symbol>
+  <symbol id="sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6.5 3v10"/></symbol>
+  <symbol id="down" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5"/></symbol>
+  <symbol id="right" viewBox="0 0 16 16"><path d="M6.5 4.5 10 8l-3.5 3.5"/></symbol>
+  <symbol id="left" viewBox="0 0 16 16"><path d="M9.5 4.5 6 8l3.5 3.5"/></symbol>
+  <symbol id="up" viewBox="0 0 16 16"><path d="M8 13V3.5M4 7.5l4-4 4 4"/></symbol>
+  <symbol id="mac" viewBox="0 0 16 16"><rect x="3" y="3.5" width="10" height="7" rx="1"/><path d="M1.5 12.5h13"/></symbol>
+  <symbol id="cloud" viewBox="0 0 16 16"><path d="M4.5 12.5a3 3 0 0 1-.3-6 4 4 0 0 1 7.6 1 2.5 2.5 0 0 1 .2 5z"/></symbol>
+  <symbol id="check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></symbol>
+  <symbol id="bubble" viewBox="0 0 16 16"><path d="M3 3.5h10v7H7l-3 2.5v-2.5H3z"/></symbol>
+  <symbol id="pin" viewBox="0 0 16 16"><path d="M6 2.5h4l-.5 4 2 2H4.5l2-2zM8 8.5V14"/></symbol>
+  <symbol id="sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/></symbol>
+  <symbol id="mail" viewBox="0 0 16 16"><rect x="2" y="3.5" width="12" height="9" rx="1.2"/><path d="m2.5 4.5 5.5 4 5.5-4"/></symbol>
+  <symbol id="doc" viewBox="0 0 16 16"><path d="M4 2h5.5L12 4.5V14H4z"/><path d="M6 8h4M6 10.5h4"/></symbol>
+  <symbol id="team" viewBox="0 0 16 16"><circle cx="8" cy="5" r="2"/><circle cx="3.8" cy="7.5" r="1.6"/><circle cx="12.2" cy="7.5" r="1.6"/><path d="M4.8 13c.3-2 1.6-3.2 3.2-3.2s2.9 1.2 3.2 3.2M1.5 12.5c.2-1.3.9-2 1.9-2.2M14.5 12.5c-.2-1.3-.9-2-1.9-2.2"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2"/></symbol>
+  <symbol id="clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1>New, and Agents on their own</h1>
+  <p class="lede">Three ways to do the two changes: every <b>New</b> lands on the same start page, where the project is something you pick (or don't), and <b>Agents</b> leave the sidebar lists to become a place of their own, next to Search and Home.</p>
+  <p class="shared">All three share: <b>⌘N, the compose button and a project's +</b> open the same page (a project's + just preselects it). Projects keep their + (it makes a folder); Conversations lose theirs. <b>New agent</b> moves into the Agents page. <b>Teams</b> go with Agents, since both are definitions you set up once. Location (This Mac / Cloud) is drawn but greyed: it appears when the cloud engine exists (spec 18, CF7).</p>
+
+  <!-- ============================== A ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">A</span><h2>Agents next to Home, project as a chip</h2></div>
+    <p class="sum">The smallest step from today. Agents become a fourth row under Search, Home and Needs you, and open one page with agents and teams. The start page is today's "What's on your mind?" box; the project picker is the first selector in its bottom row, and the line under the box says where the message goes.</p>
+    <div class="frames">
+      <div>
+        <div class="scroller"><div class="win">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib on"><svg class="i"><use href="#compose"/></svg></span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+              <div class="row"><svg class="i"><use href="#inbox"/></svg><span class="t">Needs you</span><span class="n">1</span></div>
+              <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span><span class="ring"></span></div>
+            </div>
+            <div class="sec">Pinned</div>
+            <div class="rows"><div class="row"><svg class="i"><use href="#pin"/></svg><span class="t">Release checklist</span></div></div>
+            <div class="sec">Projects<span class="sp"></span><svg class="i s"><use href="#plus"/></svg></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span></div>
+              <div class="row sub"><span class="t">Sidebar: agents section</span><span class="dot"></span></div>
+              <div class="row sub"><span class="t">Inspector row spacing</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">financial_ia</span></div>
+            </div>
+            <div class="sec">Conversations</div>
+            <div class="rows">
+              <div class="row sel draft"><span class="t">New conversation</span><span class="m">Draft</span></div>
+              <div class="row"><span class="t">Flights to Lisbon in March</span></div>
+              <div class="row"><span class="t">How pi-durable alarms work</span></div>
+            </div>
+            <div class="foot"><span class="av">A</span><span class="nm">Antonio<small>This Mac</small></span><svg class="i" style="color:var(--fg2)"><use href="#gear"/></svg></div>
+          </div>
+          <div class="main">
+            <div class="mtb"></div>
+            <div class="center"><div class="col" style="position:relative">
+              <p class="greet">What's on your mind?</p>
+              <div class="comp">
+                <div class="ph">Ask anything, @ to mention, / for commands</div>
+                <div class="bar">
+                  <span class="selr"><svg class="i"><use href="#plus"/></svg></span>
+                  <span class="selr hov"><svg class="i"><use href="#folder"/></svg>No project</span>
+                  <span class="selr off"><svg class="i"><use href="#mac"/></svg>This Mac</span>
+                  <span class="sp"></span>
+                  <span class="selr">Opus 5.5 · High</span>
+                  <span class="send"><svg class="i"><use href="#up"/></svg></span>
+                </div>
+              </div>
+              <div class="where">Not in a project · it can't see or change your files</div>
+              <div class="menu" style="left:30px; top:178px; width:300px">
+                <div class="search"><svg class="i s"><use href="#search"/></svg>Find a project or folder</div>
+                <div class="mh">Recent</div>
+                <div class="mi"><svg class="i"><use href="#folder"/></svg>piopio<span class="d">2h ago</span></div>
+                <div class="mi"><svg class="i"><use href="#folder"/></svg>BioGen<span class="d">Yesterday</span></div>
+                <div class="mi"><svg class="i"><use href="#folder"/></svg>financial_ia<span class="d">Nov 9</span></div>
+                <div class="mi">Folders on this Mac<span class="d"><svg class="i s"><use href="#right"/></svg></span></div>
+                <hr>
+                <div class="mi">Open folder…<span class="d">⌘O</span></div>
+                <div class="mi">New project…<span class="d">⇧⌘N</span></div>
+                <hr>
+                <div class="mi hl"><svg class="i"><use href="#bubble"/></svg>No project<span class="ck"><svg class="i s"><use href="#check"/></svg></span></div>
+              </div>
+            </div></div>
+          </div>
+        </div></div>
+        <p class="cap">A1 · New conversation, with the project menu open. Choosing a project adds the permissions selector to the bar and changes the line under the box ("In piopio · can edit files; asks before commands").</p>
+      </div>
+      <div>
+        <div class="scroller"><div class="win short">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+              <div class="row"><svg class="i"><use href="#inbox"/></svg><span class="t">Needs you</span><span class="n">1</span></div>
+              <div class="row sel"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span><span class="ring"></span></div>
+            </div>
+            <div class="sec">Projects<span class="sp"></span><svg class="i s"><use href="#plus"/></svg></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+            </div>
+            <div class="sec">Conversations</div>
+            <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+          </div>
+          <div class="main">
+            <div class="apage">
+              <div class="ahead"><h3>Agents</h3><span class="sp"></span><span class="black"><svg class="i s"><use href="#plus"/></svg>New agent</span></div>
+              <p class="adesc">Conversations that live on their own: schedules, channels, memory.</p>
+              <div class="seg"><span class="on">Agents 3</span><span>Teams 2</span></div>
+              <div class="arow"><span class="ava"><svg class="i"><use href="#sun"/></svg></span><span class="nm">Daily briefing<small>Calendar, mail and news before the day starts</small></span><span class="c">Every day · 08:00</span><span class="st"><span class="ring"></span>Running</span></div>
+              <div class="arow"><span class="ava"><svg class="i"><use href="#mail"/></svg></span><span class="nm">Inbox helper<small>Drafts replies on Telegram</small></span><span class="c">When you message it</span><span class="st"><span class="dot"></span>Needs you</span></div>
+              <div class="arow"><span class="ava"><svg class="i"><use href="#doc"/></svg></span><span class="nm">Release notes<small>Reads merged PRs, writes the notes</small></span><span class="c">Fridays · 18:00</span><span class="st">Paused</span></div>
+            </div>
+          </div>
+        </div></div>
+        <p class="cap">A2 · The Agents row opens one page. A row opens that agent's conversation; the sidebar keeps Agents selected while you're inside one.</p>
+      </div>
+    </div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>Closest to what's built: the box and its popover exist (spec 18 §4); only the chip moves into the bar.</li><li>Sidebar gets shorter and is only about your work: projects and conversations.</li><li>One rule for the + : it always opens this page.</li></ul></div>
+      <div><h5>Costs</h5><ul><li>A running agent is one click further away (the ring on the row and Needs you still tell you).</li><li>"No project" is easy to miss at the bottom of the box; the line under it does the work.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ============================== B ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">B</span><h2>Choose where, then write</h2></div>
+    <p class="sum">Closest to the Claude window you sent, in Piopio's ink. The start page puts <i>where</i> first: a short list of places in the middle (No project and recent projects, ✓ on the current one) with the location underneath, and the box at the bottom where the conversation's box will be, so pressing Return doesn't move anything. A "New conversation" button heads the sidebar; Agents is a row that opens a gallery.</p>
+    <div class="frames">
+      <div>
+        <div class="scroller"><div class="win">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span></div>
+            <div class="newbtn"><svg class="i"><use href="#compose"/></svg><span class="t">New conversation</span><span class="m">⌘N</span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span><span class="n">1</span></div>
+              <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span><span class="ring"></span></div>
+            </div>
+            <div class="sec">Projects<span class="sp"></span><svg class="i s"><use href="#plus"/></svg></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span></div>
+              <div class="row sub"><span class="t">Sidebar: agents section</span><span class="dot"></span></div>
+              <div class="row sub"><span class="t">Inspector row spacing</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">financial_ia</span></div>
+            </div>
+            <div class="sec">Conversations</div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#pin"/></svg><span class="t">Release checklist</span></div>
+              <div class="row"><span class="t">Flights to Lisbon in March</span></div>
+              <div class="row"><span class="t">How pi-durable alarms work</span></div>
+            </div>
+            <div class="foot"><span class="av">A</span><span class="nm">Antonio<small>This Mac</small></span><svg class="i" style="color:var(--fg2)"><use href="#gear"/></svg></div>
+          </div>
+          <div class="main">
+            <div class="mtb"></div>
+            <div class="center" style="padding-top:96px">
+              <div class="dest">
+                <div class="di hl"><svg class="i"><use href="#bubble"/></svg>No project<span class="d">&nbsp;· can't touch files</span><span class="ck"><svg class="i"><use href="#check"/></svg></span></div>
+                <div class="di"><svg class="i"><use href="#folder"/></svg>piopio<span class="d">&nbsp;· Auto-edit</span></div>
+                <div class="di"><svg class="i"><use href="#folder"/></svg>BioGen<span class="d">&nbsp;· Read only</span></div>
+                <div class="di"><svg class="i"><use href="#folder"/></svg>financial_ia<span class="d">&nbsp;· Ask</span></div>
+                <div class="df"><span class="selr">Open folder…</span><span class="selr">New project…</span><span class="sp"></span><span class="selr off"><svg class="i"><use href="#mac"/></svg>This Mac</span></div>
+              </div>
+            </div>
+            <div class="bottomcomp">
+              <div class="comp">
+                <div class="ph">Describe a task or ask a question</div>
+                <div class="bar"><span class="selr"><svg class="i"><use href="#plus"/></svg></span><span class="sp"></span><span class="selr">Opus 5.5 · High</span><span class="send"><svg class="i"><use href="#up"/></svg></span></div>
+              </div>
+              <div class="opts"><span class="selr"><svg class="i"><use href="#bubble"/></svg>No project</span><span class="sp"></span><span class="selr off"><svg class="i"><use href="#mac"/></svg>This Mac</span></div>
+            </div>
+          </div>
+        </div></div>
+        <p class="cap">B1 · New conversation. The list shows each project's default permission, so you see what it may do before picking. Under the box, the same choices stay as text for when you start typing first.</p>
+      </div>
+      <div>
+        <div class="scroller"><div class="win short">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span></div>
+            <div class="newbtn"><svg class="i"><use href="#compose"/></svg><span class="t">New conversation</span><span class="m">⌘N</span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span><span class="n">1</span></div>
+              <div class="row sel"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span><span class="ring"></span></div>
+            </div>
+            <div class="sec">Projects<span class="sp"></span><svg class="i s"><use href="#plus"/></svg></div>
+            <div class="rows"><div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span></div></div>
+          </div>
+          <div class="main">
+            <div class="apage">
+              <div class="ahead"><h3>Agents</h3><span class="sp"></span><span class="black"><svg class="i s"><use href="#plus"/></svg>New agent</span></div>
+              <div class="ghead">Yours</div>
+              <div class="grid">
+                <div class="tile"><div class="top"><span class="ava"><svg class="i"><use href="#sun"/></svg></span><span class="nm">Daily briefing</span></div><span class="ds">Calendar, mail and news before the day starts</span><span class="st"><span class="ring"></span>Running · every day 08:00</span></div>
+                <div class="tile"><div class="top"><span class="ava"><svg class="i"><use href="#mail"/></svg></span><span class="nm">Inbox helper</span></div><span class="ds">Drafts replies on Telegram</span><span class="st"><span class="dot"></span>Needs you</span></div>
+                <div class="tile"><div class="top"><span class="ava"><svg class="i"><use href="#doc"/></svg></span><span class="nm">Release notes</span></div><span class="ds">Reads merged PRs, writes the notes</span><span class="st">Paused · Fridays 18:00</span></div>
+              </div>
+              <div class="ghead">Teams</div>
+              <div class="grid">
+                <div class="tile" style="min-height:76px"><div class="top"><span class="ava"><svg class="i"><use href="#team"/></svg></span><span class="nm">Development team</span></div><span class="st">4 members · works in piopio, BioGen</span></div>
+                <div class="tile" style="min-height:76px"><div class="top"><span class="ava"><svg class="i"><use href="#team"/></svg></span><span class="nm">Research team</span></div><span class="st">3 members · not in a project</span></div>
+                <div class="tile add" style="min-height:76px">Start from a template</div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+        <p class="cap">B2 · Agents as a gallery: agents and teams on one page, templates at the end. Needs you folds into Home's count to keep the top short.</p>
+      </div>
+    </div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>The choice of place is impossible to miss, and it's one click, not a menu.</li><li>Room for the location later: the row is already there.</li><li>A visible "New conversation" button teaches the one way in.</li></ul></div>
+      <div><h5>Costs</h5><ul><li>The page is about choosing before writing, the opposite of spec 18's "you always start by writing" (CF2). The text under the box softens it.</li><li>Tiles are more decoration than grey ink allows (principle 5); it only pays off with many agents.</li><li>Home loses its own box, or keeps a second one.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ============================== C ============================== -->
+  <section class="prop">
+    <div class="prop-head"><span class="k">C</span><h2>Agents as their own place, where as a sentence</h2></div>
+    <p class="sum">Agents get the whole sidebar. Clicking Agents slides the lists over to agents and teams, with a back row to your work, like Mail's folders or a drill-in. The start page reads as a sentence, "New conversation in <u>no project</u> on <u>this Mac</u>": each underlined word is a menu, and your three latest projects are one click below the box.</p>
+    <div class="frames">
+      <div>
+        <div class="scroller"><div class="win">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib on"><svg class="i"><use href="#compose"/></svg></span></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+              <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+              <div class="row"><svg class="i"><use href="#inbox"/></svg><span class="t">Needs you</span><span class="n">1</span></div>
+              <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span><span class="ring"></span><svg class="i s" style="color:var(--fg3)"><use href="#right"/></svg></div>
+            </div>
+            <div class="sec">Projects<span class="sp"></span><svg class="i s"><use href="#plus"/></svg></div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span></div>
+              <div class="row sub"><span class="t">Sidebar: agents section</span><span class="dot"></span></div>
+              <div class="row sub"><span class="t">Inspector row spacing</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span></div>
+              <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">financial_ia</span></div>
+            </div>
+            <div class="sec">Conversations</div>
+            <div class="rows">
+              <div class="row sel draft"><span class="t">New conversation</span><span class="m">Draft</span></div>
+              <div class="row"><svg class="i"><use href="#pin"/></svg><span class="t">Release checklist</span></div>
+              <div class="row"><span class="t">Flights to Lisbon in March</span></div>
+            </div>
+            <div class="foot"><span class="av">A</span><span class="nm">Antonio<small>This Mac</small></span><svg class="i" style="color:var(--fg2)"><use href="#gear"/></svg></div>
+          </div>
+          <div class="main">
+            <div class="mtb"></div>
+            <div class="center" style="padding-top:110px"><div class="col" style="position:relative">
+              <p class="sent">New conversation in <span class="w">no project</span><br><span style="color:var(--fg3)">on</span> <span class="w off">this Mac</span></p>
+              <div class="comp">
+                <div class="ph typed">Compare the three cheapest flights to Lisbon in March</div>
+                <div class="bar"><span class="selr"><svg class="i"><use href="#plus"/></svg></span><span class="sp"></span><span class="selr">Opus 5.5 · High</span><span class="send on"><svg class="i"><use href="#up"/></svg></span></div>
+              </div>
+              <div class="picks"><span class="lbl">Or in</span><span><svg class="i s"><use href="#folder"/></svg>piopio</span><span><svg class="i s"><use href="#folder"/></svg>BioGen</span><span><svg class="i s"><use href="#folder"/></svg>financial_ia</span><span>Other…</span></div>
+            </div></div>
+          </div>
+        </div></div>
+        <p class="cap">C1 · Picking "piopio" rewrites the title to "New conversation in piopio", and the permissions word joins the sentence: "… that can <u>edit files</u>".</p>
+      </div>
+      <div>
+        <div class="scroller"><div class="win short">
+          <div class="sb">
+            <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#plus"/></svg></span></div>
+            <div class="backrow"><svg class="i s"><use href="#left"/></svg><b>Agents</b></div>
+            <div class="rows">
+              <div class="row sel"><span class="ava" style="width:20px;height:20px"><svg class="i s"><use href="#sun"/></svg></span><span class="t">Daily briefing</span><span class="ring"></span></div>
+              <div class="row"><span class="ava" style="width:20px;height:20px"><svg class="i s"><use href="#mail"/></svg></span><span class="t">Inbox helper</span><span class="dot"></span></div>
+              <div class="row"><span class="ava" style="width:20px;height:20px"><svg class="i s"><use href="#doc"/></svg></span><span class="t">Release notes</span><span class="m">Paused</span></div>
+            </div>
+            <div class="sec">Teams</div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#team"/></svg><span class="t">Development team</span><span class="m">4</span></div>
+              <div class="row"><svg class="i"><use href="#team"/></svg><span class="t">Research team</span><span class="m">3</span></div>
+            </div>
+            <div class="sec">Runs</div>
+            <div class="rows">
+              <div class="row"><svg class="i"><use href="#clock"/></svg><span class="t">Today 08:00 · Daily briefing</span></div>
+              <div class="row"><svg class="i"><use href="#clock"/></svg><span class="t">Fri 18:00 · Release notes</span></div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="mtb"><span class="title">Daily briefing</span><span class="subt">Every day · 08:00 · Telegram</span></div>
+            <div class="agentconv">
+              <div class="msg"><div class="meta">Automatic run · 08:00</div>Three meetings today; the 11:00 moved to 12:30. Two mails need an answer before noon: the invoice from Hetzner and María's question about the demo.</div>
+              <div class="msg u"><span>Draft the reply to María</span></div>
+              <div class="msg" style="color:var(--fg3); font-size:13px">Thought for 4s ›</div>
+            </div>
+          </div>
+        </div></div>
+        <p class="cap">C2 · Inside Agents the sidebar is about agents: their list, teams and upcoming runs. The + in the top bar becomes "New agent" here; ‹ Agents goes back to your work.</p>
+      </div>
+    </div>
+    <div class="notes">
+      <div><h5>Good</h5><ul><li>Agents have space to grow (runs, channels, contacts) without crowding projects.</li><li>The sentence says where the message goes and what it may do, which is spec 18's rule for phase 1, in plain words.</li><li>Quick picks make "in a project" one click for the usual three.</li></ul></div>
+      <div><h5>Costs</h5><ul><li>A swapping sidebar is a mode, which v2 removed on purpose; you can't see a project and an agent side by side in the sidebar.</li><li>The compose button means two things depending on where you are, which breaks "New always goes to the same page" for agents.</li></ul></div>
+    </div>
+  </section>
+
+  <div class="verdict">
+    <h2>My pick</h2>
+    <p><b>A, borrowing two things.</b> It keeps spec 18's "start by writing", costs the least to build, and the sidebar ends up about your work only. From B, the list of recent projects with their permission next to each one, inside A's menu. From C, the quick picks under the box ("Or in piopio · BioGen · financial_ia"), so the usual project is one click without opening anything.</p>
+    <p>B is the better choice if you expect people to pick a project most of the time; C if agents will grow into their own product (runs, contacts, channels) and deserve a whole sidebar.</p>
+  </div>
+</div>
+</body>
+</html>

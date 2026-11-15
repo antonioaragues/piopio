@@ -314,6 +314,8 @@ private struct WaitingRow: View {
 struct AskBox: View {
     let engine: EngineController
     @Binding var item: SidebarItem
+    /// The New conversation page's quick picks under the box (docs/spec/18 §16): "Or in" the three latest projects.
+    var quickPicks = false
     @State private var text = ""
     /// "chat", "project:<id>" or "agent:<id>"; the start routes set it (⌘N, ⌘O, a project's +).
     /// Back to "chat" (no project) after each send, so a loose question never lands in the last project.
@@ -384,11 +386,6 @@ struct AskBox: View {
         VStack(alignment: .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 8) {
                 if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
-                HStack(spacing: 4) {
-                    targetMenu
-                    Spacer()
-                }
-                .padding(.leading, -6)
                 TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3), axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
@@ -396,10 +393,11 @@ struct AskBox: View {
                     .focused($focused)
                     .onSubmit(send)
                 if !attachments.isEmpty { attachmentTiles }
-                // The same footer as a conversation's composer (Composer.box): attach and permissions on the left,
-                // the model and send on the right, so the box reads the same before and after it starts.
+                // The same footer as a conversation's composer (Composer.box): attach, where it goes (18 §16) and
+                // permissions on the left, the model and send on the right, so the box reads the same before and after.
                 HStack(spacing: 2) {
                     if agent == nil { AttachButton(pick: attach, help: "Add files, photos or PDFs (⌘U)") }
+                    targetMenu
                     if project != nil {
                         if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
                     }
@@ -428,6 +426,7 @@ struct AskBox: View {
                 Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.leading, 14)
                     .accessibilityLabel(line)
             }
+            if quickPicks, target == .chat, !latestProjects.isEmpty { picks }
         }
         .onChange(of: text) { _, t in mention(t); saveHomeDraft() }
         .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder; plan = false }
@@ -446,16 +445,16 @@ struct AskBox: View {
 
     // MARK: Where it goes
 
-    /// Where this goes (docs/spec/18 §4): a popover with search over projects, folders on this Mac and agents.
+    /// Where this goes (docs/spec/18 §4, §16): in the bottom row, plain text with its icon and no chevron (grey ink,
+    /// principle 6); a popover with search over projects, folders on this Mac and agents.
     private var targetMenu: some View {
         Button { picking = true } label: {
             HStack(spacing: 5) {
-                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : team != nil ? "person.3" : "bubble.left").font(.system(size: 11))
-                Text(targetLabel)
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : team != nil ? "person.3" : "bubble.left").font(.system(size: 11.5))
+                Text(targetLabel).lineLimit(1)
             }
         }
-        .buttonStyle(ChipStyle()).fixedSize()
+        .buttonStyle(ComposerChipStyle()).fixedSize()
         .help("Where this goes: no project, a project, or an agent")
         .accessibilityLabel("Where this goes: \(targetLabel)")
         .popover(isPresented: $picking, arrowEdge: .bottom) {
@@ -498,8 +497,9 @@ struct AskBox: View {
             .accessibilityLabel("Permissions: \(effectiveMode.title)")
     }
 
-    /// "In piopio · can edit files; asks before commands"; nothing with no project (it can't touch files).
+    /// "In piopio · can edit files; asks before commands"; with no project, that it can't touch files (18 §16).
     private var whereLine: String? {
+        if target == .chat { return "Not in a project · it can't see or change your files" }
         if let team { return "A new conversation with \(team.name)'s lead in \(URL(fileURLWithPath: team.cwd).lastPathComponent) · it does small things itself and puts bigger work on the board" }
         guard let project else { return nil }
         let place = switch workOn {
@@ -508,6 +508,37 @@ struct AskBox: View {
         case .worktree: " · in its own worktree"
         }
         return "In \(project.name)\(place) · \(plan ? "plans first; changes only after you approve the plan" : effectiveMode.line)"
+    }
+
+    /// The three projects used last (by their latest conversation), for the quick picks.
+    private var latestProjects: [ProjectInfo] {
+        Array(engine.projects.filter { $0.missing != true }
+            .sorted { (engine.sessions(in: $0).map(\.updatedAt).max() ?? $0.addedAt) > (engine.sessions(in: $1).map(\.updatedAt).max() ?? $1.addedAt) }
+            .prefix(3))
+    }
+
+    /// "Or in piopio · BioGen · financial_ia": one click to the usual projects (18 §16, from proposal C).
+    private var picks: some View {
+        HStack(spacing: 14) {
+            Text("Or in").foregroundStyle(Color.dsFg3)
+            ForEach(latestProjects) { p in
+                Button { target = .project(p.id); focused = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "folder").font(.system(size: 11))
+                        Text(p.name).lineLimit(1)
+                    }
+                    .foregroundStyle(Color.dsFg2)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("New conversation in \(p.name)")
+            }
+            if engine.projects.count > 3 {
+                Button("Other…") { picking = true }.buttonStyle(.plain).foregroundStyle(Color.dsFg2)
+            }
+        }
+        .font(.system(size: 12.5))
+        .padding(.leading, 14).padding(.top, 8)
     }
 
     private var targetLabel: String {
@@ -715,7 +746,10 @@ struct TargetPicker: View {
     private func matches(_ name: String) -> Bool { query.isEmpty || name.localizedCaseInsensitiveContains(query) }
 
     var body: some View {
+        // Recent first, each with the permissions its new conversations start with (docs/spec/18 §16).
         let projects = engine.projects.filter { $0.missing != true && matches($0.name) }
+            .sorted { (engine.sessions(in: $0).map(\.updatedAt).max() ?? $0.addedAt) > (engine.sessions(in: $1).map(\.updatedAt).max() ?? $1.addedAt) }
+        let buildOn = Areas.shared.contains(.build)
         let folders = recent.filter { matches($0.url.lastPathComponent) || matches($0.path) }.prefix(query.isEmpty ? 5 : 12)
         let agents = Areas.shared.contains(.agents) ? engine.agents.filter { matches($0.title) } : []
         VStack(alignment: .leading, spacing: 0) {
@@ -732,7 +766,7 @@ struct TargetPicker: View {
                     if !projects.isEmpty {
                         header("Projects")
                         ForEach(projects) { p in
-                            row(p.name, symbol: "folder", on: current == .project(p.id)) { choose(.target(.project(p.id))) }
+                            row(p.name, trailing: (buildOn ? p.approvalMode ?? .autoEdit : .readOnly).title, symbol: "folder", on: current == .project(p.id)) { choose(.target(.project(p.id))) }
                         }
                     }
                     if !folders.isEmpty {
@@ -763,7 +797,7 @@ struct TargetPicker: View {
         Text(title).font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color.dsFg3).padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 2)
     }
 
-    private func row(_ title: String, detail: String? = nil, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
+    private func row(_ title: String, detail: String? = nil, trailing: String? = nil, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 16)
@@ -772,6 +806,7 @@ struct TargetPicker: View {
                     if let detail { Text(detail).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle) }
                 }
                 Spacer()
+                if let trailing { Text(trailing).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
                 if on { Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg2) }
             }
             .padding(.horizontal, 12).padding(.vertical, 5).contentShape(Rectangle())

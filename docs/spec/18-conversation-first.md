@@ -485,3 +485,20 @@ runs every thread on the same agent, giving a thread without a project a folder 
 - An MCP server turned off in a chat is refused when called, as in a folder conversation, instead of being hidden.
 
 **Not changed:** agents stay on pi-durable. "Continue in" still makes a new conversation in the project's folder.
+
+## 16. One New, and Agents beside Home (2026-11-15)
+
+**Why:** the compose button was a menu of four kinds (conversation, conversation in a project, project, agent), and
+every sidebar section had its own `+`. Agents and teams sat between Projects and Conversations, as if they were more of
+your work, when they are things you set up once and that then run on their own. The user picked proposal A of three
+([docs/design/new-and-agents/proposals.html](../design/new-and-agents/proposals.html)), with two borrowings.
+
+| ID | Decision |
+|---|---|
+| CF9 | **New always lands on the same page.** The compose button, ⌘N and File › New Conversation open the New conversation page with no project; a project's `+` opens it with that project chosen. The compose button is a button, not a menu. Conversations lose their `+`. Projects keep theirs: it makes a folder. |
+| CF10 | **Agents is a place, beside Home.** The sidebar's top is Search, Home and Agents. The Agents and Teams lists leave the sidebar; the Agents row opens one page with **Agents · Teams**, whose one black button is New agent or New team. The row is selected inside an agent or a team, and shows a grey ring while one runs, or the blue dot when one wrote to you. Pinned agents stay in Pinned. |
+| CF11 | **The project is a selector in the box's bottom row**, after attach, as plain text with its icon (grey ink, principle 6), not a chip on top. With no project, the line under the box says so: "Not in a project · it can't see or change your files". |
+| CF12 | **The project menu shows each project's permissions** ("piopio · Auto-edit"), recent first (from proposal B). |
+| CF13 | **Quick picks under the box** on the New conversation page, with no project chosen: "Or in piopio · BioGen · financial_ia", the three latest projects (from proposal C). Home doesn't show them. |
+
+**Not now:** the location selector (This Mac / Cloud) waits for the cloud engine (CF7); the mockups draw it greyed.

@@ -234,7 +234,7 @@ struct ConversationStart: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let (place, crew) = whoChoice { who(place, crew) }
             }
-            AskBox(engine: engine, item: $item)
+            AskBox(engine: engine, item: $item, quickPicks: true)
         }
         .onExitCommand { back?() }
         // A project with a team (docs/spec/19 §10): its work goes to the team, once the team is known.

@@ -3,7 +3,7 @@ import PiopioTranscript
 import SwiftUI
 
 /// The one sidebar (docs/design/grey 9a): a 52pt top bar (traffic lights, toggle, compose), Search ⌘K, Home and
-/// Needs you, then Pinned · Projects · Agents · Conversations, and a footer with the cost today and Settings.
+/// Agents (docs/spec/18 §16), then Pinned · Projects · Conversations, and a footer with the cost today and Settings.
 /// Rows are plain: a 16pt outline glyph, the name, and status only as a blue dot (needs you) or a grey ring (running).
 /// Long lists show only what's live: a project's sessions that are running, waiting on you or touched in the last
 /// 3 days (the rest fold into "N earlier sessions"), and a few of each section ("N more ›" opens the full index).
@@ -21,7 +21,7 @@ struct MainSidebar: View {
     private var areas: AreaSet { Areas.shared.set }
 
     /// How many of each section show before "N more ›".
-    private static let caps: [SidebarSection: Int] = [.projects: 4, .agents: 4, .chats: 6]
+    private static let caps: [SidebarSection: Int] = [.projects: 4, .chats: 6]
     /// A session counts as live this long after its last activity.
     private static let liveWindow: TimeInterval = 3 * 86_400
 
@@ -31,21 +31,21 @@ struct MainSidebar: View {
             HStack(spacing: 2) {
                 Spacer()
                 SidebarToggle()
-                NewMenu(engine: engine)
+                ComposeButton()
             }
             .padding(.horizontal, 12)
             .frame(height: Shell.barHeight)
             .contentShape(Rectangle())
             .gesture(WindowDragGesture())
-            // Search and Home first (Home holds what waits on you, docs/spec/21 D2), then Pinned, Projects, Agents (your
-            // agents and saved teams, one section: design 1a) and Conversations; all of it scrolls.
+            // Search, Home (it holds what waits on you, docs/spec/21 D2) and Agents (a place of its own: your agents and
+            // teams, docs/spec/18 §16), then Pinned, Projects and Conversations; all of it scrolls.
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     searchRow
                     navRow(.home, "Home", symbol: "house", count: engine.needsYouCount)
+                    if areas.showsAgents { agentsRow }
                     pinnedSection
                     if areas.showsProjects { projectsSection }
-                    if areas.showsAgents { agentsSection }
                     if areas.showsChats { chatsSection }
                 }
                 .padding(.horizontal, 8)
@@ -144,7 +144,7 @@ struct MainSidebar: View {
     }
 
     @ViewBuilder
-    private func header(_ section: SidebarSection, total: Int, shown: Int, add: (() -> Void)?, addHelp: String = "", menu: [(String, () -> Void)] = []) -> some View {
+    private func header(_ section: SidebarSection, total: Int, shown: Int, add: (() -> Void)?, addHelp: String = "") -> some View {
         let isCollapsed = collapsed.contains(section.rawValue)
         HStack(spacing: 4) {
             Button { toggle(section) } label: {
@@ -163,14 +163,6 @@ struct MainSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .help(addHelp)
-            } else if !menu.isEmpty {
-                Menu {
-                    ForEach(Array(menu.enumerated()), id: \.offset) { _, entry in Button(entry.0, action: entry.1) }
-                } label: {
-                    Image(systemName: "plus").font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 20, height: 20).contentShape(Rectangle())
-                }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                .help("New agent or team")
             }
         }
         .padding(.leading, 8)
@@ -385,42 +377,28 @@ struct MainSidebar: View {
 
     // MARK: Agents
 
-    /// Teams (docs/spec/19): each opens its page; a dot while any of its tasks is running.
-    /// Agents (design 1a): your agents, then your saved teams. + makes either. A team that lives only in a project shows
-    /// on that project's row instead (docs/spec/21 AD1).
-    @ViewBuilder private var agentsSection: some View {
-        let agents = engine.agents
-        let teams = engine.teamDefinitions.filter(\.saved)
-        let cap = Self.caps[.agents]!
-        header(.agents, total: agents.count + teams.count, shown: min(cap, agents.count) + teams.count, add: nil, menu: [("New agent", { NotificationCenter.default.post(name: .newAgent, object: nil) }), ("New team", { item = .start(.team) })])
-        if !collapsed.contains(SidebarSection.agents.rawValue) {
-            draftRow(.agent)
-            if item == .start(.team) { draftRow(.team) }
-            ForEach(agents.prefix(cap), id: \.ref.id) { agentRow($0) }
-            if agents.count > cap { more("\(agents.count - cap) more", .index(.agents)) }
-            ForEach(teams) { teamRow($0) }
+    /// Agents (docs/spec/18 §16): one row that opens the Agents page (agents and teams). It stays selected inside an
+    /// agent, a team or their start pages, and says what's going on there: a ring while one runs, the blue dot when an
+    /// agent wrote to you.
+    private var agentsRow: some View {
+        let selected: Bool = switch item {
+        case .index(.agents), .agent, .team, .start(.agent), .start(.team): true
+        default: false
         }
-    }
-
-    /// A saved team: its members as a stack, its name and how many they are; a dot while it works somewhere.
-    private func teamRow(_ team: TeamDefinition) -> some View {
-        let selected = item == .team(team.id)
-        let places = Set(team.projects.map(\.teamId))
-        let tasks = engine.teams.filter { places.contains($0.id) }.flatMap(\.tasks)
-        let working = tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
-        return Button { item = .team(team.id) } label: {
+        let running = engine.agents.contains { engine.liveStatus[$0.ref.key] == .running }
+            || engine.teams.flatMap(\.tasks).contains { ["doing", "review", "integrating"].contains($0.state) }
+        let wrote = engine.agents.contains { ($0.agent?.status?.inbox ?? 0) > 0 }
+        return Button { item = .index(.agents) } label: {
             HStack(spacing: 10) {
-                TeamStack(colors: TeamStack.colors(team.roles, team: team.id)).frame(width: 18)
-                Text(team.name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                Spacer(minLength: 4)
-                if working > 0 { SidebarDot(status: .running).help("\(working) task\(working == 1 ? "" : "s") in progress") }
-                else if tasks.contains(where: { $0.state == "blocked" }) { SidebarDot(status: .waiting).help("A task is blocked") }
-                else { Text("\(team.roles.count)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).monospacedDigit() }
+                RowGlyph(symbol: "person.2")
+                Text("Agents").font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                Spacer()
+                if wrote { SidebarDot(status: .waiting).help("An agent wrote to you") }
+                else if running { SidebarDot(status: .running).help("An agent or a team is working") }
             }
             .rowChrome(selected: selected)
         }
         .buttonStyle(.plain)
-        .help("\(team.name): \(team.roles.map(\.name).joined(separator: ", "))")
     }
 
     private func agentRow(_ agent: SessionSummary) -> some View {
@@ -483,7 +461,8 @@ struct MainSidebar: View {
     @ViewBuilder private var chatsSection: some View {
         let threads = engine.threads
         let cap = Self.caps[.chats]!
-        header(.chats, total: threads.count, shown: min(cap, threads.count), add: { NotificationCenter.default.post(name: .newChat, object: nil) }, addHelp: "New conversation (⌘N)")
+        // No +: the compose button and ⌘N start every conversation (docs/spec/18 §16).
+        header(.chats, total: threads.count, shown: min(cap, threads.count), add: nil)
         if !collapsed.contains(SidebarSection.chats.rawValue) {
             draftRow(.chat)
             ForEach(threads.prefix(cap), id: \.ref.id) { chatRow($0) }
@@ -568,44 +547,16 @@ struct RowGlyph: View {
     }
 }
 
-/// Compose (docs/design/grey 10a): a short menu where each kind's subtitle says where it lives.
-struct NewMenu: View {
-    let engine: EngineController
-
-    static func help(_ areas: AreaSet) -> String {
-        var kinds: [String] = ["conversation", "project"]
-        if areas.contains(.agents) { kinds.append("agent") }
-        return "New " + ListFormatter.localizedString(byJoining: kinds).replacingOccurrences(of: " and ", with: " or ") + " (⌘N)"
-    }
-
+/// Compose (docs/spec/18 §16): always the New conversation page, with no project. Projects, agents and teams are made
+/// from their own places (the Projects +, the Agents page).
+struct ComposeButton: View {
     var body: some View {
-        let areas = Areas.shared.set
-        Menu {
-            Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: { Text("Conversation"); Text("Choose a project in the box, or none") }
-            if !engine.projects.isEmpty {
-                Menu {
-                    ForEach(engine.projects) { project in
-                        Button(project.name) { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
-                    }
-                    if !engine.projects.isEmpty { Divider() }
-                    Button("Open Folder…") { NotificationCenter.default.post(name: .openProject, object: nil) }
-                } label: { Text("Conversation in a project"); Text("Pick a folder") }
-            }
-            if areas.contains(.chat) {
-                Button { NotificationCenter.default.post(name: .newProject, object: nil) } label: { Text("Project"); Text("A folder with shared instructions and notes") }
-            }
-            if areas.contains(.agents) {
-                Button { NotificationCenter.default.post(name: .newAgent, object: nil) } label: { Text("Agent"); Text("Runs on its own") }
-            }
-        } label: {
+        Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: {
             Image(systemName: "square.and.pencil")
         }
-        .menuStyle(.button)
         .buttonStyle(IconButtonStyle())
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(Self.help(areas))
-        .accessibilityLabel("New")
+        .help("New conversation (⌘N)")
+        .accessibilityLabel("New conversation")
     }
 }
 

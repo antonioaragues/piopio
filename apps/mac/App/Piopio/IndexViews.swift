@@ -292,3 +292,149 @@ struct SectionIndex: View {
         }
     }
 }
+
+/// Agents (docs/spec/18 §16): the place the sidebar's Agents row opens, beside Home. Your agents and your saved teams,
+/// one tab each; the one black button makes the kind you're looking at. A row opens the agent's conversation or the
+/// team's page.
+struct AgentsIndex: View {
+    let engine: EngineController
+    @Binding var item: SidebarItem
+    @AppStorage("agentsTab") private var tab: Tab = .agents
+    @State private var filter = ""
+
+    enum Tab: String { case agents, teams }
+
+    private var agents: [SessionSummary] {
+        filter.isEmpty ? engine.agents : engine.agents.filter { $0.title.localizedCaseInsensitiveContains(filter) }
+    }
+
+    private var teams: [TeamDefinition] {
+        let saved = engine.teamDefinitions.filter(\.saved)
+        return filter.isEmpty ? saved : saved.filter { $0.name.localizedCaseInsensitiveContains(filter) }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Agents").font(.system(size: 28, weight: .bold)).tracking(-0.6)
+                        Text(tab == .agents
+                             ? "Conversations that live on their own: schedules, channels and memory."
+                             : "Agents in roles, reused across projects: a lead plans, members do the work.")
+                            .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                    }
+                    Spacer()
+                    Button(tab == .agents ? "New Agent" : "New Team") {
+                        if tab == .agents { NotificationCenter.default.post(name: .newAgent, object: nil) } else { item = .start(.team) }
+                    }
+                    .buttonStyle(PillStyle(kind: .strong))
+                }
+                HStack(spacing: 10) {
+                    NeutralSegmented(selection: $tab, options: [(.agents, "Agents  \(engine.agents.count)"), (.teams, "Teams  \(engine.teamDefinitions.filter(\.saved).count)")])
+                        .frame(width: 220)
+                    HStack(spacing: 7) {
+                        Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                        TextField("Filter", text: $filter).textFieldStyle(.plain).font(.system(size: 13))
+                    }
+                    .padding(.horizontal, 10).frame(height: 30)
+                    .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.row))
+                }
+                .padding(.top, 20)
+                VStack(spacing: 0) {
+                    if tab == .agents {
+                        ForEach(Array(agents.enumerated()), id: \.element.ref.id) { i, a in
+                            if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+                            agentRow(a)
+                        }
+                        if agents.isEmpty { empty(engine.agents.isEmpty ? "No agents yet." : "Nothing matches.", start: "New agent…") { NotificationCenter.default.post(name: .newAgent, object: nil) } }
+                    } else {
+                        ForEach(Array(teams.enumerated()), id: \.element.id) { i, t in
+                            if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+                            teamRow(t)
+                        }
+                        if teams.isEmpty { empty(engine.teamDefinitions.contains(where: \.saved) ? "Nothing matches." : "No teams yet.", start: "New team…") { item = .start(.team) } }
+                    }
+                }
+                .overlay(alignment: .top) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+                .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+                .padding(.top, 14)
+            }
+            .padding(.horizontal, 40)
+            .padding(.vertical, 36)
+            .frame(maxWidth: 880)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func empty(_ text: String, start: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Text(text).foregroundStyle(Color.dsFg3)
+            Button(start, action: action).buttonStyle(.plain).foregroundStyle(Color.accentColor)
+        }
+        .font(.system(size: 13)).frame(maxWidth: .infinity).frame(height: 60)
+    }
+
+    private func agentRow(_ a: SessionSummary) -> some View {
+        Button { item = .agent(a.ref.id) } label: {
+            HStack(spacing: 12) {
+                AgentAvatar(summary: a, size: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(a.title).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Color.dsFg).lineLimit(1)
+                    if let d = a.agent?.description, !d.isEmpty { Text(d).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
+                }
+                Spacer(minLength: 12)
+                // "Next run tomorrow 8:00" or "Paused"; nothing when the engine hasn't said (its description is above).
+                Text(MainSidebar.agentLine(a) == (a.agent?.description ?? "Local agent") ? "" : MainSidebar.agentLine(a))
+                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                    .frame(width: 180, alignment: .leading)
+                agentStatus(a).frame(width: 100, alignment: .trailing)
+            }
+            .padding(.horizontal, 16).frame(height: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private func agentStatus(_ a: SessionSummary) -> some View {
+        let status = a.agent?.status
+        HStack(spacing: 6) {
+            if engine.liveStatus[a.ref.key] == .running { SidebarDot(status: .running); Text("Running") }
+            else if let inbox = status?.inbox, inbox > 0 { SidebarDot(status: .waiting); Text("Wrote to you") }
+            else if a.agent?.draft == true { Text("Draft") }
+            else if status?.paused == true { Text("Paused") }
+            else { Text(BuildSessionView.relative(a.updatedAt)) }
+        }
+        .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+    }
+
+    private func teamRow(_ t: TeamDefinition) -> some View {
+        let places = Set(t.projects.map(\.teamId))
+        let tasks = engine.teams.filter { places.contains($0.id) }.flatMap(\.tasks)
+        let working = tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
+        let where_ = t.projects.map { URL(fileURLWithPath: $0.cwd).lastPathComponent }
+        return Button { item = .team(t.id) } label: {
+            HStack(spacing: 12) {
+                TeamStack(colors: TeamStack.colors(t.roles, team: t.id), size: 14, ring: .dsWin).frame(width: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(t.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Color.dsFg).lineLimit(1)
+                    Text(t.roles.map(\.name).joined(separator: ", ")).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                }
+                Spacer(minLength: 12)
+                Text(where_.isEmpty ? "Not in a project" : "In " + ListFormatter.localizedString(byJoining: where_))
+                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                    .frame(width: 180, alignment: .leading)
+                HStack(spacing: 6) {
+                    if working > 0 { SidebarDot(status: .running); Text("\(working) working") }
+                    else if tasks.contains(where: { $0.state == "blocked" }) { SidebarDot(status: .waiting); Text("Blocked") }
+                    else { Text("\(t.roles.count) member\(t.roles.count == 1 ? "" : "s")") }
+                }
+                .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                .frame(width: 100, alignment: .trailing)
+            }
+            .padding(.horizontal, 16).frame(height: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
