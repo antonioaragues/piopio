@@ -68,6 +68,8 @@ enum DebugAutomation {
                 NotificationCenter.default.post(name: .selectThread, object: ref.id)
                 let thread = engine.thread(ref)
                 await thread.open()
+                // PIOPIO_DEMO_BROWSER=1: open the Browser panel in this chat.
+                if env["PIOPIO_DEMO_BROWSER"] == "1" { BrowserCenter.shared.openPanels.insert(ref.id) }
                 // PIOPIO_DEMO_ATTACH: colon-separated file paths attached to the first message.
                 let files = (env["PIOPIO_DEMO_ATTACH"] ?? "").split(separator: ":").compactMap { try? AttachmentLoader.load(URL(fileURLWithPath: String($0))).attachment }
                 await thread.send(prompt, attachments: files)

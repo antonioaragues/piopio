@@ -21,6 +21,17 @@ struct ThreadView: View {
     }
 
     private var browserOpen: Bool { BrowserCenter.shared.openPanels.contains(summary.ref.id) }
+    /// One panel on the right: the Browser covers the Summary while it's open, and the Summary comes back when it closes.
+    private var summaryShown: Bool { (showSummary || Self.demoSummary) && !browserOpen }
+    @State private var conversationWidth: Double = 1200
+    /// The Browser's width as you last dragged it (every chat shares it).
+    @AppStorage("browserWidth") private var browserPreferred = 560.0
+    @State private var browserDragStart: Double?
+
+    /// The widest the Browser may be: the chat keeps at least 380pt.
+    private var browserMax: Double { max(320, conversationWidth - 380) }
+    /// The Browser's width: yours, narrower when the window can't fit it.
+    private var browserWidth: Double { min(max(320, browserPreferred), browserMax) }
 
     private var conversation: some View {
         HStack(spacing: 0) {
@@ -28,17 +39,35 @@ struct ThreadView: View {
             // The Browser panel (docs/spec/22 §5): opens by itself when the model browses here.
             if browserOpen {
                 BrowserPanel(refID: summary.ref.id) { Task { await thread.stop() } }
-                    .frame(width: 560)
+                    .frame(width: browserWidth)
                     .sidePanel()
+                    .overlay(alignment: .leading) { browserResizeHandle }
                     .transition(.move(edge: .trailing))
-            }
-            if showSummary || Self.demoSummary {
+            } else if summaryShown {
                 ChatSummaryPanel(engine: engine, thread: thread, summary: summary)
                     .frame(width: 290)
                     .sidePanel()
                     .transition(.move(edge: .trailing))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onGeometryChange(for: Double.self) { $0.size.width } action: { conversationWidth = $0 }
+    }
+
+    /// The Browser's leading edge: drag to resize it, between 320pt and what leaves the chat 380pt.
+    private var browserResizeHandle: some View {
+        Rectangle().fill(Color.clear).frame(width: 7).contentShape(Rectangle())
+            .pointerStyle(.columnResize)
+            .gesture(DragGesture(coordinateSpace: .global).onChanged { value in
+                if browserDragStart == nil { browserDragStart = browserWidth }
+                browserPreferred = min(browserMax, max(320, (browserDragStart ?? browserWidth) - value.translation.width))
+            }.onEnded { _ in browserDragStart = nil })
+            .accessibilityLabel("Browser width").accessibilityValue("\(Int(browserWidth)) points")
+            .accessibilityAdjustableAction { direction in
+                browserPreferred = min(browserMax, max(320, browserWidth + (direction == .increment ? 40 : -40)))
+            }
+            .help("Drag to resize the browser")
+            .offset(x: -3)
     }
 
     private var chatColumn: some View {
@@ -86,9 +115,12 @@ struct ThreadView: View {
                     if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
                 }
             }
-            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Summary", on: showSummary || Self.demoSummary,
-                        help: showSummary ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
-                withAnimation(.easeOut(duration: 0.15)) { showSummary.toggle() }
+            ToolbarIcon(symbol: "list.bullet.rectangle", label: "Summary", on: summaryShown,
+                        help: summaryShown ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    // With the Browser in the panel, Summary swaps it out rather than hiding a column you can't see.
+                    if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id); showSummary = true } else { showSummary.toggle() }
+                }
             }
             moveMenu
             ToolbarDivider()

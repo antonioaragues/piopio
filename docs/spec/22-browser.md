@@ -137,6 +137,11 @@ as untrusted content. It never counts as an instruction from you, and it can't g
 - **Where:** the conversation's right column gets a **Browser** tab, next to Summary and Files. It opens by itself the
   first time the model uses the browser in a conversation, and from the composer's + menu ("Open browser"). It can
   be widened or popped out into its own window.
+- **One panel on the right (2026-11-15):** the Browser and the Summary share it. Opening the Browser covers the
+  Summary; closing the Browser brings the Summary back if it was open; clicking Summary while the Browser shows
+  closes the Browser. The Browser is 560pt wide until you drag its left edge (320pt at the least; the width is kept
+  for every chat), narrower when the window is small, so the chat keeps at least 380pt and the sidebar is never
+  pushed off the window.
 - **What's in it:** a tab strip, back / forward / reload, the address (you can type one), and the page. A small lock
   shows the site's level; clicking it changes the level.
 - **Who's driving:** a thin bar says **Piopio is browsing** with **Stop**, or **You're driving** with **Hand back**.
