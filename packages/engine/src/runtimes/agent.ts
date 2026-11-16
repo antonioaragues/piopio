@@ -47,7 +47,8 @@ export type AgentOpenOptions = {
 	/** An approval was asked or answered (notifications). */
 	onApproval?: (approval: Approval) => void;
 	/** A person's turn ended with this answer (channels send it back where the message came from). */
-	onAnswer?: (contactId: string, said: string, answer: string) => void;
+	/** A turn ended: what was said, the answer, and the visuals it showed (docs/spec/25 §8). */
+	onAnswer?: (contactId: string, said: string, answer: string, visuals: { title: string; html: string }[]) => void;
 	/** The agent sent a message on its own (channels deliver it). */
 	onOutbound?: (to: string, text: string, from: string) => void;
 	/** The owner pasted a Telegram bot token in the chat: connect it and say what happened (docs/spec/19 S4). */
@@ -97,13 +98,21 @@ export class AgentRuntime implements Runtime {
 		const hasApps = () => Boolean(hub && (hub.calendars("agent").length || hub.mailboxes("agent").length));
 		const definition = () => withConnectorApprovals(options.definition(), hub);
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
+		// The extra extensions (writing, About me, visuals) must be installed too, or their tools are never offered and
+		// their sections never read: a conversation's config names extensions, the registry holds them. Installing by
+		// name replaces, so this is safe on every read.
+		const extras = () => {
+			const list = options.extraExtensions?.() ?? [];
+			for (const e of list) registry.install(e as never);
+			return list;
+		};
 		let runtime: AgentRuntime | undefined;
 		const core = new AgentCore({
 			harness,
 			definition,
 			instructions: options.instructions,
 			memory: options.memory,
-			extensions: () => [...(wantsWeb() ? [web] : []), ...(apps && hasApps() ? [apps] : []), ...(options.extraExtensions?.() ?? [])],
+			extensions: () => [...(wantsWeb() ? [web] : []), ...(apps && hasApps() ? [apps] : []), ...extras()],
 			context: ctx,
 			...(options.now ? { now: options.now } : {}),
 			...(options.appTool ? { appTool: options.appTool } : {}),
@@ -295,8 +304,8 @@ export class AgentRuntime implements Runtime {
 		this.options.onActivity?.();
 	}
 
-	answered(contactId: string, said: string, answer: string): void {
-		this.options.onAnswer?.(contactId, said, answer);
+	answered(contactId: string, said: string, answer: string, visuals: { title: string; html: string }[] = []): void {
+		this.options.onAnswer?.(contactId, said, answer, visuals);
 	}
 
 	/** A note in the owner's conversation, from the app (not the agent, not seen by the model). */
@@ -649,7 +658,12 @@ export class AgentView implements Runtime {
 		const items = this.builder.snapshot().items.slice(turn.itemCount);
 		const answer = [...items].reverse().find((i) => i.kind === "assistant" && i.parts.some((p) => p.type === "text" && p.text.trim()));
 		const text = answer?.kind === "assistant" ? answer.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
-		this.agent.answered(this.contactId, turn.said, text);
+		const visuals = items.flatMap((i) => {
+			if (i.kind !== "tool" || i.tool !== "show_visual" || i.status === "error") return [];
+			const a = (i.args ?? {}) as { title?: unknown; html?: unknown };
+			return typeof a.html === "string" && a.html.trim() ? [{ title: typeof a.title === "string" && a.title.trim() ? a.title.trim() : "Visual", html: a.html }] : [];
+		});
+		this.agent.answered(this.contactId, turn.said, text, visuals);
 		await this.agent.core.afterTurn(this.contactId, turn.said, text, { ref: `person:${this.contactId}`, ...(answer ? { itemId: answer.id } : {}) }).catch(() => undefined);
 		await this.agent.core.safety.checkBudget().catch(() => undefined);
 		this.agent.activity();

@@ -10,10 +10,16 @@ import { TestClient } from "./client.js";
 /** A Telegram Bot API stand-in: one bot, updates you push, messages it records. */
 class FakeTelegram {
 	sent: { chat_id: number | string; text: string; parse_mode?: string }[] = [];
+	photos: { chat_id: string; caption: string; bytes: number }[] = [];
 	private queue: unknown[] = [];
 	private nextId = 1;
 	readonly fetch: typeof fetch = (async (url: string, init?: RequestInit) => {
 		const method = url.split("/").pop()!;
+		if (init?.body instanceof FormData) {
+			const photo = init.body.get("photo") as Blob;
+			this.photos.push({ chat_id: String(init.body.get("chat_id")), caption: String(init.body.get("caption") ?? ""), bytes: photo.size });
+			return new Response(JSON.stringify({ ok: true, result: { message_id: 99 } }), { status: 200 });
+		}
 		const body = JSON.parse(String(init?.body ?? "{}"));
 		const ok = (result: unknown) => new Response(JSON.stringify({ ok: true, result }), { status: 200 });
 		if (!url.includes("/bot123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/")) return new Response(JSON.stringify({ ok: false, description: "Unauthorized" }), { status: 401 });
@@ -108,4 +114,23 @@ test("Telegram from the Mac: paste the token, pair with the link, talk; the toke
 	await until(() => client.call("sessions.open", { ref }), (s: { items: { kind: string; parts?: { text: string }[] }[] }) => s.items.some((i) => i.kind === "assistant" && JSON.stringify(i).includes("and this from the Mac")));
 	await new Promise((r) => setTimeout(r, 200));
 	expect(fake.sent.length).toBe(before);
+
+	// A visual in the answer (docs/spec/25 §8): with no app to draw it, its title goes out.
+	const visual = (title: string) => `call: show_visual | ${JSON.stringify({ title, html: "<b>bars</b>" })}`;
+	fake.message(4242424, visual("Weekly runs"));
+	await until(() => fake.sent, (m) => m.some((x) => x.chat_id === 4242424 && x.text.includes("Visual: Weekly runs (open Piopio on the Mac to see it).")));
+
+	// With an app that draws visuals, a picture of it, captioned with its title.
+	const app = await TestClient.connect(paths.socket);
+	const drawn: unknown[] = [];
+	app.appTool = (params) => {
+		drawn.push(params);
+		return { ok: true, output: "Drawn.", images: [{ mimeType: "image/jpeg", data: Buffer.from("jpeg bytes").toString("base64") }] };
+	};
+	await app.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "app", protocolVersion: "1.0", services: ["app.tool", "visuals"] });
+	fake.message(4242424, visual("Sleep"));
+	await until(() => fake.photos, (p) => p.length === 1);
+	expect(fake.photos[0]).toEqual({ chat_id: "4242424", caption: "Sleep", bytes: 10 });
+	expect(drawn).toContainEqual({ name: "show_visual", args: { title: "Sleep", html: "<b>bars</b>", look: true }, groups: ["visuals"], shortcuts: [] });
+	app.close();
 }, 30_000);

@@ -206,6 +206,12 @@ export class Engine {
 				await view.submit(text, { whenBusy: "followUp" });
 			},
 			notice: async (id, text) => (await this.sessions.agent({ kind: "agent", id })).notice(text),
+			// A visual for Telegram: the Mac app draws it and answers with a picture (docs/spec/25 §8).
+			picture: async (visual) => {
+				const r = await this.app.tool({ name: "show_visual", args: { ...visual, look: true }, groups: ["visuals"], shortcuts: [] });
+				const image = r.images?.[0];
+				return image ? Buffer.from(image.data, "base64") : undefined;
+			},
 			secrets: this.secrets,
 			stateDir: join(options.paths.home, "channels", "telegram"),
 			log: this.log,

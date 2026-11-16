@@ -37,12 +37,16 @@ import Testing
     #expect(page.range(of: "<!DOCTYPE html>") == nil)
 }
 
-@Test func aSavedVisualHasNoBridge() {
-    let page = VisualPage.standalone("<p>x</p>", title: "Saved")
-    #expect(!page.contains("Content-Security-Policy"))
+@Test @MainActor func aSavedVisualWorksAnywhere() {
+    let page = VisualPage.portable(#"<script src="piopio-lib://chart.js"></script><link rel="stylesheet" href="piopio-lib://katex/katex.css"><p>x</p>"#, title: "Saved")
+    #expect(page.contains(VisualPage.portableCSP) && page.contains("connect-src 'none'"))
     #expect(page.contains("window.piopio = { send: () => {}, prefill: () => {} }"))
-    #expect(!page.contains("messageHandlers"))
+    #expect(!page.contains("messageHandlers") && !page.contains("piopio-lib://"))
+    #expect(page.contains("Chart.js v4.4.7") && page.contains("url(data:font/woff2;base64,"))
+    #expect(!page.contains("importmap"))
     #expect(page.contains("html{overflow:auto}"))
+    let three = VisualPage.portable(#"<script type="module">import * as THREE from "three";</script>"#, title: "3D")
+    #expect(three.contains(#""three":"data:text/javascript;base64,"#))
     #expect(VisualCardView.fileName("Usage card: three options") == "Usage card - three options.html")
     #expect(VisualCardView.fileName("  ") == "Visual.html")
 }
@@ -86,4 +90,16 @@ import Testing
     #expect(summary.contains("Drawn at 700 × 950 px.") && summary.contains("taller than the 900 px") && summary.contains("- ReferenceError"))
     #expect(VisualChecker.summary(.init(width: 700, height: 0, problems: [], loaded: false, jpeg: nil)).contains("didn't finish loading"))
     #expect(TranscriptAction(url: TranscriptAction.prefill(text: "Go with B, but…").url) == .prefill(text: "Go with B, but…"))
+}
+
+@Test @MainActor func exportsPutTheVisualWhereItsMarkerIs() async {
+    #expect(VisualExport.callId(fromMarker: "Y2FsbHw3") == "call|7")
+    VisualStore.shared.noteHeight(140, key: "call|7")
+    let html = await VisualExport.fill(#"<p>Before</p><div data-piopio-visual="Y2FsbHw3"></div><div data-piopio-visual="bm9wZQ"></div>"#, html: true) { id in
+        id == "call|7" ? ("Spending <now>", "<b>chart</b>") : nil
+    }
+    #expect(html.hasPrefix("<p>Before</p><iframe title=\"Spending &lt;now&gt;\" sandbox=\"allow-scripts\""))
+    #expect(html.contains("height:142px") && html.contains("srcdoc=\"&lt;!doctype html&gt;") && html.contains("&lt;b&gt;chart&lt;/b&gt;"))
+    #expect(!html.contains("data-piopio-visual"))
+    #expect(VisualExport.strip("**Visual: Spending**\n\n<!-- piopio-visual:Y2FsbHw3 -->\n\nAfter") == "**Visual: Spending**\n\nAfter")
 }

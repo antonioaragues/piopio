@@ -116,7 +116,7 @@ public enum VisualPage {
     public static func html(_ content: String, title: String, scrolls: Bool = false, standalone: Bool = false) -> String {
         let head = [
             #"<meta charset="utf-8">"#,
-            standalone ? "" : #"<meta http-equiv="Content-Security-Policy" content="\#(csp)">"#,
+            #"<meta http-equiv="Content-Security-Policy" content="\#(standalone ? portableCSP : csp)">"#,
             #"<meta name="viewport" content="width=device-width">"#,
             "<title>\(escape(title))</title>",
             "<style>\(tokens())\(baseStyle(scrolls: scrolls))</style>",
@@ -193,9 +193,100 @@ public enum VisualPage {
         """
     }
 
-    /// A visual as a file: the same page without the CSP (the viewer blocks the network itself) and with `send` a no-op.
-    public static func standalone(_ content: String, title: String) -> String {
-        html(content, title: title, scrolls: true, standalone: true)
+    /// A page that works anywhere: no network, and the libraries inline, as `data:` URLs for modules.
+    static let portableCSP = "default-src 'none'; script-src 'unsafe-inline' data:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
+
+    /// A visual as a file (Save…) or inside an export: the page with `send` and `prefill` doing nothing, and every
+    /// library it uses inlined, so it draws in any browser with no network and nothing from Piopio.
+    @MainActor public static func portable(_ content: String, title: String, scrolls: Bool = true) -> String {
+        var page = html(content, title: title, scrolls: scrolls, standalone: true)
+        // Classic scripts: <script src="piopio-lib://chart.js"></script> → the script itself.
+        page = page.replacing(/<script([^>]*?)\s+src="piopio-lib:\/\/([^"]+)"([^>]*)>\s*<\/script>/) { m in
+            guard let js = library(String(m.output.2)) else { return String(m.output.0) }
+            return "<script\(m.output.1)\(m.output.3)>\(String(decoding: js, as: UTF8.self).replacingOccurrences(of: "</script", with: "<\\/script"))</script>"
+        }
+        // Stylesheets (KaTeX), with their fonts as data URLs.
+        page = page.replacing(/<link[^>]*href="piopio-lib:\/\/([^"]+\.css)"[^>]*>/) { m in
+            let path = String(m.output.1)
+            guard let css = library(path).map({ String(decoding: $0, as: UTF8.self) }) else { return String(m.output.0) }
+            let folder = (path as NSString).deletingLastPathComponent
+            let inlined = css.replacing(/url\((fonts\/[^)]+\.woff2)\)/) { f in
+                guard let font = library(folder.isEmpty ? String(f.output.1) : "\(folder)/\(f.output.1)") else { return String(f.output.0) }
+                return "url(data:font/woff2;base64,\(font.base64EncodedString()))"
+            }
+            return "<style>\(inlined)</style>"
+        }
+        // three.js: the import map points at data URLs, and only when the visual imports it (it's 650 KB).
+        let usesThree = content.contains("\"three") || content.contains("'three")
+        let map = usesThree ? threeImportMap() : ""
+        return page.replacingOccurrences(of: importMap, with: map)
+    }
+
+    @MainActor static func library(_ path: String) -> Data? {
+        guard let url = URL(string: "piopio-lib://\(path)"), let file = VisualLibrary.file(for: url) else { return nil }
+        return try? Data(contentsOf: file)
+    }
+
+    @MainActor static func threeImportMap() -> String {
+        func module(_ path: String) -> String? { library(path).map { "data:text/javascript;base64,\($0.base64EncodedString())" } }
+        var imports: [String: String] = [:]
+        if let three = module("three.js") { imports["three"] = three }
+        if let orbit = module("three/addons/controls/OrbitControls.js") { imports["three/addons/controls/OrbitControls.js"] = orbit }
+        guard let json = try? JSONSerialization.data(withJSONObject: ["imports": imports], options: [.sortedKeys, .withoutEscapingSlashes]) else { return "" }
+        return #"<script type="importmap">"# + String(decoding: json, as: UTF8.self) + "</script>"
+    }
+}
+
+// MARK: Export
+
+/// Visuals in exports (docs/spec/25 §8). The engine can't draw, so its export leaves the title and a marker with the
+/// tool call's id (base64url); this puts the visual there: in HTML, a sandboxed frame with the portable page, as tall
+/// as the visual; in Markdown, a picture of it as a data URL. Copying as Markdown keeps just the title.
+@MainActor public enum VisualExport {
+    /// The width an export's column gives a visual (760 pt, less the page's padding).
+    static let width: CGFloat = 728
+
+    public static func callId(fromMarker id: String) -> String? {
+        var base64 = id.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while base64.count % 4 != 0 { base64 += "=" }
+        return Data(base64Encoded: base64).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    /// `visual(callId)` finds the visual's title and HTML in the conversation.
+    public static func fill(_ content: String, html: Bool, visual: (String) -> (title: String, html: String)?) async -> String {
+        let markers = html ? content.matches(of: /<div data-piopio-visual="([A-Za-z0-9_-]+)"><\/div>/).map { ($0.range, String($0.output.1)) }
+            : content.matches(of: /<!-- piopio-visual:([A-Za-z0-9_-]+) -->/).map { ($0.range, String($0.output.1)) }
+        guard !markers.isEmpty else { return content }
+        var out = "", at = content.startIndex
+        for (range, id) in markers {
+            out += content[at..<range.lowerBound]
+            at = range.upperBound
+            guard let callId = callId(fromMarker: id), let v = visual(callId) else { continue }
+            out += html ? await frame(v.title, v.html, key: callId) : await picture(v.title, v.html)
+        }
+        return out + content[at...]
+    }
+
+    /// Copy as Markdown: the visual's title line stays, its marker goes.
+    public static func strip(_ markdown: String) -> String {
+        markdown.replacing(/\n*<!-- piopio-visual:[A-Za-z0-9_-]+ -->\n*/, with: "\n\n")
+    }
+
+    static func frame(_ title: String, _ html: String, key: String) async -> String {
+        var height = VisualStore.shared.heights[key] ?? 0
+        if height <= 0 { height = await VisualChecker.check(html: html, title: title, look: false, width: width).height }
+        let page = VisualPage.portable(html, title: title, scrolls: false)
+        let shown = Int(min(max(height, 40), VisualCardModel.maxContentHeight)) + 2
+        return #"<iframe title="\#(attribute(title))" sandbox="allow-scripts" loading="lazy" style="display:block;width:100%;height:\#(shown)px;border:1px solid rgba(128,128,128,.3);border-radius:12px;margin:8px 0" srcdoc="\#(attribute(page))"></iframe>"#
+    }
+
+    static func picture(_ title: String, _ html: String) async -> String {
+        guard let jpeg = await VisualChecker.check(html: html, title: title, look: true, width: width).jpeg else { return "" }
+        return "![\(title.replacingOccurrences(of: "]", with: ")"))](data:image/jpeg;base64,\(jpeg.base64EncodedString()))"
+    }
+
+    static func attribute(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "\"", with: "&quot;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
     }
 }
 
@@ -657,7 +748,7 @@ public final class VisualCardView: NSView, ArrowCursorArea {
             panel.nameFieldStringValue = Self.fileName(model.title)
             panel.allowedContentTypes = [.html]
             if let root = model.root { panel.directoryURL = URL(fileURLWithPath: root, isDirectory: true) }
-            let page = VisualPage.standalone(model.html, title: model.title)
+            let page = VisualPage.portable(model.html, title: model.title)
             let done: (NSApplication.ModalResponse) -> Void = { response in
                 guard response == .OK, let url = panel.url else { return }
                 try? page.write(to: url, atomically: true, encoding: .utf8)

@@ -1,6 +1,6 @@
 # 25 — Visuals in the conversation
 
-Status: draft 2026-11-16; decisions VS1–VS9 to confirm; V1 (HTML files), V2 (visuals) and V3 (the check, prefill) built 2026-11-16 (§13–§15); V4 not built. References: T3 Code drawing four UI
+Status: draft 2026-11-16; decisions VS1–VS9 to confirm; V1–V3 built 2026-11-16 (§13–§15); V4's export and Telegram built (§16); MCP Apps (D6) not built, waiting on a decision (§16). References: T3 Code drawing four UI
 proposals inline when asked to "show me here inline a few ideas to pick"
 ([the post](https://x.com/itssotsot/status/2122282435971092760)), Codex rendering a prototype in the chat, and Claude's
 inline charts and diagrams.
@@ -374,3 +374,46 @@ and an image from the internet came back with "ReferenceError: Can't find variab
 and "Blocked by the sandbox: https://example.com/logo.png"; a clean one with `look` came back with no problems and a
 1280 × 195 picture that matched. Real clicks: **Tweak B** filled the composer and **Go with B** sent, each on the first
 click; a double click on the answer's text still selected a word afterwards.
+
+## 16. V4 as built (2026-11-16): export and Telegram
+
+**Export (§8).** The engine can't draw, so `export.ts` writes each visual as its title (`**Visual: …**`) and a marker
+with the tool call's id: an HTML comment in Markdown, an empty `<div data-piopio-visual>` in HTML (the one raw tag the
+export lets through). When an HTML export has visuals, its policy allows inline scripts and `data:` scripts, which can
+only run in the visuals' frames, since everything else on the page is escaped; `connect-src 'none'` is inherited by the
+frames, so they stay offline. The app fills the markers (`VisualExport`) before writing the file:
+- **HTML:** a frame with `sandbox="allow-scripts"`, as tall as the visual (the card's height, or the check's), whose
+  `srcdoc` is the **portable** page: Piopio's head, its own offline policy, `send` and `prefill` stubs, and the
+  libraries inlined (classic scripts as they are, KaTeX's CSS with its fonts as data URLs, three.js and OrbitControls as
+  `data:` modules in the import map, only when the visual imports `three`).
+- **Markdown:** a picture of the visual from the check, as a `data:` JPEG, with the title as alt text.
+- **JSONL** is unchanged, and **Copy as Markdown** keeps the title and drops the marker.
+
+**Save… uses the portable page too**, so a saved visual now draws in any browser, not only in Piopio's viewer.
+
+**Telegram (§8).** When an agent's turn ends, its `show_visual` calls go with the answer (`onAnswer`). After the text,
+`TelegramChannels.answered` asks the app for a picture of each (the check with `look`) and sends it with `sendPhoto`,
+captioned with the title. With no app to draw it, or if Telegram refuses the photo, it sends
+"Visual: *title* (open Piopio on the Mac to see it)." WhatsApp has no local channel yet, so nothing changes there.
+
+**Fixed on the way: agents never had the tool.** An agent's extra extensions (writing style, About me, visuals) were
+named in each conversation's configuration but never installed in pi-durable's registry, so the model was never
+offered their tools: `show_visual` failed with "Tool show_visual is not available" (§14 said agents had it; they
+didn't). The registry now installs them whenever the list is read. The writing and About me sections may have been
+missing from agents' prompts for the same reason; not checked.
+
+**MCP Apps (D6): not built.** pi's MCP extension, which every conversation uses, drops a tool's `_meta` (where
+`ui.resourceUri` lives) and leaves `ui://` resources out on purpose, so Piopio never sees the UI to draw. Options:
+patch pi's MCP extension (as `patches/` already does for pi-ai) to keep `_meta.ui` and read the UI resource into the
+result's details; or open Piopio's own MCP connection for servers that offer apps. Either way the card also needs the
+MCP Apps bridge (initialize, tool input and result, tool calls through the engine with approvals, messages, links,
+size), and a test server.
+
+**Checked.** Engine tests: the markers and the export's policy (scripts only with visuals, the transcript still
+escaped); Telegram with no app (the title line) and with an app (a photo captioned with the title, drawn with
+`look`). Swift tests: the portable page (Chart.js inlined, KaTeX fonts as data URLs, three only when used, no
+`piopio-lib://` left), the export filler and Copy's strip. By hand: an engine HTML export of a chart and a three.js
+visual, filled by the app's code and opened in a browser: the chart drew with its network call blocked, and the 3D
+frame ran its module through the inlined import map ("three.js r169 loaded"), though its canvas came out empty in that
+browser's screenshot. The Markdown export carried a picture of each. Not checked: Export from a chat in the running
+app (folder chats have no Export), the Telegram photo with a real bot, an agent's chat in the app.

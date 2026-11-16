@@ -30,3 +30,19 @@ test("the HTML export shows raw HTML as text, keeps safe links only and blocks s
 	expect(content).toContain(`Content-Security-Policy" content="default-src 'none'`);
 	expect(content).toContain("<title>&lt;b&gt;Title&lt;/b&gt;</title>");
 });
+
+test("visuals export as their title and a marker the app fills in; only then may scripts run, and only offline", () => {
+	const visual = { kind: "tool", id: "t1", callId: "call|7", tool: "show_visual", status: "done", args: { title: "Spending", html: "<canvas></canvas>" } };
+	const refused = { kind: "tool", id: "t2", callId: "c2", tool: "show_visual", status: "error", args: { title: "Big", html: "x" } };
+	const withVisual = [...items, visual, refused] as unknown as TimelineItem[];
+	const md = exportTranscript("T", withVisual, "markdown").content;
+	expect(md).toContain("**Visual: Spending**\n\n<!-- piopio-visual:Y2FsbHw3 -->");
+	expect(md).not.toContain("Visual: Big");
+	const html = exportTranscript("T", withVisual, "html").content;
+	expect(html).toContain('<div data-piopio-visual="Y2FsbHw3"></div>');
+	expect(html).toContain("script-src 'unsafe-inline' data:; font-src data:; connect-src 'none'");
+	const body = html.slice(html.indexOf("<body>"));
+	expect(body).not.toMatch(/<script|<iframe/i);
+	expect(body).toContain("&lt;script&gt;");
+	expect(exportTranscript("T", items, "html").content).not.toContain("script-src");
+});

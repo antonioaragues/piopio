@@ -29,10 +29,15 @@ export type ChannelHost = {
 	stateDir: string;
 	log(line: string): void;
 	fetch?: typeof fetch;
+	/** A picture of a visual the agent showed (docs/spec/25 §8), drawn by the Mac app; undefined when it can't be. */
+	picture?(visual: ChannelVisual): Promise<Uint8Array | undefined>;
 	/** Tests: shorter waits. */
 	pollSeconds?: number;
 	retryMs?: number;
 };
+
+/** A visual from the answer: what `show_visual` was given. */
+export type ChannelVisual = { title: string; html: string };
 
 type State = { offset?: number; pairing?: { code: string; until: number }; username?: string };
 type Live = { bot: TelegramBot; token: string; abort: AbortController; username?: string };
@@ -104,16 +109,30 @@ export class TelegramChannels {
 			: `Connected. Send /start ${code} to the bot on Telegram within an hour.`;
 	}
 
-	/** A turn in a person's conversation ended: if the message came from Telegram, the answer goes back there. */
-	answered(agentId: string, contactId: string, said: string, answer: string): void {
+	/**
+	 * A turn in a person's conversation ended: if the message came from Telegram, the answer goes back there, and then a
+	 * picture of each visual it showed (drawn by the Mac app; its title alone when the app can't draw it).
+	 */
+	answered(agentId: string, contactId: string, said: string, answer: string, visuals: readonly ChannelVisual[] = []): Promise<void> {
 		const key = `${agentId}/${contactId}`;
 		const list = this.waiting.get(key) ?? [];
 		const i = list.findIndex((w) => w.text === said);
-		if (i < 0) return;
+		if (i < 0) return Promise.resolve();
 		const [origin] = list.splice(i, 1);
 		const live = this.live.get(agentId);
-		if (!live || !answer.trim()) return;
-		void live.bot.send(origin!.chatId, answer).catch((error: unknown) => this.host.log(`Telegram: couldn't answer: ${(error as Error).message}`));
+		if (!live || (!answer.trim() && visuals.length === 0)) return Promise.resolve();
+		const chatId = origin!.chatId;
+		return (async () => {
+			if (answer.trim()) await live.bot.send(chatId, answer);
+			for (const visual of visuals) {
+				const jpeg = await this.host.picture?.(visual).catch(() => undefined);
+				if (jpeg) await live.bot.sendPhoto(chatId, jpeg, visual.title).catch(async (error: unknown) => {
+					this.host.log(`Telegram: couldn't send a visual: ${(error as Error).message}`);
+					await live.bot.send(chatId, `Visual: ${visual.title} (open Piopio on the Mac to see it).`);
+				});
+				else await live.bot.send(chatId, `Visual: ${visual.title} (open Piopio on the Mac to see it).`);
+			}
+		})().catch((error: unknown) => this.host.log(`Telegram: couldn't answer: ${(error as Error).message}`));
 	}
 
 	/** The agent sent a message on its own (send_message, a run): to Telegram when that's the person's channel. */

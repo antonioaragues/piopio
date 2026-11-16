@@ -27,11 +27,12 @@ export class TelegramBot {
 		private readonly base = "https://api.telegram.org",
 	) {}
 
-	private async call<T>(method: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+	private async call<T>(method: string, body: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<T> {
+		const form = body instanceof FormData;
 		const response = await this.fetcher(`${this.base}/bot${this.token}/${method}`, {
 			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify(body),
+			...(form ? {} : { headers: { "content-type": "application/json" } }),
+			body: form ? body : JSON.stringify(body),
 			...(signal ? { signal } : {}),
 		});
 		const json = (await response.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string };
@@ -58,6 +59,15 @@ export class TelegramBot {
 				await this.call("sendMessage", { chat_id: chatId, text: part });
 			}
 		}
+	}
+
+	/** A picture (a visual, docs/spec/25 §8), uploaded, with a caption. */
+	async sendPhoto(chatId: number | string, jpeg: Uint8Array, caption?: string): Promise<void> {
+		const form = new FormData();
+		form.append("chat_id", String(chatId));
+		form.append("photo", new Blob([new Uint8Array(jpeg)], { type: "image/jpeg" }), "visual.jpg");
+		if (caption) form.append("caption", caption.slice(0, 1000));
+		await this.call("sendPhoto", form);
 	}
 
 	/** "typing…" for about five seconds. */

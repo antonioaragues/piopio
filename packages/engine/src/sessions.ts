@@ -1525,7 +1525,7 @@ export class Sessions {
 					if (approval.status === "pending") this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });
 					if (approval.status === "pending") this.telegram?.approval(id, approval.title);
 				},
-				onAnswer: (contactId, said, answer) => this.telegram?.answered(id, contactId, said, answer),
+				onAnswer: (contactId, said, answer, visuals) => void this.telegram?.answered(id, contactId, said, answer, visuals),
 				onOutbound: (to, text) => this.telegram?.outbound(id, to, text),
 				...(this.telegram ? { connectTelegram: (token: string) => this.telegram!.connect(id, token) } : {}),
 				...(this.hookUrl ? { watchUrl: (watchId: string) => this.hookUrl!(id, watchId) } : {}),
