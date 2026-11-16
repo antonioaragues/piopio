@@ -1,6 +1,6 @@
 # 25 — Visuals in the conversation
 
-Status: draft 2026-11-16; decisions VS1–VS9 to confirm; nothing here is built. References: T3 Code drawing four UI
+Status: draft 2026-11-16; decisions VS1–VS9 to confirm; V1 (HTML files) built 2026-11-16 (§13), the rest not built. References: T3 Code drawing four UI
 proposals inline when asked to "show me here inline a few ideas to pick"
 ([the post](https://x.com/itssotsot/status/2122282435971092760)), Codex rendering a prototype in the chat, and Claude's
 inline charts and diagrams.
@@ -257,3 +257,30 @@ V1 stands alone and is small. V2 alone already gives what the references show; V
   load the CSP doesn't.
 - How well current models follow the tokens and the "no network" rule without examples; the prompt may need a short
   example visual.
+
+## 13. V1 as built (2026-11-16)
+
+**What changed.** `FileView.swift`: `FileKind` has an `html` kind (`.html`, `.htm`, `.xhtml`, globe icon). The viewer shows
+it **Rendered** by default, with the same **Rendered | Source** switch as Markdown; opened at a line (a change the agent
+made), it starts on Source, where the line is. `HTMLFile` draws the page in a `WKWebView`:
+
+- `loadFileURL` with read access to the file's own folder; when that folder is your home folder or above, only the file
+  itself. Both paths are resolved first: WebKit refuses a file at `/private/tmp/…` with access to `/tmp/…`.
+- A content rule list (`piopio.offline-html`, compiled once) blocks every load but `file:`, `about:`, `data:` and
+  `blob:`, added before the first load.
+- A non-persistent data store; no windows opened by scripts; navigation only to files and anchors. A web or mail link
+  you click opens in your default browser; any other navigation is cancelled. Responses WebKit can't show are refused
+  (no downloads). JavaScript alerts are ignored (no UI delegate).
+- Above the page: a `wifi.slash` icon whose tooltip says the preview is offline, and **Open in browser**, which opens
+  the file in the system's web browser (not whatever app opens `.html` files).
+
+Build's file viewer counts HTML as editable (Edit and Open in an editor stay). File cards and a folder chat's preview
+use the same viewer, so `.html` files open rendered everywhere.
+
+**Different from §7:** **Open in browser** opens your default browser, not the built-in one, which keeps each
+conversation's tabs and only loads http(s) (22). `piopio-lib:` comes with V2.
+
+**Checked.** In a copy of the app (own bundle id, temporary data), a folder chat previewing a test page: its local
+stylesheet and SVG loaded, its script ran, an image from the internet was blocked, and its `fetch` to the internet
+failed; Source showed the highlighted code. Not checked: clicking a web link (it opens your browser), a file in a git
+worktree, Build's sheet viewer.

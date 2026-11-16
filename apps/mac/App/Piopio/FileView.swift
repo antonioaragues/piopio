@@ -5,17 +5,19 @@ import PiopioTranscript
 import Quartz
 import SwiftUI
 import UniformTypeIdentifiers
+import WebKit
 
 // One file viewer for every place that shows a file (roadmap D8): Build's Files and the file cards, a folder chat's
-// preview, and files you sent. Markdown is rendered (with its source a click away), PDFs and images are shown as
-// themselves, code and text get line numbers and highlighting, and anything else goes through Quick Look.
+// preview, and files you sent. Markdown and HTML are rendered (with their source a click away), PDFs and images are
+// shown as themselves, code and text get line numbers and highlighting, and anything else goes through Quick Look.
 
 enum FileKind {
-    case markdown, pdf, image, text, other
+    case markdown, html, pdf, image, text, other
 
     static func of(_ url: URL) -> FileKind {
         let ext = url.pathExtension.lowercased()
         if ["md", "markdown", "mdx", "mdown"].contains(ext) { return .markdown }
+        if ["html", "htm", "xhtml"].contains(ext) { return .html }
         if ext == "pdf" { return .pdf }
         if let type = UTType(filenameExtension: ext) {
             if type.conforms(to: .image), ext != "svg" { return .image }
@@ -32,6 +34,7 @@ enum FileKind {
     var icon: String {
         switch self {
         case .markdown, .text: "doc.text"
+        case .html: "globe"
         case .pdf: "doc.richtext"
         case .image: "photo"
         case .other: "doc"
@@ -43,7 +46,14 @@ enum FileKind {
 struct FileContentView: View {
     let url: URL
     var line: Int?
-    @State private var showSource = false
+    @State private var showSource: Bool
+
+    /// HTML opened at a line (a change the agent made) starts on its source, where the line is.
+    init(url: URL, line: Int? = nil) {
+        self.url = url
+        self.line = line
+        _showSource = State(initialValue: line != nil && FileKind.of(url) == .html)
+    }
 
     var body: some View {
         if FileManager.default.fileExists(atPath: url.path) { content } else {
@@ -54,12 +64,21 @@ struct FileContentView: View {
     private var content: some View {
         let kind = FileKind.of(url)
         return VStack(spacing: 0) {
-            if kind == .markdown {
-                HStack {
-                    Spacer()
+            if kind == .markdown || kind == .html {
+                HStack(spacing: 8) {
+                    if kind == .html, !showSource {
+                        Image(systemName: "wifi.slash").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            .help("Offline: this preview reads only the files in this file's folder, nothing from the internet. Open in browser for the full page.")
+                            .accessibilityLabel("Offline preview")
+                    }
+                    Spacer(minLength: 0)
+                    if kind == .html {
+                        Button("Open in browser") { HTMLFile.openInBrowser(url) }.buttonStyle(PillStyle(compact: true))
+                            .help("Open in your default browser, with the network")
+                    }
                     NeutralSegmented(selection: $showSource, options: [(value: false, title: "Rendered"), (value: true, title: "Source")])
                         .frame(width: 170)
-                        .accessibilityLabel("Show the Markdown rendered or as source")
+                        .accessibilityLabel(kind == .html ? "Show the page rendered or as source" : "Show the Markdown rendered or as source")
                 }
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
@@ -67,6 +86,7 @@ struct FileContentView: View {
             Group {
                 switch kind {
                 case .markdown: if showSource { CodeLines(url: url, line: line) } else { MarkdownDocument(url: url) }
+                case .html: if showSource { CodeLines(url: url, line: line) } else { HTMLFile(url: url) }
                 case .pdf: PDFDocumentView(url: url)
                 case .image: ImageFile(url: url)
                 case .text: CodeLines(url: url, line: line)
@@ -139,6 +159,99 @@ private struct MarkdownDocument: NSViewRepresentable {
             let side = max(24, (contentSize.width - 680) / 2)
             if abs(text.textContainerInset.width - side) > 0.5 { text.textContainerInset = NSSize(width: side, height: 24) }
         }
+    }
+}
+
+/// An HTML file drawn as a page (spec 25 §7, V1). It can read the files in its own folder (a prototype's CSS, scripts
+/// and images) and nothing above it; every load from the network is blocked, links out open in your browser only when
+/// you click them, and nothing it stores is kept. Scripts run: a prototype needs them, and with no network and no
+/// storage there's nowhere for them to send anything.
+struct HTMLFile: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .nonPersistent()
+        config.preferences.javaScriptCanOpenWindowsAutomatically = false
+        let view = WKWebView(frame: .zero, configuration: config)
+        view.navigationDelegate = context.coordinator
+        view.allowsBackForwardNavigationGestures = false
+        view.setAccessibilityLabel("Preview of \(url.lastPathComponent)")
+        context.coordinator.load(url, in: view)
+        return view
+    }
+
+    func updateNSView(_ view: WKWebView, context: Context) {
+        if context.coordinator.loaded != url { context.coordinator.load(url, in: view) }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    @MainActor final class Coordinator: NSObject, WKNavigationDelegate {
+        var loaded: URL?
+        private var offline = false
+
+        func load(_ url: URL, in view: WKWebView) {
+            loaded = url
+            Task {
+                // The rule goes in before the first load, or the page's first requests would get through.
+                if !offline, let rules = await HTMLFile.offline() {
+                    view.configuration.userContentController.add(rules)
+                    offline = true
+                }
+                // Both sides resolved the same way: WebKit refuses a file whose path doesn't start with the folder's
+                // (/private/tmp against /tmp).
+                let file = url.resolvingSymlinksInPath()
+                view.loadFileURL(file, allowingReadAccessTo: HTMLFile.readable(for: file))
+            }
+        }
+
+        /// The file itself, other pages and anchors in its folder: yes. A web link you clicked: your browser. Anything
+        /// else (a script sending the page somewhere, another scheme): no.
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
+            guard let target = action.request.url else { return .cancel }
+            if target.isFileURL { return .allow }
+            if target.scheme == "about" { return .allow }
+            if action.navigationType == .linkActivated, ["http", "https", "mailto"].contains(target.scheme?.lowercased() ?? "") {
+                NSWorkspace.shared.open(target)
+            }
+            return .cancel
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse) async -> WKNavigationResponsePolicy {
+            response.canShowMIMEType ? .allow : .cancel
+        }
+    }
+
+    /// The folder the page may read: its own, unless that's a home folder or above (a page in ~/Downloads may read
+    /// ~/Downloads, never all of ~), where it gets only itself.
+    static func readable(for url: URL) -> URL {
+        let folder = url.deletingLastPathComponent()
+        let home = FileManager.default.homeDirectoryForCurrentUser.resolvingSymlinksInPath()
+        if folder.pathComponents.count <= home.pathComponents.count { return url }
+        return folder
+    }
+
+    /// Blocks every load that isn't a file: http(s), WebSockets, FTP, data from anywhere else.
+    static func offline() async -> WKContentRuleList? {
+        if let compiled { return compiled }
+        // Block everything, then let local schemes through (content rules have no lookahead).
+        let rules = #"[{"trigger":{"url-filter":".*"},"action":{"type":"block"}},"# + ["file", "about", "data", "blob"]
+            .map { #"{"trigger":{"url-filter":"^\#($0):"},"action":{"type":"ignore-previous-rules"}}"# }.joined(separator: ",") + "]"
+        let list = try? await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "piopio.offline-html", encodedContentRuleList: rules)
+        compiled = list
+        return list
+    }
+
+    @MainActor private static var compiled: WKContentRuleList?
+
+    /// The page in the browser the system opens web pages with (not Piopio, whatever opens .html files).
+    static func openInBrowser(_ url: URL) {
+        guard let browser = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!) else {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        NSWorkspace.shared.open([url], withApplicationAt: browser, configuration: NSWorkspace.OpenConfiguration())
     }
 }
 

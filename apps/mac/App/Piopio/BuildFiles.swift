@@ -152,7 +152,7 @@ struct FileViewer: View {
 
     private var fullPath: String { target.path.hasPrefix("/") ? target.path : "\(cwd)/\(target.path)" }
     private var url: URL { URL(fileURLWithPath: fullPath) }
-    private var editable: Bool { [.text, .markdown].contains(FileKind.of(url)) }
+    private var editable: Bool { [.text, .markdown, .html].contains(FileKind.of(url)) }
 
     var body: some View {
         VStack(spacing: 0) {
