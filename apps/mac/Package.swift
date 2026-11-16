@@ -13,7 +13,7 @@ let package = Package(
         .target(name: "PiopioKit"),
         .executableTarget(name: "piopio-cli", dependencies: ["PiopioKit"]),
         // The session transcript: a windowed TextKit 2 document (docs/spikes/s2).
-        .target(name: "PiopioTranscript", dependencies: ["PiopioKit"]),
+        .target(name: "PiopioTranscript", dependencies: ["PiopioKit"], resources: [.copy("VisualLibraries")]),
         // Spike S2: transcript rendering benchmarks (docs/spec/09-roadmap.md).
         .executableTarget(name: "TranscriptLab", dependencies: ["PiopioKit", "PiopioTranscript"]),
         .testTarget(name: "PiopioKitTests", dependencies: ["PiopioKit"]),

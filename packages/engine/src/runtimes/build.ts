@@ -1,6 +1,7 @@
 /** Build runtime: one pi-coding-agent SDK session, persisted as a pi CLI-compatible JSONL file. */
 import { codingConnectorsExtension } from "../connectors/extension.js";
 import { codingBrowserExtension, type BrowserCall } from "../tools/browser-tools.js";
+import { codingVisualsExtension } from "../tools/visuals.js";
 import { groupOf } from "../connectors/permissions.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import {
@@ -229,6 +230,7 @@ export class BuildRuntime implements Runtime {
 					: []),
 				todosExtension(),
 				presentExtension(),
+				codingVisualsExtension(),
 				goalExtension(),
 				...(o.history ? [historySdkExtension(o.history)] : []),
 				planExtension({
@@ -1039,6 +1041,7 @@ function chatFactories(o: BuildOpenOptions, runtime: () => BuildRuntime | undefi
 		...(o.browser ? [codingBrowserExtension(o.browser, (callId, signal) => (request) => card(callId, signal)({ ...request, always: `Always allow ${request.site}` }))] : []),
 		guardsExtension(),
 		chatProfileExtension(o.hub, o.webOptions, () => false),
+		codingVisualsExtension(),
 		...(o.connectors
 			? [
 					codingConnectorsExtension(

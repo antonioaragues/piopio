@@ -92,6 +92,11 @@ nonisolated struct ItemRenderer: Sendable {
             let out = NSMutableAttributedString()
             for file in files { out.append(attachmentParagraph(FileCardAttachment(model: FileCardModel(file: file, shownPath: Self.relative(file.path, root: root))), spacing: 8)) }
             return out
+        case .tool(let t) where t.tool == "show_visual" && t.status != .error:
+            // A visual (docs/spec/25): live HTML in a card; until its HTML has arrived, the usual running card.
+            guard let html = t.args?["html"]?.stringValue, !html.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+            let model = VisualCardModel(itemId: t.id, key: t.callId, title: t.args?["title"]?.stringValue ?? "", html: html, root: root)
+            return attachmentParagraph(VisualAttachment(model: model), spacing: 14)
         case .tool(let t):
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root)))
         case .system(let s) where s.run != nil:
@@ -676,6 +681,7 @@ nonisolated struct ItemRenderer: Sendable {
         case "task": "person.2"
         case "propose_plan": "list.number"
         case "present_files": "doc.richtext"
+        case "show_visual": "rectangle.3.group"
         case "search_conversations", "read_conversation": "bubble.left.and.text.bubble.right"
         case "update_goal": "flag.checkered"
         case let name where name.hasPrefix("calendar"): "calendar"
@@ -724,6 +730,8 @@ nonisolated struct ItemRenderer: Sendable {
             return (running ? "Subagent working" : "Subagent", t.args?["description"]?.stringValue ?? "")
         case "propose_plan":
             return (running ? "Proposed a plan" : "Plan", t.args?["summary"]?.stringValue ?? "")
+        case "show_visual":
+            return (running ? "Drawing a visual" : failed ? "Visual not shown" : "Visual", t.args?["title"]?.stringValue ?? "")
         case "present_files":
             let names = t.args?["files"]?.arrayValue?.compactMap { $0["path"]?.stringValue.map { ($0 as NSString).lastPathComponent } }.joined(separator: ", ") ?? ""
             return (running ? "Handing over files" : failed ? "Files not found" : "Files for you", names)

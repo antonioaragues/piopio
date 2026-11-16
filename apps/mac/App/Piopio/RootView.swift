@@ -79,6 +79,7 @@ struct RootView: View {
             }
         }
         .modifier(FileViewerSheet())
+        .modifier(VisualViewerSheet())
         // The conversation start page (docs/spec/18 §4, §16): ⌘N and compose open it with no project; a project's +
         // (and ⌘O) open it with that project chosen.
         .onReceive(NotificationCenter.default.publisher(for: .newThread)) { _ in newChat() }

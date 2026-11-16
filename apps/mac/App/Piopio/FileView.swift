@@ -172,6 +172,8 @@ struct HTMLFile: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
+        // The bundled libraries (spec 25 §5.2), so a visual saved as a file draws here as it did in the conversation.
+        config.setURLSchemeHandler(VisualLibrary.shared, forURLScheme: VisualLibrary.scheme)
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
@@ -232,18 +234,10 @@ struct HTMLFile: NSViewRepresentable {
         return folder
     }
 
-    /// Blocks every load that isn't a file: http(s), WebSockets, FTP, data from anywhere else.
+    /// Blocks every load that isn't a file or a bundled library: http(s), WebSockets, FTP, anything from elsewhere.
     static func offline() async -> WKContentRuleList? {
-        if let compiled { return compiled }
-        // Block everything, then let local schemes through (content rules have no lookahead).
-        let rules = #"[{"trigger":{"url-filter":".*"},"action":{"type":"block"}},"# + ["file", "about", "data", "blob"]
-            .map { #"{"trigger":{"url-filter":"^\#($0):"},"action":{"type":"ignore-previous-rules"}}"# }.joined(separator: ",") + "]"
-        let list = try? await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "piopio.offline-html", encodedContentRuleList: rules)
-        compiled = list
-        return list
+        await VisualLibrary.offlineRules(allowing: ["file", "about", "data", "blob", VisualLibrary.scheme])
     }
-
-    @MainActor private static var compiled: WKContentRuleList?
 
     /// The page in the browser the system opens web pages with (not Piopio, whatever opens .html files).
     static func openInBrowser(_ url: URL) {
@@ -402,6 +396,64 @@ private struct QuickLookView: NSViewRepresentable {
 extension Notification.Name {
     /// Show a file (its URL is the object) in the viewer sheet, from anywhere: a file you sent in a conversation.
     static let viewFile = Notification.Name("piopio.viewFile")
+}
+
+extension Notification.Name {
+    /// Show a visual (a `ShownVisual`) on its own, larger, in a sheet: Open on a visual's card (spec 25 §4.3).
+    static let showVisual = Notification.Name("piopio.showVisual")
+}
+
+/// A visual to show in the sheet, and where its `piopio.send` goes (the conversation it came from).
+struct ShownVisual: Identifiable {
+    let id = UUID()
+    let title: String
+    let html: String
+    let send: @MainActor (String) -> Void
+}
+
+/// Shows visuals posted with `.showVisual` in a sheet (the main window has one).
+struct VisualViewerSheet: ViewModifier {
+    @State private var shown: ShownVisual?
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .showVisual)) { note in
+                if let visual = note.object as? ShownVisual { shown = visual }
+            }
+            .sheet(item: $shown) { visual in
+                VisualSheet(visual: visual) { shown = nil }
+            }
+    }
+}
+
+/// A visual on its own: its title, the visual scrolling at the sheet's size, Done. A click that sends closes it.
+struct VisualSheet: View {
+    let visual: ShownVisual
+    let close: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "rectangle.3.group").foregroundStyle(Color.dsFg3)
+                Text(visual.title).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+                Spacer()
+                Button("Done", action: close).buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 48)
+            Rectangle().fill(Color.dsLine).frame(height: 0.5)
+            VisualPreview(title: visual.title, html: visual.html)
+        }
+        .frame(width: 1000, height: 720)
+        .background(Color.dsWin)
+        .onAppear {
+            VisualSheetSender.current = { text in
+                close()
+                visual.send(text)
+            }
+        }
+        .onDisappear { VisualSheetSender.current = nil }
+    }
 }
 
 /// A file being viewed, for `.sheet(item:)`.

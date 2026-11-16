@@ -247,6 +247,10 @@ final class ThreadModel {
             Task { await send("Continue") }
         case .reply(let text):
             Task { await send(text) }
+        case .openVisual(let id):
+            guard case .tool(let t)? = document.item(id), let html = t.args?["html"]?.stringValue else { return }
+            let visual = ShownVisual(title: t.args?["title"]?.stringValue ?? "Visual", html: html) { [weak self] text in Task { await self?.send(text) } }
+            NotificationCenter.default.post(name: .showVisual, object: visual)
         case .offer(let kind, let callId):
             // Piopio's offers (docs/spec/21 D7): the conversation's page acts on them (a sheet, an agent, a routine).
             NotificationCenter.default.post(name: .transcriptOffer, object: ref.id, userInfo: ["kind": kind, "call": callId])

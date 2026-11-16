@@ -706,6 +706,10 @@ public final class TranscriptDocument {
             (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
             (value as? DisclosureAttachment)?.card.onAction = { [weak self] action in self?.handle(action) }
             (value as? FileCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
+            if let visual = (value as? VisualAttachment)?.model {
+                visual.onAction = { [weak self] action in self?.handle(action) }
+                visual.onResize = { [weak self] model in self?.relayout { ($0 as? VisualAttachment)?.model === model } }
+            }
             if let row = (value as? ActionsAttachment)?.actions {
                 row.document = self
                 actionRows[row.itemId] = row
@@ -731,9 +735,14 @@ public final class TranscriptDocument {
     }
 
     private func relayout(_ card: DisclosureCard) {
+        relayout { ($0 as? DisclosureAttachment)?.card === card }
+    }
+
+    /// Lays out again the line of the attachment that matches (a card that changed height).
+    private func relayout(_ matches: (NSTextAttachment) -> Bool) {
         var location: Int?
         storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length), options: .reverse) { value, range, stop in
-            if (value as? DisclosureAttachment)?.card === card { location = range.location; stop.pointee = true }
+            if let a = value as? NSTextAttachment, matches(a) { location = range.location; stop.pointee = true }
         }
         guard let location, let content = layoutManager.textContentManager,
               let start = content.location(content.documentRange.location, offsetBy: location),

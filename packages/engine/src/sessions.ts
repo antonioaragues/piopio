@@ -25,6 +25,7 @@ import type { Settings } from "./settings.js";
 import type { ChatResources } from "./tools/chat-resources.js";
 import { AgentRuntime, type AgentOpenOptions } from "./runtimes/agent.js";
 import { writingExtension } from "./tools/writing.js";
+import { durableVisualsExtension } from "./tools/visuals.js";
 import type { AgentFiles } from "./agent-files.js";
 import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
@@ -1147,12 +1148,14 @@ export class Sessions {
 	/** About me in an agent, when Settings › Chat shares it with agents. */
 	/** No em dashes, tables as Markdown tables (tools/writing.ts), in conversations and agents. */
 	private writing?: Extension;
+	private visuals?: Extension;
 
 	private agentExtras(): Extension[] {
 		const s = this.chat?.settings.get().aboutMe;
 		const aboutMe = s?.enabled && s.inAgents ? this.aboutMeFor("agent") : undefined;
 		this.writing ??= writingExtension() as unknown as Extension;
-		return aboutMe ? [aboutMe, this.writing] : [this.writing];
+		this.visuals ??= durableVisualsExtension() as unknown as Extension;
+		return aboutMe ? [aboutMe, this.writing, this.visuals] : [this.writing, this.visuals];
 	}
 
 	/** Sites the browser may act on (docs/spec/22 §4.4); set by the engine. */

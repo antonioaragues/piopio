@@ -1,6 +1,6 @@
 # 25 — Visuals in the conversation
 
-Status: draft 2026-11-16; decisions VS1–VS9 to confirm; V1 (HTML files) built 2026-11-16 (§13), the rest not built. References: T3 Code drawing four UI
+Status: draft 2026-11-16; decisions VS1–VS9 to confirm; V1 (HTML files) and V2 (visuals) built 2026-11-16 (§13, §14); V3's check and V4 not built. References: T3 Code drawing four UI
 proposals inline when asked to "show me here inline a few ideas to pick"
 ([the post](https://x.com/itssotsot/status/2122282435971092760)), Codex rendering a prototype in the chat, and Claude's
 inline charts and diagrams.
@@ -284,3 +284,51 @@ conversation's tabs and only loads http(s) (22). `piopio-lib:` comes with V2.
 stylesheet and SVG loaded, its script ran, an image from the internet was blocked, and its `fetch` to the internet
 failed; Source showed the highlighted code. Not checked: clicking a web link (it opens your browser), a file in a git
 worktree, Build's sheet viewer.
+
+## 14. V2 as built (2026-11-16)
+
+**Engine.** `tools/visuals.ts`: `show_visual({title, html})`, defined once with an extension for pi-coding-agent
+(chats and Build, both sets of factories in `runtimes/build.ts`) and one for pi-durable (agents, `agentExtras`). It
+checks and answers in one line: empty HTML and more than 300 KB are refused; HTML that reaches for `http(s)` is shown
+with a warning that those parts won't load. The HTML stays in the call's arguments, which is what the app draws, so
+the protocol didn't change. The prompt section (§3.3) names the tokens, the libraries, `piopio.send`, and says to use
+words in Telegram and WhatsApp. It's a user tool in the approval policy (runs in Read only) and stays its own item
+when steps fold (`keepAlone`).
+
+**App.** `PiopioTranscript/VisualCard.swift`:
+- **The card** is a view attachment like the file cards: a header (icon, title, Open, Save…, Copy HTML, Reload; Show
+  all when the visual is taller than 900 pt) over the visual, in a hairline frame. Its height follows the page's
+  `ResizeObserver` and the document lays out just that line again. Before the first height it's 180 pt with
+  **Drawing…**.
+- **The page** (`VisualPage`): our head first (CSP of §5.1, the tokens as CSS variables in light and dark, base styles,
+  an import map for `three` and `three/addons/`, the bridge), then the model's fragment as the body; a whole document
+  keeps its own head after ours. Loaded with `loadHTMLString` on `piopio-visual://visual/`.
+- **The sandbox**: a non-persistent store; a content rule list that blocks everything but `piopio-lib`,
+  `piopio-visual`, `about`, `data` and `blob`; navigation only within the page; a link you click opens in your default
+  browser; camera and microphone refused; no pop-ups; the wheel goes to the conversation.
+- **Libraries** (§5.2) in `VisualLibraries/`, 1.7 MB with their licences: Chart.js 4.4.7 (`piopio-lib://chart.js`),
+  d3 7.9.0 (`piopio-lib://d3.js`), three.js r169 as a module (`piopio-lib://three.js` and OrbitControls under
+  `three/addons/`), KaTeX 0.16.11 (`piopio-lib://katex/katex.js`, `.css`, woff2 fonts). Served with CORS so modules
+  load. The file viewer serves them too, so a saved visual draws there.
+- **Talking back**: `piopio.send(text)` sends `text` as your message, only within 3 s of a click inside that visual
+  (or a key press while it has focus) and once per click. Clicks are watched app-wide, because WebKit takes them in its
+  own views.
+- **Live views**: the store keeps up to 6 web views by tool call (the transcript renders items again often; the web
+  view moves to the new card instead of reloading), with their heights and a picture taken once a visual settles. A
+  visual evicted and scrolled back to shows its picture until it has drawn again.
+- **Open** shows the visual in a sheet (1000 × 720, scrolling), where `piopio.send` sends and closes the sheet.
+  **Save…** writes the page without the CSP and with `send` a no-op, to the conversation's folder by default.
+
+**Different from the spec:** Open is a sheet, not the right column (§4.3). `piopio.send` came forward from V3, without
+the "from *title*" tag; `piopio.prefill` isn't built. Live views are the 6 most recent, not "the 4 in view" (§6). A saved
+visual's libraries stay `piopio-lib://` references, so it draws in Piopio's viewer but not in another browser.
+
+**Checked.** Engine tests (the tool's answers, the prompt, Read only) and Swift tests (the library's paths, the page,
+a saved page, the renderer). In a copy of the app with the scripted model, in a folder chat: a Chart.js chart in the
+app's colours with `fetch` to the internet blocked, three option cards whose height fit, and a three.js cube through
+the import map with OrbitControls; Open showed the options in the sheet; **Go with B** sent "Go with B" from the sheet
+and from the transcript, and **Go with A** from the transcript. Not checked: Save…, Reload, eviction and pictures with
+more than 6 visuals, dark mode, an agent's chat, a real model.
+
+**Known:** clicks in a visual while a turn is still running were lost in early tries (the transcript renders the item
+again and the web view moves card); after the turn they worked every time.
