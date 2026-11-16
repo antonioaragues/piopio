@@ -115,6 +115,8 @@ final class CardLayoutFragment: NSTextLayoutFragment {
             context.fill(CGRect(x: text.maxX + 12, y: text.midY, width: max(0, rect.maxX - text.maxX - 12), height: 0.5))
         }
         drawPills(at: point, in: context)
+        // Your bubble's selection stays on its text: a wrapped line's selection would start at the column's edge.
+        drawSelection(at: point, in: context, clip: card == .user ? rect.insetBy(dx: Self.bubblePadH, dy: 0) : nil)
         context.restoreGState()
         drawText(super.draw, at: point, in: context)
     }
@@ -195,7 +197,31 @@ func drawText(_ draw: (CGPoint, CGContext) -> Void, at point: CGPoint, in contex
 /// A plain paragraph: only its text, drawn without font smoothing.
 final class PlainLayoutFragment: NSTextLayoutFragment {
     override func draw(at point: CGPoint, in context: CGContext) {
+        drawSelection(at: point, in: context)
         drawText(super.draw, at: point, in: context)
+    }
+}
+
+extension NSTextLayoutFragment {
+    /// The transcript draws its selection itself, between a card's fill and its text (`TranscriptTextView` hides the
+    /// text view's own, which sits beneath the fragments and spans a bubble's indent). The document marks the selected
+    /// text with a background rendering attribute (`TranscriptDocument.paintSelection`).
+    func drawSelection(at point: CGPoint, in context: CGContext, clip: CGRect? = nil) {
+        guard let manager = textLayoutManager else { return }
+        let origin = layoutFragmentFrame.origin
+        manager.enumerateRenderingAttributes(from: rangeInElement.location, reverse: false) { _, attributes, range in
+            guard range.location.compare(self.rangeInElement.endLocation) == .orderedAscending else { return false }
+            guard let color = attributes[.backgroundColor] as? NSColor, let part = range.intersection(self.rangeInElement) else { return true }
+            context.saveGState()
+            if let clip { context.clip(to: clip) }
+            context.setFillColor(color.cgColor)
+            manager.enumerateTextSegments(in: part, type: .selection, options: .rangeNotRequired) { _, frame, _, _ in
+                context.fill(frame.offsetBy(dx: point.x - origin.x, dy: point.y - origin.y))
+                return true
+            }
+            context.restoreGState()
+            return true
+        }
     }
 }
 
@@ -451,6 +477,43 @@ final class DisclosureAttachment: NSTextAttachment, @unchecked Sendable {
 /// over what's laid on top of it (an approval card, buttons above the composer). Its I-beam covers its whole visible
 /// rect and is set again on every mouse move, so those views can't keep the arrow on their own.
 final class TranscriptTextView: NSTextView {
+    /// When the selection's colour changes: the view gains or loses focus, or its window becomes or stops being key.
+    var onFocusChange: (() -> Void)?
+    private var keyObservers: [NSObjectProtocol] = []
+
+    /// The fragments draw the selection (`NSTextLayoutFragment.drawSelection`): AppKit's own view for it lies beneath
+    /// them, hidden by card fills, and it reaches past a bubble's edge. It has no public type, hence the name check.
+    func hideSystemSelection() {
+        for view in subviews where !view.isHidden && String(describing: type(of: view)).hasSuffix("TextSelectionView") { view.isHidden = true }
+    }
+
+    override func layout() {
+        super.layout()
+        hideSystemSelection()
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        defer { onFocusChange?() }
+        return super.becomeFirstResponder()
+    }
+
+    override func resignFirstResponder() -> Bool {
+        defer { onFocusChange?() }
+        return super.resignFirstResponder()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+        keyObservers = []
+        guard let window else { return }
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            keyObservers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.onFocusChange?() }
+            })
+        }
+    }
+
     /// Sets the arrow when the mouse isn't over transcript text; true when it did.
     @discardableResult func arrowIfNeeded(_ event: NSEvent) -> Bool {
         guard let content = window?.contentView, let hit = content.hitTest(content.superview?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow) else { return false }
