@@ -1,6 +1,6 @@
 # 25 — Visuals in the conversation
 
-Status: draft 2026-11-16; decisions VS1–VS9 to confirm; V1 (HTML files) and V2 (visuals) built 2026-11-16 (§13, §14); V3's check and V4 not built. References: T3 Code drawing four UI
+Status: draft 2026-11-16; decisions VS1–VS9 to confirm; V1 (HTML files), V2 (visuals) and V3 (the check, prefill) built 2026-11-16 (§13–§15); V4 not built. References: T3 Code drawing four UI
 proposals inline when asked to "show me here inline a few ideas to pick"
 ([the post](https://x.com/itssotsot/status/2122282435971092760)), Codex rendering a prototype in the chat, and Claude's
 inline charts and diagrams.
@@ -330,5 +330,47 @@ the import map with OrbitControls; Open showed the options in the sheet; **Go wi
 and from the transcript, and **Go with A** from the transcript. Not checked: Save…, Reload, eviction and pictures with
 more than 6 visuals, dark mode, an agent's chat, a real model.
 
-**Known:** clicks in a visual while a turn is still running were lost in early tries (the transcript renders the item
-again and the web view moves card); after the turn they worked every time.
+**Known:** some clicks in a visual were lost. The cause was found and fixed in V3 (§15): the transcript's text
+selection gestures.
+
+## 15. V3 as built (2026-11-16)
+
+**The check (§3.2).** The app says `visuals` in `engine.hello`, and `AppServices` asks only such a client for the
+`visuals` group. In chats and Build sessions `show_visual` goes to the app as `app.tool` with the conversation's `ref`
+and the tool call's id (`visualChecker`, passed as `visuals` like the browser). `VisualChecker` draws the page in a
+transparent window on screen at the width cards last had (720 pt before any), waits for it to load (at most 5 s), then
+for half a second without a change of height (at most 3 s more), and answers:
+
+```
+Shown to the user as "Two blocks".
+Drawn at 680 × 104 px.
+No script errors or failed loads.
+```
+
+or, for a broken one, the problems: script errors with their line in the model's HTML, failed loads, loads the sandbox
+blocked (once each, at most 12), unhandled promise rejections and `console.error`. It also says when the visual is
+taller than the card shows, looks empty, or didn't finish loading. With `look: true` the answer carries a JPEG of the
+visual on the window's background, at most 1280 px wide. The card starts at the height the check measured instead of
+its placeholder. With no app connected the answer says it wasn't drawn or checked. Agents (pi-durable) still record
+without a check.
+
+**`piopio.prefill(text)`** puts the text in the composer (the same path as Select and ask's quote), under the same
+rule as `send`: only from the user's click or key press in that visual. From the sheet, it closes the sheet first.
+
+**Clicks.** NSTextView's own selection gesture recognizers on the transcript hold a mouse-down back until they know
+it isn't a double click or a drag, and that sometimes swallowed a click meant for a visual. While the mouse is down
+in a visual, the recognizers of the text views above it that delay mouse-downs are paused, and they come back after
+the mouse-up. Text selection elsewhere is unchanged.
+
+Also: the card no longer hides its contents from VoiceOver (it was one accessibility element; now it's a group with
+the visual's title).
+
+**Not built:** the "from *title*" tag on messages a visual sends (§4.4), a check for agents.
+
+**Checked.** Engine tests: the check goes only to an app that draws visuals, with the call's id; without one the
+visual is recorded and says so. Swift tests: line numbers count from the model's HTML, a blocked load is reported once,
+the summary's wording, the prefill action. In a copy of the app with the scripted model: a visual with a broken script
+and an image from the internet came back with "ReferenceError: Can't find variable: notAFunction (line 5 of the HTML)"
+and "Blocked by the sandbox: https://example.com/logo.png"; a clean one with `look` came back with no problems and a
+1280 × 195 picture that matched. Real clicks: **Tweak B** filled the composer and **Go with B** sent, each on the first
+click; a double click on the answer's text still selected a word afterwards.

@@ -80,12 +80,17 @@ public enum VisualPage {
 
     static let importMap = #"<script type="importmap">{"imports":{"three":"piopio-lib://three.js","three/addons/":"piopio-lib://three/addons/"}}</script>"#
 
-    /// What `piopio.send` and the height report go through. In the sheet and in a saved file there's no conversation to
-    /// send to, so `send` does nothing there.
+    /// What `piopio.send` and `piopio.prefill`, the height and the problems (script errors, failed and blocked loads) go
+    /// through. Line numbers count from the model's HTML (the offset is filled in by `html`). A saved file has a stub.
+    static let lineOffsetMark = "__PIOPIO_LINE_OFFSET__"
     static let bridge = """
     <script>(() => {
       const post = (m) => { try { window.webkit.messageHandlers.piopio.postMessage(m); } catch (e) {} };
-      window.piopio = Object.freeze({ send: (text) => post({ type: "send", text: String(text) }) });
+      const offset = \(lineOffsetMark);
+      window.piopio = Object.freeze({
+        send: (text) => post({ type: "send", text: String(text) }),
+        prefill: (text) => post({ type: "prefill", text: String(text) }),
+      });
       let last = -1;
       const report = () => {
         if (!document.body) return;
@@ -94,7 +99,16 @@ public enum VisualPage {
       };
       addEventListener("DOMContentLoaded", () => { new ResizeObserver(report).observe(document.body); report(); });
       addEventListener("load", report);
-      addEventListener("error", (e) => post({ type: "error", text: String(e.message || e.type) }));
+      const problem = (text) => post({ type: "error", text: String(text).slice(0, 300) });
+      addEventListener("error", (e) => {
+        const t = e.target;
+        if (t && t !== window && (t.src || t.href)) problem("Couldn't load " + (t.src || t.href));
+        else problem((e.message || "Script error") + (e.lineno ? " (line " + Math.max(1, e.lineno - offset) + " of the HTML)" : ""));
+      }, true);
+      addEventListener("unhandledrejection", (e) => problem("Unhandled promise rejection: " + ((e.reason && e.reason.message) || e.reason)));
+      addEventListener("securitypolicyviolation", (e) => problem("Blocked by the sandbox: " + (e.blockedURI || e.violatedDirective)));
+      const consoleError = console.error.bind(console);
+      console.error = (...args) => { problem("console.error: " + args.map(String).join(" ")); consoleError(...args); };
     })();</script>
     """
 
@@ -107,8 +121,9 @@ public enum VisualPage {
             "<title>\(escape(title))</title>",
             "<style>\(tokens())\(baseStyle(scrolls: scrolls))</style>",
             importMap,
-            standalone ? "<script>window.piopio = { send: () => {} };</script>" : bridge,
+            standalone ? "<script>window.piopio = { send: () => {}, prefill: () => {} };</script>" : bridge,
         ].joined(separator: "\n")
+        let headLines = head.filter { $0 == "\n" }.count
         // A whole document keeps its own head, after ours (so its styles win and our CSP still comes first).
         if content.range(of: "<html", options: .caseInsensitive) != nil {
             var page = content.replacingOccurrences(of: #"<!doctype[^>]*>"#, with: "", options: [.regularExpression, .caseInsensitive])
@@ -117,9 +132,11 @@ public enum VisualPage {
             } else if let htmlTag = page.range(of: #"<html[^>]*>"#, options: [.regularExpression, .caseInsensitive]) {
                 page.insert(contentsOf: "<head>\n\(head)\n</head>", at: htmlTag.upperBound)
             }
-            return "<!doctype html>\n" + page
+            // Our doctype line and the lines of our head, inserted before most of theirs (close enough for scripts).
+            return ("<!doctype html>\n" + page).replacingOccurrences(of: lineOffsetMark, with: "\(headLines + 2)")
         }
-        return "<!doctype html>\n<html><head>\n\(head)\n</head><body>\n\(content)\n</body></html>"
+        // The fragment starts after the doctype, <html><head>, our head and </head><body>: that many lines down.
+        return "<!doctype html>\n<html><head>\n\(head)\n</head><body>\n\(content)\n</body></html>".replacingOccurrences(of: lineOffsetMark, with: "\(headLines + 4)")
     }
 
     static func escape(_ s: String) -> String {
@@ -192,6 +209,8 @@ public final class VisualWebView: WKWebView {
     var lastSent = Date.distantPast
     /// The card showing it now (cards are made again when the transcript renders; the web view stays).
     weak var card: VisualCardView?
+    /// Every message from the page, for the check (§3.2).
+    var observer: (@MainActor (String, [String: Any]) -> Void)?
     var key = ""
     var loaded = false
     /// When false (the sheet), the page scrolls itself.
@@ -205,14 +224,48 @@ public final class VisualWebView: WKWebView {
     @MainActor private static var lastClick: (at: Date, window: NSWindow?, point: NSPoint)?
     @MainActor private static var lastKey: (at: Date, window: NSWindow?)?
     @MainActor private static var monitor: Any?
+    /// The transcript's own gesture recognizers, paused while the mouse is down in a visual.
+    @MainActor private static var paused: [NSGestureRecognizer] = []
 
     @MainActor private static func watchInput() {
         guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .keyDown]) { event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .keyDown]) { event in
             MainActor.assumeIsolated {
-                if event.type == .leftMouseDown { lastClick = (.now, event.window, event.locationInWindow) } else { lastKey = (.now, event.window) }
+                switch event.type {
+                case .leftMouseDown:
+                    lastClick = (.now, event.window, event.locationInWindow)
+                    letClickThrough(event)
+                case .leftMouseUp:
+                    // After this event is delivered: the text view's selection works again everywhere else.
+                    guard !paused.isEmpty else { break }
+                    DispatchQueue.main.async {
+                        paused.forEach { $0.isEnabled = true }
+                        paused = []
+                    }
+                default:
+                    lastKey = (.now, event.window)
+                }
             }
             return event
+        }
+    }
+
+    /// The transcript is a text view, and its selection gestures hold a mouse-down back until they know it isn't a
+    /// double click or a drag, which can swallow a click meant for a page inside it. While the mouse is down in a
+    /// visual, those gestures (only the text view's) are paused, so the click goes straight to the page.
+    @MainActor private static func letClickThrough(_ event: NSEvent) {
+        guard let frame = event.window?.contentView?.superview else { return }
+        var view = frame.hitTest(frame.convert(event.locationInWindow, from: nil))
+        while let v = view, !(v is VisualWebView) { view = v.superview }
+        guard view != nil else { return }
+        while let v = view?.superview {
+            if v is NSTextView {
+                for g in v.gestureRecognizers where g.isEnabled && g.delaysPrimaryMouseButtonEvents {
+                    g.isEnabled = false
+                    paused.append(g)
+                }
+            }
+            view = v
         }
     }
 
@@ -268,22 +321,23 @@ final class VisualBridge: NSObject, WKScriptMessageHandler {
             switch type {
             case "height":
                 if let value = body["value"] as? Double { view.card?.contentHeightChanged(CGFloat(value), from: view) ?? VisualStore.shared.noteHeight(CGFloat(value), key: view.key) }
-            case "send":
+            case "send", "prefill":
                 // Only the user's own click or key press sends; a page can't write in their name on its own.
                 guard view.userJustActed, let text = (body["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
                 view.lastSent = .now
-                let clipped = String(text.prefix(2000))
-                if let card = view.card { card.send(clipped) } else { VisualSheetSender.current?(clipped) }
+                let clipped = String(text.prefix(2000)), sends = type == "send"
+                if let card = view.card { card.answer(clipped, send: sends) } else { VisualSheetSender.current?(clipped, sends) }
             default:
                 break
             }
+            view.observer?(type, body)
         }
     }
 }
 
-/// Where `piopio.send` goes from the sheet (set by the app while a visual is open there).
+/// Where `piopio.send` (true) and `piopio.prefill` (false) go from the sheet (set by the app while a visual is open).
 @MainActor public enum VisualSheetSender {
-    public static var current: ((String) -> Void)?
+    public static var current: ((String, Bool) -> Void)?
 }
 
 /// Navigation for every visual: the page itself loads; a link the user clicks opens in their browser; nothing else.
@@ -330,6 +384,8 @@ final class VisualNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
     static let maxLive = 6
 
     private(set) var heights: [String: CGFloat] = [:]
+    /// The width cards were last laid out at: the check draws at it.
+    var columnWidth: CGFloat = 720
     private(set) var pictures: [String: NSImage] = [:]
     private var live: [(key: String, view: VisualWebView)] = []
 
@@ -460,7 +516,7 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         addSubview(header)
         content.wantsLayer = true
         addSubview(content)
-        setAccessibilityElement(true)
+        // A group VoiceOver reads by its title, with the visual's own contents inside it.
         setAccessibilityRole(.group)
         setAccessibilityLabel("Visual: \(model.title)")
         if let image = VisualStore.shared.pictures[model.key] { showPicture(image) } else { showPlaceholder("Drawing…") }
@@ -478,6 +534,7 @@ public final class VisualCardView: NSView, ArrowCursorArea {
 
     public override func layout() {
         super.layout()
+        if bounds.width > 200 { VisualStore.shared.columnWidth = bounds.width }
         header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: VisualCardModel.headerHeight)
         content.frame = NSRect(x: 0, y: VisualCardModel.headerHeight + 1, width: bounds.width, height: max(0, bounds.height - VisualCardModel.headerHeight - 1))
         webView?.frame = content.bounds
@@ -552,8 +609,8 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         showPlaceholder("This visual stopped. Reload to draw it again.")
     }
 
-    func send(_ text: String) {
-        model.onAction?(.reply(text: text))
+    func answer(_ text: String, send: Bool) {
+        model.onAction?(send ? .reply(text: text) : .prefill(text: text))
     }
 
     private func showPicture(_ image: NSImage) {
@@ -669,4 +726,129 @@ public struct VisualPreview: NSViewRepresentable {
     }
 
     public func updateNSView(_ view: VisualWebView, context: Context) {}
+}
+
+// MARK: Check
+
+/// Draws a visual the model just made, before anyone looks, and says how it went (docs/spec/25 §3.2): the height it
+/// took at the conversation's width, script errors and failed or blocked loads, and with `look`, a picture. It draws in
+/// a transparent window on screen (off-screen windows run at one frame a second, docs/spec/22 W0) that ignores the mouse.
+@MainActor public enum VisualChecker {
+    private static let window: NSWindow = {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: 2100), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .transient]
+        window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+        window.orderFrontRegardless()
+        return window
+    }()
+
+    /// What the page reported while it was drawn.
+    final class Report {
+        var height: CGFloat = 0
+        var lastChange = Date.now
+        var problems: [String] = []
+        var loaded = false
+
+        /// A problem, once. A blocked load reports twice (the element's error and the sandbox's): keep the sandbox's.
+        func add(_ text: String) {
+            let blocked = "Blocked by the sandbox: ", failed = "Couldn't load "
+            if text.hasPrefix(failed), problems.contains(blocked + text.dropFirst(failed.count)) { return }
+            if text.hasPrefix(blocked) { problems.removeAll { $0 == failed + text.dropFirst(blocked.count) } }
+            guard problems.count < 12, !problems.contains(text) else { return }
+            problems.append(text)
+        }
+    }
+
+    public struct Result: Sendable {
+        public var width: CGFloat
+        public var height: CGFloat
+        public var problems: [String]
+        public var loaded: Bool
+        public var jpeg: Data?
+    }
+
+    /// `app.tool` `show_visual` (group `visuals`): `args` are the tool's, plus `callId`.
+    public static func handle(_ params: JSONValue) async -> JSONValue {
+        let args = params["args"]
+        guard let html = args?["html"]?.stringValue, !html.isEmpty else { return reply(ok: false, "Nothing to draw: html is empty.") }
+        let title = args?["title"]?.stringValue ?? "Visual"
+        let look = args?["look"] == .bool(true)
+        let r = await check(html: html, title: title, look: look, width: VisualStore.shared.columnWidth)
+        // The card starts at this height instead of its placeholder, unless it has measured itself already.
+        if let key = args?["callId"]?.stringValue, r.loaded, r.height > 0, VisualStore.shared.heights[key] == nil { VisualStore.shared.noteHeight(r.height, key: key) }
+        return reply(ok: true, summary(r), jpeg: r.jpeg)
+    }
+
+    public static func check(html: String, title: String, look: Bool, width: CGFloat) async -> Result {
+        let report = Report()
+        let view = VisualWebView.make(scrolls: false)
+        view.observer = { type, body in
+            switch type {
+            case "height":
+                if let value = body["value"] as? Double, abs(CGFloat(value) - report.height) >= 1 { report.height = CGFloat(value); report.lastChange = .now }
+            case "error":
+                if let text = body["text"] as? String { report.add(text) }
+            default:
+                break
+            }
+        }
+        view.frame = NSRect(x: 0, y: 0, width: width, height: VisualCardModel.maxContentHeight)
+        window.contentView?.addSubview(view)
+        defer { view.removeFromSuperview() }
+        view.show(html, title: title, scrolls: false)
+
+        // Loaded (at most 5 s), then quiet: no change of height for half a second (at most 3 s more).
+        let start = Date.now
+        while !view.loaded, Date.now.timeIntervalSince(start) < 5 { try? await Task.sleep(for: .milliseconds(50)) }
+        report.loaded = view.loaded
+        let loadedAt = Date.now
+        report.lastChange = max(report.lastChange, loadedAt)
+        while report.loaded, Date.now.timeIntervalSince(report.lastChange) < 0.5, Date.now.timeIntervalSince(loadedAt) < 3 { try? await Task.sleep(for: .milliseconds(50)) }
+
+        var jpeg: Data?
+        if look, report.loaded {
+            view.frame.size.height = min(max(report.height, 40), 2000)
+            try? await Task.sleep(for: .milliseconds(150))
+            if let image = try? await view.takeSnapshot(configuration: nil) { jpeg = Self.jpeg(image, maxWidth: 1280) }
+        }
+        return Result(width: width, height: report.height, problems: report.problems, loaded: report.loaded, jpeg: jpeg)
+    }
+
+    /// What the model reads.
+    static func summary(_ r: Result) -> String {
+        guard r.loaded else { return "It didn't finish loading in 5 s, so it may show nothing. Make it simpler, or check its scripts." }
+        var lines = ["Drawn at \(Int(r.width)) × \(Int(r.height)) px."]
+        if r.height > VisualCardModel.maxContentHeight { lines.append("That's taller than the \(Int(VisualCardModel.maxContentHeight)) px the conversation shows; the rest is behind Show all.") }
+        if r.height < 24 { lines.append("It looks empty: nothing in it takes up space.") }
+        if r.problems.isEmpty { lines.append("No script errors or failed loads.") } else {
+            lines.append("Script errors and failed loads (fix them with a new show_visual):")
+            lines += r.problems.map { "- \($0)" }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    static func reply(ok: Bool, _ output: String, jpeg: Data? = nil) -> JSONValue {
+        var o: [String: JSONValue] = ["ok": .bool(ok), "output": .string(output)]
+        if let jpeg { o["images"] = .array([.object(["mimeType": .string("image/jpeg"), "data": .string(jpeg.base64EncodedString())])]) }
+        return .object(o)
+    }
+
+    /// The picture as JPEG, no wider than `maxWidth` pixels.
+    static func jpeg(_ image: NSImage, maxWidth: CGFloat) -> Data? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let scale = min(1, maxWidth / CGFloat(cg.width))
+        let w = max(1, Int(CGFloat(cg.width) * scale)), h = max(1, Int(CGFloat(cg.height) * scale))
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        // A visual has no background of its own: put the window's under it, as the conversation does.
+        DS.win.setFill()
+        NSRect(x: 0, y: 0, width: w, height: h).fill()
+        NSGraphicsContext.current?.cgContext.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+    }
 }

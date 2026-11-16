@@ -9,11 +9,14 @@ import { AppUnavailable } from "@piopio/runtime";
 export type AppToolRequester = (params: ReverseParams<"app.tool">) => Promise<ReverseResult<"app.tool">>;
 
 export class AppServices {
-	private tools: { requester: AppToolRequester; browser: boolean }[] = [];
+	private tools: { requester: AppToolRequester; browser: boolean; visuals: boolean }[] = [];
 
-	/** A client that answers `app.tool` (and the browser's tools, when it said `browser`); returns an unregister function. */
-	addToolServer(requester: AppToolRequester, options: { browser?: boolean } = {}): () => void {
-		const entry = { requester, browser: options.browser ?? false };
+	/**
+	 * A client that answers `app.tool` (and the browser's tools when it said `browser`, the check of visuals when it said
+	 * `visuals`); returns an unregister function.
+	 */
+	addToolServer(requester: AppToolRequester, options: { browser?: boolean; visuals?: boolean } = {}): () => void {
+		const entry = { requester, browser: options.browser ?? false, visuals: options.visuals ?? false };
 		this.tools.push(entry);
 		return () => {
 			this.tools = this.tools.filter((r) => r !== entry);
@@ -27,7 +30,8 @@ export class AppServices {
 	async tool(params: ReverseParams<"app.tool">): Promise<ReverseResult<"app.tool">> {
 		let last: unknown;
 		const browser = params.groups.includes("browser");
-		for (const { requester } of [...this.tools].reverse().filter((t) => !browser || t.browser)) {
+		const visuals = params.groups.includes("visuals");
+		for (const { requester } of [...this.tools].reverse().filter((t) => (!browser || t.browser) && (!visuals || t.visuals))) {
 			try {
 				return await requester(params);
 			} catch (error) {

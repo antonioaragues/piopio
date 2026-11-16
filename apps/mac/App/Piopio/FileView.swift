@@ -409,6 +409,7 @@ struct ShownVisual: Identifiable {
     let title: String
     let html: String
     let send: @MainActor (String) -> Void
+    let prefill: @MainActor (String) -> Void
 }
 
 /// Shows visuals posted with `.showVisual` in a sheet (the main window has one).
@@ -426,7 +427,8 @@ struct VisualViewerSheet: ViewModifier {
     }
 }
 
-/// A visual on its own: its title, the visual scrolling at the sheet's size, Done. A click that sends closes it.
+/// A visual on its own: its title, the visual scrolling at the sheet's size, Done. A click that sends or fills the
+/// composer closes it.
 struct VisualSheet: View {
     let visual: ShownVisual
     let close: () -> Void
@@ -447,9 +449,9 @@ struct VisualSheet: View {
         .frame(width: 1000, height: 720)
         .background(Color.dsWin)
         .onAppear {
-            VisualSheetSender.current = { text in
+            VisualSheetSender.current = { text, sends in
                 close()
-                visual.send(text)
+                if sends { visual.send(text) } else { visual.prefill(text) }
             }
         }
         .onDisappear { VisualSheetSender.current = nil }

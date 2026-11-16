@@ -276,6 +276,10 @@ final class EngineController {
             if method == "app.tool", params["groups"]?.arrayValue?.contains(where: { $0.stringValue == "browser" }) == true {
                 return await BrowserCenter.shared.handle(params)
             }
+            // Visuals the model just made, drawn and checked before anyone looks (docs/spec/25 §3.2).
+            if method == "app.tool", params["groups"]?.arrayValue?.contains(where: { $0.stringValue == "visuals" }) == true {
+                return await VisualChecker.handle(params)
+            }
             if method == "app.tool" { return await AppleTools.shared.handle(params) }
             // Provider sign-ins and refreshed tokens (docs/spec/10 §10): the Keychain is the store.
             if method == "secrets.set", let name = params["name"]?.stringValue, let value = params["value"]?.stringValue {
@@ -293,7 +297,7 @@ final class EngineController {
         }
         let hello: HelloResult
         do {
-            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"), services: ["app.tool", "secrets.set", "browser"])
+            hello = try await client.connectAndHello(client: "Piopio.app", tokenFile: home.appending(path: "engine.token"), services: ["app.tool", "secrets.set", "browser", "visuals"])
         } catch {
             await client.close()
             return nil

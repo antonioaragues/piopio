@@ -25,7 +25,7 @@ import type { Settings } from "./settings.js";
 import type { ChatResources } from "./tools/chat-resources.js";
 import { AgentRuntime, type AgentOpenOptions } from "./runtimes/agent.js";
 import { writingExtension } from "./tools/writing.js";
-import { durableVisualsExtension } from "./tools/visuals.js";
+import { durableVisualsExtension, visualChecker, type VisualCheck } from "./tools/visuals.js";
 import type { AgentFiles } from "./agent-files.js";
 import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
@@ -1167,6 +1167,12 @@ export class Sessions {
 		return app ? { browser: browserCaller(app, ref, { allowPrivate: this.webOptions.allowPrivate ?? false, ...(this.browserSites ? { sites: this.browserSites } : {}) }) } : {};
 	}
 
+	/** The check of visuals for a conversation or Build session, by the Mac app (docs/spec/25 §3.2). */
+	private visualsFor(ref: ContainerRef): { visuals?: VisualCheck } {
+		const app = this.agentHost?.app;
+		return app ? { visuals: visualChecker(app, ref) } : {};
+	}
+
 	/** `/commands` of a conversation: prompt templates and skills from pi's folder and packages. */
 	async chatCommands() {
 		await this.chat?.resources.ready();
@@ -1552,6 +1558,7 @@ export class Sessions {
 			checkpoints: this.checkpoints,
 			webOptions: this.webOptions,
 			...this.browserFor(entry.ref),
+			...this.visualsFor(entry.ref),
 			sandbox: () => this.chat?.settings.get().build?.sandbox !== false,
 			// Auto review on the session's own model (Settings › Approvals; off by default).
 			review: async (command, request) => {
@@ -1640,6 +1647,7 @@ export class Sessions {
 			plan: { active: () => false, setActive: () => {} },
 			webOptions: this.webOptions,
 			...this.browserFor(entry.ref),
+			...this.visualsFor(entry.ref),
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			// Global MCP servers that aren't on for chats (Settings › MCP servers) are refused, as are those turned off here.

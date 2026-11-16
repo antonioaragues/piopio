@@ -40,7 +40,7 @@ import Testing
 @Test func aSavedVisualHasNoBridge() {
     let page = VisualPage.standalone("<p>x</p>", title: "Saved")
     #expect(!page.contains("Content-Security-Policy"))
-    #expect(page.contains("window.piopio = { send: () => {} }"))
+    #expect(page.contains("window.piopio = { send: () => {}, prefill: () => {} }"))
     #expect(!page.contains("messageHandlers"))
     #expect(page.contains("html{overflow:auto}"))
     #expect(VisualCardView.fileName("Usage card: three options") == "Usage card - three options.html")
@@ -62,4 +62,28 @@ import Testing
     let refused = ToolItem(id: "t2", at: "", callId: "call-2", tool: "show_visual", args: .object(["title": .string("Big"), "html": .string("x")]), status: .error, output: "Not shown")
     #expect(ItemRenderer.toolTitle(refused) == ("Visual not shown", "Big"))
     #expect(TranscriptAction(url: TranscriptAction.openVisual(itemId: "t1").url) == .openVisual(itemId: "t1"))
+}
+
+@Test func scriptLinesCountFromTheModelsHTML() {
+    // The bridge subtracts this from the page's line numbers; line 1 of the fragment is the line after <body>.
+    let page = VisualPage.html("FIRST\nSECOND", title: "t")
+    let lines = page.components(separatedBy: "\n")
+    let first = lines.firstIndex(of: "FIRST")! + 1
+    let offset = Int(page.firstMatch(of: /const offset = (\d+);/)!.1)!
+    #expect(first - offset == 1)
+    #expect(!page.contains(VisualPage.lineOffsetMark))
+}
+
+@Test @MainActor func aBlockedLoadIsReportedOnce() {
+    let report = VisualChecker.Report()
+    report.add("Couldn't load https://example.com/a.png")
+    report.add("Blocked by the sandbox: https://example.com/a.png")
+    report.add("Couldn't load https://example.com/a.png")
+    report.add("ReferenceError: x (line 2 of the HTML)")
+    report.add("ReferenceError: x (line 2 of the HTML)")
+    #expect(report.problems == ["Blocked by the sandbox: https://example.com/a.png", "ReferenceError: x (line 2 of the HTML)"])
+    let summary = VisualChecker.summary(.init(width: 700, height: 950, problems: report.problems, loaded: true, jpeg: nil))
+    #expect(summary.contains("Drawn at 700 × 950 px.") && summary.contains("taller than the 900 px") && summary.contains("- ReferenceError"))
+    #expect(VisualChecker.summary(.init(width: 700, height: 0, problems: [], loaded: false, jpeg: nil)).contains("didn't finish loading"))
+    #expect(TranscriptAction(url: TranscriptAction.prefill(text: "Go with B, but…").url) == .prefill(text: "Go with B, but…"))
 }

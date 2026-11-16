@@ -2,9 +2,14 @@
  * Visuals (docs/spec/25): the model shows a chart, a diagram, a few UI options or a small explainer as live HTML in
  * the conversation, with `show_visual`. The engine only records it: the HTML stays in the tool call's arguments, so
  * any client draws it again when it opens the conversation, and the Mac app draws it in a sandboxed web view with no
- * network (§5). Defined once, with an extension for pi-coding-agent (chats and Build) and one for pi-durable (agents).
+ * network (§5). When the app is connected it also checks the visual (§3.2): it draws it off screen and answers with
+ * the height, the script errors and failed loads, and with `look`, a picture. Defined once, with an extension for
+ * pi-coding-agent (chats and Build) and one for pi-durable (agents, recorded only).
  */
 import { Type } from "@earendil-works/pi-ai";
+import type { ContainerRef } from "@piopio/protocol";
+import { AppUnavailable } from "@piopio/runtime";
+import type { AppServices } from "../app-services.js";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 
@@ -19,6 +24,7 @@ const DESCRIPTION =
 const PARAMETERS = Type.Object({
 	title: Type.String({ description: "Shown above the visual, 2 to 6 words: 'Usage card: three options'." }),
 	html: Type.String({ description: "An HTML fragment (no <html>, <head> or <body>: Piopio wraps it) or a whole document. Inline <style> and <script>; libraries only from piopio-lib:// (see the Visuals section)." }),
+	look: Type.Optional(Type.Boolean({ description: "Also return a picture of the visual as drawn, to check its layout (only useful if you can see images)." })),
 });
 
 /** The system prompt section: when to show a visual, and how to make one that fits. */
@@ -28,11 +34,28 @@ You can show the user a visual with ${SHOW_VISUAL}: live HTML drawn in the conve
 - Size: it fills the column's width (about 560 to 900 px); its height follows its content, up to about 900 px. No fixed widths, no page background (it sits on the conversation's), no outer margins.
 - Look: use these CSS variables, which follow the app's light and dark mode: --fg, --fg2, --fg3 (text, strong to faint), --line (hairlines), --card and --bubble (raised and quiet surfaces), --chip (hover), --accent, --green, --amber, --red, --c1 to --c8 (chart series, in that order), --radius (8px), --radius-card (12px), --font, --font-mono. Buttons, inputs and tables are already styled like the app's.
 - No network: nothing loads from the internet or the user's disk. Put data in the HTML. Libraries are bundled: <script src="piopio-lib://chart.js"></script> (Chart.js 4, global Chart), <script src="piopio-lib://d3.js"></script> (d3 7, global d3), <script src="piopio-lib://katex/katex.js"></script> with <link rel="stylesheet" href="piopio-lib://katex/katex.css"> (KaTeX), and three.js r169 as a module: <script type="module">import * as THREE from "three"; import { OrbitControls } from "three/addons/controls/OrbitControls.js";</script>. For diagrams, write SVG yourself.
-- Options to pick from: label them A, B, C, and give each a button that calls piopio.send("Go with B"): when the user clicks it, that text is sent as their message.
+- Options to pick from: label them A, B, C, and give each a button that calls piopio.send("Go with B"): when the user clicks it, that text is sent as their message. piopio.prefill("…") puts text in the user's message box instead, for them to finish. Both work only from the user's click.
+- Check: the result says the height it was drawn at and lists script errors and failed loads. Fix any with a new ${SHOW_VISUAL} call. Pass look: true when the layout matters and you can see images, to get a picture of it.
 - A changed version is a new ${SHOW_VISUAL} call; the old one stays where it was.
 - Visuals show only in Piopio's window. When the person reads you in a message channel (Telegram, WhatsApp), say it in words instead.`;
 
-export type VisualArgs = { title: string; html: string };
+export type VisualArgs = { title: string; html: string; look?: boolean };
+type Image = { mimeType: string; data: string };
+/** Draws and checks a visual in the Mac app; `callId` lets the app start the card at the height it measured. */
+export type VisualCheck = (args: VisualArgs, callId: string) => Promise<{ text: string; images: Image[] }>;
+
+/** The check, through the app, for one conversation. Without the app the visual is still recorded and shown later. */
+export function visualChecker(app: AppServices, ref: ContainerRef): VisualCheck {
+	return async (args, callId) => {
+		try {
+			const r = await app.tool({ name: SHOW_VISUAL, args: { ...args, callId }, ref, groups: ["visuals"], shortcuts: [] });
+			return { text: r.output, images: r.images ?? [] };
+		} catch (error) {
+			const text = error instanceof AppUnavailable ? "Piopio isn't open on the Mac, so it wasn't drawn or checked; it will be drawn when the conversation is opened." : `It couldn't be checked: ${(error as Error).message}`;
+			return { text, images: [] };
+		}
+	};
+}
 
 /** What the tool answers: a short line, or why the visual can't be shown. The HTML isn't repeated back. */
 export function showVisual(args: { title?: unknown; html?: unknown }): { text: string; isError?: boolean } {
@@ -46,8 +69,8 @@ export function showVisual(args: { title?: unknown; html?: unknown }): { text: s
 	return { text: `Shown to the user as "${title || "Visual"}".` };
 }
 
-/** Chats and Build sessions (pi-coding-agent). */
-export function codingVisualsExtension(): ExtensionFactory {
+/** Chats and Build sessions (pi-coding-agent). With `check`, the app draws each visual and reports back. */
+export function codingVisualsExtension(check?: VisualCheck): ExtensionFactory {
 	return (pi) => {
 		pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${VISUALS_SECTION}` }));
 		pi.registerTool(
@@ -57,9 +80,14 @@ export function codingVisualsExtension(): ExtensionFactory {
 				description: DESCRIPTION,
 				promptSnippet: `${SHOW_VISUAL}: show a chart, diagram or UI options as live HTML in the conversation`,
 				parameters: PARAMETERS,
-				async execute(_callId, params) {
+				async execute(callId, params) {
 					const r = showVisual(params);
-					return { content: [{ type: "text", text: r.text }], details: {}, ...(r.isError ? { isError: true } : {}) } as never;
+					if (r.isError || !check) return { content: [{ type: "text", text: r.text }], details: {}, ...(r.isError ? { isError: true } : {}) } as never;
+					const checked = await check({ title: params.title, html: params.html, ...(params.look ? { look: true } : {}) }, callId);
+					return {
+						content: [{ type: "text", text: `${r.text}\n${checked.text}` }, ...checked.images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))],
+						details: {},
+					} as never;
 				},
 			}),
 		);

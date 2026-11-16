@@ -452,7 +452,7 @@ export class Engine {
 							if (!Value.Check(reverseMethods["app.tool"].result, res)) throw new Error("The app's answer wasn't understood.");
 							return res;
 						},
-						{ browser: p.services.includes("browser") },
+						{ browser: p.services.includes("browser"), visuals: p.services.includes("visuals") },
 					);
 				}
 				return this.hello();

@@ -1,7 +1,7 @@
 /** Build runtime: one pi-coding-agent SDK session, persisted as a pi CLI-compatible JSONL file. */
 import { codingConnectorsExtension } from "../connectors/extension.js";
 import { codingBrowserExtension, type BrowserCall } from "../tools/browser-tools.js";
-import { codingVisualsExtension } from "../tools/visuals.js";
+import { codingVisualsExtension, type VisualCheck } from "../tools/visuals.js";
 import { groupOf } from "../connectors/permissions.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import {
@@ -67,6 +67,8 @@ export type BuildOpenOptions = {
 	chat?: ChatProfile;
 	/** The browser's tools (docs/spec/22), run by the Mac app for this session. */
 	browser?: BrowserCall;
+	/** Visuals drawn and checked by the Mac app (docs/spec/25 §3.2). */
+	visuals?: VisualCheck;
 	/** Connected apps: their tools, asking through Build's approval prompt before a change. */
 	connectors?: ConnectorHub;
 	/** Connectors and MCP servers this session turned off ("connector:<id>", "mcp:<server>"). */
@@ -230,7 +232,7 @@ export class BuildRuntime implements Runtime {
 					: []),
 				todosExtension(),
 				presentExtension(),
-				codingVisualsExtension(),
+				codingVisualsExtension(o.visuals),
 				goalExtension(),
 				...(o.history ? [historySdkExtension(o.history)] : []),
 				planExtension({
@@ -1041,7 +1043,7 @@ function chatFactories(o: BuildOpenOptions, runtime: () => BuildRuntime | undefi
 		...(o.browser ? [codingBrowserExtension(o.browser, (callId, signal) => (request) => card(callId, signal)({ ...request, always: `Always allow ${request.site}` }))] : []),
 		guardsExtension(),
 		chatProfileExtension(o.hub, o.webOptions, () => false),
-		codingVisualsExtension(),
+		codingVisualsExtension(o.visuals),
 		...(o.connectors
 			? [
 					codingConnectorsExtension(
