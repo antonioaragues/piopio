@@ -99,7 +99,8 @@ struct RootView: View {
                 // A project with a team (docs/spec/19 §10): its work goes to the team; the chip switches back to the project.
                 let team = engine.projects.first { $0.id == id }.flatMap { engine.team(in: $0) }
                 UserDefaults.standard.set(team.map { "team:" + $0.id } ?? "project:" + id, forKey: "homeTarget")
-            case .start(.chat) where target.hasPrefix("project:"): UserDefaults.standard.set("chat", forKey: "homeTarget")
+            // ⌘N and compose start with no project: a project or team left chosen from before doesn't stick.
+            case .start(.chat) where target.hasPrefix("project:") || target.hasPrefix("team:"): UserDefaults.standard.set("chat", forKey: "homeTarget")
             default: break
             }
         }

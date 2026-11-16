@@ -551,3 +551,17 @@ project's row; the row itself only folds. Designs: [proposal](../design/project-
 **Not built from the design:** bold headings and grey list marks in the editor (it's a plain text view), and the dashed
 line where memory stops being read (the footer says it instead). "Who works here" keeps today's two cards rather than
 the drawn segmented control.
+
+## 20. The New conversation page: one question, centered (2026-11-16)
+
+**Why:** the page said "New conversation" and a sentence about how projects work, the same for every project. The user
+picked proposal A of four ([docs/design/new-conversation/proposals.html](../design/new-conversation/proposals.html)).
+
+| ID | Decision |
+|---|---|
+| CF24 | **One question in the middle of the window:** a 44 pt mark (folder, team or conversation), then "What's next in **Tesis**?" with the name in grey ("What should **Development team** do?" with a team, "What's on your mind?" with no project), then the box, a little larger, with "Ask, or describe a task…". No kind label, no description. |
+| CF25 | **Pills under the box.** In a project: **Pick up** with its two latest conversations, and **Uses** with its linked folders ("2 folders") and **Memory** when NOTES.md exists; those open the project's settings, on Memory for the second. With no project: **Or in** with your three latest projects, which choose that project (replacing the box's "Or in" line from §16, CF13). Hairline capsules, centered, wrapping when they don't fit. |
+| CF26 | **The line under the box moves into the permissions' tooltip** on this page ("In Tesis and 2 linked folders · reads files and the web; can't change anything"). Home and project boxes elsewhere keep the line. |
+
+**Fixed along the way:** ⌘N after using a team's page opened the team's version of this page; New conversation now
+forgets a chosen team as it already forgot a chosen project.

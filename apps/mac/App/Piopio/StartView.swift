@@ -217,27 +217,31 @@ struct ConversationStart: View {
     }
 
     var body: some View {
-        StartColumn(top: 128) {
-            VStack(alignment: .leading, spacing: 12) {
-                Group {
-                    if let team { KindLabel(symbol: StartKind.team.symbol, text: team.name) }
-                    else if let project { KindLabel(symbol: StartKind.project.symbol, text: project.name) } else { KindLabel(kind: .chat) }
+        // One question, centered (docs/spec/18 §20, design docs/design/new-conversation, proposal A): a mark, "What's next
+        // in Tesis?", the box, and a row of pills: conversations to pick up and what this one uses (linked folders,
+        // memory); with no project, your latest projects.
+        GeometryReader { g in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 48)
+                    mark.padding(.bottom, 18)
+                    title
+                        .multilineTextAlignment(.center)
+                        .padding(.bottom, whoChoice == nil ? 26 : 14)
+                    if let (place, crew) = whoChoice { who(place, crew).padding(.bottom, 20) }
+                    AskBox(engine: engine, item: $item, showsWhere: false, prominent: true)
+                    pills.padding(.top, 18)
+                    // A project just made in the sidebar (docs/spec/18 §17): its instructions are written here, or later.
+                    if let project, team == nil, ProjectNaming.shared.fresh.contains(project.id), engine.sessions(in: project).isEmpty {
+                        instructionsLine(project).padding(.top, 14)
+                    }
+                    Spacer(minLength: 48)
+                    // A little above the middle, where the eye lands.
+                    Color.clear.frame(height: g.size.height * 0.08)
                 }
-                .padding(.bottom, 4)
-                TitleText(text: team != nil ? "What should the team do?" : project == nil ? "What's on your mind?" : "New conversation")
-                Text(team != nil
-                    ? "A conversation with its lead: it does small things itself and puts bigger work on the board, where the team works in parallel."
-                    : project == nil
-                    ? "A conversation keeps its own history. Continue it in a project whenever it grows into a subject."
-                    : "It works in the project's folder, with its instructions and the notes its conversations share.")
-                    .font(.system(size: 15)).lineSpacing(4.5).foregroundStyle(Color.dsFg2)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let (place, crew) = whoChoice { who(place, crew) }
-            }
-            AskBox(engine: engine, item: $item, quickPicks: true)
-            // A project just made in the sidebar (docs/spec/18 §17): its instructions are written here, or later.
-            if let project, team == nil, ProjectNaming.shared.fresh.contains(project.id), engine.sessions(in: project).isEmpty {
-                instructionsLine(project)
+                .frame(width: 640)
+                .frame(minHeight: g.size.height)
+                .frame(maxWidth: .infinity)
             }
         }
         .onExitCommand { back?() }
@@ -257,6 +261,77 @@ struct ConversationStart: View {
             if raw.hasPrefix("team:") { return }
             let next: SidebarItem = raw.hasPrefix("project:") ? .newSession(String(raw.dropFirst(8))) : .start(.chat)
             if next != item { item = next }
+        }
+    }
+
+    /// The place's mark: a folder, a team, or a conversation.
+    private var mark: some View {
+        Image(systemName: team != nil ? "person.3" : project != nil ? "folder" : "bubble.left")
+            .font(.system(size: 19, weight: .light))
+            .foregroundStyle(Color.dsFg2)
+            .frame(width: 44, height: 44)
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
+    /// "What's next in Tesis?", the place's name in grey; "What's on your mind?" with no project.
+    private var title: Text {
+        let name = team?.name ?? project?.name
+        guard let name else { return Text("What's on your mind?").font(.system(size: 30, weight: .semibold)) }
+        let lead = team != nil ? "What should " : "What's next in "
+        let tail = team != nil ? " do?" : "?"
+        return (Text(lead) + Text(name).foregroundColor(Color.dsFg3) + Text(tail)).font(.system(size: 30, weight: .semibold))
+    }
+
+    /// The project the page is in: the chosen one, or a team's.
+    private var place: ProjectInfo? {
+        if let project { return project }
+        if let team { return engine.projects.first { $0.path == team.cwd } }
+        return nil
+    }
+
+    /// "Pick up  Chapter 3 outline  Check the citations   Uses  2 folders  Memory"; with no project, "Or in" and your
+    /// three latest projects.
+    @ViewBuilder private var pills: some View {
+        if let place {
+            let recent = Array(engine.sessions(in: place).filter(\.listed).sorted { $0.updatedAt > $1.updatedAt }.prefix(2))
+            let linked = (place.folders ?? []).filter { $0.missing != true }.count
+            let memory = FileManager.default.fileExists(atPath: ProjectFile.memory.url(place).path)
+            if !recent.isEmpty || linked > 0 || memory {
+                PillRow {
+                    if !recent.isEmpty {
+                        PillLabel("Pick up")
+                        ForEach(recent, id: \.ref.id) { s in
+                            Pill(symbol: "bubble.left", text: s.title, help: "Open “\(s.title)”") { item = .session(s.ref.id) }
+                        }
+                    }
+                    if linked > 0 || memory {
+                        PillLabel("Uses").padding(.leading, recent.isEmpty ? 0 : 10)
+                        if linked > 0 {
+                            Pill(symbol: "link", text: "\(linked) folder\(linked == 1 ? "" : "s")", help: "Linked folders: every conversation here can use them") {
+                                NotificationCenter.default.post(name: .projectSettings, object: place.id)
+                            }
+                        }
+                        if memory {
+                            Pill(symbol: "brain", text: "Memory", help: "What its conversations keep for each other (NOTES.md)") {
+                                NotificationCenter.default.post(name: .projectSettings, object: place.id + "|memory")
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            let latest = Array(engine.projects.filter { $0.missing != true }
+                .sorted { (engine.sessions(in: $0).map(\.updatedAt).max() ?? $0.addedAt) > (engine.sessions(in: $1).map(\.updatedAt).max() ?? $1.addedAt) }
+                .prefix(3))
+            if !latest.isEmpty {
+                PillRow {
+                    PillLabel("Or in")
+                    ForEach(latest) { p in
+                        Pill(symbol: "folder", text: p.name, help: "New conversation in \(p.name)") { targetRaw = "project:" + p.id }
+                    }
+                }
+            }
         }
     }
 
@@ -1060,3 +1135,89 @@ private struct TemplateGrid: View {
     }
 }
 
+
+/// The New conversation page's pills (docs/spec/18 §20): hairline capsules, centered, wrapping when they don't fit.
+private struct PillRow<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        CenteredFlow(spacing: 8) { content }
+            .frame(maxWidth: .infinity)
+    }
+}
+
+private struct PillLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).frame(height: 28)
+    }
+}
+
+private struct Pill: View {
+    let symbol: String
+    let text: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                Text(text).lineLimit(1).truncationMode(.tail)
+            }
+            .font(.system(size: 12.5)).foregroundStyle(hovering ? Color.dsFg : Color.dsFg2)
+            .padding(.horizontal, 11).frame(height: 28)
+            .frame(maxWidth: 220)
+            .background(hovering ? Color.dsChip : Color.clear, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.dsLine, lineWidth: 0.5))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+    }
+}
+
+/// Lays children in rows, centering each row, wrapping when the next one doesn't fit.
+private struct CenteredFlow: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let rows = rows(subviews, width: width)
+        let height = rows.map(\.height).reduce(0, +) + CGFloat(max(rows.count - 1, 0)) * spacing
+        return CGSize(width: width == .infinity ? (rows.map(\.width).max() ?? 0) : width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            var x = bounds.minX + (bounds.width - row.width) / 2
+            for i in row.items {
+                let size = subviews[i].sizeThatFits(.unspecified)
+                subviews[i].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row { var items: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [Row] {
+        var rows: [Row] = [Row()]
+        for i in subviews.indices {
+            let size = subviews[i].sizeThatFits(.unspecified)
+            let extra = rows[rows.count - 1].items.isEmpty ? size.width : size.width + spacing
+            if rows[rows.count - 1].width + extra > width, !rows[rows.count - 1].items.isEmpty {
+                rows.append(Row())
+            }
+            let w = rows[rows.count - 1].items.isEmpty ? size.width : size.width + spacing
+            rows[rows.count - 1].items.append(i)
+            rows[rows.count - 1].width += w
+            rows[rows.count - 1].height = max(rows[rows.count - 1].height, size.height)
+        }
+        return rows.filter { !$0.items.isEmpty }
+    }
+}

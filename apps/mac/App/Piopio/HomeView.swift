@@ -314,20 +314,24 @@ private struct WaitingRow: View {
 struct AskBox: View {
     let engine: EngineController
     @Binding var item: SidebarItem
-    /// The New conversation page's quick picks under the box (docs/spec/18 §16): "Or in" the three latest projects.
-    var quickPicks = false
     /// On a project's page (18 §18): the box starts in that project, with its own target and draft, apart from Home's.
     var projectId: String?
+    /// The line under the box (where it goes, what it may do). The New conversation page puts it in the permissions'
+    /// tooltip instead (18 §20).
+    var showsWhere = true
+    /// The New conversation page's box: a little larger, and a placeholder that doesn't repeat the title.
+    var prominent = false
     @State private var text = ""
     /// "chat", "project:<id>" or "agent:<id>"; the start routes set it (⌘N, ⌘O, a project's +).
     /// Back to "chat" (no project) after each send, so a loose question never lands in the last project.
     @AppStorage private var targetRaw: String
 
-    init(engine: EngineController, item: Binding<SidebarItem>, quickPicks: Bool = false, projectId: String? = nil) {
+    init(engine: EngineController, item: Binding<SidebarItem>, projectId: String? = nil, showsWhere: Bool = true, prominent: Bool = false) {
         self.engine = engine
         _item = item
-        self.quickPicks = quickPicks
         self.projectId = projectId
+        self.showsWhere = showsWhere
+        self.prominent = prominent
         _targetRaw = AppStorage(wrappedValue: projectId.map { "project:" + $0 } ?? "chat", projectId.map { "projectBoxTarget:" + $0 } ?? "homeTarget")
     }
 
@@ -389,6 +393,7 @@ struct AskBox: View {
     private var effectiveMode: ApprovalMode { buildOn ? (mode ?? project?.approvalMode ?? .autoEdit) : .readOnly }
 
     private var placeholder: String {
+        if prominent, project != nil || team != nil { return "Ask, or describe a task…" }
         if let project { return "What should we do in \(project.name)?" }
         if let agent { return "Message \(agent.title)…" }
         if let team { return "What should \(team.name) do?" }
@@ -401,10 +406,11 @@ struct AskBox: View {
                 if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                 TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3), axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14))
+                    .font(.system(size: prominent ? 15 : 14))
                     .lineLimit(1...6)
                     .focused($focused)
                     .onSubmit(send)
+                    .padding(.bottom, prominent ? 6 : 0)
                 if !attachments.isEmpty { attachmentTiles }
                 // The same footer as a conversation's composer (Composer.box): attach, where it goes (18 §16) and
                 // permissions on the left, the model and send on the right, so the box reads the same before and after.
@@ -427,19 +433,19 @@ struct AskBox: View {
                         .keyboardShortcut(.return, modifiers: .command)
                 }
             }
-            .padding(.top, 12)
-            .padding(.leading, 14)
+            .padding(.top, prominent ? 16 : 12)
+            .padding(.leading, prominent ? 16 : 14)
             .padding(.trailing, 12)
-            .padding(.bottom, 10)
+            .padding(.bottom, prominent ? 12 : 10)
             .composerBox()
+            .shadow(color: .black.opacity(prominent ? 0.04 : 0), radius: 12, y: 4)
             // Sending moves this box into the conversation's composer (the same morph the start pages used).
             .composerMorph()
             // Before Return: where it goes, and whether Piopio may change anything (18 §4). Nothing without a folder.
-            if let line = whereLine {
+            if showsWhere, let line = whereLine {
                 Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.leading, 14)
                     .accessibilityLabel(line)
             }
-            if quickPicks, target == .chat, !latestProjects.isEmpty { picks }
         }
         .onChange(of: text) { _, t in mention(t); saveHomeDraft() }
         .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder; plan = false }
@@ -508,7 +514,7 @@ struct AskBox: View {
             }
         } label: { Text(plan ? "Plan" : effectiveMode.title).foregroundStyle(!plan && effectiveMode == .fullAuto ? Color.accentColor : Color.dsFg2) }
             .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
-            .help(effectiveMode.summary)
+            .help(whereLine ?? effectiveMode.summary)
             .accessibilityLabel("Permissions: \(effectiveMode.title)")
     }
 
@@ -526,37 +532,6 @@ struct AskBox: View {
         let linked = (project.folders ?? []).filter { $0.missing != true }.count
         let also = linked == 0 ? "" : " and \(linked) linked folder\(linked == 1 ? "" : "s")"
         return "In \(project.name)\(also)\(place) · \(plan ? "plans first; changes only after you approve the plan" : effectiveMode.line)"
-    }
-
-    /// The three projects used last (by their latest conversation), for the quick picks.
-    private var latestProjects: [ProjectInfo] {
-        Array(engine.projects.filter { $0.missing != true }
-            .sorted { (engine.sessions(in: $0).map(\.updatedAt).max() ?? $0.addedAt) > (engine.sessions(in: $1).map(\.updatedAt).max() ?? $1.addedAt) }
-            .prefix(3))
-    }
-
-    /// "Or in piopio · BioGen · financial_ia": one click to the usual projects (18 §16, from proposal C).
-    private var picks: some View {
-        HStack(spacing: 14) {
-            Text("Or in").foregroundStyle(Color.dsFg3)
-            ForEach(latestProjects) { p in
-                Button { target = .project(p.id); focused = true } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "folder").font(.system(size: 11))
-                        Text(p.name).lineLimit(1)
-                    }
-                    .foregroundStyle(Color.dsFg2)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("New conversation in \(p.name)")
-            }
-            if engine.projects.count > 3 {
-                Button("Other…") { picking = true }.buttonStyle(.plain).foregroundStyle(Color.dsFg2)
-            }
-        }
-        .font(.system(size: 12.5))
-        .padding(.leading, 14).padding(.top, 8)
     }
 
     private var targetLabel: String {
