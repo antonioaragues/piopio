@@ -184,14 +184,20 @@ struct MainSidebar: View {
         .padding(.bottom, 4)
     }
 
+    /// "··· 3 more projects ›": a row of its own, its glyph in the icons' column, so it reads as one more of the section
+    /// and not as part of the row above (a project's nested conversations start at about the names' indent).
     private func more(_ text: String, _ target: SidebarItem) -> some View {
         Button { item = target } label: {
-            HStack(spacing: 3) {
-                Text(text)
-                Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
+            HStack(spacing: 10) {
+                Image(systemName: "ellipsis").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg3).frame(width: 18)
+                HStack(spacing: 3) {
+                    Text(text)
+                    Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
+                }
+                .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+                Spacer(minLength: 0)
             }
-            .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-            .padding(.leading, 36).padding(.trailing, 8).frame(height: 26).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            .rowChrome(selected: false, height: 28)
         }
         .buttonStyle(.plain)
     }
@@ -254,7 +260,7 @@ struct MainSidebar: View {
                 if !pinnedHere.contains(SidebarItem.project(project.id).raw) { projectRow(project) }
                 projectSessions(project)
             }
-            if projects.count > cap { more("\(projects.count - cap) more projects", .index(.projects)) }
+            if projects.count > cap { more("\(projects.count - cap) more project\(projects.count - cap == 1 ? "" : "s")", .index(.projects)) }
         }
     }
 
