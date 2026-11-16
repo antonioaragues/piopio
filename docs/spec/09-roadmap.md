@@ -129,10 +129,10 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - D3 · Truly proactive agents: agents that don't need you to chat with them. They observe their environment (mail, calendar, files, Mac apps), decide when something matters, ask you questions and act. Builds on 4.3 proactivity (schedules, heartbeat, triggers).
 - D4 · Create agents by chatting: describe what you want and Piopio drafts the definition (instructions, schedule, abilities, people) for you to confirm, replacing or complementing the form in the new agent sheet.
 - D5 · Voice input in the composers (dictation, push to talk).
-- D6 · MCP Apps support: MCP servers that return interactive UI, rendered in the transcript.
+- D6 · MCP Apps support: MCP servers that return interactive UI, rendered in the transcript. **Spec 2026-11-16:** drawn in the visual card of [25-visuals.md](25-visuals.md) (milestone V4).
 
 **Future idea**
-- F1 · Concept → simple 3D visualization: say a concept and Piopio shows it in 3D (reference: https://x.com/elvar_official/status/2111831136171151589). Open question: a skill, a mode, or its own item type in the sidebar.
+- F1 · Concept → simple 3D visualization: say a concept and Piopio shows it in 3D (reference: https://x.com/elvar_official/status/2111831136171151589). Open question: a skill, a mode, or its own item type in the sidebar. **2026-11-16:** a visual with three.js, [25-visuals.md](25-visuals.md); a button of its own later (25 §10).
 
 ### Second batch (2026-10-22)
 
@@ -150,6 +150,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - D10 · Computer use: let agents and chats drive the Mac's screen (screenshots, clicks, typing), with approvals. Builds on Mac apps as tools (4.5). **Spike done 2026-10-22:** [11-computer-use.md](11-computer-use.md) recommends accessibility-first tools built on Peekaboo's Swift automation kit, reached through `app.tool`. **Design drafted 2026-11-12:** [23-computer-use.md](23-computer-use.md) (Mac apps) and [22-browser.md](22-browser.md) (websites, in a built-in browser that is also Build's web preview).
 - D11 · Image generation in Chat (and as an agent ability), through a provider that offers it (see D2).
 - D12 · Web search: Chat has it already (OpenRouter web plugin, CQ3) and agents have `web_search`. Check it's on and visible in Build sessions, notebooks and the composer, and make it obvious when a turn searched the web.
+- D13 · Visuals in the conversation: the model shows charts, diagrams and UI options as live HTML in the transcript, and `.html` files open rendered (reference: T3 Code, https://x.com/itssotsot/status/2122282435971092760). **Spec 2026-11-16:** [25-visuals.md](25-visuals.md): one sandboxed web view card with no network, Piopio's tokens, a click that answers; saved visuals are files; milestones V1–V4. Also covers D6 and F1.
 
 **Open questions**
 - Q1 · **Resolved 2026-10-24 by chat v3 (docs/design/chat-v3):** checkpoint dividers are gone; Rewind (chat and files, or chat only) is on each of your messages and in the inspector's Turns, and Fork is on each answer. **Checkpoints vs fork.** Today a checkpoint is a snapshot of the project's *files* taken before each turn that writes (a shadow git dir, 05-build §7, `checkpoints.ts`); "Restore to here" rewinds the files, not the conversation. Fork (pi's session tree, BR6) branches the *conversation*. Claude Code's rewind and Cursor's "restore checkpoint" put both on each message: hover a message → restore code, conversation, or both. Proposal to evaluate: drop the separate checkpoint items from the transcript and the inspector timeline, put Restore on each of your messages with those three choices, and draw forks as a small branch marker on the message they start from.
@@ -159,7 +160,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - Q4 · **Where things run.** Claude and Codex let you pick, per chat, whether it runs on this Mac or in the cloud. Research per kind: Build sessions (this Mac, a worktree, or a cloud machine from the GitHub repo), chats and notebooks (this Mac or the cloud engine), agents (this Mac or a Durable Object, Phase 5). Decide whether the choice lives in the composer, the new-session sheet, or per project/agent, and how a running item moves between them. Related: "cloud Threads/Spaces" and "cloud Build sessions" in Later.
 
 ## Later (unordered)
-Mac Bridge · cloud Threads/Spaces · iOS companion · direct providers + local models + subscription logins · artifacts/canvas · code execution in Chat · email/Slack/Discord channels · group chats & agent rooms · cloud Build sessions · web preview · semantic search.
+Mac Bridge · cloud Threads/Spaces · iOS companion · direct providers + local models + subscription logins · artifacts/canvas (→ [25-visuals.md](25-visuals.md): saved visuals are files) · code execution in Chat · email/Slack/Discord channels · group chats & agent rooms · cloud Build sessions · web preview · semantic search.
 
 ---
 

@@ -46,7 +46,7 @@ A free-standing conversation. Backed by **one pi-durable session** (`threads/<id
 
 ### 1.3 Later
 - "Move to cloud" (the thread runs on the Cloud Engine, reachable from iOS).
-- Artifacts/canvas side panel (HTML/markdown documents the model writes and edits).
+- Artifacts/canvas side panel (HTML/markdown documents the model writes and edits). **2026-11-16:** replaced by visuals and HTML files, [25-visuals.md](25-visuals.md).
 - Sandboxed code execution tool (codemode/QuickJS locally).
 - Voice input (on-device dictation) and TTS.
 

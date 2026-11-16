@@ -29,6 +29,7 @@ Piopio is a native macOS app on top of the **pi** agent harnesses (`pi-coding-ag
 | [22-browser.md](22-browser.md) | The built-in browser: a WebKit browser you and the model both use, in a pane beside the conversation; reading runs, acting asks per site, sign-ins and payments are hand-offs; agents browse off screen; the project preview; shared `app.tool` plumbing; draft 2026-11-12 |
 | [23-computer-use.md](23-computer-use.md) | Computer use, the design after spike 11: one granted app at a time, accessibility first, beside you by default and full control on request, attended only, a never list that includes Piopio itself; draft 2026-11-12 |
 | [24-side-conversations.md](24-side-conversations.md) | Side conversations: when you bring up an unrelated task, the conversation offers to give it its own, linked conversation that works beside this one and reports back with a short note; Piopio can also propose follow-ups as cards you start; nothing starts without your words or click; decided 2026-11-12 |
+| [25-visuals.md](25-visuals.md) | Visuals in the conversation: the model shows charts, diagrams and UI options as live, sandboxed HTML cards in the transcript (no network, Piopio's tokens, a click that answers), `.html` files open rendered, and saved visuals are files; also the home of MCP Apps (D6) and F1; draft 2026-11-16 |
 
 Normative words: **MUST** / **SHOULD** / **MAY**. "v1" means the first release of a mode. "Later" means after it.
 
