@@ -285,7 +285,7 @@ struct MainSidebar: View {
     private var openProjectId: String? {
         switch item {
         case .session(let id): engine.buildSessions.first { $0.ref.id == id }.flatMap { engine.project(of: $0) }?.id
-        case .project(let id), .newSession(let id): id
+        case .project(let id), .newSession(let id), .board(let id): id
         default: nil
         }
     }
@@ -301,10 +301,12 @@ struct MainSidebar: View {
         let all = engine.sessions(in: project).filter { $0.listed && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
-        // No draft row: the project's row is marked while its new conversation page is open. Its team has no row: the
-        // team works in the project's conversations (docs/spec/20 §5).
-        if !collapsedProjects.contains(project.id), !all.isEmpty {
+        // No draft row: the project's row is marked while its new conversation page is open. A team's board is the
+        // first row (docs/spec/18 §19); the team itself works in the project's conversations (docs/spec/20 §5).
+        let team = engine.team(in: project)
+        if !collapsedProjects.contains(project.id), !all.isEmpty || team != nil {
             VStack(alignment: .leading, spacing: 1) {
+                if let team { boardRow(project, team) }
                 ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in
                     if s.ref.kind == .thread { chatRow(s) } else { sessionRow(s, indent: true) }
                 }
@@ -326,6 +328,26 @@ struct MainSidebar: View {
         }
     }
 
+    /// "Board  2 doing ◌": a team's board in its project, with what's moving (or the blue dot when a task is blocked).
+    private func boardRow(_ project: ProjectInfo, _ team: TeamInfo) -> some View {
+        let doing = team.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
+        let blocked = team.tasks.contains { $0.state == "blocked" }
+        return Button { item = .board(project.id) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "rectangle.split.3x1").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).frame(width: 16)
+                Text("Board").font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Spacer(minLength: 4)
+                if doing > 0 {
+                    Text("\(doing) doing").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    SidebarDot(status: .running)
+                } else if blocked { SidebarDot(status: .waiting).help("A task is blocked") }
+            }
+            .rowChrome(selected: item == .board(project.id), height: 30)
+        }
+        .buttonStyle(.plain)
+        .help("\(team.name)'s board")
+    }
+
     /// Live sessions (running, waiting on you, or recent; those that need you first) and the rest.
     private func split(_ sessions: [SessionSummary]) -> ([SessionSummary], [SessionSummary]) {
         let now = Date()
@@ -344,25 +366,25 @@ struct MainSidebar: View {
     }
 
     private func projectRow(_ project: ProjectInfo) -> some View {
-        let selected = item == .project(project.id)
         let plus: ProjectRow.Plus? = startsSessions(project) ? .session : nil
         let folded = collapsedProjects.contains(project.id)
-        let hasSessions = !engine.sessions(in: project).filter { $0.listed }.isEmpty
+        let hasContent = !engine.sessions(in: project).filter { $0.listed }.isEmpty || engine.team(in: project) != nil
         let working = engine.team(in: project)?.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count ?? 0
-        // The row opens the project's page (docs/spec/20 §5); on its page, it folds or unfolds its conversations.
         let crew = engine.team(in: project).map { TeamStack.colors($0.roles, team: $0.definitionId ?? $0.id) }
-        return ProjectRow(project: project, selected: selected, isOpen: openProjectId == project.id, plus: plus, folded: hasSessions ? folded : nil, working: working, crew: crew,
+        // The row folds or unfolds its conversations (docs/spec/18 §19); with nothing to show, it starts one there.
+        return ProjectRow(project: project, selected: false, isOpen: openProjectId == project.id, plus: plus, folded: hasContent ? folded : nil, working: working, crew: crew,
                           toggle: {
-                              if selected { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }
-                              else { item = .project(project.id); if folded { setProject(project.id, collapsed: false) } }
+                              if hasContent { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }
+                              else if plus != nil { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
                           },
-                          link: { urls in linkFolders(urls, to: project) }) {
+                          link: { urls in linkFolders(urls, to: project) },
+                          settings: { NotificationCenter.default.post(name: .projectSettings, object: project.id) }) {
             NotificationCenter.default.post(name: .newBuildSession, object: project.id)
         }
         .contextMenu {
-            Button("New Conversation…") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
-            Button("Open Project") { item = .project(project.id) }
-            Button("Project Settings…") { UserDefaults.standard.set("settings", forKey: "projectTab"); item = .project(project.id) }
+            Button("New Conversation") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
+            Button("Project Settings…") { NotificationCenter.default.post(name: .projectSettings, object: project.id) }
+            if engine.team(in: project) != nil { Button("Board") { item = .board(project.id) } }
             pinButton(.project(project.id))
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)]) }
             Divider()
@@ -373,14 +395,12 @@ struct MainSidebar: View {
         }
     }
 
-    /// Folders dropped on a project's row are linked to it, read only (docs/spec/18 §18); its page shows them.
+    /// Folders dropped on a project's row are linked to it, read only (docs/spec/18 §18); the row says so for a moment
+    /// and nothing else moves (§19). Its settings list them.
     private func linkFolders(_ urls: [URL], to project: ProjectInfo) -> Bool {
         let dirs = urls.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
         guard !dirs.isEmpty, project.missing != true else { return false }
-        Task {
-            for url in dirs { try? await engine.linkFolder(url, edit: false, to: project) }
-            item = .project(project.id)
-        }
+        Task { for url in dirs { try? await engine.linkFolder(url, edit: false, to: project) } }
         return true
     }
 
@@ -674,12 +694,17 @@ private struct ProjectRow: View {
     let toggle: () -> Void
     /// Folders dropped from Finder: linked to the project (18 §18).
     var link: (([URL]) -> Bool)?
+    /// The project's settings sheet (18 §19).
+    var settings: (() -> Void)?
     let start: () -> Void
     @State private var hovering = false
     @State private var dropping = false
+    @FocusState private var settingsFocused: Bool
+    /// "Linked Bibliografía", for a moment after a drop.
+    @State private var linked: String?
     @FocusState private var plusFocused: Bool
 
-    private var showsPlus: Bool { plus != nil && (isOpen || hovering || plusFocused) }
+    private var showsPlus: Bool { plus != nil && (isOpen || hovering || plusFocused || settingsFocused) }
     private var plusLabel: String { "New conversation in \(project.name)" }
 
     var body: some View {
@@ -696,20 +721,38 @@ private struct ProjectRow: View {
                     if let crew, !showsPlus { TeamStack(colors: crew).help("A team works here") }
                     if project.missing == true {
                         Text("missing").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                    } else if let linked {
+                        Text(linked).font(.system(size: 11)).foregroundStyle(Color.accentColor).lineLimit(1).transition(.opacity)
                     } else if !showsPlus, working > 0 {
                         SidebarDot(status: .running).help("\(working) task\(working == 1 ? "" : "s") in progress")
                     } else if !showsPlus, let branch = project.branch {
                         Text(branch).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1)
                     }
-                    if plus != nil { Color.clear.frame(width: 22, height: 1) }
+                    if plus != nil { Color.clear.frame(width: settings == nil ? 22 : 50, height: 1) }
                 }
                 .rowChrome(selected: selected)
             }
             .buttonStyle(.plain)
-            .help(selected ? (folded == nil ? "" : folded == true ? "Show its conversations" : "Hide its conversations") : "Open the project")
+            .help(folded == nil ? "New conversation in \(project.name)" : folded == true ? "Show its conversations" : "Hide its conversations")
             .accessibilityValue(folded == nil ? "" : folded == true ? "Collapsed" : "Expanded")
             .accessibilityAction(named: "New conversation") { if plus != nil { start() } }
+            .accessibilityAction(named: "Project settings") { settings?() }
             if plus != nil {
+              HStack(spacing: 2) {
+                // Settings, then + (docs/spec/18 §19): shown on hover and on the project you're in.
+                if let settings {
+                    Button(action: settings) {
+                        Image(systemName: "slider.horizontal.3").font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.dsFg2)
+                            .frame(width: 26, height: 26)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .focused($settingsFocused)
+                    .opacity(showsPlus ? 1 : 0)
+                    .help("Project settings")
+                    .accessibilityLabel("\(project.name) settings")
+                }
                 Button(action: start) {
                     Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(isOpen ? Color.dsFg : Color.dsFg2)
@@ -723,6 +766,8 @@ private struct ProjectRow: View {
                 .padding(.trailing, 2)
                 .help("New conversation in this folder")
                 .accessibilityLabel(plusLabel)
+              }
+              .padding(.trailing, -2)
             }
         }
         .onHover { hovering = $0 }
@@ -733,7 +778,13 @@ private struct ProjectRow: View {
                     .allowsHitTesting(false)
             }
         }
-        .dropDestination(for: URL.self) { urls, _ in link?(urls) ?? false } isTargeted: { dropping = $0 && link != nil }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard link?(urls) == true else { return false }
+            let name = urls.first.map(\.lastPathComponent) ?? ""
+            withAnimation { linked = urls.count == 1 ? "Linked \(name)" : "Linked \(urls.count) folders" }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { linked = nil } }
+            return true
+        } isTargeted: { dropping = $0 && link != nil }
         .help(dropping ? "Link to \(project.name)" : "")
     }
 }

@@ -84,7 +84,7 @@ extension Area {
         case .start: self = .chat
         case .index(.agents): self = .agents
         case .index(.chats): self = .chat
-        case .index(.projects), .project: self = .build
+        case .index(.projects), .project, .board: self = .build
         default: return nil
         }
     }
@@ -273,7 +273,7 @@ extension AreaSet {
         switch item {
         case .home, .needsYou: true
         case .index(let section): shows(section)
-        case .project: showsProjects
+        case .project, .board: showsProjects
         case .session(let id): engine.buildSessions.first { $0.ref.id == id }.map { showsSession(chatProfile: $0.profile == .chat) } ?? showsProjects
         case .chat: showsChats
         case .agent, .team: showsAgents

@@ -46,7 +46,7 @@ enum DebugAutomation {
             }
         }
         // PIOPIO_DEMO_LINK=<folder>[!],…: link these folders to the first project ("!": editable) after the item delay, then
-        // open its page (docs/spec/18 §18).
+        // open it (docs/spec/18 §18).
         if let spec = env["PIOPIO_DEMO_LINK"] {
             Task {
                 try? await Task.sleep(for: .seconds((Double(env["PIOPIO_DEMO_ITEM_DELAY"] ?? "") ?? 10) + 1))
@@ -57,6 +57,11 @@ enum DebugAutomation {
                     try? await engine.linkFolder(URL(fileURLWithPath: String(edit ? part.dropLast() : part)), edit: edit, to: project)
                 }
                 NotificationCenter.default.post(name: .selectItem, object: SidebarItem.project(project.id).raw)
+                // PIOPIO_DEMO_PROJECT_SETTINGS=1|instructions|memory: then its settings sheet, or that file's editor (18 §19).
+                if let open = env["PIOPIO_DEMO_PROJECT_SETTINGS"] {
+                    try? await Task.sleep(for: .seconds(1))
+                    NotificationCenter.default.post(name: .projectSettings, object: open == "1" ? project.id : project.id + "|" + open)
+                }
             }
         }
         // PIOPIO_DEMO_NAME_PROJECT=<name>: New project after the item delay (+1 s), named in the sidebar; with a name, it's

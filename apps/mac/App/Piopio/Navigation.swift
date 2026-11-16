@@ -8,8 +8,11 @@ enum SidebarItem: Hashable {
     case needsYou
     /// A section's full list ("Projects · 6", "N more ›").
     case index(SidebarSection)
-    /// A project: the Projects index, opened at it.
+    /// A project (its id). There's no project page (docs/spec/18 §19): it opens the project's New conversation page, or
+    /// its board or settings when asked through "projectTab".
     case project(String)
+    /// A team's board in a project (the project's id): the "Board" row under the project.
+    case board(String)
     /// A Build session or a project chat session.
     case session(String)
     case agent(String)
@@ -27,6 +30,7 @@ enum SidebarItem: Hashable {
         case .needsYou: "needs"
         case .index(let s): "index:\(s.rawValue)"
         case .project(let id): "project:\(id)"
+        case .board(let id): "board:\(id)"
         case .session(let id): "session:\(id)"
         case .agent(let id): "agent:\(id)"
         case .team(let id): "team:\(id)"
@@ -43,6 +47,7 @@ enum SidebarItem: Hashable {
         case "needs": self = .needsYou
         case "index": self = SidebarSection(rawValue: value).map { .index($0) } ?? .home
         case "project": self = .project(value)
+        case "board": self = .board(value)
         case "session": self = .session(value)
         case "agent": self = .agent(value)
         case "team": self = .team(value)

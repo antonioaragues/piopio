@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- docs/design/project-settings: the project row, the settings modal, and what changes (2026-11-16). -->
+<title>Project Settings</title>
+<style>
+:root {
+  --win: #FCFCFB; --side: #F4F4F2; --card: #FFFFFF; --bubble: #F0F0ED; --sel: #EAEAE6; --field: #FFFFFF;
+  --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --inv: #1F1F1E; --invfg: #FFFFFF;
+  --line: rgba(0,0,0,.09); --accent: #2F6FEB; --wash: rgba(47,111,235,.10); --page: #E9E9E5; --light: #DADAD6; --dim: rgba(0,0,0,.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29; --sel: #333331; --field: #252524;
+    --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --inv: #ECECEA; --invfg: #1E1E1D;
+    --line: rgba(255,255,255,.10); --accent: #5B8DF0; --wash: rgba(91,141,240,.16); --page: #121211; --light: #3A3A38; --dim: rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"] {
+  --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29; --sel: #333331; --field: #252524;
+  --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --inv: #ECECEA; --invfg: #1E1E1D;
+  --line: rgba(255,255,255,.10); --accent: #5B8DF0; --wash: rgba(91,141,240,.16); --page: #121211; --light: #3A3A38; --dim: rgba(0,0,0,.45);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--fg);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 48px 16px 96px; }
+h1 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 6px; }
+.lede { color: var(--fg2); font-size: 15px; max-width: 820px; margin: 0 0 32px; }
+.lede b { color: var(--fg); }
+h2 { font-size: 20px; letter-spacing: -.01em; margin: 0 0 6px; }
+.sum { color: var(--fg2); font-size: 14px; margin: 0 0 18px; max-width: 860px; }
+.sum b { color: var(--fg); }
+section { margin: 0 0 64px; }
+.cap { font-size: 12px; color: var(--fg3); margin: 8px 2px 0; max-width: 1000px; }
+.scroller { overflow-x: auto; padding-bottom: 4px; }
+
+.win { width: 1120px; height: 740px; background: var(--win); border-radius: 12px; overflow: hidden; display: flex;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.18), 0 18px 50px rgba(0,0,0,.14); position: relative; }
+.sb { width: 248px; background: var(--side); border-right: .5px solid var(--line); display: flex; flex-direction: column; flex: none; position: relative; }
+.tb { height: 48px; display: flex; align-items: center; padding: 0 12px 0 16px; gap: 8px; flex: none; }
+.lights { display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--light); display: block; }
+.sp { flex: 1; }
+.ib { width: 26px; height: 26px; display: grid; place-items: center; color: var(--fg2); border-radius: 6px; }
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 13px; height: 13px; }
+svg.i.xs { width: 11px; height: 11px; stroke-width: 1.8; }
+.rows { padding: 0 8px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 7px; font-size: 13px; height: 29px; white-space: nowrap; position: relative; }
+.row svg { color: var(--fg2); }
+.row.hov { background: rgba(0,0,0,.035); }
+.row.sel { background: var(--sel); }
+.row .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.row .m { color: var(--fg3); font-size: 11.5px; }
+.row .mono { color: var(--fg3); font: 11px ui-monospace, Menlo, monospace; }
+.row .chev { color: var(--fg3); }
+.row .acts { display: flex; gap: 2px; margin-right: -4px; }
+.row .acts span { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--fg2); }
+.row .acts span.on { background: var(--sel); color: var(--fg); }
+.nest { margin: 0 0 4px 25px; padding-left: 9px; border-left: 1px solid var(--line); }
+.nest .row { height: 28px; }
+.sec { display: flex; align-items: center; padding: 14px 16px 4px; color: var(--fg3); font-size: 12px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.ring { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--fg3); border-right-color: transparent; flex: none; }
+.foot { margin-top: auto; height: 50px; display: flex; align-items: center; gap: 10px; padding: 0 14px; }
+.av { width: 24px; height: 24px; border-radius: 50%; background: var(--sel); display: grid; place-items: center; font-size: 11px; color: var(--fg2); flex: none; }
+.foot .nm { flex: 1; font-size: 12.5px; line-height: 1.2; }
+.foot .nm small { display: block; color: var(--fg3); font-size: 11px; }
+.tip { position: absolute; z-index: 6; background: var(--inv); color: var(--invfg); font-size: 11.5px; padding: 3px 7px; border-radius: 5px; white-space: nowrap; }
+.callout { position: absolute; z-index: 6; font-size: 11.5px; color: var(--accent); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.callout::before { content: ""; width: 22px; height: 1px; background: var(--accent); }
+
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.center { flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 110px; }
+.col { width: 600px; }
+.kind { display: flex; align-items: center; gap: 10px; color: var(--fg2); font-size: 14px; margin-bottom: 12px; }
+.kind .tile { width: 26px; height: 26px; border-radius: 7px; background: var(--wash); color: var(--accent); display: grid; place-items: center; }
+.title { font-size: 32px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 20px; }
+.comp { background: var(--field); border-radius: 16px; box-shadow: 0 0 0 .5px var(--line), 0 2px 10px rgba(0,0,0,.05); padding: 12px 14px 10px; }
+.comp .ph { color: var(--fg3); font-size: 14px; padding: 2px 2px 14px; }
+.comp .bar { display: flex; align-items: center; gap: 4px; color: var(--fg2); font-size: 12.5px; }
+.selr { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; color: var(--fg2); white-space: nowrap; }
+.send { width: 28px; height: 28px; border-radius: 50%; background: var(--sel); color: var(--fg3); display: grid; place-items: center; margin-left: 6px; }
+.where { color: var(--fg3); font-size: 12px; margin: 8px 14px 0; }
+.where a { color: var(--accent); text-decoration: none; }
+
+/* modal */
+.scrim { position: absolute; inset: 0; background: var(--dim); z-index: 8; display: grid; place-items: start center; padding-top: 30px; }
+.modal { width: 600px; max-height: 680px; background: var(--win); border-radius: 14px; box-shadow: 0 0 0 .5px var(--line), 0 24px 60px rgba(0,0,0,.28); display: flex; flex-direction: column; overflow: hidden; }
+.mh { display: flex; align-items: center; gap: 12px; padding: 18px 22px 14px; border-bottom: .5px solid var(--line); }
+.mh .ft { width: 32px; height: 32px; border-radius: 8px; background: var(--bubble); display: grid; place-items: center; color: var(--fg2); }
+.mh .nm { font-size: 16px; font-weight: 600; }
+.mh .pth { color: var(--fg3); font-size: 12px; }
+.mb { padding: 4px 22px 8px; overflow: hidden; }
+.blk { padding: 14px 0; border-bottom: .5px solid var(--line); }
+.blk:last-child { border-bottom: 0; }
+.bh { display: flex; align-items: baseline; margin-bottom: 8px; }
+.bh b { font-size: 13px; font-weight: 600; }
+.bh .d { color: var(--fg3); font-size: 12px; margin-left: 8px; }
+.bh .r { margin-left: auto; color: var(--fg2); font-size: 12.5px; }
+.fr { display: flex; align-items: center; gap: 9px; height: 30px; font-size: 13px; }
+.fr svg { color: var(--fg2); }
+.fr .p { color: var(--fg3); font-size: 11.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr .a { color: var(--fg2); font-size: 12.5px; padding: 2px 6px; border-radius: 5px; }
+.fr .a.g { color: var(--fg3); }
+.fr .a.hov { background: var(--sel); }
+.add { color: var(--fg2); font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+.doc { display: flex; align-items: flex-start; gap: 9px; padding: 6px 0; font-size: 13px; }
+.doc svg { color: var(--fg2); margin-top: 2px; }
+.doc .tx { flex: 1; min-width: 0; }
+.doc .tx small { display: block; color: var(--fg3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc .r { color: var(--fg2); font-size: 12.5px; }
+.kv { display: flex; align-items: center; height: 32px; font-size: 13px; }
+.kv .k { width: 190px; color: var(--fg2); white-space: nowrap; }
+.kv .v { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border-radius: 6px; margin-left: -7px; }
+.kv .v.hov { background: var(--sel); }
+.kv .h { color: var(--fg3); font-size: 12px; margin-left: 10px; }
+.seg { display: inline-flex; background: var(--bubble); border-radius: 8px; padding: 2px; }
+.seg span { padding: 3px 12px; border-radius: 6px; font-size: 12.5px; color: var(--fg2); }
+.seg span.on { background: var(--card); color: var(--fg); box-shadow: 0 0 0 .5px var(--line); }
+.rt { display: flex; align-items: center; gap: 9px; height: 30px; font-size: 13px; }
+.rt svg { color: var(--fg2); }
+.rt .m { color: var(--fg3); font-size: 12px; margin-left: auto; }
+.mf { display: flex; align-items: center; padding: 12px 22px; border-top: .5px solid var(--line); gap: 14px; }
+.mf .tb2 { color: var(--fg2); font-size: 13px; }
+.black { background: var(--inv); color: var(--invfg); border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 500; }
+
+.qs { max-width: 900px; padding: 18px 20px; border-radius: 12px; background: var(--win); box-shadow: 0 0 0 .5px var(--line); }
+.qs h3 { margin: 0 0 8px; font-size: 15px; }
+.qs ol { margin: 0; padding-left: 20px; color: var(--fg2); font-size: 13.5px; }
+.qs li { margin-bottom: 8px; }
+.qs li b { color: var(--fg); }
+table.beh { border-collapse: collapse; font-size: 13px; max-width: 900px; width: 100%; margin-top: 4px; }
+table.beh td, table.beh th { text-align: left; padding: 8px 12px 8px 0; border-top: .5px solid var(--line); vertical-align: top; }
+table.beh th { color: var(--fg3); font-weight: 500; font-size: 12px; border-top: 0; }
+table.beh td:first-child { white-space: nowrap; font-weight: 500; width: 230px; }
+table.beh td { color: var(--fg2); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5V10h-4v3.5H2.5z"/></symbol>
+  <symbol id="agents" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13.5c.4-2.4 2.1-3.8 4.2-3.8s3.8 1.4 4.2 3.8"/><circle cx="11.3" cy="5" r="1.9"/><path d="M11.6 8.8c1.6.2 2.6 1.4 2.9 3.2"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5c0-.6.4-1 1-1h3.2l1.3 1.5H13c.6 0 1 .4 1 1V12c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/></symbol>
+  <symbol id="link" viewBox="0 0 16 16"><path d="M7 9a2.5 2.5 0 0 0 3.5 0l2-2A2.5 2.5 0 0 0 9 3.5l-.7.7"/><path d="M9 7a2.5 2.5 0 0 0-3.5 0l-2 2A2.5 2.5 0 0 0 7 12.5l.7-.7"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="compose" viewBox="0 0 16 16"><path d="M13 9v4H3V3h4"/><path d="M11.5 2.5 13.5 4.5 8 10H6V8z"/></symbol>
+  <symbol id="sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6.5 3v10"/></symbol>
+  <symbol id="up" viewBox="0 0 16 16"><path d="M8 13V3.5M4 7.5l4-4 4 4"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2"/></symbol>
+  <symbol id="sliders" viewBox="0 0 16 16"><path d="M3 5h6M12 5h1M3 11h1M7 11h6"/><circle cx="10.5" cy="5" r="1.5"/><circle cx="5.5" cy="11" r="1.5"/></symbol>
+  <symbol id="doc" viewBox="0 0 16 16"><path d="M4 2h5.5L12 4.5V14H4z"/><path d="M6 8h4M6 10.5h4"/></symbol>
+  <symbol id="board" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10M10 3v10"/></symbol>
+  <symbol id="clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></symbol>
+  <symbol id="right" viewBox="0 0 16 16"><path d="M6.5 4.5 10 8l-3.5 3.5"/></symbol>
+  <symbol id="down" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5"/></symbol>
+  <symbol id="bubble" viewBox="0 0 16 16"><path d="M3 3.5h10v7H7l-3 2.5v-2.5H3z"/></symbol>
+  <symbol id="team" viewBox="0 0 16 16"><circle cx="8" cy="5" r="2"/><circle cx="3.8" cy="7.5" r="1.6"/><circle cx="12.2" cy="7.5" r="1.6"/><path d="M4.8 13c.3-2 1.6-3.2 3.2-3.2s2.9 1.2 3.2 3.2M1.5 12.5c.2-1.3.9-2 1.9-2.2M14.5 12.5c-.2-1.3-.9-2-1.9-2.2"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1>Project settings in a modal</h1>
+  <p class="lede">A project lives in the sidebar. <b>Clicking its row folds or unfolds its conversations</b>, and nothing else. On hover, next to the <b>+</b> for a new conversation, a <b>settings</b> button opens a modal with everything about the project: folders, instructions and notes, permissions, who works here, routines. The project page goes away.</p>
+
+  <!-- ============================== Row ============================== -->
+  <section>
+    <h2>1 · The project row</h2>
+    <p class="sum">Two buttons appear on hover (and stay on the project you're in): <b>settings</b> and <b>+</b>. They take the place of the branch name. A folded project shows a › after its name, as today. With a team working there, the project's first nested row is its <b>Board</b>.</p>
+    <div class="scroller"><div class="win" style="height:470px">
+      <div class="sb">
+        <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+        <div class="rows">
+          <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+          <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+          <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+        </div>
+        <div class="sec">Projects<span class="sp"></span><svg class="i s"><use href="#plus"/></svg></div>
+        <div class="rows">
+          <div class="row hov"><svg class="i"><use href="#folder"/></svg><span class="t">Tesis</span><span class="acts"><span class="on"><svg class="i s"><use href="#sliders"/></svg></span><span><svg class="i s"><use href="#plus"/></svg></span></span></div>
+          <div class="nest">
+            <div class="row sel"><span class="t">Chapter 3 outline</span><span class="dot"></span></div>
+            <div class="row"><span class="t">Check the citations</span><span class="ring"></span></div>
+          </div>
+          <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+          <div class="nest">
+            <div class="row"><svg class="i"><use href="#board"/></svg><span class="t">Board</span><span class="m">2 doing</span><span class="ring"></span></div>
+            <div class="row"><span class="t">Sidebar: agents section</span></div>
+          </div>
+          <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">BioGen</span><svg class="i xs chev"><use href="#right"/></svg><span class="sp"></span></div>
+        </div>
+        <div class="sec">Conversations</div>
+        <div class="rows"><div class="row"><span class="t">Flights to Lisbon in March</span></div></div>
+        <div class="tip" style="left:158px; top:150px">Project settings</div>
+      </div>
+      <div class="main">
+        <div class="callout" style="left:6px; top:176px">hover: settings, then +</div>
+        <div class="callout" style="left:6px; top:294px">a team's board, first under its project</div>
+        <div class="callout" style="left:6px; top:354px">folded: click the row to show its conversations</div>
+      </div>
+    </div></div>
+    <p class="cap">The settings icon is sliders, not a gear: the gear in the sidebar's footer is the app's Settings. Right-click on a project also has "Project Settings…" and "New Conversation", for the keyboard and VoiceOver.</p>
+  </section>
+
+  <!-- ============================== Modal ============================== -->
+  <section>
+    <h2>2 · The settings modal</h2>
+    <p class="sum">A sheet over the window, in the order you'd look for things: <b>what it uses</b> (folders, instructions and notes), then <b>how it works</b> (permissions, who works here, routines). Changes apply as you make them, as in macOS Settings, so the only button is <b>Done</b>. Removing the project sits in the footer, in grey, away from Done.</p>
+    <div class="scroller"><div class="win">
+      <div class="sb">
+        <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="sp"></div><span class="ib"><svg class="i"><use href="#sidebar"/></svg></span><span class="ib"><svg class="i"><use href="#compose"/></svg></span></div>
+        <div class="rows">
+          <div class="row"><svg class="i"><use href="#search"/></svg><span class="t">Search</span><span class="m">⌘K</span></div>
+          <div class="row"><svg class="i"><use href="#home"/></svg><span class="t">Home</span></div>
+          <div class="row"><svg class="i"><use href="#agents"/></svg><span class="t">Agents</span></div>
+        </div>
+        <div class="sec">Projects</div>
+        <div class="rows">
+          <div class="row sel"><svg class="i"><use href="#folder"/></svg><span class="t">Tesis</span></div>
+          <div class="nest"><div class="row"><span class="t">Chapter 3 outline</span></div></div>
+          <div class="row"><svg class="i"><use href="#folder"/></svg><span class="t">piopio</span><span class="mono">main</span></div>
+        </div>
+      </div>
+      <div class="main"><div class="center"><div class="col">
+        <div class="kind"><span class="tile"><svg class="i s"><use href="#folder"/></svg></span>Tesis</div>
+        <p class="title">New conversation</p>
+        <div class="comp"><div class="ph">What should we do in Tesis?</div><div class="bar"><span class="selr"><svg class="i"><use href="#plus"/></svg></span><span class="selr"><svg class="i"><use href="#folder"/></svg>Tesis</span><span class="selr">Auto-edit</span><span class="sp"></span><span class="selr">Opus 5.5 · High</span><span class="send"><svg class="i"><use href="#up"/></svg></span></div></div>
+      </div></div></div>
+      <div class="scrim"><div class="modal">
+        <div class="mh">
+          <span class="ft"><svg class="i"><use href="#folder"/></svg></span>
+          <div><div class="nm">Tesis</div><div class="pth">~/Piopio/Tesis</div></div>
+          <span class="sp"></span><span style="color:var(--fg2); font-size:12.5px">Reveal in Finder</span>
+        </div>
+        <div class="mb">
+          <div class="blk">
+            <div class="bh"><b>Folders</b><span class="d">Every conversation here can use them; @ finds their files</span></div>
+            <div class="fr"><svg class="i"><use href="#folder"/></svg>Tesis<span class="p">~/Piopio/Tesis</span><span class="a g">Its own</span></div>
+            <div class="fr"><svg class="i"><use href="#link"/></svg>Bibliografía<span class="p">~/Documents/Bibliografía</span><span class="a hov">Read only</span></div>
+            <div class="fr"><svg class="i"><use href="#link"/></svg>Datos<span class="p">~/Lab/2026/Datos</span><span class="a">Can edit</span></div>
+            <span class="add"><svg class="i xs"><use href="#plus"/></svg>Add folder…</span><span style="color:var(--fg3); font-size:12px; margin-left:10px">or drop folders here</span>
+          </div>
+          <div class="blk">
+            <div class="bh"><b>Instructions and notes</b></div>
+            <div class="doc"><svg class="i"><use href="#doc"/></svg><span class="tx">Instructions · AGENTS.md<small>A PhD thesis on soil microbiomes, in Spanish. Cite in APA 7…</small></span><span class="r">Edit</span></div>
+            <div class="doc"><svg class="i"><use href="#doc"/></svg><span class="tx">Notes · NOTES.md<small>Chapter 2 is final. Supervisor wants the methods before Dec 1.</small></span><span class="r">Edit</span></div>
+          </div>
+          <div class="blk">
+            <div class="bh"><b>How it works</b></div>
+            <div class="kv"><span class="k">New conversations start in</span><span class="v hov">Auto-edit</span><span class="h">can edit files; asks before commands</span></div>
+            <div class="kv"><span class="k">Who works here</span><span class="seg"><span class="on">Piopio</span><span>A team…</span></span></div>
+          </div>
+          <div class="blk">
+            <div class="bh"><b>Routines</b><span class="d">Each run is a new conversation here</span><span class="r">Add routine…</span></div>
+            <div class="rt"><svg class="i"><use href="#clock"/></svg>Weekly progress note<span class="m">Fridays 18:00</span></div>
+          </div>
+        </div>
+        <div class="mf"><span class="tb2" style="color:var(--fg3)">Remove from Piopio…</span><span class="sp"></span><span class="black">Done</span></div>
+      </div></div>
+    </div></div>
+    <p class="cap">With a team, "Who works here" shows the team with Change, and two rows join How it works: Tasks at once and Checks. Choosing "A team…" opens the team picker and its fit check, as today. Esc or Done closes; the modal is as tall as its content, and scrolls past the window's height.</p>
+  </section>
+
+  <!-- ============================== Behaviour ============================== -->
+  <section>
+    <h2>3 · What changes</h2>
+    <table class="beh">
+      <tr><th>Action</th><th>Now</th><th>With this</th></tr>
+      <tr><td>Click a project's row</td><td style="color:var(--fg2)">Opens the project page (and folds or unfolds once you're on it)</td><td>Folds or unfolds its conversations. Nothing opens.</td></tr>
+      <tr><td>+ on the row</td><td style="color:var(--fg2)">New conversation in the project</td><td>Same.</td></tr>
+      <tr><td>Settings on the row</td><td style="color:var(--fg2)">—</td><td>Opens the modal over whatever you're looking at.</td></tr>
+      <tr><td>The project page</td><td style="color:var(--fg2)">Box, conversations, right column; Board and Settings inside</td><td>Gone. Its box is the + page, its conversations are in the sidebar, its column is the modal.</td></tr>
+      <tr><td>A team's board</td><td style="color:var(--fg2)">A line on the project page</td><td>A "Board" row under the project in the sidebar, with its status (2 doing, blocked). It opens the board full width.</td></tr>
+      <tr><td>Dropping a folder on the row</td><td style="color:var(--fg2)">Links it and opens the project page</td><td>Links it; the row flashes "Linked Bibliografía" and nothing else moves.</td></tr>
+      <tr><td>"Write them" on a new project's page</td><td style="color:var(--fg2)">Opens the project page</td><td>Opens the modal.</td></tr>
+      <tr><td>"N more projects ›", the palette, links</td><td style="color:var(--fg2)">Can open a project page</td><td>The Projects list stays as the full list; a project there opens its + page. Links to a project select its row and unfold it.</td></tr>
+    </table>
+  </section>
+
+  <div class="qs">
+    <h3>For you to decide</h3>
+    <ol>
+      <li><b>Losing the project page.</b> With the row only folding, nothing would open the page, so I'd remove it. Its box is already the project's + page, and its conversations are in the sidebar. The alternative is keeping it behind a double click, but that's hidden. <b>OK to remove it?</b></li>
+      <li><b>The Board row.</b> Without the page, a team's board needs a place; I'd put it first under its project in the sidebar. The alternative is a button in the modal, but the board is work in progress, not a setting.</li>
+      <li><b>Instructions in the modal, or a line on the + page?</b> I'd keep both: the modal for editing, and on a new project's + page the existing "Instructions… Write them" line, which would now open the modal.</li>
+    </ol>
+  </div>
+</div>
+</body>
+</html>

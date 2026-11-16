@@ -25,6 +25,8 @@ struct RootView: View {
     @Environment(\.openSettings) private var openSettings
 
     private var item: SidebarItem { SidebarItem(raw: itemRaw) }
+    /// The project settings sheet, when open.
+    @State private var projectSheet: ProjectSheet?
     private var itemBinding: Binding<SidebarItem> { Binding(get: { SidebarItem(raw: itemRaw) }, set: { itemRaw = $0.raw }) }
 
     var body: some View {
@@ -86,11 +88,13 @@ struct RootView: View {
             startConversation(target: "project:" + id)
         }
         .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in openFolder(note.object as? URL) }
+        .modifier(ProjectSettingsHost(engine: engine, item: itemBinding, sheet: $projectSheet))
         // The conversation start page's box follows the page (also from a link or a saved selection): a project's has that
         // project chosen, the plain one no project.
         .onChange(of: itemRaw, initial: true) { _, raw in
             let target = UserDefaults.standard.string(forKey: "homeTarget") ?? "chat"
             switch SidebarItem(raw: raw) {
+            case .project(let id): openProject(id)
             case .newSession(let id):
                 // A project with a team (docs/spec/19 §10): its work goes to the team; the chip switches back to the project.
                 let team = engine.projects.first { $0.id == id }.flatMap { engine.team(in: $0) }
@@ -116,6 +120,8 @@ struct RootView: View {
         }
         .onChange(of: itemRaw) { old, _ in
             engine.selectedThreadId = item.engineId
+            // A project only redirects, so it's never where Back returns to.
+            if case .project = SidebarItem(raw: old) { return }
             if !SidebarItem(raw: old).isStart { previousRaw = old }
         }
         .onAppear {
@@ -196,8 +202,11 @@ struct RootView: View {
             BuildFirstRun(engine: engine, item: itemBinding)
         case .index(.projects):
             ProjectsIndex(engine: engine, item: itemBinding)
-        case .project(let id):
-            ProjectPage(engine: engine, projectId: id, item: itemBinding)
+        case .project:
+            // Redirected at once (below): its New conversation page, board or settings.
+            ConversationStart(engine: engine, item: itemBinding)
+        case .board(let id):
+            ProjectBoardPage(engine: engine, projectId: id, item: itemBinding)
         case .index(.agents) where engine.agents.isEmpty && !engine.teamDefinitions.contains(where: \.saved):
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.agents):
@@ -318,6 +327,17 @@ struct RootView: View {
             guard let project = await engine.addProject(url) else { return }
             startConversation(target: "project:" + project.id)
         }
+    }
+
+    /// No project page (docs/spec/18 §19): a project opens its New conversation page, or what "projectTab" asked for
+    /// (Review on Home: the board; Project Settings: the sheet over its page).
+    private func openProject(_ id: String) {
+        let asked = UserDefaults.standard.string(forKey: "projectTab")
+        UserDefaults.standard.removeObject(forKey: "projectTab")
+        let hasTeam = engine.projects.first { $0.id == id }.flatMap { engine.team(in: $0) } != nil
+        if asked == "settings" { projectSheet = ProjectSheet(note: id) }
+        let next: SidebarItem = asked == "board" && hasTeam ? .board(id) : .newSession(id)
+        itemRaw = next.raw
     }
 
     /// A new conversation with no project, with the cursor in its box.
@@ -442,3 +462,19 @@ private struct StartSheets: ViewModifier {
     }
 }
 
+
+/// A project's settings (docs/spec/18 §19): a sheet over whatever is open, from the row's button, its context menu or
+/// "Write them".
+private struct ProjectSettingsHost: ViewModifier {
+    let engine: EngineController
+    @Binding var item: SidebarItem
+    @Binding var sheet: ProjectSheet?
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .projectSettings)) { note in sheet = ProjectSheet(note: note.object) }
+            .sheet(item: $sheet) { s in
+                ProjectSettingsSheet(engine: engine, sheet: s, item: $item) { sheet = nil }
+            }
+    }
+}

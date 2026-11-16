@@ -11,3 +11,5 @@ Different from the mockup:
   Summary panel's label-value grid. Changing who works here or the routines opens Settings.
 - The column has a toolbar button to hide it.
 - "Add folder…" for a single conversation (the box's +) isn't built.
+
+> **2026-11-16:** the page is gone; its column became the settings sheet ([project-settings](../project-settings/README.md), spec 18 §19).

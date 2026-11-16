@@ -534,3 +534,20 @@ the project is stays visible, not behind a panel.
 
 **Not built:** adding a folder to a single conversation from the box's `+`. Instructions and notes always stay in the
 project's own folder.
+
+## 19. Project settings in a sheet, and no project page (2026-11-16)
+
+**Why:** the user didn't want the project's settings as a column on a page. They live in a sheet, opened from the
+project's row; the row itself only folds. Designs: [proposal](../design/project-settings/proposal.html) and
+[editing](../design/project-settings/editing.html). Replaces CF17's page; CF18–CF19 (linked folders) are unchanged.
+
+| ID | Decision |
+|---|---|
+| CF20 | **Clicking a project's row folds or unfolds its conversations.** On hover (and on the project you're in), two buttons replace the branch: **settings** (sliders, not the app's gear) and **+**. A project with nothing under it starts a conversation there instead. Right-click: New Conversation, Project Settings…, Board, Pin, Reveal in Finder, Remove from Piopio. Dropping folders on the row links them and says "Linked <name>" for two seconds; nothing else moves. |
+| CF21 | **No project page.** Links to a project (palette, Home, a team's page) open its New conversation page; "Review" on Home opens its board. A team's **Board** is the first row under its project, with "2 doing" and the ring, or the blue dot when a task is blocked. |
+| CF22 | **The settings sheet:** Folders (its own and linked ones, Add folder…, drop), Instructions (AGENTS.md, or CLAUDE.md when that's the project's) and Memory (NOTES.md, renamed from Notes), How it works (the permissions new conversations start in, who works here, a team's tasks at once and checks), Routines. Changes apply as they're made; Done closes; Remove from Piopio… asks first. |
+| CF23 | **Instructions and Memory are edited in the sheet or in your editor.** Each row has Edit and an arrow that opens the file in Settings › Open files in (or the default app). Edit widens the sheet to the file: plain markdown in a monospaced font, a line on what the file does, saved half a second after you stop typing and on leaving, Undo all, ⌘O to open it in your editor. Memory shows how much of it each turn reads (~6,000 characters). While it's open the file is watched: with nothing typed it reloads; with your edits pending a bar offers "Use theirs and mine" (the lines the file gained, after yours) or "Keep mine", and "Reload" when the file changed lines rather than adding them. |
+
+**Not built from the design:** bold headings and grey list marks in the editor (it's a plain text view), and the dashed
+line where memory stops being read (the footer says it instead). "Who works here" keeps today's two cards rather than
+the drawn segmented control.
