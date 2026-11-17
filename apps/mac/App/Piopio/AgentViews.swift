@@ -580,9 +580,7 @@ struct AgentRunsView: View {
 
     /// "Today 21:00", "Tue 08:00", "23 Oct 09:00".
     static func when(_ iso: String) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
+        guard let date = ISODate.parse(iso) else { return iso }
         let out = DateFormatter()
         let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: .now), to: date).day ?? 0
         out.dateFormat = days == 0 ? "'today' HH:mm" : days == 1 ? "'tomorrow' HH:mm" : days < 7 ? "EEE HH:mm" : "d MMM HH:mm"

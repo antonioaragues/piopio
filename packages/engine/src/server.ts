@@ -33,6 +33,7 @@ import { exportMemory, MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
 import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
 import { groupSteps, StepsView } from "./timeline/steps.js";
+import { DeltaBatcher } from "./timeline/delta-batcher.js";
 import { replacedVisuals } from "./tools/visuals.js";
 import { fitCheck } from "./work/fit.js";
 import type { TimelineItem, ToolItem } from "@piopio/protocol";
@@ -608,10 +609,15 @@ export class Engine {
 				const steps = p.fold ? new StepsView(fold) : undefined;
 				const snapshot = runtime.snapshot();
 				const first = steps ? { ...snapshot, items: steps.snapshot(snapshot.items) } : snapshot;
-				const off = runtime.onEvents((events) => {
-					const out = steps ? steps.events(events, () => runtime.snapshot().items) : events;
-					if (out.length) conn.notify("session.events", { subscriptionId, seq: ++seq, events: out });
+				// A notification per token is a JSON line and a main-thread hop on the Mac per token: deltas go out a frame at a time.
+				const batcher = new DeltaBatcher((events) => conn.notify("session.events", { subscriptionId, seq: ++seq, events }));
+				const unsubscribe = runtime.onEvents((events) => {
+					batcher.push(steps ? steps.events(events, () => runtime.snapshot().items) : events);
 				});
+				const off = () => {
+					unsubscribe();
+					batcher.dispose();
+				};
 				this.subscriptions.set(subscriptionId, off);
 				owned.add(subscriptionId);
 				return { subscriptionId, snapshot: first } satisfies Result<"sessions.subscribe">;

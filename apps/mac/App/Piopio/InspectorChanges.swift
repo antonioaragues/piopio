@@ -206,9 +206,7 @@ struct ChangesBlock: View {
 
     /// "now", "4m", "2h", "3d": the timeline's short ages.
     static func age(_ iso: String, now: Date = .now) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return "" }
+        guard let date = ISODate.parse(iso) else { return "" }
         let s = max(0, now.timeIntervalSince(date))
         if s < 60 { return "now" }
         if s < 3600 { return "\(Int(s / 60))m" }

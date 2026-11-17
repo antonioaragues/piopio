@@ -40,7 +40,13 @@ public final class TranscriptDocument {
     private var columnWidth: CGFloat = 0
     private var laidOutWidth: CGFloat = 0
     /// Extra space at the bottom so the floating composer never covers the last line.
-    public var bottomInset: CGFloat = 24 { didSet { layoutColumn(force: true) } }
+    /// It follows the composer's height as you type: only the scroll inset moves, the text is not laid out again.
+    public var bottomInset: CGFloat = 24 {
+        didSet {
+            guard abs(bottomInset - oldValue) > 0.5 else { return }
+            scrollView.contentInsets.bottom = bottomInset
+        }
+    }
     /// Widest the reading column gets (docs/design chat v3: 680), with at least 40 on each side.
     public var maxColumnWidth: CGFloat = 680
     private let minimumInset: CGFloat = 40

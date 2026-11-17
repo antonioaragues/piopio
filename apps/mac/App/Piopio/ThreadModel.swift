@@ -112,7 +112,7 @@ final class ThreadModel {
     private func load() async {
         guard !loaded, let engine else { return }
         do {
-            let sub = try await engine.subscribe(ref) { [weak self] events in self?.apply(events) }
+            let sub = try await engine.subscribe(ref) { [weak self] events in self?.receive(events) }
             subscriptionId = sub.subscriptionId
             state = sub.snapshot.state
             await document.load(sub.snapshot)
@@ -130,6 +130,37 @@ final class ThreadModel {
     func close() {
         if let subscriptionId { engine?.unsubscribe(subscriptionId) }
         subscriptionId = nil
+        buffered = []
+    }
+
+    // Streaming sends a batch per token. Apply at most one batch per frame: the first at once,
+    // then whatever piled up, with back-to-back deltas joined (one re-render of the open block, one refresh).
+    @ObservationIgnored private var buffered: [SessionEvent] = []
+    @ObservationIgnored private var flushScheduled = false
+    @ObservationIgnored private var lastFlush: ContinuousClock.Instant?
+    private static let frame: Duration = .milliseconds(16)
+
+    private func receive(_ events: [SessionEvent]) {
+        buffered += events
+        guard !flushScheduled else { return }
+        if let lastFlush, ContinuousClock.now - lastFlush < Self.frame {
+            flushScheduled = true
+            Task { [weak self] in
+                try? await Task.sleep(until: lastFlush + Self.frame, tolerance: .milliseconds(2), clock: .continuous)
+                self?.flush()
+            }
+        } else {
+            flush()
+        }
+    }
+
+    private func flush() {
+        flushScheduled = false
+        guard !buffered.isEmpty else { return }
+        let events = SessionEvent.coalesced(buffered)
+        buffered = []
+        lastFlush = .now
+        apply(events)
     }
 
     private func apply(_ events: [SessionEvent]) {

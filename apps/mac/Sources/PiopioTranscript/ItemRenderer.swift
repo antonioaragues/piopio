@@ -921,10 +921,7 @@ nonisolated struct ItemRenderer: Sendable {
 
     /// An item's ISO time, with or without fractional seconds (nil when it has none).
     static func date(_ iso: String) -> Date? {
-        guard !iso.isEmpty else { return nil }
-        let precise = ISO8601DateFormatter()
-        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return precise.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+        ISODate.parse(iso)
     }
 
     /// "Today 8:00", "Yesterday 21:00", "Fri 8:00", "3 Nov 8:00".

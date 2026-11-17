@@ -374,9 +374,7 @@ struct PlanBlock: View {
 
     /// From the first checklist update to the last: "34 min", "1 h 5 min"; nil under a minute or without times.
     static func duration(_ items: [TimelineItem]) -> String? {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        func date(_ s: String) -> Date? { iso.date(from: s) ?? ISO8601DateFormatter().date(from: s) }
+        func date(_ s: String) -> Date? { ISODate.parse(s) }
         var times: [Date] = []
         for item in items {
             switch item {

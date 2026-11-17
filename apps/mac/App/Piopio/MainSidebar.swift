@@ -368,9 +368,7 @@ struct MainSidebar: View {
     }
 
     static func date(_ iso: String) -> Date {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) ?? .distantPast
+        ISODate.parse(iso) ?? .distantPast
     }
 
     private func projectRow(_ project: ProjectInfo) -> some View {

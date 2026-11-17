@@ -390,9 +390,7 @@ struct BuildSessionView: View {
     }
 
     static func relative(_ iso: String) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return "" }
+        guard let date = ISODate.parse(iso) else { return "" }
         if Date().timeIntervalSince(date) < 60 { return "just now" }
         return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
     }

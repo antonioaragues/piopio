@@ -76,3 +76,31 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     #expect(String(decoding: try encoder.encode(SettingsPatch(models: .init(utility: .auto))), as: UTF8.self) == #"{"models":{"utility":"auto"}}"#)
     #expect(String(decoding: try encoder.encode(SettingsPatch(models: .init(utility: .off))), as: UTF8.self) == #"{"models":{"utility":"off"}}"#)
 }
+
+@Test func coalescingJoinsOnlyBackToBackDeltasOfOnePart() {
+    let events: [SessionEvent] = [
+        .itemDelta(itemId: "a", partIndex: 0, partType: .thinking, textDelta: "h"),
+        .itemDelta(itemId: "a", partIndex: 0, partType: .thinking, textDelta: "m"),
+        .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "Hel"),
+        .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "lo"),
+        .itemRemoved(itemId: "x"),
+        .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "!"),
+        .itemDelta(itemId: "b", partIndex: 1, partType: .text, textDelta: "?"),
+    ]
+    #expect(SessionEvent.coalesced(events) == [
+        .itemDelta(itemId: "a", partIndex: 0, partType: .thinking, textDelta: "hm"),
+        .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "Hello"),
+        .itemRemoved(itemId: "x"),
+        .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "!"),
+        .itemDelta(itemId: "b", partIndex: 1, partType: .text, textDelta: "?"),
+    ])
+}
+
+@Test func isoDatesParseWithAndWithoutFractions() throws {
+    let whole = try #require(ISODate.parse("2026-11-18T10:00:00Z"))
+    let precise = try #require(ISODate.parse("2026-11-18T10:00:00.250Z"))
+    #expect(precise.timeIntervalSince(whole) == 0.25)
+    #expect(ISODate.parse("2026-11-18T11:00:00+01:00") == whole)
+    #expect(ISODate.parse("") == nil)
+    #expect(ISODate.parse("yesterday") == nil)
+}
