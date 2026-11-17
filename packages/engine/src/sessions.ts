@@ -13,7 +13,7 @@ import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, ProjectInfo, P
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
-import { attachmentsDir, copyAttachments, deleteAttachments } from "./attachment-files.js";
+import { attachmentsDir, copyAttachments, deleteAttachments, toolImageKeeper } from "./attachment-files.js";
 import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, git as runGit, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
@@ -1557,6 +1557,7 @@ export class Sessions {
 			folders: () => this.policy.foldersFor?.(entry.projectPath ?? entry.cwd!) ?? [],
 			checkpoints: this.checkpoints,
 			webOptions: this.webOptions,
+			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 			...this.browserFor(entry.ref),
 			...this.visualsFor(entry.ref),
 			sandbox: () => this.chat?.settings.get().build?.sandbox !== false,
@@ -1646,6 +1647,7 @@ export class Sessions {
 			checkpoints: this.checkpoints,
 			plan: { active: () => false, setActive: () => {} },
 			webOptions: this.webOptions,
+			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 			...this.browserFor(entry.ref),
 			...this.visualsFor(entry.ref),
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),

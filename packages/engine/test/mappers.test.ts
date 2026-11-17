@@ -153,3 +153,44 @@ describe("tool details", () => {
 		expect(startDetails("web_search", { query: "x" })).toBeUndefined();
 	});
 });
+
+describe("tool images", () => {
+	test("a read screenshot is kept once and listed on the tool item, live and after a rebuild", async () => {
+		const { mkdtempSync, existsSync, readFileSync: read } = await import("node:fs");
+		const { tmpdir } = await import("node:os");
+		const { join } = await import("node:path");
+		const { toolImageKeeper } = await import("../src/attachment-files.js");
+		const dir = mkdtempSync(join(tmpdir(), "piopio-tool-images-"));
+		const png = Buffer.from("not really a png").toString("base64");
+		const content = [{ type: "text" as const, text: "Read image file [image/png]" }, { type: "image" as const, mimeType: "image/png", data: png }];
+		const live = new TimelineBuilder({ kind: "build", id: "ses_test" });
+		live.keepImages = toolImageKeeper(dir);
+		live.toolStart("call|1", "read", { path: "/tmp/probe.png" });
+		live.toolEnd("call|1", "Read image file [image/png]\n[image]", false, 5, { content });
+		const tool = live.snapshot().items.find((i) => i.kind === "tool") as Extract<TimelineItem, { kind: "tool" }>;
+		expect(tool.images).toEqual([{ name: "probe.png", kind: "image", mimeType: "image/png", stored: "tools/call_1-1.png" }]);
+		expect(read(join(dir, "tools/call_1-1.png"), "utf8")).toBe("not really a png");
+
+		const fresh = new TimelineBuilder({ kind: "build", id: "ses_test" });
+		fresh.keepImages = toolImageKeeper(dir);
+		fresh.reset(
+			[
+				{ role: "assistant", content: [{ type: "toolCall", id: "call|1", name: "read", arguments: { path: "/tmp/probe.png" } }] },
+				{ role: "toolResult", toolCallId: "call|1", toolName: "read", content },
+			],
+			(i) => `m${i}`,
+			false,
+		);
+		const again = fresh.snapshot().items.find((i) => i.kind === "tool") as Extract<TimelineItem, { kind: "tool" }>;
+		expect(again.images).toEqual(tool.images);
+		expect(existsSync(join(dir, "tools"))).toBe(true);
+	});
+
+	test("without a keeper, images stay out of the item", () => {
+		const b = new TimelineBuilder({ kind: "build", id: "ses_test" });
+		b.toolStart("c1", "read", { path: "/tmp/a.png" });
+		b.toolEnd("c1", "[image]", false, 1, { content: [{ type: "image", mimeType: "image/png", data: "AAAA" }] });
+		const tool = b.snapshot().items.find((i) => i.kind === "tool") as Extract<TimelineItem, { kind: "tool" }>;
+		expect(tool.images).toBeUndefined();
+	});
+});

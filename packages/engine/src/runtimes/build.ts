@@ -24,7 +24,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
-import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage } from "../timeline/builder.js";
+import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage, type ToolImageKeeper } from "../timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "../timeline/pi-sdk.js";
 import { chatPromptExtension } from "../tools/chat-prompt.js";
 import { sdkAsSent, sdkContent, sdkUser, sdkWithWords, TYPED_ENTRY, type ContentBlock, type SdkInput } from "../input.js";
@@ -65,6 +65,8 @@ const REVIEW_ENTRY = "piopio.review";
 export type BuildOpenOptions = {
 	/** A chat rather than a folder conversation (see ChatProfile). */
 	chat?: ChatProfile;
+	/** Keeps images that tools return (screenshots it read) for the transcript (attachment-files.ts). */
+	keepImages?: ToolImageKeeper;
 	/** The browser's tools (docs/spec/22), run by the Mac app for this session. */
 	browser?: BrowserCall;
 	/** Visuals drawn and checked by the Mac app (docs/spec/25 §3.2). */
@@ -289,6 +291,7 @@ export class BuildRuntime implements Runtime {
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
 		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan, o.chat);
+		if (o.keepImages) runtime.builder.keepImages = o.keepImages;
 		runtime.connectors = o.connectors;
 		runtime.toolsOff = o.toolsOff;
 		if (o.thinking) runtime.thinkingChosen = o.thinking;

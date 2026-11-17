@@ -17,6 +17,8 @@ nonisolated struct ItemRenderer: Sendable {
     var build = false
     /// The project folder: paths inside it show relative, as chips (the full path in their tooltip).
     var root: String?
+    /// Where the conversation's files are kept (`<home>/attachments/<id>`), for images its steps returned.
+    var attachments: URL?
     /// Answers with more text after them in the same turn: no action row under them (only the turn's last text has one).
     var midTurn: Set<String> = []
 
@@ -119,7 +121,7 @@ nonisolated struct ItemRenderer: Sendable {
             // Saved silently before every message (chat v3, 14b): rewinding is an action on your message.
             return NSAttributedString()
         case .steps(let s):
-            return attachmentParagraph(DisclosureAttachment(card: Self.stepsCard(s, root: root)))
+            return attachmentParagraph(DisclosureAttachment(card: Self.stepsCard(s, root: root, attachments: attachments)))
         case .approval(let a):
             return approvalCard(a)
         case .result(let r):
@@ -286,7 +288,7 @@ nonisolated struct ItemRenderer: Sendable {
 
     /// A turn's activity as one quiet line (chat v3, 14a): "Thought for 3s, edited RESUMEN.md +13 ›", or what's running
     /// now ("Running a command…", "Editing RESUMEN.md…"). It opens to the thought and each step's card.
-    static func stepsCard(_ s: StepsItem, root: String? = nil) -> DisclosureCard {
+    static func stepsCard(_ s: StepsItem, root: String? = nil, attachments: URL? = nil) -> DisclosureCard {
         let running = s.tools.first { $0.status == .running }
         let waiting = s.tools.contains { $0.status == .pendingApproval }
         let card = DisclosureCard(kind: .activity, title: "", body: "")
@@ -297,6 +299,11 @@ nonisolated struct ItemRenderer: Sendable {
             nested.insert(thought, at: 0)
         }
         card.content = .cards(nested)
+        if let attachments {
+            card.images = s.tools.flatMap { $0.images ?? [] }.compactMap { image in
+                image.stored.map { CardImage(url: attachments.appending(path: $0), stored: $0, name: image.name) }
+            }
+        }
         card.working = running != nil
         card.waiting = waiting
         card.failed = s.tools.contains { $0.status == .error }

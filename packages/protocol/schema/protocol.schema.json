@@ -661,6 +661,42 @@
 						},
 						"review": {
 							"type": "string"
+						},
+						"images": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"name",
+									"kind"
+								],
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "image"
+											},
+											{
+												"type": "string",
+												"const": "text"
+											}
+										]
+									},
+									"mimeType": {
+										"type": "string"
+									},
+									"size": {
+										"type": "number"
+									},
+									"stored": {
+										"type": "string"
+									}
+								}
+							}
 						}
 					}
 				},
@@ -1190,6 +1226,42 @@
 									},
 									"review": {
 										"type": "string"
+									},
+									"images": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"name",
+												"kind"
+											],
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"kind": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "image"
+														},
+														{
+															"type": "string",
+															"const": "text"
+														}
+													]
+												},
+												"mimeType": {
+													"type": "string"
+												},
+												"size": {
+													"type": "number"
+												},
+												"stored": {
+													"type": "string"
+												}
+											}
+										}
 									}
 								}
 							}
@@ -2452,6 +2524,42 @@
 										},
 										"review": {
 											"type": "string"
+										},
+										"images": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"name",
+													"kind"
+												],
+												"properties": {
+													"name": {
+														"type": "string"
+													},
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "image"
+															},
+															{
+																"type": "string",
+																"const": "text"
+															}
+														]
+													},
+													"mimeType": {
+														"type": "string"
+													},
+													"size": {
+														"type": "number"
+													},
+													"stored": {
+														"type": "string"
+													}
+												}
+											}
 										}
 									}
 								},
@@ -2981,6 +3089,42 @@
 													},
 													"review": {
 														"type": "string"
+													},
+													"images": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											}
@@ -3982,6 +4126,42 @@
 										},
 										"review": {
 											"type": "string"
+										},
+										"images": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"name",
+													"kind"
+												],
+												"properties": {
+													"name": {
+														"type": "string"
+													},
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "image"
+															},
+															{
+																"type": "string",
+																"const": "text"
+															}
+														]
+													},
+													"mimeType": {
+														"type": "string"
+													},
+													"size": {
+														"type": "number"
+													},
+													"stored": {
+														"type": "string"
+													}
+												}
+											}
 										}
 									}
 								},
@@ -4511,6 +4691,42 @@
 													},
 													"review": {
 														"type": "string"
+													},
+													"images": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											}
@@ -5492,6 +5708,42 @@
 										},
 										"review": {
 											"type": "string"
+										},
+										"images": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"name",
+													"kind"
+												],
+												"properties": {
+													"name": {
+														"type": "string"
+													},
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "image"
+															},
+															{
+																"type": "string",
+																"const": "text"
+															}
+														]
+													},
+													"mimeType": {
+														"type": "string"
+													},
+													"size": {
+														"type": "number"
+													},
+													"stored": {
+														"type": "string"
+													}
+												}
+											}
 										}
 									}
 								},
@@ -6021,6 +6273,42 @@
 													},
 													"review": {
 														"type": "string"
+													},
+													"images": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											}
@@ -7337,6 +7625,42 @@
 													},
 													"review": {
 														"type": "string"
+													},
+													"images": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											},
@@ -7866,6 +8190,42 @@
 																},
 																"review": {
 																	"type": "string"
+																},
+																"images": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"name",
+																			"kind"
+																		],
+																		"properties": {
+																			"name": {
+																				"type": "string"
+																			},
+																			"kind": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "image"
+																					},
+																					{
+																						"type": "string",
+																						"const": "text"
+																					}
+																				]
+																			},
+																			"mimeType": {
+																				"type": "string"
+																			},
+																			"size": {
+																				"type": "number"
+																			},
+																			"stored": {
+																				"type": "string"
+																			}
+																		}
+																	}
 																}
 															}
 														}
@@ -9163,6 +9523,42 @@
 									},
 									"review": {
 										"type": "string"
+									},
+									"images": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"name",
+												"kind"
+											],
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"kind": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "image"
+														},
+														{
+															"type": "string",
+															"const": "text"
+														}
+													]
+												},
+												"mimeType": {
+													"type": "string"
+												},
+												"size": {
+													"type": "number"
+												},
+												"stored": {
+													"type": "string"
+												}
+											}
+										}
 									}
 								}
 							},
@@ -9692,6 +10088,42 @@
 												},
 												"review": {
 													"type": "string"
+												},
+												"images": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"required": [
+															"name",
+															"kind"
+														],
+														"properties": {
+															"name": {
+																"type": "string"
+															},
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "image"
+																	},
+																	{
+																		"type": "string",
+																		"const": "text"
+																	}
+																]
+															},
+															"mimeType": {
+																"type": "string"
+															},
+															"size": {
+																"type": "number"
+															},
+															"stored": {
+																"type": "string"
+															}
+														}
+													}
 												}
 											}
 										}
@@ -11284,6 +11716,42 @@
 													},
 													"review": {
 														"type": "string"
+													},
+													"images": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											},
@@ -11813,6 +12281,42 @@
 																},
 																"review": {
 																	"type": "string"
+																},
+																"images": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"name",
+																			"kind"
+																		],
+																		"properties": {
+																			"name": {
+																				"type": "string"
+																			},
+																			"kind": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "image"
+																					},
+																					{
+																						"type": "string",
+																						"const": "text"
+																					}
+																				]
+																			},
+																			"mimeType": {
+																				"type": "string"
+																			},
+																			"size": {
+																				"type": "number"
+																			},
+																			"stored": {
+																				"type": "string"
+																			}
+																		}
+																	}
 																}
 															}
 														}
@@ -12814,6 +13318,42 @@
 													},
 													"review": {
 														"type": "string"
+													},
+													"images": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											},
@@ -13343,6 +13883,42 @@
 																},
 																"review": {
 																	"type": "string"
+																},
+																"images": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"name",
+																			"kind"
+																		],
+																		"properties": {
+																			"name": {
+																				"type": "string"
+																			},
+																			"kind": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "image"
+																					},
+																					{
+																						"type": "string",
+																						"const": "text"
+																					}
+																				]
+																			},
+																			"mimeType": {
+																				"type": "string"
+																			},
+																			"size": {
+																				"type": "number"
+																			},
+																			"stored": {
+																				"type": "string"
+																			}
+																		}
+																	}
 																}
 															}
 														}
@@ -14324,6 +14900,42 @@
 													},
 													"review": {
 														"type": "string"
+													},
+													"images": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"name",
+																"kind"
+															],
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"kind": {
+																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "image"
+																		},
+																		{
+																			"type": "string",
+																			"const": "text"
+																		}
+																	]
+																},
+																"mimeType": {
+																	"type": "string"
+																},
+																"size": {
+																	"type": "number"
+																},
+																"stored": {
+																	"type": "string"
+																}
+															}
+														}
 													}
 												}
 											},
@@ -14853,6 +15465,42 @@
 																},
 																"review": {
 																	"type": "string"
+																},
+																"images": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"name",
+																			"kind"
+																		],
+																		"properties": {
+																			"name": {
+																				"type": "string"
+																			},
+																			"kind": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "image"
+																					},
+																					{
+																						"type": "string",
+																						"const": "text"
+																					}
+																				]
+																			},
+																			"mimeType": {
+																				"type": "string"
+																			},
+																			"size": {
+																				"type": "number"
+																			},
+																			"stored": {
+																				"type": "string"
+																			}
+																		}
+																	}
 																}
 															}
 														}
@@ -16169,6 +16817,42 @@
 																},
 																"review": {
 																	"type": "string"
+																},
+																"images": {
+																	"type": "array",
+																	"items": {
+																		"type": "object",
+																		"required": [
+																			"name",
+																			"kind"
+																		],
+																		"properties": {
+																			"name": {
+																				"type": "string"
+																			},
+																			"kind": {
+																				"anyOf": [
+																					{
+																						"type": "string",
+																						"const": "image"
+																					},
+																					{
+																						"type": "string",
+																						"const": "text"
+																					}
+																				]
+																			},
+																			"mimeType": {
+																				"type": "string"
+																			},
+																			"size": {
+																				"type": "number"
+																			},
+																			"stored": {
+																				"type": "string"
+																			}
+																		}
+																	}
 																}
 															}
 														},
@@ -16698,6 +17382,42 @@
 																			},
 																			"review": {
 																				"type": "string"
+																			},
+																			"images": {
+																				"type": "array",
+																				"items": {
+																					"type": "object",
+																					"required": [
+																						"name",
+																						"kind"
+																					],
+																					"properties": {
+																						"name": {
+																							"type": "string"
+																						},
+																						"kind": {
+																							"anyOf": [
+																								{
+																									"type": "string",
+																									"const": "image"
+																								},
+																								{
+																									"type": "string",
+																									"const": "text"
+																								}
+																							]
+																						},
+																						"mimeType": {
+																							"type": "string"
+																						},
+																						"size": {
+																							"type": "number"
+																						},
+																						"stored": {
+																							"type": "string"
+																						}
+																					}
+																				}
 																			}
 																		}
 																	}
@@ -19217,6 +19937,42 @@
 									},
 									"review": {
 										"type": "string"
+									},
+									"images": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"name",
+												"kind"
+											],
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"kind": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "image"
+														},
+														{
+															"type": "string",
+															"const": "text"
+														}
+													]
+												},
+												"mimeType": {
+													"type": "string"
+												},
+												"size": {
+													"type": "number"
+												},
+												"stored": {
+													"type": "string"
+												}
+											}
+										}
 									}
 								}
 							},
@@ -19746,6 +20502,42 @@
 												},
 												"review": {
 													"type": "string"
+												},
+												"images": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"required": [
+															"name",
+															"kind"
+														],
+														"properties": {
+															"name": {
+																"type": "string"
+															},
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "image"
+																	},
+																	{
+																		"type": "string",
+																		"const": "text"
+																	}
+																]
+															},
+															"mimeType": {
+																"type": "string"
+															},
+															"size": {
+																"type": "number"
+															},
+															"stored": {
+																"type": "string"
+															}
+														}
+													}
 												}
 											}
 										}
@@ -21091,6 +21883,42 @@
 											},
 											"review": {
 												"type": "string"
+											},
+											"images": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"name",
+														"kind"
+													],
+													"properties": {
+														"name": {
+															"type": "string"
+														},
+														"kind": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "image"
+																},
+																{
+																	"type": "string",
+																	"const": "text"
+																}
+															]
+														},
+														"mimeType": {
+															"type": "string"
+														},
+														"size": {
+															"type": "number"
+														},
+														"stored": {
+															"type": "string"
+														}
+													}
+												}
 											}
 										}
 									},
@@ -21620,6 +22448,42 @@
 														},
 														"review": {
 															"type": "string"
+														},
+														"images": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"required": [
+																	"name",
+																	"kind"
+																],
+																"properties": {
+																	"name": {
+																		"type": "string"
+																	},
+																	"kind": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "image"
+																			},
+																			{
+																				"type": "string",
+																				"const": "text"
+																			}
+																		]
+																	},
+																	"mimeType": {
+																		"type": "string"
+																	},
+																	"size": {
+																		"type": "number"
+																	},
+																	"stored": {
+																		"type": "string"
+																	}
+																}
+															}
 														}
 													}
 												}
@@ -24658,6 +25522,27 @@
 							},
 							"missing": {
 								"type": "boolean"
+							},
+							"folders": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"path",
+										"edit"
+									],
+									"properties": {
+										"path": {
+											"type": "string"
+										},
+										"edit": {
+											"type": "boolean"
+										},
+										"missing": {
+											"type": "boolean"
+										}
+									}
+								}
 							}
 						}
 					}
@@ -24816,6 +25701,27 @@
 						},
 						"missing": {
 							"type": "boolean"
+						},
+						"folders": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"path",
+									"edit"
+								],
+								"properties": {
+									"path": {
+										"type": "string"
+									},
+									"edit": {
+										"type": "boolean"
+									},
+									"missing": {
+										"type": "boolean"
+									}
+								}
+							}
 						}
 					}
 				}
@@ -25046,6 +25952,27 @@
 						},
 						"missing": {
 							"type": "boolean"
+						},
+						"folders": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"path",
+									"edit"
+								],
+								"properties": {
+									"path": {
+										"type": "string"
+									},
+									"edit": {
+										"type": "boolean"
+									},
+									"missing": {
+										"type": "boolean"
+									}
+								}
+							}
 						}
 					}
 				}
@@ -25107,6 +26034,24 @@
 							}
 						]
 					}
+				},
+				"linkFolder": {
+					"type": "object",
+					"required": [
+						"path",
+						"edit"
+					],
+					"properties": {
+						"path": {
+							"type": "string"
+						},
+						"edit": {
+							"type": "boolean"
+						}
+					}
+				},
+				"unlinkFolder": {
+					"type": "string"
 				}
 			}
 		},
@@ -25247,6 +26192,27 @@
 						},
 						"missing": {
 							"type": "boolean"
+						},
+						"folders": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"path",
+									"edit"
+								],
+								"properties": {
+									"path": {
+										"type": "string"
+									},
+									"edit": {
+										"type": "boolean"
+									},
+									"missing": {
+										"type": "boolean"
+									}
+								}
+							}
 						}
 					}
 				}

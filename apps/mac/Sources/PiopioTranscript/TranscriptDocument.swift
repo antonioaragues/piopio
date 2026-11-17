@@ -68,8 +68,8 @@ public final class TranscriptDocument {
     /// Whether a selection is painted (see `paintSelection`).
     fileprivate var paintedSelection = false
 
-    public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true, build: Bool = false, root: String? = nil) {
-        renderer = ItemRenderer(compact: compact, versions: versions, build: build, root: root)
+    public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true, build: Bool = false, root: String? = nil, attachments: URL? = nil) {
+        renderer = ItemRenderer(compact: compact, versions: versions, build: build, root: root, attachments: attachments)
         self.windowSize = windowSize
         self.pageSize = pageSize
         // Like NSTextView.scrollableTextView(), with the transcript's own text view (its cursor over cards).

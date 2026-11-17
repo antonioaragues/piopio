@@ -281,8 +281,8 @@ struct Composer: View {
         return engine.threads.first { $0.ref.id == id } ?? engine.buildSessions.first { $0.ref.id == id }
     }
 
-    /// The +: files and folders in one open panel. Build reads them itself, so they become @paths in the message;
-    /// elsewhere files are attached, and a folder's readable files.
+    /// The +: files and folders in one open panel. Build reads them itself, so they become @paths in the message (images
+    /// are attached); elsewhere files are attached, and a folder's readable files.
     private func pickFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
@@ -338,8 +338,13 @@ struct Composer: View {
     }
 
     /// Build: a dropped or picked file becomes an @mention of its path (relative to the project), like one typed after
-    /// @; the agent reads it, and Summary lists it under Context › You gave.
+    /// @; the agent reads it, and Summary lists it under Context › You gave. An image is attached instead, so the box
+    /// shows it as a thumbnail and the model sees it.
     private func mention(_ url: URL) {
+        if !url.hasDirectoryPath, UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true {
+            add([url])
+            return
+        }
         var path = url.path
         if let cwd = engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.cwd, path.hasPrefix(cwd + "/") {
             path = String(path.dropFirst(cwd.count + 1))

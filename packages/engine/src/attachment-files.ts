@@ -62,3 +62,27 @@ export function copyAttachments(home: string, from: string, to: string): void {
 export function deleteAttachments(home: string, containerId: string): void {
 	rmSync(attachmentsDir(home, containerId), { recursive: true, force: true });
 }
+
+/**
+ * Keeps the images a tool returned (a screenshot it read) in the conversation's folder under `tools/`, named after the
+ * call, so rebuilding the timeline finds them again instead of writing new copies. Returns each one's `stored` path,
+ * or undefined where it couldn't be kept.
+ */
+export function toolImageKeeper(dir: string): (callId: string, images: readonly { data: string; mimeType: string }[]) => (string | undefined)[] {
+	return (callId, images) =>
+		images.map((image, i) => {
+			try {
+				const ext = (image.mimeType.split("/")[1] ?? "").replace("jpeg", "jpg").replace(/[^a-z0-9]/g, "") || "img";
+				const stored = `tools/${callId.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120)}-${i + 1}.${ext}`;
+				const file = join(dir, stored);
+				if (!existsSync(file)) {
+					mkdirSync(join(dir, "tools"), { recursive: true, mode: 0o700 });
+					writeFileSync(file, Buffer.from(image.data, "base64"));
+				}
+				return stored;
+			} catch {
+				return undefined;
+			}
+		});
+}
+

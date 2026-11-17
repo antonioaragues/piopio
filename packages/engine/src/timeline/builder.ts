@@ -12,7 +12,7 @@ export type PiContentBlock =
 	| { type: "text"; text: string }
 	| { type: "thinking"; thinking: string; redacted?: boolean }
 	| { type: "toolCall"; id: string; name: string; arguments: unknown }
-	| { type: "image"; mimeType?: string };
+	| { type: "image"; mimeType?: string; data?: string };
 export type PiUsage = { input: number; output: number; cacheRead: number; cacheWrite: number; cost?: { total?: number } };
 export type PiMessage =
 	| { role: "user"; content: string | PiContentBlock[]; timestamp?: number }
@@ -53,7 +53,12 @@ function partsFrom(content: PiContentBlock[]): AssistantPart[] {
 	return parts;
 }
 
+/** Keeps a tool result's images where the app can show them; returns each one's `stored` path (attachment-files.ts). */
+export type ToolImageKeeper = (callId: string, images: readonly { data: string; mimeType: string }[]) => (string | undefined)[];
+
 export class TimelineBuilder {
+	/** Where tool images go; without it they show only as "[image]" in the output. */
+	keepImages?: ToolImageKeeper;
 	private items: TimelineItem[] = [];
 	private index = new Map<string, number>();
 	private pending: SessionEvent[] = [];
@@ -109,6 +114,7 @@ export class TimelineBuilder {
 				const t = tools.get(r.toolCallId);
 				if (t) {
 					t.output = contentText(r.content);
+					this.addImages(t, r.content);
 					t.status = r.isError ? failedStatus(t.output) : "done";
 					const details = endDetails(t.tool, t.args, { details: r.details }, t.output, Boolean(r.isError));
 					if (details) t.details = details;
@@ -298,10 +304,11 @@ export class TimelineBuilder {
 		this.pending.push({ type: "item.updated", item: structuredClone(item) });
 	}
 
-	toolEnd(callId: string, output: string | undefined, isError: boolean, durationMs?: number, result?: PiToolResult): void {
+	toolEnd(callId: string, output: string | undefined, isError: boolean, durationMs?: number, result?: PiToolResult & { content?: PiContentBlock[] }): void {
 		const item = this.get(`tool:${callId}`) as ToolItem | undefined;
 		if (!item) return;
 		if (output !== undefined) item.output = output;
+		this.addImages(item, result?.content);
 		item.status = isError ? failedStatus(item.output) : "done";
 		const details = endDetails(item.tool, item.args, result, item.output, isError);
 		if (details) item.details = details;
@@ -311,6 +318,18 @@ export class TimelineBuilder {
 	}
 
 	// ── Internals ──────────────────────────────────────────────────────────
+
+	/** A tool's images (a screenshot it read), kept so the activity line can show them; named after the file read. */
+	private addImages(item: ToolItem, content: PiContentBlock[] | undefined): void {
+		if (!this.keepImages || !content) return;
+		const blocks = content.flatMap((b) => (b.type === "image" && typeof b.data === "string" && b.data.length > 0 ? [{ data: b.data, mimeType: b.mimeType ?? "image/png" }] : []));
+		if (blocks.length === 0) return;
+		const stored = this.keepImages(item.callId, blocks);
+		const path = (item.args as { path?: unknown } | undefined)?.path;
+		const name = typeof path === "string" && path.length > 0 ? (path.split("/").pop() ?? path) : "Image";
+		const images = blocks.flatMap((b, i) => (stored[i] ? [{ name, kind: "image" as const, mimeType: b.mimeType, stored: stored[i] }] : []));
+		if (images.length > 0) item.images = images;
+	}
 
 	private assistantItem(id: string, m: Extract<PiMessage, { role: "assistant" }>): AssistantItem {
 		const usage = toUsage(m.usage);

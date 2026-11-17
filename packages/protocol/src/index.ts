@@ -156,6 +156,8 @@ export const ToolItem = Type.Object({
 	parentCallId: Type.Optional(Type.String()),
 	/** Auto review let this command run without asking you (Build, Auto-edit): its reason. */
 	review: Type.Optional(Type.String()),
+	/** Images the tool returned (a screenshot it read), kept like sent files so the transcript can show them. */
+	images: Type.Optional(Type.Array(AttachmentInfo)),
 });
 export const SystemItem = Type.Object({
 	kind: Type.Literal("system"),

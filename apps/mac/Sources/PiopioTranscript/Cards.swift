@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import Observation
 import SwiftUI
 
@@ -261,6 +262,13 @@ public struct ActivityPart: Sendable, Hashable {
     public var warning = false
 }
 
+/// An image a step returned (a screenshot it read): the kept file, and what opens it.
+public struct CardImage: Sendable, Hashable {
+    public var url: URL
+    public var stored: String
+    public var name: String
+}
+
 /// Model behind an expandable card. Built on any thread; mutated on the main thread.
 @Observable
 public final class DisclosureCard: @unchecked Sendable {
@@ -292,6 +300,8 @@ public final class DisclosureCard: @unchecked Sendable {
     public var action: (title: String, action: TranscriptAction)?
     /// The step's icon in an activity log (an SF Symbol).
     public var glyph = "circle"
+    /// Activity: images its steps returned, as thumbnails at the end of the line (the line grows to fit them).
+    public var images: [CardImage] = []
     /// Commands cut at the end; paths in the middle.
     public var truncateTail = false
     /// The width last laid out at, so nested rows measure with the same width.
@@ -348,6 +358,10 @@ public final class DisclosureCard: @unchecked Sendable {
 
     /// The quiet line's height (activity, thinking).
     static let lineHeight: CGFloat = 28
+    /// An activity line with thumbnails.
+    static let imageLineHeight: CGFloat = 40
+    /// The quiet line's height for this card.
+    var lineHeight: CGFloat { images.isEmpty ? Self.lineHeight : Self.imageLineHeight }
     static let nestedSpacing: CGFloat = 6
 
     static let collapsedHeight: CGFloat = 26
@@ -364,7 +378,7 @@ public final class DisclosureCard: @unchecked Sendable {
     func height(width: CGFloat) -> CGFloat {
         measuredWidth = width
         if case .plan(let plan) = content { return plan.height(width: width) }
-        let header = kind == .tool ? Self.collapsedHeight : Self.lineHeight
+        let header = kind == .tool ? Self.collapsedHeight : lineHeight
         guard expanded, !isEmpty else { return header }
         if case .cards(let cards) = content {
             return header + 2 + cards.reduce(0) { $0 + $1.logHeight(width: width) + Self.logSpacing }
@@ -597,29 +611,32 @@ struct DisclosureCardView: View {
     /// running now. A dot only when it waits for you (amber) or a step failed (red).
     private var quietLine: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: toggle) {
-                HStack(spacing: 5) {
-                    if card.working {
-                        RunningRing()
-                    } else if card.waiting {
-                        Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6)
+            HStack(spacing: 8) {
+                Button(action: toggle) {
+                    HStack(spacing: 5) {
+                        if card.working {
+                            RunningRing()
+                        } else if card.waiting {
+                            Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6)
+                        }
+                        if card.parts.isEmpty {
+                            Text(card.title).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).truncationMode(.tail)
+                        } else {
+                            Text(Self.line(card.parts)).lineLimit(1).truncationMode(.tail)
+                        }
+                        if !card.working && !card.isEmpty {
+                            Image(systemName: card.expanded ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
+                        }
+                        Spacer(minLength: 0)
                     }
-                    if card.parts.isEmpty {
-                        Text(card.title).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).truncationMode(.tail)
-                    } else {
-                        Text(Self.line(card.parts)).lineLimit(1).truncationMode(.tail)
-                    }
-                    if !card.working && !card.isEmpty {
-                        Image(systemName: card.expanded ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
-                    }
-                    Spacer(minLength: 0)
+                    .font(.system(size: 13))
+                    .frame(height: card.lineHeight)
+                    .contentShape(Rectangle())
+                    .help(card.parts.compactMap(\.help).joined(separator: "\n"))
                 }
-                .font(.system(size: 13))
-                .frame(height: DisclosureCard.lineHeight)
-                .contentShape(Rectangle())
-                .help(card.parts.compactMap(\.help).joined(separator: "\n"))
+                .buttonStyle(.plain)
+                if !card.images.isEmpty { StepImagesView(images: card.images) { card.onAction?($0) } }
             }
-            .buttonStyle(.plain)
             if card.expanded {
                 switch card.content {
                 case .cards(let cards):
@@ -909,5 +926,69 @@ public struct RunningRing: View {
             .frame(width: size, height: size)
             .onAppear { withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { turning = true } }
             .accessibilityLabel("Running")
+    }
+}
+
+/// Images a turn's steps returned (screenshots it read), at the end of its activity line: small rounded thumbnails,
+/// the last few if there are many. A click opens the image.
+struct StepImagesView: View {
+    let images: [CardImage]
+    let open: @MainActor (TranscriptAction) -> Void
+    static let shown = 3
+
+    var body: some View {
+        HStack(spacing: 6) {
+            let hidden = max(0, images.count - Self.shown)
+            if hidden > 0 {
+                Text("+\(hidden)").font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).monospacedDigit()
+            }
+            ForEach(images.suffix(Self.shown), id: \.self) { image in
+                Button { open(.openAttachment(stored: image.stored)) } label: { StepThumbnail(url: image.url) }
+                    .buttonStyle(.plain)
+                    .help("Open \(image.name)")
+                    .accessibilityLabel("Image \(image.name)")
+            }
+        }
+    }
+}
+
+/// One thumbnail, read small from the kept file (cached across re-renders).
+struct StepThumbnail: View {
+    let url: URL
+    @State private var image: NSImage?
+    static let size = CGSize(width: 52, height: 34)
+    nonisolated(unsafe) private static let cache = NSCache<NSURL, NSImage>()
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color(nsColor: DS.chip))
+            if let image {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                    .frame(width: Self.size.width, height: Self.size.height)
+            } else {
+                Image(systemName: "photo").font(.system(size: 11)).foregroundStyle(Color(nsColor: DS.fg3))
+            }
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color(nsColor: DS.line), lineWidth: 0.5))
+        .contentShape(Rectangle())
+        .task(id: url) { image = await Self.load(url) }
+    }
+
+    static func load(_ url: URL) async -> NSImage? {
+        if let hit = cache.object(forKey: url as NSURL) { return hit }
+        let image = await Task.detached(priority: .utility) { () -> NSImage? in
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 160,
+            ]
+            guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+            return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        }.value
+        if let image { cache.setObject(image, forKey: url as NSURL) }
+        return image
     }
 }

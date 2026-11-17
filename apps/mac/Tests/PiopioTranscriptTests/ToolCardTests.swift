@@ -57,6 +57,17 @@ import Testing
     #expect(parts[2].chip == "notes.md")
 }
 
+@Test func screenshotsAStepReadShowOnItsActivityLine() throws {
+    let json = #"{"kind":"steps","id":"s","at":"","tools":[{"id":"t","at":"","callId":"c","tool":"read","args":{"path":"/tmp/probe.png"},"status":"done","images":[{"name":"probe.png","kind":"image","mimeType":"image/png","stored":"tools/c-1.png"}]}]}"#
+    guard case .steps(let steps) = try JSONDecoder().decode(TimelineItem.self, from: Data(json.utf8)) else { Issue.record("not steps"); return }
+    let folder = URL(fileURLWithPath: "/home/attachments/ses_1")
+    let card = ItemRenderer.stepsCard(steps, attachments: folder)
+    #expect(card.images == [CardImage(url: folder.appending(path: "tools/c-1.png"), stored: "tools/c-1.png", name: "probe.png")])
+    // The line grows to fit the thumbnails; without the folder there are none.
+    #expect(card.height(width: 600) == DisclosureCard.imageLineHeight)
+    #expect(ItemRenderer.stepsCard(steps).images.isEmpty)
+}
+
 @Test func handedOverFilesOpenAndMissingOnesSaySo() {
     let item = ToolItem(id: "t9", at: "", callId: "c9", tool: "present_files", args: .object(["files": .array([.object(["path": .string("out/report.pdf")])])]), status: .done,
                         details: .object(["type": .string("files"), "files": .array([

@@ -65,7 +65,8 @@ final class ThreadModel {
 
     init(ref: ContainerRef, engine: EngineController, notifies: Bool = true, compact: Bool = false) {
         let root = ref.kind == .build ? engine.buildSessions.first { $0.ref.id == ref.id }?.cwd : nil
-        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread, build: ref.kind == .build, root: root)
+        document = TranscriptDocument(compact: compact, versions: ref.kind == .thread, build: ref.kind == .build, root: root,
+                                      attachments: engine.home.appending(path: "attachments").appending(path: ref.id))
         draftStore = DraftStore(home: engine.home)
         draftWriter = DraftWriter(store: draftStore)
         self.ref = ref
