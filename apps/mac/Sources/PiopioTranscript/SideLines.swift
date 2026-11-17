@@ -62,9 +62,9 @@ extension ItemRenderer {
         m.append(NSAttributedString(string: "\t" + what, attributes: [.font: meta, .foregroundColor: DS.fg3]))
         let why = flat(t.args?["why"]?.stringValue)
         if !why.isEmpty { m.append(NSAttributedString(string: lineSeparator + why, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2])) }
-        // A thin line of air above the buttons, as in the approval card.
-        m.append(NSAttributedString(string: lineSeparator, attributes: [.font: NSFont.systemFont(ofSize: 5)]))
-        m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+        // A little air above the buttons, as in the approval card: an empty line is a whole line tall, so a taller
+        // invisible glyph lifts the line above instead (lines put their extra height above the text).
+        m.append(NSAttributedString(string: lineSeparator + "\u{200B}", attributes: [.font: NSFont.systemFont(ofSize: 17)]))
         m.append(NSAttributedString(string: "Dismiss", attributes: [
             .font: NSFont.systemFont(ofSize: 12.5, weight: .medium), .foregroundColor: DS.fg2,
             .link: TranscriptAction.offer(kind: SideActionKind.dismiss, callId: t.callId).url, .toolTip: "Drop this proposal",
@@ -74,8 +74,8 @@ extension ItemRenderer {
         start.addAttribute(.toolTip, value: "Start it as its own conversation", range: NSRange(location: 0, length: start.length))
         m.append(start)
         let out = NSMutableAttributedString(attributedString: card(m, .approval, lineHeight: 1.6))
-        // The right tab sits so Start's capsule (it overhangs its text by 5) ends where the text's left inset begins.
-        out.addAttribute(.piopioRightTab, value: NSNumber(value: Double(CardLayoutFragment.padding + 2 + 5)), range: NSRange(location: 0, length: out.length))
+        // One right tab for the meta and Start, at the card's text inset (the pill is no wider than its run).
+        out.addAttribute(.piopioRightTab, value: NSNumber(value: Double(CardLayoutFragment.padding + 2)), range: NSRange(location: 0, length: out.length))
         return out
     }
 

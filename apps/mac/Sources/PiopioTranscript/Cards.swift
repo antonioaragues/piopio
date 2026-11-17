@@ -136,9 +136,14 @@ final class CardLayoutFragment: NSTextLayoutFragment {
                 let rect = CGRect(x: b.minX + x0 - 2, y: b.minY + 1, width: x1 - x0 + 4, height: b.height - 2).offsetBy(dx: point.x, dy: point.y)
                 switch style {
                 case .primary:
-                    // Tall lines put the text at their bottom: the pill hugs the text, not the line.
-                    let h = min(rect.height, 21)
-                    fill(context, CGRect(x: rect.minX - 3, y: rect.maxY - h + 1.5, width: rect.width + 6, height: h), DS.inv, radius: 6)
+                    // Sized from the label's font at its baseline (tall lines put their extra space above the text),
+                    // and only as wide as the run: its thin spaces are the padding, so the pill's edges line up with
+                    // the card's text instead of overhanging it.
+                    let font = paragraph.attribute(.font, at: start, effectiveRange: nil) as? NSFont ?? .systemFont(ofSize: 12, weight: .medium)
+                    let baseline = b.minY + line.glyphOrigin.y + point.y
+                    let pad: CGFloat = 3.5
+                    let pill = CGRect(x: rect.minX + 2, y: baseline - font.ascender - pad, width: rect.width - 4, height: font.ascender - font.descender + pad * 2)
+                    fill(context, pill, DS.inv, radius: 6)
                 case .secondary: break
                 case .file:
                     // Sized from the name's font at the baseline, like code chips: the chip line is tall, and its bounds

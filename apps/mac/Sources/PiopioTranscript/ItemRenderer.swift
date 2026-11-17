@@ -877,9 +877,9 @@ nonisolated struct ItemRenderer: Sendable {
 
     private var footerFont: NSFont { .systemFont(ofSize: 11.5, weight: .medium) }
 
-    /// A capsule button (error cards): accent fill for the primary action, chip fill otherwise.
+    /// A capsule button: a dark fill for the primary action (its thin spaces are its padding), plain text otherwise.
     func pill(_ title: String, _ action: TranscriptAction, _ style: PillStyle) -> NSAttributedString {
-        NSAttributedString(string: "\u{2009}\u{2009}\u{2009}\(title)\u{2009}\u{2009}\u{2009}", attributes: [
+        NSAttributedString(string: "\u{2009}\u{2009}\u{2009}\u{2009}\(title)\u{2009}\u{2009}\u{2009}\u{2009}", attributes: [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
             .foregroundColor: style == .primary ? DS.invfg : DS.fg2,
             .link: action.url,

@@ -158,7 +158,9 @@ as with `piopio-history`.
 - **Conversation card** (the reference's): title; a dot (grey proposed, pulsing working, amber needs you, green done,
   red failed); one muted live line; a chevron. Click opens it. ⌥-click opens it beside (later, with split view).
   Done cards on a worktree carry the finishing actions.
-- **Proposal card:** dashed outline, title, the model's one-line reason, **Start** · **Dismiss**, "until 19 Nov".
+- **Proposal card:** the approval card's shape (docs/design/grey build-approval): the title, and "Proposed · in
+  *project* · until 19 Nov" on the right; the model's one-line reason; **Dismiss** on the left, **Start** on the right.
+  No blue dot: it's Piopio's idea, not something waiting on you.
 - **Note row:** "Message from *title* ›" with the time; unfolds to the note; the title opens the conversation.
 - **In the side conversation:** the "Started from *parent* ›" bar (the same bar as "Continued from", 18 §5).
 - **Sidebar:** side conversations sit one level under their parent, folded into "2 side conversations" when all are
