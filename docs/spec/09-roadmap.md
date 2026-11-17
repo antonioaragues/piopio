@@ -19,7 +19,7 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 |---|---|---|---|
 | **A · Make it real** | [status](../status.md), [acceptance](../acceptance.md) | Scripted tests, captures, one real-model team trial (20 §14) | The eight acceptance items; real providers (ChatGPT sign-in, a real Ollama/LiteLLM); real Google and Microsoft accounts; sleep/wake schedules; VoiceOver |
 | **B · Agents and teams** | 06, 19, 20, 21, 26 | 19 T0–T2; 20 P1–P4; 21 D1–D7 | 26 **C1–C4** (teams become a project's way of working and playbooks, decided 2026-11-17); the "not yet" lists of D2–D4 |
-| **C · Conversations** | 18, 24, 17 | 18 phases 1–3 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the rest of 17 became teams, TD2). Debate (16) was removed 2026-11-15 |
+| **C · Conversations** | 18, 24, 17 | 18 phases 1–3 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the router is dropped: from Home, Piopio starts side conversations across projects, 26 CL11). Debate (16) was removed 2026-11-15 |
 | **D · Reach** (what the model can touch) | 22, 23, 12, 10 | Connectors C1; providers P0–P1; browser **W1–W2** (22 §14–15) | Browser **W3–W4**; computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); MCP Apps (D6); image generation (D11) |
 | **E · Cloud and channels** | 13, 19 T3–T4 | Spikes S4 and S7 (go); Telegram from the Mac | 13 **5.1–5.5**: deploy, Telegram by webhook, Mac Bridge, WhatsApp. Nothing is on a real account |
 | **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8, which 17 DP5 and 24's Create PR wait for); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
@@ -39,10 +39,10 @@ One build track at a time, plus Track A running beside it as use, not as buildin
 
 **Next**
 3. **Side conversations SD1–SD2** (24) with **Watchdog DP1** (17). Neither needs anything unbuilt, both help daily
-   use at once, and the report bridge they add also serves teams.
+   use at once, and the report bridge they add also serves board helpers and `task` (26 §7.1).
 4. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
    reads pages and, asking per site, clicks and types in a Browser panel; the interim Playwright browser is gone.
-5. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on team, worktree and
+5. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on board, worktree and
    side-conversation cards.
 
 **Later** (each waits for something)

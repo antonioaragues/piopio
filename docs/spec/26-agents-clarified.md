@@ -1,6 +1,6 @@
 # 26 · Agents, clarified: contacts, and Piopio orchestrates the work
 
-Status: draft 2026-11-16, from a conversation with the user; decisions CL1–CL10 confirmed by the user 2026-11-17;
+Status: draft 2026-11-16, from a conversation with the user; decisions CL1–CL12 confirmed by the user 2026-11-17;
 the questions of §10 are still open; nothing here is built. It changes what 19, 20 and 21 made of agents and teams: it keeps the machinery they built (the board, worktrees,
 review, merging, project routines) and takes teams away as something you make and manage. 06 (agents) and 19 §0 S1–S5
 ("simple first") still hold, more strictly.
@@ -44,9 +44,11 @@ same result with nothing to set up.
 | CL8 | **The one bridge: asking an agent.** In any conversation, `@Rita` or the model calling `ask_agent` asks one of your agents something. She answers from her own conversation, with her instructions, model, memory and tools, and the answer comes back indented (21 D6, as built). She doesn't work in the project's folder and doesn't become part of the work. | Also: agents as team members |
 | CL9 | **Piopio offers, you start.** Before it puts parallel work on the board in a project that hasn't done that yet, Piopio asks ("This could go faster in parallel: 3 parts", with Work in parallel / Do it here, one by one), as `offer_team` does today. Once the project has a way of working, Piopio splits work on its own and shows the plan. | `offer_team` → "A team for <project>" sheet → `teams.adopt` |
 | CL10 | **Routines keep their two owners** (21 AD5): an agent's (it messages you) or a project's (it opens a conversation there with Piopio). | Same; "with the lead" goes |
+| CL11 | **No Dispatch router** (added 2026-11-17). From Home, Piopio is the front door: work in one or more projects becomes one side conversation per project (24), which reports back there. 17's Watchdog, non-blocking `task`, PR events and limits stay (17's note). | 17: a separate router that never does the work; 19 TD2: Dispatch as the default team |
+| CL12 | **Agent-to-agent stays a bridge** (added 2026-11-17). `ask_agent` as built; `tell_agent` for notices only, not for handing work to another agent; the WhatsApp front agent answers and asks, and doesn't hand out work; agent boards (06 §12.1) go (06 §7's note). | 06 AA3 and §5.3: fire-and-forget delegation, a front agent that dispatches; 06 §12.1 |
 
-**What this doesn't change:** Dispatch (17) is still the idea of a front door across projects. Under CL3 it's the same
-orchestrator one level up, and it isn't part of this spec.
+**Dispatch (17)** was the idea of a front door across projects. Under CL3 it's the same orchestrator one level up:
+CL11 makes it Piopio at Home, starting side conversations in projects.
 
 ## 3. The model
 
@@ -126,6 +128,42 @@ team's.
   `tools/chat-resources.ts`). Built-in ones ship with the app, and a project enables the ones it uses.
 - **`ask_agent`** stays as built. Members' sessions don't get it, and neither do helpers.
 
+### 7.1 One mechanism for child sessions (added 2026-11-17)
+
+Three things start a session from a conversation, and they should be one mechanism with three uses, not three:
+
+| Use | For | Lives | Reports to |
+|---|---|---|---|
+| **`task`** (05 §4) | A read-only piece of this turn that would flood the context (a wide search, a long trace) | Inside the turn; you can open it | This turn |
+| **A helper** (§7) | A piece of this job that changes files in parallel, or an independent review | The board, a worktree | The conversation that made the job |
+| **A side conversation** (24) | A different subject | The sidebar, under its parent | Its parent, as a note |
+
+They share:
+- **one start that doesn't block** (17 §3: `wait: false` by default, a wait call for when the parent needs the
+  result);
+- **one report bridge** (24 §7), with batched notes that may wake the parent and the same loop guard;
+- **one set of limits**: running at once, cost per job or per session, permissions never wider than the parent's.
+
+**When to start one at all.** Doing the work in the conversation is the default, with parallel tool calls inside the
+turn. A child session is for one of three reasons: the context would get too large, the work really runs in parallel
+(and, for writes, needs its own worktree), or it needs fresh eyes (review). A role, a domain or "a specialist for X"
+isn't a reason; that's a playbook. (Anthropic, *When to fold subagents into your main agent loop*, 2026-10-22, and
+20 §14.)
+
+### 7.2 Rules in the tools, not the prompt (added 2026-11-17)
+
+- **A report isn't proof.** Before Piopio says a helper's task is done or offers the merge card, it reads the diff and
+  the check's output, not only the report (24 §5 says the same for notes).
+- **The way of working is enforced by the board's tools:** a task is sent back at most `reviewLimit` times, then the
+  tool returns "ask the user"; merging is refused until review passed when review is on; the budget stop is the
+  engine's. Each refusal says what to do next, so the model can act on it.
+- **Tools per session:** count them for each kind of session (a chat, a project conversation with parallel work on, a
+  helper). Above roughly 30–50 definitions, choice gets worse, so the rest are found through tool search, as MCP
+  servers and the browser already are (22 §13). Group tools by what you want done, not one per API.
+- **Prompt audit with C1:** Piopio's project brief, the build and chat prompts and the playbooks get a pass for rules
+  written for weaker models. Piopio runs on several providers, so what's cut for frontier models may come back as a
+  section for a model family, not in everyone's prompt.
+
 ## 8. Migration
 
 At first start after this ships, once, with a short report in the app ("What changed in your teams"):
@@ -152,6 +190,10 @@ At first start after this ships, once, with a short report in the app ("What cha
 | **C2 · Teams leave the app** | Sidebar, project Settings (§4), the Board's empty state, the conversation without the pill, Agents without Join a team; the migration report. | You can't find "team" anywhere in the app except the migration report. | M |
 | **C3 · Playbooks** | Built-in playbooks from the templates; a project enables them; Piopio picks one when it plans and says which; "Save how we did this as a playbook" after a merge, as a skill diff you accept. | A research project and a code project plan differently from their playbooks, and you edit a playbook and the next plan follows it. | M |
 | **C4 · A real trial** | Like 20 §14, with real models on a throwaway project: small requests, a parallel job, a job with `@` an agent. | The costs and judgement match 20 §14's, or this spec says why not. | S |
+
+**CL11 and CL12** aren't phases of their own. CL11 is 24's SD1–SD2 plus a side conversation in another project, from
+Home. CL12 goes with C1: `tell_agent`'s description and the front agent's brief say "notices only", and nothing that
+was built for agent boards exists to remove.
 
 **Order:** C1, then C2, so the app never shows teams that the engine no longer has. C3 can follow later. Until then,
 the built-in Development playbook is the lead's current brief.

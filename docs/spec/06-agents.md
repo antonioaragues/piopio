@@ -199,6 +199,17 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 - **AA8** (4.6) Locally the engine routes messages in-process between agents' runtimes; each agent keeps a log of what it sent and answered, and the trace view joins them. A message nested in a trace that B's conversation with A is still answering (A asks B, B asks A, A asks B again) goes to a side conversation, so it doesn't wait behind itself. In an agent's conversation with another agent, memory tools use only the `shared` partition. Policies `agentMessagesPerHour` and `traceBudgetUsd` change the AA4 defaults; contacts can't make an agent reach other agents (AS2).
 - **Later:** **rooms**: a multi-agent conversation the owner can watch and join (and a Telegram group with several agent bots).
 
+> **Since 26: decided with the user 2026-11-17 (26 CL12).** 26 CL8 makes asking an agent the one bridge: the agent answers from
+> its own conversation and doesn't become part of the work. Against that rule:
+> - **`ask_agent` stays** as built (AA2), with the guards of AA4.
+> - **`tell_agent` stays for notices only** ("the report is ready", "the owner is travelling this week"), not for handing
+>   one agent work to do for another. Work you want done goes to a project conversation with Piopio, or to an agent
+>   by talking to it yourself.
+> - **The WhatsApp front agent (5.3) answers itself and asks;** it may `ask_agent` the others, but it doesn't
+>   dispatch their work.
+> - **Agent boards (12.1) go:** a board of tasks is a project's (26 §5), and agents never join a project (CL2).
+> - **Rooms** stay in Later, as a conversation you watch, not as a way to split work.
+
 ## 8. Memory
 
 - **ME1** A memory item is `{id, partition, text, source: {conversationId, itemId}, createdBy: agent|user, at, expiresAt?}`.
@@ -264,6 +275,8 @@ While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud En
 - **UI11 Spend at a glance:** a single line in the Agents sidebar footer, such as "This month · $4.10 of $40", sums the agents' budgets (AS3). Clicking it opens Costs. It turns amber at 80%.
 
 ## 12.1 Agent boards (later)
+
+**Dropped 2026-11-17 (26 CL12):** since 26 a board belongs to a project, and agents never join one.
 
 A **board** of tasks for agents ("Projects" in Agents): columns To do / Doing / Done, with cards assigned to an agent. The agent picks up a card as a run, keeps its checklist on the card (the Build `todo` tool), moves it, and posts the result card when done. The owner can add, reorder or reassign cards; agents can add cards for each other (agent-to-agent, §7) within their budgets.
 

@@ -2,6 +2,27 @@
 
 Written 2026-11-03. Planned; nothing built yet. "Dispatch" is a working name (DPQ1).
 
+> **Where this stands: decided with the user 2026-11-17 (26 CL11).** 19 TD2 made Dispatch the default team, and 26
+> has since removed teams, so Dispatch as written had no home. The separate router is dropped, and what it was for
+> stays:
+>
+> - **No Dispatch row, no router that "never does the work".** From Home, Piopio is the front door. A request for
+>   work in one or more projects ("in piopio, fix the picker; in wiki, add a dark-mode toggle") becomes one **side
+>   conversation per project** (24), started because you asked for separate work (SC3) and reporting back to the
+>   Home conversation with notes (24 §5). This needs 24's "Later" item *a side conversation in another project*,
+>   brought forward.
+> - **Piopio still does small things itself,** at Home as anywhere (26 CL3). A one-line question about a project is
+>   answered, not handed out.
+> - **What stays from this spec:** the Watchdog (§4, DP1, DP6), non-blocking `task` (§3, DP4), PR events routed to the
+>   conversation that owns the branch (§5, DP5), and §2.6's limits, which 24 already uses.
+> - **What goes:** DP2 and DP3 (Dispatch's own runtime, Main, sidebar row and board), and DPQ1–DPQ3.
+>
+> Why: a router that only classifies and hands out is the layer that one capable orchestrator no longer needs
+> (Anthropic, *When to fold subagents into your main agent loop*, 2026-10-22), and Piopio already has the two pieces
+> that do the job: side conversations for separate work and Piopio for everything else. The rest of the page is kept
+> as written: §3, §4, §5 and §2.6 still hold, and the parts about Dispatch's own runtime (§1, §2.1–§2.5, DP2, DP3,
+> DPQ1–DPQ3) are history.
+
 ## 0. Where this comes from
 
 DeepSeek Harness's article *Exploring Super-agent Design* (X, 2026-11-01) argues that single coding tasks now need
@@ -210,8 +231,8 @@ With the scripted model and a fake clock:
 
 - **DP1 — Watchdog rules.** W1–W5 for all Build sessions and agents, Inbox entries. Useful on its own, before
   Dispatch exists.
-- **DP2 — Dispatch, engine.** The runtime, tools, reports, board, limits, protocol, tests.
-- **DP3 — Dispatch, app.** Sidebar row, Main with cards, Board panel, finishing from cards, badges. Then real use on
+- **DP2 — Dispatch, engine.** *Dropped 2026-11-17 (26 CL11).* The runtime, tools, reports, board, limits, protocol, tests.
+- **DP3 — Dispatch, app.** *Dropped 2026-11-17 (26 CL11).* Sidebar row, Main with cards, Board panel, finishing from cards, badges. Then real use on
   this repo for a week and prompt tuning.
 - **DP4 — Non-blocking subagents** (§3). Independent of DP2; can go first.
 - **DP5 — PR events** (§5), after Phase 6's G6–G7.

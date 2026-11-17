@@ -45,7 +45,7 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
 | `piopio-checkpoints` | Snapshot before each turn that writes files (§7). |
 | `piopio-plan` | Plan mode: read-only tools until the user approves a plan. Plan rendered as a checklist card. |
 | `piopio-todos` | Todo list tool. Shown in the inspector and as a progress card. |
-| `piopio-subagents` | `task` tool to spawn child sessions (shown as nested `task` items, openable). Children inherit the parent's approval mode and count toward its cost. Default max 3 concurrent children per session. |
+| `piopio-subagents` | `task` tool to spawn child sessions (shown as nested `task` items, openable). Children inherit the parent's approval mode and count toward its cost. Default max 3 concurrent children per session. Blocks its parent today; non-blocking is 17 §3 (DP4). Since 2026-11-17 it's one of three uses of one child-session mechanism, for a read-only piece of the turn that would flood its context (26 §7.1). |
 | `piopio-notify` | `notify_user(message)` / `ask_user(question, options)` for agent-initiated questions. Surfaced as a "waiting for you" state. |
 | `piopio-sandbox` | Runs `bash` inside macOS's sandbox (AP5). Built 2026-11-08. |
 | `piopio-present` | `present_files(files)`: the files the agent made for you, as a card per file that opens in the viewer. Kept out of the folded activity line. Built 2026-11-08. |

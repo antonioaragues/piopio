@@ -488,6 +488,11 @@ runs every thread on the same agent, giving a thread without a project a folder 
 
 ## 16. One New, and Agents beside Home (2026-11-15)
 
+> **Since 26 (2026-11-17):** the team parts of §16–§20 go in 26 C2. The Agents page lists agents only (CF10, no
+> Teams tab and no New team); the Board row under a project is the project's, not a team's (CF21); How it works in the
+> settings sheet becomes the project's way of working (CF22, 26 §4); and the New conversation page has no team mark
+> or "What should **Development team** do?" (CF24). The rest stands.
+
 **Why:** the compose button was a menu of four kinds (conversation, conversation in a project, project, agent), and
 every sidebar section had its own `+`. Agents and teams sat between Projects and Conversations, as if they were more of
 your work, when they are things you set up once and that then run on their own. The user picked proposal A of three
