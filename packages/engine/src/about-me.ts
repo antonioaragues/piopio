@@ -6,7 +6,7 @@
  * what it stored (07 §6.2 MM3) shows no text here; the agents then recall from it instead.
  */
 import { existsSync, readFileSync, renameSync } from "node:fs";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { BuiltinMemory, MemoryEvent, MemoryProvider, MemoryRecord } from "@piopio/runtime";

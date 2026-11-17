@@ -94,32 +94,3 @@ exports[`pi SDK mapper > pi-sdk-tools-faux: streamed timeline equals a fresh sna
   },
 ]
 `;
-
-exports[`pi-durable mapper > pi-durable-chat-faux: items use committed entry ids 1`] = `
-[
-  {
-    "id": "7",
-    "kind": "user",
-    "text": "hello piopio",
-  },
-  {
-    "id": "10",
-    "kind": "assistant",
-    "model": "faux/faux-1",
-    "parts": [
-      {
-        "text": "Echo: hello piopio",
-        "type": "text",
-      },
-    ],
-    "status": "done",
-    "usage": {
-      "cacheReadTokens": 0,
-      "cacheWriteTokens": 5,
-      "costUsd": 0,
-      "inputTokens": 5,
-      "outputTokens": 5,
-    },
-  },
-]
-`;

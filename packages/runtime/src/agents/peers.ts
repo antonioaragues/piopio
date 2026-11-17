@@ -11,7 +11,7 @@
  * - Answers in progress survive a restart: B answers when it comes back, and A gets it as a late reply.
  */
 import { awaitWithContext, type Context } from "@earendil-works/chord/context";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool, type ConversationId, type Harness } from "@earendil-works/pi-durable";
 import type { AgentDefinition } from "./definition.js";
 
@@ -289,9 +289,8 @@ export class Peers {
 	private async answerOf(conversationId: string, envelopeId: string): Promise<{ answer: string; costUsd: number }> {
 		const conversation = await this.host.harness.conversation(Number(conversationId) as never, this.host.context);
 		if (!conversation) return { answer: "", costUsd: 0 };
-		const view = await conversation.viewState(this.host.context);
-		const entries = view.value.entries as readonly { kind: string; data?: { id?: string }; model?: { role: string; content?: unknown; usage?: { cost?: { total?: number } } }[] }[];
-		view.dispose();
+		// The active transcript, as the model sees it.
+		const entries = (await conversation.context(this.host.context)).entries as unknown as readonly { kind: string; data?: { id?: string }; model?: { role: string; content?: unknown; usage?: { cost?: { total?: number } } }[] }[];
 		const start = entries.findIndex((e) => e.kind === AGENT_ENTRY && e.data?.id === envelopeId);
 		let answer = "";
 		let costUsd = 0;

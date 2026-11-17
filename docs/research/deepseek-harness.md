@@ -30,7 +30,7 @@ Two facts matter for us:
 
 ### 1.3 The pi-ai patch
 The patch does two things:
-1. **It removes `parseStreamingJson` on every tool-call delta** (Anthropic, OpenAI completions/responses, Bedrock, Mistral, pi-messages). Re-parsing the whole growing JSON on every chunk is quadratic, and it gets slow when the model writes a large file in one `write` call. Piopio's pinned **pi-ai 1.4.0 still does this** (`dist/api/anthropic-messages.js` ~L588).
+1. **It removes `parseStreamingJson` on every tool-call delta** (Anthropic, OpenAI completions/responses, Bedrock, Mistral, pi-messages). Re-parsing the whole growing JSON on every chunk is quadratic, and it gets slow when the model writes a large file in one `write` call. Piopio's pinned **pi-ai 1.4.0 still does this** (`dist/api/anthropic-messages.js` ~L588). *(2026-11-17: fixed upstream in pi-ai 1.5, which reads the JSON once with `StreamingJsonParser`; Piopio's patch was dropped with the upgrade to 1.5.2.)*
 2. **It keeps Gemini's `thought_signature`** when a tool call is replayed over an OpenAI-compatible endpoint. That matters only for Gemini through a custom OpenAI-compatible endpoint, not for pi's `google` provider.
 
 **For Piopio:** check whether anything shows *partial* tool arguments while they stream. The timeline builder reads `arguments` from finished messages. If nothing does, apply (1) as a `pnpm patch`, and better, report it upstream to pi. (2) can wait until someone uses that route.

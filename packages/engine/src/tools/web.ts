@@ -8,7 +8,7 @@ import { isIP } from "node:net";
 import { request as httpRequest, type RequestOptions } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { Readable } from "node:stream";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { ModelHub } from "../models.js";
 import { localDate, localZone } from "@piopio/runtime";

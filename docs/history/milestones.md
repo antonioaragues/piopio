@@ -329,3 +329,18 @@ After a look at T3 Code (pingdotgg/t3code), which also drives pi:
   as a chat with its author.
 - **One engine for conversations:** chats run on pi-coding-agent like folder conversations, in a folder of their own,
   with the same tools as before (docs/spec/18 §15). Old chats move once, at start; the old engine for chats is gone.
+
+## pi 1.5.2 (2026-11-17)
+Every `@earendil-works/*` package moved from 1.4.0 to 1.5.2, and Cloudflare's `agents` from 0.30.1 to 0.33.0 (the first release that accepts pi 1.5).
+- **Agents' transcripts follow state, not events.** pi-durable 1.5 removed `watchEvents()`. The engine and the cloud
+  now read the active transcript, then watch the conversation view (`Conversation.watch()`, or `PiSession.watch()` in
+  the cloud) and compare each value with the last: new entries, the partial answer in `pi.live.generation`, tool slots
+  in `pi.live.tools`, the queue in `pi.inbox`, run and compaction failures (`DurableViewMapper`, spec 03 §6).
+- **The removed state getters:** `Conversation.viewState()` became `Conversation.context()`, the same active transcript
+  (old-chat migration, an agent's answer to another agent, proactive run summaries).
+- **pi-ai's streaming patch is gone:** 1.5 parses streamed tool-call JSON once, for every provider the patch touched.
+- pi-ai no longer re-exports TypeBox's `Type`: tools import it from `typebox`. pi-coding-agent reworded its preamble
+  (Build's prompt replaces the new wording). Nothing used `GrepOperations.readFile`.
+- **Not changed, open:** pi-coding-agent 1.5.1 turns on idle prompt-cache warming by default (`cacheWarming: "idle"`):
+  between runs it may refresh a cache for up to 30 minutes when pi expects that to save money. It reads the user's own
+  `~/.pi/agent/settings.json`, so Build and chats follow the pi CLI's setting.

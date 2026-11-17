@@ -5,7 +5,7 @@
  * Groups are opted into per agent (`tools.apple`, NB1); reading is free, changes follow the approval policy (§9).
  * With no app connected (background mode, app closed) the tools say so (NB2).
  */
-import { Type, type TSchema } from "@earendil-works/pi-ai";
+import { Type, type TSchema } from "typebox";
 import { defineTool, type JsonObject } from "@earendil-works/pi-durable";
 import type { ResultCard } from "./safety.js";
 

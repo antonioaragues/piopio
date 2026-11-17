@@ -3,14 +3,13 @@
  * object's SQLite. Clients reach it over a hibernatable WebSocket speaking a subset of the
  * Engine Protocol (JSON-RPC 2.0, one message per text frame).
  *
- * Subscriptions live in each connection's attachment, so they survive hibernation. The pi event
- * streams behind them are in memory only: after any wake (WebSocket message, alarm, request) the
- * object reopens them and sends each subscriber a `resnapshot`, because pi's event streams cannot
- * resume from a cursor.
+ * Subscriptions live in each connection's attachment, so they survive hibernation. The pi watches
+ * behind them are in memory only: after any wake (WebSocket message, alarm, request) the object
+ * reopens them and sends each subscriber a `resnapshot`.
  */
-import { createRegistry, Harness, type AgentEventStream } from "@earendil-works/pi-durable";
+import { createRegistry, Harness, type ConversationWatch } from "@earendil-works/pi-durable";
 import { methods, PROTOCOL_VERSION, type JsonRpcId, type MethodName, type ModelRef, type Params, type Result, type SessionEvent } from "@piopio/protocol";
-import { PiHarness, ROOT_SESSION } from "agents/harness/pi";
+import { PiHarness, ROOT_SESSION, type PiSession } from "agents/harness/pi";
 import { Lifecycle } from "agents/lifecycle";
 import { WebSockets } from "agents/websockets";
 import { DurableObject } from "cloudflare:workers";
@@ -19,7 +18,7 @@ import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js
 import type { Env } from "./env.js";
 import { createCloudModels, defaultModel } from "./models.js";
 import { TimelineBuilder } from "./timeline/builder.js";
-import { DurableEventMapper } from "./timeline/pi-durable.js";
+import { DurableViewMapper, type DurableView, type Entry } from "./timeline/pi-durable.js";
 
 export const CLOUD_VERSION = "0.0.0";
 
@@ -37,23 +36,27 @@ class RpcError extends Error {
 	}
 }
 
-/** One pi session's event stream folded into a timeline, shared by its subscribers. */
+/** One pi session's state folded into a timeline, shared by its subscribers. */
 class SessionView {
 	readonly listeners = new Map<string, (events: SessionEvent[]) => void>();
 	private constructor(
 		readonly builder: TimelineBuilder,
-		private readonly stream: AgentEventStream,
+		private readonly watch: ConversationWatch,
 	) {}
 
-	static async open(agentId: string, session: string, stream: AgentEventStream, model: ModelRef): Promise<SessionView> {
+	/** The active transcript is read before the watch, so the watch's first value is as new or newer. */
+	static async open(agentId: string, session: string, pi: PiSession, model: ModelRef): Promise<SessionView> {
+		const transcript = (await pi.messages()) as unknown as Entry[];
+		const watch = await pi.watch();
 		const builder = new TimelineBuilder({ kind: "agent", id: agentId, conversationId: session });
-		const mapper = new DurableEventMapper(builder);
-		mapper.applySnapshot(stream.snapshot as never, false);
+		const mapper = new DurableViewMapper(builder);
+		mapper.load(transcript, watch.value as unknown as DurableView, false);
 		builder.setState({ model });
 		builder.flush();
-		const view = new SessionView(builder, stream);
-		stream.start(async (events) => {
-			for (const event of events) mapper.apply(event as never);
+		const view = new SessionView(builder, watch);
+		watch.start(async (call) => {
+			if (call.kind !== "value") return;
+			mapper.apply(call.value as unknown as DurableView);
 			const out = builder.flush();
 			if (out.length === 0) return;
 			for (const listener of view.listeners.values()) listener(out);
@@ -62,7 +65,7 @@ class SessionView {
 	}
 
 	async close(): Promise<void> {
-		await this.stream.stop();
+		await this.watch.stop();
 	}
 }
 
@@ -334,10 +337,7 @@ export class AgentDO extends DurableObject<Env> {
 	private async attach(connection: Connection, sub: Subscription): Promise<SessionView> {
 		let opening = this.views.get(sub.session);
 		if (!opening) {
-			opening = this.harness
-				.session(sub.session)
-				.events()
-				.then((stream) => SessionView.open(this.agentId, sub.session, stream, defaultModel(this.env)));
+			opening = SessionView.open(this.agentId, sub.session, this.harness.session(sub.session), defaultModel(this.env));
 			opening.catch(() => this.views.delete(sub.session));
 			this.views.set(sub.session, opening);
 		}

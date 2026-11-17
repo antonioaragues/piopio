@@ -11,7 +11,7 @@
 import { durableConnectorsExtension } from "../connectors/extension.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { ConversationBusy, createRegistry, Harness, watchEvents, type AgentEventStream, type Conversation, type Extension } from "@earendil-works/pi-durable";
+import { ConversationBusy, createRegistry, Harness, type Conversation, type ConversationWatch, type Extension, type SubmissionDraft } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem, UtilityChoice } from "@piopio/protocol";
 import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
@@ -19,7 +19,7 @@ import { BOT_TOKEN } from "../channels/telegram.js";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { TimelineBuilder } from "../timeline/builder.js";
-import { DurableEventMapper } from "../timeline/pi-durable.js";
+import { DurableViewMapper, type DurableView, type Entry } from "../timeline/pi-durable.js";
 import { groupSteps, StepsView } from "../timeline/steps.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
@@ -317,8 +317,10 @@ export class AgentRuntime implements Runtime {
 		return this.options.connectTelegram?.(token);
 	}
 
-	watch(conversation: Conversation): Promise<AgentEventStream> {
-		return watchEvents(this.harness, conversation.id, ctx);
+	/** The active transcript, then a watch of the conversation's state (read in that order, so the watch is newer). */
+	async watch(conversation: Conversation): Promise<{ transcript: Entry[]; watch: ConversationWatch }> {
+		const transcript = (await conversation.context(ctx)).entries as unknown as Entry[];
+		return { transcript, watch: await conversation.watch(ctx) };
 	}
 
 	submission(id: string) {
@@ -372,9 +374,9 @@ export class AgentRuntime implements Runtime {
 export class AgentView implements Runtime {
 	private readonly emitter = new Emitter();
 	private readonly builder: TimelineBuilder;
-	private readonly mapper: DurableEventMapper;
+	private readonly mapper: DurableViewMapper;
 	private readonly steps = new StepsView((items) => this.group(items));
-	private stream?: AgentEventStream;
+	private watch?: ConversationWatch;
 	private readonly queueTexts = new Map<string, string>();
 	/** What the person said, for each turn still running (retained with the answer when it ends). */
 	private readonly pending: { said: string; itemCount: number }[] = [];
@@ -405,7 +407,7 @@ export class AgentView implements Runtime {
 		else if ("peer" in who) this.peer = who.peer;
 		else this.contactId = who.contactId;
 		this.builder = new TimelineBuilder(this.ref);
-		this.mapper = new DurableEventMapper(this.builder, (id) => this.queueTexts.get(id));
+		this.mapper = new DurableViewMapper(this.builder, (id) => this.queueTexts.get(id));
 	}
 
 	get ref(): ContainerRef {
@@ -414,9 +416,9 @@ export class AgentView implements Runtime {
 
 	static async attach(agent: AgentRuntime, who: { contactId: string } | { run: RunRecord } | { peer: { id: string; name: string } }, conversation: Conversation): Promise<AgentView> {
 		const view = new AgentView(agent, who, conversation);
-		const stream = await agent.watch(conversation);
-		view.stream = stream;
-		view.load(stream.snapshot as never, false);
+		const { transcript, watch } = await agent.watch(conversation);
+		view.watch = watch;
+		view.load(transcript, watch.value as unknown as DurableView);
 		for (const undo of await agent.core.safety.undos()) if (undo.conversationId === view.conversationId) view.undos.set(undo.id, undo);
 		for (const approval of await agent.core.safety.approvals(view.conversationId)) view.approval(approval, false);
 		if (view.isOwner) for (const run of (await agent.runs()).runs) view.runLine(run, false);
@@ -424,28 +426,20 @@ export class AgentView implements Runtime {
 		agent.live.add(view);
 		await view.settings();
 		view.builder.flush();
-		stream.start(async (events) => {
-			let ended = false;
-			for (const event of events as { type: string; entry?: RawEntry; entries?: RawEntry[] }[]) {
-				if (event.type === "run_end") ended = true;
-				if (event.type === "snapshot") {
-					view.load(event as never, true);
-					continue;
-				}
-				view.mapper.apply(event as never);
-				if (event.entry) view.noteEntry(event.entry, true);
-			}
+		watch.start(async (call) => {
+			if (call.kind !== "value") return;
+			const { appended, runEnded } = view.mapper.apply(call.value as unknown as DurableView);
+			for (const entry of appended) view.noteEntry(entry as RawEntry, true);
 			view.emit(view.builder.flush());
-			if (ended) void view.turnEnded();
+			if (runEnded) void view.turnEnded();
 		});
 		return view;
 	}
 
 	/** The transcript, with outbound messages and notices in place. */
-	private load(snapshot: { entries?: RawEntry[] }, emit: boolean): void {
-		this.mapper.applySnapshot(snapshot as never, false);
-		for (const entry of snapshot.entries ?? []) this.noteEntry(entry, false);
-		if (emit) this.builder.resnapshot();
+	private load(transcript: Entry[], first: DurableView): void {
+		const newer = this.mapper.load(transcript, first, false);
+		for (const entry of [...transcript, ...newer]) this.noteEntry(entry as RawEntry, false);
 	}
 
 	get conversationId(): string {
@@ -700,7 +694,7 @@ export class AgentView implements Runtime {
 		const input = buildInput(text, options.attachments);
 		try {
 			const submission = await this.conversation.submit(
-				{ type: "input", content: input.content, ...(input.entry ? { entry: input.entry } : {}), whenBusy: options.whenBusy, ...(options.requestId ? { requestId: options.requestId } : {}) } as Parameters<Conversation["submit"]>[0],
+				{ type: "input", content: input.content, ...(input.entry ? { entry: input.entry } : {}), whenBusy: options.whenBusy, ...(options.requestId ? { requestId: options.requestId } : {}) } as SubmissionDraft,
 				ctx,
 			);
 			this.queueTexts.set(String(submission.id), text);
@@ -735,7 +729,7 @@ export class AgentView implements Runtime {
 
 	async stop(): Promise<void> {
 		this.agent.live.delete(this);
-		await this.stream?.stop();
+		await this.watch?.stop();
 	}
 
 	/** Person views close with their agent. */

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import type { SessionEvent, TimelineItem } from "@piopio/protocol";
 import { describe, expect, test } from "vitest";
 import { TimelineBuilder, type PiMessage } from "../src/timeline/builder.js";
-import { DurableEventMapper, messagesFromEntries } from "../src/timeline/pi-durable.js";
+import { DurableViewMapper, messagesFromEntries } from "../src/timeline/pi-durable.js";
 import { SdkEventMapper } from "../src/timeline/pi-sdk.js";
 import { endDetails, startDetails } from "../src/timeline/tool-details.js";
 
@@ -49,42 +49,94 @@ describe("pi SDK mapper", () => {
 });
 
 describe("pi-durable mapper", () => {
-	test("pi-durable-chat-faux: items use committed entry ids", () => {
-		const events = load("pi-durable-chat-faux");
-		const live = new TimelineBuilder({ kind: "thread", id: "thr_test" });
-		const mapper = new DurableEventMapper(live);
-		mapper.applySnapshot(events[0]!, false);
-		for (const e of events.slice(1)) mapper.apply(e);
-		const entries = events.filter((e) => e.type === "message_end").map((e) => e.entry as { id: number; kind: string; model?: PiMessage[] });
-		const { messages, ids } = messagesFromEntries(entries as never);
-		const fresh = new TimelineBuilder({ kind: "thread", id: "thr_test" });
-		fresh.reset(messages, (i) => ids[i]!, false);
-		expect(stable(live.snapshot().items)).toEqual(stable(fresh.snapshot().items));
-		expect(stable(live.snapshot().items)).toMatchSnapshot();
-	});
+	type V = Parameters<DurableViewMapper["apply"]>[0];
+	const user = (id: number, text: string) => ({ id, kind: "piopio.user", model: [{ role: "user", content: text, timestamp: 1 }], data: { text } });
+	const answer = (id: number, content: unknown[], stopReason = "stop") => ({ id, kind: "pi.assistant", model: [{ role: "assistant", content, stopReason, model: "m" }] });
+	const result = (id: number, callId: string, text: string, isError = false) => ({ id, kind: "pi.tool_result", model: [{ role: "toolResult", toolCallId: callId, toolName: "bash", content: [{ type: "text", text }], isError }] });
+	const view = (entries: unknown[], live: object = {}, inbox: unknown[] = []): V => ({ entries: entries as never, docs: { "pi.live": live, "pi.inbox": { items: inbox } } });
+	const run = { taskId: 9, inputs: [], turns: 0 };
 
-	test("streams deltas on a provisional item, then swaps in the entry id", () => {
-		const live = new TimelineBuilder({ kind: "thread", id: "thr_test" });
-		const mapper = new DurableEventMapper(live);
-		mapper.apply({ type: "message_start", message: { role: "assistant", content: [], model: "m" } });
-		mapper.apply({ type: "message_update", changes: [{ type: "text_start", contentIndex: 0, block: { type: "text", text: "Hel" } }] });
-		mapper.apply({ type: "message_update", changes: [{ type: "text_delta", contentIndex: 0, delta: "lo" }] });
-		mapper.apply({ type: "message_end", entry: { id: 42, kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "text", text: "Hello" }], stopReason: "stop" }] } });
+	test("streams the partial answer on a provisional item, then swaps in the entry id", () => {
+		const live = new TimelineBuilder({ kind: "agent", id: "agt_test" });
+		const mapper = new DurableViewMapper(live);
+		mapper.load([user(1, "hi")], view([user(1, "hi")]), false);
+		live.flush();
+		mapper.apply(view([user(1, "hi")], { run, generation: { attempt: 1, message: { role: "assistant", content: [{ type: "text", text: "Hel" }], model: "m" } } }));
+		mapper.apply(view([user(1, "hi")], { run, generation: { attempt: 1, message: { role: "assistant", content: [{ type: "text", text: "Hello" }], model: "m" } } }));
+		const change = mapper.apply(view([user(1, "hi"), answer(2, [{ type: "text", text: "Hello" }])], {}));
+		expect(change).toMatchObject({ runEnded: true, appended: [{ id: 2 }] });
 		const events = live.flush();
 		expect(events.filter((e) => e.type === "item.delta").map((e) => (e as { textDelta: string }).textDelta)).toEqual(["Hel", "lo"]);
-		expect(events.find((e) => e.type === "item.replaced")).toMatchObject({ oldId: "gen:1", item: { id: "42", status: "done" } });
-		expect(live.snapshot().items).toMatchObject([{ id: "42", parts: [{ type: "text", text: "Hello" }] }]);
+		expect(events.find((e) => e.type === "item.replaced")).toMatchObject({ oldId: "gen:1", item: { id: "2", status: "done" } });
+		expect(live.snapshot().items).toMatchObject([{ kind: "user", id: "1" }, { id: "2", parts: [{ type: "text", text: "Hello" }] }]);
+		expect(live.snapshot().state.status).toBe("idle");
 	});
 
-	test("a snapshot taken mid-answer resumes the partial", () => {
-		const live = new TimelineBuilder({ kind: "thread", id: "thr_test" });
-		new DurableEventMapper(live).applySnapshot(
-			{ type: "snapshot", entries: [{ id: 1, kind: "pi.user", model: [{ role: "user", content: "hi" }] }], run: { inputs: [] }, generation: { attempt: 1, message: { role: "assistant", content: [{ type: "text", text: "Hal" }] } }, inbox: [] },
+	test("a tool round: the card starts when the call runs, takes its output, and ends with the result entry", () => {
+		const live = new TimelineBuilder({ kind: "agent", id: "agt_test" });
+		const mapper = new DurableViewMapper(live);
+		const call = answer(2, [{ type: "toolCall", id: "c1", name: "bash", arguments: { command: "echo hi" } }], "toolUse");
+		mapper.load([user(1, "go")], view([user(1, "go")], { run }), false);
+		mapper.apply(view([user(1, "go"), call], { run, tools: [{ callId: "c1", name: "bash", status: "pending", taskId: 10 }] }));
+		expect(live.snapshot().items.some((i) => i.kind === "tool")).toBe(false); // waiting for beforeTool (an approval)
+		mapper.apply(view([user(1, "go"), call], { run, tools: [{ callId: "c1", name: "bash", status: "running", taskId: 10, output: "h" }] }));
+		mapper.apply(view([user(1, "go"), call], { run, tools: [{ callId: "c1", name: "bash", status: "running", taskId: 10, output: "hi\n" }] }));
+		expect(live.snapshot().items.find((i) => i.kind === "tool")).toMatchObject({ status: "running", output: "hi\n", args: { command: "echo hi" } });
+		mapper.apply(view([user(1, "go"), call, result(3, "c1", "hi")], { run, tools: [{ callId: "c1", name: "bash", status: "done", taskId: 10, entry: 3 }] }));
+		expect(live.snapshot().items.find((i) => i.kind === "tool")).toMatchObject({ status: "done", output: "hi" });
+	});
+
+	test("a call that never ran (blocked) or ran between two values still gets its card", () => {
+		const live = new TimelineBuilder({ kind: "agent", id: "agt_test" });
+		const mapper = new DurableViewMapper(live);
+		mapper.load([], view([]), false);
+		const calls = answer(1, [
+			{ type: "toolCall", id: "c1", name: "bash", arguments: { command: "rm x" } },
+			{ type: "toolCall", id: "c2", name: "bash", arguments: { command: "ls" } },
+		], "toolUse");
+		mapper.apply(view([calls, result(2, "c1", "Denied", true), result(3, "c2", "a b")], { run }));
+		expect(live.snapshot().items.filter((i) => i.kind === "tool")).toMatchObject([
+			{ callId: "c1", status: "error", args: { command: "rm x" } },
+			{ callId: "c2", status: "done", output: "a b" },
+		]);
+	});
+
+	test("the first value resumes an answer in progress and the queue; an old run failure isn't shown again", () => {
+		const live = new TimelineBuilder({ kind: "agent", id: "agt_test" });
+		const mapper = new DurableViewMapper(live, (id) => (id === "7" ? "later" : undefined));
+		mapper.load(
+			[user(1, "hi")],
+			view([user(1, "hi")], { run, runFailure: { taskId: 3, reason: "faulted", inputs: [] }, generation: { attempt: 1, message: { role: "assistant", content: [{ type: "text", text: "Hal" }] } } }, [{ id: 7, mode: "followUp" }]),
 			false,
 		);
 		const snap = live.snapshot();
 		expect(snap.state.status).toBe("running");
+		expect(snap.state.queue).toEqual([{ id: "7", mode: "followUp", text: "later" }]);
 		expect(snap.items).toMatchObject([{ kind: "user", id: "1" }, { kind: "assistant", status: "streaming", parts: [{ text: "Hal" }] }]);
+		expect(snap.items.some((i) => i.kind === "system")).toBe(false);
+	});
+
+	test("a run that ends without an answer, a retry and a failed compaction get notices once", () => {
+		const live = new TimelineBuilder({ kind: "agent", id: "agt_test" });
+		const mapper = new DurableViewMapper(live);
+		mapper.load([user(1, "hi")], view([user(1, "hi")], { run }), false);
+		const retrying = { run, generation: { attempt: 2, retry: { at: 0, error: "overloaded" } } };
+		mapper.apply(view([user(1, "hi")], retrying));
+		mapper.apply(view([user(1, "hi")], retrying));
+		const failed = { runFailure: { taskId: 9, reason: "faulted", detail: "boom", inputs: [] }, compactionFailure: { taskId: 4, trigger: "threshold", error: "no model" } };
+		expect(mapper.apply(view([user(1, "hi")], failed)).runEnded).toBe(true);
+		mapper.apply(view([user(1, "hi")], failed));
+		expect(live.snapshot().items.filter((i) => i.kind === "system").map((i) => (i as { text: string }).text)).toEqual([
+			"Retrying (attempt 2): overloaded",
+			"Not answered (faulted): boom",
+			"Compaction failed: no model",
+		]);
+	});
+
+	test("committed entries load as messages with their entry ids", () => {
+		const { messages, ids } = messagesFromEntries([user(1, "hi"), answer(2, [{ type: "text", text: "yo" }]), { id: 3, kind: "pi.compaction", data: { summary: "s" } }] as never);
+		expect(ids).toEqual(["1", "2"]);
+		expect(messages).toMatchObject([{ role: "user", content: "hi" }, { role: "assistant" }]);
 	});
 });
 

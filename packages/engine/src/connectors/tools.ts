@@ -4,7 +4,7 @@
  * something asks first, through whatever the conversation uses to ask (a chat's approval card, Build's prompt, an
  * agent's approvals). A write the user marked "Don't ask again" runs; sending and deleting always ask.
  */
-import { Type, type TSchema } from "@earendil-works/pi-ai";
+import { Type, type TSchema } from "typebox";
 import type { Account, ConnectorHub } from "./hub.js";
 import { effective, groupOf, type Access } from "./permissions.js";
 import type { Calendar, CalendarEvent, EventInput, Mailbox } from "./types.js";

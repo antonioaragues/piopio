@@ -48,9 +48,8 @@ export async function migrateChat(file: string, activeBranch: string | undefined
 	try {
 		const root = await harness.root(ctx, {} as Parameters<Harness["root"]>[1]);
 		const shown = activeBranch ? ((await harness.conversation(Number(activeBranch) as never, ctx).catch(() => undefined)) ?? root) : root;
-		const view = await shown.viewState(ctx);
-		const entries = view.value.entries as readonly Entry[];
-		view.dispose();
+		// The active transcript, as the model sees it.
+		const entries = (await shown.context(ctx)).entries as unknown as readonly Entry[];
 		const sm = SessionManager.create(cwd, sessionDir);
 		for (const e of entries) {
 			if (e.kind === "pi.compaction") continue;

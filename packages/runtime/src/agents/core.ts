@@ -6,7 +6,7 @@
  * own `contacts/<id>`.
  */
 import type { Context } from "@earendil-works/chord/context";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { configure, defineDoc, defineExtension, defineTool, GenerationTask, hook, section, ToolTask, type ConversationId, type Extension, type Harness, type JsonObject } from "@earendil-works/pi-durable";
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";

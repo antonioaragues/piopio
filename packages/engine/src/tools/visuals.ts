@@ -6,7 +6,7 @@
  * the height, the script errors and failed loads, and with `look`, a picture. Defined once, with an extension for
  * pi-coding-agent (chats and Build) and one for pi-durable (agents, recorded only).
  */
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { ContainerRef } from "@piopio/protocol";
 import { AppUnavailable } from "@piopio/runtime";
 import type { AppServices } from "../app-services.js";

@@ -139,20 +139,20 @@ type SessionEvent =
 
 ## 6. Mapping notes
 
-Verified against pi 1.3.0 in Spike S1 (`packages/engine/src/timeline/`, fixtures in `packages/engine/test/fixtures/`). Both runtimes feed one `TimelineBuilder` through a thin adapter each, because their event shapes differ even though they share names.
+Verified against pi 1.3.0 in Spike S1 (`packages/engine/src/timeline/`, fixtures in `packages/engine/test/fixtures/`); the pi-durable column was redone for pi 1.5 (2026-11-17). Both runtimes feed one `TimelineBuilder` through a thin adapter each. The SDK adapter maps events. pi-durable 1.5 has no event stream any more (`watchEvents()` was removed): its adapter (`DurableViewMapper`) reads the active transcript (`Conversation.context()`), then watches the conversation view (`Conversation.watch()`: a window over the transcript, plus the `pi.live` and `pi.inbox` documents) and compares each new value with the last.
 
-| pi-coding-agent SDK (`AgentSessionEvent`) | pi-durable (`watchEvents`) | Maps to |
+| pi-coding-agent SDK (`AgentSessionEvent`) | pi-durable (conversation view) | Maps to |
 |---|---|---|
-| `agent_start` / `agent_settled` | `run_start` / `run_end` | `state` running / idle |
-| `message_start` (user) | `message_end` with a `pi.user` entry | `item.added` user |
-| `message_start` (assistant) | `message_start` (assistant) | `item.added` assistant (pi-durable: provisional `gen:N` id) |
-| `message_update.assistantMessageEvent` `text_delta` / `thinking_delta` | `message_update.changes[]` `text_start`/`text_delta`/`thinking_*` | `item.delta` |
-| `message_end` (assistant message) | `message_end` with a `pi.assistant` entry | `item.updated` (SDK) / `item.replaced` gen:N → entry id (pi-durable) |
-| `tool_execution_start/update/end` (`partialResult`, `result`) | `tool_execution_start/update/end` (`output` trim/append, result `entry`) | `tool` item + `item.updated` |
-| `queue_update {steering, followUp}` | `inbox_update {items}` | `state.queue` |
-| `compaction_end` | `entry_appended` (`pi.compaction`), `compaction_end` (errors) | `compaction` / `system` item |
-| `auto_retry_start/end` | `auto_retry_start`, `task_failed`, `submission` (`unanswered`) | `system` item |
-| `session.messages` (snapshot) | `snapshot.entries` (+ `generation` partial) | `resnapshot` / initial snapshot |
+| `agent_start` / `agent_settled` | `pi.live.run` appears / disappears | `state` running / idle |
+| `message_start` (user) | a new `pi.user` entry | `item.added` user |
+| `message_start` (assistant) | `pi.live.generation.message` appears (a new run task or attempt) | `item.added` assistant (pi-durable: provisional `gen:N` id) |
+| `message_update.assistantMessageEvent` `text_delta` / `thinking_delta` | `pi.live.generation.message` blocks grow | `item.delta` |
+| `message_end` (assistant message) | a new `pi.assistant` entry | `item.updated` (SDK) / `item.replaced` gen:N → entry id (pi-durable) |
+| `tool_execution_start/update/end` (`partialResult`, `result`) | a `pi.live.tools` / `nestedTools` slot turns `running` (after `beforeTool`), its `output` grows, its result entry arrives | `tool` item + `item.updated` |
+| `queue_update {steering, followUp}` | `pi.inbox.items` | `state.queue` |
+| `compaction_end` | a new `pi.compaction` entry, `pi.live.compactionFailure` | `compaction` / `system` item |
+| `auto_retry_start/end` | `pi.live.generation.retry`, `pi.live.runFailure` | `system` item |
+| `session.messages` (snapshot) | `Conversation.context()` entries, then the watch's first value | `resnapshot` / initial snapshot |
 | pi `extension_ui_request` (confirm), from the approvals extension | — | `approval.requested` (Phase 2) |
 
 **Item ids.** pi-durable items use the committed entry id (stringified). pi SDK messages carry no ids, so items are numbered by transcript position (`m<index>`, counting system messages). Tests check that both stay stable across an engine restart.

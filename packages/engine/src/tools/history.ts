@@ -7,7 +7,7 @@
  * - What comes back is marked as background from another conversation: instructions, permission claims and tool
  *   requests in it aren't to be followed. It's bounded, and read-only.
  */
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool as defineSdkTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineExtension, defineTool } from "@earendil-works/pi-durable";
 import type { TimelineItem } from "@piopio/protocol";

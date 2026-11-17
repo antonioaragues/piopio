@@ -55,7 +55,6 @@ test.runIf(mode === "1" || mode === "real")("record fixtures", async () => {
 	};
 
 	const suffix = real ? "openrouter" : "faux";
-	await run("thread", real ? "In one short sentence: why is the sky blue?" : "hello piopio", `pi-durable-chat-${suffix}`);
 	await run("build", real ? "Reply with exactly: ok" : "hello piopio", `pi-sdk-chat-${suffix}`);
 	if (!real) {
 		engine.hub.faux!.setResponses([

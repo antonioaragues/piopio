@@ -6,7 +6,7 @@
  * limit hold it; held messages wait in the outbox, which a task flushes when they may go.
  */
 import type { Context } from "@earendil-works/chord/context";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTask, defineTool, type ConversationId, type Harness, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
 import { cronError, type AgentDefinition } from "./definition.js";
 import type { ResultCard, UndoKind } from "./safety.js";
@@ -308,9 +308,8 @@ export class Proactivity {
 		const run = ((await this.host.read()).runs ?? []).find((r) => r.id === id);
 		if (!run) return;
 		const conversation = await this.host.harness.conversation(Number(run.conversationId) as never, this.host.context);
-		const view = await conversation!.viewState(this.host.context);
-		const entries = view.value.entries as readonly { kind: string; model?: { role: string; content?: unknown; usage?: { cost?: { total?: number } } }[] }[];
-		view.dispose();
+		// The active transcript, as the model sees it.
+		const entries = (await conversation!.context(this.host.context)).entries as unknown as readonly { kind: string; model?: { role: string; content?: unknown; usage?: { cost?: { total?: number } } }[] }[];
 		let costUsd = 0;
 		let summary = "";
 		for (const e of entries) {
