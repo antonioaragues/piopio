@@ -16,7 +16,9 @@ type Lens = "build" | "chat";
  * `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both. `folder: false` and `instructions`:
  * a project without a folder, before CF4. Both are read once to migrate, then dropped.
  */
-type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[] };
+type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[]; prEvents?: PrEvents };
+/** What a conversation hears about its pull request (docs/spec/17 §5): nothing, a notification, or a follow-up it works on. */
+export type PrEvents = "off" | "tell" | "act";
 
 /** A folder linked to a project (docs/spec/18 §18): read only, or edited under the project's permissions. */
 export type LinkedFolder = { path: string; edit: boolean };
@@ -180,7 +182,7 @@ export class Projects {
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; lenses?: Lens[]; linkFolder?: LinkedFolder; unlinkFolder?: string }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; lenses?: Lens[]; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
 		if (change.linkFolder) this.link(entry, change.linkFolder);
@@ -189,6 +191,7 @@ export class Projects {
 			if (!entry.folders.length) delete entry.folders;
 		}
 		if (change.approvalMode) entry.approvalMode = change.approvalMode;
+		if (change.prEvents) entry.prEvents = change.prEvents;
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
 		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
 		if (change.trust !== undefined) this.trust.set(entry.path, change.trust);
@@ -211,6 +214,11 @@ export class Projects {
 	/** Approval mode for new sessions in `cwd` (global default: auto-edit, BQ1). */
 	modeFor(cwd: string): ApprovalMode {
 		return this.entryFor(cwd)?.approvalMode ?? "auto_edit";
+	}
+
+	/** What conversations in `cwd`'s project hear about their pull requests (default: tell). */
+	prEventsFor(cwd: string): PrEvents {
+		return this.entryFor(cwd)?.prEvents ?? "tell";
 	}
 
 	rulesFor(cwd: string): ApprovalRule[] {
@@ -275,6 +283,7 @@ function describe(stored: StoredProject): Omit<ProjectInfo, "trust" | "needsTrus
 	const p = {
 		...rest,
 		approvalMode: stored.approvalMode ?? "auto_edit",
+		prEvents: stored.prEvents ?? "tell",
 		rules: stored.rules ?? [],
 		lenses: ["build", "chat"] as Lens[],
 		...(folders?.length ? { folders: folders.map((f) => (existsSync(f.path) ? f : { ...f, missing: true })) } : {}),

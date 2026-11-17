@@ -11129,6 +11129,74 @@
 						}
 					}
 				},
+				"pr": {
+					"type": "object",
+					"required": [
+						"repo",
+						"number",
+						"url",
+						"title",
+						"head",
+						"base",
+						"state"
+					],
+					"properties": {
+						"repo": {
+							"type": "string"
+						},
+						"number": {
+							"type": "number"
+						},
+						"url": {
+							"type": "string"
+						},
+						"title": {
+							"type": "string"
+						},
+						"head": {
+							"type": "string"
+						},
+						"base": {
+							"type": "string"
+						},
+						"state": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "open"
+								},
+								{
+									"type": "string",
+									"const": "closed"
+								},
+								{
+									"type": "string",
+									"const": "merged"
+								}
+							]
+						},
+						"checks": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "pending"
+								},
+								{
+									"type": "string",
+									"const": "passing"
+								},
+								{
+									"type": "string",
+									"const": "failing"
+								},
+								{
+									"type": "string",
+									"const": "none"
+								}
+							]
+						}
+					}
+				},
 				"continuedIn": {
 					"type": "object",
 					"required": [
@@ -18697,6 +18765,74 @@
 									}
 								}
 							},
+							"pr": {
+								"type": "object",
+								"required": [
+									"repo",
+									"number",
+									"url",
+									"title",
+									"head",
+									"base",
+									"state"
+								],
+								"properties": {
+									"repo": {
+										"type": "string"
+									},
+									"number": {
+										"type": "number"
+									},
+									"url": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"head": {
+										"type": "string"
+									},
+									"base": {
+										"type": "string"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "open"
+											},
+											{
+												"type": "string",
+												"const": "closed"
+											},
+											{
+												"type": "string",
+												"const": "merged"
+											}
+										]
+									},
+									"checks": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "passing"
+											},
+											{
+												"type": "string",
+												"const": "failing"
+											},
+											{
+												"type": "string",
+												"const": "none"
+											}
+										]
+									}
+								}
+							},
 							"continuedIn": {
 								"type": "object",
 								"required": [
@@ -19319,6 +19455,74 @@
 										"expiresAt": {
 											"type": "string"
 										}
+									}
+								}
+							},
+							"pr": {
+								"type": "object",
+								"required": [
+									"repo",
+									"number",
+									"url",
+									"title",
+									"head",
+									"base",
+									"state"
+								],
+								"properties": {
+									"repo": {
+										"type": "string"
+									},
+									"number": {
+										"type": "number"
+									},
+									"url": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"head": {
+										"type": "string"
+									},
+									"base": {
+										"type": "string"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "open"
+											},
+											{
+												"type": "string",
+												"const": "closed"
+											},
+											{
+												"type": "string",
+												"const": "merged"
+											}
+										]
+									},
+									"checks": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "pending"
+											},
+											{
+												"type": "string",
+												"const": "passing"
+											},
+											{
+												"type": "string",
+												"const": "failing"
+											},
+											{
+												"type": "string",
+												"const": "none"
+											}
+										]
 									}
 								}
 							},
@@ -25999,6 +26203,22 @@
 									}
 								]
 							},
+							"prEvents": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "off"
+									},
+									{
+										"type": "string",
+										"const": "tell"
+									},
+									{
+										"type": "string",
+										"const": "act"
+									}
+								]
+							},
 							"rules": {
 								"type": "array",
 								"items": {
@@ -26175,6 +26395,22 @@
 								{
 									"type": "string",
 									"const": "full_auto"
+								}
+							]
+						},
+						"prEvents": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "off"
+								},
+								{
+									"type": "string",
+									"const": "tell"
+								},
+								{
+									"type": "string",
+									"const": "act"
 								}
 							]
 						},
@@ -26429,6 +26665,22 @@
 								}
 							]
 						},
+						"prEvents": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "off"
+								},
+								{
+									"type": "string",
+									"const": "tell"
+								},
+								{
+									"type": "string",
+									"const": "act"
+								}
+							]
+						},
 						"rules": {
 							"type": "array",
 							"items": {
@@ -26604,6 +26856,22 @@
 				},
 				"unlinkFolder": {
 					"type": "string"
+				},
+				"prEvents": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "off"
+						},
+						{
+							"type": "string",
+							"const": "tell"
+						},
+						{
+							"type": "string",
+							"const": "act"
+						}
+					]
 				}
 			}
 		},
@@ -26666,6 +26934,22 @@
 								{
 									"type": "string",
 									"const": "full_auto"
+								}
+							]
+						},
+						"prEvents": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "off"
+								},
+								{
+									"type": "string",
+									"const": "tell"
+								},
+								{
+									"type": "string",
+									"const": "act"
 								}
 							]
 						},
@@ -31174,6 +31458,884 @@
 				}
 			}
 		},
+		"github.status.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"github.status.result": {
+			"type": "object",
+			"required": [
+				"connected"
+			],
+			"properties": {
+				"connected": {
+					"type": "boolean"
+				},
+				"via": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "gh"
+						},
+						{
+							"type": "string",
+							"const": "token"
+						}
+					]
+				},
+				"login": {
+					"type": "string"
+				},
+				"error": {
+					"type": "string"
+				}
+			}
+		},
+		"github.setToken.params": {
+			"type": "object",
+			"required": [
+				"token"
+			],
+			"properties": {
+				"token": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"github.setToken.result": {
+			"type": "object",
+			"required": [
+				"login"
+			],
+			"properties": {
+				"login": {
+					"type": "string"
+				}
+			}
+		},
+		"github.signOut.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"github.signOut.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"github.repos.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"github.repos.result": {
+			"type": "object",
+			"required": [
+				"repos"
+			],
+			"properties": {
+				"repos": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"fullName",
+							"private",
+							"cloneUrl",
+							"updatedAt",
+							"defaultBranch"
+						],
+						"properties": {
+							"fullName": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"private": {
+								"type": "boolean"
+							},
+							"cloneUrl": {
+								"type": "string"
+							},
+							"updatedAt": {
+								"type": "string"
+							},
+							"defaultBranch": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"github.clone.params": {
+			"type": "object",
+			"required": [
+				"repo"
+			],
+			"properties": {
+				"repo": {
+					"type": "string"
+				},
+				"path": {
+					"type": "string"
+				}
+			}
+		},
+		"github.clone.result": {
+			"type": "object",
+			"required": [
+				"project"
+			],
+			"properties": {
+				"project": {
+					"type": "object",
+					"required": [
+						"id",
+						"path",
+						"name",
+						"addedAt",
+						"piConfig",
+						"approvalMode",
+						"rules",
+						"trust",
+						"needsTrust",
+						"lenses"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"path": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"addedAt": {
+							"type": "string"
+						},
+						"branch": {
+							"type": "string"
+						},
+						"contextFile": {
+							"type": "string"
+						},
+						"piConfig": {
+							"type": "boolean"
+						},
+						"approvalMode": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "read_only"
+								},
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "auto_edit"
+								},
+								{
+									"type": "string",
+									"const": "full_auto"
+								}
+							]
+						},
+						"prEvents": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "off"
+								},
+								{
+									"type": "string",
+									"const": "tell"
+								},
+								{
+									"type": "string",
+									"const": "act"
+								}
+							]
+						},
+						"rules": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"kind",
+									"pattern",
+									"createdAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "command"
+											},
+											{
+												"type": "string",
+												"const": "tool"
+											},
+											{
+												"type": "string",
+												"const": "path"
+											}
+										]
+									},
+									"pattern": {
+										"type": "string"
+									},
+									"createdAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"trust": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "trusted"
+								},
+								{
+									"type": "string",
+									"const": "untrusted"
+								},
+								{
+									"type": "string",
+									"const": "undecided"
+								}
+							]
+						},
+						"needsTrust": {
+							"type": "boolean"
+						},
+						"lenses": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "build"
+									},
+									{
+										"type": "string",
+										"const": "chat"
+									}
+								]
+							}
+						},
+						"missing": {
+							"type": "boolean"
+						},
+						"folders": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"path",
+									"edit"
+								],
+								"properties": {
+									"path": {
+										"type": "string"
+									},
+									"edit": {
+										"type": "boolean"
+									},
+									"missing": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"sessions.pr.draft.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.pr.draft.result": {
+			"type": "object",
+			"required": [
+				"title",
+				"body",
+				"head",
+				"base"
+			],
+			"properties": {
+				"title": {
+					"type": "string"
+				},
+				"body": {
+					"type": "string"
+				},
+				"head": {
+					"type": "string"
+				},
+				"base": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.pr.create.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"title",
+				"body"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"title": {
+					"type": "string"
+				},
+				"body": {
+					"type": "string"
+				},
+				"base": {
+					"type": "string"
+				},
+				"draft": {
+					"type": "boolean"
+				}
+			}
+		},
+		"sessions.pr.create.result": {
+			"type": "object",
+			"required": [
+				"pr"
+			],
+			"properties": {
+				"pr": {
+					"type": "object",
+					"required": [
+						"repo",
+						"number",
+						"url",
+						"title",
+						"state",
+						"draft",
+						"head",
+						"base",
+						"headSha",
+						"summary",
+						"checks",
+						"comments"
+					],
+					"properties": {
+						"repo": {
+							"type": "string"
+						},
+						"number": {
+							"type": "number"
+						},
+						"url": {
+							"type": "string"
+						},
+						"title": {
+							"type": "string"
+						},
+						"state": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "open"
+								},
+								{
+									"type": "string",
+									"const": "closed"
+								},
+								{
+									"type": "string",
+									"const": "merged"
+								}
+							]
+						},
+						"draft": {
+							"type": "boolean"
+						},
+						"head": {
+							"type": "string"
+						},
+						"base": {
+							"type": "string"
+						},
+						"headSha": {
+							"type": "string"
+						},
+						"summary": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "pending"
+								},
+								{
+									"type": "string",
+									"const": "passing"
+								},
+								{
+									"type": "string",
+									"const": "failing"
+								},
+								{
+									"type": "string",
+									"const": "none"
+								}
+							]
+						},
+						"checks": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"name",
+									"status"
+								],
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "queued"
+											},
+											{
+												"type": "string",
+												"const": "in_progress"
+											},
+											{
+												"type": "string",
+												"const": "completed"
+											}
+										]
+									},
+									"conclusion": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"jobId": {
+										"type": "number"
+									}
+								}
+							}
+						},
+						"comments": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"author",
+									"bot",
+									"body",
+									"at",
+									"kind"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"author": {
+										"type": "string"
+									},
+									"bot": {
+										"type": "boolean"
+									},
+									"body": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"path": {
+										"type": "string"
+									},
+									"line": {
+										"type": "number"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "comment"
+											},
+											{
+												"type": "string",
+												"const": "verdict"
+											}
+										]
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"sessions.pr.get.params": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"sessions.pr.get.result": {
+			"type": "object",
+			"required": [
+				"pr"
+			],
+			"properties": {
+				"pr": {
+					"type": "object",
+					"required": [
+						"repo",
+						"number",
+						"url",
+						"title",
+						"state",
+						"draft",
+						"head",
+						"base",
+						"headSha",
+						"summary",
+						"checks",
+						"comments"
+					],
+					"properties": {
+						"repo": {
+							"type": "string"
+						},
+						"number": {
+							"type": "number"
+						},
+						"url": {
+							"type": "string"
+						},
+						"title": {
+							"type": "string"
+						},
+						"state": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "open"
+								},
+								{
+									"type": "string",
+									"const": "closed"
+								},
+								{
+									"type": "string",
+									"const": "merged"
+								}
+							]
+						},
+						"draft": {
+							"type": "boolean"
+						},
+						"head": {
+							"type": "string"
+						},
+						"base": {
+							"type": "string"
+						},
+						"headSha": {
+							"type": "string"
+						},
+						"summary": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "pending"
+								},
+								{
+									"type": "string",
+									"const": "passing"
+								},
+								{
+									"type": "string",
+									"const": "failing"
+								},
+								{
+									"type": "string",
+									"const": "none"
+								}
+							]
+						},
+						"checks": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"name",
+									"status"
+								],
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "queued"
+											},
+											{
+												"type": "string",
+												"const": "in_progress"
+											},
+											{
+												"type": "string",
+												"const": "completed"
+											}
+										]
+									},
+									"conclusion": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"jobId": {
+										"type": "number"
+									}
+								}
+							}
+						},
+						"comments": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"author",
+									"bot",
+									"body",
+									"at",
+									"kind"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"author": {
+										"type": "string"
+									},
+									"bot": {
+										"type": "boolean"
+									},
+									"body": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"path": {
+										"type": "string"
+									},
+									"line": {
+										"type": "number"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "comment"
+											},
+											{
+												"type": "string",
+												"const": "verdict"
+											}
+										]
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"sessions.pr.address.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"what"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"what": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "comments"
+						},
+						{
+							"type": "string",
+							"const": "ci"
+						}
+					]
+				}
+			}
+		},
+		"sessions.pr.address.result": {
+			"type": "object",
+			"properties": {}
+		},
 		"sessions.side.start.params": {
 			"type": "object",
 			"required": [
@@ -32724,6 +33886,211 @@
 				},
 				"output": {
 					"type": "string"
+				}
+			}
+		},
+		"work.createPR.params": {
+			"type": "object",
+			"required": [
+				"project",
+				"title",
+				"body"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				},
+				"title": {
+					"type": "string"
+				},
+				"body": {
+					"type": "string"
+				},
+				"draft": {
+					"type": "boolean"
+				}
+			}
+		},
+		"work.createPR.result": {
+			"type": "object",
+			"required": [
+				"pr"
+			],
+			"properties": {
+				"pr": {
+					"type": "object",
+					"required": [
+						"repo",
+						"number",
+						"url",
+						"title",
+						"state",
+						"draft",
+						"head",
+						"base",
+						"headSha",
+						"summary",
+						"checks",
+						"comments"
+					],
+					"properties": {
+						"repo": {
+							"type": "string"
+						},
+						"number": {
+							"type": "number"
+						},
+						"url": {
+							"type": "string"
+						},
+						"title": {
+							"type": "string"
+						},
+						"state": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "open"
+								},
+								{
+									"type": "string",
+									"const": "closed"
+								},
+								{
+									"type": "string",
+									"const": "merged"
+								}
+							]
+						},
+						"draft": {
+							"type": "boolean"
+						},
+						"head": {
+							"type": "string"
+						},
+						"base": {
+							"type": "string"
+						},
+						"headSha": {
+							"type": "string"
+						},
+						"summary": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "pending"
+								},
+								{
+									"type": "string",
+									"const": "passing"
+								},
+								{
+									"type": "string",
+									"const": "failing"
+								},
+								{
+									"type": "string",
+									"const": "none"
+								}
+							]
+						},
+						"checks": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"name",
+									"status"
+								],
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"status": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "queued"
+											},
+											{
+												"type": "string",
+												"const": "in_progress"
+											},
+											{
+												"type": "string",
+												"const": "completed"
+											}
+										]
+									},
+									"conclusion": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"jobId": {
+										"type": "number"
+									}
+								}
+							}
+						},
+						"comments": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"author",
+									"bot",
+									"body",
+									"at",
+									"kind"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"author": {
+										"type": "string"
+									},
+									"bot": {
+										"type": "boolean"
+									},
+									"body": {
+										"type": "string"
+									},
+									"at": {
+										"type": "string"
+									},
+									"url": {
+										"type": "string"
+									},
+									"path": {
+										"type": "string"
+									},
+									"line": {
+										"type": "number"
+									},
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "comment"
+											},
+											{
+												"type": "string",
+												"const": "verdict"
+											}
+										]
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 		},

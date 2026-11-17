@@ -235,7 +235,9 @@ With the scripted model and a fake clock:
 - **DP3 — Dispatch, app.** *Dropped 2026-11-17 (26 CL11).* Sidebar row, Main with cards, Board panel, finishing from cards, badges. Then real use on
   this repo for a week and prompt tuning.
 - **DP4 — Non-blocking subagents** (§3). Independent of DP2; can go first.
-- **DP5 — PR events** (§5), after Phase 6's G6–G7.
+- **DP5 — PR events** (§5), after Phase 6's G6–G7. *Built 2026-11-17 with G4–G8 (05 §8, as built):* Off, Tell and
+  Act per project; events go to the conversation that created the PR. Bots dropped; collaborators and ignore list
+  later.
 - **DP6 — Watchdog W6**, once DP3 shows how often sessions drift.
 - **Later.**
   - Agents reach Dispatch through `ask_agent` ("Cobot, tell Dispatch the login page is broken"), so a Telegram

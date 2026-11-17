@@ -155,6 +155,7 @@ struct LandingCard: View {
     var onMerged: (() -> Void)? = nil
     @State private var landing: WorkLanding?
     @State private var job: WorkJob?
+    @State private var creatingPR = false
     @State private var showingFiles = false
     @State private var busy = false
     @State private var confirming = false
@@ -169,6 +170,7 @@ struct LandingCard: View {
             if let landing, landing.ahead > 0 { if conversation != nil { conversationCard(landing) } else { card(landing) } }
             else if let note { line(note.text, warn: note.warn).frame(maxWidth: .infinity, alignment: .leading) }
         }
+        .sheet(isPresented: $creatingPR) { WorkPRSheet(engine: engine, work: work) { creatingPR = false } }
         .task(id: key) {
             landing = await engine.landing(work)
             if let conversation { job = await engine.job(work, conversationId: conversation) }
@@ -195,7 +197,7 @@ struct LandingCard: View {
                 Button("Merge into \(l.base)") { confirming = true }.buttonStyle(PillStyle(kind: .primary, compact: true))
                 Button("See changes") { showingFiles = true }.buttonStyle(PillStyle(compact: true))
                     .popover(isPresented: $showingFiles, arrowEdge: .bottom) { files(l) }
-                if l.remote != nil { Button("Push for a PR") { Task { await land("push") } }.buttonStyle(PillStyle(compact: true)) }
+                if l.remote != nil { Button("Create PR…") { creatingPR = true }.buttonStyle(PillStyle(compact: true)) }
                 Spacer()
             }
             if l.behind > 0 { line("\(l.base) has \(count(l.behind, "commit")) the work branch doesn't. If they touch the same files, the merge stops and changes nothing.", warn: false) }
@@ -252,8 +254,8 @@ struct LandingCard: View {
                 Spacer(minLength: 12)
                 if busy { ProgressView().controlSize(.small) }
                 if l.remote != nil {
-                    Button("Push for a PR") { Task { await land("push") } }.buttonStyle(PillStyle())
-                        .help("Pushes \(l.branch) to \(l.remote ?? "the remote")\(l.compareUrl != nil ? " and opens GitHub to create the pull request" : "")")
+                    Button("Create PR…") { creatingPR = true }.buttonStyle(PillStyle())
+                        .help("Pushes \(l.branch) to \(l.remote ?? "the remote") and opens a pull request into \(l.base)")
                 }
                 Button("Merge into \(l.base)…") { confirming = true }.buttonStyle(PillStyle(kind: .primary))
             }

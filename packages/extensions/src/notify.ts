@@ -23,6 +23,8 @@ export function notifyExtension(bridge?: NotifyBridge): ExtensionFactory {
 				description:
 					"Ask the user a question and wait for the answer. Use it when you need a decision or information only they have (a choice between approaches, a missing requirement). Don't use it for routine confirmations. Offer `options` when the answer is one of a few choices. To ask several things, call it once per question, in turn.",
 				promptSnippet: "ask_user: ask the user a question and wait for the answer",
+				// Called by the model itself, never from a codemode script: it waits on the user, and its card is the question.
+				exposure: "model-only",
 				parameters: Type.Object({
 					question: Type.String({ description: "The question, in one or two sentences." }),
 					options: Type.Optional(Type.Array(Type.String(), { description: "Short choices; the user can still answer in their own words." })),

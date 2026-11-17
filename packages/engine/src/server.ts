@@ -2,7 +2,7 @@
 import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { appendFileSync, existsSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
@@ -48,6 +48,7 @@ import { WorkRunner, type ProjectWork } from "./work/runner.js";
 import { migrateTeams, needsMigration, REPORT_FILE } from "./work/migrate.js";
 import { buildAgenda } from "./agenda.js";
 import { Watchdog, type WatchdogOptions } from "./watchdog.js";
+import { GitHub, type GitHubOptions } from "./github.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -79,6 +80,8 @@ export type EngineOptions = {
 	teamsDir?: string;
 	/** The Watchdog's thresholds (tests: seconds, not minutes). */
 	watchdog?: WatchdogOptions;
+	/** GitHub (tests: a fake API and token, and how often PRs are polled; default every 2 minutes). */
+	github?: GitHubOptions & { pollMs?: number };
 	/** Event routines (tests: check mail and settle folders sooner). */
 	watchers?: { mailEveryMs?: number; settleMs?: number };
 	/** Telegram's API (tests: a fake one) and how long a poll waits. */
@@ -110,6 +113,8 @@ export class Engine {
 	readonly watchers: AgentWatchers;
 	readonly work: WorkRunner;
 	readonly watchdog: Watchdog;
+	readonly github: GitHub;
+	private prTimer?: NodeJS.Timeout;
 	private readonly teamsDir: string;
 	private readonly agentDir: string;
 	readonly app = new AppServices();
@@ -277,6 +282,9 @@ export class Engine {
 			options.watchdog ?? {},
 		);
 		this.sessions.watchdog = this.watchdog;
+		// GitHub (docs/spec/05-build G4–G8): pull requests linked to conversations, polled for what happens on them.
+		this.github = new GitHub(this.secrets, options.github ?? {});
+		this.sessions.github = this.github;
 		// Side conversations in another project (docs/spec/24 SCQ5, 26 CL11): by its name or id.
 		this.sessions.projectNamed = (name) => {
 			const p = this.projects.list().find((x) => x.missing !== true && (x.id === name || x.name.toLowerCase() === name.toLowerCase()));
@@ -294,6 +302,7 @@ export class Engine {
 			rulesFor: (cwd) => this.projects.rulesFor(cwd),
 			foldersFor: (cwd) => this.projects.foldersFor(cwd),
 			addRule: (cwd, rule) => this.projects.addRule(cwd, rule),
+			prEventsFor: (cwd) => this.projects.prEventsFor(cwd),
 		};
 		this.projects.onChange((projects) => {
 			for (const conn of this.authed) conn.notify("projects.changed", { projects });
@@ -336,6 +345,9 @@ export class Engine {
 		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
 		void this.sessions.startAgents(this.log);
 		void this.work.resume().catch((error: unknown) => this.log(`Work: ${(error as Error).message}`));
+		// Open pull requests: what happens on them goes to the conversation that owns them (docs/spec/17 §5).
+		this.prTimer = setInterval(() => void this.sessions.pollPrs().catch((error: unknown) => this.log(`Pull requests: ${(error as Error).message}`)), this.options.github?.pollMs ?? 120_000);
+		this.prTimer.unref?.();
 	}
 
 	/** Whether conversations use a global MCP server: chosen per server, else (before that) all that are on. */
@@ -454,6 +466,7 @@ export class Engine {
 		this.watchers?.stop();
 		this.work?.stop();
 		this.watchdog?.stop();
+		clearInterval(this.prTimer);
 		for (const conn of this.authed) conn.close();
 		await this.backfill;
 		for (const off of this.subscriptions.values()) off();
@@ -688,7 +701,7 @@ export class Engine {
 			}
 			case "projects.configure": {
 				const p = params as Params<"projects.configure">;
-				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}), ...(p.linkFolder ? { linkFolder: p.linkFolder } : {}), ...(p.unlinkFolder ? { unlinkFolder: p.unlinkFolder } : {}) };
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}), ...(p.linkFolder ? { linkFolder: p.linkFolder } : {}), ...(p.unlinkFolder ? { unlinkFolder: p.unlinkFolder } : {}), ...(p.prEvents ? { prEvents: p.prEvents } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
 			}
 			case "projects.create": {
@@ -892,6 +905,46 @@ export class Engine {
 				});
 				return buildAgenda({ now: Date.now(), tz: systemZone(), ...(p.since ? { since: Date.parse(p.since) } : {}), agents, projects, boards }) satisfies Result<"home.agenda">;
 			}
+			case "github.status":
+				return (await this.github.status()) satisfies Result<"github.status">;
+			case "github.setToken": {
+				const p = params as Params<"github.setToken">;
+				return { login: await this.github.setToken(p.token) } satisfies Result<"github.setToken">;
+			}
+			case "github.signOut":
+				await this.github.signOut();
+				return {} satisfies Result<"github.signOut">;
+			case "github.repos":
+				return { repos: await this.github.repos() } satisfies Result<"github.repos">;
+			case "github.clone": {
+				const p = params as Params<"github.clone">;
+				const name = p.repo.replace(/\.git$/, "").split("/").pop() || "repo";
+				let dest = p.path?.trim() || join(this.options.paths.projectsRoot, name);
+				if (!p.path) for (let n = 2; existsSync(dest); n++) dest = join(this.options.paths.projectsRoot, `${name}-${n}`);
+				else if (existsSync(dest)) throw new EngineError("INVALID", `${dest} already exists.`);
+				mkdirSync(this.options.paths.projectsRoot, { recursive: true });
+				await this.github.clone(p.repo, dest);
+				const project = this.projects.add(dest);
+				await this.sessions.syncFolder(project.path);
+				return { project } satisfies Result<"github.clone">;
+			}
+			case "sessions.pr.draft": {
+				const p = params as Params<"sessions.pr.draft">;
+				return (await this.sessions.prDraft(p.ref)) satisfies Result<"sessions.pr.draft">;
+			}
+			case "sessions.pr.create": {
+				const p = params as Params<"sessions.pr.create">;
+				return { pr: await this.sessions.createPr(p.ref, { title: p.title, body: p.body, ...(p.base ? { base: p.base } : {}), ...(p.draft ? { draft: true } : {}) }) } satisfies Result<"sessions.pr.create">;
+			}
+			case "sessions.pr.get": {
+				const p = params as Params<"sessions.pr.get">;
+				return { pr: await this.sessions.prStatus(p.ref) } satisfies Result<"sessions.pr.get">;
+			}
+			case "sessions.pr.address": {
+				const p = params as Params<"sessions.pr.address">;
+				await this.sessions.addressPr(p.ref, p.what);
+				return {} satisfies Result<"sessions.pr.address">;
+			}
 			case "sessions.side.answer": {
 				const p = params as Params<"sessions.side.answer">;
 				return (await this.sessions.answerSide(p.ref, p.id, p.choice)) satisfies Result<"sessions.side.answer">;
@@ -949,6 +1002,13 @@ export class Engine {
 			case "work.land": {
 				const p = params as Params<"work.land">;
 				return (await this.work.land(p.project, p.action)) satisfies Result<"work.land">;
+			}
+			case "work.createPR": {
+				const p = params as Params<"work.createPR">;
+				const work = this.work.get(this.projects.get(p.project).id);
+				if (!work.git) throw new EngineError("INVALID", "This project's work isn't on a branch.");
+				const pr = await this.github.createPullRequest(work.cwd, { head: work.git.branch, base: work.git.base, title: p.title, body: p.body, ...(p.draft ? { draft: true } : {}) });
+				return { pr: await this.github.pullRequest(pr.repo, pr.number) } satisfies Result<"work.createPR">;
 			}
 			case "work.migrationReport": {
 				const file = join(this.options.paths.home, REPORT_FILE);

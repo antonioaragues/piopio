@@ -546,6 +546,8 @@ export const SessionSummary = Type.Object({
 	side: Type.Optional(Type.Object({ parent: Type.Object({ id: Type.String(), title: Type.String() }), how: literals("asked", "manual", "offered", "proposed"), state: literals("queued", "working", "needs_you", "done", "failed", "stopped"), line: Type.Optional(Type.String()) })),
 	/** Side conversations Piopio proposed from here (docs/spec/24 §3): each a card you may start, until it expires. */
 	sideProposals: Type.Optional(Type.Array(Type.Object({ id: Type.String(), title: Type.String(), why: Type.String(), project: Type.Optional(Type.String()), expiresAt: Type.String() }))),
+	/** Its pull request (docs/spec/05-build G6–G7): the conversation that created it owns it. */
+	pr: Type.Optional(Type.Object({ repo: Type.String(), number: Type.Number(), url: Type.String(), title: Type.String(), head: Type.String(), base: Type.String(), state: literals("open", "closed", "merged"), checks: Type.Optional(literals("pending", "passing", "failing", "none")) })),
 	/** A chat continued in a project folder (18 §5): the new conversation, and in it, where it came from. */
 	continuedIn: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
 	continuedFrom: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
@@ -690,6 +692,8 @@ export const ProjectInfo = Type.Object({
 	piConfig: Type.Boolean(),
 	/** Approval mode new sessions start with (default: auto_edit). */
 	approvalMode: ApprovalMode,
+	/** What a conversation hears about its pull request (docs/spec/17 §5): off, tell (a notification, default) or act (a follow-up it works on). */
+	prEvents: Type.Optional(literals("off", "tell", "act")),
 	rules: Type.Array(ApprovalRule),
 	/**
 	 * pi project trust (shared with the pi CLI, ~/.pi/agent/trust.json): whether the project's own .pi
@@ -793,6 +797,22 @@ export const WorkTask = Type.Object({
 	updatedAt: Type.String(),
 });
 export type WorkTask = Static<typeof WorkTask>;
+/** A pull request as Piopio sees it (docs/spec/05-build G7): state, checks and the comments on it. */
+export const PrStatus = Type.Object({
+	repo: Type.String(),
+	number: Type.Number(),
+	url: Type.String(),
+	title: Type.String(),
+	state: literals("open", "closed", "merged"),
+	draft: Type.Boolean(),
+	head: Type.String(),
+	base: Type.String(),
+	headSha: Type.String(),
+	summary: literals("pending", "passing", "failing", "none"),
+	checks: Type.Array(Type.Object({ name: Type.String(), status: literals("queued", "in_progress", "completed"), conclusion: Type.Optional(Type.String()), url: Type.Optional(Type.String()), jobId: Type.Optional(Type.Number()) })),
+	comments: Type.Array(Type.Object({ id: Type.String(), author: Type.String(), bot: Type.Boolean(), body: Type.String(), at: Type.String(), url: Type.Optional(Type.String()), path: Type.Optional(Type.String()), line: Type.Optional(Type.Number()), kind: literals("review", "comment", "verdict") })),
+});
+export type PrStatus = Static<typeof PrStatus>;
 /** What the project's work branch would bring to its branch (the merge card). */
 export const WorkLanding = Type.Object({
 	base: Type.String(),
@@ -1190,6 +1210,7 @@ export const methods = {
 			linkFolder: Type.Optional(Type.Object({ path: Type.String(), edit: Type.Boolean() })),
 			/** Unlinks a folder (its path as `folders` lists it). Nothing on disk changes. */
 			unlinkFolder: Type.Optional(Type.String()),
+			prEvents: Type.Optional(literals("off", "tell", "act")),
 		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},
@@ -1520,6 +1541,23 @@ export const methods = {
 	 * proposal's Start or Dismiss. `askAlways` after three New in a row: offer "Don't ask again" (SCQ3).
 	 */
 	"sessions.side.answer": { params: Type.Object({ ref: ContainerRef, id: Type.String({ description: "The offer's or proposal's tool call id" }), choice: literals("new", "here", "start", "dismiss") }), result: Type.Object({ ref: Type.Optional(ContainerRef), askAlways: Type.Optional(Type.Boolean()) }) },
+	/** GitHub (docs/spec/05-build G4): signed in or not, how (`gh` or a token you added), and as whom. */
+	"github.status": { params: Type.Object({}), result: Type.Object({ connected: Type.Boolean(), via: Type.Optional(literals("gh", "token")), login: Type.Optional(Type.String()), error: Type.Optional(Type.String()) }) },
+	/** A personal access token, checked, then kept in the app's Keychain. */
+	"github.setToken": { params: Type.Object({ token: Type.String({ minLength: 1 }) }), result: Type.Object({ login: Type.String() }) },
+	"github.signOut": { params: Type.Object({}), result: Type.Object({}) },
+	/** Your repositories, most recently updated first (G5). */
+	"github.repos": { params: Type.Object({}), result: Type.Object({ repos: Type.Array(Type.Object({ fullName: Type.String(), description: Type.Optional(Type.String()), private: Type.Boolean(), cloneUrl: Type.String(), updatedAt: Type.String(), defaultBranch: Type.String() })) }) },
+	/** Clones owner/name (or a URL) into ~/Piopio/<name> or `path`, and adds it as a project (G5). */
+	"github.clone": { params: Type.Object({ repo: Type.String(), path: Type.Optional(Type.String()) }), result: Type.Object({ project: ProjectInfo }) },
+	/** A title and body for this conversation's pull request, from what it did and its diff (G6), and the branches. */
+	"sessions.pr.draft": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({ title: Type.String(), body: Type.String(), head: Type.String(), base: Type.String() }) },
+	/** Pushes the conversation's branch and opens its pull request, linked to it (G6). */
+	"sessions.pr.create": { params: Type.Object({ ref: ContainerRef, title: Type.String(), body: Type.String(), base: Type.Optional(Type.String()), draft: Type.Optional(Type.Boolean()) }), result: Type.Object({ pr: PrStatus }) },
+	/** Its pull request now: state, checks and comments (G7). */
+	"sessions.pr.get": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({ pr: PrStatus }) },
+	/** Hands the review comments, or the failing checks' logs, to the conversation as a follow-up (G7, G8). */
+	"sessions.pr.address": { params: Type.Object({ ref: ContainerRef, what: literals("comments", "ci") }), result: Type.Object({}) },
 	/** A side conversation by hand (docs/spec/24 §6, `/side <what>`): your words are its brief. */
 	"sessions.side.start": { params: Type.Object({ ref: ContainerRef, brief: Type.String({ minLength: 1 }), title: Type.Optional(Type.String()) }), result: Type.Object({ ref: ContainerRef }) },
 	"work.list": { params: Type.Object({}), result: Type.Object({ work: Type.Array(WorkInfo) }) },
@@ -1565,6 +1603,8 @@ export const methods = {
 	"work.landing": { params: Type.Object({ project: Type.String() }), result: WorkLanding },
 	/** You land the work: merge the work branch into the project's, or push it for a pull request. */
 	"work.land": { params: Type.Object({ project: Type.String(), action: literals("merge", "push") }), result: Type.Object({ commit: Type.Optional(Type.String()), compareUrl: Type.Optional(Type.String()), output: Type.Optional(Type.String()) }) },
+	/** The project's work branch as a pull request into its base (G6 from the Board). */
+	"work.createPR": { params: Type.Object({ project: Type.String(), title: Type.String(), body: Type.String(), draft: Type.Optional(Type.Boolean()) }), result: Type.Object({ pr: PrStatus }) },
 	/** What changed when teams became projects' ways of working (docs/spec/26 §8): shown once, until dismissed. */
 	"work.migrationReport": { params: Type.Object({}), result: Type.Object({ report: Type.Optional(Type.String({ description: "Markdown" })) }) },
 	"work.dismissMigrationReport": { params: Type.Object({}), result: Type.Object({}) },

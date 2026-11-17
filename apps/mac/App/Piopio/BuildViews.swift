@@ -73,6 +73,7 @@ struct BuildSessionView: View {
     @State private var reviewFile: String?
     @State private var git: GitModel?
     @State private var committing = false
+    @State private var creatingPR = false
     @AppStorage("buildTerminal") private var showTerminal = false
 
     private var project: ProjectInfo? { engine.projects.first { $0.path == (summary.projectPath ?? summary.cwd) } }
@@ -213,6 +214,8 @@ struct BuildSessionView: View {
                 // This conversation's tasks on the board (docs/spec/26 §5), live, then the merge card.
                 if let work = project.flatMap({ engine.work(in: $0) }) { ConversationPlan(engine: engine, work: work, conversationId: summary.ref.id) }
                 SideConversations(engine: engine, parentId: summary.ref.id)
+                // Its pull request (docs/spec/05-build G7): checks, comments, Fix CI and Address comments.
+                PullRequestBlock(engine: engine, summary: summary)
                 Composer(engine: engine, thread: session).frame(maxWidth: 680)
             }
             .padding(.horizontal, 40)
@@ -222,6 +225,10 @@ struct BuildSessionView: View {
             }
         }
         .modifier(SideOffers(engine: engine, ref: summary.ref))
+        .onReceive(NotificationCenter.default.publisher(for: .createPullRequest)) { note in
+            if note.object as? String == summary.ref.id { creatingPR = true }
+        }
+        .sheet(isPresented: $creatingPR) { CreatePRSheet(engine: engine, ref: summary.ref) { creatingPR = false } }
         .onReceive(NotificationCenter.default.publisher(for: .transcriptOffer)) { note in
             guard note.object as? String == summary.ref.id, let kind = note.userInfo?["kind"] as? String, let call = note.userInfo?["call"] as? String else { return }
             takeOffer(kind, call: call)
@@ -350,6 +357,7 @@ struct BuildSessionView: View {
             Menu {
                 Button("Session Tree") { session.showTree = true }
                 Button("Review All Changes") { review(nil) }
+                if summary.pr == nil, git?.status?.repo == true { Button("Create Pull Request…") { creatingPR = true } }
                 if let cwd = summary.cwd {
                     Divider()
                     if let editor = Editor.preferred { Button("Open in \(editor.name)") { editor.open(cwd) } }

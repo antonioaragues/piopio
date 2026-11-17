@@ -478,6 +478,9 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// Side conversations Piopio proposed from here (docs/spec/24 §3): cards you may start until they expire.
     public struct SideProposal: Codable, Sendable, Hashable, Identifiable { public var id, title, why, expiresAt: String; public var project: String? }
     public var sideProposals: [SideProposal]?
+    /// Its pull request (docs/spec/05-build G6–G7): checks is "pending", "passing", "failing" or "none".
+    public struct PR: Codable, Sendable, Hashable { public var repo, url, title, head, base, state: String; public var number: Int; public var checks: String? }
+    public var pr: PR?
     /// A chat continued in a project folder, and the conversation it continued from (18 §5).
     public struct Link: Codable, Sendable, Hashable { public var id: String; public var title: String }
     public var continuedIn: Link?
@@ -620,6 +623,37 @@ public struct ProjectWork: Codable, Sendable, Hashable, Identifiable {
     public var tasks: [WorkTask]
     public var id: String { project }
 }
+// MARK: GitHub (docs/spec/05-build G4–G8)
+
+public struct GitHubStatus: Decodable, Sendable, Hashable { public var connected: Bool; public var via: String?; public var login: String?; public var error: String? }
+public struct GitHubTokenParams: Encodable, Sendable { public var token: String; public init(token: String) { self.token = token } }
+public struct GitHubLogin: Decodable, Sendable { public var login: String }
+public struct GitHubRepo: Decodable, Sendable, Hashable, Identifiable { public var fullName, cloneUrl, updatedAt, defaultBranch: String; public var description: String?; public var `private`: Bool; public var id: String { fullName } }
+public struct GitHubReposResult: Decodable, Sendable { public var repos: [GitHubRepo] }
+public struct GitHubCloneParams: Encodable, Sendable { public var repo: String; public init(repo: String) { self.repo = repo } }
+public struct GitHubCloneResult: Decodable, Sendable { public var project: ProjectInfo }
+/// A pull request now: its state, checks and comments.
+public struct PrStatus: Decodable, Sendable, Hashable {
+    public struct Check: Decodable, Sendable, Hashable { public var name, status: String; public var conclusion: String?; public var url: String? }
+    public struct Comment: Decodable, Sendable, Hashable, Identifiable { public var id, author, body, at, kind: String; public var bot: Bool; public var url: String?; public var path: String?; public var line: Int? }
+    public var repo, url, title, state, head, base, summary: String
+    public var number: Int
+    public var draft: Bool
+    public var checks: [Check]
+    public var comments: [Comment]
+}
+public struct PrResult: Decodable, Sendable { public var pr: PrStatus }
+public struct PrDraft: Decodable, Sendable { public var title, body, head, base: String }
+public struct CreatePrParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var title, body: String; public var base: String?; public var draft: Bool?
+    public init(ref: ContainerRef, title: String, body: String, base: String?, draft: Bool) { self.ref = ref; self.title = title; self.body = body; self.base = base; self.draft = draft ? true : nil }
+}
+public struct AddressPrParams: Encodable, Sendable { public var ref: ContainerRef; public var what: String; public init(ref: ContainerRef, what: String) { self.ref = ref; self.what = what } }
+public struct WorkPrParams: Encodable, Sendable {
+    public var project, title, body: String; public var draft: Bool?
+    public init(project: String, title: String, body: String, draft: Bool) { self.project = project; self.title = title; self.body = body; self.draft = draft ? true : nil }
+}
+
 /// A Watchdog note about one of your conversations (docs/spec/17 §4): "silent" or "looping".
 public struct WatchdogNote: Decodable, Sendable, Hashable, Identifiable { public var id, title, rule, text, at: String; public var ref: ContainerRef }
 public struct WatchdogListResult: Decodable, Sendable { public var notes: [WatchdogNote] }
@@ -1611,9 +1645,10 @@ public struct ProjectsConfigureParams: Encodable, Sendable {
     /// Links a folder, or changes whether it can be edited (docs/spec/18 §18).
     public var linkFolder: LinkFolder?
     public var unlinkFolder: String?
-    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, lenses: [ProjectInfo.Lens]? = nil, linkFolder: LinkFolder? = nil, unlinkFolder: String? = nil) {
+    public var prEvents: String?
+    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, lenses: [ProjectInfo.Lens]? = nil, linkFolder: LinkFolder? = nil, unlinkFolder: String? = nil, prEvents: String? = nil) {
         self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust; self.lenses = lenses
-        self.linkFolder = linkFolder; self.unlinkFolder = unlinkFolder
+        self.linkFolder = linkFolder; self.unlinkFolder = unlinkFolder; self.prEvents = prEvents
     }
 }
 
@@ -1650,6 +1685,8 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public var contextFile: String?
     public var piConfig: Bool
     public var approvalMode: ApprovalMode
+    /// What a conversation hears about its pull request (docs/spec/17 §5): "off", "tell" (default) or "act".
+    public var prEvents: String?
     public var rules: [ApprovalRule]
     /// pi project trust (shared with the pi CLI): whether the project's .pi resources load; `needsTrust`: it has some.
     public enum Trust: String, Codable, Sendable { case trusted, untrusted, undecided }

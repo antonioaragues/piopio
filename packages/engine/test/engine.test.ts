@@ -724,6 +724,17 @@ describe("approvals and questions (docs/spec/05-build §6)", () => {
 		expect((await tools(a, s.ref)).at(-1)?.status).toBe("interrupted");
 	});
 
+	test("a chat asks with the same question card (ask_user), not a visual", async () => {
+		const a = await start();
+		const chat = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		const sub = (await a.client.call("sessions.subscribe", { ref: chat })).subscriptionId as string;
+		await a.client.call("sessions.submit", { ref: chat, input: { text: "ask: Coffee or tea? | Coffee | Tea" } });
+		const waiting = await stateWhere(a, sub, (st) => st.status === "waiting_approval");
+		expect(waiting.prompts![0]).toMatchObject({ kind: "question", title: "Coffee or tea?", options: ["Coffee", "Tea"] });
+		await a.client.call("sessions.respond", { ref: chat, promptId: waiting.prompts![0]!.id, response: { choice: "Tea" } });
+		expect((await finishedTools(a, chat, 1))[0]).toMatchObject({ tool: "ask_user", status: "done", output: "The user answered: Tea" });
+	}, 30_000);
+
 	test("an answered question stays its own item, so the transcript shows what you answered", async () => {
 		const a = await start();
 		const { folder } = await newProject(a);

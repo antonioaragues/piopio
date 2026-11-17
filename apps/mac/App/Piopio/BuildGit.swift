@@ -104,6 +104,12 @@ struct GitMenu: View {
                 Button("Push") { Task { await git.sync(.push) } }
                 Button("Pull") { Task { await git.sync(.pull) } }.disabled(status.upstream == nil)
                 Button("Fetch") { Task { await git.sync(.fetch) } }
+                // G6: its branch as a pull request, linked to this conversation.
+                if summary.pr == nil {
+                    Button("Create Pull Request…") { NotificationCenter.default.post(name: .createPullRequest, object: summary.ref.id) }
+                } else if let url = summary.pr.flatMap({ URL(string: $0.url) }) {
+                    Button("Open Pull Request #\(summary.pr!.number)") { NSWorkspace.shared.open(url) }
+                }
                 if summary.worktree == nil || summary.worktree?.finished != nil {
                     Divider()
                     Menu("Switch Branch") {

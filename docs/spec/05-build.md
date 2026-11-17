@@ -107,6 +107,25 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 - **G7** **PR panel** for linked PRs: checks status (polled while the app is open), review comments listed with file/line, and "Address comments" → a follow-up prompt with the comments.
 - **G8** "Fix CI": pull failing check logs (GitHub Actions) into a follow-up.
 
+### G4–G8 as built (2026-11-17)
+- **G4:** `github.ts` takes `gh auth token` when `gh` is signed in, else a token you paste in Settings → GitHub,
+  kept in Keychain (`github.token`, through the secret broker). The OAuth device flow is not built: it needs
+  Piopio's own OAuth App, which comes with the 1.0 release work. git gets the token as an `http.extraheader` for
+  github.com only, so nothing is written to the remote URL or the git config.
+- **G5:** New project → "Clone from GitHub…": your repositories (searchable) or any URL, cloned into a folder you
+  pick, which becomes the project.
+- **G6:** Create PR from the Git menu, the session's menu, or a board card's landing: the branch is pushed, title
+  and body come from the conversation and the diff (editable), base branch and draft toggle. The PR is linked to the
+  conversation (`entry.pr`), and a PR block sits above its composer.
+- **G7:** the PR block shows state, checks (passing, failing, pending) and review comments with file and line.
+  "Address comments" sends them as a `[PR]` follow-up. Linked open PRs are polled every 2 minutes while the engine
+  runs.
+- **G8:** "Fix CI" pulls the failing GitHub Actions jobs' last 150 log lines into a `[PR]` follow-up.
+- **PR events (17 §5, DP5):** per project, Off, Tell (default) or Act. New human comments, a failing head commit
+  (once per sha) and a merge or close become a notification (Tell) or `[PR]` follow-ups the conversation works on
+  (Act). Bots are dropped in code; the collaborators filter and an ignore list are not built yet.
+- Tests: `test/github.test.ts`, against a fake GitHub API and a bare repo standing in for github.com.
+
 ### Later
 - Issues → session ("Work on #42"). PR review mode (agent reviews someone else's PR). Auto-fix loop. GitLab.
 

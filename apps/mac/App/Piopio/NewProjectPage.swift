@@ -24,6 +24,7 @@ struct NewProjectPage: View {
     @State private var instructions = ""
     @State private var error: String?
     @State private var saving = false
+    @State private var cloning = false
     @FocusState private var focus: StartField?
 
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -53,6 +54,7 @@ struct NewProjectPage: View {
                 HStack {
                     Button("Open a folder instead…", action: chooseFolder).buttonStyle(PillStyle())
                         .help("A folder you already have: its conversations read and change its files")
+                    if continuing == nil { Button("Clone from GitHub…") { cloning = true }.buttonStyle(PillStyle()) }
                     Spacer()
                     Button("Back") { done(nil) }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
                     MainAction(title: "Create project ⌘↩", busy: saving, enabled: !trimmed.isEmpty, action: create)
@@ -61,6 +63,7 @@ struct NewProjectPage: View {
         }
         .disabled(saving)
         .onAppear { focus = .name }
+        .sheet(isPresented: $cloning) { CloneSheet(engine: engine) { project in cloning = false; if let project { done(project) } } }
         .onExitCommand { done(nil) }
     }
 

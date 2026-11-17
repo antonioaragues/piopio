@@ -608,6 +608,69 @@ final class EngineController {
 
     // MARK: Agents
 
+    // MARK: GitHub (docs/spec/05-build G4–G8)
+
+    func gitHubStatus() async -> GitHubStatus? {
+        try? await client?.call("github.status", Empty(), as: GitHubStatus.self)
+    }
+
+    func setGitHubToken(_ token: String) async throws -> String {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("github.setToken", GitHubTokenParams(token: token), as: GitHubLogin.self).login
+    }
+
+    func signOutOfGitHub() async {
+        _ = try? await client?.call("github.signOut", Empty(), as: Empty.self)
+    }
+
+    func gitHubRepos() async throws -> [GitHubRepo] {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("github.repos", Empty(), as: GitHubReposResult.self).repos
+    }
+
+    /// Clones it into ~/Piopio and adds it as a project.
+    func clone(_ repo: String) async throws -> ProjectInfo {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let project = try await client.call("github.clone", GitHubCloneParams(repo: repo), as: GitHubCloneResult.self).project
+        await loadProjects()
+        return project
+    }
+
+    func prDraft(_ ref: ContainerRef) async throws -> PrDraft {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("sessions.pr.draft", RefParams(ref: ref), as: PrDraft.self)
+    }
+
+    @discardableResult
+    func createPR(_ ref: ContainerRef, title: String, body: String, base: String?, draft: Bool) async throws -> PrStatus {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let pr = try await client.call("sessions.pr.create", CreatePrParams(ref: ref, title: title, body: body, base: base, draft: draft), as: PrResult.self).pr
+        try? await refreshCatalog()
+        return pr
+    }
+
+    func pullRequest(_ ref: ContainerRef) async throws -> PrStatus {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("sessions.pr.get", RefParams(ref: ref), as: PrResult.self).pr
+    }
+
+    /// Address comments ("comments") or Fix CI ("ci"): handed to the conversation.
+    func addressPR(_ ref: ContainerRef, _ what: String) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("sessions.pr.address", AddressPrParams(ref: ref, what: what), as: Empty.self)
+    }
+
+    /// The project's work branch as a pull request (the Board's merge card).
+    func createWorkPR(_ work: ProjectWork, title: String, body: String, draft: Bool) async throws -> PrStatus {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("work.createPR", WorkPrParams(project: work.project, title: title, body: body, draft: draft), as: PrResult.self).pr
+    }
+
+    func setPrEvents(_ value: String, for project: ProjectInfo) async {
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, prEvents: value), as: ProjectsAddResult.self)
+        await loadProjects()
+    }
+
     // MARK: The Watchdog (docs/spec/17 §4)
 
     func loadWatchdog() async {

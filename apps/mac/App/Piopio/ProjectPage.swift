@@ -326,6 +326,16 @@ struct ProjectSettingsSheet: View {
                     .padding(.leading, -6)
                 Text(project.approvalMode.line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
+            // What a conversation hears about its pull request (docs/spec/17 §5).
+            HStack(spacing: 10) {
+                Text("Pull request news").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 180, alignment: .leading)
+                Picker("", selection: Binding(get: { project.prEvents ?? "tell" }, set: { v in Task { await engine.setPrEvents(v, for: project) } })) {
+                    Text("Tell me").tag("tell")
+                    Text("The conversation works on it").tag("act")
+                    Text("Only in the conversation's panel").tag("off")
+                }
+                .labelsHidden().fixedSize()
+            }
             VStack(alignment: .leading, spacing: 8) {
                 Text("How work is done here").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
                 WayOfWorkingSection(engine: engine, project: project)

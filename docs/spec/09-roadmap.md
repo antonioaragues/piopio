@@ -22,7 +22,7 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 | **C · Conversations** | 18, 24, 17 | 18 phases 1–3 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the router is dropped: from Home, Piopio starts side conversations across projects, 26 CL11). Debate (16) was removed 2026-11-15 |
 | **D · Reach** (what the model can touch) | 22, 23, 12, 10 | Connectors C1; providers P0–P1; browser **W1–W2** (22 §14–15) | Browser **W3–W4**; computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); MCP Apps (D6); image generation (D11) |
 | **E · Cloud and channels** | 13, 19 T3–T4 | Spikes S4 and S7 (go); Telegram from the Mac | 13 **5.1–5.5**: deploy, Telegram by webhook, Mac Bridge, WhatsApp. Nothing is on a real account |
-| **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8, which 17 DP5 and 24's Create PR wait for); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
+| **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8 and 17 DP5, built 2026-11-17); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
 | **G · Memory** | 14 | M0–M3 | **M4** past chats, **M5** project lessons, **M6** Hindsight |
 | **H · Small things** | Backlog below | Most of batch 1 and 2 | Voice input (D5), a composer that keeps formatting (D7), web search visible everywhere (D12), Q2 worktree wording, Q3 context files, Q4 where things run, F1 3D |
 
@@ -30,17 +30,16 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 
 One build track at a time, plus Track A running beside it as use, not as building.
 
-**Done 2026-11-17:** spec 26 C1–C2 (teams became projects' ways of working, 26 §11–§12, merged into main) and side
-conversations SD1–SD3 (24 §10–§11). C4, the real-model trial, is still to run.
+**Done 2026-11-17:** spec 26 C1–C2 (teams became projects' ways of working, 26 §11–§12, merged into main), side
+conversations SD1–SD3 (24 §10–§11), non-blocking `task` DP4 (17 §9), the Watchdog's rules DP1 (17 §10), and the
+GitHub PR loop G4–G8 with PR events DP5 (05 §8, as built). C4, the real-model trial, is still to run.
 
 **Now**
-1. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on board, worktree and
-   side-conversation cards. Non-blocking `task` DP4 (17 §9) and the Watchdog's rules DP1 (17 §10) are built.
-2. **Track A alongside:** do the day's real work in Piopio and tick the acceptance boxes as they pass, C4 among them.
-   What breaks goes ahead of new features.
+1. **Track A:** do the day's real work in Piopio and tick the acceptance boxes as they pass, C4 and a real PR
+   through G6–G8 among them. What breaks goes ahead of new features.
 
 **Next**
-3. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
+2. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
    reads pages and, asking per site, clicks and types in a Browser panel; the interim Playwright browser is gone.
 
 **Later** (each waits for something)
@@ -101,7 +100,7 @@ Each phase ends with something usable every day. What each milestone delivered, 
 | **3 · Projects lens and Spaces** | 04-chat §2–3, global memory (07 §5), MCP in pi-durable | One real Space with 5+ topics; routing ≥ 90% on the 50-message replay; corrections learned | Built; the replay scored 49/50, daily use open |
 | **4 · Local agents** | 06-agents §2–4, §6–9, §11 (local), Apple app tools, Inbox, background mode | Two agents for a week; schedules fire with the app closed; delegation with loop guards | Built; real schedules across sleep/wake, permissions and budgets open |
 | **5 · Cloud agents and channels** | Cloud Engine (02 §5), deploy/rollback from the app, Telegram, WhatsApp, approvals over channels | Two agents 24/7 with the Mac off; both channels; owner approvals by button | Spikes S4 and S7 pass; nothing deployed to a real account yet |
-| **6 · 1.0 polish** | GitHub PR/CI loop (G4–G8), worktrees UX, usage page, export everything, accessibility pass, Sparkle + Homebrew cask, docs site | — | Not started |
+| **6 · 1.0 polish** | GitHub PR/CI loop (G4–G8, built 2026-11-17 except the OAuth device flow), worktrees UX, usage page, export everything, accessibility pass, Sparkle + Homebrew cask, docs site | — | G4–G8 built; the rest not started |
 
 **Spikes:** S1–S5 in Phase 0; S6 Hindsight as an opt-in memory provider; S7 the cloud harness (go); S8 the memory review. Reports are in [../spikes](../spikes), [packages/cloud](../../packages/cloud/README.md) and [14-memory](14-memory.md).
 
