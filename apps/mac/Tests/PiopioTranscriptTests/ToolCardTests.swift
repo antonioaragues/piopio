@@ -157,3 +157,10 @@ import Testing
     let proposed = ToolItem(id: "t2", at: "", callId: "c10", tool: "side_propose", args: .object(["title": .string("Fix the team page"), "why": .string("Same bug")]), status: .done, output: "Proposed.")
     #expect(ItemRenderer().render(.tool(proposed)).string.contains("Proposed a side conversation: Fix the team page"))
 }
+
+/// The Watchdog's word on a board helper (docs/spec/17 §4) is notable: a row in the conversation that made the task.
+@Test @MainActor func watchdogBoardNotesAreRows() {
+    #expect(ItemRenderer.notable("T2 “Signup form” looks stuck: nothing new for 10 minutes while running `npm test`."))
+    #expect(ItemRenderer.notable("T2 “Signup form” is repeating itself: the same command failed 3 times in this turn."))
+    #expect(!ItemRenderer.notable("T2 “Signup form” is done."))
+}

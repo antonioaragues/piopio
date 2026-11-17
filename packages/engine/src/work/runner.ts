@@ -818,6 +818,13 @@ export class WorkRunner {
 		await this.pump(work);
 	}
 
+	/** The Watchdog's word on a helper (docs/spec/17 §4): "looks stuck…", "is repeating itself…", to the task's conversation. */
+	async noteHelper(project: string, taskId: string, text: string): Promise<void> {
+		const work = this.find(project);
+		const t = work?.tasks.find((x) => x.id === taskId);
+		if (work && t) await this.tell(work, `${t.id} “${t.title}” ${text}`, t);
+	}
+
 	/** A board update, to the conversation that made the task (docs/spec/20 PT6). Your own cards have none. */
 	private async tell(work: ProjectWork, text: string, t: WorkTask): Promise<void> {
 		if (t.conversationId) await this.host.submit(t.conversationId, `[Board] ${text}`).catch((error: unknown) => this.host.log(`Work in ${work.cwd}: ${(error as Error).message}`));

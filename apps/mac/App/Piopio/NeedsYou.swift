@@ -5,13 +5,15 @@ import SwiftUI
 /// One thing that waits for you (docs/design v2, "Needs you"): an agent's approval, message, failed run or budget
 /// stop, or a Build session waiting on an approval or a question. Aggregated across the engine, oldest first.
 struct NeedsYouEntry: Identifiable {
-    enum Kind { case approval, message, runFailed, budget, buildPrompt }
+    enum Kind { case approval, message, runFailed, budget, buildPrompt, watchdog }
     let id: String
     let kind: Kind
     let at: String
     var inbox: InboxItem?
     var agent: SessionSummary?
     var session: SessionSummary?
+    /// The Watchdog's note (docs/spec/17 §4): a conversation that looks stuck or repeats itself.
+    var watchdog: WatchdogNote?
 
     var isApproval: Bool { kind == .approval || kind == .buildPrompt }
 
@@ -20,7 +22,7 @@ struct NeedsYouEntry: Identifiable {
         let area: Area = session.map { $0.profile == .chat ? .chat : .build } ?? .agents
         return Areas.shared.contains(area) ? nil : area
     }
-    var isMessage: Bool { kind == .message || kind == .runFailed || kind == .budget }
+    var isMessage: Bool { kind == .message || kind == .runFailed || kind == .budget || kind == .watchdog }
 }
 
 extension EngineController {
@@ -38,6 +40,9 @@ extension EngineController {
         }
         for s in buildSessions where liveStatus[s.ref.id] == .waitingApproval {
             out.append(NeedsYouEntry(id: "session:\(s.ref.id)", kind: .buildPrompt, at: s.updatedAt, session: s))
+        }
+        for n in watchdogNotes {
+            out.append(NeedsYouEntry(id: "watchdog:\(n.id)", kind: .watchdog, at: n.at, session: (buildSessions + threads).first { $0.ref.id == n.ref.id }, watchdog: n))
         }
         return out.sorted { $0.at < $1.at }
     }
@@ -59,7 +64,7 @@ struct NeedsYouView: View {
         case .all: return all
         case .approvals: return all.filter(\.isApproval)
         case .messages: return all.filter { $0.kind == .message }
-        case .problems: return all.filter { $0.kind == .runFailed || $0.kind == .budget }
+        case .problems: return all.filter { $0.kind == .runFailed || $0.kind == .budget || $0.kind == .watchdog }
         }
     }
 
@@ -108,6 +113,7 @@ enum NeedsYouText {
     @MainActor static func source(_ entry: NeedsYouEntry, engine: EngineController) -> String {
         let hidden = entry.hiddenArea.map { " (\($0.title) · hidden)" } ?? ""
         if let s = entry.session { return s.title + hidden }
+        if let n = entry.watchdog { return n.title + hidden }
         return (entry.agent?.title ?? entry.inbox?.agentName ?? "Agent") + hidden
     }
 
@@ -117,6 +123,7 @@ enum NeedsYouText {
         case .message: return entry.inbox.map { firstLine($0.body) } ?? "Wrote to you"
         case .runFailed: return "\(source(entry, engine: engine)) didn't run"
         case .budget: return entry.inbox?.title ?? "Budget"
+        case .watchdog: return entry.watchdog?.text ?? "Looks stuck"
         case .buildPrompt:
             guard let s = entry.session, let prompt = engine.thread(s.ref).prompts.first else { return "Waiting on you" }
             if prompt.kind == .approval, prompt.tool == "bash", let detail = prompt.detail, !detail.isEmpty, !detail.contains("\n") { return "Run \(detail)?" }
@@ -132,6 +139,7 @@ enum NeedsYouText {
         case .runFailed: "didn't run"
         case .budget: entry.inbox?.title == "Budget used up" ? "paused itself" : "budget"
         case .buildPrompt: "is waiting on you"
+        case .watchdog: entry.watchdog?.rule == "looping" ? "is repeating itself" : "looks stuck"
         }
     }
 
@@ -193,7 +201,7 @@ struct NeedsYouCard: View {
     }
 
     private var content: some View {
-        Text(entry.inbox?.body ?? entry.inbox?.title ?? "").font(.system(size: 13.5)).foregroundStyle(Color.dsFg)
+        Text(entry.watchdog?.text ?? entry.inbox?.body ?? entry.inbox?.title ?? "").font(.system(size: 13.5)).foregroundStyle(Color.dsFg)
             .lineSpacing(3).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
     }
 
@@ -221,6 +229,10 @@ struct NeedsYouCard: View {
                     Button("Raise to \(MainSidebar.money(max(1, budget * 2)))") { raise(to: max(1, budget * 2)) }.buttonStyle(PillStyle(kind: .primary, compact: true))
                 }
                 Button("Keep paused") { markRead() }.buttonStyle(PillStyle(compact: true))
+            case .watchdog:
+                // The Watchdog never stops anything itself (docs/spec/17 §4): you look, and decide.
+                Button("Open conversation") { open() }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                if let note = entry.watchdog { Button("Dismiss") { Task { await engine.dismissWatchdog(note) } }.buttonStyle(PillStyle(compact: true)) }
             case .message, .buildPrompt:
                 EmptyView()
             }
@@ -255,6 +267,10 @@ struct NeedsYouCard: View {
     // MARK: Actions
 
     private func open() {
+        if let note = entry.watchdog {
+            item = engine.item(for: note.ref.id) ?? .needsYou
+            return
+        }
         guard let inbox = entry.inbox else { return }
         let conversation = inbox.conversationId ?? "person:owner"
         UserDefaults.standard.set(conversation.hasPrefix("run:") ? "Activity" : "Chat", forKey: "agentTab")

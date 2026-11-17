@@ -34,15 +34,13 @@ One build track at a time, plus Track A running beside it as use, not as buildin
 conversations SD1–SD3 (24 §10–§11). C4, the real-model trial, is still to run.
 
 **Now**
-1. **Watchdog DP1** (17 §4). Non-blocking `task` DP4 is built (17 §9), on the report bridge side conversations use
-   (26 §7.1).
+1. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on board, worktree and
+   side-conversation cards. Non-blocking `task` DP4 (17 §9) and the Watchdog's rules DP1 (17 §10) are built.
 2. **Track A alongside:** do the day's real work in Piopio and tick the acceptance boxes as they pass, C4 among them.
    What breaks goes ahead of new features.
 
 **Next**
-3. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on board, worktree and
-   side-conversation cards.
-4. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
+3. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
    reads pages and, asking per site, clicks and types in a Browser panel; the interim Playwright browser is gone.
 
 **Later** (each waits for something)

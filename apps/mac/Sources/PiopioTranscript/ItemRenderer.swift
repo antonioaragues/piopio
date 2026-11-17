@@ -280,7 +280,7 @@ nonisolated struct ItemRenderer: Sendable {
     /// A board update worth a line in the conversation (AD9): a task sent back, or blocked.
     static func notable(_ boardText: String) -> Bool {
         let first = boardText.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? boardText
-        return first.contains(" went back to ") || first.contains(" is blocked")
+        return first.contains(" went back to ") || first.contains(" is blocked") || first.contains(" looks stuck") || first.contains(" is repeating itself")
     }
 
     /// One of your agents, asked from a conversation (docs/spec/21 D6, design 5c-2): "Rita · joined for this message"

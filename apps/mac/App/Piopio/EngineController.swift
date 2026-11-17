@@ -16,6 +16,8 @@ final class EngineController {
     private(set) var agents: [SessionSummary] = []
     /// Projects' work (docs/spec/26): each one's way of working and board.
     private(set) var work: [ProjectWork] = []
+    /// The Watchdog's notes about your conversations (docs/spec/17 §4): in Needs you.
+    private(set) var watchdogNotes: [WatchdogNote] = []
     /// Build: folders added as projects, and their sessions (newest first).
     private(set) var projects: [ProjectInfo] = []
     private(set) var buildSessions: [SessionSummary] = []
@@ -324,7 +326,7 @@ final class EngineController {
             }
         }
         Task { [weak self] in await self?.loadInbox() }
-        Task { [weak self] in await self?.loadWork() }
+        Task { [weak self] in await self?.loadWork(); await self?.loadWatchdog() }
         Task { [weak self] in
             for await note in client.providerEvents {
                 guard let self else { return }
@@ -338,6 +340,8 @@ final class EngineController {
                     await self.loadConnectors()
                 case .workChanged:
                     await self.loadWork()
+                case .watchdogChanged:
+                    await self.loadWatchdog()
                 case .connectorAuth(let auth):
                     if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
                     if auth.event.type == "done" { await self.loadConnectors() }
@@ -604,6 +608,17 @@ final class EngineController {
 
     // MARK: Agents
 
+    // MARK: The Watchdog (docs/spec/17 §4)
+
+    func loadWatchdog() async {
+        if let notes = try? await client?.call("watchdog.list", Empty(), as: WatchdogListResult.self).notes { watchdogNotes = notes }
+    }
+
+    func dismissWatchdog(_ note: WatchdogNote) async {
+        _ = try? await client?.call("watchdog.dismiss", IdParams(id: note.id), as: Empty.self)
+        await loadWatchdog()
+    }
+
     // MARK: Side conversations (docs/spec/24)
 
     /// A side conversation by hand: `/side <what>`, with your words as its brief.
@@ -800,7 +815,7 @@ final class EngineController {
 
     /// Everything that waits for you (docs/design v2 "Needs you"): agents' Inbox items and Build sessions waiting on an approval.
     var needsYouCount: Int {
-        inboxCount + buildSessions.filter { liveStatus[$0.ref.id] == .waitingApproval }.count
+        inboxCount + buildSessions.filter { liveStatus[$0.ref.id] == .waitingApproval }.count + watchdogNotes.count
     }
 
     func markInboxRead(_ items: [InboxItem]) async {

@@ -289,3 +289,40 @@ On the bridge side conversations use (24 §5), so `task`, side conversations and
   - `task_wait` with no message after it;
   - `task_stop`, and a stranger's id refused;
   - queued past three, and batched results.
+
+## 10. DP1 as built (2026-11-17): the Watchdog's rules
+
+`packages/engine/src/watchdog.ts` follows every open Build session and chat. Agents aren't covered yet: their runs are
+pi-durable's, and a failed run already reaches the Inbox.
+
+- **The rules:**
+  - **W1 Silent:** a running turn with nothing new (no item, no tool output) for 10 minutes. The note says how long
+    and what's running ("while running `npm test`"). It goes away when anything new arrives or the turn ends.
+  - **W2 Looping:** the same tool call with the same arguments 3 times in a turn, or the same failing command 3
+    times. The note stays after the turn, until you dismiss it or the next turn starts.
+  - **W3 Waiting on you:** an approval or question unanswered for 30 minutes gets one notification, "Still waiting
+    for you after 30 minutes: …", and no note.
+- **W4 and W5 aren't separate rules.** A parked or faulted pi-durable task is the agents' Inbox `run_failed`. Over
+  budget is the board's budget per job and the agents' budgets. With Dispatch gone (26 CL11), §2.6's cap has no
+  owner.
+- **Where a note goes** (the Watchdog never stops or steers anything):
+  - a side conversation's or a subagent's goes to its parent, as its report (`[Side] “…” looks stuck: …`), through
+    the bridge of 26 §7.1;
+  - a board helper's goes to the conversation that made the task (`[Board] T2 “…” looks stuck: …`), a row there like
+    "sent back";
+  - yours goes to Needs you (and Home's Waiting on you), with **Open conversation** and **Dismiss**, under Problems,
+    plus a notification.
+- **Protocol:** `watchdog.list`, `watchdog.dismiss`, and the `watchdog.changed` notification. Notes are kept in
+  `<home>/watchdog.json`.
+- **Thresholds** are engine options (`silentMs`, `waitingMs`, `tickMs`); tests use seconds.
+- **Tests:** `watchdog.test.ts` covers:
+  - W1 with what's running, and the note going when the turn moves on;
+  - W2 staying after the turn until dismissed;
+  - W3 as one reminder with no note;
+  - a stuck side conversation reported to its parent, not to you.
+
+  `ToolCardTests` checks the board rows.
+- **Not done:**
+  - W6, the utility model's "on track / drifting / stuck" check (DP6);
+  - the thresholds as settings;
+  - agents' runs.

@@ -41,6 +41,7 @@ import type { AgentWatchers } from "./watchers.js";
 import { runCommand, type WorkHost, type WorkRunner } from "./work/runner.js";
 import type { BoardBridge } from "./work/extension.js";
 import type { SideBridge, SideLine } from "./tools/side.js";
+import type { Watchdog, WatchdogRule } from "./watchdog.js";
 import type { ConsultBridge } from "./consult.js";
 import { routineLabel } from "./work/routines.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
@@ -135,6 +136,8 @@ export class Sessions {
 	telegram?: TelegramChannels;
 	/** Projects' work (docs/spec/26): their boards, set by the engine. */
 	work?: WorkRunner;
+	/** The Watchdog (docs/spec/17 §4), set by the engine: it follows every open Build session and chat. */
+	watchdog?: Watchdog;
 	/** A project's work changed (the app refreshes its board). */
 	onWork?: (project: string) => void;
 	/** Event routines on this Mac (watchers.ts), and a webhook's local URL; set by the engine. */
@@ -497,6 +500,7 @@ export class Sessions {
 			pending.catch(() => this.open.delete(ref.id));
 			// A side conversation reports to its parent whenever it's open (docs/spec/24 §5).
 			if (entry.side || entry.parent) void pending.then((runtime) => this.watchChild(entry, runtime)).catch(() => undefined);
+			if (entry.ref.kind === "build" || entry.ref.kind === "thread") void pending.then((runtime) => this.watchdog?.watch(entry.ref, runtime)).catch(() => undefined);
 		}
 		return pending;
 	}
@@ -1468,6 +1472,29 @@ export class Sessions {
 		const runtime = await this.runtime(parent.ref);
 		await runtime.submit(notes.join("\n\n"), { whenBusy: "followUp" });
 		this.touch(parent.ref);
+	}
+
+	/**
+	 * Where a Watchdog note goes (docs/spec/17 §4): a side conversation's or a subagent's to its parent (as its
+	 * report), a board helper's to the conversation that made the task, yours to Needs you.
+	 */
+	watchdogNote(ref: ContainerRef, rule: WatchdogRule, text: string): "elsewhere" | "you" {
+		const e = this.entries.get(ref.id);
+		if (!e) return "you";
+		if (e.side || e.parent) {
+			const kind = e.side ? "Side" : "Task";
+			void this.reportToParent(e, `[${kind}] “${e.title}” (${e.ref.id}) ${text}`, `${e.side ? "Message" : "Result"} from ${e.title} · ${rule === "silent" ? "looks stuck" : "repeating itself"}`).catch(() => undefined);
+			return "elsewhere";
+		}
+		if (e.helper && this.work) {
+			void this.work.noteHelper(e.helper.project, e.helper.taskId, text).catch(() => undefined);
+			return "elsewhere";
+		}
+		return "you";
+	}
+
+	titleOf(ref: ContainerRef): string {
+		return this.entries.get(ref.id)?.title ?? ref.id;
 	}
 
 	/** You wrote in a conversation yourself: its side conversations may wake it again, and a side conversation you drive doesn't wake its parent. */

@@ -156,6 +156,8 @@ public actor EngineClient {
                     providersContinuation.yield(.connectorsChanged)
                 } else if method == "work.changed" {
                     providersContinuation.yield(.workChanged)
+                } else if method == "watchdog.changed" {
+                    providersContinuation.yield(.watchdogChanged)
                 } else if method == "projects.changed" {
                     if let n = try? decoder.decode(NotificationEnvelope<ProjectsChanged>.self, from: line) {
                         projectsContinuation.yield(n.params.projects)

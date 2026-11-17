@@ -33774,6 +33774,108 @@
 				}
 			}
 		},
+		"watchdog.list.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"watchdog.list.result": {
+			"type": "object",
+			"required": [
+				"notes"
+			],
+			"properties": {
+				"notes": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"ref",
+							"title",
+							"rule",
+							"text",
+							"at"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"ref": {
+								"type": "object",
+								"required": [
+									"kind",
+									"id"
+								],
+								"properties": {
+									"kind": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "build"
+											},
+											{
+												"type": "string",
+												"const": "thread"
+											},
+											{
+												"type": "string",
+												"const": "agent"
+											}
+										]
+									},
+									"id": {
+										"type": "string"
+									},
+									"conversationId": {
+										"type": "string"
+									}
+								}
+							},
+							"title": {
+								"type": "string"
+							},
+							"rule": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "silent"
+									},
+									{
+										"type": "string",
+										"const": "looping"
+									},
+									{
+										"type": "string",
+										"const": "waiting"
+									}
+								]
+							},
+							"text": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"watchdog.dismiss.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"watchdog.dismiss.result": {
+			"type": "object",
+			"properties": {}
+		},
 		"inbox.read.params": {
 			"type": "object",
 			"required": [

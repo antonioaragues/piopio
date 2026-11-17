@@ -620,6 +620,10 @@ public struct ProjectWork: Codable, Sendable, Hashable, Identifiable {
     public var tasks: [WorkTask]
     public var id: String { project }
 }
+/// A Watchdog note about one of your conversations (docs/spec/17 §4): "silent" or "looping".
+public struct WatchdogNote: Decodable, Sendable, Hashable, Identifiable { public var id, title, rule, text, at: String; public var ref: ContainerRef }
+public struct WatchdogListResult: Decodable, Sendable { public var notes: [WatchdogNote] }
+public struct IdParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
 /// Your answer to a side card: an offer's "new" or "here", a proposal's "start" or "dismiss".
 public struct AnswerSideParams: Encodable, Sendable {
     public var ref: ContainerRef
@@ -1472,7 +1476,7 @@ public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
     public init(type: String, message: String? = nil) { self.type = type; self.message = message }
 }
 public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
-public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged }
 
 // MARK: Connected apps (docs/spec/12-connectors)
 

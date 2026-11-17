@@ -47,6 +47,7 @@ import { routineLabel, systemZone, type ProjectRoutine } from "./work/routines.j
 import { WorkRunner, type ProjectWork } from "./work/runner.js";
 import { migrateTeams, needsMigration, REPORT_FILE } from "./work/migrate.js";
 import { buildAgenda } from "./agenda.js";
+import { Watchdog, type WatchdogOptions } from "./watchdog.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -76,6 +77,8 @@ export type EngineOptions = {
 	connectorEndpoints?: ConnectorEndpoints;
 	/** Where teams kept their folders before docs/spec/26, read once by the migration; default ~/Piopio/Teams or PIOPIO_TEAMS_DIR. */
 	teamsDir?: string;
+	/** The Watchdog's thresholds (tests: seconds, not minutes). */
+	watchdog?: WatchdogOptions;
 	/** Event routines (tests: check mail and settle folders sooner). */
 	watchers?: { mailEveryMs?: number; settleMs?: number };
 	/** Telegram's API (tests: a fake one) and how long a poll waits. */
@@ -106,6 +109,7 @@ export class Engine {
 	readonly telegram: TelegramChannels;
 	readonly watchers: AgentWatchers;
 	readonly work: WorkRunner;
+	readonly watchdog: Watchdog;
 	private readonly teamsDir: string;
 	private readonly agentDir: string;
 	readonly app = new AppServices();
@@ -257,6 +261,22 @@ export class Engine {
 			}),
 		);
 		this.sessions.work = this.work;
+		// The Watchdog (docs/spec/17 §4): notes on conversations that look stuck or repeat themselves.
+		this.watchdog = new Watchdog(
+			{
+				deliver: (ref, rule, text) => this.sessions.watchdogNote(ref, rule, text),
+				title: (ref) => this.sessions.titleOf(ref),
+				notify: (ref, title, message) => {
+					for (const conn of this.authed) conn.notify("session.attention", { ref, title, kind: "notify", message });
+				},
+				changed: () => {
+					for (const conn of this.authed) conn.notify("watchdog.changed", {});
+				},
+			},
+			join(options.paths.home, "watchdog.json"),
+			options.watchdog ?? {},
+		);
+		this.sessions.watchdog = this.watchdog;
 		// Side conversations in another project (docs/spec/24 SCQ5, 26 CL11): by its name or id.
 		this.sessions.projectNamed = (name) => {
 			const p = this.projects.list().find((x) => x.missing !== true && (x.id === name || x.name.toLowerCase() === name.toLowerCase()));
@@ -433,6 +453,7 @@ export class Engine {
 		this.telegram?.stop();
 		this.watchers?.stop();
 		this.work?.stop();
+		this.watchdog?.stop();
 		for (const conn of this.authed) conn.close();
 		await this.backfill;
 		for (const off of this.subscriptions.values()) off();
@@ -1016,6 +1037,13 @@ export class Engine {
 			}
 			case "inbox.list":
 				return (await this.sessions.inbox()) satisfies Result<"inbox.list">;
+			case "watchdog.list":
+				return { notes: this.watchdog.list() } satisfies Result<"watchdog.list">;
+			case "watchdog.dismiss": {
+				const p = params as Params<"watchdog.dismiss">;
+				this.watchdog.dismiss(p.id);
+				return {} satisfies Result<"watchdog.dismiss">;
+			}
 			case "inbox.read": {
 				const p = params as Params<"inbox.read">;
 				await this.sessions.inboxRead(p.items);

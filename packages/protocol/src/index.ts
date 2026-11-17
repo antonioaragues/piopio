@@ -1648,6 +1648,12 @@ export const methods = {
 			),
 		}),
 	},
+	/** The Watchdog's notes about your conversations (docs/spec/17 §4): stuck, repeating itself. In Needs you until dismissed or the conversation moves on. */
+	"watchdog.list": {
+		params: Type.Object({}),
+		result: Type.Object({ notes: Type.Array(Type.Object({ id: Type.String(), ref: ContainerRef, title: Type.String(), rule: literals("silent", "looping", "waiting"), text: Type.String(), at: Type.String() })) }),
+	},
+	"watchdog.dismiss": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
 	"inbox.read": {
 		params: Type.Object({ items: Type.Array(Type.Object({ agentId: Type.String(), id: Type.String() })) }),
 		result: Type.Object({}),
@@ -1766,6 +1772,8 @@ export const notifications = {
 	"projects.changed": ProjectsChanged,
 	/** A session needs you (it's waiting on a prompt) or told you something (notify_user). Sent to every client. */
 	"session.attention": Type.Object({ ref: ContainerRef, title: Type.String(), kind: literals("waiting", "notify"), message: Type.String() }),
+	/** The Watchdog's notes changed (docs/spec/17 §4): list them again. */
+	"watchdog.changed": Type.Object({}),
 	/** The Inbox changed; `count` is what waits for you (badges). `approval` is set when an agent asks (notifications). */
 	/** A step of a provider sign-in started with `providers.login`. */
 	"providers.auth": Type.Object({ loginId: Type.String(), provider: Type.String(), event: ProviderAuthEvent }),
