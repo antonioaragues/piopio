@@ -283,8 +283,7 @@ All seven went with the proposal.
 - **`/side <what>`** in any composer is `sessions.side.start`, with your words as the brief. It shows in the `/` list.
 - **The app:**
   - "Started from <parent> ›" in a side conversation;
-  - a "Side conversations" block above the parent's composer: a row each with its dot, title, live line and branch,
-    which opens it, and **Merge** / **Discard** on a finished one whose worktree isn't merged;
+  - ~~a "Side conversations" block above the parent's composer~~ (replaced 2026-11-17, see "In the transcript" below);
   - `[Side]` notes as "Message from <title> · finished" rows that open to the answer;
   - side conversations nested under their parent in the sidebar, with the parent's dot showing when one needs you;
   - Build conversations in a worktree now find their project by its path, not the worktree's.
@@ -330,14 +329,15 @@ exist yet. That's what's left of SD3 (below).
 - **The card** (`ItemRenderer`): "This looks like its own task", the title, the brief and **New conversation** ·
   **Do it here**. It stays out of folded steps.
   - **New conversation** (`sessions.side.answer`, choice `new`) starts the side conversation, with `how: "offered"`.
-    You stay where you are, and it shows in the block above the composer.
+    You stay where you are, and the card becomes the side's line in the transcript.
   - **Do it here** sends "Do it here." as your words.
   - A card answers once; a second click says why it can't.
   - After three New conversation in a row (since the engine started), the app asks "Start these on their own?",
     and Always start sets the setting (SCQ3).
 - **`side_propose({ title, brief, why, project? })`** leaves a proposal on the conversation (`sideProposals`). It
-  expires after a week, a proposal with the same title is refused, and at most 6 are open. The block above the
-  composer shows it dashed, with its reason, "until 24 Nov", **Start** and **Dismiss**. `side_dismiss({ id })`
+  expires after a week, a proposal with the same title is refused, and at most 6 are open. The transcript shows
+  it as a card with its reason, **Start** and **Dismiss** while it's open; its side's line once started; a grey
+  "closed" line once dismissed or expired. `side_dismiss({ id })`
   withdraws one. Started ones have `how: "proposed"`.
 - **Another project** (SCQ5, 26 CL11): `side_start`, `side_offer` and `side_propose` take `project`, one of your
   projects by name or id. The side conversation works in that project's folder, with its permissions, in a worktree
@@ -353,6 +353,29 @@ exist yet. That's what's left of SD3 (below).
   - the replay set of ~60 real messages and its acceptance (≥ 90% of new tasks offered, ≤ 1 false offer in 20
     continuations) on the default models, after a week of use;
   - Options on the card (where it runs, worktree, model, permissions), as in the reference;
-  - the card can't show it was answered, since the transcript doesn't know the answer; the block does;
+  - an offer answered New conversation becomes its side's line (`side.from`); one answered Do it here still shows its
+    buttons, and a click says why it can't;
   - "at most three proposals per turn" is the prompt's, not enforced;
   - the streak for "Always start" resets when the engine restarts.
+
+### In the transcript (2026-11-17)
+
+Side conversations moved out of the block above the composer and into the transcript (design option B: process is a
+grey line, a card only for what needs you). Nothing about sides is pinned above the composer; the block stays only
+for subagents at work (17 §3).
+
+- **`side.from`** on a side conversation: the tool call that started it (`side_start`'s, or the offer's or proposal's
+  you answered). The app finds a side's line by it.
+- **Starting:** `side_start` is a grey line, "Side conversation · *title* · *where it stands*", that follows the side
+  live (its line while it works, queued, needs you with the blue dot, done, failed, merged or discarded). The title
+  opens it; a finished side on an unmerged branch gets **Merge** · **Discard** on the same line. An offer answered New
+  conversation becomes the same line. `side_start` and `side_propose` stay out of folded steps.
+- **Proposals:** a card with **Start** · **Dismiss** while open (see `side_propose` above).
+- **Reports (`[Side]`):** a card with **Open** only while the side still waits on you (an approval there); after that
+  it's "*title* · needed you". Finished, failed and stopped reports are grey lines that unfold to the answer, with
+  **Open**, and the branch's **Merge** · **Discard** under them while nobody chose.
+- **Ask next:** no suggestions under a turn that ended on a card that asks already (`ask_user`, `ask_owner`,
+  `side_offer`, `side_propose`, `offer_parallel`, `offer_repeat`, `propose_plan`), nor after a note the user didn't
+  write (`[Side]`, `[Task]`, `[Board]`, `[Routine]`). `side_offer`'s result tells the model to end its turn without
+  restating the card's choices.
+- **Tests:** `follow-ups.test.ts` (`followUpsFit`), `side.test.ts` (`from`), `SideLinesTests` and `ToolCardTests`.

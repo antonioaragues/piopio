@@ -67,7 +67,7 @@ test("asked in words: a side conversation in its own worktree does its task and 
 	const parent = await conversation(client, dir);
 	await client.call("sessions.submit", { ref: parent, input: { text: `Also, do the about page in its own conversation.\n${sideStart({ title: "About page", brief: "write: about.html | <p>About</p>" })}` } });
 	const child = await until(() => sessions(client), (s) => s.some((x) => x.side?.state === "done")).then((s) => s.find((x) => x.side)!);
-	expect(child).toMatchObject({ title: "About page", side: { parent: { id: parent.id }, how: "asked", state: "done" }, worktree: { branch: expect.stringMatching(/^side\/about-page-/) } });
+	expect(child).toMatchObject({ title: "About page", side: { parent: { id: parent.id }, how: "asked", state: "done", from: expect.any(String) }, worktree: { branch: expect.stringMatching(/^side\/about-page-/) } });
 	// It worked in its worktree; the parent's folder didn't change.
 	expect(readFileSync(join(child.cwd!, "about.html"), "utf8")).toContain("About");
 	expect(existsSync(join(dir, "about.html"))).toBe(false);
@@ -176,7 +176,7 @@ test("proposed (SD3): a card you start or dismiss, withdrawn by Piopio, refused 
 	await idle(client, parent);
 	const { ref } = await answer(client, parent, alpha!.id, "start");
 	await until(() => sessions(client), (s) => s.find((x) => x.ref.id === ref!.id)?.side?.state === "done");
-	expect((await sessions(client)).find((x) => x.ref.id === ref!.id)).toMatchObject({ title: "Alpha", side: { how: "proposed" } });
+	expect((await sessions(client)).find((x) => x.ref.id === ref!.id)).toMatchObject({ title: "Alpha", side: { how: "proposed", from: alpha!.id } });
 	await answer(client, parent, beta!.id, "dismiss");
 	await expect(answer(client, parent, beta!.id, "start")).rejects.toThrow(/gone/);
 	await idle(client, parent);

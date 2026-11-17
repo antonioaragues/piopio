@@ -11097,6 +11097,10 @@
 						},
 						"line": {
 							"type": "string"
+						},
+						"from": {
+							"type": "string",
+							"description": "The tool call that started it (side_start, an offer's or a proposal's), for its line in the parent's transcript"
 						}
 					}
 				},
@@ -18733,6 +18737,10 @@
 									},
 									"line": {
 										"type": "string"
+									},
+									"from": {
+										"type": "string",
+										"description": "The tool call that started it (side_start, an offer's or a proposal's), for its line in the parent's transcript"
 									}
 								}
 							},
@@ -19426,6 +19434,10 @@
 									},
 									"line": {
 										"type": "string"
+									},
+									"from": {
+										"type": "string",
+										"description": "The tool call that started it (side_start, an offer's or a proposal's), for its line in the parent's transcript"
 									}
 								}
 							},

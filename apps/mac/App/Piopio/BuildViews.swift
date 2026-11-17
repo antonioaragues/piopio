@@ -224,7 +224,7 @@ struct BuildSessionView: View {
                 session.document.bottomInset = height + 40
             }
         }
-        .modifier(SideOffers(engine: engine, ref: summary.ref))
+        .modifier(SideOffers(engine: engine, ref: summary.ref, document: session.document))
         .onReceive(NotificationCenter.default.publisher(for: .createPullRequest)) { note in
             if note.object as? String == summary.ref.id { creatingPR = true }
         }

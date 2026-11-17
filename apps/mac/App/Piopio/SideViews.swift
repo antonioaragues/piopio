@@ -1,10 +1,11 @@
 import PiopioKit
+import PiopioTranscript
 import SwiftUI
 
-// Side conversations (docs/spec/24 §6): in a side conversation, the "Started from <parent> ›" bar; in its parent, a
-// block above the composer with each one's state and what it's doing, which opens it, a finished one's Merge and
-// Discard when it worked on its own branch, and Piopio's proposals with Start and Dismiss; and the offer card's
-// answers, with "Always start" after three New conversation in a row.
+// Side conversations (docs/spec/24 §6): in a side conversation, the "Started from <parent> ›" bar; in its parent, their
+// lines in the transcript (a grey line each that says where it stands, a card only for what needs you: a proposal, a
+// side waiting on an approval), whose links act here; above the composer, only subagents still at work; and the offer
+// card's answers, with "Always start" after three New conversation in a row.
 
 /// Opens a conversation by id: a project's (a session) or one without a project (a chat).
 @MainActor func openConversation(_ engine: EngineController, _ id: String) {
@@ -37,36 +38,27 @@ struct SideStartedBar: View {
     }
 }
 
-/// A conversation's side conversations, above its composer: a row each with a dot, its title and a live line.
+/// Subagents still at work (docs/spec/17 §3), above the composer: their results come back as [Task] rows, and finished
+/// ones leave here. Side conversations have their lines in the transcript instead.
 struct SideConversations: View {
     let engine: EngineController
     let parentId: String
     @State private var open = true
-    @State private var error: String?
 
-    private var proposals: [SessionSummary.SideProposal] {
-        let me = (engine.buildSessions + engine.threads).first { $0.ref.id == parentId }
-        return (me?.sideProposals ?? []).filter { (Self.iso.date(from: $0.expiresAt) ?? .distantFuture) > Date() }
-    }
-
-    /// Subagents still at work (docs/spec/17 §3): their results come back as [Task] rows; finished ones leave here.
     private var subagents: [SessionSummary] {
         engine.buildSessions.filter { $0.parent?.id == parentId && ($0.parent?.state == "working" || $0.parent?.state == "queued") }.sorted { $0.createdAt < $1.createdAt }
     }
 
     var body: some View {
-        let sides = engine.sides(of: parentId)
-        let proposals = proposals
         let subagents = subagents
-        if !sides.isEmpty || !proposals.isEmpty || !subagents.isEmpty {
+        if !subagents.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
                             .rotationEffect(.degrees(open ? 90 : 0))
-                        Text(sides.isEmpty && proposals.isEmpty ? "Subagents" : "Side conversations").font(.system(size: 12.5, weight: .semibold))
-                        Text([sides.isEmpty ? nil : Self.summary(sides), proposals.isEmpty ? nil : "\(proposals.count) proposed", subagents.isEmpty ? nil : "\(subagents.count) subagent\(subagents.count == 1 ? "" : "s") running"].compactMap { $0 }.joined(separator: " · "))
-                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                        Text("Subagents").font(.system(size: 12.5, weight: .semibold))
+                        Text("\(subagents.count) running").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                         Spacer()
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
@@ -74,13 +66,7 @@ struct SideConversations: View {
                 }
                 .buttonStyle(.plain)
                 if open {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(sides, id: \.ref.id) { row($0) }
-                        ForEach(proposals) { proposal($0) }
-                        ForEach(subagents, id: \.ref.id) { subagent($0) }
-                    }
-                    .padding(.bottom, 6)
-                    if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn).padding(.horizontal, 12).padding(.bottom, 8) }
+                    VStack(alignment: .leading, spacing: 0) { ForEach(subagents, id: \.ref.id) { subagent($0) } }.padding(.bottom, 6)
                 }
             }
             .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -89,58 +75,11 @@ struct SideConversations: View {
         }
     }
 
-    private func row(_ s: SessionSummary) -> some View {
-        let state = s.side?.state ?? "working"
-        let (word, color) = Self.state(state)
-        let unmerged = state == "done" && s.worktree != nil && s.worktree?.finished == nil
-        return HStack(spacing: 10) {
-            Button { openConversation(engine, s.ref.id) } label: {
-                HStack(spacing: 10) {
-                    if state == "working" { ProgressView().controlSize(.mini).frame(width: 7, height: 7) } else { Circle().fill(color).frame(width: 7, height: 7) }
-                    Text(s.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                    Text(state == "working" ? (s.side?.line ?? word) : word).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                    Spacer(minLength: 8)
-                    if let branch = s.worktree?.branch { Text(s.worktree?.finished.map { "\(branch) · \($0.rawValue)" } ?? branch).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1) }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Open it")
-            if unmerged {
-                Button("Merge") { finish(s, .merge) }.buttonStyle(PillStyle(kind: .primary, compact: true))
-                    .help("Merge \(s.worktree?.branch ?? "its branch") into \(s.worktree?.base ?? "the base branch")")
-                Button("Discard") { finish(s, .discard) }.buttonStyle(PillStyle(compact: true))
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 4)
-    }
-
-    /// "Proposed · Fix the same clipping in the team page · until 24 Nov", its reason, Start and Dismiss (§6).
-    private func proposal(_ p: SessionSummary.SideProposal) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Circle().strokeBorder(Color.dsFg3, style: StrokeStyle(lineWidth: 1, dash: [2, 2])).frame(width: 8, height: 8).padding(.top, 4)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Proposed").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    Text(p.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                    if let project = p.project { Text("in \(project)").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                }
-                Text([p.why, Self.iso.date(from: p.expiresAt).map { "until \($0.formatted(.dateTime.day().month(.abbreviated)))" }].compactMap { $0 }.joined(separator: " · "))
-                    .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
-            }
-            Spacer(minLength: 8)
-            Button("Start") { answer(p.id, "start") }.buttonStyle(PillStyle(kind: .primary, compact: true))
-            Button("Dismiss") { answer(p.id, "dismiss") }.buttonStyle(PillStyle(compact: true))
-        }
-        .padding(.horizontal, 12).padding(.vertical, 5)
-    }
-
     /// A subagent at work: its title and what it's doing; it opens its session.
     private func subagent(_ s: SessionSummary) -> some View {
         Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.session(s.ref.id).raw) } label: {
             HStack(spacing: 10) {
                 if s.parent?.state == "working" { ProgressView().controlSize(.mini).frame(width: 7, height: 7) } else { Circle().fill(Color.dsFg3).frame(width: 7, height: 7) }
-                Text("Subagent").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 Text(s.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Text(s.parent?.state == "queued" ? "queued" : (s.parent?.line ?? "working")).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 Spacer(minLength: 8)
@@ -151,68 +90,46 @@ struct SideConversations: View {
         .help("Open it")
         .padding(.horizontal, 12).padding(.vertical, 4)
     }
-
-    private func answer(_ id: String, _ choice: String) {
-        guard let ref = (engine.buildSessions + engine.threads).first(where: { $0.ref.id == parentId })?.ref else { return }
-        Task {
-            do { try await engine.answerSide(ref, id: id, choice: choice); error = nil } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
-        }
-    }
-
-    static let iso: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private func finish(_ s: SessionSummary, _ action: FinishParams.Action) {
-        Task {
-            do { try await engine.finish(s.ref, action); error = nil } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
-        }
-    }
-
-    /// "2 · 1 working, 1 done".
-    static func summary(_ sides: [SessionSummary]) -> String {
-        var counts: [(String, Int)] = []
-        for s in sides {
-            let word = state(s.side?.state ?? "working").0
-            if let i = counts.firstIndex(where: { $0.0 == word }) { counts[i].1 += 1 } else { counts.append((word, 1)) }
-        }
-        return "\(sides.count) · " + counts.map { "\($0.1) \($0.0)" }.joined(separator: ", ")
-    }
-
-    /// A side conversation's state as a word and its dot (§6: grey queued, working, amber needs you, green done, red failed).
-    static func state(_ state: String) -> (String, Color) {
-        switch state {
-        case "queued": ("queued", Color.dsFg3)
-        case "working": ("working", Color.accentColor)
-        case "needs_you": ("needs you", Color.dsWarn)
-        case "done": ("done", Color.dsGreen)
-        case "failed": ("failed", Color.dsRed)
-        default: ("stopped", Color.dsFg3)
-        }
-    }
 }
 
-/// The offer card's answers (docs/spec/24 §1): New conversation starts it beside this one (you stay here), Do it here
-/// tells Piopio so. After three New in a row, "Always start these?" (SCQ3) sets Settings › Chat.
+/// The side links in the transcript (docs/spec/24 §1, §6): an offer's New conversation (it starts beside this one; you
+/// stay here) or Do it here, a proposal's Start or Dismiss, a side's title (opens it) and its branch's Merge or
+/// Discard. It also tells the transcript where each side stands. After three New in a row, "Always start these?" (SCQ3)
+/// sets Settings › Chat.
 struct SideOffers: ViewModifier {
     let engine: EngineController
     let ref: ContainerRef
+    let document: TranscriptDocument
     @State private var askAlways = false
     @State private var error: String?
 
+    private var sides: [SideInfo] {
+        engine.sides(of: ref.id).map { s in
+            SideInfo(id: s.ref.id, title: s.title, state: s.side?.state ?? "working", line: s.side?.line, branch: s.worktree?.branch,
+                     finished: s.worktree?.finished?.rawValue, from: s.side?.from)
+        }
+    }
+
+    /// Open proposals and when each expires (the card says "until 24 Nov").
+    private var openProposals: [String: Date] {
+        let me = (engine.buildSessions + engine.threads).first { $0.ref.id == ref.id }
+        var open: [String: Date] = [:]
+        for p in me?.sideProposals ?? [] {
+            let expires = SideOffers.iso.date(from: p.expiresAt) ?? .distantFuture
+            if expires > Date() { open[p.id] = expires }
+        }
+        return open
+    }
+
     func body(content: Content) -> some View {
+        let sides = sides, proposals = openProposals
         content
+            .onChange(of: sides, initial: true) { _, now in document.setSides(now, openProposals: proposals) }
+            .onChange(of: proposals) { _, now in document.setSides(sides, openProposals: now) }
             .onReceive(NotificationCenter.default.publisher(for: .transcriptOffer)) { note in
                 guard note.object as? String == ref.id, let kind = note.userInfo?["kind"] as? String, kind.hasPrefix("side-"),
-                      let call = note.userInfo?["call"] as? String else { return }
-                Task {
-                    do {
-                        let result = try await engine.answerSide(ref, id: call, choice: kind == "side-new" ? "new" : "here")
-                        if result.askAlways == true { askAlways = true }
-                    } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
-                }
+                      let id = note.userInfo?["call"] as? String else { return }
+                take(kind, id)
             }
             .alert("Start these on their own?", isPresented: $askAlways) {
                 Button("Always start") { Task { await engine.updateSettings(SettingsPatch(chat: .init(sideOnUnrelated: "start"))) } }
@@ -224,4 +141,37 @@ struct SideOffers: ViewModifier {
                 Button("OK", role: .cancel) {}
             }
     }
+
+    private func take(_ kind: String, _ id: String) {
+        switch kind {
+        case SideActionKind.open:
+            openConversation(engine, id)
+        case SideActionKind.merge, SideActionKind.discard:
+            guard let side = engine.sides(of: ref.id).first(where: { $0.ref.id == id }) else { return }
+            run { try await engine.finish(side.ref, kind == SideActionKind.merge ? .merge : .discard) }
+        default:
+            let choice = switch kind {
+            case "side-new": "new"
+            case SideActionKind.start: "start"
+            case SideActionKind.dismiss: "dismiss"
+            default: "here"
+            }
+            run {
+                let result = try await engine.answerSide(ref, id: id, choice: choice)
+                if result.askAlways == true { askAlways = true }
+            }
+        }
+    }
+
+    private func run(_ work: @escaping @MainActor () async throws -> Void) {
+        Task { @MainActor in
+            do { try await work() } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+        }
+    }
+
+    static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 }

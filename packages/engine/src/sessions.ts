@@ -1293,6 +1293,7 @@ export class Sessions {
 		const answer = [...items].reverse().find((i) => i.kind === "assistant" && i.status === "done" && i.parts.some((p) => p.type === "text" && p.text.trim()));
 		const asked = [...items].reverse().find((i) => i.kind === "user");
 		if (!answer || answer.kind !== "assistant" || !asked || asked.kind !== "user") return;
+		if (!followUpsFit(items)) return;
 		const text = answer.parts.filter((p) => p.type === "text").map((p) => p.text).join("").slice(0, 4000);
 		const reply = await this.hub
 			.utility(
@@ -1334,7 +1335,7 @@ export class Sessions {
 	 * parent's model and permissions (never wider), in a worktree of its own when it will change files in a git project
 	 * (SC5, SC6). The brief is its first message; past SIDE_MAX running, it waits as queued.
 	 */
-	async startSide(parentRef: ContainerRef, input: { title?: string; brief: string; workOn?: "worktree" | "here"; project?: string }, how: NonNullable<CatalogEntry["side"]>["how"]): Promise<CatalogEntry> {
+	async startSide(parentRef: ContainerRef, input: { title?: string; brief: string; workOn?: "worktree" | "here"; project?: string }, how: NonNullable<CatalogEntry["side"]>["how"], from?: string): Promise<CatalogEntry> {
 		const parent = this.entry(parentRef);
 		if ((parent.ref.kind !== "build" && parent.ref.kind !== "thread") || parent.parent || parent.helper) throw new EngineError("INVALID", "Only your own conversations start side conversations.");
 		const brief = input.brief.trim();
@@ -1354,7 +1355,7 @@ export class Sessions {
 		const running = this.sidesOf(parent.ref.id).filter((s) => s.side!.state === "working").length;
 		const ref = await this.create({ kind: elsewhere ? "build" : parent.ref.kind, ...(folder ? { cwd: folder } : {}), ...(parent.model ? { model: parent.model } : {}), ...(parent.thinking ? { thinking: parent.thinking } : {}), ...(mode ? { approvalMode: mode } : {}), ...(parent.profile && !elsewhere ? { profile: parent.profile } : {}), title, ...(workOn ? { workOn } : {}) });
 		const child = this.entry(ref);
-		child.side = { parent: { id: parent.ref.id, title: parent.title }, how, state: running >= SIDE_MAX ? "queued" : "working" };
+		child.side = { parent: { id: parent.ref.id, title: parent.title }, how, state: running >= SIDE_MAX ? "queued" : "working", ...(from ? { from } : {}) };
 		child.sideBy = "parent";
 		if (parent.toolsOff?.length && !elsewhere) child.toolsOff = [...parent.toolsOff];
 		const opening = `${brief}\n\n(This is a side conversation started from “${parent.title}” (${parent.ref.id}). It works on its own; read that conversation with read_conversation only if you need its background.)`;
@@ -1709,7 +1710,7 @@ export class Sessions {
 			// Its brief: the part of your words the offer named, else your whole message (§3: a fresh conversation would do it from your words alone).
 			const user = [...(await this.runtime(ref)).snapshot().items].reverse().find((i) => i.kind === "user");
 			const brief = offer.brief?.trim() || (user?.kind === "user" ? user.text : offer.title);
-			const child = await this.startSide(ref, { title: offer.title, brief, ...(offer.project ? { project: offer.project } : {}) }, "offered");
+			const child = await this.startSide(ref, { title: offer.title, brief, ...(offer.project ? { project: offer.project } : {}) }, "offered", id);
 			this.sideStreak++;
 			return { ref: child.ref, ...(this.sideStreak >= 3 && this.sideSettings().onUnrelated === "ask" ? { askAlways: true } : {}) };
 		}
@@ -1718,7 +1719,7 @@ export class Sessions {
 		const brief = entry.sideBriefs?.[id] ?? proposal.title;
 		this.dropProposal(entry, id);
 		if (choice === "dismiss") return {};
-		const child = await this.startSide(ref, { title: proposal.title, brief, ...(proposal.project ? { project: proposal.project } : {}) }, "proposed");
+		const child = await this.startSide(ref, { title: proposal.title, brief, ...(proposal.project ? { project: proposal.project } : {}) }, "proposed", id);
 		return { ref: child.ref };
 	}
 
@@ -1745,7 +1746,7 @@ export class Sessions {
 				if (input.project?.trim() && !this.projectNamed?.(input.project.trim())) throw new EngineError("NOT_FOUND", `No project called “${input.project.trim()}”.`);
 				entry.sideOffers = { ...entry.sideOffers, [callId]: { title: input.title.trim(), ...(input.brief?.trim() ? { brief: input.brief.trim() } : {}), ...(input.project?.trim() ? { project: input.project.trim() } : {}) } };
 				this.save();
-				return "Offered. Stop here and wait for their choice.";
+				return "Offered: the card shows the user both choices. End your turn now, with nothing more or one short line; don't restate the choices or ask anything else.";
 			},
 			propose: async (callId, input) => {
 				if (!this.sideSettings().propose) throw new EngineError("INVALID", "The user turned proposals off.");
@@ -1764,10 +1765,10 @@ export class Sessions {
 				this.dropProposal(entry, id);
 				return `Withdrew ${id}.`;
 			},
-			start: async (input) => {
+			start: async (input, callId) => {
 				// Only on the user's own words: a turn a note, the board or a routine started can't start one (§4).
 				if (!(await this.yourTurn(entry))) throw new EngineError("INVALID", "Start a side conversation only when the user asks for separate work in their own message.");
-				return this.sideLine(await this.startSide(entry.ref, input, "asked"));
+				return this.sideLine(await this.startSide(entry.ref, input, "asked", callId));
 			},
 			send: async (id, message) => {
 				const child = this.ownSide(entry, id);
@@ -2324,6 +2325,22 @@ export function titleFrom(text: string): string {
 /** A Build session's approval mode, and the profile that goes with it: Read only is the chat profile (18 §4). */
 function buildMode(approvalMode: ApprovalMode): { approvalMode: ApprovalMode; profile: "build" | "chat" } {
 	return { approvalMode, profile: approvalMode === "read_only" ? "chat" : "build" };
+}
+
+/** Tools whose card already asks the user for their answer: suggestions under it would ask a second time. */
+const ASKS_ON_A_CARD = new Set(["ask_user", "ask_owner", "side_offer", "side_propose", "offer_parallel", "offer_repeat", "propose_plan"]);
+
+/**
+ * Whether a turn's end may get suggested replies: not when it ended on a card that waits for the user (it asks
+ * already, with its own buttons), and not after a note the user didn't write (a side conversation's report, the
+ * board, a routine), whose answer reports rather than asks.
+ */
+export function followUpsFit(items: readonly TimelineItem[]): boolean {
+	const last = items.findLastIndex((i) => i.kind === "user");
+	if (last < 0) return false;
+	const asked = items[last]!;
+	if (asked.kind === "user" && /^\[(Side|Task|Board|Routine)\] /.test(asked.text)) return false;
+	return !items.slice(last + 1).some((i) => (i.kind === "tool" && ASKS_ON_A_CARD.has(i.tool)) || (i.kind === "steps" && i.tools.some((t) => ASKS_ON_A_CARD.has(t.tool))));
 }
 
 /** What the utility model is asked after an answer (suggestFollowUps). Empty when nothing calls for a reply. */

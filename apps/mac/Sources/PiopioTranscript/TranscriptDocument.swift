@@ -338,6 +338,23 @@ public final class TranscriptDocument {
         return out
     }
 
+    /// Where this conversation's side conversations stand, and its open proposals (docs/spec/24 §6): their lines in
+    /// the transcript are drawn again when that changes.
+    public func setSides(_ sides: [SideInfo], openProposals: [String: Date]) {
+        guard sides != renderer.sides || openProposals != renderer.openProposals else { return }
+        renderer.sides = sides
+        renderer.openProposals = openProposals
+        guard !loading else { return }
+        for id in documentIDs {
+            guard let item = items.last(where: { $0.id == id }) else { continue }
+            switch item {
+            case .tool(let t) where t.tool == "side_start" || t.tool == "side_offer" || t.tool == "side_propose": replace(item)
+            case .user(let u) where u.text.hasPrefix("[Side] "): replace(item)
+            default: break
+            }
+        }
+    }
+
     /// When a turn goes on, its earlier text loses its action row (and the space it took).
     private func refreshMidTurn() {
         let next = Self.midTurn(items)

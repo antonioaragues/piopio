@@ -90,7 +90,7 @@ struct ThreadView: View {
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 20)
-                .modifier(SideOffers(engine: engine, ref: summary.ref))
+                .modifier(SideOffers(engine: engine, ref: summary.ref, document: thread.document))
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                     thread.document.bottomInset = height + 40
                 }

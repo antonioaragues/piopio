@@ -155,7 +155,12 @@ import Testing
     #expect(card.contains("Centered start page"))
     #expect(card.contains("Bring back the centered start page"))
     let proposed = ToolItem(id: "t2", at: "", callId: "c10", tool: "side_propose", args: .object(["title": .string("Fix the team page"), "why": .string("Same bug")]), status: .done, output: "Proposed.")
-    #expect(ItemRenderer().render(.tool(proposed)).string.contains("Proposed a side conversation: Fix the team page"))
+    // A proposal is a card with Start while it's open, a grey line once it's dismissed or expired.
+    var open = ItemRenderer()
+    open.openProposals = ["c10": .distantFuture]
+    #expect(open.render(.tool(proposed)).string.contains("Fix the team page"))
+    #expect(open.render(.tool(proposed)).string.contains("Start"))
+    #expect(ItemRenderer().render(.tool(proposed)).string.contains("Proposed a side conversation · Fix the team page · closed"))
 }
 
 /// The Watchdog's word on a board helper (docs/spec/17 §4) is notable: a row in the conversation that made the task.

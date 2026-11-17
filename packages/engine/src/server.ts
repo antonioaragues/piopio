@@ -38,7 +38,7 @@ import type { ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over and visuals (they read as part of the conversation). */
-const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_parallel" || tool.tool === "side_offer" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
+const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_parallel" || tool.tool === "side_offer" || tool.tool === "side_start" || tool.tool === "side_propose" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
 import { AppServices } from "./app-services.js";
 import { BrowserSites } from "./tools/browser-tools.js";
 import { TelegramChannels } from "./channels/manager.js";

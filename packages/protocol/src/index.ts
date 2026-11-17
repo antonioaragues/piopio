@@ -543,7 +543,7 @@ export const SessionSummary = Type.Object({
 	 * A side conversation (docs/spec/24): the conversation it was started from, how (asked in words, or by hand with
 	 * /side), its state (queued while 4 others of its parent run), and while it works, a line on what it's doing.
 	 */
-	side: Type.Optional(Type.Object({ parent: Type.Object({ id: Type.String(), title: Type.String() }), how: literals("asked", "manual", "offered", "proposed"), state: literals("queued", "working", "needs_you", "done", "failed", "stopped"), line: Type.Optional(Type.String()) })),
+	side: Type.Optional(Type.Object({ parent: Type.Object({ id: Type.String(), title: Type.String() }), how: literals("asked", "manual", "offered", "proposed"), state: literals("queued", "working", "needs_you", "done", "failed", "stopped"), line: Type.Optional(Type.String()), from: Type.Optional(Type.String({ description: "The tool call that started it (side_start, an offer's or a proposal's), for its line in the parent's transcript" })) })),
 	/** Side conversations Piopio proposed from here (docs/spec/24 §3): each a card you may start, until it expires. */
 	sideProposals: Type.Optional(Type.Array(Type.Object({ id: Type.String(), title: Type.String(), why: Type.String(), project: Type.Optional(Type.String()), expiresAt: Type.String() }))),
 	/** Its pull request (docs/spec/05-build G6–G7): the conversation that created it owns it. */

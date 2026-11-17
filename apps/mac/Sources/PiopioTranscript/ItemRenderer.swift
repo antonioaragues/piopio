@@ -21,12 +21,17 @@ nonisolated struct ItemRenderer: Sendable {
     var attachments: URL?
     /// Answers with more text after them in the same turn: no action row under them (only the turn's last text has one).
     var midTurn: Set<String> = []
+    /// This conversation's side conversations now, and the proposals still open (docs/spec/24): their lines in the
+    /// transcript show where each stands.
+    var sides: [SideInfo] = []
+    /// Open proposals (side_propose call ids) and when each expires.
+    var openProposals: [String: Date] = [:]
 
     /// Answers 15 / 1.6 (chat v3); Quick Chat keeps the compact 13.5.
     private var bodySize: CGFloat { compact ? DS.transcriptSize : 15 }
     private var body: NSFont { .systemFont(ofSize: bodySize) }
     private var mono: NSFont { .monospacedSystemFont(ofSize: 12, weight: .regular) }
-    private var small: NSFont { .systemFont(ofSize: 12) }
+    var small: NSFont { .systemFont(ofSize: 12) }
     /// SF line height is ~1.2× its size; this gives the design's 1.6.
     private static let lineHeight: CGFloat = DS.transcriptLineHeight / 1.2
 
@@ -38,7 +43,10 @@ nonisolated struct ItemRenderer: Sendable {
 
     func render(_ item: TimelineItem) -> NSAttributedString {
         switch item {
-        case .user(let u) where u.text.hasPrefix("[Side] ") || u.text.hasPrefix("[Task] "):
+        case .user(let u) where u.text.hasPrefix("[Side] "):
+            // A side conversation's report (docs/spec/24 §5): a card only while it needs you, else a grey line.
+            return compact ? NSAttributedString() : sideReports(u.text)
+        case .user(let u) where u.text.hasPrefix("[Task] "):
             // Reports from side conversations and subagents (docs/spec/24 §5, 17 §3): "Message from About page ·
             // finished" or "Result from Explore auth · finished", the answer under it. Several arrive together.
             if compact { return NSAttributedString() }
@@ -91,11 +99,15 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .tool(let t) where t.tool == "ask_agent":
             return agentAnswer(t)
+        case .tool(let t) where t.tool == "side_start" && t.status != .error:
+            return sideStarted(t)
+        case .tool(let t) where t.tool == "side_offer" && t.status == .done && side(from: t.callId) != nil:
+            // New conversation was chosen: the card gives way to the side's line.
+            return sideStarted(t)
         case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat" || t.tool == "side_offer") && t.status == .done:
             return offerCard(t)
         case .tool(let t) where t.tool == "side_propose" && t.status == .done:
-            // The card itself lives above the composer, with Start and Dismiss (docs/spec/24 §6).
-            return note("Proposed a side conversation: \(t.args?["title"]?.stringValue ?? "")")
+            return sideProposal(t)
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
         case .tool(let t) where t.tool == "present_files" && t.status == .done:
@@ -638,7 +650,7 @@ nonisolated struct ItemRenderer: Sendable {
     }
 
     /// A grey line in the transcript (docs/design/grey 11h). Only something waiting on you gets the blue dot.
-    private func note(_ text: String, dot: NSColor? = nil) -> NSAttributedString {
+    func note(_ text: String, dot: NSColor? = nil) -> NSAttributedString {
         let m = NSMutableAttributedString()
         if let dot { m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: dot, .baselineOffset: 1.5])) }
         m.append(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
@@ -1065,7 +1077,7 @@ nonisolated struct ItemRenderer: Sendable {
         return FileManager.default.fileExists(atPath: candidate) ? candidate : nil
     }
 
-    private func paragraph(spacing: CGFloat = 10, before: CGFloat = 0, indent: CGFloat = 0, head: CGFloat? = nil, tail: CGFloat = 0) -> NSMutableParagraphStyle {
+    func paragraph(spacing: CGFloat = 10, before: CGFloat = 0, indent: CGFloat = 0, head: CGFloat? = nil, tail: CGFloat = 0) -> NSMutableParagraphStyle {
         let p = NSMutableParagraphStyle()
         p.paragraphSpacing = spacing
         p.paragraphSpacingBefore = before
@@ -1076,7 +1088,7 @@ nonisolated struct ItemRenderer: Sendable {
         return p
     }
 
-    private func line(_ s: NSAttributedString, _ style: NSParagraphStyle) -> NSAttributedString {
+    func line(_ s: NSAttributedString, _ style: NSParagraphStyle) -> NSAttributedString {
         let m = NSMutableAttributedString(attributedString: s)
         m.append(NSAttributedString(string: "\n", attributes: [.font: s.length > 0 ? (s.attribute(.font, at: max(0, s.length - 1), effectiveRange: nil) as? NSFont ?? body) : body]))
         m.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: m.length))
@@ -1094,7 +1106,7 @@ nonisolated struct ItemRenderer: Sendable {
     }
 
     /// One paragraph that `CardLayoutFragment` draws a background behind (full column width).
-    private func card(_ s: NSAttributedString, _ kind: CardStyle, lineHeight: CGFloat? = nil, paragraphStyle: NSMutableParagraphStyle? = nil) -> NSAttributedString {
+    func card(_ s: NSAttributedString, _ kind: CardStyle, lineHeight: CGFloat? = nil, paragraphStyle: NSMutableParagraphStyle? = nil) -> NSAttributedString {
         let pad = CardLayoutFragment.padding
         let p = paragraphStyle ?? paragraph(spacing: 14 + pad, before: pad + 2, indent: pad + 2, tail: -(pad + 2))
         if let lineHeight { p.lineHeightMultiple = lineHeight / 1.2 }

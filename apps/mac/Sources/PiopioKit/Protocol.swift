@@ -473,7 +473,7 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var listed: Bool { parent == nil && helper == nil }
     /// A side conversation (docs/spec/24): where it was started from, how ("asked" or "manual"), its state
     /// (queued, working, needs_you, done, failed, stopped) and, while it works, a line on what it's doing.
-    public struct Side: Codable, Sendable, Hashable { public var parent: Link; public var how: String; public var state: String; public var line: String? }
+    public struct Side: Codable, Sendable, Hashable { public var parent: Link; public var how: String; public var state: String; public var line: String?; public var from: String? }
     public var side: Side?
     /// Side conversations Piopio proposed from here (docs/spec/24 §3): cards you may start until they expire.
     public struct SideProposal: Codable, Sendable, Hashable, Identifiable { public var id, title, why, expiresAt: String; public var project: String? }

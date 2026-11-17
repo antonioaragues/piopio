@@ -18,7 +18,7 @@ export type SideSettings = { onUnrelated: "ask" | "start" | "off"; propose: bool
 
 export interface SideBridge {
 	/** Starts one, with the brief as its first message; why it can't, as an error. */
-	start(input: { title: string; brief: string; workOn?: "worktree" | "here"; project?: string }): Promise<SideLine>;
+	start(input: { title: string; brief: string; workOn?: "worktree" | "here"; project?: string }, callId?: string): Promise<SideLine>;
 	/** Leaves the offer card (New conversation · Do it here) for this tool call. */
 	offer(callId: string, input: { title: string; brief?: string; project?: string }): Promise<string>;
 	/** Leaves a proposal card (Start · Dismiss) for this tool call. */
@@ -81,9 +81,9 @@ export function sideExtension(bridge: SideBridge): ExtensionFactory {
 					workOn: Type.Optional(Type.Union([Type.Literal("worktree"), Type.Literal("here")], { description: "In a git project: its own worktree (default when it will change files) or this folder" })),
 					project: Type.Optional(Type.String({ description: "Another of the user's projects, by name, when the task is plainly about it" })),
 				}),
-				async execute(_id, params) {
+				async execute(callId, params) {
 					return run(async () => {
-						const s = await bridge.start(params);
+						const s = await bridge.start(params, callId);
 						return `Started ${s.id} “${s.title}”${s.state === "queued" ? " (queued: others are running)" : ""}${s.branch ? ` on ${s.branch}` : ""}. Tell the user in a line; its report comes back here.`;
 					});
 				},
@@ -93,7 +93,7 @@ export function sideExtension(bridge: SideBridge): ExtensionFactory {
 			defineTool({
 				name: "side_offer",
 				label: "Offer a side conversation",
-				description: "Offer to give a new task its own conversation: shows a card where the user chooses New conversation or Do it here. Call it first, before any work; then stop and wait for their choice.",
+				description: "Offer to give a new task its own conversation: shows a card where the user chooses New conversation or Do it here. Call it first, before any work; then end your turn. The card asks: don't restate its choices or add questions of your own.",
 				promptSnippet: "side_offer: offer a new task its own conversation",
 				parameters: Type.Object({
 					title: Type.String({ description: "A few words: the new task" }),
