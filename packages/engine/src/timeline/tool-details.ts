@@ -24,7 +24,7 @@ export function startDetails(tool: string, args: unknown): ToolDetails | undefin
 		case "write":
 			return path && typeof a.content === "string" ? { type: "diff", path, diff: newFilePatch(a.content) } : undefined;
 		case "todo":
-			return Array.isArray(a.items) ? { type: "todos", items: a.items as { text: string; status: "pending" | "in_progress" | "done" }[] } : undefined;
+			return Array.isArray(a.items) ? { type: "todos", items: a.items as { text: string; detail?: string; status: "pending" | "in_progress" | "done" }[] } : undefined;
 		case "task":
 			return { type: "task" };
 		case "ask_agent":

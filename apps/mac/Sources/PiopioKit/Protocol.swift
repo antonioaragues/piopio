@@ -165,8 +165,15 @@ public struct PlanDetails: Sendable, Hashable {
 /// An item of the agent's checklist (piopio-todos).
 public struct Todo: Codable, Sendable, Hashable {
     public enum Status: String, Codable, Sendable { case pending, inProgress = "in_progress", done }
+    /// The step's title, in a few words.
     public var text: String
+    /// One sentence on what the step covers; older lists and short steps have none.
+    public var detail: String?
     public var status: Status
+
+    public init(text: String, detail: String? = nil, status: Status) {
+        self.text = text; self.detail = detail; self.status = status
+    }
 }
 
 extension ToolItem {
@@ -179,7 +186,8 @@ extension ToolItem {
             guard case .array(let items)? = d["items"] else { return nil }
             return .todos(items.compactMap { item in
                 guard let text = item["text"]?.stringValue, let status = item["status"]?.stringValue.flatMap(Todo.Status.init(rawValue:)) else { return nil }
-                return Todo(text: text, status: status)
+                let detail = item["detail"]?.stringValue.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+                return Todo(text: text, detail: detail, status: status)
             })
         case "task":
             var cost: Double?

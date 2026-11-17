@@ -453,7 +453,7 @@ function toInfo(m: Model<Api>, providerName: string, billing: string | undefined
  *   write: <path> | <content>        write (\n in content for new lines)
  *   edit: <path> | <old> | <new>     edit
  *   ask: <question> | <option>…      ask_user
- *   todo: <item> (done) | <item> (in_progress) | <item>…   todo
+ *   todo: <item> (done) | <item> (in_progress) | <item>…   todo (an item may be "<title> :: <detail>")
  *   plan: <summary> | <step>…          propose_plan
  *   task: <title> | <prompt>           task (a subagent)
  *   call: <tool> | <JSON arguments>    any tool (MCP tools in tests)
@@ -505,7 +505,8 @@ function scriptedTools(text: string): { name: string; args: Record<string, unkno
 		} else if (line.startsWith("todo: ")) {
 			const items = parts(line.slice(6)).map((p) => {
 				const m = /^(.*?)\s*\((done|in_progress|pending)\)$/.exec(p);
-				return m ? { text: m[1]!, status: m[2]! } : { text: p, status: "pending" };
+				const [text, detail] = (m ? m[1]! : p).split(" :: ").map((x) => x.trim());
+				return { text: text!, ...(detail ? { detail } : {}), status: m ? m[2]! : "pending" };
 			});
 			calls.push({ name: "todo", args: { items } });
 		} else if (line.startsWith("plan: ")) {

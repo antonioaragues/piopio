@@ -88,6 +88,53 @@ struct TableContent: Sendable {
     }
 }
 
+// MARK: Copying
+
+extension TableContent {
+    private var allRows: [[String]] { [header] + rows }
+
+    /// A row's cells as they read (no Markdown marks), tab-separated.
+    func tsv(_ row: [String]) -> String {
+        (0..<columns).map { CopyFormat.inline(cell(row, $0)).replacingOccurrences(of: "\t", with: " ") }.joined(separator: "\t")
+    }
+
+    /// One row a line, cells tab-separated: a spreadsheet splits it into cells, a text editor lines it up.
+    var tsv: String { allRows.map(tsv).joined(separator: "\n") }
+
+    /// The table as the model wrote it.
+    var markdown: String {
+        func line(_ row: [String]) -> String {
+            "| " + (0..<columns).map { cell(row, $0).replacingOccurrences(of: "|", with: "\\|") }.joined(separator: " | ") + " |"
+        }
+        return ([line(header), "|" + String(repeating: " --- |", count: columns)] + rows.map(line)).joined(separator: "\n")
+    }
+
+    /// A real table for Numbers, Excel, Notes, Mail and Pages.
+    var html: String {
+        func row(_ cells: [String], _ tag: String) -> String {
+            "<tr>" + (0..<columns).map { "<\(tag)>\(Self.escape(CopyFormat.inline(cell(cells, $0))))</\(tag)>" }.joined() + "</tr>"
+        }
+        return "<table><thead>\(row(header, "th"))</thead><tbody>\(rows.map { row($0, "td") }.joined())</tbody></table>"
+    }
+
+    static func escape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    /// HTML for the pasteboard: the charset, or accented text reads as mojibake where it's pasted.
+    static func htmlDocument(_ body: String) -> String {
+        #"<html><head><meta charset="utf-8"></head><body>"# + body + "</body></html>"
+    }
+
+    /// Puts text on the pasteboard, with an HTML form beside it when there is one.
+    @MainActor static func write(plain: String, html: String?) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        if let html { pb.setString(html, forType: .html) }
+        pb.setString(plain, forType: .string)
+    }
+}
+
 private extension String {
     /// Splits at runs of `separator` or longer (two spaces: "a  b   c" → ["a", "b", "c"]).
     func split(using separator: String) -> [String] {
@@ -113,8 +160,14 @@ private extension String {
     }
 }
 
+/// Whether the transcript's selection runs through a table, and the colour it's drawn in (nil when it doesn't).
+@Observable final class TableSelection: @unchecked Sendable {
+    var color: NSColor?
+}
+
 final class TableAttachment: NSTextAttachment, @unchecked Sendable {
     let table: TableContent
+    let selection = TableSelection()
 
     init(table: TableContent) {
         self.table = table
@@ -136,8 +189,11 @@ final class TableViewProvider: NSTextAttachmentViewProvider {
     private var table: TableContent { (textAttachment as! TableAttachment).table }
 
     override func loadView() {
-        let table = self.table
-        view = MainActor.assumeIsolated { ArrowHostingView(rootView: TableCardView(table: table)) }
+        let table = self.table, selection = (textAttachment as! TableAttachment).selection
+        view = MainActor.assumeIsolated {
+            ClickThrough.install()
+            return TableHostingView(rootView: TableCardView(table: table, selection: selection))
+        }
     }
 
     override func attachmentBounds(for attributes: [NSAttributedString.Key: Any], location: NSTextLocation, textContainer: NSTextContainer?, proposedLineFragment: CGRect, position: CGPoint) -> CGRect {
@@ -146,9 +202,14 @@ final class TableViewProvider: NSTextAttachmentViewProvider {
     }
 }
 
+/// The table's host: its cells take their own drags (each one's text can be selected), and the pointer is the text
+/// view's I-beam, not the arrow other cards show.
+final class TableHostingView<Content: View>: NSHostingView<Content>, ClickThroughArea {}
+
 /// The table, at whatever width the text gives it.
 struct TableCardView: View {
     let table: TableContent
+    var selection = TableSelection()
 
     var body: some View {
         GeometryReader { geo in
@@ -173,6 +234,8 @@ struct TableCardView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
             .clipShape(shape)
+            // Inside a selection of the transcript: tinted like the text around it, so it shows it goes with a copy.
+            .overlay { if let color = selection.color { shape.fill(Color(nsColor: color).opacity(0.55)).allowsHitTesting(false) } }
             .overlay(shape.strokeBorder(Color(nsColor: DS.line), lineWidth: 1))
         }
     }
@@ -189,9 +252,20 @@ struct TableCardView: View {
                     .padding(.vertical, TableContent.padV)
                     .frame(width: widths[c], height: height, alignment: .topLeading)
                     .textSelection(.enabled)
+                    .contentShape(Rectangle())
+                    .contextMenu { menu(cells, c) }
             }
         }
         .background(Color.clear)
+    }
+
+    /// Right-click on a cell: it, its row, or the whole table.
+    @ViewBuilder private func menu(_ cells: [String], _ c: Int) -> some View {
+        Button("Copy Cell") { TableContent.write(plain: CopyFormat.inline(table.cell(cells, c)), html: nil) }
+        Button("Copy Row") { TableContent.write(plain: table.tsv(cells), html: nil) }
+        Divider()
+        Button("Copy Table") { TableContent.write(plain: table.tsv, html: TableContent.htmlDocument(table.html)) }
+        Button("Copy Table as Markdown") { TableContent.write(plain: table.markdown, html: nil) }
     }
 
     /// **bold**, *italic* and `code` inside a cell.

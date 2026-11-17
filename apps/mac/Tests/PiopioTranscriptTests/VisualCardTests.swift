@@ -20,7 +20,10 @@ import Testing
     let page = VisualPage.html("<div id=x>Hi</div>", title: "A <b> title")
     #expect(page.hasPrefix("<!doctype html>"))
     #expect(page.contains("Content-Security-Policy") && page.contains("connect-src 'none'"))
-    #expect(page.contains("--fg:rgba(") && page.contains("--c1:#4E79A7") && page.contains("prefers-color-scheme: dark"))
+    #expect(page.contains("--c1:#4E79A7") && page.contains("prefers-color-scheme: dark"))
+    // Every colour is hex, so a script can add alpha: opaque ones #RRGGBB, translucent ones #RRGGBBAA.
+    #expect(page.contains("--fg:#1F1F1E;") && page.contains("--red:#C2493F;") && page.contains("--line:#00000014;") && page.contains("--line:#FFFFFF17;"))
+    #expect(!page.contains("rgba("))
     #expect(page.contains(#""three":"piopio-lib://three.js""#))
     #expect(page.contains("window.piopio = Object.freeze"))
     #expect(page.contains("<title>A &lt;b&gt; title</title>"))

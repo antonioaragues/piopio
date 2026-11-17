@@ -451,6 +451,9 @@
 													"text": {
 														"type": "string"
 													},
+													"detail": {
+														"type": "string"
+													},
 													"status": {
 														"anyOf": [
 															{
@@ -1022,6 +1025,9 @@
 															],
 															"properties": {
 																"text": {
+																	"type": "string"
+																},
+																"detail": {
 																	"type": "string"
 																},
 																"status": {
@@ -1854,6 +1860,9 @@
 							"text": {
 								"type": "string"
 							},
+							"detail": {
+								"type": "string"
+							},
 							"status": {
 								"anyOf": [
 									{
@@ -2328,6 +2337,9 @@
 																],
 																"properties": {
 																	"text": {
+																		"type": "string"
+																	},
+																	"detail": {
 																		"type": "string"
 																	},
 																	"status": {
@@ -2901,6 +2913,9 @@
 																			],
 																			"properties": {
 																				"text": {
+																					"type": "string"
+																				},
+																				"detail": {
 																					"type": "string"
 																				},
 																				"status": {
@@ -3948,6 +3963,9 @@
 																	"text": {
 																		"type": "string"
 																	},
+																	"detail": {
+																		"type": "string"
+																	},
 																	"status": {
 																		"anyOf": [
 																			{
@@ -4519,6 +4537,9 @@
 																			],
 																			"properties": {
 																				"text": {
+																					"type": "string"
+																				},
+																				"detail": {
 																					"type": "string"
 																				},
 																				"status": {
@@ -5546,6 +5567,9 @@
 																	"text": {
 																		"type": "string"
 																	},
+																	"detail": {
+																		"type": "string"
+																	},
 																	"status": {
 																		"anyOf": [
 																			{
@@ -6117,6 +6141,9 @@
 																			],
 																			"properties": {
 																				"text": {
+																					"type": "string"
+																				},
+																				"detail": {
 																					"type": "string"
 																				},
 																				"status": {
@@ -6962,6 +6989,9 @@
 											"text": {
 												"type": "string"
 											},
+											"detail": {
+												"type": "string"
+											},
 											"status": {
 												"anyOf": [
 													{
@@ -7477,6 +7507,9 @@
 																			],
 																			"properties": {
 																				"text": {
+																					"type": "string"
+																				},
+																				"detail": {
 																					"type": "string"
 																				},
 																				"status": {
@@ -8050,6 +8083,9 @@
 																						],
 																						"properties": {
 																							"text": {
+																								"type": "string"
+																							},
+																							"detail": {
 																								"type": "string"
 																							},
 																							"status": {
@@ -8883,6 +8919,9 @@
 													"text": {
 														"type": "string"
 													},
+													"detail": {
+														"type": "string"
+													},
 													"status": {
 														"anyOf": [
 															{
@@ -9391,6 +9430,9 @@
 															],
 															"properties": {
 																"text": {
+																	"type": "string"
+																},
+																"detail": {
 																	"type": "string"
 																},
 																"status": {
@@ -9964,6 +10006,9 @@
 																		],
 																		"properties": {
 																			"text": {
+																				"type": "string"
+																			},
+																			"detail": {
 																				"type": "string"
 																			},
 																			"status": {
@@ -10795,6 +10840,9 @@
 								],
 								"properties": {
 									"text": {
+										"type": "string"
+									},
+									"detail": {
 										"type": "string"
 									},
 									"status": {
@@ -11795,6 +11843,9 @@
 																				"text": {
 																					"type": "string"
 																				},
+																				"detail": {
+																					"type": "string"
+																				},
 																				"status": {
 																					"anyOf": [
 																						{
@@ -12366,6 +12417,9 @@
 																						],
 																						"properties": {
 																							"text": {
+																								"type": "string"
+																							},
+																							"detail": {
 																								"type": "string"
 																							},
 																							"status": {
@@ -13413,6 +13467,9 @@
 																				"text": {
 																					"type": "string"
 																				},
+																				"detail": {
+																					"type": "string"
+																				},
 																				"status": {
 																					"anyOf": [
 																						{
@@ -13984,6 +14041,9 @@
 																						],
 																						"properties": {
 																							"text": {
+																								"type": "string"
+																							},
+																							"detail": {
 																								"type": "string"
 																							},
 																							"status": {
@@ -15011,6 +15071,9 @@
 																				"text": {
 																					"type": "string"
 																				},
+																				"detail": {
+																					"type": "string"
+																				},
 																				"status": {
 																					"anyOf": [
 																						{
@@ -15582,6 +15645,9 @@
 																						],
 																						"properties": {
 																							"text": {
+																								"type": "string"
+																							},
+																							"detail": {
 																								"type": "string"
 																							},
 																							"status": {
@@ -16427,6 +16493,9 @@
 														"text": {
 															"type": "string"
 														},
+														"detail": {
+															"type": "string"
+														},
 														"status": {
 															"anyOf": [
 																{
@@ -16942,6 +17011,9 @@
 																						],
 																						"properties": {
 																							"text": {
+																								"type": "string"
+																							},
+																							"detail": {
 																								"type": "string"
 																							},
 																							"status": {
@@ -17515,6 +17587,9 @@
 																									],
 																									"properties": {
 																										"text": {
+																											"type": "string"
+																										},
+																										"detail": {
 																											"type": "string"
 																										},
 																										"status": {
@@ -18346,6 +18421,9 @@
 															],
 															"properties": {
 																"text": {
+																	"type": "string"
+																},
+																"detail": {
 																	"type": "string"
 																},
 																"status": {
@@ -20463,6 +20541,9 @@
 																"text": {
 																	"type": "string"
 																},
+																"detail": {
+																	"type": "string"
+																},
 																"status": {
 																	"anyOf": [
 																		{
@@ -21034,6 +21115,9 @@
 																		],
 																		"properties": {
 																			"text": {
+																				"type": "string"
+																			},
+																			"detail": {
 																				"type": "string"
 																			},
 																			"status": {
@@ -21867,6 +21951,9 @@
 									"text": {
 										"type": "string"
 									},
+									"detail": {
+										"type": "string"
+									},
 									"status": {
 										"anyOf": [
 											{
@@ -22423,6 +22510,9 @@
 																	],
 																	"properties": {
 																		"text": {
+																			"type": "string"
+																		},
+																		"detail": {
 																			"type": "string"
 																		},
 																		"status": {
@@ -22996,6 +23086,9 @@
 																				],
 																				"properties": {
 																					"text": {
+																						"type": "string"
+																					},
+																					"detail": {
 																						"type": "string"
 																					},
 																					"status": {
@@ -23827,6 +23920,9 @@
 										],
 										"properties": {
 											"text": {
+												"type": "string"
+											},
+											"detail": {
 												"type": "string"
 											},
 											"status": {

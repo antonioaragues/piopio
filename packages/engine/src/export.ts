@@ -1,6 +1,7 @@
 /** Exports a session's visible transcript (the active branch) as Markdown, HTML or JSONL. */
 import { Marked, type Tokens } from "marked";
 import type { TimelineItem } from "@piopio/protocol";
+import { replacedVisuals } from "./tools/visuals.js";
 
 export type ExportFormat = "markdown" | "html" | "jsonl";
 
@@ -54,6 +55,7 @@ const safeMarked = new Marked({
 
 export function toMarkdown(title: string, items: readonly TimelineItem[], visuals: "markdown" | "html" = "markdown"): string {
 	const out: string[] = [`# ${title}`, ""];
+	const replaced = replacedVisuals(items);
 	for (const item of items) {
 		switch (item.kind) {
 			case "user": {
@@ -72,6 +74,7 @@ export function toMarkdown(title: string, items: readonly TimelineItem[], visual
 				break;
 			}
 			case "tool": {
+				if (isVisual(item) && replaced.has(item.id)) break;
 				if (isVisual(item)) {
 					const name = (item.args as { title?: unknown }).title;
 					out.push(`**Visual: ${typeof name === "string" && name.trim() ? name.trim() : "untitled"}**`, "", visualMarker(item.callId, visuals), "");

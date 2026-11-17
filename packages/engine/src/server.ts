@@ -33,12 +33,18 @@ import { exportMemory, MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
 import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
 import { groupSteps, StepsView } from "./timeline/steps.js";
+import { replacedVisuals } from "./tools/visuals.js";
 import { fitCheck } from "./work/fit.js";
-import type { ToolItem } from "@piopio/protocol";
+import type { TimelineItem, ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over and visuals (they read as part of the conversation). */
 const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_parallel" || tool.tool === "side_offer" || tool.tool === "side_start" || tool.tool === "side_propose" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
+/** Folds a turn's tool calls into steps lines; a visual that a later one replaced (docs/spec/25 §3.4) folds in too. */
+const fold = (items: readonly TimelineItem[]): TimelineItem[] => {
+	const replaced = replacedVisuals(items);
+	return groupSteps(items, (tool) => keepAlone(tool) && !replaced.has(tool.id));
+};
 import { AppServices } from "./app-services.js";
 import { BrowserSites } from "./tools/browser-tools.js";
 import { TelegramChannels } from "./channels/manager.js";
@@ -591,7 +597,7 @@ export class Engine {
 			case "sessions.open": {
 				const p = params as Params<"sessions.open">;
 				const snapshot = (await this.sessions.runtime(p.ref)).snapshot();
-				return (p.fold ? { ...snapshot, items: groupSteps(snapshot.items, keepAlone) } : snapshot) satisfies Result<"sessions.open">;
+				return (p.fold ? { ...snapshot, items: fold(snapshot.items) } : snapshot) satisfies Result<"sessions.open">;
 			}
 			case "sessions.subscribe": {
 				const p = params as Params<"sessions.subscribe">;
@@ -599,7 +605,7 @@ export class Engine {
 				const subscriptionId = `sub_${randomUUID().slice(0, 8)}`;
 				let seq = 0;
 				// Folded: this subscription sees a turn's tool calls as one steps item.
-				const steps = p.fold ? new StepsView((items) => groupSteps(items, keepAlone)) : undefined;
+				const steps = p.fold ? new StepsView(fold) : undefined;
 				const snapshot = runtime.snapshot();
 				const first = steps ? { ...snapshot, items: steps.snapshot(snapshot.items) } : snapshot;
 				const off = runtime.onEvents((events) => {

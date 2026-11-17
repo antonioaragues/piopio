@@ -101,7 +101,24 @@ A short section, in every profile that has the tool:
   transparent page background; one visual per idea; options labelled A, B, C, each with a button that calls
   `piopio.send("Go with B")`.
 - **Libraries:** the bundled ones (§5.2), by their `piopio-lib:` URL. Nothing from the internet: it won't load.
-- **Check:** read the errors in the result; use `look: true` when the layout matters and you can see images.
+- **Check:** read the errors in the result; use `look: true` when the layout matters and you can see images. Every
+  call is drawn for you straight away, so the model gets it right before calling and doesn't call again for polish.
+- **Fixing it:** call again with the same title (§3.4).
+
+### 3.4 A fix takes the place of the draft
+
+The check (§3.2) shows the visual to you in the moment it checks it, so a model that fixes its chart used to leave every
+draft in the answer: the first run of "Zaragoza weather against the 1981-2010 normals" showed three charts, a broken
+one, a fixed one and a polished one. Now, within a turn (until the next message to the model), a `show_visual` with
+the same title (trimmed, any case) **replaces** the earlier ones:
+
+- the earlier versions fold into the turn's steps line (a "Visual" step); only the last one is a card;
+- the result says `Shown to the user as "…", in place of the earlier one.`;
+- an export and the Telegram answer carry only the last version;
+- a call that failed replaces nothing; a good one replaces a failed one.
+
+A new version you ask for in a later message is a new card; the old one stays where it was (§1.5). The engine does it
+where it folds steps (`replacedVisuals` in `tools/visuals.ts`), so every client gets it; no protocol change.
 
 ## 4. The card
 
@@ -125,7 +142,9 @@ Piopio puts every visual inside its own page:
 - a strict Content Security Policy (§5.1);
 - the design tokens as CSS variables, light and dark, from `DesignTokens.swift`: `--bg`, `--fg`, `--fg2`, `--fg3`,
   `--line`, `--accent`, `--accent-soft`, `--card`, `--radius`, `--radius-card`, `--font`, `--font-mono`, and a
-  categorical palette `--c1`…`--c8` for charts;
+  categorical palette `--c1`…`--c8` for charts. Every colour is hex: `#RRGGBB`, or `#RRGGBBAA` for the translucent
+  ones (`--line`, `--chip`). They used to be `rgba(…)` next to hex series colours, and a model that added two digits of
+  alpha to `--fg3` got an invalid colour, drawn black (2026-11-18);
 - a small base stylesheet: the system font at 13 pt, margins at 0, buttons, inputs and tables styled like the app's;
 - the `piopio` object (§4.4) and the height reporter.
 

@@ -153,11 +153,15 @@ public enum VisualPage {
     static func tokens() -> String {
         func vars(dark: Bool) -> String {
             let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
+            // Hex, like the chart series: #RRGGBB, or #RRGGBBAA for the translucent ones (line, chip), so a script can add
+            // two digits of alpha to any opaque colour (docs/spec/25 §4.2).
             func css(_ color: NSColor) -> String {
                 var out = ""
                 appearance.performAsCurrentDrawingAppearance {
                     let c = color.usingColorSpace(.sRGB) ?? color
-                    out = String(format: "rgba(%d,%d,%d,%.3f)", Int((c.redComponent * 255).rounded()), Int((c.greenComponent * 255).rounded()), Int((c.blueComponent * 255).rounded()), c.alphaComponent)
+                    func byte(_ v: CGFloat) -> Int { min(255, max(0, Int((v * 255).rounded()))) }
+                    out = String(format: "#%02X%02X%02X", byte(c.redComponent), byte(c.greenComponent), byte(c.blueComponent))
+                    if c.alphaComponent < 0.999 { out += String(format: "%02X", byte(c.alphaComponent)) }
                 }
                 return out
             }
@@ -295,7 +299,7 @@ public enum VisualPage {
 /// A visual's web view: the wheel scrolls the conversation, not the page, and the page can send only right after the
 /// user clicked in it or typed while it had focus. Clicks and keys are watched app-wide: WebKit takes them in its own
 /// views, so overriding `mouseDown` here sees nothing.
-public final class VisualWebView: WKWebView {
+public final class VisualWebView: WKWebView, ClickThroughArea {
     /// When this page last sent, so one click sends once.
     var lastSent = Date.distantPast
     /// The card showing it now (cards are made again when the transcript renders; the web view stays).
@@ -315,48 +319,15 @@ public final class VisualWebView: WKWebView {
     @MainActor private static var lastClick: (at: Date, window: NSWindow?, point: NSPoint)?
     @MainActor private static var lastKey: (at: Date, window: NSWindow?)?
     @MainActor private static var monitor: Any?
-    /// The transcript's own gesture recognizers, paused while the mouse is down in a visual.
-    @MainActor private static var paused: [NSGestureRecognizer] = []
 
     @MainActor private static func watchInput() {
+        ClickThrough.install()
         guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .keyDown]) { event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .keyDown]) { event in
             MainActor.assumeIsolated {
-                switch event.type {
-                case .leftMouseDown:
-                    lastClick = (.now, event.window, event.locationInWindow)
-                    letClickThrough(event)
-                case .leftMouseUp:
-                    // After this event is delivered: the text view's selection works again everywhere else.
-                    guard !paused.isEmpty else { break }
-                    DispatchQueue.main.async {
-                        paused.forEach { $0.isEnabled = true }
-                        paused = []
-                    }
-                default:
-                    lastKey = (.now, event.window)
-                }
+                if event.type == .leftMouseDown { lastClick = (.now, event.window, event.locationInWindow) } else { lastKey = (.now, event.window) }
             }
             return event
-        }
-    }
-
-    /// The transcript is a text view, and its selection gestures hold a mouse-down back until they know it isn't a
-    /// double click or a drag, which can swallow a click meant for a page inside it. While the mouse is down in a
-    /// visual, those gestures (only the text view's) are paused, so the click goes straight to the page.
-    @MainActor private static func letClickThrough(_ event: NSEvent) {
-        guard let frame = event.window?.contentView?.superview else { return }
-        var view = frame.hitTest(frame.convert(event.locationInWindow, from: nil))
-        while let v = view, !(v is VisualWebView) { view = v.superview }
-        guard view != nil else { return }
-        while let v = view?.superview {
-            if v is NSTextView {
-                for g in v.gestureRecognizers where g.isEnabled && g.delaysPrimaryMouseButtonEvents {
-                    g.isEnabled = false
-                    paused.append(g)
-                }
-            }
-            view = v
         }
     }
 

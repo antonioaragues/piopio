@@ -13,6 +13,7 @@ The handoff is in [README.md](README.md); the canvas is `Harness Panel Proposals
 - **Inspector** (`Inspector.swift`):
   - **One column (2026-11-15; it had Session and Changes tabs):** Setup (Project · branch with the git menu, Runs
     on, and Tools, which unfolds into the old Uses and Skills switches), Read, Changes, and the plan's three states.
+    Since 2026-11-18 the plan is a timeline ([plan-timeline](../plan-timeline/README.md)), not a bar and a checklist.
   - Whether Changes is open is remembered per session (`inspectorChangesOpen` in defaults); it starts closed.
     `PIOPIO_DEMO_INSPECTOR_CHANGES=1` opens it for captures.
   - **Shared footer:** `InspectorFooter`.
@@ -46,7 +47,8 @@ The handoff is in [README.md](README.md); the canvas is `Harness Panel Proposals
 - **The Read row of a session that has read nothing says "Nothing yet".**
 - **No plan:** "Ask for one" appears only after the first answer, while the session is idle. Before that the row says
   "It makes one for longer tasks."
-- **The done plan shows a duration only past a minute,** measured from the first checklist update to the last.
+- **The done plan shows a duration only past a minute,** measured from the first checklist update to the last (in
+  the header's counter since the timeline, 2026-11-18).
 - **Chats keep their own summary column,** but now use the same footer, so context and cost aren't shown twice.
 - **Colours use the app's tokens,** so light mode works too. Two were added: `dsWarn` (DS.amber) and `dsRead`.
 

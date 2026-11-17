@@ -6,7 +6,7 @@ import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-age
 import { Type } from "typebox";
 
 export type TodoStatus = "pending" | "in_progress" | "done";
-export type Todo = { text: string; status: TodoStatus };
+export type Todo = { text: string; detail?: string; status: TodoStatus };
 
 export function todosExtension(): ExtensionFactory {
 	return (pi) => {
@@ -15,12 +15,13 @@ export function todosExtension(): ExtensionFactory {
 				name: "todo",
 				label: "Todo list",
 				description:
-					"Keep a short checklist for work with several steps. Send the whole list every time (it replaces the previous one): when you start, and whenever an item starts or is done. Keep exactly one item in_progress while working. Skip it for one-step tasks.",
+					"Keep a short checklist for work with several steps. Send the whole list every time (it replaces the previous one): when you start, and whenever an item starts or is done. Keep exactly one item in_progress while working. Each item is a short title plus, optionally, one sentence of detail on what it covers. Skip it for one-step tasks.",
 				promptSnippet: "todo: keep a checklist for multi-step work",
 				parameters: Type.Object({
 					items: Type.Array(
 						Type.Object({
-							text: Type.String({ description: "What to do, in a few words." }),
+							text: Type.String({ description: "The step's title: what to do, in a few words." }),
+							detail: Type.Optional(Type.String({ description: "One sentence on what the step covers or produces." })),
 							status: Type.Union([Type.Literal("pending"), Type.Literal("in_progress"), Type.Literal("done")]),
 						}),
 					),

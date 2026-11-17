@@ -22,6 +22,7 @@ import { TimelineBuilder } from "../timeline/builder.js";
 import { DurableViewMapper, type DurableView, type Entry } from "../timeline/pi-durable.js";
 import { groupSteps, StepsView } from "../timeline/steps.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
+import { replacedVisuals } from "../tools/visuals.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
 const ctx = BACKGROUND_CONTEXT;
@@ -652,8 +653,10 @@ export class AgentView implements Runtime {
 		const items = this.builder.snapshot().items.slice(turn.itemCount);
 		const answer = [...items].reverse().find((i) => i.kind === "assistant" && i.parts.some((p) => p.type === "text" && p.text.trim()));
 		const text = answer?.kind === "assistant" ? answer.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
+		// Only the last version of each: one a later call replaced isn't sent (docs/spec/25 §3.4).
+		const replaced = replacedVisuals(items);
 		const visuals = items.flatMap((i) => {
-			if (i.kind !== "tool" || i.tool !== "show_visual" || i.status === "error") return [];
+			if (i.kind !== "tool" || i.tool !== "show_visual" || i.status === "error" || replaced.has(i.id)) return [];
 			const a = (i.args ?? {}) as { title?: unknown; html?: unknown };
 			return typeof a.html === "string" && a.html.trim() ? [{ title: typeof a.title === "string" && a.title.trim() ? a.title.trim() : "Visual", html: a.html }] : [];
 		});

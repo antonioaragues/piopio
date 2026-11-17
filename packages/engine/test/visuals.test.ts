@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { decide } from "@piopio/pi-extensions";
 import { AppServices } from "../src/app-services.js";
-import { MAX_VISUAL_BYTES, showVisual, visualChecker, VISUALS_SECTION } from "../src/tools/visuals.js";
+import type { TimelineItem } from "@piopio/protocol";
+import { MAX_VISUAL_BYTES, replacedVisuals, showVisual, visualChecker, VISUALS_SECTION } from "../src/tools/visuals.js";
+import { groupSteps } from "../src/timeline/steps.js";
+import { toMarkdown } from "../src/export.js";
 
 describe("show_visual (docs/spec/25)", () => {
 	it("answers with a short line, never the HTML", () => {
@@ -52,5 +55,42 @@ describe("show_visual (docs/spec/25)", () => {
 		const r = await visualChecker(new AppServices(), { kind: "build", id: "s1" })({ title: "t", html: "x" }, "c");
 		expect(r.text).toContain("wasn't drawn or checked");
 		expect(r.images).toEqual([]);
+	});
+
+	describe("a redraw in the same turn replaces the earlier one (§3.4)", () => {
+		const at = "2026-11-18T00:00:00.000Z";
+		const user = (id: string): TimelineItem => ({ kind: "user", id, at, text: "chart please" }) as TimelineItem;
+		const visual = (id: string, title: string, status = "done"): TimelineItem =>
+			({ kind: "tool", id, at, callId: `c-${id}`, tool: "show_visual", status, args: { title, html: `<b>${id}</b>` } }) as TimelineItem;
+		const text = (id: string): TimelineItem => ({ kind: "assistant", id, at, status: "done", parts: [{ type: "text", text: "Fixed." }] }) as TimelineItem;
+
+		it("by title, within the turn only", () => {
+			const items = [user("u1"), visual("v1", "Zaragoza 2025-26"), text("a1"), visual("v2", " zaragoza 2025-26 "), visual("v3", "Another idea"), visual("v4", "Zaragoza 2025-26"), user("u2"), visual("v5", "Zaragoza 2025-26")];
+			expect([...replacedVisuals(items)]).toEqual(["v1", "v2"]);
+		});
+
+		it("not by a call that failed, which a later good one replaces", () => {
+			expect([...replacedVisuals([visual("v1", "T"), visual("v2", "T", "error")])]).toEqual([]);
+			expect([...replacedVisuals([visual("v1", "T", "error"), visual("v2", "T")])]).toEqual(["v1"]);
+		});
+
+		it("folds the earlier version into the steps line and leaves the last as a card", () => {
+			const items = [user("u1"), visual("v1", "T"), visual("v2", "T")];
+			const replaced = replacedVisuals(items);
+			const out = groupSteps(items, (t) => t.tool === "show_visual" && !replaced.has(t.id));
+			expect(out.map((i) => i.kind === "steps" ? `steps:${i.tools.map((t) => t.id)}` : i.id)).toEqual(["u1", "steps:v1", "v2"]);
+		});
+
+		it("is left out of an export", () => {
+			const md = toMarkdown("Chat", [user("u1"), visual("v1", "T"), visual("v2", "T")]);
+			expect(md.match(/\*\*Visual: T\*\*/g)).toHaveLength(1);
+			expect(md).not.toContain("<b>v1</b>");
+		});
+
+		it("says so in the result, and the prompt tells the model how", () => {
+			expect(showVisual({ title: "T", html: "<b>x</b>" }, true).text).toBe('Shown to the user as "T", in place of the earlier one.');
+			expect(VISUALS_SECTION).toContain("again with the same title");
+			expect(VISUALS_SECTION).toContain("#rrggbb");
+		});
 	});
 });

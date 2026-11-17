@@ -67,6 +67,8 @@ public final class TranscriptDocument {
     private var selectionBar: ArrowHostingView<SelectionBar>?
     /// Whether a selection is painted (see `paintSelection`).
     fileprivate var paintedSelection = false
+    /// Tables the selection runs through, tinted as selected (they're attachments: the painted background misses them).
+    private var selectedTables: [TableSelection] = []
 
     public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true, build: Bool = false, root: String? = nil, attachments: URL? = nil) {
         renderer = ItemRenderer(compact: compact, versions: versions, build: build, root: root, attachments: attachments)
@@ -97,6 +99,8 @@ public final class TranscriptDocument {
         textView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
         textView.delegate = links
         links.document = self
+        // ⌘C over a selection that runs through a table: the table's cells, not the attachment's placeholder.
+        text.copyOverride = { [weak self] in self?.copySelection() ?? false }
         // On the next turn: the window sets its first responder once the text view has answered.
         text.onFocusChange = { [weak self] in
             Task { @MainActor in
@@ -817,14 +821,11 @@ extension TranscriptDocument {
         paintSelection()
         let range = textView.selectedRange()
         guard range.length > 1, NSMaxRange(range) <= storage.length, let window = textView.window else { return hideSelectionBar() }
-        let text = (storage.string as NSString).substring(with: range)
-            .replacingOccurrences(of: "\u{FFFC}", with: "")
-            .replacingOccurrences(of: lineSeparator, with: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.contains(where: \.isLetter) else { return hideSelectionBar() }
+        let selected = selectionText(range)
+        guard selected.ask.contains(where: \.isLetter) else { return hideSelectionBar() }
         let onScreen = textView.firstRect(forCharacterRange: range, actualRange: nil)
         let rect = textView.convert(window.convertFromScreen(onScreen), from: nil)
-        let bar = SelectionBar(remember: rememberDestination, act: { [weak self] choice in self?.selectionAction(choice, text: text) })
+        let bar = SelectionBar(remember: rememberDestination, act: { [weak self] choice in self?.selectionAction(choice, text: selected) })
         let host = selectionBar ?? ArrowHostingView(rootView: bar)
         host.rootView = bar
         let size = host.fittingSize
@@ -859,6 +860,54 @@ extension TranscriptDocument {
             layoutManager.addRenderingAttribute(.backgroundColor, value: color, for: range)
             paintedSelection = true
         }
+        var tables: [TableSelection] = []
+        for value in textView.selectedRanges where value.rangeValue.length > 0 && NSMaxRange(value.rangeValue) <= storage.length {
+            storage.enumerateAttribute(.attachment, in: value.rangeValue) { a, _, _ in
+                if let a = a as? TableAttachment { tables.append(a.selection) }
+            }
+        }
+        for t in selectedTables where !tables.contains(where: { $0 === t }) { t.color = nil }
+        for t in tables { t.color = color }
+        selectedTables = tables
+    }
+
+    /// The selection as text, with each table it runs through as its cells: `ask` (tables as Markdown, for the model
+    /// and Remember), `plain` (tables tab-separated, so a spreadsheet splits them into cells) and `html` (real tables
+    /// for Numbers, Notes, Mail and Pages; only when there's a table).
+    func selectionText(_ range: NSRange) -> (ask: String, plain: String, html: String?) {
+        var ask = "", plain = "", html = "", tables = 0
+        let clean = { (s: String) in s.replacingOccurrences(of: "\u{FFFC}", with: "").replacingOccurrences(of: lineSeparator, with: "\n") }
+        storage.enumerateAttribute(.attachment, in: range) { value, r, _ in
+            if let table = (value as? TableAttachment)?.table {
+                tables += 1
+                ask += "\n\n" + table.markdown + "\n\n"
+                plain += "\n\n" + table.tsv + "\n\n"
+                html += table.html
+            } else {
+                let text = clean((storage.string as NSString).substring(with: r))
+                ask += text
+                plain += text
+                for p in text.components(separatedBy: "\n\n") where !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    html += "<p>" + TableContent.escape(p.trimmingCharacters(in: .whitespacesAndNewlines)).replacingOccurrences(of: "\n", with: "<br>") + "</p>"
+                }
+            }
+        }
+        let trim = { (s: String) in s.replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines) }
+        return (trim(ask), trim(plain), tables > 0 ? TableContent.htmlDocument(html) : nil)
+    }
+
+    /// ⌘C when the selection runs through a table; false leaves the copy to the text view.
+    func copySelection() -> Bool {
+        let range = textView.selectedRange()
+        guard range.length > 0, NSMaxRange(range) <= storage.length else { return false }
+        var hasTable = false
+        storage.enumerateAttribute(.attachment, in: range) { a, _, stop in
+            if a is TableAttachment { hasTable = true; stop.pointee = true }
+        }
+        guard hasTable else { return false }
+        let text = selectionText(range)
+        TableContent.write(plain: text.plain, html: text.html)
+        return true
     }
 
     func hideSelectionBar() {
@@ -866,13 +915,11 @@ extension TranscriptDocument {
         selectionBar = nil
     }
 
-    private func selectionAction(_ choice: SelectionBar.Choice, text: String) {
+    private func selectionAction(_ choice: SelectionBar.Choice, text: (ask: String, plain: String, html: String?)) {
         switch choice {
-        case .ask: handle(.quote(text: text))
-        case .remember: handle(.remember(text: text))
-        case .copy:
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+        case .ask: handle(.quote(text: text.ask))
+        case .remember: handle(.remember(text: text.ask))
+        case .copy: TableContent.write(plain: text.plain, html: text.html)
         }
         // A beat for the check mark, then the selection and the bar go.
         Task { @MainActor [weak self] in

@@ -212,6 +212,24 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     expectConsistent(doc)
 }
 
+@Test func tablesCopyAsTheirCells() {
+    let t = TableContent(header: ["Name", "Notes"], rows: [["**Año**", "a | b"], ["Café", "<ok>"]])
+    #expect(t.tsv == "Name\tNotes\nAño\ta | b\nCafé\t<ok>")
+    #expect(t.markdown == "| Name | Notes |\n| --- | --- |\n| **Año** | a \\| b |\n| Café | <ok> |")
+    #expect(t.html.contains("<th>Name</th>") && t.html.contains("<td>&lt;ok&gt;</td>"))
+    #expect(TableContent.htmlDocument(t.html).contains(#"charset="utf-8""#))
+}
+
+@MainActor @Test func aSelectionThroughATableCopiesItsCells() async {
+    let doc = await loaded([answer("1", "Before.\n\n| A | B |\n|---|---|\n| one | two |\n\nAfter.")])
+    let all = NSRange(location: 0, length: (doc.text as NSString).length)
+    let text = doc.selectionText(all)
+    #expect(text.plain.contains("Before.") && text.plain.contains("A\tB\none\ttwo") && text.plain.contains("After."))
+    #expect(text.ask.contains("| one | two |"))
+    #expect(text.html?.contains("<td>one</td>") == true)
+    #expect(!text.plain.contains("\u{FFFC}"))
+}
+
 @Test func tablesDrawnWithSpacesBecomeTables() {
     let code = """
     Dimension          ESPHome                          Voice & Assist

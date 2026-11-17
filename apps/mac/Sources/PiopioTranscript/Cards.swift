@@ -498,6 +498,13 @@ final class DisclosureAttachment: NSTextAttachment, @unchecked Sendable {
 final class TranscriptTextView: NSTextView {
     /// When the selection's colour changes: the view gains or loses focus, or its window becomes or stops being key.
     var onFocusChange: (() -> Void)?
+    /// Copies the selection itself when it can (a selection through a table); false lets the text view copy.
+    var copyOverride: (() -> Bool)?
+
+    override func copy(_ sender: Any?) {
+        if copyOverride?() == true { return }
+        super.copy(sender)
+    }
     private var keyObservers: [NSObjectProtocol] = []
 
     /// The fragments draw the selection (`NSTextLayoutFragment.drawSelection`): AppKit's own view for it lies beneath

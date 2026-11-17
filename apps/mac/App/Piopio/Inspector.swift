@@ -248,32 +248,39 @@ struct ToolsSummary: View {
     }
 }
 
-/// The plan's three states (4a): in progress (a segmented bar and the steps, the current one bold with "now"), done
-/// (one green line with how long it took; the steps on demand) and none (why, and a way to ask for one).
+/// The plan as a timeline (docs/design/plan-timeline, 1a in grey ink): a rail of markers joined by a line, done steps
+/// checked in `fg3`, the current one ringed in ink with its detail open, the rest just their titles. Clicking a step
+/// with a detail opens or closes it; the agent alone moves the plan along. Done shows every step checked, with how
+/// long it took in the header; none says why, with a way to ask for one.
 struct PlanBlock: View {
     let session: ThreadModel
-    @State private var showSteps = false
+    /// Steps (by title) whose detail is flipped from its default: open for the current one, closed for the rest.
+    @State private var flipped: Set<String> = []
 
     var body: some View {
         let todos = session.todos
         let done = todos.filter { $0.status == .done }.count
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Plan").font(.system(size: 13, weight: .semibold))
                 Spacer(minLength: 8)
-                Text(todos.isEmpty ? "None" : "\(done) of \(todos.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+                Text(counter(todos, done: done)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
             }
             if todos.isEmpty {
                 none
-            } else if done == todos.count {
-                finished(todos.count)
-                if showSteps { steps(todos) }
             } else {
-                progress(todos)
-                steps(todos)
+                timeline(todos)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: showSteps)
+        .animation(.easeOut(duration: 0.2), value: todos.map(\.status))
+    }
+
+    /// "2 of 6"; "6 of 6 · 34 min" once it's done.
+    private func counter(_ todos: [Todo], done: Int) -> String {
+        guard !todos.isEmpty else { return "None" }
+        let base = "\(done) of \(todos.count)"
+        guard done == todos.count, let duration = Self.duration(session.document.items) else { return base }
+        return "\(base) · \(duration)"
     }
 
     @ViewBuilder private var none: some View {
@@ -292,58 +299,76 @@ struct PlanBlock: View {
         .font(.system(size: 12))
     }
 
-    private func finished(_ count: Int) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 7) {
-                Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsGreen)
-                Text(count == 1 ? "Its step is done" : "All \(count) steps done").font(.system(size: 13))
-                Spacer(minLength: 6)
-                if let duration = Self.duration(session.document.items) {
-                    Text(duration).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+    private func timeline(_ todos: [Todo]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(todos.enumerated()), id: \.offset) { index, todo in
+                step(todo, last: index == todos.count - 1)
+            }
+        }
+    }
+
+    private func isOpen(_ todo: Todo) -> Bool {
+        guard todo.detail != nil else { return false }
+        return (todo.status == .inProgress) != flipped.contains(todo.text)
+    }
+
+    /// The rail (marker, then the line down to the next step) beside the title and, when open, the detail.
+    private func step(_ todo: Todo, last: Bool) -> some View {
+        let open = isOpen(todo)
+        return HStack(alignment: .top, spacing: 10) {
+            VStack(spacing: 3) {
+                marker(todo.status).padding(.top, 1.5)
+                if !last {
+                    Rectangle()
+                        .fill(todo.status == .done ? Color.dsFg3 : Color.dsFg3.opacity(0.28))
+                        .frame(width: 1.5).frame(minHeight: 8, maxHeight: .infinity)
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 8)
-            .background(Color.dsGreen.opacity(0.13), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            SummaryLink(showSteps ? "Hide steps" : "Show steps") { showSteps.toggle() }
-        }
-    }
-
-    /// One segment per step: done green, the current one blue, the rest a track.
-    private func progress(_ todos: [Todo]) -> some View {
-        HStack(spacing: 3) {
-            ForEach(Array(todos.enumerated()), id: \.offset) { _, todo in
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(todo.status == .done ? Color.dsGreen : todo.status == .inProgress ? Color.accentColor : Color.dsTrack)
-                    .frame(height: 3)
-            }
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func steps(_ todos: [Todo]) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            ForEach(Array(todos.enumerated()), id: \.offset) { _, todo in
+            .frame(width: 16)
+            .frame(maxHeight: .infinity, alignment: .top)
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    marker(todo.status).frame(width: 14)
                     Text(todo.text)
                         .font(.system(size: 13, weight: todo.status == .inProgress ? .semibold : .regular))
                         .foregroundStyle(todo.status == .done ? Color.dsFg3 : todo.status == .inProgress ? Color.dsFg : Color.dsFg2)
-                        .strikethrough(todo.status == .done, color: Color.dsFg3.opacity(0.7))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
-                    if todo.status == .inProgress { Text("now").font(.system(size: 12)).foregroundStyle(Color.accentColor) }
+                    if todo.status == .inProgress { Text("now").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityValue(todo.status == .done ? "Done" : todo.status == .inProgress ? "In progress" : "To do")
+                if open, let detail = todo.detail {
+                    Text(detail)
+                        .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                }
+            }
+            .padding(.bottom, last ? 0 : 14)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard todo.detail != nil else { return }
+            withAnimation(.easeOut(duration: 0.18)) {
+                if flipped.contains(todo.text) { flipped.remove(todo.text) } else { flipped.insert(todo.text) }
             }
         }
+        .help(todo.detail.map { open ? "" : $0 } ?? "")
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(todo.status == .done ? "Done" : todo.status == .inProgress ? "In progress" : "To do")
+        .accessibilityHint(todo.detail == nil ? "" : open ? "Hides what this step covers" : "Shows what this step covers")
+        .accessibilityAddTraits(todo.detail == nil ? [] : .isButton)
     }
 
+    /// Done: a filled `fg3` disc with a check. Current: an ink ring. To do: a faint ring.
     @ViewBuilder private func marker(_ status: Todo.Status) -> some View {
         switch status {
-        case .done: Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.dsGreen)
-        case .inProgress: Circle().strokeBorder(Color.accentColor, lineWidth: 2).frame(width: 8, height: 8)
-        default: Circle().strokeBorder(Color.dsFg3, lineWidth: 1.5).frame(width: 8, height: 8)
+        case .done:
+            Circle().fill(Color.dsFg3).frame(width: 14, height: 14)
+                .overlay { Image(systemName: "checkmark").font(.system(size: 7.5, weight: .bold)).foregroundStyle(Color.dsWin) }
+        case .inProgress:
+            Circle().fill(Color.dsWin).overlay { Circle().strokeBorder(Color.dsFg, lineWidth: 2) }.frame(width: 14, height: 14)
+        default:
+            Circle().strokeBorder(Color.dsFg3.opacity(0.6), lineWidth: 1.5).frame(width: 14, height: 14)
         }
     }
 

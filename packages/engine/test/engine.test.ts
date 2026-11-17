@@ -971,10 +971,10 @@ describe("composer and extensions (milestone 2.5)", () => {
 	test("todo keeps the latest checklist in the session state, also after a reopen", async () => {
 		const a = await start();
 		const s = await session(a);
-		await run(a, s, "todo: Read the code (done) | Write the test (in_progress) | Ship it");
+		await run(a, s, "todo: Read the code (done) | Write the test :: Cover the reopen case too. (in_progress) | Ship it");
 		const items = [
 			{ text: "Read the code", status: "done" },
-			{ text: "Write the test", status: "in_progress" },
+			{ text: "Write the test", detail: "Cover the reopen case too.", status: "in_progress" },
 			{ text: "Ship it", status: "pending" },
 		];
 		expect(latest(a, s.sub)!.state.todos).toEqual(items);

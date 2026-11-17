@@ -53,7 +53,7 @@ export const ToolDetails = Type.Union([
 	Type.Object({ type: Type.Literal("terminal"), command: Type.String(), exitCode: Type.Optional(Type.Number()) }),
 	Type.Object({ type: Type.Literal("json"), value: Type.Unknown() }),
 	/** The agent's checklist (piopio-todos). */
-	Type.Object({ type: Type.Literal("todos"), items: Type.Array(Type.Object({ text: Type.String(), status: literals("pending", "in_progress", "done") })) }),
+	Type.Object({ type: Type.Literal("todos"), items: Type.Array(Type.Object({ text: Type.String(), detail: Type.Optional(Type.String()), status: literals("pending", "in_progress", "done") })) }),
 	/** A subagent (piopio-subagents): its child session, once started, and the outcome. */
 	Type.Object({ type: Type.Literal("task"), sessionId: Type.Optional(Type.String()), status: Type.Optional(literals("started", "queued", "done", "error", "stopped")), costUsd: Type.Optional(Type.Number()) }),
 	/** Files the agent handed over (piopio-present): where they are, what they are, and which ones don't exist. */
@@ -336,7 +336,7 @@ export const SessionState = Type.Object({
 	approvalMode: Type.Optional(ApprovalMode),
 	prompts: Type.Optional(Type.Array(PendingPrompt)),
 	/** Build: the agent's current checklist, and whether plan mode is on. */
-	todos: Type.Optional(Type.Array(Type.Object({ text: Type.String(), status: literals("pending", "in_progress", "done") }))),
+	todos: Type.Optional(Type.Array(Type.Object({ text: Type.String(), detail: Type.Optional(Type.String()), status: literals("pending", "in_progress", "done") }))),
 	planMode: Type.Optional(Type.Boolean()),
 	/** How full the model's context is (Build). `tokens` is null right after a compaction. */
 	context: Type.Optional(Type.Object({ tokens: Type.Union([Type.Number(), Type.Null()]), window: Type.Number() })),

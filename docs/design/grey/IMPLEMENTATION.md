@@ -9,7 +9,7 @@ seen running. Nothing here has been used with real models.
 |---|---|---|---|
 | Tokens and principles 1–7 | Built | Yes | The chick remains in onboarding |
 | 9a Sidebar, window, toolbar | Built | Yes | Also has Home and Pinned; the git menu stays as an icon |
-| 9a Inspector | Built | Yes | A checklist shows above Changes when the agent keeps one; it opens on Changes when a turn changes files |
+| 9a Inspector | Built | Yes | The plan shows below Changes as a timeline when the agent keeps one (docs/design/plan-timeline, 2026-11-18); it opens on Changes when a turn changes files |
 | 10a New menu | Built | Code only | A native menu; also offers Debate; no ⌘N/⌘⇧N labels |
 | 10b Search ⌘K | Built | Yes, clicked | Keeps the scope selector |
 | 10c | Replaced by 14b | n/a | The README says so |
