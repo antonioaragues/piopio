@@ -17,7 +17,7 @@ import {
 	type AgentSession,
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
-import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
+import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
 import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -161,7 +161,7 @@ export class BuildRuntime implements Runtime {
 			cwd: o.cwd,
 			agentDir,
 			settingsManager,
-			extensionFactories: o.chat ? chatFactories(o, () => runtime) : [
+			extensionFactories: o.chat ? chatFactories(o, broker, () => runtime) : [
 				// The pi CLI's built-ins (MCP servers, and codemode / tool search through which MCP tools are
 				// reached). Replaceable: a user extension that registers the same tools or /mcp takes over.
 				...piBuiltins(),
@@ -261,16 +261,7 @@ export class BuildRuntime implements Runtime {
 					},
 				}),
 				subagentsExtension(o.runTask ? { run: o.runTask, ...(o.tasks ?? {}), ...(o.externalAgents?.length ? { agents: o.externalAgents } : {}) } : undefined),
-				notifyExtension({
-					ask: async (question, signal) => {
-						const response = await broker.ask({ kind: "question", title: question.question, callId: question.callId, ...(question.options ? { options: question.options } : {}) }, signal);
-						return response?.choice ?? response?.text;
-					},
-					notify: (message) => {
-						runtime?.note("info", message);
-						o.onAttention?.("notify", message);
-					},
-				}),
+				notifyExtension(notifyBridge(o, broker, () => runtime)),
 			],
 		});
 		// Project trust, as the pi CLI decides it: the closest saved decision (~/.pi/agent/trust.json) for the
@@ -1050,8 +1041,22 @@ function piBuiltins() {
 /** pi's tools a chat doesn't get: it has no folder of the user's to look in or change (`read` stays, for skills). */
 const CHAT_OFF = ["bash", "powershell", "edit", "write", "grep", "find", "ls"];
 
+/** `ask_user` and `notify_user`: a question waits on the session's question card, a notice is a note in the transcript. */
+function notifyBridge(o: BuildOpenOptions, broker: PromptBroker, runtime: () => BuildRuntime | undefined) {
+	return {
+		ask: async (question: Question, signal: AbortSignal | undefined) => {
+			const response = await broker.ask({ kind: "question", title: question.question, callId: question.callId, ...(question.options ? { options: question.options } : {}) }, signal);
+			return response?.choice ?? response?.text;
+		},
+		notify: (message: string) => {
+			runtime()?.note("info", message);
+			o.onAttention?.("notify", message);
+		},
+	};
+}
+
 /** A chat's extensions (ChatProfile): its prompt and tools, and cards in the transcript where Build would ask. */
-function chatFactories(o: BuildOpenOptions, runtime: () => BuildRuntime | undefined) {
+function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () => BuildRuntime | undefined) {
 	const card = (callId: string, signal: AbortSignal | undefined) => (request: { tool: string; title: string; args: Record<string, unknown>; always: string }) => runtime()!.approvalCard(callId, signal, request);
 	return [
 		...piBuiltins(),
@@ -1062,6 +1067,8 @@ function chatFactories(o: BuildOpenOptions, runtime: () => BuildRuntime | undefi
 		guardsExtension(),
 		chatProfileExtension(o.hub, o.webOptions, () => false),
 		codingVisualsExtension(o.visuals),
+		// Questions for the user get the question card, as in Build, not a form drawn with show_visual.
+		notifyExtension(notifyBridge(o, broker, runtime)),
 		...(o.connectors
 			? [
 					codingConnectorsExtension(

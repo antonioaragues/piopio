@@ -19,7 +19,7 @@ export const SHOW_VISUAL = "show_visual";
 export const MAX_VISUAL_BYTES = 300 * 1024;
 
 const DESCRIPTION =
-	"Show the user a visual in the conversation: a chart, a diagram of how something works, UI or layout options to pick from, or a small interactive explainer. It is drawn right away as live HTML in Piopio's colours, with no network. Not for what text, a list or a table says as well, nor for documents (write a file) or code to copy (a code block).";
+	"Show the user a visual in the conversation: a chart, a diagram of how something works, UI or layout options to pick from, or a small interactive explainer. It is drawn right away as live HTML in Piopio's colours, with no network. Not for what text, a list or a table says as well, nor for documents (write a file) or code to copy (a code block). Not for asking the user questions, even with options: ask with your question tool (ask_user or ask_owner), which the app shows as its own card.";
 
 const PARAMETERS = Type.Object({
 	title: Type.String({ description: "Shown above the visual, 2 to 6 words: 'Usage card: three options'." }),
@@ -34,7 +34,8 @@ You can show the user a visual with ${SHOW_VISUAL}: live HTML drawn in the conve
 - Size: it fills the column's width (about 560 to 900 px); its height follows its content, up to about 900 px. No fixed widths, no page background (it sits on the conversation's), no outer margins.
 - Look: use these CSS variables, which follow the app's light and dark mode: --fg, --fg2, --fg3 (text, strong to faint), --line (hairlines), --card and --bubble (raised and quiet surfaces), --chip (hover), --accent, --green, --amber, --red, --c1 to --c8 (chart series, in that order), --radius (8px), --radius-card (12px), --font, --font-mono. Buttons, inputs and tables are already styled like the app's.
 - No network: nothing loads from the internet or the user's disk. Put data in the HTML. Libraries are bundled: <script src="piopio-lib://chart.js"></script> (Chart.js 4, global Chart), <script src="piopio-lib://d3.js"></script> (d3 7, global d3), <script src="piopio-lib://katex/katex.js"></script> with <link rel="stylesheet" href="piopio-lib://katex/katex.css"> (KaTeX), and three.js r169 as a module: <script type="module">import * as THREE from "three"; import { OrbitControls } from "three/addons/controls/OrbitControls.js";</script>. For diagrams, write SVG yourself.
-- Options to pick from: label them A, B, C, and give each a button that calls piopio.send("Go with B"): when the user clicks it, that text is sent as their message. piopio.prefill("…") puts text in the user's message box instead, for them to finish. Both work only from the user's click.
+- Not for questions: when you ask the user something (a choice, a quiz, a few questions to answer), never draw a form. Use your question tool (ask_user or ask_owner), one question per call, which the app shows as its own question card; without one, ask in words.
+- Options to pick from: only when the options are themselves visual (layouts, designs, charts) and seeing them is the point. Label them A, B, C, and give each a button that calls piopio.send("Go with B"): when the user clicks it, that text is sent as their message. piopio.prefill("…") puts text in the user's message box instead, for them to finish. Both work only from the user's click.
 - Check: the result says the height it was drawn at and lists script errors and failed loads. Fix any with a new ${SHOW_VISUAL} call. Pass look: true when the layout matters and you can see images, to get a picture of it.
 - A changed version is a new ${SHOW_VISUAL} call; the old one stays where it was.
 - Visuals show only in Piopio's window. When the person reads you in a message channel (Telegram, WhatsApp), say it in words instead.`;

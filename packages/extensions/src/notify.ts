@@ -21,7 +21,7 @@ export function notifyExtension(bridge?: NotifyBridge): ExtensionFactory {
 				name: "ask_user",
 				label: "Ask the user",
 				description:
-					"Ask the user a question and wait for the answer. Use it when you need a decision or information only they have (a choice between approaches, a missing requirement). Don't use it for routine confirmations. Offer `options` when the answer is one of a few choices.",
+					"Ask the user a question and wait for the answer. Use it when you need a decision or information only they have (a choice between approaches, a missing requirement). Don't use it for routine confirmations. Offer `options` when the answer is one of a few choices. To ask several things, call it once per question, in turn.",
 				promptSnippet: "ask_user: ask the user a question and wait for the answer",
 				parameters: Type.Object({
 					question: Type.String({ description: "The question, in one or two sentences." }),
