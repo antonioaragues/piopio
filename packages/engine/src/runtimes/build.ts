@@ -28,7 +28,7 @@ import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage, type
 import { sdkMessages, SdkEventMapper } from "../timeline/pi-sdk.js";
 import { chatPromptExtension } from "../tools/chat-prompt.js";
 import { sdkAsSent, sdkContent, sdkUser, sdkWithWords, TYPED_ENTRY, type ContentBlock, type SdkInput } from "../input.js";
-import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat-profile.js";
+import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON, WEB_TOOLS } from "../tools/chat-profile.js";
 import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
 import { buildPromptExtension } from "../tools/build-prompt.js";
@@ -228,7 +228,7 @@ export class BuildRuntime implements Runtime {
 						return { decision: response.decision ?? "deny", ...(response.text ? { note: response.text } : {}) };
 					},
 				}),
-				chatProfileExtension(o.hub, o.webOptions, () => o.approvals.mode() === "read_only"),
+				chatProfileExtension(o.hub, o.webOptions, () => o.approvals.mode() === "read_only", () => true),
 				...(o.connectors
 					? [
 							codingConnectorsExtension(o.connectors, (callId, signal) => async (request) => {
@@ -702,8 +702,9 @@ export class BuildRuntime implements Runtime {
 	}
 
 	/**
-	 * The tools for the approval mode (docs/spec/18 §4): Read only drops bash, edit and write and adds the finders and
-	 * the web tools; any other mode the other way round. Live: the next model request sees them (no reopen).
+	 * The tools for the approval mode (docs/spec/18 §4): Read only drops bash, edit and write and adds the finders; any
+	 * other mode brings them back. The web tools are on in every mode (the table in §4: "Reads, search, web"), so a
+	 * quick lookup is a search, not the browser. Live: the next model request sees them (no reopen).
 	 */
 	applyMode(): void {
 		if (this.chat) {
@@ -720,8 +721,8 @@ export class BuildRuntime implements Runtime {
 		const readOnly = this.approvalMode() === "read_only";
 		const known = new Set(this.session.getAllTools().map((t) => t.name));
 		const active = new Set(this.session.getActiveToolNames());
-		for (const name of readOnly ? READ_ONLY_OFF : ["web_search", "web_fetch"]) active.delete(name);
-		for (const name of readOnly ? READ_ONLY_ON : READ_ONLY_OFF) if (known.has(name)) active.add(name);
+		if (readOnly) for (const name of READ_ONLY_OFF) active.delete(name);
+		for (const name of [...(readOnly ? READ_ONLY_ON : READ_ONLY_OFF), ...WEB_TOOLS]) if (known.has(name)) active.add(name);
 		this.session.setActiveToolsByName([...active]);
 	}
 

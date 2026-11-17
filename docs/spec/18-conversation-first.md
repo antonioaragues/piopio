@@ -265,7 +265,9 @@ Acceptance:
 
 **Engine:**
 - `read_only` is a fourth approval mode. A Build session's profile follows it:
-  - Read only drops `bash`, `edit` and `write`, and adds the finders and the web tools.
+  - Read only drops `bash`, `edit` and `write`, and adds the finders.
+  - The web tools (`web_search`, `web_fetch`) and their prompt section are on in every mode, as the table above says
+    (until 2026-11-17 only Read only had them, so other modes reached the web through the browser).
   - It switches live with `setActiveToolsByName`, so the transcript and subscriptions stay.
   - The knowledge prompt is added only while Read only.
 - **The policy in Read only:**

@@ -1395,7 +1395,7 @@ describe("projects in the Chat lens (milestone 3.1)", () => {
 		expect((await a.client.call("projects.listDir", { cwd: notes, dir: "plans" })).entries).toEqual([{ name: "budget.md", path: "plans/budget.md", kind: "file" }]);
 	});
 
-	test("Read only switches live: no commands or edits, finders and the web; back to Full auto, commands again", async () => {
+	test("Read only switches live: no commands or edits, finders and the web; back to Full auto, commands again (and the web in every mode)", async () => {
 		const a = await start();
 		const http = await import("node:http");
 		const server = http.createServer((_req, res) => res.end("<html><head><title>Page</title></head><body><p>Readable.</p></body></html>"));
@@ -1418,22 +1418,26 @@ describe("projects in the Chat lens (milestone 3.1)", () => {
 			const snap = (await a.client.call("sessions.open", { ref })) as Snapshot;
 			throw new Error(`fewer than ${count} tool calls finished: ${JSON.stringify({ state: snap.state.status, prompts: snap.state.prompts, tools: snap.items.filter((x) => x.kind === "tool").map((x) => [x.tool, x.status, (x.output ?? "").slice(0, 80)]) })}`);
 		};
-		await a.client.call("sessions.submit", { ref, input: { text: "$ echo before" } });
-		await finished(1);
+		// The web tools are on outside Read only too (docs/spec/18 §4): a lookup is a search, not the browser.
+		await a.client.call("sessions.submit", { ref, input: { text: `$ echo before\ncall: web_fetch | {"url":"http://127.0.0.1:${port}/"}` } });
+		await finished(2);
+		expect((await tools()).map((t) => `${t.tool}:${t.status}`)).toEqual(["bash:done", "web_fetch:done"]);
 
 		await a.client.call("sessions.configure", { ref, approvalMode: "read_only" });
 		expect((await a.client.call("sessions.list", { kind: "build" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === ref.id)).toMatchObject({ approvalMode: "read_only", profile: "chat" });
 		await a.client.call("sessions.submit", { ref, input: { text: `$ echo during\ncall: write | {"path":"x.txt","content":"no"}\ncall: grep | {"pattern":"Budget","path":"."}\ncall: web_fetch | {"url":"http://127.0.0.1:${port}/"}` } });
-		await finished(5);
-		const during = (await tools()).slice(1);
+		await finished(6);
+		const during = (await tools()).slice(2);
 		expect(during.map((t) => `${t.tool}:${t.status}`)).toEqual(["bash:error", "write:error", "grep:done", "web_fetch:done"]);
 		expect(existsSync(join(folder, "x.txt"))).toBe(false);
 
 		await a.client.call("sessions.configure", { ref, approvalMode: "full_auto" });
-		await a.client.call("sessions.submit", { ref, input: { text: "$ echo after" } });
-		await finished(6);
+		await a.client.call("sessions.submit", { ref, input: { text: `$ echo after\ncall: web_fetch | {"url":"http://127.0.0.1:${port}/"}` } });
+		await finished(8);
 		server.close();
-		expect((await tools()).at(-1)).toMatchObject({ tool: "bash", status: "done", output: expect.stringContaining("after") });
+		const after = (await tools()).slice(-2);
+		expect(after[0]).toMatchObject({ tool: "bash", status: "done", output: expect.stringContaining("after") });
+		expect(after[1]).toMatchObject({ tool: "web_fetch", status: "done", output: expect.stringContaining("Readable.") });
 	}, 30_000);
 
 	test("a subagent of a chat-profile session keeps its profile and the tools turned off (no bash through a task)", async () => {
