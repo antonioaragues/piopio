@@ -4,7 +4,7 @@
  * other). Kept in projects.json.
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "@earendil-works/pi-coding-agent";
 import type { ApprovalMode, ApprovalRule, ProjectInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
@@ -260,7 +260,33 @@ export class Projects {
 	}
 
 	private entryFor(cwd: string): StoredProject | undefined {
-		return this.entries.find((p) => cwd === p.path || cwd.startsWith(`${p.path}/`));
+		const match = (path: string) => this.entries.find((p) => path === p.path || path.startsWith(`${p.path}/`));
+		// Projects are stored by their real path; a folder reached through a symlink (/var → /private/var, a linked
+		// ~/Projects) is still in its project.
+		return match(cwd) ?? match(Projects.real(cwd));
+	}
+
+	private static readonly reals = new Map<string, string>();
+	private static real(path: string): string {
+		let real = Projects.reals.get(path);
+		if (real === undefined) {
+			// The deepest folder that exists, resolved, and the rest as it is (a subfolder not made yet).
+			let head = path;
+			let rest = "";
+			for (;;) {
+				try {
+					real = realpathSync(head) + rest;
+					break;
+				} catch {
+					const up = dirname(head);
+					if (up === head) return path;
+					rest = `/${basename(head)}${rest}`;
+					head = up;
+				}
+			}
+			if (!rest) Projects.reals.set(path, real);
+		}
+		return real;
 	}
 
 	onChange(listener: (projects: ProjectInfo[]) => void): () => void {

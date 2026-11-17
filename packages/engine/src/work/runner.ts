@@ -498,8 +498,30 @@ export class WorkRunner {
 
 	// ── Running ──
 
-	/** Starts To do tasks while there's room. */
+	private readonly pumping = new Set<string>();
+	private readonly pumpAgain = new Set<string>();
+
+	/**
+	 * Starts To do tasks while there's room. One pump per project at a time (C4: three tasks made at once each started
+	 * T1, and the second `git worktree add` blocked it); a call while one runs makes it go round again.
+	 */
 	private async pump(work: ProjectWork): Promise<void> {
+		if (this.pumping.has(work.id)) {
+			this.pumpAgain.add(work.id);
+			return;
+		}
+		this.pumping.add(work.id);
+		try {
+			do {
+				this.pumpAgain.delete(work.id);
+				await this.pumpOnce(work);
+			} while (this.pumpAgain.has(work.id));
+		} finally {
+			this.pumping.delete(work.id);
+		}
+	}
+
+	private async pumpOnce(work: ProjectWork): Promise<void> {
 		const busy = () => work.tasks.filter((t) => t.state === "doing" || t.state === "review" || t.state === "integrating").length;
 		for (const t of work.tasks.filter((x) => x.state === "todo")) {
 			if (busy() >= work.way.maxParallel) break;
@@ -511,6 +533,7 @@ export class WorkRunner {
 					continue;
 				}
 			}
+			if (t.state !== "todo") continue;
 			await this.start(work, t).catch((error: unknown) => this.block(work, t, (error as Error).message));
 		}
 	}

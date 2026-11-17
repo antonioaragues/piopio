@@ -144,8 +144,8 @@ export class Watchdog {
 			}
 			const item = e.item;
 			if (item.status === "running") w.tool = item.tool === "bash" ? `\`${short(String((item.args as { command?: string } | undefined)?.command ?? "bash"))}\`` : item.tool;
+			const sig = `${item.tool} ${JSON.stringify(item.args ?? {})}`;
 			if (e.type === "item.added") {
-				const sig = `${item.tool} ${JSON.stringify(item.args ?? {})}`;
 				const n = (w.calls.get(sig) ?? 0) + 1;
 				w.calls.set(sig, n);
 				if (n >= 3 && !w.looped.has(sig)) {
@@ -157,9 +157,10 @@ export class Watchdog {
 				const command = String((item.args as { command?: string } | undefined)?.command ?? "");
 				const n = (w.failing.get(command) ?? 0) + 1;
 				w.failing.set(command, n);
-				const sig = `failing ${command}`;
-				if (n >= 3 && !w.looped.has(sig)) {
-					w.looped.add(sig);
+				const failSig = `failing ${command}`;
+				// The same call repeated has already said so: one cause, one note.
+				if (n >= 3 && !w.looped.has(failSig) && !w.looped.has(sig)) {
+					w.looped.add(failSig);
 					this.fire(w, "looping", `is repeating itself: the same command failed ${n} times in this turn (\`${short(command)}\`).`);
 				}
 			}

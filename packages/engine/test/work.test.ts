@@ -251,6 +251,17 @@ test("two conversations plan their own tasks on one board, and each hears only i
 	await until(() => textOf(client, a.id), (s) => /T\d \[done\] From A \(Builder, yours\)/.test(s) && /T\d \[done\] From B \(Builder\)/.test(s));
 }, 90_000);
 
+test("three tasks made at once each start once: none is blocked by its own branch (C4, a job with a budget)", async () => {
+	const { client } = await start();
+	const dir = repo();
+	const work = await parallel(client, dir, { maxParallel: 3, budgetPerJob: 5, review: false });
+	const piopio = await conversation(client, work.cwd);
+	await client.call("sessions.submit", { ref: piopio, input: { text: ["a", "b", "c"].map((x, i) => `${i ? "& " : ""}${createTask({ title: `Page ${x}`, brief: `write: ${x}.html | <p>${x}</p>` })}`).join("\n") } });
+	const done = await until(() => workOf(client, work.project), (w) => w.tasks.length === 3 && w.tasks.every((x) => x.state === "done" || x.state === "blocked"), 40_000);
+	expect(done.tasks.map((t) => [t.id, t.state, t.blocked])).toEqual([["T1", "done", undefined], ["T2", "done", undefined], ["T3", "done", undefined]]);
+	expect(await textOf(client, piopio.id)).not.toContain("already exists");
+}, 60_000);
+
 test("a task starts from the project as it is: the work branch catches up with commits on the base", async () => {
 	const { client } = await start();
 	const dir = repo();

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
@@ -49,4 +49,13 @@ test("every turn tells the model about the linked folders and what it may do the
 	expect(prompt.startsWith("Base\n\n")).toBe(true);
 	expect(prompt).toContain("- /Users/me/Documents/Bibliografia (read only: read and search it, but don't change anything there)");
 	expect(prompt).toContain("- /Users/me/Lab/Datos (part of the project: you may change files here");
+});
+
+test("a folder reached through a symlink is still in its project (C4: /var → /private/var)", () => {
+	const { root, projects, project } = setup();
+	const link = join(root, "linked-project");
+	symlinkSync(project.path, link);
+	expect(projects.projectFor(link)?.id).toBe(project.id);
+	expect(projects.projectFor(join(link, "capitulos"))?.id).toBe(project.id);
+	expect(projects.projectFor(join(root, "elsewhere"))).toBeUndefined();
 });

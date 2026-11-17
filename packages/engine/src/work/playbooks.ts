@@ -41,7 +41,7 @@ export type Playbook = {
 /** What Piopio is told about the board in a project with parallel work on (docs/spec/26 CL3, §7.1–§7.2). */
 export const PIOPIO_BOARD = `Parallel work is on in this project: you can put tasks on its board, and helpers you make for them do the work while you keep talking with the user.
 
-Do things yourself by default: answer questions and make small or single changes here, in the conversation. Put work on the board only when it splits into parts that really can run at the same time, and each part is big enough to be worth a helper. A role or a kind of expertise isn't a reason to split; independent parts are. Two parts that would change the same files are one task.
+Do things yourself by default: answer questions and make small or single changes here, in the conversation. Put work on the board only when it splits into parts that really can run at the same time, and each part is big enough to be worth a helper. A role or a kind of expertise isn't a reason to split; independent parts are. Two parts that would change the same files are one task. Changes that run in parallel go on the board with create_task, not to a task subagent: the board gives each its own branch, a review and the checks; task subagents are for read-only pieces (a wide search, a long trace).
 
 For each task, write a brief another person could do without asking: what to do, where, and what done means. Helpers know nothing of this conversation.
 

@@ -469,10 +469,17 @@ function installEcho(faux: FauxHandle): void {
 		const text = raw.replace(/^\[Sent [^\]\n]*\](\n\n)?/, "").replace(/^(<attachment [^>\n]*\/>\n)+/, "");
 		const script = scriptedTools(text);
 		const done = context.messages.slice(lastUser + 1).filter((m) => m.role === "toolResult").length;
-		const next = script[done];
+		// A call on a line that starts with "& " goes in the same message as the one before (parallel tool calls).
+		const groups: (typeof script)[] = [];
+		for (const c of script) {
+			if (c.together && groups.length) groups.at(-1)!.push(c);
+			else groups.push([c]);
+		}
+		let used = 0;
+		const group = groups.find((g) => (used += g.length) > done) ?? [];
 		const thinking = done === 0 ? text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("think: ")).map((l) => l.slice(7)).join("\n\n") : "";
-		const call = next ? fauxToolCall(next.name, next.args as Parameters<typeof fauxToolCall>[1]) : undefined;
-		if (call) return fauxAssistantMessage(thinking ? [fauxThinking(thinking), call] : [call], { stopReason: "toolUse" });
+		const calls = group.map((c) => fauxToolCall(c.name, c.args as Parameters<typeof fauxToolCall>[1]));
+		if (calls.length) return fauxAssistantMessage(thinking ? [fauxThinking(thinking), ...calls] : calls, { stopReason: "toolUse" });
 		return fauxAssistantMessage([fauxText(`Echo: ${text}`)]);
 	};
 	// Each step queues the next; a few ahead, so conversations asking at the same moment (a side conversation started
@@ -480,9 +487,12 @@ function installEcho(faux: FauxHandle): void {
 	faux.setResponses(Array.from({ length: 8 }, () => step));
 }
 
-function scriptedTools(text: string): { name: string; args: Record<string, unknown> }[] {
-	const calls: { name: string; args: Record<string, unknown> }[] = [];
-	for (const line of text.split("\n").map((l) => l.trim())) {
+function scriptedTools(text: string): { name: string; args: Record<string, unknown>; together?: boolean }[] {
+	const calls: { name: string; args: Record<string, unknown>; together?: boolean }[] = [];
+	for (const raw of text.split("\n").map((l) => l.trim())) {
+		const together = raw.startsWith("& ") && calls.length > 0;
+		const line = together ? raw.slice(2) : raw;
+		const before = calls.length;
 		const parts = (rest: string) => rest.split("|").map((p) => p.trim().replaceAll("\\n", "\n"));
 		if (line.startsWith("$ ")) calls.push({ name: "bash", args: { command: line.slice(2) } });
 		else if (line.startsWith("read: ")) calls.push({ name: "read", args: { path: line.slice(6).trim() } });
@@ -512,6 +522,7 @@ function scriptedTools(text: string): { name: string; args: Record<string, unkno
 			const [path, oldText = "", newText = ""] = parts(line.slice(6));
 			calls.push({ name: "edit", args: { path, edits: [{ oldText, newText }] } });
 		}
+		if (together && calls.length > before) calls[calls.length - 1]!.together = true;
 	}
 	return calls;
 }
