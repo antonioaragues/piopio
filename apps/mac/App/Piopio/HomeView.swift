@@ -83,13 +83,13 @@ struct HomeView: View {
         .padding(.bottom, 8)
     }
 
-    /// Teams whose finished work waits to be merged (open the project's Board).
-    private var readyToMerge: [(team: TeamInfo, project: ProjectInfo, tasks: Int)] {
-        engine.teams.compactMap { t in
-            guard t.git != nil, !t.tasks.contains(where: { ["todo", "doing", "review", "integrating"].contains($0.state) }),
-                  let p = engine.projects.first(where: { $0.path == t.cwd }) else { return nil }
-            let n = t.tasks.filter { $0.state == "done" && $0.branch != nil && $0.landed == nil }.count
-            return n > 0 ? (t, p, n) : nil
+    /// Projects whose finished board work waits to be merged (open the project's Board).
+    private var readyToMerge: [(work: ProjectWork, project: ProjectInfo, tasks: Int)] {
+        engine.work.compactMap { w in
+            guard w.git != nil, !w.tasks.contains(where: { ["todo", "doing", "review", "integrating"].contains($0.state) }),
+                  let p = engine.projects.first(where: { $0.id == w.project }) else { return nil }
+            let n = w.tasks.filter { $0.state == "done" && $0.branch != nil && $0.landed == nil }.count
+            return n > 0 ? (w, p, n) : nil
         }
     }
 
@@ -101,11 +101,11 @@ struct HomeView: View {
             sectionTitle("Waiting on you · \(count)", see: entries.count > 4 ? ("See all", { item = .needsYou }) : nil)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(entries.prefix(4)) { WaitingRow(engine: engine, entry: $0, item: $item) }
-                ForEach(ready, id: \.team.id) { r in
+                ForEach(ready, id: \.work.id) { r in
                     AgendaLine(dot: .accentColor) {
-                        Text("\(r.project.name) · \(r.tasks) task\(r.tasks == 1 ? "" : "s") ready for \(r.team.git?.base ?? "main")").font(.system(size: 13.5))
+                        Text("\(r.project.name) · \(r.tasks) task\(r.tasks == 1 ? "" : "s") ready for \(r.work.git?.base ?? "main")").font(.system(size: 13.5))
                     } trailing: {
-                        Button("Review") { UserDefaults.standard.set("board", forKey: "projectTab"); item = .project(r.project.id) }.buttonStyle(PillStyle(compact: true))
+                        Button("Review") { item = .board(r.project.id) }.buttonStyle(PillStyle(compact: true))
                     }
                 }
             }
@@ -177,12 +177,7 @@ struct HomeView: View {
     private func open(_ source: HomeAgenda.Source) {
         switch source.kind {
         case "agent": item = .agent(source.id)
-        case "project": item = .project(source.id)
-        default:
-            if let t = engine.teams.first(where: { $0.id == source.id }), let p = engine.projects.first(where: { $0.path == t.cwd }) {
-                UserDefaults.standard.set("board", forKey: "projectTab")
-                item = .project(p.id)
-            }
+        default: item = .project(source.id)
         }
     }
 
@@ -350,11 +345,10 @@ struct AskBox: View {
         get {
             if targetRaw.hasPrefix("project:") { return .project(String(targetRaw.dropFirst(8))) }
             if targetRaw.hasPrefix("agent:") { return .agent(String(targetRaw.dropFirst(6))) }
-            if targetRaw.hasPrefix("team:") { return .team(String(targetRaw.dropFirst(5))) }
             return .chat
         }
         nonmutating set {
-            switch newValue { case .chat: targetRaw = "chat"; case .project(let id): targetRaw = "project:" + id; case .agent(let id): targetRaw = "agent:" + id; case .team(let id): targetRaw = "team:" + id }
+            switch newValue { case .chat: targetRaw = "chat"; case .project(let id): targetRaw = "project:" + id; case .agent(let id): targetRaw = "agent:" + id }
             pendingChat = nil
         }
     }
@@ -367,15 +361,9 @@ struct AskBox: View {
     @State private var model: ModelRef?
     @FocusState private var focused: Bool
 
-    enum Target: Hashable { case chat, project(String), agent(String), team(String) }
+    enum Target: Hashable { case chat, project(String), agent(String) }
 
     private var areas: AreaSet { Areas.shared.set }
-
-    /// A team (docs/spec/19): the message goes to its lead, who plans it and hands out the tasks.
-    private var team: TeamInfo? {
-        if case .team(let id) = target { return engine.teams.first { $0.id == id } }
-        return nil
-    }
 
     private var project: ProjectInfo? {
         if case .project(let id) = target { return engine.projects.first { $0.id == id && $0.missing != true } }
@@ -393,10 +381,9 @@ struct AskBox: View {
     private var effectiveMode: ApprovalMode { buildOn ? (mode ?? project?.approvalMode ?? .autoEdit) : .readOnly }
 
     private var placeholder: String {
-        if prominent, project != nil || team != nil { return "Ask, or describe a task…" }
+        if prominent, project != nil { return "Ask, or describe a task…" }
         if let project { return "What should we do in \(project.name)?" }
         if let agent { return "Message \(agent.title)…" }
-        if let team { return "What should \(team.name) do?" }
         return "Ask anything, or @ a project or an agent…"
     }
 
@@ -471,7 +458,7 @@ struct AskBox: View {
     private var targetMenu: some View {
         Button { picking = true } label: {
             HStack(spacing: 5) {
-                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : team != nil ? "person.3" : "bubble.left").font(.system(size: 11.5))
+                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : "bubble.left").font(.system(size: 11.5))
                 Text(targetLabel).lineLimit(1)
             }
         }
@@ -521,7 +508,6 @@ struct AskBox: View {
     /// "In piopio · can edit files; asks before commands"; with no project, that it can't touch files (18 §16).
     private var whereLine: String? {
         if target == .chat { return "Not in a project · it can't see or change your files" }
-        if let team { return "A new conversation with \(team.name)'s lead in \(URL(fileURLWithPath: team.cwd).lastPathComponent) · it does small things itself and puts bigger work on the board" }
         guard let project else { return nil }
         let place = switch workOn {
         case .folder: ""
@@ -537,14 +523,12 @@ struct AskBox: View {
     private var targetLabel: String {
         if let project { return project.name }
         if let agent { return agent.title }
-        if let team { return team.name }
         return "No project"
     }
 
     private var sendLabel: String {
         if let project { return "Start in \(project.name)" }
         if let agent { return "Send to \(agent.title)" }
-        if let team { return "Send to \(team.name)" }
         return "Send"
     }
 
@@ -657,26 +641,6 @@ struct AskBox: View {
                     }
                     // Either way the conversation exists (on failure its composer keeps the draft for a retry). Home
                     // starts clean next time: no project (docs/spec/18 §4); a project's + preselects it again.
-                    target = .chat
-                    withAnimation(StartMotion.morph) { item = .session(ref.id) }
-                } catch {
-                    sendError = ((error as? EngineError)?.message ?? String(describing: error)) + " Nothing was started, and your message is kept."
-                }
-            }
-        case .team:
-            // A new conversation with the lead, in the team's project (docs/spec/20 PT4); it shows with the project's.
-            guard let team else { sendError = "That team isn't there any more."; return }
-            sending = true
-            let chosenMode = effectiveMode
-            Task {
-                defer { sending = false }
-                do {
-                    let ref = try await engine.createTeamConversation(team, mode: chosenMode, model: model)
-                    let session = engine.thread(ref)
-                    await session.open()
-                    if await session.send(message, attachments: attachments.map(\.attachment)) {
-                        text = ""; attachments = []; saveHomeDraft()
-                    }
                     target = .chat
                     withAnimation(StartMotion.morph) { item = .session(ref.id) }
                 } catch {

@@ -11,13 +11,11 @@ enum SidebarItem: Hashable {
     /// A project (its id). There's no project page (docs/spec/18 §19): it opens the project's New conversation page, or
     /// its board or settings when asked through "projectTab".
     case project(String)
-    /// A team's board in a project (the project's id): the "Board" row under the project.
+    /// A project's board (the project's id, docs/spec/26): the "Board" row under the project.
     case board(String)
     /// A Build session or a project chat session.
     case session(String)
     case agent(String)
-    /// A team (docs/spec/19): its lead, board and members.
-    case team(String)
     case chat(String)
     /// A start page (docs/design/start-pages): what a sidebar + opens. Nothing exists until you start.
     case start(StartKind)
@@ -33,7 +31,6 @@ enum SidebarItem: Hashable {
         case .board(let id): "board:\(id)"
         case .session(let id): "session:\(id)"
         case .agent(let id): "agent:\(id)"
-        case .team(let id): "team:\(id)"
         case .chat(let id): "chat:\(id)"
         case .start(let kind): "start:\(kind.rawValue)"
         case .newSession(let id): "newsession:\(id)"
@@ -50,7 +47,6 @@ enum SidebarItem: Hashable {
         case "board": self = .board(value)
         case "session": self = .session(value)
         case "agent": self = .agent(value)
-        case "team": self = .team(value)
         case "chat": self = .chat(value)
         case "start": self = StartKind(rawValue: value).map { .start($0) } ?? .home
         case "newsession": self = .newSession(value)
@@ -77,11 +73,11 @@ enum SidebarItem: Hashable {
 
 /// What a start page makes.
 enum StartKind: String, CaseIterable, Hashable {
-    case chat, agent, project, team
+    case chat, agent, project
 }
 
 enum SidebarSection: String, CaseIterable, Identifiable {
-    case pinned, projects, agents, teams, chats
+    case pinned, projects, agents, chats
     var id: String { rawValue }
     /// "Chats" are "Conversations" (docs/spec/18 §6): the ones with no project.
     var title: String { self == .chats ? "Conversations" : rawValue.capitalized }

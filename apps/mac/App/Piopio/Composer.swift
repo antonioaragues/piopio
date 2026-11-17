@@ -174,8 +174,6 @@ struct Composer: View {
                     AttachButton(pick: pickFiles, help: isBuild ? "Mention files or folders (⌘U)" : "Add files, photos or folders (⌘U)")
                 }
                 if isBuild { EditModeChip(engine: engine, thread: thread) }
-                // Who answers here (docs/spec/21 D6, design 5c-1): only in a project with a team.
-                if isBuild { WhoChip(engine: engine, thread: thread) }
                 Spacer(minLength: 6)
                 ModelChip(engine: engine, thread: thread)
                 let stopping = thread.isRunning && text.isEmpty
@@ -504,40 +502,6 @@ enum ThinkingLevel {
 /// Composer selectors (model, mode): plain text, a grey fill on hover (the same as ChipStyle).
 struct ComposerChipStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { ChipStyle().makeBody(configuration: configuration) }
-}
-
-/// "with the lead ⌄" (docs/spec/21 D6, design 5c-1): in a project with a team, who answers this conversation. The lead
-/// plans with the team; Piopio alone works on its own, with no board. A conversation keeps who it began with, so the
-/// other choice starts a new one.
-struct WhoChip: View {
-    let engine: EngineController
-    let thread: ThreadModel
-
-    var body: some View {
-        let summary = engine.buildSessions.first { $0.ref.id == thread.ref.id }
-        let project = summary.flatMap { s in engine.projects.first { $0.path == (s.projectPath ?? s.cwd) } }
-        let team = project.flatMap { engine.team(in: $0) }
-        if let summary, let project, let team, summary.team == nil || summary.team?.kind == "lead" {
-            let lead = summary.team?.kind == "lead"
-            Menu {
-                Section(lead ? "This conversation is with \(team.name)'s lead" : "This conversation is with Piopio alone") {
-                    Button(lead ? "New Conversation with Piopio Alone" : "New Conversation with the Lead") {
-                        // The start page picks the team by default; this asks it not to.
-                        if lead { UserDefaults.standard.set(project.id, forKey: "startWithPiopio") }
-                        NotificationCenter.default.post(name: .newBuildSession, object: project.id)
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(lead ? "with the lead" : "with Piopio")
-                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
-                }
-                .font(.system(size: 12.5))
-            }
-            .menuStyle(.button).buttonStyle(ComposerChipStyle()).menuIndicator(.hidden).fixedSize()
-            .help(lead ? "The lead does small things itself and puts bigger work on the board" : "Works on its own: no board")
-        }
-    }
 }
 
 /// What the conversation may do in its folder (docs/spec/18 §4): Read only, Ask, Auto-edit, Full auto (below a divider),

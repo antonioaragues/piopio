@@ -3,7 +3,7 @@ import PiopioTranscript
 import SwiftUI
 
 // Making an agent by talking (docs/spec/21 D4, design 5a): answers to tap while it learns its job, the card it shows
-// when it "comes alive", and a trial run. And an agent joining a team (design 5d).
+// when it "comes alive", and a trial run.
 
 /// Answers to tap, above the composer: a new agent's three ideas, or the options of the question it just asked.
 /// They go once you answer (by tapping or in your own words).
@@ -138,95 +138,3 @@ struct AgentIdentityCard: View {
     }
 }
 
-/// An agent joins a team (design 5d-1): which team, as what, and what changes for it there.
-struct JoinTeamSheet: View {
-    let engine: EngineController
-    let agent: SessionSummary
-    let done: () -> Void
-    @State private var teamId = ""
-    /// A member's role id to take over, or "" for a new member who does tasks.
-    @State private var roleId = ""
-    @State private var error: String?
-    @State private var busy = false
-
-    private var teams: [TeamDefinition] { engine.teamDefinitions }
-    private var team: TeamDefinition? { teams.first { $0.id == teamId } }
-    private var replaceable: [TeamRole] { (team?.roles ?? []).filter { $0.kind != "integrate" && $0.agent != agent.ref.id } }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                SidebarAvatar(id: agent.ref.id, name: agent.title, glyph: agent.agent?.avatar, size: 22)
-                Text("\(agent.title) joins a team").font(.system(size: 15, weight: .semibold))
-            }
-            if teams.isEmpty {
-                Text("You have no teams yet. Make one from Agents › +, or give a project a team in its Settings.")
-                    .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-            } else {
-                Picker("Team", selection: $teamId) {
-                    ForEach(teams) { t in Text(t.saved ? t.name : "\(t.name) (only in \(URL(fileURLWithPath: t.projects.first?.cwd ?? "").lastPathComponent))").tag(t.id) }
-                }
-                Picker("As", selection: $roleId) {
-                    ForEach(replaceable) { r in Text("\(Self.verb(r.kind)) · replaces \(r.name)").tag(r.id) }
-                    Text("A new member who does tasks").tag("")
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("In the team it…").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg2)
-                    bullet("Keeps its instructions, plus the team's TEAM.md")
-                    bullet("Uses its own model, unless you give the member another")
-                    bullet("Writes what it learns to the team's notes, not its memory")
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.dsChip.opacity(0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
-            HStack {
-                Spacer()
-                Button("Cancel", action: done).keyboardShortcut(.cancelAction)
-                if !teams.isEmpty { Button("Join", action: join).keyboardShortcut(.defaultAction).disabled(busy || team == nil) }
-            }
-        }
-        .padding(20)
-        .frame(width: 460)
-        .task {
-            await engine.loadTeams()
-            if teamId.isEmpty { teamId = teams.first?.id ?? "" }
-        }
-        .onChange(of: teamId) { _, _ in roleId = replaceable.first { $0.kind == "review" }?.id ?? "" }
-    }
-
-    private func bullet(_ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text("·").foregroundStyle(Color.dsFg3)
-            Text(text).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    static func verb(_ kind: String) -> String {
-        switch kind {
-        case "lead": "Plans and assigns"
-        case "write": "Does tasks"
-        case "review": "Reviews every task"
-        default: "Merges"
-        }
-    }
-
-    private func join() {
-        guard let team else { return }
-        var roles = team.roles
-        if let i = roles.firstIndex(where: { $0.id == roleId }) {
-            roles[i].agent = agent.ref.id
-        } else {
-            roles.append(TeamRole(name: agent.title, kind: "write", responsibility: agent.agent?.description ?? "You do the tasks you're given, as \(agent.title).", agent: agent.ref.id))
-        }
-        busy = true
-        Task {
-            defer { busy = false }
-            do {
-                try await engine.updateTeamDefinition(team, roles: roles)
-                done()
-            } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
-        }
-    }
-}

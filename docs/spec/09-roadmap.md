@@ -31,9 +31,9 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 One build track at a time, plus Track A running beside it as use, not as building.
 
 **Now**
-1. **Spec 26 C1–C2** (decided 2026-11-17): one orchestrator, then teams leave the app. This replaces finishing 21's
-   team pages (D5–D7), which 26 removes; what's left of 21's agent pages (D2–D4) stays. C4, the real-model trial,
-   follows.
+1. **Spec 26 C1–C2** (decided 2026-11-17; built 2026-11-17 on branch `agents-clarified`, 26 §11–§12): one
+   orchestrator, then teams leave the app. This replaces finishing 21's team pages (D5–D7), which 26 removes; what's
+   left of 21's agent pages (D2–D4) stays. Next: C4, the real-model trial, before merging.
 2. **Track A alongside:** do the day's real work in Piopio and tick the acceptance boxes as they pass. What breaks
    goes ahead of new features.
 

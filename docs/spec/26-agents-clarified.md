@@ -239,10 +239,10 @@ The engine side, on branch `agents-clarified`; the app still shows teams until C
   is off" are refusals from the board, not lines in the prompt.
 
 **Conversations:**
-- Every project conversation is with Piopio. It has the board's tools (`create_task`, `list_tasks`,
-  `message_task`, and the routine tools) only while parallel work is on there. Switching it on or off closes the
-  project's idle conversations, so they open again with or without them. A conversation that's answering keeps
-  what it had, and `create_task` refuses once parallel work is off.
+- Every project conversation is with Piopio. The board's tools (`create_task`, `list_tasks`, `message_task`, and the
+  routine tools) are registered in all of them but declared to the model, with the board's brief, only on turns
+  when parallel work is on there. Switching it reaches open conversations at their next turn, without reopening
+  them (so the app's live views go on), and `create_task` refuses once parallel work is off.
 - Piopio with the board keeps `task` subagents (a lead didn't have them). Helpers have neither, nor `ask_agent`.
 - `offer_team` is `offer_parallel`, offered while parallel work is off. **Work in parallel** is `work.accept`:
   parallel work goes on (with the fit check's checks) and that conversation is told to plan.
@@ -281,3 +281,50 @@ landing, two conversations, catching up, routines), `work-budget.test.ts`, `work
 - Choosing among playbooks, and saving one (C3).
 - Routine tools for Piopio in a project without parallel work (it offers a routine instead, as before).
 - A real trial (C4).
+
+## 12. C2 as built (2026-11-17)
+
+On the same branch as C1, so the app and the engine change together.
+
+- **The Kit** (`PiopioKit/Protocol.swift`): `WayOfWorking`, `ProjectWork`, `WorkTask`, `WorkLanding` and `ProjectRoutine`
+  replace the team types. A session's `helper` replaces `team`, and `listed` hides helpers' sessions. `work.changed`
+  reloads `engine.work`.
+- **Project settings › How it works:** "How work is done here" (`WayOfWorking.swift`). It has a parallel work
+  switch and, once a project has a board, these settings:
+  - review, with its send-back limit;
+  - the checks;
+  - tasks at once;
+  - the build and review models, each with a way back to the default;
+  - what helpers may do;
+  - the budget per job;
+  - the playbook.
+
+  The first time parallel work goes on, a fit check sheet offers git, checks and AGENTS.md, then **Switch on**.
+  `work.configure` gained `initGit` for the "Start git" fix.
+- **The Board** (`WorkViews.swift`): the same kanban and merge card, now one per project. A card shows its helper
+  ("Builder"), and "Give to <role>" is gone. Until parallel work is on, the Board says "Piopio puts parallel work
+  here" and has the switch. The Board row shows under a project once it has a board, and the context menu always
+  has Board.
+- **A conversation:** the plan block and merge card show for this conversation's tasks in any project with a board.
+  The "with the lead" chip and "· with <team>" in the header are gone. The offer card reads "This could go faster in
+  parallel" with **Work in parallel** (`work.accept`) or "Do it here, one by one". "The user chose to work in
+  parallel" shows as one quiet line.
+- **Gone:**
+  - the team page, New team, the "A team for <project>" sheet, Who works here, the team picker on the empty Board
+    and on New project;
+  - the Agents page's Teams tab;
+  - "Join a Team…" on an agent;
+  - the team stack on project rows;
+  - "What should <team> do?" on the New conversation page;
+  - sending to a team from Home;
+  - `.team` in navigation.
+- **The migration report** is a sheet at start, shown until you choose **Got it** (`work.dismissMigrationReport`).
+- **Captures:** `PIOPIO_DEMO_PARALLEL=<folder>` (with `_TEST`, `_TAB=board|settings`, `_GOAL`) replaces
+  `PIOPIO_DEMO_TEAM`.
+- **Checked:**
+  - the app builds with no new warnings;
+  - the Swift tests pass, except `draftsRecoverAttachmentsAndRetryIdentityPerConversation`, which fails the same way
+    on `main`;
+  - captures of the Board, the settings sheet and the report.
+- **Not checked:** a click-through of the offer card, the fit check sheet and a real job. That's C4, with real
+  models.

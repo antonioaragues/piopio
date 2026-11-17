@@ -96,8 +96,6 @@ export class WorkRunner {
 	hookUrl?: (projectId: string, routineId: string) => string | undefined;
 	/** Folder and email routines changed: the watchers start or stop theirs. */
 	onRoutines?: () => void;
-	/** Parallel work was switched on or off in a project: its open conversations pick up the board's tools. */
-	onParallel?: (cwd: string) => Promise<void>;
 	/** Tests: the clock. */
 	now: () => number = () => Date.now();
 
@@ -178,11 +176,10 @@ export class WorkRunner {
 	 * You change how work is done in a project. The first time parallel work goes on, the project gets its record: the
 	 * fit check's checks, the playbook for its folder, and in a git project a work branch in its own worktree.
 	 */
-	async configure(projectId: string, change: Partial<Omit<WayOfWorking, "buildModel" | "reviewModel" | "budgetPerJob">> & { buildModel?: string | null; reviewModel?: string | null; budgetPerJob?: number | null }): Promise<ProjectWork> {
+	async configure(projectId: string, change: Partial<Omit<WayOfWorking, "buildModel" | "reviewModel" | "budgetPerJob">> & { buildModel?: string | null; reviewModel?: string | null; budgetPerJob?: number | null; initGit?: boolean }): Promise<ProjectWork> {
 		const project = this.host.project(projectId);
 		if (!project) throw new EngineError("NOT_FOUND", `No project “${projectId}”.`);
 		let work = this.find(project.id);
-		const was = work?.way.parallel ?? false;
 		if (!work) work = await this.open(project, change.parallel === true);
 		const way = work.way;
 		if (change.parallel !== undefined) way.parallel = change.parallel;
@@ -208,10 +205,15 @@ export class WorkRunner {
 			if (!this.playbooks(work.cwd).some((p) => p.id === change.playbook)) throw new EngineError("INVALID", `No playbook “${change.playbook}” here.`);
 			way.playbook = change.playbook;
 		}
+		// A folder you asked to start git in (the fit check's fix), so tasks get branches of their own.
+		if (change.initGit && !(await this.host.isRepo(work.cwd))) {
+			await this.host.git(work.cwd, ["init", "-q", "-b", "main"]);
+			await this.host.git(work.cwd, ["add", "-A"]);
+			await this.host.git(work.cwd, [...PIOPIO, "commit", "-q", "--allow-empty", "-m", "Start"]);
+		}
 		// Parallel work needs a branch to merge into, in a git project (it may have become one since).
 		if (way.parallel && !work.git) await this.branch(work);
 		this.save(work);
-		if (was !== way.parallel) await this.onParallel?.(work.cwd).catch(() => undefined);
 		await this.pump(work);
 		return work;
 	}

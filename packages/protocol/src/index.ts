@@ -1517,6 +1517,7 @@ export const methods = {
 			helperMode: Type.Optional(ApprovalMode),
 			budgetPerJob: Type.Optional(Type.Union([Type.Number({ minimum: 0 }), Type.Null()])),
 			playbook: Type.Optional(Type.String()),
+			initGit: Type.Optional(Type.Boolean({ description: "A folder without git: make it a repo first, so tasks get branches" })),
 		}),
 		result: Type.Object({ work: WorkInfo }),
 	},

@@ -462,12 +462,11 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// A subagent's session: the parent session and its `task` call.
     public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String }
     public var parent: Parent?
-    /// A team's session (docs/spec/19): its lead, or a member working a task.
-    public struct Team: Codable, Sendable, Hashable { public var id: String; public var role: String; public var kind: String; public var taskId: String? }
-    public var team: Team?
-    /// Listed with the project's conversations: yours and the team lead's (docs/spec/20 PT4); members' sessions are
-    /// reached from their tasks.
-    public var listed: Bool { parent == nil && (team == nil || team?.kind == "lead") }
+    /// A helper's session (docs/spec/26 CL4): made by Piopio for a task on a project's board.
+    public struct Helper: Codable, Sendable, Hashable { public var project: String; public var kind: String; public var taskId: String }
+    public var helper: Helper?
+    /// Listed with the project's conversations: yours, all with Piopio; helpers' sessions are reached from their tasks.
+    public var listed: Bool { parent == nil && helper == nil }
     /// A chat continued in a project folder, and the conversation it continued from (18 §5).
     public struct Link: Codable, Sendable, Hashable { public var id: String; public var title: String }
     public var continuedIn: Link?
@@ -561,53 +560,32 @@ public struct AgentPerson: Decodable, Sendable, Hashable, Identifiable {
 }
 public struct AgentPeopleResult: Decodable, Sendable { public var people: [AgentPerson] }
 /// The Runs tab (06-agents §6): runs newest first, messages held by quiet hours or the daily limit, what fires next.
-// MARK: Teams (docs/spec/19)
+// MARK: A project's work (docs/spec/26)
 
-public struct TeamRole: Codable, Sendable, Hashable, Identifiable {
-    public var id, name, kind, responsibility: String
-    public var done: String?
-    /// "provider:id"; nil: the agent's, else the team's.
-    public var model: String?
-    /// An agent this member is (docs/spec/20 §3).
-    public var agent: String?
-    public init(id: String = "", name: String, kind: String, responsibility: String, done: String? = nil, model: String? = nil, agent: String? = nil) {
-        self.id = id; self.name = name; self.kind = kind; self.responsibility = responsibility; self.done = done; self.model = model; self.agent = agent
-    }
-}
-
-/// A team as a definition (docs/spec/20 P3): members and way of working, reused by the projects it works in.
-public struct TeamDefinition: Codable, Sendable, Hashable, Identifiable {
-    public struct Place: Codable, Sendable, Hashable { public var teamId, cwd: String }
-    public var id, name, template, style, folder, memberMode, createdAt: String
-    public var roles: [TeamRole]
-    public var model: String?
-    /// Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1).
-    public var saved: Bool
-    public var reviewLimit: Int?
+/// How work is done in a project (docs/spec/26 §4).
+public struct WayOfWorking: Codable, Sendable, Hashable {
+    /// Piopio may split work onto the board.
+    public var parallel: Bool
+    /// Every task is reviewed, and sent back at most `reviewLimit` times before you're asked.
+    public var review: Bool
+    public var reviewLimit: Int
+    /// The checks, run after each merge.
+    public var testCommand: String?
+    /// Tasks at once.
+    public var maxParallel: Int
+    /// "provider:id"; nil: the project's model (the reviewers': the build model).
+    public var buildModel: String?
+    public var reviewModel: String?
+    /// What helpers may do without asking: read_only, ask, auto_edit or full_auto.
+    public var helperMode: String
     public var budgetPerJob: Double?
-    public var projects: [Place]
-}
-public struct TeamDefinitionsResult: Decodable, Sendable { public var definitions: [TeamDefinition] }
-public struct UpdateTeamDefinitionParams: Encodable, Sendable {
-    public var id: String
-    public var name: String?
-    public var roles: [TeamRole]?
-    /// "" clears the team's model.
-    public var model: String?
-    public var saved: Bool?
-    public var reviewLimit: Int?
-    /// 0 clears it.
-    public var budgetPerJob: Double?
-    /// What its members may do on their own: read_only, ask, auto_edit or full_auto.
-    public var memberMode: String?
-    public init(id: String, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil, saved: Bool? = nil, reviewLimit: Int? = nil, budgetPerJob: Double? = nil, memberMode: String? = nil) {
-        self.id = id; self.name = name; self.roles = roles; self.model = model; self.saved = saved; self.reviewLimit = reviewLimit; self.budgetPerJob = budgetPerJob; self.memberMode = memberMode
-    }
+    /// The playbook Piopio plans with.
+    public var playbook: String
 }
 
-public struct TeamTask: Codable, Sendable, Hashable, Identifiable {
-    public var id, title, brief, role, state, by: String
-    /// The lead conversation that made it (docs/spec/20 PT6).
+public struct WorkTask: Codable, Sendable, Hashable, Identifiable {
+    public var id, title, brief, helper, state, by: String
+    /// The conversation that made it; its updates go there.
     public var conversationId: String?
     public var done: String?
     public var sessionId: String?
@@ -622,8 +600,43 @@ public struct TeamTask: Codable, Sendable, Hashable, Identifiable {
     public var createdAt, updatedAt: String
 }
 
-/// What a team's branch would bring to the project's branch (the merge card).
-public struct TeamLanding: Decodable, Sendable, Hashable {
+/// A project's work: its way of working, board and branch. None until parallel work was first switched on.
+public struct ProjectWork: Codable, Sendable, Hashable, Identifiable {
+    public struct Git: Codable, Sendable, Hashable { public var base, branch, integration: String }
+    public var project, cwd, createdAt: String
+    public var way: WayOfWorking
+    public var git: Git?
+    public var tasks: [WorkTask]
+    public var id: String { project }
+}
+public struct WorkListResult: Decodable, Sendable { public var work: [ProjectWork] }
+public struct WorkGetResult: Decodable, Sendable { public var work: ProjectWork? }
+public struct WorkResult: Decodable, Sendable { public var work: ProjectWork }
+
+/// A change to how work is done in a project. "" clears a model or the checks; a budget of 0 clears it.
+public struct ConfigureWorkParams: Encodable, Sendable {
+    public var project: String
+    public var parallel, review: Bool?
+    public var reviewLimit, maxParallel: Int?
+    public var testCommand, buildModel, reviewModel, helperMode, playbook: String?
+    public var budgetPerJob: Double?
+    /// A folder without git: make it a repo first, so tasks get branches (the fit check's fix).
+    public var initGit: Bool?
+    public init(project: String, parallel: Bool? = nil, review: Bool? = nil, reviewLimit: Int? = nil, maxParallel: Int? = nil, testCommand: String? = nil, buildModel: String? = nil, reviewModel: String? = nil, helperMode: String? = nil, playbook: String? = nil, budgetPerJob: Double? = nil, initGit: Bool? = nil) {
+        self.project = project; self.parallel = parallel; self.review = review; self.reviewLimit = reviewLimit; self.maxParallel = maxParallel; self.testCommand = testCommand; self.buildModel = buildModel; self.reviewModel = reviewModel; self.helperMode = helperMode; self.playbook = playbook; self.budgetPerJob = budgetPerJob; self.initGit = initGit
+    }
+}
+/// "Work in parallel" on Piopio's offer: parallel work goes on, and that conversation plans it.
+public struct AcceptWorkParams: Encodable, Sendable {
+    public var project, sessionId: String
+    public init(project: String, sessionId: String) { self.project = project; self.sessionId = sessionId }
+}
+public struct Playbook: Decodable, Sendable, Hashable, Identifiable { public var id, name, description, source: String }
+public struct PlaybooksResult: Decodable, Sendable { public var playbooks: [Playbook] }
+public struct MigrationReport: Decodable, Sendable { public var report: String? }
+
+/// What the work branch would bring to the project's branch (the merge card).
+public struct WorkLanding: Decodable, Sendable, Hashable {
     public struct File: Decodable, Sendable, Hashable { public var path: String; public var added, removed: Int }
     public struct Task: Decodable, Sendable, Hashable { public var id, title: String }
     public var base, branch: String
@@ -634,41 +647,23 @@ public struct TeamLanding: Decodable, Sendable, Hashable {
     public var remote: String?
     public var compareUrl: String?
 }
-public struct TeamLandParams: Encodable, Sendable {
-    public var id, action: String
-    public init(id: String, action: String) { self.id = id; self.action = action }
+public struct WorkLandParams: Encodable, Sendable {
+    public var project, action: String
+    public init(project: String, action: String) { self.project = project; self.action = action }
 }
-public struct TeamLandResult: Decodable, Sendable { public var commit: String?; public var compareUrl: String?; public var output: String? }
+public struct WorkLandResult: Decodable, Sendable { public var commit: String?; public var compareUrl: String?; public var output: String? }
 
-/// What a lead conversation's tasks cost (docs/spec/21 D1): the merge card's "$0.36".
-public struct TeamJobParams: Encodable, Sendable {
-    public var id, conversationId: String
-    public init(id: String, conversationId: String) { self.id = id; self.conversationId = conversationId }
+/// What a conversation's tasks cost (docs/spec/21 D1): the merge card's "$0.36".
+public struct WorkJobParams: Encodable, Sendable {
+    public var project, conversationId: String
+    public init(project: String, conversationId: String) { self.project = project; self.conversationId = conversationId }
 }
-public struct TeamJob: Decodable, Sendable, Hashable { public var cost: Double; public var tasks: Int; public var budget: Double? }
+public struct WorkJob: Decodable, Sendable, Hashable { public var cost: Double; public var tasks: Int; public var budget: Double? }
 
-/// What a team needs in a project (docs/spec/21 D6): git, the checks found there, AGENTS.md.
+/// What parallel work needs in a project (docs/spec/21 D6): git, the checks found there, AGENTS.md.
 public struct FitCheckParams: Encodable, Sendable { public var cwd: String; public init(cwd: String) { self.cwd = cwd } }
 public struct FitCheck: Decodable, Sendable, Hashable { public var git: Bool; public var checks: String?; public var agentsMd: Bool; public var language: String? }
 
-/// "A team for piopio" (docs/spec/21 D7): a draft read from the project, what was found, your agents that fit.
-public struct DraftForParams: Encodable, Sendable {
-    public var cwd: String; public var request: String?
-    public init(cwd: String, request: String?) { self.cwd = cwd; self.request = request }
-}
-public struct DraftFor: Decodable, Sendable, Hashable {
-    public struct Suggestion: Decodable, Sendable, Hashable { public var role, agent, name: String }
-    public var draft: TeamDraft
-    public var found: FitCheck
-    public var suggestions: [Suggestion]
-}
-/// A conversation with Piopio becomes the team's lead's.
-public struct AdoptParams: Encodable, Sendable {
-    public var id, sessionId: String
-    public init(id: String, sessionId: String) { self.id = id; self.sessionId = sessionId }
-}
-
-/// What starts a team's work on its own (docs/spec/19 T1).
 /// Home's agenda (docs/spec/21 D2): today's timeline and what happened since your last visit.
 public struct HomeAgenda: Decodable, Sendable, Hashable {
     public struct Source: Decodable, Sendable, Hashable { public var kind, id, name: String }
@@ -680,7 +675,8 @@ public struct HomeAgenda: Decodable, Sendable, Hashable {
 }
 public struct HomeAgendaParams: Encodable, Sendable { public var since: String?; public init(since: String?) { self.since = since } }
 
-public struct TeamRoutine: Codable, Sendable, Hashable, Identifiable {
+/// What starts a project's work on its own (docs/spec/21 AD5): a time, a folder, an email, a webhook.
+public struct ProjectRoutine: Codable, Sendable, Hashable, Identifiable {
     public var id, on, prompt, by, createdAt: String
     public var cron: String?
     public var at: Double?
@@ -706,94 +702,16 @@ public struct RoutineParams: Encodable, Sendable {
     public init(project: String, routineId: String) { self.project = project; self.routineId = routineId }
 }
 public struct ProjectParams: Encodable, Sendable { public var project: String; public init(project: String) { self.project = project } }
-public struct RoutinesResult: Decodable, Sendable { public var routines: [TeamRoutine] }
-public struct PromoteMemberParams: Encodable, Sendable {
-    public var id, roleId: String
-    public init(id: String, roleId: String) { self.id = id; self.roleId = roleId }
-}
-public struct PromoteMemberResult: Decodable, Sendable { public var agent: ContainerRef }
-public struct UpdateTeamParams: Encodable, Sendable {
-    public var id: String
-    public var testCommand: String?
-    public var maxParallel: Int?
-    public init(id: String, testCommand: String? = nil, maxParallel: Int? = nil) { self.id = id; self.testCommand = testCommand; self.maxParallel = maxParallel }
-}
+public struct RoutinesResult: Decodable, Sendable { public var routines: [ProjectRoutine] }
 
-public struct TeamInfo: Codable, Sendable, Hashable, Identifiable {
-    public struct Git: Codable, Sendable, Hashable { public var base, branch, integration: String }
-    public var id, name, slug, template, style, cwd, folder: String
-    public var definitionId: String?
-    public var roles: [TeamRole]
-    public var git: Git?
-    public var leadSessionId: String?
-    public var memberMode: String
-    public var maxParallel: Int
-    public var testCommand: String?
-    public var goal: String?
-    public var tasks: [TeamTask]
-    public var routines: [TeamRoutine]?
+public struct AddWorkTaskParams: Encodable, Sendable {
+    public var project, title, brief: String
+    public init(project: String, title: String, brief: String) { self.project = project; self.title = title; self.brief = brief }
 }
-
-public struct TeamTemplate: Decodable, Sendable, Hashable, Identifiable {
-    public var id, name, description, workplace: String
-    public var roles: [TeamRole]
-    /// "builtin", or "yours": a folder in ~/Piopio/Teams/Templates (docs/spec/20 P4).
-    public var source: String?
-    public var folder: String?
-}
-
-/// A team drafted from your description (docs/spec/20 P4); nothing is made until you create it.
-public struct TeamDraft: Codable, Sendable, Hashable {
-    public var name, description, style, instructions: String
-    public var roles: [TeamRole]
-}
-public struct TeamDraftParams: Encodable, Sendable { public var description: String; public init(description: String) { self.description = description } }
-public struct TeamDraftResult: Decodable, Sendable { public var draft: TeamDraft }
-public struct CreateTeamDefinitionParams: Encodable, Sendable {
-    public var template, name, style, instructions: String?
-    public var roles: [TeamRole]?
-    public init(template: String? = nil, name: String? = nil, style: String? = nil, instructions: String? = nil, roles: [TeamRole]? = nil) {
-        self.template = template; self.name = name; self.style = style; self.instructions = instructions; self.roles = roles
-    }
-}
-public struct TeamDefinitionResult: Decodable, Sendable { public var definition: TeamDefinition }
-public struct SaveTeamTemplateParams: Encodable, Sendable {
-    public var id: String
-    public var name: String?
-    public init(id: String, name: String? = nil) { self.id = id; self.name = name }
-}
-public struct SaveTeamTemplateResult: Decodable, Sendable { public var id, folder: String }
-
-public struct TeamTemplatesResult: Decodable, Sendable { public var templates: [TeamTemplate] }
-public struct TeamsListResult: Decodable, Sendable { public var teams: [TeamInfo] }
-public struct TeamResult: Decodable, Sendable { public var team: TeamInfo }
-public struct TeamIdParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
-public struct CreateTeamParams: Encodable, Sendable {
-    public var name, template: String
-    public var cwd: String?
-    public var goal: String?
-    public var testCommand: String?
-    public var model: ModelRef?
-    public var initGit: Bool?
-    /// An existing team (definition) to work in this project.
-    public var definition: String?
-    /// Members in place of the template's: a draft read from the project (docs/spec/21 D7).
-    public var roles: [TeamRole]?
-    public var style: String?
-    public init(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, model: ModelRef?, initGit: Bool = false, definition: String? = nil, roles: [TeamRole]? = nil, style: String? = nil) {
-        self.name = name; self.template = template; self.cwd = cwd; self.goal = goal; self.testCommand = testCommand; self.model = model; self.initGit = initGit ? true : nil; self.definition = definition; self.roles = roles; self.style = style
-    }
-}
-public struct AddTeamTaskParams: Encodable, Sendable {
-    public var id, title, brief: String
-    public var role: String?
-    public init(id: String, title: String, brief: String, role: String?) { self.id = id; self.title = title; self.brief = brief; self.role = role }
-}
-public struct UpdateTeamTaskParams: Encodable, Sendable {
-    public var id, taskId: String
+public struct UpdateWorkTaskParams: Encodable, Sendable {
+    public var project, taskId: String
     public var state: String?
-    public var role: String?
-    public init(id: String, taskId: String, state: String? = nil, role: String? = nil) { self.id = id; self.taskId = taskId; self.state = state; self.role = role }
+    public init(project: String, taskId: String, state: String? = nil) { self.project = project; self.taskId = taskId; self.state = state }
 }
 
 public struct AgentRunsResult: Decodable, Sendable {
@@ -1147,10 +1065,8 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var planMode: Bool?
     public var approvalMode: ApprovalMode?
     public var profile: SessionSummary.Profile?
-    /// A conversation with this team's lead, in its project (docs/spec/20 PT4).
-    public var team: String?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, team: String? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile; self.team = team
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile
     }
 }
 
@@ -1525,7 +1441,7 @@ public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
     public init(type: String, message: String? = nil) { self.type = type; self.message = message }
 }
 public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
-public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, teamsChanged }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged }
 
 // MARK: Connected apps (docs/spec/12-connectors)
 

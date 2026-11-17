@@ -2,17 +2,15 @@ import AppKit
 import PiopioKit
 import SwiftUI
 
-// Teams (docs/spec/19): a start page that makes one from a template, and the team's page: its lead's conversation,
-// the board as a kanban you can edit (TD5), and its members (role cards).
+// A project's board (docs/spec/26): the tasks Piopio put there for helpers, as a kanban you can edit (19 TD5); the
+// merge card; and the project's routines.
 
-// MARK: Page
-
-/// A team: its lead's conversation (where you give the goal and talk), the board, the members.
-/// The board (TD5): To do, Doing, Review, Done and Blocked. A card opens its member's session; its menu moves it
-/// back, stops it or hands it to another role.
-struct TeamBoard: View {
+/// The board: To do, Doing, Review, Done and Blocked. A card opens its helper's session; its menu moves it back or
+/// stops it.
+struct WorkBoard: View {
     let engine: EngineController
-    let team: TeamInfo
+    let project: ProjectInfo
+    let work: ProjectWork
     @Binding var item: SidebarItem
     @State private var adding = false
 
@@ -22,17 +20,17 @@ struct TeamBoard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if team.git != nil { TeamLandingCard(engine: engine, team: team).padding([.horizontal, .top], 20) }
+            if work.git != nil { LandingCard(engine: engine, work: work).padding([.horizontal, .top], 20) }
             columns
         }
-        .sheet(isPresented: $adding) { AddTeamTask(engine: engine, team: team) { adding = false } }
+        .sheet(isPresented: $adding) { AddTask(engine: engine, project: project) { adding = false } }
     }
 
     private var columns: some View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(Self.columns, id: \.id) { column in
-                    let tasks = team.tasks.filter { column.states.contains($0.state) }
+                    let tasks = work.tasks.filter { column.states.contains($0.state) }
                     if column.id != "blocked" || !tasks.isEmpty { self.column(column.title, tasks, add: column.id == "todo") }
                 }
             }
@@ -41,7 +39,7 @@ struct TeamBoard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func column(_ title: String, _ tasks: [TeamTask], add: Bool) -> some View {
+    private func column(_ title: String, _ tasks: [WorkTask], add: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Text(title).font(.system(size: 13, weight: .semibold))
@@ -56,7 +54,7 @@ struct TeamBoard: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(tasks) { card($0) }
-                    if tasks.isEmpty { Text(add ? "The lead adds tasks here. You can too." : "Nothing here.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.horizontal, 4) }
+                    if tasks.isEmpty { Text(add ? "Piopio adds tasks here. You can too." : "Nothing here.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.horizontal, 4) }
                 }
             }
         }
@@ -66,15 +64,14 @@ struct TeamBoard: View {
         .background(Color.dsChip.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func card(_ task: TeamTask) -> some View {
-        let role = team.roles.first { $0.id == task.role }
-        return Button { if let id = task.reviewSessionId ?? task.sessionId, task.state == "review" { item = .session(id) } else if let id = task.sessionId { item = .session(id) } } label: {
+    private func card(_ task: WorkTask) -> some View {
+        Button { if let id = task.reviewSessionId ?? task.sessionId, task.state == "review" { item = .session(id) } else if let id = task.sessionId { item = .session(id) } } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(task.id).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3)
                     if task.state == "doing" || task.state == "review" || task.state == "integrating" { ProgressView().controlSize(.mini) }
                     Spacer()
-                    Text(role?.name ?? task.role).font(.system(size: 11)).foregroundStyle(Color.dsFg2)
+                    Text(task.helper).font(.system(size: 11)).foregroundStyle(Color.dsFg2)
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(Color.dsChip, in: Capsule())
                 }
@@ -93,15 +90,10 @@ struct TeamBoard: View {
             if task.state != "todo" { Button("Move to To do") { update(task, state: "todo") } }
             if task.state != "blocked" { Button("Stop (Blocked)") { update(task, state: "blocked") } }
             if task.state != "done" { Button("Mark Done") { update(task, state: "done") } }
-            let writers = team.roles.filter { $0.kind == "write" && $0.id != task.role }
-            if !writers.isEmpty {
-                Divider()
-                ForEach(writers) { r in Button("Give to \(r.name)") { update(task, role: r.id) } }
-            }
         }
     }
 
-    private func status(_ task: TeamTask) -> String? {
+    private func status(_ task: WorkTask) -> String? {
         switch task.state {
         case "review": "In review"
         case "integrating": "Merging and checking"
@@ -112,19 +104,18 @@ struct TeamBoard: View {
         }
     }
 
-    private func update(_ task: TeamTask, state: String? = nil, role: String? = nil) {
-        Task { try? await engine.updateTeamTask(team, task, state: state, role: role) }
+    private func update(_ task: WorkTask, state: String) {
+        Task { try? await engine.updateTask(project, task, state: state) }
     }
 }
 
-/// You add a card to the board: a title, a brief, who does it.
-private struct AddTeamTask: View {
+/// You add a card to the board: a title and a brief; a helper is made for it.
+private struct AddTask: View {
     let engine: EngineController
-    let team: TeamInfo
+    let project: ProjectInfo
     let done: () -> Void
     @State private var title = ""
     @State private var brief = ""
-    @State private var role: String?
     @State private var error: String?
 
     var body: some View {
@@ -133,9 +124,6 @@ private struct AddTeamTask: View {
             TextField("Title", text: $title).textFieldStyle(.roundedBorder)
             TextEditor(text: $brief).font(.system(size: 13)).scrollContentBackground(.hidden).padding(6).frame(height: 110)
                 .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
-            Picker("For", selection: $role) {
-                ForEach(team.roles.filter { $0.kind == "write" }) { r in Text(r.name).tag(Optional(r.id)) }
-            }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
             HStack {
                 Spacer()
@@ -143,7 +131,7 @@ private struct AddTeamTask: View {
                 Button("Add") {
                     Task {
                         do {
-                            try await engine.addTeamTask(team, title: title, brief: brief, role: role)
+                            try await engine.addTask(project, title: title, brief: brief)
                             done()
                         } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
                     }
@@ -154,27 +142,26 @@ private struct AddTeamTask: View {
         }
         .padding(20)
         .frame(width: 440)
-        .onAppear { role = team.roles.first { $0.kind == "write" }?.id }
     }
 }
 
-/// The merge card (docs/spec/19 §11): what the team's branch would bring to the project's, and the two ways to land
+/// The merge card (docs/spec/19 §11): what the work branch would bring to the project's, and the two ways to land
 /// it: merge it here, or push it for a pull request. Shown once the branch has work the project doesn't.
-struct TeamLandingCard: View {
+struct LandingCard: View {
     let engine: EngineController
-    let team: TeamInfo
-    /// In a lead conversation (docs/spec/21 D6, design 5b-4): a green card with what its tasks cost.
+    let work: ProjectWork
+    /// In the conversation that made the tasks (docs/spec/21 D6, design 5b-4): a green card with what they cost.
     var conversation: String? = nil
     var onMerged: (() -> Void)? = nil
-    @State private var landing: TeamLanding?
-    @State private var job: TeamJob?
+    @State private var landing: WorkLanding?
+    @State private var job: WorkJob?
     @State private var showingFiles = false
     @State private var busy = false
     @State private var confirming = false
     @State private var note: (text: String, warn: Bool)?
 
     /// Reloads when a card moves or lands.
-    private var key: String { team.tasks.map { "\($0.id)\($0.state)\($0.landed ?? "")" }.joined(separator: ",") }
+    private var key: String { work.tasks.map { "\($0.id)\($0.state)\($0.landed ?? "")" }.joined(separator: ",") }
 
     var body: some View {
         // A stack, not a Group: an empty Group has nothing to run the task on.
@@ -183,8 +170,8 @@ struct TeamLandingCard: View {
             else if let note { line(note.text, warn: note.warn).frame(maxWidth: .infinity, alignment: .leading) }
         }
         .task(id: key) {
-            landing = await engine.teamLanding(team)
-            if let conversation { job = await engine.teamJob(team, conversationId: conversation) }
+            landing = await engine.landing(work)
+            if let conversation { job = await engine.job(work, conversationId: conversation) }
         }
     }
 
@@ -192,9 +179,9 @@ struct TeamLandingCard: View {
     private static let green = Color(red: 0.36, green: 0.66, blue: 0.42)
 
     /// "Ready for main · 3 tasks · 14 files · checks passed · $0.36", with Merge, See changes and Push for a PR.
-    private func conversationCard(_ l: TeamLanding) -> some View {
+    private func conversationCard(_ l: WorkLanding) -> some View {
         var meta = [count(l.tasks.count, "task"), count(l.files.count, "file")]
-        if team.testCommand?.isEmpty == false { meta.append("checks passed") }
+        if work.way.testCommand?.isEmpty == false { meta.append("checks passed") }
         if let cost = job?.cost, cost > 0 { meta.append(cost < 0.01 ? "<$0.01" : String(format: "$%.2f", cost)) }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -211,7 +198,7 @@ struct TeamLandingCard: View {
                 if l.remote != nil { Button("Push for a PR") { Task { await land("push") } }.buttonStyle(PillStyle(compact: true)) }
                 Spacer()
             }
-            if l.behind > 0 { line("\(l.base) has \(count(l.behind, "commit")) the team doesn't. If they touch the same files, the merge stops and changes nothing.", warn: false) }
+            if l.behind > 0 { line("\(l.base) has \(count(l.behind, "commit")) the work branch doesn't. If they touch the same files, the merge stops and changes nothing.", warn: false) }
             if let note { line(note.text, warn: note.warn) }
         }
         .padding(14)
@@ -224,11 +211,11 @@ struct TeamLandingCard: View {
             Button("Merge") { Task { await land("merge") } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("\(count(l.tasks.count, "task")), \(count(l.files.count, "file")). The team keeps working from there.")
+            Text("\(count(l.tasks.count, "task")), \(count(l.files.count, "file")). New tasks start from there.")
         }
     }
 
-    private func files(_ l: TeamLanding) -> some View {
+    private func files(_ l: WorkLanding) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(l.files, id: \.path) { f in
                 HStack(spacing: 8) {
@@ -244,7 +231,7 @@ struct TeamLandingCard: View {
         .frame(width: 380)
     }
 
-    private func card(_ l: TeamLanding) -> some View {
+    private func card(_ l: WorkLanding) -> some View {
         let added = l.files.reduce(0) { $0 + $1.added }, removed = l.files.reduce(0) { $0 + $1.removed }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
@@ -270,8 +257,8 @@ struct TeamLandingCard: View {
                 }
                 Button("Merge into \(l.base)…") { confirming = true }.buttonStyle(PillStyle(kind: .primary))
             }
-            if l.open > 0 { line("\(count(l.open, "task")) still on the board; they stay on the team's branch.", warn: false) }
-            if l.behind > 0 { line("\(l.base) has \(count(l.behind, "commit")) the team doesn't. If they touch the same files, the merge stops and changes nothing.", warn: false) }
+            if l.open > 0 { line("\(count(l.open, "task")) still on the board; they stay on the work branch.", warn: false) }
+            if l.behind > 0 { line("\(l.base) has \(count(l.behind, "commit")) the work branch doesn't. If they touch the same files, the merge stops and changes nothing.", warn: false) }
             if let note { line(note.text, warn: note.warn) }
         }
         .padding(14)
@@ -284,7 +271,7 @@ struct TeamLandingCard: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(l.checkedOut == l.base
-                ? "In the project's folder, which is on \(l.base): \(count(l.tasks.count, "task")), \(count(l.files.count, "file")). The team keeps working from there."
+                ? "In the project's folder, which is on \(l.base): \(count(l.tasks.count, "task")), \(count(l.files.count, "file")). New tasks start from there."
                 : "The project's folder is on \(l.checkedOut ?? "another branch") and stays there; \(l.base) is updated aside. \(count(l.tasks.count, "task")), \(count(l.files.count, "file")).")
         }
     }
@@ -299,37 +286,34 @@ struct TeamLandingCard: View {
         busy = true
         defer { busy = false }
         do {
-            let result = try await engine.landTeam(team, action: action)
+            let result = try await engine.land(work, action: action)
             if action == "push" {
                 if let url = result.compareUrl.flatMap(URL.init(string:)) { NSWorkspace.shared.open(url) }
-                note = ("Pushed \(team.git?.branch ?? "the team's branch")\(result.compareUrl != nil ? ": create the pull request in your browser." : ".")", false)
+                note = ("Pushed \(work.git?.branch ?? "the work branch")\(result.compareUrl != nil ? ": create the pull request in your browser." : ".")", false)
             } else {
-                note = ("Merged into \(team.git?.base ?? "the project")\(result.commit.map { " (\($0))" } ?? ""). The lead knows.", false)
+                note = ("Merged into \(work.git?.base ?? "the project")\(result.commit.map { " (\($0))" } ?? ""). Piopio knows.", false)
                 onMerged?()
             }
         } catch {
             note = ((error as? EngineError)?.message ?? error.localizedDescription, true)
         }
-        landing = await engine.teamLanding(team)
+        landing = await engine.landing(work)
     }
 }
 
-/// A project's routines (docs/spec/21 AD5): what starts work here on its own. Each run is a new conversation in the
-/// project, with the team's lead when it has a team, else with Piopio. You add, run or remove them here; a lead sets
-/// them when you ask it.
+/// A project's routines (docs/spec/21 AD5): what starts work here on its own. Each run is a new conversation with
+/// Piopio in the project. You add, run or remove them here; Piopio sets them when you ask it.
 struct ProjectRoutinesList: View {
     let engine: EngineController
     let project: ProjectInfo
-    let team: TeamInfo?
-    @State private var routines: [TeamRoutine] = []
+    @State private var routines: [ProjectRoutine] = []
     @State private var adding = false
     @State private var error: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text(team.map { "What starts work here on its own: each run is a new conversation with \($0.name)'s lead. Ask the lead (“every Monday, a brief on our competitors”), or add one." }
-                    ?? "What starts work here on its own: each run is a new conversation in this project.")
+                Text("What starts work here on its own: each run is a new conversation with Piopio in this project. Ask Piopio (“every Monday, a brief on our competitors”), or add one.")
                     .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 16)
                 Button("Add routine…") { adding = true }.buttonStyle(PillStyle(compact: true))
@@ -343,7 +327,7 @@ struct ProjectRoutinesList: View {
 
     private func reload() async { routines = await engine.routines(in: project) }
 
-    private func row(_ r: TeamRoutine) -> some View {
+    private func row(_ r: ProjectRoutine) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: Self.icon(r.on)).font(.system(size: 14)).foregroundStyle(Color.dsFg2).frame(width: 20).padding(.top, 1)
             VStack(alignment: .leading, spacing: 4) {
@@ -370,12 +354,12 @@ struct ProjectRoutinesList: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
     }
 
-    private func meta(_ r: TeamRoutine) -> String {
+    private func meta(_ r: ProjectRoutine) -> String {
         var parts: [String] = []
         if let next = r.next { parts.append("Next \(Self.day.string(from: Date(timeIntervalSince1970: next / 1000)))") }
         parts.append(r.runs == 0 ? "Hasn't run yet" : "Ran \(r.runs == 1 ? "once" : "\(r.runs) times")")
         if let last = r.lastRun.flatMap(Self.iso.date(from:)) { parts.append("last \(Self.day.string(from: last))") }
-        parts.append(r.by == "lead" ? "set by the lead" : "set by you")
+        parts.append(r.by == "you" ? "set by you" : "set by Piopio")
         return parts.joined(separator: " · ")
     }
 
@@ -408,7 +392,7 @@ struct ProjectRoutinesList: View {
     }
 }
 
-/// A routine by hand: a time (repeating or once), a folder, an email or a webhook, and what the team does then.
+/// A routine by hand: a time (repeating or once), a folder, an email or a webhook, and what Piopio does then.
 private struct AddRoutine: View {
     let engine: EngineController
     let project: ProjectInfo
@@ -461,10 +445,10 @@ private struct AddRoutine: View {
             default:
                 Text("You get a URL on this Mac that other apps can POST to; the body comes with the routine.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
-            Text("Then the team…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
+            Text("Then Piopio…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
             TextEditor(text: $prompt).font(.system(size: 13)).scrollContentBackground(.hidden).padding(6).frame(height: 90)
                 .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                .accessibilityLabel("What the team does then")
+                .accessibilityLabel("What Piopio does then")
             Text("Each run starts a new conversation in the project with this request.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
             HStack {

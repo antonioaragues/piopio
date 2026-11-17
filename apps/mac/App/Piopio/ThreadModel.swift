@@ -269,7 +269,7 @@ final class ThreadModel {
         case .prefill(let text):
             draft = text
         case .offer(let kind, let callId):
-            // Piopio's offers (docs/spec/21 D7): the conversation's page acts on them (a sheet, an agent, a routine).
+            // Piopio's offers (docs/spec/26 CL9): the conversation's page acts on them (parallel work, an agent, a routine).
             NotificationCenter.default.post(name: .transcriptOffer, object: ref.id, userInfo: ["kind": kind, "call": callId])
         case .quote(let text):
             // Select and ask: the fragment as a Markdown quote, above what's already in the composer.

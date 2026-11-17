@@ -30109,6 +30109,10 @@
 				},
 				"playbook": {
 					"type": "string"
+				},
+				"initGit": {
+					"type": "boolean",
+					"description": "A folder without git: make it a repo first, so tasks get branches"
 				}
 			}
 		},

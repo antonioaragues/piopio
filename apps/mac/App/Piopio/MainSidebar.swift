@@ -40,8 +40,8 @@ struct MainSidebar: View {
             .frame(height: Shell.barHeight)
             .contentShape(Rectangle())
             .gesture(WindowDragGesture())
-            // Search, Home (it holds what waits on you, docs/spec/21 D2) and Agents (a place of its own: your agents and
-            // teams, docs/spec/18 §16), then Pinned, Projects and Conversations; all of it scrolls.
+            // Search, Home (it holds what waits on you, docs/spec/21 D2) and Agents (a place of its own: your agents,
+            // docs/spec/18 §16), then Pinned, Projects and Conversations; all of it scrolls.
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     searchRow
@@ -307,12 +307,12 @@ struct MainSidebar: View {
         let all = engine.sessions(in: project).filter { $0.listed && areas.showsSession(chatProfile: $0.profile == .chat) }
         let (live, earlier) = split(all)
         let showAll = showingEarlier.contains(project.id)
-        // No draft row: the project's row is marked while its new conversation page is open. A team's board is the
-        // first row (docs/spec/18 §19); the team itself works in the project's conversations (docs/spec/20 §5).
-        let team = engine.team(in: project)
-        if !collapsedProjects.contains(project.id), !all.isEmpty || team != nil {
+        // No draft row: the project's row is marked while its new conversation page is open. Its board is the first
+        // row once it has one (docs/spec/18 §19, 26 §5).
+        let work = engine.work(in: project).flatMap { $0.way.parallel || !$0.tasks.isEmpty ? $0 : nil }
+        if !collapsedProjects.contains(project.id), !all.isEmpty || work != nil {
             VStack(alignment: .leading, spacing: 1) {
-                if let team { boardRow(project, team) }
+                if let work { boardRow(project, work) }
                 ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in
                     if s.ref.kind == .thread { chatRow(s) } else { sessionRow(s, indent: true) }
                 }
@@ -334,10 +334,10 @@ struct MainSidebar: View {
         }
     }
 
-    /// "Board  2 doing ◌": a team's board in its project, with what's moving (or the blue dot when a task is blocked).
-    private func boardRow(_ project: ProjectInfo, _ team: TeamInfo) -> some View {
-        let doing = team.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
-        let blocked = team.tasks.contains { $0.state == "blocked" }
+    /// "Board  2 doing ◌": the project's board, with what's moving (or the blue dot when a task is blocked).
+    private func boardRow(_ project: ProjectInfo, _ work: ProjectWork) -> some View {
+        let doing = work.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
+        let blocked = work.tasks.contains { $0.state == "blocked" }
         return Button { item = .board(project.id) } label: {
             HStack(spacing: 8) {
                 Image(systemName: "rectangle.split.3x1").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).frame(width: 16)
@@ -351,7 +351,7 @@ struct MainSidebar: View {
             .rowChrome(selected: item == .board(project.id), height: 30)
         }
         .buttonStyle(.plain)
-        .help("\(team.name)'s board")
+        .help("\(project.name)'s board")
     }
 
     /// Live sessions (running, waiting on you, or recent; those that need you first) and the rest.
@@ -374,11 +374,11 @@ struct MainSidebar: View {
     private func projectRow(_ project: ProjectInfo) -> some View {
         let plus: ProjectRow.Plus? = startsSessions(project) ? .session : nil
         let folded = collapsedProjects.contains(project.id)
-        let hasContent = !engine.sessions(in: project).filter { $0.listed }.isEmpty || engine.team(in: project) != nil
-        let working = engine.team(in: project)?.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count ?? 0
-        let crew = engine.team(in: project).map { TeamStack.colors($0.roles, team: $0.definitionId ?? $0.id) }
+        let work = engine.work(in: project)
+        let hasContent = !engine.sessions(in: project).filter { $0.listed }.isEmpty || work.map { $0.way.parallel || !$0.tasks.isEmpty } == true
+        let working = work?.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count ?? 0
         // The row folds or unfolds its conversations (docs/spec/18 §19); with nothing to show, it starts one there.
-        return ProjectRow(project: project, selected: false, isOpen: openProjectId == project.id, plus: plus, folded: hasContent ? folded : nil, working: working, crew: crew,
+        return ProjectRow(project: project, selected: false, isOpen: openProjectId == project.id, plus: plus, folded: hasContent ? folded : nil, working: working,
                           toggle: {
                               if hasContent { withAnimation(.easeOut(duration: 0.15)) { setProject(project.id, collapsed: !folded) } }
                               else if plus != nil { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
@@ -390,7 +390,7 @@ struct MainSidebar: View {
         .contextMenu {
             Button("New Conversation") { NotificationCenter.default.post(name: .newBuildSession, object: project.id) }
             Button("Project Settings…") { NotificationCenter.default.post(name: .projectSettings, object: project.id) }
-            if engine.team(in: project) != nil { Button("Board") { item = .board(project.id) } }
+            Button("Board") { item = .board(project.id) }
             pinButton(.project(project.id))
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.path)]) }
             Divider()
@@ -455,16 +455,14 @@ struct MainSidebar: View {
 
     // MARK: Agents
 
-    /// Agents (docs/spec/18 §16): one row that opens the Agents page (agents and teams). It stays selected inside an
-    /// agent, a team or their start pages, and says what's going on there: a ring while one runs, the blue dot when an
-    /// agent wrote to you.
+    /// Agents (docs/spec/18 §16): one row that opens the Agents page. It stays selected inside an agent or its start
+    /// page, and says what's going on there: a ring while one runs, the blue dot when an agent wrote to you.
     private var agentsRow: some View {
         let selected: Bool = switch item {
-        case .index(.agents), .agent, .team, .start(.agent), .start(.team): true
+        case .index(.agents), .agent, .start(.agent): true
         default: false
         }
         let running = engine.agents.contains { engine.liveStatus[$0.ref.key] == .running }
-            || engine.teams.flatMap(\.tasks).contains { ["doing", "review", "integrating"].contains($0.state) }
         let wrote = engine.agents.contains { ($0.agent?.status?.inbox ?? 0) > 0 }
         return Button { item = .index(.agents) } label: {
             HStack(spacing: 10) {
@@ -472,7 +470,7 @@ struct MainSidebar: View {
                 Text("Agents").font(.system(size: 13)).foregroundStyle(Color.dsFg)
                 Spacer()
                 if wrote { SidebarDot(status: .waiting).help("An agent wrote to you") }
-                else if running { SidebarDot(status: .running).help("An agent or a team is working") }
+                else if running { SidebarDot(status: .running).help("An agent is working") }
             }
             .rowChrome(selected: selected)
         }
@@ -625,7 +623,7 @@ struct RowGlyph: View {
     }
 }
 
-/// Compose (docs/spec/18 §16): always the New conversation page, with no project. Projects, agents and teams are made
+/// Compose (docs/spec/18 §16): always the New conversation page, with no project. Projects and agents are made
 /// from their own places (the Projects +, the Agents page).
 struct ComposeButton: View {
     var body: some View {
@@ -693,10 +691,8 @@ private struct ProjectRow: View {
     let plus: Plus?
     /// Whether its sessions are folded away; nil when it has none.
     let folded: Bool?
-    /// Its team's tasks in progress (a dot, in place of the branch).
+    /// Its board's tasks in progress (a dot, in place of the branch).
     var working = 0
-    /// Its team's members' colours (design 1a): a stack on the row.
-    var crew: [Color]?
     let toggle: () -> Void
     /// Folders dropped from Finder: linked to the project (18 §18).
     var link: (([URL]) -> Bool)?
@@ -724,7 +720,6 @@ private struct ProjectRow: View {
                         Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(Color.dsFg3)
                     }
                     Spacer(minLength: 4)
-                    if let crew, !showsPlus { TeamStack(colors: crew).help("A team works here") }
                     if project.missing == true {
                         Text("missing").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                     } else if let linked {

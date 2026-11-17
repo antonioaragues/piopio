@@ -96,11 +96,11 @@ import Testing
     #expect(ItemRenderer.splitLine(":12") == (":12", nil))
 }
 
-/// Board updates and routines in a lead conversation are events, not your messages (docs/spec/20 §4).
+/// Board updates and routines in a conversation are events, not your messages (docs/spec/20 §4).
 @Test @MainActor func boardUpdatesAreEventRowsNotBubbles() {
     let renderer = ItemRenderer()
     // A done task shows in the plan block, not as a line (docs/spec/21 AD9).
-    let done = renderer.render(.user(UserItem(id: "u1", at: "", text: "[Board] T1 “Signup form” is done. Merged into team/shop-ab12.\n\nReport:\n> Added the form.")))
+    let done = renderer.render(.user(UserItem(id: "u1", at: "", text: "[Board] T1 “Signup form” is done. Merged into work/shop-ab12.\n\nReport:\n> Added the form.")))
     #expect(done.length == 0)
     // Sent back: notable, a row with what was said.
     let back = renderer.render(.user(UserItem(id: "u3", at: "", text: "[Board] T1 “Signup form” went back to its Builder (QA, round 2).\n\nNotes:\n> The button is cut off.")))
@@ -113,9 +113,9 @@ import Testing
     #expect(cards.map(\.title) == ["Board · T1 “Signup form” went back to its Builder (QA, round 2)."])
     #expect(!styles.contains(CardStyle.user.rawValue))
     if case .text(let body) = cards.first?.content { #expect(body.contains("The button is cut off.")) } else { Issue.record("no notes") }
-    // The conversation became the lead's (docs/spec/21 D7): one quiet line.
-    let joined = renderer.render(.user(UserItem(id: "u4", at: "", text: "[Board] The user brought in App team; you lead it now, in this conversation.")))
-    #expect(joined.string.contains("App team joined · the lead takes it from here"))
+    // You chose to work in parallel (docs/spec/26 CL9): one quiet line.
+    let parallel = renderer.render(.user(UserItem(id: "u4", at: "", text: "[Board] The user chose to work in parallel. Plan what they asked above.")))
+    #expect(parallel.string.contains("Working in parallel · Piopio puts the parts on the board"))
 
     let routine = renderer.render(.user(UserItem(id: "u2", at: "", text: "[Routine] Every Monday at 09:00: Write the brief")))
     #expect(routine.string.contains("Routine · Every Monday at 09:00: Write the brief"))

@@ -257,7 +257,6 @@ export class Engine {
 			}),
 		);
 		this.sessions.work = this.work;
-		this.work.onParallel = (cwd) => this.sessions.boardChanged(cwd);
 		// A project's webhook routine has the same kind of URL as an agent's trigger, with the project's id.
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.work.hasProject(agent) ? this.work.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
 		this.work.hookUrl = (project, routine) => (this.hooks.port ? this.hooks.url(project, routine) : undefined);

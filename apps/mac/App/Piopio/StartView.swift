@@ -102,7 +102,6 @@ extension StartKind {
         case .chat: "New conversation"
         case .agent: "New agent"
         case .project: "New project"
-        case .team: "New team"
         }
     }
 
@@ -111,7 +110,6 @@ extension StartKind {
         case .chat: "bubble.left"
         case .agent: "smallcircle.circle"
         case .project: "folder"
-        case .team: "person.3"
         }
     }
 }
@@ -185,7 +183,6 @@ struct StartView: View {
             case .chat: ChatStart(engine: engine, item: $item)
             case .agent: AgentStart(engine: engine, item: $item)
             case .project: EmptyView() // RootView shows NewProjectPage, with the conversation it continues
-            case .team: EmptyView() // RootView shows TeamStart
             }
         }
         .id(kind)
@@ -201,19 +198,11 @@ struct ConversationStart: View {
     /// The box's own target ("chat", "project:<id>", "agent:<id>"), so the header and the sidebar follow the chip.
     @AppStorage("homeTarget") private var targetRaw = "chat"
     @Environment(\.startBack) private var back
-    /// A project's team was chosen for you on this page (once; switching back to the project sticks).
-    @State private var teamChosen = false
 
     private var project: ProjectInfo? {
         guard targetRaw.hasPrefix("project:") else { return nil }
         let id = String(targetRaw.dropFirst(8))
         return engine.projects.first { $0.id == id && $0.missing != true }
-    }
-
-    private var team: TeamInfo? {
-        guard targetRaw.hasPrefix("team:") else { return nil }
-        let id = String(targetRaw.dropFirst(5))
-        return engine.teams.first { $0.id == id }
     }
 
     var body: some View {
@@ -227,12 +216,11 @@ struct ConversationStart: View {
                     mark.padding(.bottom, 18)
                     title
                         .multilineTextAlignment(.center)
-                        .padding(.bottom, whoChoice == nil ? 26 : 14)
-                    if let (place, crew) = whoChoice { who(place, crew).padding(.bottom, 20) }
+                        .padding(.bottom, 26)
                     AskBox(engine: engine, item: $item, showsWhere: false, prominent: true)
                     pills.padding(.top, 18)
                     // A project just made in the sidebar (docs/spec/18 §17): its instructions are written here, or later.
-                    if let project, team == nil, ProjectNaming.shared.fresh.contains(project.id), engine.sessions(in: project).isEmpty {
+                    if let project, ProjectNaming.shared.fresh.contains(project.id), engine.sessions(in: project).isEmpty {
                         instructionsLine(project).padding(.top, 14)
                     }
                     Spacer(minLength: 48)
@@ -245,28 +233,18 @@ struct ConversationStart: View {
             }
         }
         .onExitCommand { back?() }
-        // A project with a team (docs/spec/19 §10): its work goes to the team, once the team is known.
-        .onAppear(perform: chooseTeam)
-        .onChange(of: engine.teams.count) { _, _ in chooseTeam() }
-        .onChange(of: engine.projects.count) { _, _ in chooseTeam() }
-        .onChange(of: item) { _, _ in
-            teamChosen = false
-            chooseTeam()
-        }
         // The sidebar marks where it goes: the project's row, or Conversations. Not once it has started (the box
         // resets its chip to no project as it opens the new conversation).
         .onChange(of: targetRaw) { _, raw in
             guard item == .start(.chat) || { if case .newSession = item { true } else { false } }() else { return }
-            // A team keeps the page where it is (its project's, when it has one).
-            if raw.hasPrefix("team:") { return }
             let next: SidebarItem = raw.hasPrefix("project:") ? .newSession(String(raw.dropFirst(8))) : .start(.chat)
             if next != item { item = next }
         }
     }
 
-    /// The place's mark: a folder, a team, or a conversation.
+    /// The place's mark: a folder, or a conversation.
     private var mark: some View {
-        Image(systemName: team != nil ? "person.3" : project != nil ? "folder" : "bubble.left")
+        Image(systemName: project != nil ? "folder" : "bubble.left")
             .font(.system(size: 19, weight: .light))
             .foregroundStyle(Color.dsFg2)
             .frame(width: 44, height: 44)
@@ -276,19 +254,12 @@ struct ConversationStart: View {
 
     /// "What's next in Tesis?", the place's name in grey; "What's on your mind?" with no project.
     private var title: Text {
-        let name = team?.name ?? project?.name
-        guard let name else { return Text("What's on your mind?").font(.system(size: 30, weight: .semibold)) }
-        let lead = team != nil ? "What should " : "What's next in "
-        let tail = team != nil ? " do?" : "?"
-        return (Text(lead) + Text(name).foregroundColor(Color.dsFg3) + Text(tail)).font(.system(size: 30, weight: .semibold))
+        guard let name = project?.name else { return Text("What's on your mind?").font(.system(size: 30, weight: .semibold)) }
+        return (Text("What's next in ") + Text(name).foregroundColor(Color.dsFg3) + Text("?")).font(.system(size: 30, weight: .semibold))
     }
 
-    /// The project the page is in: the chosen one, or a team's.
-    private var place: ProjectInfo? {
-        if let project { return project }
-        if let team { return engine.projects.first { $0.path == team.cwd } }
-        return nil
-    }
+    /// The project the page is in.
+    private var place: ProjectInfo? { project }
 
     /// "Pick up  Chapter 3 outline  Check the citations   Uses  2 folders  Memory"; with no project, "Or in" and your
     /// three latest projects.
@@ -347,35 +318,6 @@ struct ConversationStart: View {
         }
         .font(.system(size: 12.5))
         .padding(.leading, 14)
-    }
-
-    /// A project with a team (docs/spec/20 §4): who answers this conversation, visible and per conversation.
-    private var whoChoice: (ProjectInfo, TeamInfo)? {
-        if let team, let place = engine.projects.first(where: { $0.path == team.cwd }) { return (place, team) }
-        if let project, let crew = engine.team(in: project) { return (project, crew) }
-        return nil
-    }
-
-    private func who(_ place: ProjectInfo, _ crew: TeamInfo) -> some View {
-        HStack(spacing: 10) {
-            Text("Who").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
-            NeutralSegmented(selection: Binding(get: { team != nil ? "team" : "piopio" }, set: { targetRaw = $0 == "team" ? "team:" + crew.id : "project:" + place.id }),
-                             options: [("team", crew.name), ("piopio", "Piopio alone")])
-                .frame(width: 300)
-        }
-        .padding(.top, 6)
-    }
-
-    private func chooseTeam() {
-        guard !teamChosen, case .newSession(let id) = item, targetRaw == "project:" + id,
-              let project = engine.projects.first(where: { $0.id == id }), let team = engine.team(in: project) else { return }
-        teamChosen = true
-        // "New conversation with Piopio alone" from a lead's composer (docs/spec/21 D6).
-        if UserDefaults.standard.string(forKey: "startWithPiopio") == id {
-            UserDefaults.standard.removeObject(forKey: "startWithPiopio")
-            return
-        }
-        targetRaw = "team:" + team.id
     }
 }
 

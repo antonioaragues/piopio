@@ -837,22 +837,6 @@ export class Sessions {
 		return this.consultBridge().agents();
 	}
 
-	/**
-	 * Parallel work went on or off in a project (docs/spec/26 CL9): its idle conversations with Piopio close, so they
-	 * open again with (or without) the board's tools. One that's answering keeps its tools until it's next opened.
-	 */
-	async boardChanged(cwd: string): Promise<void> {
-		for (const entry of this.entries.values()) {
-			if (entry.ref.kind !== "build" || entry.parent || entry.helper || (entry.projectPath ?? entry.cwd) !== cwd) continue;
-			const open = this.open.get(entry.ref.id);
-			if (!open) continue;
-			const runtime = await open.catch(() => undefined);
-			if (runtime?.snapshot().state.status === "running") continue;
-			this.open.delete(entry.ref.id);
-			await runtime?.close();
-		}
-	}
-
 	/** A conversation with Piopio in this project (not a helper's or a subagent's), or an error saying why not. */
 	plannerIn(ref: ContainerRef, projectPath: string): void {
 		const entry = this.entry(ref);
@@ -1582,7 +1566,8 @@ export class Sessions {
 			...(entry.parent || entry.helper ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
 			// The board (docs/spec/26): Piopio's tools where parallel work is on, a reviewer's verdict.
 			...(entry.helper?.kind === "review" && this.work ? { board: this.boardBridge(entry, "review") } : {}),
-			...(!entry.parent && !entry.helper && this.work?.parallelAt(entry.projectPath ?? entry.cwd!) ? { board: this.boardBridge(entry, "piopio") } : {}),
+			// Piopio's board tools are declared each turn only while parallel work is on in the project (work/extension.ts).
+			...(!entry.parent && !entry.helper && this.work && this.policy.projectFor(entry.projectPath ?? entry.cwd!) ? { board: this.boardBridge(entry, "piopio") } : {}),
 			// Your agents, from your conversations (not a helper's task or a subagent): ask_agent and @Name.
 			...(!entry.parent && !entry.helper ? { consult: { bridge: this.consultBridge(), from: () => entry.title } } : {}),
 			// Piopio's offers: in a project conversation with Piopio, not a helper's.

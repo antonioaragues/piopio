@@ -23,11 +23,21 @@ export type BoardBridge = {
 
 const text = (t: string, isError = false) => ({ content: [{ type: "text" as const, text: t }], details: {}, ...(isError ? { isError: true } : {}) });
 
+/** Piopio's board tools: declared to the model only while parallel work is on in the project. */
+export const BOARD_TOOLS = ["create_task", "list_tasks", "message_task", "schedule", "watch", "list_routines", "cancel_routine"];
+
 export function boardExtension(bridge: BoardBridge): ExtensionFactory {
 	return (pi) => {
 		if (bridge.kind === "piopio") {
+			// Read each turn, so switching parallel work on or off reaches an open conversation without reopening it.
 			pi.on("before_agent_start", (event) => {
 				const brief = bridge.brief();
+				const active = new Set(pi.getActiveTools());
+				for (const name of BOARD_TOOLS) {
+					if (brief) active.add(name);
+					else active.delete(name);
+				}
+				pi.setActiveTools([...active]);
 				return brief ? { systemPrompt: `${event.systemPrompt}\n\n<board>\n${brief}\n</board>` } : undefined;
 			});
 			pi.registerTool(

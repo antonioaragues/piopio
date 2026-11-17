@@ -119,6 +119,7 @@ test("without git, helpers share the folder; with review off a task is done when
 	expect(((await client.call("work.get", { project: created.project.id })) as { work?: Work }).work).toBeUndefined();
 	const work = ((await client.call("work.configure", { project: created.project.id, parallel: true, review: false, playbook: "research" })) as { work: Work }).work;
 	expect(work.git).toBeUndefined();
+	expect(existsSync(join(dir, ".git"))).toBe(false);
 	await client.call("work.addTask", { project: work.project, title: "Competitors", brief: "write: notes/T1.md | - Acme sells X" });
 	const done = await until(() => workOf(client, work.project), (w) => w.tasks[0]?.state === "done");
 	expect(done.tasks[0]).toMatchObject({ helper: "Researcher", by: "you" });
@@ -315,3 +316,13 @@ test("a time routine missed while the engine was off runs once when it's back", 
 	expect(ran.next).toBeGreaterThan(Date.now());
 	await until(() => textOf(client, ran.lastConversation!), (s) => s.includes("[Routine] Every Monday at 09:00: Write the weekly brief"));
 }, 40_000);
+
+test("the fit check's fix: a folder without git becomes a repo when parallel work goes on, so tasks get branches", async () => {
+	const { client } = await start();
+	const created = (await client.call("projects.create", { name: "Shop" })) as { project: { id: string; path: string } };
+	expect(((await client.call("work.fitCheck", { cwd: created.project.path })) as { git: boolean }).git).toBe(false);
+	const work = ((await client.call("work.configure", { project: created.project.id, parallel: true, initGit: true })) as { work: Work }).work;
+	expect(work.git).toMatchObject({ base: "main", branch: expect.stringMatching(/^work\/shop-/) });
+	expect(git(created.project.path, "log", "--format=%s", "main").trim()).toBe("Start");
+	expect(git(created.project.path, "ls-files")).toContain("AGENTS.md");
+}, 30_000);

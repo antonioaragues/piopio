@@ -24,21 +24,10 @@ struct NewProjectPage: View {
     @State private var instructions = ""
     @State private var error: String?
     @State private var saving = false
-    /// A team for the project (docs/spec/19 §10): a template id, or nil for none.
-    @State private var teamTemplate: String?
-    @State private var templates: [TeamTemplate] = []
     @FocusState private var focus: StartField?
 
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var folderName: String { trimmed.isEmpty ? "Name" : trimmed.replacingOccurrences(of: "/", with: "-") }
-
-    /// The chosen team: one of yours ("def:<id>") or a template.
-    private var chosenDefinition: TeamDefinition? {
-        guard let id = teamTemplate, id.hasPrefix("def:") else { return nil }
-        return engine.teamDefinitions.first { $0.id == String(id.dropFirst(4)) }
-    }
-    private var chosenName: String? { chosenDefinition?.name ?? templates.first { $0.id == teamTemplate }?.name }
-    private var chosenRoles: [TeamRole]? { chosenDefinition?.roles ?? templates.first { $0.id == teamTemplate }?.roles }
 
     private var description: String {
         if let continuing, let title = engine.threads.first(where: { $0.ref == continuing })?.title ?? engine.buildSessions.first(where: { $0.ref == continuing })?.title {
@@ -60,24 +49,6 @@ struct NewProjectPage: View {
                     .font(.system(size: 14)).scrollContentBackground(.hidden).padding(12).frame(height: 102)
                     .composerBox()
                 FinePrint("Makes the folder ~/Piopio/\(folderName), with the instructions in AGENTS.md and the shared notes in NOTES.md. Edit them there any time.")
-                if continuing == nil && !templates.isEmpty {
-                    HStack(spacing: 10) {
-                        Text("Who works here").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
-                        Menu {
-                            Button("Piopio") { teamTemplate = nil }
-                            // Your teams first (docs/spec/20 P3), then a new one from a template.
-                            if engine.teamDefinitions.contains(where: \.saved) {
-                                Section("Your teams") { ForEach(engine.teamDefinitions.filter(\.saved)) { d in Button(d.name) { teamTemplate = "def:" + d.id } } }
-                            }
-                            Section("New, from a template") { ForEach(templates) { t in Button(t.name) { teamTemplate = t.id } } }
-                        } label: {
-                            Text(chosenName ?? "Piopio").foregroundStyle(Color.dsFg)
-                        }
-                        .menuStyle(.button).buttonStyle(PillStyle()).fixedSize()
-                        Text(chosenRoles.map { "\($0.map(\.name).joined(separator: ", ")). Every conversation here is with its lead." } ?? "Or a team: a lead that plans and members that work in parallel. You can change it in the project's Settings.")
-                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
                 StartError(text: error)
                 HStack {
                     Button("Open a folder instead…", action: chooseFolder).buttonStyle(PillStyle())
@@ -90,7 +61,6 @@ struct NewProjectPage: View {
         }
         .disabled(saving)
         .onAppear { focus = .name }
-        .task { templates = await engine.teamTemplates() }
         .onExitCommand { done(nil) }
     }
 
@@ -104,12 +74,6 @@ struct NewProjectPage: View {
             defer { saving = false }
             do {
                 let project = try await engine.createProject(name: projectName, instructions: text.isEmpty ? nil : text)
-                // With a team: it works in the new folder, which becomes a git repo so tasks get their own branches.
-                if let teamTemplate {
-                    let def = chosenDefinition
-                    do { _ = try await engine.createTeam(name: def?.name ?? "\(project.name) team", template: def?.template ?? teamTemplate, cwd: project.path, goal: nil, testCommand: nil, initGit: true, definition: def?.id) }
-                    catch { self.error = "The project is made, but not its team: \((error as? EngineError)?.message ?? error.localizedDescription)" }
-                }
                 done(project)
             }
             catch { self.error = ((error as? EngineError)?.message ?? error.localizedDescription) + " Nothing was made." }
