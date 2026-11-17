@@ -208,9 +208,7 @@ struct BuildSessionView: View {
                 if !session.isFollowing {
                     JumpToLatestButton { session.scrollToLatest() }
                 }
-                if !session.prompts.isEmpty {
-                    PromptStack(session: session).frame(maxWidth: 680)
-                }
+                // What the session waits on you for is the composer's tray (docs/design/grey "Composer tray").
                 // This conversation's tasks on the board (docs/spec/26 §5), live, then the merge card.
                 if let work = project.flatMap({ engine.work(in: $0) }) { ConversationPlan(engine: engine, work: work, conversationId: summary.ref.id) }
                 SideConversations(engine: engine, parentId: summary.ref.id)
@@ -590,18 +588,17 @@ struct HoverRowStyle: ButtonStyle {
     }
 }
 
-// MARK: Approvals and questions (docs/design 2a approval card; docs/spec/05-build §6, AP1)
+// MARK: Approvals and questions (docs/design/grey 11c, 11d; docs/spec/05-build §6, AP1)
 
-/// What the session waits on you for, stacked above the composer: always visible, even when scrolled up.
-struct PromptStack: View {
-    let session: ThreadModel
-
-    var body: some View {
-        // One at a time; more waiting show as steps ("1 of 2").
-        if let prompt = session.prompts.first {
-            PromptCard(session: session, prompt: prompt, primary: true, step: session.prompts.count > 1 ? "1 of \(session.prompts.count)" : nil).id(prompt.id)
-        }
-    }
+/// In the composer's tray (docs/design/grey "Composer tray"), the card has no box of its own and the composer is its
+/// text field: Deny and Keep planning take what you typed there, and questions have no "Something else…" row.
+struct PromptTrayContext {
+    /// What's typed in the composer, trimmed; taking it empties the composer.
+    var takeReply: () -> String?
+    /// Puts the cursor in the composer.
+    var focusReply: () -> Void
+    /// The pager and the collapse button, at the end of the title row.
+    var accessory: AnyView
 }
 
 struct PromptCard: View {
@@ -610,12 +607,16 @@ struct PromptCard: View {
     /// The first card answers ⌘↩.
     let primary: Bool
     var step: String?
+    var tray: PromptTrayContext?
     @State private var denying = false
     @State private var text = ""
     @FocusState private var focused: Bool
 
     var body: some View {
-        if prompt.kind == .plan { planBar } else { card }
+        Group {
+            if prompt.kind == .plan { planBar } else { card }
+        }
+        .modifier(PromptShell(inTray: tray != nil))
     }
 
     /// Plans are read in the transcript (docs/spec/09 P1); above the composer, only a bar with the answers and ⌘↩.
@@ -626,12 +627,14 @@ struct PromptCard: View {
                 Text("Build this plan?").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
                 Text(prompt.title.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 Spacer(minLength: 8)
+                tray?.accessory
             }
             if denying {
                 denyField(placeholder: "What should change in the plan?", send: "Send")
             } else {
                 HStack(spacing: 14) {
-                    Button("Keep planning") { denying = true }.buttonStyle(PillStyle(compact: true))
+                    Button("Keep planning") { keepPlanning() }.buttonStyle(PillStyle(compact: true))
+                        .help(tray != nil ? "Sends what you typed below as the change to make, or puts the cursor there" : "")
                     Button("Edit") { session.editingPlan = prompt }.buttonStyle(PillStyle(compact: true))
                     Spacer()
                     Button { answer(PromptResponse(decision: .allow)) } label: { Text(primary ? "Approve and build ⌘↩" : "Approve and build") }
@@ -640,10 +643,15 @@ struct PromptCard: View {
                 }
             }
         }
-        .askCard()
         .onChange(of: session.revisingPlan) { _, id in
-            if id == prompt.id { denying = true; session.revisingPlan = nil }
+            if id == prompt.id { session.revisingPlan = nil; if let tray { tray.focusReply() } else { denying = true } }
         }
+    }
+
+    /// In the tray, what you typed below is the change to make; with nothing typed, the cursor goes there.
+    private func keepPlanning() {
+        guard let tray else { denying = true; return }
+        if let reply = tray.takeReply() { answer(PromptResponse(decision: .deny, text: reply)) } else { tray.focusReply() }
     }
 
     /// Approvals and questions (docs/design/grey 11c, 11d): a blue dot and the question, its context on the right,
@@ -657,6 +665,7 @@ struct PromptCard: View {
                 if let step { Text(step).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
                 else if let counts = diffCounts { DiffCounts(added: counts.added, removed: counts.removed) }
                 else if let tool = prompt.tool { Text(tool).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
+                tray?.accessory
             }
             if let message = prompt.message {
                 Text(message).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
@@ -692,7 +701,6 @@ struct PromptCard: View {
             }
             actions
         }
-        .askCard()
     }
 
     /// An edit's detail is a patch: how many lines it adds and removes.
@@ -715,7 +723,9 @@ struct PromptCard: View {
                 Button(primary ? "Confirm ⌘↩" : "Confirm") { answer(PromptResponse(confirmed: true)) }.buttonStyle(PillStyle(kind: .primary, compact: true))
                     .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
             }
-        case .input: freeAnswer(placeholder: prompt.placeholder ?? "Your answer")
+        case .input:
+            if tray != nil { Text("Type your answer below and press ↩").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+            else { freeAnswer(placeholder: prompt.placeholder ?? "Your answer") }
         case .plan: EmptyView() // plans answer from the plan bar
         }
     }
@@ -725,7 +735,8 @@ struct PromptCard: View {
             denyField(placeholder: "Tell the agent why, or what to do instead (optional)", send: "Deny")
         } else {
             HStack(spacing: 14) {
-                Button("Deny") { denying = true }.buttonStyle(PillStyle(compact: true))
+                Button("Deny") { deny() }.buttonStyle(PillStyle(compact: true))
+                    .help(tray != nil ? "Denies it; what you typed below goes to the agent as the reason" : "")
                 if let rule = prompt.rule {
                     Button(Self.alwaysLabel(rule)) { answer(PromptResponse(decision: .always)) }
                         .buttonStyle(PillStyle(compact: true))
@@ -737,6 +748,12 @@ struct PromptCard: View {
                     .keyboardShortcut(primary ? KeyboardShortcut(.return, modifiers: .command) : nil)
             }
         }
+    }
+
+    /// In the tray, Deny goes at once, with what you typed below as the reason; on a card, it asks for the reason first.
+    private func deny() {
+        guard let tray else { denying = true; return }
+        answer(PromptResponse(decision: .deny, text: tray.takeReply()))
     }
 
     private func denyField(placeholder: String, send label: String) -> some View {
@@ -761,7 +778,7 @@ struct PromptCard: View {
                 Button { answer(PromptResponse(choice: option)) } label: { OptionRow(number: i + 1, text: option) }
                     .buttonStyle(.plain)
             }
-            if prompt.kind == .question {
+            if prompt.kind == .question, tray == nil {
                 HStack(spacing: 10) {
                     if !options.isEmpty { KeyBadge(text: "\(options.count + 1)") }
                     TextField(options.isEmpty ? "Your answer" : "Something else…", text: $text)
@@ -775,7 +792,7 @@ struct PromptCard: View {
         if prompt.kind == .question {
             HStack(spacing: 12) {
                 Button("Skip") { answer(PromptResponse(text: "Skipped")) }.buttonStyle(PillStyle(compact: true))
-                if options.count > 1 { Text("1–\(options.count) to pick").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                if options.count > 1 { Text("1–\(options.count) to pick" + (tray != nil ? ", or type your own answer below" : "")).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
                 Spacer()
             }
             .padding(.horizontal, -4)
@@ -854,6 +871,49 @@ struct KeyBadge: View {
         Text(text).font(.system(size: 11)).foregroundStyle(Color.dsFg2)
             .frame(width: 18, height: 18)
             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.dsLine, lineWidth: 1))
+    }
+}
+
+/// A card on its own (Needs you) gets the ask card; in the composer's tray, only the padding.
+private struct PromptShell: ViewModifier {
+    let inTray: Bool
+    func body(content: Content) -> some View {
+        if inTray { content.padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 12).frame(maxWidth: .infinity, alignment: .leading) }
+        else { content.askCard() }
+    }
+}
+
+extension PendingPrompt {
+    /// Whether what you type in the composer answers it: the reason for a denial, your own answer, what to change in
+    /// a plan. A pick from a list or a yes/no can't take words, so the composer stays a composer for those.
+    var takesReply: Bool { kind == .approval || kind == .question || kind == .input || kind == .plan }
+
+    /// The composer's placeholder while it waits on this.
+    var replyPlaceholder: String {
+        switch kind {
+        case .approval: "Or tell it what to do instead…"
+        case .question: options?.isEmpty == false ? "Or type your own answer…" : "Your answer…"
+        case .input: placeholder.map { $0.hasSuffix("…") ? $0 : $0 + "…" } ?? "Your answer…"
+        case .plan: "Or say what to change in the plan…"
+        case .select, .confirm: "Reply…"
+        }
+    }
+
+    /// The one answer the collapsed tray offers (⌘↩), when there is one.
+    var quickAnswer: (label: String, response: PromptResponse)? {
+        switch kind {
+        case .approval: ("Allow", PromptResponse(decision: .allow))
+        case .plan: ("Approve and build", PromptResponse(decision: .allow))
+        case .confirm: ("Confirm", PromptResponse(confirmed: true))
+        case .question, .select, .input: nil
+        }
+    }
+
+    /// One line for the collapsed tray: the question, then the command or the first line of what it's about.
+    var oneLine: (question: String, detail: String?) {
+        let lines = (detail ?? "").split(separator: "\n").map(String.init)
+        let isPatch = lines.count > 1 && lines.contains { $0.hasPrefix("+") || $0.hasPrefix("-") }
+        return (question, kind == .approval && !isPatch ? lines.first : nil)
     }
 }
 

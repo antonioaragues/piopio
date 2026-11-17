@@ -21,6 +21,10 @@ struct Composer: View {
     @State private var suggestions: [Suggestion] = []
     @State private var highlighted = 0
     @State private var sessionCommands: [SessionCommand] = []
+    /// The tray (docs/design/grey "Composer tray"): which of the waiting prompts it shows, and whether it's folded to
+    /// one line.
+    @State private var trayIndex = 0
+    @State private var trayCollapsed = false
 
     init(engine: EngineController, thread: ThreadModel) {
         self.engine = engine; self.thread = thread
@@ -95,9 +99,119 @@ struct Composer: View {
             add(urls)
             return true
         } isTargeted: { dropTargeted = $0 }
+        // Something new waiting on you opens the tray again.
+        .onChange(of: thread.prompts.map(\.id)) { old, new in
+            if new.contains(where: { !old.contains($0) }) { trayCollapsed = false }
+            if new.isEmpty { trayIndex = 0; trayCollapsed = false }
+        }
+    }
+
+    // MARK: Tray
+
+    /// The prompt the tray shows: the first one, or the one the pager moved to.
+    private var shownPrompt: PendingPrompt? {
+        let prompts = thread.prompts
+        return prompts.isEmpty ? nil : prompts[min(trayIndex, prompts.count - 1)]
+    }
+
+    /// What the agent waits on you for, glued to the top of the composer: an approval, a question, a plan. The
+    /// composer below is its text field (Deny's reason, your own answer, what to change in the plan).
+    @ViewBuilder private func tray(_ prompt: PendingPrompt) -> some View {
+        Group {
+            if trayCollapsed { collapsedTray(prompt) } else {
+                PromptCard(session: thread, prompt: prompt, primary: true, tray: PromptTrayContext(
+                    takeReply: takeReply, focusReply: { focused = true }, accessory: AnyView(trayAccessory)))
+                    .id(prompt.id)
+            }
+        }
+        .background(Color.dsWin, in: UnevenRoundedRectangle(topLeadingRadius: DS.Radius.composer, topTrailingRadius: DS.Radius.composer, style: .continuous))
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+    }
+
+    /// "‹ 1 of 3 ›" while more than one waits, and the button that folds the tray to one line.
+    private var trayAccessory: some View {
+        let count = thread.prompts.count, index = min(trayIndex, max(0, count - 1))
+        return HStack(spacing: 0) {
+            if count > 1 {
+                trayIcon("chevron.left", help: "Previous") { trayIndex = (index + count - 1) % count }
+                Text("\(index + 1) of \(count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3).padding(.horizontal, 2)
+                trayIcon("chevron.right", help: "Next") { trayIndex = (index + 1) % count }
+            }
+            trayIcon("chevron.down", help: "Fold to one line") { withAnimation(.smooth(duration: 0.2)) { trayCollapsed = true } }
+                .padding(.leading, 4)
+        }
+    }
+
+    private func trayIcon(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                .frame(width: 20, height: 20).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).help(help).accessibilityLabel(help)
+    }
+
+    /// Folded: the question, the command, how many more wait, and the one answer it has (⌘↩).
+    private func collapsedTray(_ prompt: PendingPrompt) -> some View {
+        let line = prompt.oneLine, more = thread.prompts.count - 1
+        return HStack(spacing: 8) {
+            Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+            Text(line.question).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1).layoutPriority(1)
+            if let detail = line.detail {
+                Text(detail).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1).truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            if more > 0 { Text("\(more) more").font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize() }
+            if let quick = prompt.quickAnswer {
+                Button("\(quick.label) ⌘↩") { Task { await thread.respond(prompt, quick.response) } }
+                    .buttonStyle(PillStyle(kind: .primary, compact: true))
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .fixedSize()
+            }
+            trayIcon("chevron.up", help: "Show all of it") { withAnimation(.smooth(duration: 0.2)) { trayCollapsed = false } }
+        }
+        .padding(.leading, 14).padding(.trailing, 10).padding(.vertical, 9)
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(.smooth(duration: 0.2)) { trayCollapsed = false } }
+    }
+
+    /// What's typed, trimmed, for the tray's Deny or Keep planning; taking it empties the box.
+    private func takeReply() -> String? {
+        let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reply.isEmpty else { return nil }
+        text = ""
+        return reply
+    }
+
+    /// ↩ while the tray waits on words: what you typed answers it instead of going out as a message. ⌥↩, a /command,
+    /// attachments and editing a message still send as usual.
+    private func answerTray() -> Bool {
+        guard thread.editing == nil, attachments.isEmpty, let prompt = shownPrompt, prompt.takesReply else { return false }
+        let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reply.isEmpty, !reply.hasPrefix("/") else { return false }
+        let response = switch prompt.kind {
+        case .approval, .plan: PromptResponse(decision: .deny, text: reply)
+        default: PromptResponse(text: reply)
+        }
+        text = ""
+        Task { await thread.respond(prompt, response) }
+        return true
     }
 
     private var box: some View {
+        VStack(spacing: 0) {
+            if let prompt = shownPrompt { tray(prompt) }
+            field
+        }
+        .composerBox()
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color.dsFg3, lineWidth: dropTargeted ? 1 : 0))
+        .composerMorph()
+        .background {
+            Button("") { if thread.isRunning { stop() } }.keyboardShortcut(".", modifiers: .command).hidden()
+        }
+        .onAppear { focused = true }
+    }
+
+    private var field: some View {
         VStack(alignment: .leading, spacing: 8) {
             if thread.editing != nil {
                 HStack(spacing: 6) {
@@ -128,7 +242,7 @@ struct Composer: View {
                     }
                     .onKeyPress(characters: .decimalDigits) { press in
                         // 1–9 pick an answer while the agent asks and the box is empty (docs/design/grey 11d).
-                        guard text.isEmpty, let prompt = thread.prompts.first, prompt.kind == .question || prompt.kind == .select,
+                        guard text.isEmpty, !trayCollapsed, let prompt = shownPrompt, prompt.kind == .question || prompt.kind == .select,
                               let options = prompt.options, let n = Int(press.characters), options.indices.contains(n - 1) else { return .ignored }
                         Task { await thread.respond(prompt, PromptResponse(choice: options[n - 1])) }
                         return .handled
@@ -199,13 +313,6 @@ struct Composer: View {
         .padding(.leading, 14)
         .padding(.trailing, 12)
         .padding(.bottom, 10)
-        .composerBox()
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color.dsFg3, lineWidth: dropTargeted ? 1 : 0))
-        .composerMorph()
-        .background {
-            Button("") { if thread.isRunning { stop() } }.keyboardShortcut(".", modifiers: .command).hidden()
-        }
-        .onAppear { focused = true }
     }
 
     /// Build sessions take files by path (the agent reads them) and have their own tools.
@@ -215,6 +322,7 @@ struct Composer: View {
 
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
+        if let prompt = shownPrompt, prompt.takesReply { return prompt.replyPlaceholder }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         // An agent is set up by talking (docs/spec/21 D3): its chat says so.
@@ -354,6 +462,7 @@ struct Composer: View {
     private func send(steer: Bool) {
         let message = text
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if !steer, answerTray() { return }
         // `/side <what>` (docs/spec/24 §6): a side conversation with your words as its brief; this one goes on.
         let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedMessage.hasPrefix("/side ") {
