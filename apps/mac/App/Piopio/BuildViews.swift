@@ -792,7 +792,7 @@ struct PromptCard: View {
         if prompt.kind == .question {
             HStack(spacing: 12) {
                 Button("Skip") { answer(PromptResponse(text: "Skipped")) }.buttonStyle(PillStyle(compact: true))
-                if options.count > 1 { Text("1–\(options.count) to pick" + (tray != nil ? ", or type your own answer below" : "")).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                if options.count > 1 { Text("1–\(options.count) to pick").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
                 Spacer()
             }
             .padding(.horizontal, -4)

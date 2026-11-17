@@ -18,8 +18,8 @@ seen running. Nothing here has been used with real models.
 | 10f Quick Chat | Built | Yes | Also has New chat |
 | 11a Turn | Built | Yes | Answer text stays 15 / 1.45, set by the user on 2026-10-29; Copy sits beside the language, not at the right edge |
 | 11b While working | Built | Code only | No live output under the running step; Edit on a queued message moves it back to the box |
-| 11c Approvals | Built | Command: yes, allowed and denied by clicking. Diff: code only | Allow is ⌘↩, because ↩ sends from the composer; MCP arguments show as text, not labeled rows; decided approvals in Build show in the activity line |
-| 11d Questions | Built | Yes | Options have no description (the engine sends names only); no "change" after answering; steps are one card at a time |
+| 11c Approvals | Built as the composer tray (2026-11-17) | Command: yes. Diff, plan, folded and typed denial: code only | Allow is ⌘↩, because ↩ sends from the composer (in the tray, ↩ denies with what you typed); MCP arguments show as text, not labeled rows; decided approvals in Build show in the activity line |
+| 11d Questions | Built as the composer tray (2026-11-17) | Yes | Options have no description (the engine sends names only); no "change" after answering; more than one waiting is a pager, not steps; the composer is the free-text answer |
 | 11e Composer | Built | Partly | @mentions are plain text, not grey tokens; files show their extension, not page counts |
 | 11f Model picker | Built | Yes, with one model | The line per model is derived from price and abilities, not curated; ⌘↩ sets the default |
 | 11g Mode picker | Built | Code only | A native menu; Plan, Ask before edits, Auto-edit, Full auto (no Read only); no ⇧⇥ |
