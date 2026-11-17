@@ -38,6 +38,31 @@ describe("pi SDK mapper", () => {
 		});
 	}
 
+	test("a script's own tool calls come back on reload, right after it, as they were live", () => {
+		const html = "<canvas></canvas>";
+		const transcript = [
+			{ role: "user", content: "chart", timestamp: 1 },
+			{ role: "assistant", content: [{ type: "toolCall", id: "cm1", name: "codemode", arguments: { code: "await tools.show_visual(...)" } }], timestamp: 2 },
+			{
+				role: "toolResult", toolCallId: "cm1", toolName: "codemode", content: [{ type: "text", text: "done" }], isError: false, timestamp: 3,
+				nestedCalls: { complete: true, calls: [
+					{ id: "cm1/1", name: "web_fetch", status: "error", arguments: { url: "https://x" }, error: "429", durationMs: 5 },
+					{ id: "cm1/2", name: "show_visual", status: "ok", arguments: { title: "T", html } },
+					{ id: "cm1/3", name: "show_visual", status: "ok", argumentsBytes: 9000 },
+				] },
+			},
+			{ role: "assistant", content: [{ type: "text", text: "Here." }], timestamp: 4 },
+		] as unknown as PiMessage[];
+		const b = new TimelineBuilder({ kind: "chat", id: "c" });
+		b.reset(transcript, (i) => `m${i}`, false);
+		const tools = b.snapshot().items.map((i) => (i.kind === "tool" ? [i.id, i.status, i.parentCallId ?? null] : [i.kind]));
+		expect(tools).toEqual([["user"], ["assistant"], ["tool:cm1", "done", null], ["tool:cm1/1", "error", "cm1"], ["tool:cm1/2", "done", "cm1"], ["tool:cm1/3", "done", "cm1"], ["assistant"]]);
+		const items = b.snapshot().items;
+		expect(items.find((i) => i.id === "tool:cm1/2")).toMatchObject({ tool: "show_visual", args: { title: "T", html } });
+		expect(items.find((i) => i.id === "tool:cm1/1")).toMatchObject({ output: "429", durationMs: 5 });
+		expect(items.find((i) => i.id === "tool:cm1/3")).toMatchObject({ args: {} });
+	});
+
 	test("tool calls become tool items with output", () => {
 		const live = new TimelineBuilder({ kind: "build", id: "ses_test" });
 		const mapper = new SdkEventMapper(live, 0);

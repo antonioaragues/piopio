@@ -117,6 +117,13 @@ the same title (trimmed, any case) **replaces** the earlier ones:
 - an export and the Telegram answer carry only the last version;
 - a call that failed replaces nothing; a good one replaces a failed one.
 
+- calls from a codemode script count like direct ones. Their items come back when a conversation is opened again,
+  rebuilt from pi's record of a script's calls (`nestedCalls` on its result). That record drops the arguments of a
+  call over 8 KB, so a large visual drawn from a script comes back as a plain "Visual" line. The prompt therefore asks
+  for `show_visual` to be called directly, never from a script. The second run (2026-11-18) drew from a script, and its
+  first draft referred to a variable of the script, which doesn't exist in the visual: an empty chart that stayed next
+  to the fixed one.
+
 A new version you ask for in a later message is a new card; the old one stays where it was (§1.5). The engine does it
 where it folds steps (`replacedVisuals` in `tools/visuals.ts`), so every client gets it; no protocol change.
 

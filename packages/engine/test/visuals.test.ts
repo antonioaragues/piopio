@@ -69,6 +69,12 @@ describe("show_visual (docs/spec/25)", () => {
 			expect([...replacedVisuals(items)]).toEqual(["v1", "v2"]);
 		});
 
+		it("from a codemode script too", () => {
+			const nested = (id: string) => ({ ...visual(id, "T"), parentCallId: "cm1" }) as TimelineItem;
+			expect([...replacedVisuals([user("u1"), nested("v1"), nested("v2")])]).toEqual(["v1"]);
+			expect(VISUALS_SECTION).toContain("never from a codemode script");
+		});
+
 		it("not by a call that failed, which a later good one replaces", () => {
 			expect([...replacedVisuals([visual("v1", "T"), visual("v2", "T", "error")])]).toEqual([]);
 			expect([...replacedVisuals([visual("v1", "T", "error"), visual("v2", "T")])]).toEqual(["v1"]);

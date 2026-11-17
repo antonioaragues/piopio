@@ -91,6 +91,7 @@ export class TimelineBuilder {
 		this.streaming = undefined;
 		this.state.usage = emptyUsage();
 		const tools = new Map<string, ToolItem>();
+		const nested = new Map<string, ToolItem[]>();
 		messages.forEach((m, i) => {
 			const id = idOf(i, m);
 			if (m.role === "user") {
@@ -119,9 +120,13 @@ export class TimelineBuilder {
 					const details = endDetails(t.tool, t.args, { details: r.details }, t.output, Boolean(r.isError));
 					if (details) t.details = details;
 					this.addTaskCost(t);
+					const inner = nestedItems(t, (r as { nestedCalls?: unknown }).nestedCalls);
+					if (inner.length) nested.set(t.id, inner);
 				}
 			}
 		});
+		// The calls a tool made while it ran (a codemode script's), as live: their own items, right after it.
+		if (nested.size) this.setItems(this.items.flatMap((item) => [item, ...(nested.get(item.id) ?? [])]));
 		// The checklist is the latest todo call on this branch.
 		const lastTodo = [...tools.values()].reverse().find((t) => t.details?.type === "todos");
 		if (lastTodo?.details?.type === "todos") this.state.todos = lastTodo.details.items;
@@ -417,6 +422,27 @@ function errorFields(raw: string | undefined, provider: string | undefined): Pic
 export function customText(m: PiMessage): string {
 	const summary = (m as { details?: { summary?: unknown } }).details?.summary;
 	return typeof summary === "string" ? summary : contentText((m as { content?: string | PiContentBlock[] }).content);
+}
+
+/**
+ * The calls a tool made while it ran, from pi's record on its result (`nestedCalls`), as the items they were live.
+ * The record keeps no output, and drops the arguments of a call over 8 KB (pi's limit); such a call comes back with none.
+ */
+function nestedItems(parent: ToolItem, record: unknown): ToolItem[] {
+	const calls = (record as { calls?: unknown } | undefined)?.calls;
+	if (!Array.isArray(calls)) return [];
+	return calls.flatMap((c: { id?: unknown; name?: unknown; status?: unknown; arguments?: unknown; error?: unknown; durationMs?: unknown }) => {
+		if (typeof c?.id !== "string" || typeof c.name !== "string") return [];
+		const args = c.arguments ?? {};
+		const details = startDetails(c.name, args);
+		const status: ToolItem["status"] = c.status === "ok" ? "done" : c.status === "error" ? "error" : "interrupted";
+		return [{
+			kind: "tool", id: `tool:${c.id}`, at: parent.at, callId: c.id, tool: c.name, args, status, parentCallId: parent.callId,
+			...(typeof c.error === "string" ? { output: c.error } : {}),
+			...(typeof c.durationMs === "number" ? { durationMs: c.durationMs } : {}),
+			...(details ? { details } : {}),
+		} satisfies ToolItem];
+	});
 }
 
 /** A failed call that the user denied, or that a stop cut short, isn't an error of the tool. */

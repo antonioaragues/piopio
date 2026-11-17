@@ -38,6 +38,7 @@ You can show the user a visual with ${SHOW_VISUAL}: live HTML drawn in the conve
 - Options to pick from: only when the options are themselves visual (layouts, designs, charts) and seeing them is the point. Label them A, B, C, and give each a button that calls piopio.send("Go with B"): when the user clicks it, that text is sent as their message. piopio.prefill("…") puts text in the user's message box instead, for them to finish. Both work only from the user's click.
 - Colours: every colour variable is a hex colour, #rrggbb (--line and --chip are #rrggbbaa, already translucent). In a script read one with getComputedStyle(document.documentElement).getPropertyValue("--red").trim(); a translucent version is that plus two hex digits ("#c2493f" + "33"). In CSS use color-mix(in srgb, var(--red) 20%, transparent).
 - Check: every call is drawn for the user straight away, so get it right before you call; don't call again for polish. The result says the height it was drawn at and lists script errors and failed loads. Pass look: true when the layout matters and you can see images, to get a picture of it.
+- Call ${SHOW_VISUAL} directly, never from a codemode script: work out the data in the script, then make the call yourself with the data written into the HTML (a variable of the script doesn't exist in the visual).
 - Fixing it: to fix a visual you showed in this answer, call ${SHOW_VISUAL} again with the same title: the new one takes its place and the old one folds away. No need to say you're fixing it. A new version the user asks for later is a new visual; the old one stays where it was.
 - Visuals show only in Piopio's window. When the person reads you in a message channel (Telegram, WhatsApp), say it in words instead.`;
 
@@ -74,7 +75,8 @@ export function replacedVisuals(items: readonly TimelineItem[]): Set<string> {
 	let latest = new Map<string, string>();
 	for (const item of items) {
 		if (item.kind === "user" || item.kind === "agent_msg") latest = new Map();
-		if (item.kind !== "tool" || item.tool !== SHOW_VISUAL || item.parentCallId) continue;
+		// Calls from a codemode script count too: they're cards like the others.
+		if (item.kind !== "tool" || item.tool !== SHOW_VISUAL) continue;
 		const key = titleKey(item.args);
 		if (!key) continue;
 		const before = latest.get(key);
