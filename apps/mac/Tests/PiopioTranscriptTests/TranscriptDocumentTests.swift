@@ -258,3 +258,22 @@ private func expectConsistent(_ doc: TranscriptDocument) {
         #expect(TranscriptAction(url: action.url) == action)
     }
 }
+
+@MainActor @Test func theTranscriptPaintsItsOwnSelection() async {
+    let doc = await loaded([user("1", "Hello this is my message"), answer("2", "And the answer")])
+    let manager = doc.textView.textLayoutManager!
+    func painted() -> Int {
+        var count = 0
+        manager.enumerateRenderingAttributes(from: manager.documentRange.location, reverse: false) { _, attributes, _ in
+            if attributes[.backgroundColor] != nil { count += 1 }
+            return true
+        }
+        return count
+    }
+    doc.textView.setSelectedRange((doc.text as NSString).range(of: "this is my"))
+    #expect(painted() == 1)
+    doc.textView.setSelectedRange((doc.text as NSString).range(of: "the answer"))
+    #expect(painted() == 1)
+    doc.textView.setSelectedRange(NSRange(location: 3, length: 0))
+    #expect(painted() == 0)
+}

@@ -65,6 +65,8 @@ public final class TranscriptDocument {
     public var rememberDestination: String?
     /// Select and ask: the bar over selected text (Ask about this, Remember, Copy).
     private var selectionBar: ArrowHostingView<SelectionBar>?
+    /// Whether a selection is painted (see `paintSelection`).
+    fileprivate var paintedSelection = false
 
     public init(windowSize: Int = 300, pageSize: Int = 10, compact: Bool = false, versions: Bool = true, build: Bool = false, root: String? = nil) {
         renderer = ItemRenderer(compact: compact, versions: versions, build: build, root: root)
@@ -95,6 +97,13 @@ public final class TranscriptDocument {
         textView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
         textView.delegate = links
         links.document = self
+        // On the next turn: the window sets its first responder once the text view has answered.
+        text.onFocusChange = { [weak self] in
+            Task { @MainActor in
+                guard let self, self.paintedSelection else { return }
+                self.paintSelection()
+            }
+        }
         scrollView.drawsBackground = false
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -758,6 +767,7 @@ public final class TranscriptDocument {
 extension TranscriptDocument {
     /// Shows the bar above a selection of text (in answers or your messages), hides it when the selection goes.
     func selectionChanged() {
+        paintSelection()
         let range = textView.selectedRange()
         guard range.length > 1, NSMaxRange(range) <= storage.length, let window = textView.window else { return hideSelectionBar() }
         let text = (storage.string as NSString).substring(with: range)
@@ -780,6 +790,28 @@ extension TranscriptDocument {
         host.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
         if host.superview == nil { textView.addSubview(host) }
         selectionBar = host
+    }
+
+    /// The transcript's fragments draw its selection (`NSTextLayoutFragment.drawSelection`), so it shows over card fills
+    /// and stays inside your bubbles: the selected text gets the selection colour as a background rendering attribute.
+    func paintSelection() {
+        (textView as? TranscriptTextView)?.hideSystemSelection()
+        guard let content = layoutManager.textContentManager else { return }
+        if paintedSelection {
+            layoutManager.removeRenderingAttribute(.backgroundColor, for: layoutManager.documentRange)
+            paintedSelection = false
+        }
+        let active = textView.window?.isKeyWindow == true && textView.window?.firstResponder === textView
+        let color = active ? (textView.selectedTextAttributes[.backgroundColor] as? NSColor ?? .selectedTextBackgroundColor) : .unemphasizedSelectedTextBackgroundColor
+        for value in textView.selectedRanges {
+            let selection = value.rangeValue
+            guard selection.length > 0, NSMaxRange(selection) <= storage.length,
+                  let start = content.location(content.documentRange.location, offsetBy: selection.location),
+                  let end = content.location(start, offsetBy: selection.length),
+                  let range = NSTextRange(location: start, end: end) else { continue }
+            layoutManager.addRenderingAttribute(.backgroundColor, value: color, for: range)
+            paintedSelection = true
+        }
     }
 
     func hideSelectionBar() {
