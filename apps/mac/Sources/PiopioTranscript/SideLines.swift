@@ -51,32 +51,12 @@ extension ItemRenderer {
         let title = t.args?["title"]?.stringValue ?? ""
         if let s = side(from: t.callId) { return sideLine(s) }
         guard let expires = openProposals[t.callId] else { return note("Proposed a side conversation · \(title) · closed") }
-        // Tabs would catch the right tab stop that places the meta and Start.
-        func flat(_ s: String?) -> String { (s ?? "").replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ") }
-        let meta = NSFont.systemFont(ofSize: 12)
-        let m = NSMutableAttributedString()
-        m.append(NSAttributedString(string: flat(title), attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
-        let project = flat(t.args?["project"]?.stringValue)
+        let project = t.args?["project"]?.stringValue ?? ""
         let until = expires == .distantFuture ? nil : "until \(expires.formatted(.dateTime.day().month(.abbreviated)))"
         let what = ["Proposed", project.isEmpty ? nil : "in \(project)", until].compactMap { $0 }.joined(separator: " · ")
-        m.append(NSAttributedString(string: "\t" + what, attributes: [.font: meta, .foregroundColor: DS.fg3]))
-        let why = flat(t.args?["why"]?.stringValue)
-        if !why.isEmpty { m.append(NSAttributedString(string: lineSeparator + why, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2])) }
-        // A little air above the buttons, as in the approval card: an empty line is a whole line tall, so a taller
-        // invisible glyph lifts the line above instead (lines put their extra height above the text).
-        m.append(NSAttributedString(string: lineSeparator + "\u{200B}", attributes: [.font: NSFont.systemFont(ofSize: 17)]))
-        m.append(NSAttributedString(string: "Dismiss", attributes: [
-            .font: NSFont.systemFont(ofSize: 12.5, weight: .medium), .foregroundColor: DS.fg2,
-            .link: TranscriptAction.offer(kind: SideActionKind.dismiss, callId: t.callId).url, .toolTip: "Drop this proposal",
-        ]))
-        m.append(NSAttributedString(string: "\t", attributes: [.font: small]))
-        let start = NSMutableAttributedString(attributedString: pill("Start", .offer(kind: SideActionKind.start, callId: t.callId), .primary))
-        start.addAttribute(.toolTip, value: "Start it as its own conversation", range: NSRange(location: 0, length: start.length))
-        m.append(start)
-        let out = NSMutableAttributedString(attributedString: card(m, .approval, lineHeight: 1.6))
-        // One right tab for the meta and Start, at the card's text inset (the pill is no wider than its run).
-        out.addAttribute(.piopioRightTab, value: NSNumber(value: Double(CardLayoutFragment.padding + 2)), range: NSRange(location: 0, length: out.length))
-        return out
+        return actionCard(dot: false, title: title, meta: what, lines: [(t.args?["why"]?.stringValue ?? "", DS.fg2)],
+                          secondary: [CardButton(title: "Dismiss", action: .offer(kind: SideActionKind.dismiss, callId: t.callId), help: "Drop this proposal")],
+                          primary: CardButton(title: "Start", action: .offer(kind: SideActionKind.start, callId: t.callId), help: "Start it as its own conversation"))
     }
 
     /// One or more `[Side]` reports: a card while the side still waits on you, else a grey line that opens to the
@@ -87,14 +67,8 @@ extension ItemRenderer {
             let now = sides.first { $0.id == r.id }
             let name = now?.title ?? r.name
             if r.needsYou, now?.state == "needs_you" {
-                let m = NSMutableAttributedString()
-                m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: DS.accent, .baselineOffset: 1.5]))
-                m.append(NSAttributedString(string: name, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
-                m.append(NSAttributedString(string: " needs you", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
-                m.append(NSAttributedString(string: lineSeparator + "It's waiting for an approval there.", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2]))
-                m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-                m.append(pill("Open", .offer(kind: SideActionKind.open, callId: r.id), .primary))
-                out.append(card(m, .approval, lineHeight: 1.6))
+                out.append(actionCard(title: name, after: " needs you", lines: [("It's waiting for an approval there.", DS.fg2)],
+                                      primary: CardButton(title: "Open", action: .offer(kind: SideActionKind.open, callId: r.id))))
                 continue
             }
             let verb = r.needsYou ? "needed you" : r.verb

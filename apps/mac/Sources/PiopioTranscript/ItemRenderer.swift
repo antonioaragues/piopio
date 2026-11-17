@@ -156,7 +156,6 @@ nonisolated struct ItemRenderer: Sendable {
     /// An agent asks before acting (06-agents §9 AS1, docs/design 2a): what it wants to do, Deny / Edit… / Approve.
     /// Once answered, one line says how.
     private func approvalCard(_ a: ApprovalItem) -> NSAttributedString {
-        let m = NSMutableAttributedString()
         let state: String = switch a.status {
         case .pending: ""
         case .approved: a.editedArgs == nil ? "Allowed" : "Allowed with your changes"
@@ -165,27 +164,16 @@ nonisolated struct ItemRenderer: Sendable {
         case .cancelled: "Cancelled"
         }
         if a.status != .pending { return note("\(state) · \(a.title)") }
-        m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: DS.accent, .baselineOffset: 1.5]))
-        m.append(NSAttributedString(string: a.title.hasSuffix("?") ? a.title : a.title + "?", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
-        if !compact, a.source == "connector" {
+        let title = a.title.hasSuffix("?") ? a.title : a.title + "?"
+        let allow = CardButton(title: "Allow", action: .decideApproval(approvalId: a.approvalId, approve: true))
+        let deny = CardButton(title: "Deny", action: .decideApproval(approvalId: a.approvalId, approve: false))
+        if compact { return actionCard(title: title) }
+        if a.source == "connector" {
             // A connected app's change in a chat (docs/spec/12-connectors): Deny / Allow, and "don't ask again" for plain writes.
-            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-            m.append(pill("Allow", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
-            m.append(NSAttributedString(string: "    ", attributes: [.font: small]))
-            m.append(pill("Deny", .decideApproval(approvalId: a.approvalId, approve: false), .secondary))
-            if !a.always.isEmpty {
-                m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
-                m.append(pill("Allow, don't ask again", .allowAlways(approvalId: a.approvalId), .secondary))
-            }
-        } else if !compact {
-            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-            m.append(pill("Allow", .decideApproval(approvalId: a.approvalId, approve: true), .primary))
-            m.append(NSAttributedString(string: "    ", attributes: [.font: small]))
-            m.append(pill("Deny", .decideApproval(approvalId: a.approvalId, approve: false), .secondary))
-            m.append(NSAttributedString(string: "  ", attributes: [.font: small]))
-            m.append(pill("Edit…", .editApproval(approvalId: a.approvalId), .secondary))
+            let always = a.always.isEmpty ? [] : [CardButton(title: "Allow, don't ask again", action: .allowAlways(approvalId: a.approvalId))]
+            return actionCard(title: title, secondary: [deny] + always, primary: allow)
         }
-        return card(m, .approval, lineHeight: 1.6)
+        return actionCard(title: title, meta: a.tool, secondary: [deny, CardButton(title: "Edit…", action: .editApproval(approvalId: a.approvalId))], primary: allow)
     }
 
     /// What a tool changed (06-agents §4.2 RC1): the change, and Undo while it can be undone.
@@ -212,51 +200,31 @@ nonisolated struct ItemRenderer: Sendable {
     /// Piopio's offers (docs/spec/26 CL9, 21 design 5d-3): parallel work for work that divides, or a way to repeat
     /// something.
     private func offerCard(_ t: ToolItem) -> NSAttributedString {
-        let m = NSMutableAttributedString()
-        let gap = NSAttributedString(string: "    ", attributes: [.font: small])
-        func title(_ text: String) {
-            m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: DS.accent, .baselineOffset: 1.5]))
-            m.append(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
-        }
-        func line(_ text: String, color: NSColor = DS.fg2) {
-            m.append(NSAttributedString(string: lineSeparator + text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: color]))
-        }
+        let reply = { (text: String) in TranscriptAction.reply(text: text) }
+        func offer(_ kind: String) -> TranscriptAction { .offer(kind: kind, callId: t.callId) }
         if t.tool == "side_offer" {
             // "This looks like its own task" (docs/spec/24 §1, §6): New conversation, or Do it here.
-            title("This looks like its own task")
-            line(t.args?["title"]?.stringValue ?? "")
-            if let brief = t.args?["brief"]?.stringValue, !brief.isEmpty {
-                let short = brief.count > 160 ? String(brief.prefix(159)) + "…" : brief
-                line(short.replacingOccurrences(of: "\n", with: " "), color: DS.fg3)
-            }
-            if let project = t.args?["project"]?.stringValue, !project.isEmpty { line("In \(project)", color: DS.fg3) }
-            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-            m.append(pill("New conversation", .offer(kind: "side-new", callId: t.callId), .primary))
-            m.append(gap)
-            m.append(pill("Do it here", .offer(kind: "side-here", callId: t.callId), .secondary))
-        } else if t.tool == "offer_parallel" {
-            title("This could go faster in parallel")
-            if let why = t.args?["why"]?.stringValue { line(why) }
-            if case .array(let parts)? = t.args?["parts"] { line(parts.compactMap(\.stringValue).joined(separator: " · "), color: DS.fg3) }
-            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-            m.append(pill("Work in parallel", .offer(kind: "parallel", callId: t.callId), .primary))
-            m.append(gap)
-            m.append(pill("Do it here, one by one", .reply(text: "Do it here, one by one."), .secondary))
-        } else {
-            title("Make this happen on its own?")
-            let what = t.args?["what"]?.stringValue ?? ""
-            let when = t.args?["when"]?.stringValue ?? ""
-            line([when, what].filter { !$0.isEmpty }.joined(separator: ": "))
-            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-            m.append(pill("Make it an agent", .offer(kind: "agent", callId: t.callId), .primary))
-            if t.args?["cron"]?.stringValue != nil {
-                m.append(gap)
-                m.append(pill("Just a routine here", .offer(kind: "routine", callId: t.callId), .secondary))
-            }
-            m.append(gap)
-            m.append(pill("No", .reply(text: "No, just this once."), .secondary))
+            let project = t.args?["project"]?.stringValue ?? ""
+            var brief = t.args?["brief"]?.stringValue ?? ""
+            if brief.count > 160 { brief = String(brief.prefix(159)) + "…" }
+            return actionCard(title: "This looks like its own task", meta: project.isEmpty ? nil : "in \(project)",
+                              lines: [(t.args?["title"]?.stringValue ?? "", DS.fg), (brief, DS.fg3)],
+                              secondary: [CardButton(title: "Do it here", action: offer("side-here"), help: "Keep it in this conversation")],
+                              primary: CardButton(title: "New conversation", action: offer("side-new"), help: "Start it as its own conversation"))
         }
-        return card(m, .approval, lineHeight: 1.6)
+        if t.tool == "offer_parallel" {
+            var parts = ""
+            if case .array(let list)? = t.args?["parts"] { parts = list.compactMap(\.stringValue).joined(separator: " · ") }
+            return actionCard(title: "This could go faster in parallel", lines: [(t.args?["why"]?.stringValue ?? "", DS.fg2), (parts, DS.fg3)],
+                              secondary: [CardButton(title: "Do it here, one by one", action: reply("Do it here, one by one."))],
+                              primary: CardButton(title: "Work in parallel", action: offer("parallel")))
+        }
+        let what = t.args?["what"]?.stringValue ?? ""
+        let when = t.args?["when"]?.stringValue ?? ""
+        var others: [CardButton] = [CardButton(title: "No", action: reply("No, just this once."))]
+        if t.args?["cron"]?.stringValue != nil { others.append(CardButton(title: "Just a routine here", action: offer("routine"))) }
+        return actionCard(title: "Make this happen on its own?", lines: [([when, what].filter { !$0.isEmpty }.joined(separator: ": "), DS.fg2)],
+                          secondary: others, primary: CardButton(title: "Make it an agent", action: offer("agent")))
     }
 
     /// One or more side conversations' reports (they arrive together when several finish in a burst), each as
@@ -885,6 +853,52 @@ nonisolated struct ItemRenderer: Sendable {
             .link: action.url,
             .piopioPill: style.rawValue,
         ])
+    }
+
+    /// A button on an action card.
+    struct CardButton {
+        var title: String
+        var action: TranscriptAction
+        var help: String? = nil
+    }
+
+    /// A card that asks (docs/design/grey build-approval), one layout for all of them: an optional blue dot and the
+    /// title, with what it is on the right; a few lines; then the other choices as text on the left and the main one
+    /// as a dark button on the right. Without buttons (Quick Chat) it stops after the lines.
+    func actionCard(dot: Bool = true, title: String, after: String? = nil, meta: String? = nil, lines: [(text: String, color: NSColor)] = [],
+                    secondary: [CardButton] = [], primary: CardButton? = nil) -> NSAttributedString {
+        // Tabs would catch the right tab stop that places the meta and the main button; a card is one paragraph.
+        func flat(_ s: String) -> String { s.replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ") }
+        let text = NSFont.systemFont(ofSize: 13)
+        let m = NSMutableAttributedString()
+        if dot { m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: DS.accent, .baselineOffset: 1.5])) }
+        m.append(NSAttributedString(string: flat(title), attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: DS.fg]))
+        if let after { m.append(NSAttributedString(string: flat(after), attributes: [.font: text, .foregroundColor: DS.fg3])) }
+        if let meta, !meta.isEmpty { m.append(NSAttributedString(string: "\t" + flat(meta), attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg3])) }
+        for l in lines where !l.text.isEmpty {
+            m.append(NSAttributedString(string: lineSeparator + flat(l.text), attributes: [.font: text, .foregroundColor: l.color]))
+        }
+        if primary != nil || !secondary.isEmpty {
+            // Air above the buttons: an empty line is a whole line tall, so a taller invisible glyph lifts this line
+            // instead (lines put their extra height above the text).
+            m.append(NSAttributedString(string: lineSeparator + "\u{200B}", attributes: [.font: NSFont.systemFont(ofSize: 17)]))
+            for (i, b) in secondary.enumerated() {
+                if i > 0 { m.append(NSAttributedString(string: "    ", attributes: [.font: NSFont.systemFont(ofSize: 12.5)])) }
+                var a: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 12.5, weight: .medium), .foregroundColor: DS.fg2, .link: b.action.url]
+                if let help = b.help { a[.toolTip] = help }
+                m.append(NSAttributedString(string: b.title, attributes: a))
+            }
+            if let primary {
+                m.append(NSAttributedString(string: "\t", attributes: [.font: small]))
+                let p = NSMutableAttributedString(attributedString: pill(primary.title, primary.action, .primary))
+                if let help = primary.help { p.addAttribute(.toolTip, value: help, range: NSRange(location: 0, length: p.length)) }
+                m.append(p)
+            }
+        }
+        let out = NSMutableAttributedString(attributedString: card(m, .approval, lineHeight: 1.6))
+        // One right tab for the meta and the main button, at the card's text inset (the pill is no wider than its run).
+        out.addAttribute(.piopioRightTab, value: NSNumber(value: Double(CardLayoutFragment.padding + 2)), range: NSRange(location: 0, length: out.length))
+        return out
     }
 
     /// Under your message, on hover (14b): Copy, Edit and, in Build, Rewind to here; a thread's versions switcher.
