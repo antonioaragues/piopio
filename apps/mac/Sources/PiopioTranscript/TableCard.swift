@@ -18,6 +18,13 @@ struct TableContent: Sendable {
     static let padH: CGFloat = 14
     static let padV: CGFloat = 9
     static let radius: CGFloat = DS.Radius.card
+    /// Room kept at the end of the header's last cell for the Copy button, so it never covers a heading.
+    static let copyRoom: CGFloat = 24
+
+    /// A cell's padding at its trailing edge.
+    func trailingPad(header: Bool, column c: Int) -> CGFloat {
+        header && c == columns - 1 ? Self.padH + Self.copyRoom : Self.padH
+    }
 
     var columns: Int { max(header.count, rows.map(\.count).max() ?? 0) }
 
@@ -29,8 +36,10 @@ struct TableContent: Sendable {
         let n = columns
         guard n > 0 else { return [] }
         let natural = (0..<n).map { c in
-            ([header] + rows).map { row in Self.textWidth(Self.plain(cell(row, c)), font: c == 0 ? Self.firstColumnFont : Self.cellFont) }.max() ?? 0
-        }.map { $0 + 2 * Self.padH }
+            ([header] + rows).enumerated().map { r, row in
+                Self.textWidth(Self.plain(cell(row, c)), font: c == 0 ? Self.firstColumnFont : Self.cellFont) + Self.padH + trailingPad(header: r == 0, column: c)
+            }.max() ?? 0
+        }
         let total = natural.reduce(0, +)
         if total <= width { return natural.map { $0 * width / max(total, 1) } }
         let minimum = min(120, width / CGFloat(n))
@@ -46,7 +55,7 @@ struct TableContent: Sendable {
         ([header] + rows).enumerated().map { r, row in
             let isHeader = r == 0
             let tallest = widths.indices.map { c in
-                Self.textHeight(Self.plain(cell(row, c)), font: isHeader ? Self.headerFont : (c == 0 ? Self.firstColumnFont : Self.cellFont), width: widths[c] - 2 * Self.padH)
+                Self.textHeight(Self.plain(cell(row, c)), font: isHeader ? Self.headerFont : (c == 0 ? Self.firstColumnFont : Self.cellFont), width: widths[c] - Self.padH - trailingPad(header: isHeader, column: c))
             }.max() ?? 0
             return ceil(tallest) + 2 * Self.padV
         }
@@ -210,6 +219,7 @@ final class TableHostingView<Content: View>: NSHostingView<Content>, ClickThroug
 struct TableCardView: View {
     let table: TableContent
     var selection = TableSelection()
+    @State private var hovering = false
 
     var body: some View {
         GeometryReader { geo in
@@ -237,6 +247,14 @@ struct TableCardView: View {
             // Inside a selection of the transcript: tinted like the text around it, so it shows it goes with a copy.
             .overlay { if let color = selection.color { shape.fill(Color(nsColor: color).opacity(0.55)).allowsHitTesting(false) } }
             .overlay(shape.strokeBorder(Color(nsColor: DS.line), lineWidth: 1))
+            // Copy, at the header's end: shown while the pointer is over the table.
+            .overlay(alignment: .topTrailing) {
+                TableCopyButton(table: table)
+                    .frame(height: heights[0])
+                    .padding(.trailing, 6)
+                    .opacity(hovering ? 1 : 0)
+            }
+            .onHover { hovering = $0 }
         }
     }
 
@@ -248,7 +266,8 @@ struct TableCardView: View {
                     .foregroundStyle(Color(nsColor: DS.fg))
                     .lineSpacing(1)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, TableContent.padH)
+                    .padding(.leading, TableContent.padH)
+                    .padding(.trailing, table.trailingPad(header: header, column: c))
                     .padding(.vertical, TableContent.padV)
                     .frame(width: widths[c], height: height, alignment: .topLeading)
                     .textSelection(.enabled)
@@ -271,5 +290,35 @@ struct TableCardView: View {
     /// **bold**, *italic* and `code` inside a cell.
     static func inline(_ s: String) -> AttributedString {
         (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+    }
+}
+
+/// The table's Copy button: its cells tab-separated (a spreadsheet splits them) with an HTML table beside them (Notes,
+/// Mail, Pages). A check mark for a moment after.
+struct TableCopyButton: View {
+    let table: TableContent
+    @State private var copied = false
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            TableContent.write(plain: table.tsv, html: TableContent.htmlDocument(table.html))
+            copied = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.5))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color(nsColor: hovering ? DS.fg2 : DS.fg3))
+                .frame(width: 22, height: 22)
+                .background(hovering ? Color(nsColor: DS.chip) : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(copied ? "Copied" : "Copy table")
+        .accessibilityLabel("Copy table")
     }
 }
