@@ -112,17 +112,18 @@ struct ThreadView: View {
 
     private var header: some View {
         PageHeader(summary.title, subtitle: subtitle) {
-            ToolbarIcon(symbol: "globe", label: "Browser", on: browserOpen,
-                        help: browserOpen ? "Hide the browser" : "Browser: the pages this chat opened, and yours") {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
-                }
-            }
+            // Summary first, then the rest, in the same order as a Build session's toolbar.
             ToolbarIcon(symbol: "list.bullet.rectangle", label: "Summary", on: summaryShown,
                         help: summaryShown ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
                 withAnimation(.easeOut(duration: 0.15)) {
                     // With the Browser in the panel, Summary swaps it out rather than hiding a column you can't see.
                     if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id); showSummary = true } else { showSummary.toggle() }
+                }
+            }
+            ToolbarIcon(symbol: "globe", label: "Browser", on: browserOpen,
+                        help: browserOpen ? "Hide the browser" : "Browser: the pages this chat opened, and yours") {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
                 }
             }
             moveMenu
