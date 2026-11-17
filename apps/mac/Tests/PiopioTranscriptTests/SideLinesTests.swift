@@ -33,12 +33,25 @@ import Testing
     let offer = TimelineItem.tool(ToolItem(id: "t2", at: "", callId: "c2", tool: "side_offer", args: .object(["title": .string("Dating app")]), status: .done))
     let propose = TimelineItem.tool(ToolItem(id: "t3", at: "", callId: "c3", tool: "side_propose", args: .object(["title": .string("Team page"), "why": .string("Spotted in passing")]), status: .done))
     var r = ItemRenderer()
-    #expect(r.render(offer).string.contains("This looks like its own task"))
+    if case .offer? = sideOfferModel(r.render(offer))?.content {} else { Issue.record("no offer card") }
     #expect(r.render(propose).string.contains("closed"))
     r.openProposals = ["c3": .distantFuture]
     #expect(r.render(propose).string.contains("Start"))
+    r.keptHere = ["c2"]
+    #expect(r.render(offer).string.contains("Doing it here · Dating app"))
+    r.keptHere = []
     r.sides = [SideInfo(id: "thr_1", title: "Dating app", state: "queued", from: "c2")]
-    #expect(r.render(offer).string.contains("Side conversation · Dating app · queued"))
+    guard case .side(let s)? = sideOfferModel(r.render(offer))?.content else { Issue.record("no side row"); return }
+    #expect(s.id == "thr_1" && SideOfferModel.state(s) == "queued")
+}
+
+@Test func doItHereIsTheMessageAfterTheOffer() {
+    let offer = TimelineItem.tool(ToolItem(id: "t1", at: "", callId: "c1", tool: "side_offer", args: .object(["title": .string("A")]), status: .done))
+    let later = TimelineItem.tool(ToolItem(id: "t2", at: "", callId: "c2", tool: "side_offer", args: .object(["title": .string("B")]), status: .done))
+    let here = TimelineItem.user(UserItem(id: "u1", at: "", text: "Do it here."))
+    let other = TimelineItem.user(UserItem(id: "u2", at: "", text: "Something else"))
+    #expect(TranscriptDocument.keptHere([offer, here, later, other]) == ["c1"])
+    #expect(TranscriptDocument.keptHere([offer, other, here]).isEmpty)
 }
 
 @Test func aSideWaitingOnYouIsACardOnlyWhileItStillWaits() {

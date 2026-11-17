@@ -208,6 +208,7 @@ public final class TranscriptDocument {
         prefetched = nil
         items = snapshot.items
         renderer.midTurn = Self.midTurn(items)
+        renderer.keptHere = Self.keptHere(items)
         windowStart = max(0, items.count - windowSize)
         let window = Array(items[windowStart...])
         let renderer = self.renderer
@@ -317,6 +318,7 @@ public final class TranscriptDocument {
         }
         if !events.isEmpty {
             refreshMidTurn()
+            refreshKeptHere()
             refreshFooters()
         }
         if follow, !events.isEmpty { textView.scrollToEndOfDocument(nil) }
@@ -362,6 +364,33 @@ public final class TranscriptDocument {
         renderer.midTurn = next
         for id in changed {
             if let item = items.last(where: { $0.id == id }) { replace(item) }
+        }
+    }
+
+    /// The offers you answered with Do it here: the engine sends "Do it here." as your next message (docs/spec/24 §1).
+    nonisolated static func keptHere(_ items: [TimelineItem]) -> Set<String> {
+        var out = Set<String>()
+        var offer: String?
+        for item in items {
+            switch item {
+            case .tool(let t) where t.tool == "side_offer": offer = t.callId
+            case .user(let u):
+                if let o = offer, u.text.trimmingCharacters(in: .whitespacesAndNewlines) == "Do it here." { out.insert(o) }
+                offer = nil
+            default: break
+            }
+        }
+        return out
+    }
+
+    /// Once you choose Do it here, its card becomes a grey line.
+    private func refreshKeptHere() {
+        let next = Self.keptHere(items)
+        guard next != renderer.keptHere else { return }
+        let changed = next.symmetricDifference(renderer.keptHere)
+        renderer.keptHere = next
+        for item in items {
+            if case .tool(let t) = item, changed.contains(t.callId) { replace(item) }
         }
     }
 
@@ -732,6 +761,7 @@ public final class TranscriptDocument {
             (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
             (value as? DisclosureAttachment)?.card.onAction = { [weak self] action in self?.handle(action) }
             (value as? FileCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
+            (value as? SideOfferAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             if let visual = (value as? VisualAttachment)?.model {
                 visual.onAction = { [weak self] action in self?.handle(action) }
                 visual.onResize = { [weak self] model in self?.relayout { ($0 as? VisualAttachment)?.model === model } }

@@ -150,10 +150,13 @@ import Testing
 /// Piopio's offer of a side conversation (docs/spec/24 §1): the task, its brief, New conversation and Do it here.
 @Test @MainActor func sideOfferIsACardWithTwoChoices() {
     let offer = ToolItem(id: "t1", at: "", callId: "c9", tool: "side_offer", args: .object(["title": .string("Centered start page"), "brief": .string("Bring back the centered start page for + and New project")]), status: .done, output: "Offered.")
-    let card = ItemRenderer().render(.tool(offer)).string
-    #expect(card.contains("This looks like its own task"))
-    #expect(card.contains("Centered start page"))
-    #expect(card.contains("Bring back the centered start page"))
+    let card = sideOfferModel(ItemRenderer().render(.tool(offer)))
+    guard case .offer(let callId, let title, let brief, let project)? = card?.content else { Issue.record("no offer card"); return }
+    #expect(callId == "c9" && title == "Centered start page" && brief.hasPrefix("Bring back the centered start page") && project == nil)
+    // Room for the eyebrow, a title, two lines of brief and the footer, however long the brief is.
+    let long = SideOfferModel(.offer(callId: "c", title: "T", brief: String(repeating: "word ", count: 200), project: nil))
+    #expect(long.height(width: 560) == SideOfferModel(.offer(callId: "c", title: "T", brief: String(repeating: "word ", count: 400), project: nil)).height(width: 560))
+    #expect(long.height(width: 560) > SideOfferModel(.offer(callId: "c", title: "T", brief: "", project: nil)).height(width: 560))
     let proposed = ToolItem(id: "t2", at: "", callId: "c10", tool: "side_propose", args: .object(["title": .string("Fix the team page"), "why": .string("Same bug")]), status: .done, output: "Proposed.")
     // A proposal is a card with Start while it's open, a grey line once it's dismissed or expired.
     var open = ItemRenderer()
@@ -168,4 +171,13 @@ import Testing
     #expect(ItemRenderer.notable("T2 “Signup form” looks stuck: nothing new for 10 minutes while running `npm test`."))
     #expect(ItemRenderer.notable("T2 “Signup form” is repeating itself: the same command failed 3 times in this turn."))
     #expect(!ItemRenderer.notable("T2 “Signup form” is done."))
+}
+
+/// The side-offer card in a rendered item, if it has one.
+func sideOfferModel(_ text: NSAttributedString) -> SideOfferModel? {
+    var found: SideOfferModel?
+    text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) { value, _, stop in
+        if let a = value as? SideOfferAttachment { found = a.model; stop.pointee = true }
+    }
+    return found
 }

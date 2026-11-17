@@ -43,6 +43,17 @@ extension ItemRenderer {
         return sideLine(s)
     }
 
+    /// An offer (side_offer, docs/design/side-conversations 1a): the card while it waits; the side's row once New
+    /// conversation started it; a grey line once you chose Do it here.
+    func sideOffer(_ t: ToolItem) -> NSAttributedString {
+        let title = t.args?["title"]?.stringValue ?? ""
+        if let s = side(from: t.callId) { return attachmentParagraph(SideOfferAttachment(model: SideOfferModel(.side(s))), spacing: 14) }
+        if keptHere.contains(t.callId) { return note("Doing it here · \(title)") }
+        let project = t.args?["project"]?.stringValue ?? ""
+        let model = SideOfferModel(.offer(callId: t.callId, title: title, brief: t.args?["brief"]?.stringValue ?? "", project: project.isEmpty ? nil : project))
+        return attachmentParagraph(SideOfferAttachment(model: model), spacing: 14)
+    }
+
     /// A proposal (side_propose): a card with Start and Dismiss while it's open; its side's line once started.
     /// Laid out as the grey approval card (docs/design/grey build-approval): the title, and what it is on the right;
     /// the model's reason; Dismiss on the left and Start on the right. It's Piopio's idea, not something waiting on
@@ -98,14 +109,7 @@ extension ItemRenderer {
         if s.state == "needs_you" { m.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 7), .foregroundColor: DS.accent, .baselineOffset: 1.5])) }
         m.append(NSAttributedString(string: "Side conversation · ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
         m.append(link(s.title, .open, s.id))
-        let state: String = switch s.state {
-        case "queued": "queued"
-        case "working": s.line.map { $0.isEmpty ? "working" : $0 } ?? "working"
-        case "needs_you": "needs you"
-        case "done": s.finished.map { $0 } ?? "done"
-        case "failed": "failed"
-        default: "stopped"
-        }
+        let state = SideOfferModel.state(s)
         m.append(NSAttributedString(string: " · \(state)", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))
         if s.unmerged {
             m.append(NSAttributedString(string: " · ", attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3]))

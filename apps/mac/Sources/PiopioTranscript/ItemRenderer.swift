@@ -26,6 +26,8 @@ nonisolated struct ItemRenderer: Sendable {
     var sides: [SideInfo] = []
     /// Open proposals (side_propose call ids) and when each expires.
     var openProposals: [String: Date] = [:]
+    /// Offers (side_offer call ids) you answered with Do it here: a grey line instead of the card.
+    var keptHere: Set<String> = []
 
     /// Answers 15 / 1.6 (chat v3); Quick Chat keeps the compact 13.5.
     private var bodySize: CGFloat { compact ? DS.transcriptSize : 15 }
@@ -101,10 +103,9 @@ nonisolated struct ItemRenderer: Sendable {
             return agentAnswer(t)
         case .tool(let t) where t.tool == "side_start" && t.status != .error:
             return sideStarted(t)
-        case .tool(let t) where t.tool == "side_offer" && t.status == .done && side(from: t.callId) != nil:
-            // New conversation was chosen: the card gives way to the side's line.
-            return sideStarted(t)
-        case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat" || t.tool == "side_offer") && t.status == .done:
+        case .tool(let t) where t.tool == "side_offer" && t.status == .done:
+            return sideOffer(t)
+        case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat") && t.status == .done:
             return offerCard(t)
         case .tool(let t) where t.tool == "side_propose" && t.status == .done:
             return sideProposal(t)
@@ -202,16 +203,6 @@ nonisolated struct ItemRenderer: Sendable {
     private func offerCard(_ t: ToolItem) -> NSAttributedString {
         let reply = { (text: String) in TranscriptAction.reply(text: text) }
         func offer(_ kind: String) -> TranscriptAction { .offer(kind: kind, callId: t.callId) }
-        if t.tool == "side_offer" {
-            // "This looks like its own task" (docs/spec/24 §1, §6): New conversation, or Do it here.
-            let project = t.args?["project"]?.stringValue ?? ""
-            var brief = t.args?["brief"]?.stringValue ?? ""
-            if brief.count > 160 { brief = String(brief.prefix(159)) + "…" }
-            return actionCard(title: "This looks like its own task", meta: project.isEmpty ? nil : "in \(project)",
-                              lines: [(t.args?["title"]?.stringValue ?? "", DS.fg), (brief, DS.fg3)],
-                              secondary: [CardButton(title: "Do it here", action: offer("side-here"), help: "Keep it in this conversation")],
-                              primary: CardButton(title: "New conversation", action: offer("side-new"), help: "Start it as its own conversation"))
-        }
         if t.tool == "offer_parallel" {
             var parts = ""
             if case .array(let list)? = t.args?["parts"] { parts = list.compactMap(\.stringValue).joined(separator: " · ") }
@@ -1109,7 +1100,7 @@ nonisolated struct ItemRenderer: Sendable {
         return m
     }
 
-    private func attachmentParagraph(_ attachment: NSTextAttachment, spacing: CGFloat = 12) -> NSAttributedString {
+    func attachmentParagraph(_ attachment: NSTextAttachment, spacing: CGFloat = 12) -> NSAttributedString {
         let s = NSMutableAttributedString(attachment: attachment)
         s.append(NSAttributedString(string: "\n"))
         let p = NSMutableParagraphStyle()

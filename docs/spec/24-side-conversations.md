@@ -153,8 +153,16 @@ as with `piopio-history`.
 
 ## 6. In the app
 
-- **Offer card:** "This looks like its own task" · the title · **New conversation** ⏎ · **Do it here**. Esc is Do it
-  here. Once answered it becomes the conversation card, or a one-line "Doing it here".
+- **Offer card** (2026-11-18, [design 1a](../design/side-conversations/card/README.md), built in grey tokens:
+  [light](../design/side-conversations/card/built-light.png), [dark](../design/side-conversations/card/built-dark.png)):
+  field fill, 0.5pt hairline, radius 12. A branch glyph on a chip and "This looks like its own task" (· in *project*)
+  in `fg3`; the title, 14 semibold; the brief in two lines at most (all of it in the tooltip). A footer under a
+  hairline, on the `win` fill: "Takes the brief with it" on the left, **Do it here** as text and **New conversation ↗**
+  as the black button on the right. Not built yet: ⏎ and Esc. Once answered it becomes the conversation's row, or a
+  one-line "Doing it here · *title*" when the next message is the "Do it here." the choice sends.
+- **Its row once started** (the same design's state 2): the branch chip, the title, "Side conversation · *where it
+  stands*" (a blue dot when it needs you), Discard · Merge while its branch waits, and **Open ↗**. Sides started by
+  asking or from a proposal keep the grey line ("Side conversation · *title* · *where it stands*").
 - **Conversation card** (the reference's): title; a dot (grey proposed, pulsing working, amber needs you, green done,
   red failed); one muted live line; a chevron. Click opens it. ⌥-click opens it beside (later, with split view).
   Done cards on a worktree carry the finishing actions.
