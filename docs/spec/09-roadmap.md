@@ -32,11 +32,12 @@ One build track at a time, plus Track A running beside it as use, not as buildin
 
 **Done 2026-11-17:** spec 26 C1–C2 (teams became projects' ways of working, 26 §11–§12, merged into main), side
 conversations SD1–SD3 (24 §10–§11), non-blocking `task` DP4 (17 §9), the Watchdog's rules DP1 (17 §10), and the
-GitHub PR loop G4–G8 with PR events DP5 (05 §8, as built). C4, the real-model trial, is still to run.
+GitHub PR loop G4–G8 with PR events DP5 (05 §8, as built), and C4, the real-model trial (26 §13): about $0.66, three
+fixes. The OpenRouter key expired during it.
 
 **Now**
-1. **Track A:** do the day's real work in Piopio and tick the acceptance boxes as they pass, C4 and a real PR
-   through G6–G8 among them. What breaks goes ahead of new features.
+1. **Track A:** do the day's real work in Piopio and tick the acceptance boxes as they pass, a real PR through G6–G8
+   among them. What breaks goes ahead of new features.
 
 **Next**
 2. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model

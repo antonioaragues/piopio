@@ -332,3 +332,64 @@ On the same branch as C1, so the app and the engine change together.
   - captures of the Board, the settings sheet and the report.
 - **Not checked:** a click-through of the offer card, the fit check sheet and a real job. That's C4, with real
   models.
+
+## 13. C4, the real-model trial (2026-11-17)
+
+An isolated app copy with your OpenRouter key, driven over the engine socket. The project was a small static site
+(`node check.mjs` checks titles, nav, footer and links) with git. Piopio ran on Claude Sonnet 5.5 in Full auto. Helpers
+and reviewer ran on Claude Haiku 5.5, with review on, the checks as the test command and $1.50 per job. There was one
+agent, Copy, on Haiku. 22 requests in five runs cost **about $0.66 in all**. The last run stopped when OpenRouter
+answered "API key expired", so the key needs renewing before the next trial.
+
+**Doing it in the conversation (the default, §7.1):**
+
+| Request | What Piopio did | Cost |
+|---|---|---|
+| About page, linked from every nav | did it itself, said what it invented | $0.05 |
+| Three blog posts, parallel off | did it itself in one command; no offer | $0.02 |
+| Allergens note, footer hours, address, a title fix (four small edits) | each done itself, parallel on or off | $0.007–0.013 |
+| Three posts "in parallel please" (twice), three recipe pages, three linked pages | did each itself and said why: small pages that all change the same list or nav | $0.02–0.06 |
+| Three pages, "use the board for this, one helper per page" | three board tasks (below) | $0.15 + $0.02 |
+
+That matches 20 §14. Piopio splits only when asked plainly, and it says why when it doesn't. Doing it in the
+conversation was always cheaper: three posts cost $0.02 there, against $0.14 when they went to subagents (below).
+
+**Side conversations and agents:**
+- "Unrelated: can you help me plan the staff rota for December?" got `side_offer` at once and nothing else ($0.006).
+- "Different topic: what should I ask an accountant…" was answered in the conversation. That's the rule: a question
+  stays (24 §3).
+- "@Copy suggest a tagline…" called `ask_agent`, put Copy's pick under the heading, and said it repeats the next line.
+
+**The board (once the bug below was fixed):**
+- Three tasks with scoped briefs. Piopio told the helpers to leave the nav alone and added the links itself after the
+  merges, "to avoid merge conflicts".
+- Haiku built and reviewed each task. The reviewer's notes were specific ("matches about.html's structure… invents no
+  prices"). All three merged with the checks passing, in 65 s, and the helpers cost $0.02 in all.
+- Piopio checked each diff before reporting and said the branch was ready to merge from the Board.
+- Merging from the Board stopped on a conflict, because a commit on `main` had changed the same nav lines. Nothing
+  changed, and the message said what to do. That's right.
+
+**Fixed from the trial:**
+- **No board in a conversation reached through a symlink.** Projects are stored by real path. A conversation opened as
+  `/var/folders/…` (which is `/private/var/folders/…`) didn't find its project, so it got no board, nor the project's
+  approval mode, rules or PR setting. Piopio said "there's no board tool here". Project lookup now resolves symlinks
+  (`Projects.entryFor`), tested in `linked-folders.test.ts`.
+- **Parallel writes went to `task` subagents.** Without the board (the bug above), "in parallel please" became three
+  `task` subagents writing files in the same folder. They ran on the conversation's own Sonnet, with no branch, review
+  or checks, and cost $0.11 against $0.02 done in the conversation. `task` now says it's for read-only pieces and
+  that changes are made in the conversation. The board's brief says parallel changes go on the board, not to `task`.
+  The side-conversation rules say the same.
+- **Each board task started twice.** Three `create_task` calls in one message each ran the board's pump, and each pump
+  saw T1 still To do while it looked up the job's cost. The second start failed on "a branch named … already exists"
+  and marked the task blocked while its helper worked on. Piopio then spent several turns on false "blocked" messages
+  (most of that job's $0.15). Now there's one pump per project at a time; a call while one runs makes it go round
+  again. The scripted model gained `& ` (a call in the same message as the one before) so a test reproduces it.
+- **The Watchdog's W2 fired twice for one cause.** The same failing command three times also counts as the same call
+  three times, so it gave two notifications. The second note replaced the first. One cause now gives one note.
+
+**Seen, not changed:**
+- Copy's cost shows as $0 in its snapshot, so an `ask_agent` answer isn't in any conversation's cost yet.
+- Subagents run on the conversation's model, not the helpers' build model.
+- Each request in A ran with the earlier ones' uncommitted edits in the folder, as in daily use. Piopio worked around
+  them and asked before touching files it hadn't made.
+- The real model sends parallel tool calls; the scripted one didn't, which is why the double start had no test.
