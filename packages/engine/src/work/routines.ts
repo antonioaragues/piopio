@@ -1,11 +1,12 @@
 /**
- * Team routines (docs/spec/19 T1): when something should start the team's work without you asking. A time (a cron, or
- * once), a file in a folder, an email, or a webhook call. Each fire is a `[Routine]` message to the lead, which plans
- * it like any request. They're set by the lead when you ask it ("every Monday, a brief on…") or from the team page.
+ * A project's routines (docs/spec/21 AD5, 26 CL10): when something should start work there without you asking. A time
+ * (a cron, or once), a file in a folder, an email, or a webhook call. Each fire opens a conversation with Piopio in the
+ * project, with a `[Routine]` message it plans like any request. Piopio sets them when you ask ("every Monday, a brief
+ * on…"), or you do in the project's settings.
  */
 import { nextFire, parseLocal } from "@piopio/runtime";
 
-export type TeamRoutine = {
+export type ProjectRoutine = {
 	id: string;
 	on: "time" | "folder" | "email" | "webhook";
 	prompt: string;
@@ -18,7 +19,7 @@ export type TeamRoutine = {
 	/** email: part of the sender, and words in the subject. */
 	from?: string;
 	subject?: string;
-	by: "lead" | "you";
+	by: "piopio" | "you";
 	createdAt: string;
 	/** time: the next fire (epoch ms), kept so a fire missed while the Mac slept runs once on wake. */
 	next?: number;
@@ -33,7 +34,7 @@ export const systemZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /** "Every Monday at 09:00", "Every weekday at 08:30", "When a file appears in ~/Inbox"… */
-export function routineLabel(r: Pick<TeamRoutine, "on" | "cron" | "at" | "tz" | "folder" | "from" | "subject">): string {
+export function routineLabel(r: Pick<ProjectRoutine, "on" | "cron" | "at" | "tz" | "folder" | "from" | "subject">): string {
 	if (r.on === "folder") return `When a file appears or changes in ${r.folder}`;
 	if (r.on === "email") return `When an email${r.from ? ` from ${r.from}` : ""}${r.subject ? ` about “${r.subject}”` : ""} arrives`;
 	if (r.on === "webhook") return "When its URL is called";
@@ -70,7 +71,7 @@ export function parseWhen(when: string, tz: string, now: number): { cron: string
 }
 
 /** The next fire after `after`, or undefined for a once that's done. */
-export function nextOf(r: TeamRoutine, after: number): number | undefined {
+export function nextOf(r: ProjectRoutine, after: number): number | undefined {
 	if (r.on !== "time") return undefined;
 	if (r.cron) return nextFire(r.cron, r.tz ?? systemZone(), after);
 	return r.at !== undefined && r.at > after ? r.at : undefined;

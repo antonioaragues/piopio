@@ -72,8 +72,6 @@ struct BuildSessionView: View {
     @State private var reviewing = false
     @State private var reviewFile: String?
     @State private var git: GitModel?
-    /// "Bring in a team" from Piopio's offer (docs/spec/21 D7).
-    @State private var teamOffer: TeamOffer?
     @State private var committing = false
     @AppStorage("buildTerminal") private var showTerminal = false
 
@@ -211,8 +209,8 @@ struct BuildSessionView: View {
                 if !session.prompts.isEmpty {
                     PromptStack(session: session).frame(maxWidth: 680)
                 }
-                // A lead conversation's plan (docs/spec/21 D6): its tasks live from the board, then the merge card.
-                if let team = leadTeam { ConversationPlan(engine: engine, team: team, conversationId: summary.ref.id) }
+                // This conversation's tasks on the board (docs/spec/26 §5), live, then the merge card.
+                if let work = project.flatMap({ engine.work(in: $0) }) { ConversationPlan(engine: engine, work: work, conversationId: summary.ref.id) }
                 Composer(engine: engine, thread: session).frame(maxWidth: 680)
             }
             .padding(.horizontal, 40)
@@ -221,33 +219,24 @@ struct BuildSessionView: View {
                 session.document.bottomInset = height + 40
             }
         }
-        .sheet(item: $teamOffer) { offer in
-            if let project { TeamForProjectSheet(engine: engine, project: project, conversation: summary.ref, offer: offer) { teamOffer = nil } }
-        }
-        // PIOPIO_DEMO_OFFER=team: captures open the newest team offer's sheet.
-        .task {
-            guard ProcessInfo.processInfo.environment["PIOPIO_DEMO_OFFER"] == "team" else { return }
-            try? await Task.sleep(for: .seconds(2))
-            let offer = session.document.items.reversed().compactMap { if case .tool(let t) = $0, t.tool == "offer_team" { t.callId } else { nil } }.first
-            if let offer { takeOffer("team", call: offer) }
-        }
         .onReceive(NotificationCenter.default.publisher(for: .transcriptOffer)) { note in
             guard note.object as? String == summary.ref.id, let kind = note.userInfo?["kind"] as? String, let call = note.userInfo?["call"] as? String else { return }
             takeOffer(kind, call: call)
         }
     }
 
-    /// Piopio's offers (docs/spec/21 D7): a team for this project, an agent of its own, or a routine here.
+    /// Piopio's offers (docs/spec/26 CL9): parallel work in this project, an agent of its own, or a routine here.
     private func takeOffer(_ kind: String, call: String) {
         guard case .tool(let t)? = session.document.item("tool:\(call)") else { return }
         switch kind {
-        case "team":
-            // Already taken: the project has its team (and this conversation, likely, its lead).
-            guard let project, engine.team(in: project) == nil else { return }
-            var parts: [String] = []
-            if case .array(let list)? = t.args?["parts"] { parts = list.compactMap(\.stringValue) }
-            let asked = session.document.items.compactMap { if case .user(let u) = $0 { u.text } else { nil } }.last ?? ""
-            teamOffer = TeamOffer(request: [asked, parts.isEmpty ? "" : "Parts: " + parts.joined(separator: ", ")].filter { !$0.isEmpty }.joined(separator: "\n"), parts: parts.count)
+        case "parallel":
+            // Already taken: parallel work is on here, and this conversation was told to plan.
+            guard let project, engine.work(in: project)?.way.parallel != true else { return }
+            Task {
+                do { try await engine.acceptParallel(summary.ref, in: project) } catch {
+                    await session.send("Switching on parallel work failed: \((error as? EngineError)?.message ?? error.localizedDescription)")
+                }
+            }
         case "agent":
             Task { try? await engine.turnIntoAgent(summary.ref) }
         case "routine":
@@ -385,17 +374,10 @@ struct BuildSessionView: View {
     }
 
     /// "smart-paste · pi/engine-protocol", or "· no git".
-    /// The team whose lead this conversation is (docs/spec/20 PT4).
-    private var leadTeam: TeamInfo? {
-        guard let t = summary.team, t.kind == "lead" else { return nil }
-        return engine.teams.first { $0.id == t.id }
-    }
-
     private var subtitle: String {
         let name = project?.name ?? URL(fileURLWithPath: summary.cwd ?? "").lastPathComponent
         let branch = git?.status?.branch ?? summary.worktree?.branch ?? project?.branch
-        let base = branch.map { "\(name) · \($0)" } ?? (git?.status?.repo == false ? "\(name) · no git" : name)
-        return leadTeam.map { "\(base) · with \($0.name)" } ?? base
+        return branch.map { "\(name) · \($0)" } ?? (git?.status?.repo == false ? "\(name) · no git" : name)
     }
 
     static func relative(_ iso: String) -> String {

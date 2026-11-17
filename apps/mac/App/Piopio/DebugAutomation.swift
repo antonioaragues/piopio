@@ -262,25 +262,20 @@ enum DebugAutomation {
                 if let prompt = env["PIOPIO_DEMO_BUILD_PROMPT"] { await session.send(prompt) }
             }
         }
-        // PIOPIO_DEMO_TEAM=<template>[:<folder>]: a team (docs/spec/19), with PIOPIO_DEMO_TEAM_GOAL for its lead and
-        // PIOPIO_DEMO_TEAM_TEST as its checks; then its project's page (PIOPIO_DEMO_TEAM_TAB: conversations, board, settings).
-        if let spec = env["PIOPIO_DEMO_TEAM"], engine.status == .ready {
+        // PIOPIO_DEMO_PARALLEL=<folder>: the folder as a project with parallel work on (docs/spec/26), PIOPIO_DEMO_PARALLEL_TEST
+        // as its checks; then PIOPIO_DEMO_PARALLEL_TAB: "board", "settings", or a new conversation there that gets
+        // PIOPIO_DEMO_PARALLEL_GOAL.
+        if let folder = env["PIOPIO_DEMO_PARALLEL"], engine.status == .ready {
             Task {
-                let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
-                if let tab = env["PIOPIO_DEMO_TEAM_TAB"] { UserDefaults.standard.set(tab, forKey: "projectTab") }
-                // PIOPIO_DEMO_TEAM_START=1: the folder is added as a project first, and its + page opens (its team chosen).
-                let start = env["PIOPIO_DEMO_TEAM_START"] == "1" && parts.count > 1
-                let project = start ? await engine.addProject(URL(fileURLWithPath: parts[1])) : nil
-                guard let team = try? await engine.createTeam(name: "", template: parts[0], cwd: parts.count > 1 ? parts[1] : nil, goal: env["PIOPIO_DEMO_TEAM_GOAL"], testCommand: env["PIOPIO_DEMO_TEAM_TEST"]) else { return }
-                if let project {
-                    // As the project's + does, once the project and its team are loaded.
-                    try? await Task.sleep(for: .seconds(1))
-                    NotificationCenter.default.post(name: .newBuildSession, object: project.id)
-                } else {
-                    // Its project's page (docs/spec/20 §5), on the tab from PIOPIO_DEMO_TEAM_TAB.
-                    await engine.loadProjects()
-                    let place = engine.projects.first { $0.path == team.cwd }
-                    NotificationCenter.default.post(name: .selectItem, object: (place.map { SidebarItem.project($0.id) } ?? .team(team.id)).raw)
+                guard let project = await engine.addProject(URL(fileURLWithPath: folder)) else { return }
+                _ = try? await engine.configureWork(ConfigureWorkParams(project: project.id, parallel: true, testCommand: env["PIOPIO_DEMO_PARALLEL_TEST"]))
+                switch env["PIOPIO_DEMO_PARALLEL_TAB"] {
+                case "board": NotificationCenter.default.post(name: .selectItem, object: SidebarItem.board(project.id).raw)
+                case "settings": NotificationCenter.default.post(name: .projectSettings, object: project.id)
+                default:
+                    guard let ref = await engine.createBuildSession(in: project) else { return }
+                    NotificationCenter.default.post(name: .selectItem, object: SidebarItem.session(ref.id).raw)
+                    if let goal = env["PIOPIO_DEMO_PARALLEL_GOAL"] { _ = await engine.thread(ref).send(goal) }
                 }
             }
         }

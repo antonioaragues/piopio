@@ -90,17 +90,15 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openProject)) { note in openFolder(note.object as? URL) }
         .modifier(ProjectSettingsHost(engine: engine, item: itemBinding, sheet: $projectSheet))
+        .modifier(MigrationReportHost(engine: engine))
         // The conversation start page's box follows the page (also from a link or a saved selection): a project's has that
         // project chosen, the plain one no project.
         .onChange(of: itemRaw, initial: true) { _, raw in
             let target = UserDefaults.standard.string(forKey: "homeTarget") ?? "chat"
             switch SidebarItem(raw: raw) {
             case .project(let id): openProject(id)
-            case .newSession(let id):
-                // A project with a team (docs/spec/19 §10): its work goes to the team; the chip switches back to the project.
-                let team = engine.projects.first { $0.id == id }.flatMap { engine.team(in: $0) }
-                UserDefaults.standard.set(team.map { "team:" + $0.id } ?? "project:" + id, forKey: "homeTarget")
-            // ⌘N and compose start with no project: a project or team left chosen from before doesn't stick.
+            case .newSession(let id): UserDefaults.standard.set("project:" + id, forKey: "homeTarget")
+            // ⌘N and compose start with no project: a project (or, before docs/spec/26, a team) left chosen doesn't stick.
             case .start(.chat) where target.hasPrefix("project:") || target.hasPrefix("team:"): UserDefaults.standard.set("chat", forKey: "homeTarget")
             default: break
             }
@@ -209,7 +207,7 @@ struct RootView: View {
             ConversationStart(engine: engine, item: itemBinding)
         case .board(let id):
             ProjectBoardPage(engine: engine, projectId: id, item: itemBinding)
-        case .index(.agents) where engine.agents.isEmpty && !engine.teamDefinitions.contains(where: \.saved):
+        case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.agents):
             AgentsIndex(engine: engine, item: itemBinding)
@@ -239,10 +237,6 @@ struct RootView: View {
                 missing
             }
         // One case for both, so choosing another project in the box keeps the page (and what's typed).
-        case .team(let id):
-            TeamPage(engine: engine, teamId: id, item: itemBinding)
-        case .start(.team):
-            TeamStart(engine: engine, item: itemBinding)
         case .start(.chat), .newSession:
             ConversationStart(engine: engine, item: itemBinding)
         case .start(.project):
@@ -336,9 +330,8 @@ struct RootView: View {
     private func openProject(_ id: String) {
         let asked = UserDefaults.standard.string(forKey: "projectTab")
         UserDefaults.standard.removeObject(forKey: "projectTab")
-        let hasTeam = engine.projects.first { $0.id == id }.flatMap { engine.team(in: $0) } != nil
         if asked == "settings" { projectSheet = ProjectSheet(note: id) }
-        let next: SidebarItem = asked == "board" && hasTeam ? .board(id) : .newSession(id)
+        let next: SidebarItem = asked == "board" ? .board(id) : .newSession(id)
         itemRaw = next.raw
     }
 
@@ -467,6 +460,48 @@ private struct StartSheets: ViewModifier {
 
 /// A project's settings (docs/spec/18 §19): a sheet over whatever is open, from the row's button, its context menu or
 /// "Write them".
+/// What changed when teams became projects' ways of working (docs/spec/26 §8): shown once the engine is ready, until
+/// you close it.
+private struct MigrationReportHost: ViewModifier {
+    let engine: EngineController
+    @State private var report: String?
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: engine.status == .ready) {
+                guard engine.status == .ready, report == nil else { return }
+                report = await engine.migrationReport()
+            }
+            .sheet(isPresented: Binding(get: { report != nil }, set: { if !$0 { close() } })) {
+                VStack(alignment: .leading, spacing: 14) {
+                    ScrollView {
+                        Text(Self.markdown(report ?? "")).font(.system(size: 13)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    HStack {
+                        Spacer()
+                        Button("Got it", action: close).buttonStyle(PillStyle(kind: .strong)).keyboardShortcut(.defaultAction)
+                    }
+                }
+                .padding(24)
+                .frame(width: 560, height: 480)
+                .background(Color.dsWin)
+            }
+    }
+
+    private func close() {
+        report = nil
+        Task { await engine.dismissMigrationReport() }
+    }
+
+    /// The report's Markdown, with its heading as a bold first line (inline Markdown has no headings).
+    static func markdown(_ text: String) -> AttributedString {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map { $0.hasPrefix("# ") ? "**\($0.dropFirst(2))**" : String($0) }
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: lines.joined(separator: "\n"), options: options)) ?? AttributedString(text)
+    }
+}
+
 private struct ProjectSettingsHost: ViewModifier {
     let engine: EngineController
     @Binding var item: SidebarItem

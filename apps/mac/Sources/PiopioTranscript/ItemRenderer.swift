@@ -46,9 +46,9 @@ nonisolated struct ItemRenderer: Sendable {
             let text = String(u.text.dropFirst(routine ? 10 : 8))
             // The plan block above the composer shows each task's state (docs/spec/21 AD9): only what's notable stays a
             // line here, a task sent back or blocked.
-            // The conversation became the lead's (docs/spec/21 D7): one line says so.
-            if !routine, text.hasPrefix("The user brought in "), let team = text.dropFirst(20).split(separator: ";").first {
-                return note("\(team) joined · the lead takes it from here")
+            // You chose to work in parallel (docs/spec/26 CL9): one line says so.
+            if !routine, text.hasPrefix("The user chose to work in parallel") {
+                return note("Working in parallel · Piopio puts the parts on the board")
             }
             if !routine, !Self.notable(text) { return NSAttributedString() }
             let first = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? text
@@ -84,7 +84,7 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .tool(let t) where t.tool == "ask_agent":
             return agentAnswer(t)
-        case .tool(let t) where (t.tool == "offer_team" || t.tool == "offer_repeat") && t.status == .done:
+        case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat") && t.status == .done:
             return offerCard(t)
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
@@ -187,7 +187,8 @@ nonisolated struct ItemRenderer: Sendable {
         return card(m, .link, lineHeight: 1.5)
     }
 
-    /// Piopio's offers (docs/spec/21 D7, design 5b-1, 5d-3): a team for work that divides, or a way to repeat something.
+    /// Piopio's offers (docs/spec/26 CL9, 21 design 5d-3): parallel work for work that divides, or a way to repeat
+    /// something.
     private func offerCard(_ t: ToolItem) -> NSAttributedString {
         let m = NSMutableAttributedString()
         let gap = NSAttributedString(string: "    ", attributes: [.font: small])
@@ -198,12 +199,12 @@ nonisolated struct ItemRenderer: Sendable {
         func line(_ text: String, color: NSColor = DS.fg2) {
             m.append(NSAttributedString(string: lineSeparator + text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: color]))
         }
-        if t.tool == "offer_team" {
-            title("This could go faster with a team")
+        if t.tool == "offer_parallel" {
+            title("This could go faster in parallel")
             if let why = t.args?["why"]?.stringValue { line(why) }
             if case .array(let parts)? = t.args?["parts"] { line(parts.compactMap(\.stringValue).joined(separator: " · "), color: DS.fg3) }
             m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
-            m.append(pill("Bring in a team", .offer(kind: "team", callId: t.callId), .primary))
+            m.append(pill("Work in parallel", .offer(kind: "parallel", callId: t.callId), .primary))
             m.append(gap)
             m.append(pill("Do it here, one by one", .reply(text: "Do it here, one by one."), .secondary))
         } else {
@@ -223,7 +224,7 @@ nonisolated struct ItemRenderer: Sendable {
         return card(m, .approval, lineHeight: 1.6)
     }
 
-    /// A board update worth a line in the lead's conversation (AD9): a task sent back, or blocked.
+    /// A board update worth a line in the conversation (AD9): a task sent back, or blocked.
     static func notable(_ boardText: String) -> Bool {
         let first = boardText.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? boardText
         return first.contains(" went back to ") || first.contains(" is blocked")

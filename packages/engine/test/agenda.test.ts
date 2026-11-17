@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { buildAgenda } from "../src/agenda.js";
 
 /** Home's agenda (docs/spec/21 D2, design 5e): a Tuesday morning in Madrid, back at 10:00 after leaving at 22:00. */
-test("Home's agenda: today's timeline across agents, projects and teams, and what happened while you were away", () => {
+test("Home's agenda: today's timeline across agents and projects (their routines and boards), and what happened while you were away", () => {
 	const tz = "Europe/Madrid";
 	const at = (h: number, m = 0, day = 10) => new Date(Date.UTC(2026, 10, day, h - 1, m)).toISOString(); // CET = UTC+1
 	const agenda = buildAgenda({
@@ -26,12 +26,12 @@ test("Home's agenda: today's timeline across agents, projects and teams, and wha
 			},
 		],
 		projects: [{ id: "prj_p", name: "piopio", routines: [{ id: "rt", on: "time", prompt: "Write this week's brief", cron: "0 11 * * 2", tz, by: "you", createdAt: at(9, 0, 1), next: Date.parse(at(11)), runs: 0 }] }],
-		teams: [{ id: "team_p", name: "Development team", project: { id: "prj_p", name: "piopio" }, tasks: [{ id: "T1", title: "Fix crash reports", state: "doing", attempts: 0, updatedAt: at(9, 30) }, { id: "T2", title: "Settings screen", state: "done", attempts: 1, updatedAt: at(9) }] }],
+		boards: [{ project: { id: "prj_p", name: "piopio" }, tasks: [{ id: "T1", title: "Fix crash reports", state: "doing", attempts: 0, updatedAt: at(9, 30) }, { id: "T2", title: "Settings screen", state: "done", attempts: 1, updatedAt: at(9) }] }],
 	});
 	expect(agenda.today.map((x) => [x.at?.slice(11, 16), x.source.name, x.label, x.state])).toEqual([
 		["05:30", "Habit coach", "", "done"],
 		["07:00", "Morning briefing", "", "done"],
-		["09:00", "piopio team", "fix crash reports", "running"],
+		["09:00", "piopio", "fix crash reports", "running"],
 		["10:00", "piopio", "Write this week's brief", "upcoming"],
 		["20:00", "Habit coach", "Check-in", "upcoming"],
 		// Within the next 24 hours: tomorrow's 8:00 briefing, after a "Tomorrow" divider.
@@ -40,7 +40,7 @@ test("Home's agenda: today's timeline across agents, projects and teams, and wha
 	]);
 	expect(agenda.today.find((x) => x.at?.startsWith("2026-11-11T07"))?.tomorrow).toBe(true);
 	expect(agenda.away.map((x) => [x.source.name, x.text, x.quiet])).toEqual([
-		["piopio team", "finished a task; the reviewer sent one back", false],
+		["piopio", "finished a task; the reviewer sent one back", false],
 		["Morning briefing", "Sent you today's briefing", false],
 		["Habit coach", "had nothing new", true],
 	]);

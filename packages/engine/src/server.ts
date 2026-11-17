@@ -2,7 +2,7 @@
 import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { appendFileSync, existsSync, unlinkSync, chmodSync, statSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
@@ -33,23 +33,20 @@ import { exportMemory, MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
 import { DEFAULT_HOOKS_PORT, Hooks } from "./hooks.js";
 import { groupSteps, StepsView } from "./timeline/steps.js";
-import { fitCheck } from "./teams/fit.js";
-import { draftFor } from "./teams/draft-for.js";
+import { fitCheck } from "./work/fit.js";
 import type { ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over and visuals (they read as part of the conversation). */
-const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_team" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
+const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_parallel" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
 import { AppServices } from "./app-services.js";
 import { BrowserSites } from "./tools/browser-tools.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
-import { routineLabel, type TeamRoutine } from "./teams/routines.js";
-import { TeamRunner, type Team } from "./teams/runner.js";
+import { routineLabel, systemZone, type ProjectRoutine } from "./work/routines.js";
+import { WorkRunner, type ProjectWork } from "./work/runner.js";
+import { migrateTeams, needsMigration, REPORT_FILE } from "./work/migrate.js";
 import { buildAgenda } from "./agenda.js";
-import { systemZone } from "./teams/routines.js";
-import { draftTeam, readTemplates } from "./teams/library.js";
-import { TEAM_TEMPLATES } from "./teams/templates.js";
 import { TEMPLATES } from "@piopio/runtime";
 
 /** Set by the release bundle (scripts/bundle.mjs); "dev" when running from tsc output. */
@@ -77,7 +74,7 @@ export type EngineOptions = {
 	allowPrivateFetch?: boolean;
 	/** Where connected apps sign in and call their APIs (tests point them at a fake server). */
 	connectorEndpoints?: ConnectorEndpoints;
-	/** Where teams keep their folders (NOTES.md, a non-software team's work); default ~/Piopio/Teams or PIOPIO_TEAMS_DIR. */
+	/** Where teams kept their folders before docs/spec/26, read once by the migration; default ~/Piopio/Teams or PIOPIO_TEAMS_DIR. */
 	teamsDir?: string;
 	/** Event routines (tests: check mail and settle folders sooner). */
 	watchers?: { mailEveryMs?: number; settleMs?: number };
@@ -108,8 +105,9 @@ export class Engine {
 	readonly hooks: Hooks;
 	readonly telegram: TelegramChannels;
 	readonly watchers: AgentWatchers;
-	readonly teams: TeamRunner;
+	readonly work: WorkRunner;
 	private readonly teamsDir: string;
+	private readonly agentDir: string;
 	readonly app = new AppServices();
 	private usageCache?: { at: number; value: Result<"usage.summary"> };
 	private server?: Server;
@@ -163,8 +161,8 @@ export class Engine {
 		this.sessions.onInbox = (change) => {
 			for (const conn of this.authed) conn.notify("inbox.changed", change);
 		};
-		this.sessions.onTeams = (id) => {
-			for (const conn of this.authed) conn.notify("teams.changed", { id });
+		this.sessions.onWork = (project) => {
+			for (const conn of this.authed) conn.notify("work.changed", { project });
 		};
 		this.sessions.onAttention = (change) => {
 			for (const conn of this.authed) conn.notify("session.attention", change);
@@ -222,10 +220,10 @@ export class Engine {
 		this.sessions.telegram = this.telegram;
 		// Event routines agents set themselves (docs/spec/19 S3): folders and connected mail; webhooks go through hooks.
 		this.watchers = new AgentWatchers({
-			// Agents' watches, and teams' folder and email routines (keyed by the team's id).
-			watches: async () => [...(await this.sessions.agentWatches()), ...this.teams.routineWatches()],
+			// Agents' watches, and projects' folder and email routines (keyed by the project's id).
+			watches: async () => [...(await this.sessions.agentWatches()), ...this.work.routineWatches()],
 			fire: async (id, watchId, happened, key) => {
-				if (this.teams.hasProject(id)) await this.teams.fireRoutine(id, watchId, happened, key);
+				if (this.work.hasProject(id)) await this.work.fireRoutine(id, watchId, happened, key);
 				else await (await this.sessions.agent({ kind: "agent", id })).fireWatch(watchId, happened, key);
 			},
 			mail: () => this.connectors.mailboxes("agent").map((b) => ({ name: b.name, search: (q: string, n: number) => b.mailbox.search(q, n) })),
@@ -235,14 +233,16 @@ export class Engine {
 			...(options.watchers?.settleMs !== undefined ? { settleMs: options.watchers.settleMs } : {}),
 		});
 		this.sessions.watchers = this.watchers;
-		// Teams (docs/spec/19): a lead and members working through a board.
+		// Projects' work (docs/spec/26): the way of working, the board and the routines of each project.
 		this.teamsDir = options.teamsDir ?? process.env.PIOPIO_TEAMS_DIR ?? join(homedir(), "Piopio", "Teams");
-		this.teams = new TeamRunner(
-			this.sessions.teamHost({
-				stateFile: join(options.paths.home, "teams.json"),
-				worktreesDir: join(options.paths.home, "worktrees", "teams"),
+		this.agentDir = agentDir;
+		this.work = new WorkRunner(
+			this.sessions.workHost({
+				stateFile: join(options.paths.home, "work.json"),
+				routinesFile: join(options.paths.home, "project-routines.json"),
+				worktreesDir: join(options.paths.home, "worktrees", "work"),
 				log: this.log,
-				// A project by id or by folder (routines are a project's, docs/spec/21 AD5).
+				// A project by id or by folder (a worktree's is its project's).
 				project: (x) => {
 					if (x.startsWith("prj_")) {
 						try {
@@ -256,14 +256,11 @@ export class Engine {
 				},
 			}),
 		);
-		this.sessions.teams = this.teams;
-		// Your templates live beside your teams, as folders (docs/spec/20 P4).
-		this.teams.templatesDir = join(this.teamsDir, "Templates");
-		this.teams.templates = () => [...TEAM_TEMPLATES.map((t) => ({ ...t, source: "builtin" as const })), ...readTemplates(join(this.teamsDir, "Templates"))];
-		// A team's webhook routine has the same kind of URL as an agent's trigger, with the team's id.
-		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.teams.hasProject(agent) ? this.teams.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
-		this.teams.hookUrl = (team, routine) => (this.hooks.port ? this.hooks.url(team, routine) : undefined);
-		this.teams.onRoutines = () => void this.watchers.sync().catch(() => undefined);
+		this.sessions.work = this.work;
+		// A project's webhook routine has the same kind of URL as an agent's trigger, with the project's id.
+		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.work.hasProject(agent) ? this.work.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
+		this.work.hookUrl = (project, routine) => (this.hooks.port ? this.hooks.url(project, routine) : undefined);
+		this.work.onRoutines = () => void this.watchers.sync().catch(() => undefined);
 		this.sessions.hookUrl = (agent, trigger) => this.hooks.url(agent, trigger);
 		this.sessions.policy = {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
@@ -294,6 +291,8 @@ export class Engine {
 		if (moved) this.log(`Moved ${moved} chat${moved === 1 ? "" : "s"} to the new engine.`);
 		// The interim browser (Playwright MCP, 2026-11-14) is gone: take out what it left (docs/spec/22 §13).
 		this.removeInterimBrowser();
+		// Teams from before docs/spec/26 become their projects' ways of working, once.
+		this.migrateTeams();
 		this.server = createServer((stream) => this.accept(new RpcConnectionFor(stream)));
 		await new Promise<void>((resolve, reject) => {
 			this.server!.once("error", reject);
@@ -310,16 +309,7 @@ export class Engine {
 		// Agents: webhook triggers, then every agent's schedules (they run with the app closed).
 		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
 		void this.sessions.startAgents(this.log);
-		// Teams that worked in their own folder become projects there (docs/spec/20 PT2).
-		for (const team of this.teams.list()) {
-			if (this.projects.projectFor(team.cwd)) continue;
-			try {
-				this.projects.add(team.cwd);
-			} catch (error) {
-				this.log(`Team ${team.name}: its folder couldn't become a project: ${(error as Error).message}`);
-			}
-		}
-		void this.teams.resume().catch((error: unknown) => this.log(`Teams: ${(error as Error).message}`));
+		void this.work.resume().catch((error: unknown) => this.log(`Work: ${(error as Error).message}`));
 	}
 
 	/** Whether conversations use a global MCP server: chosen per server, else (before that) all that are on. */
@@ -388,26 +378,55 @@ export class Engine {
 		);
 	}
 
-	/** A team definition with the projects it works in. */
-	private definitionView(id: string) {
-		const def = this.teams.definition(id);
-		return { ...def, projects: this.teams.usedBy(id).map((t) => ({ teamId: t.id, cwd: t.cwd })) };
+	/** docs/spec/26 §8: teams.json and team-definitions.json, read once, become projects' work and playbooks. */
+	private migrateTeams(): void {
+		if (!needsMigration(this.options.paths.home)) return;
+		const agents = new Map(this.sessions.list("agent").map((a) => [a.ref.id, a.title]));
+		const result = migrateTeams({
+			home: this.options.paths.home,
+			teamsDir: this.teamsDir,
+			skillsDir: join(this.agentDir, "skills"),
+			project: (cwd) => {
+				const known = this.projects.projectFor(cwd);
+				if (known) return known;
+				try {
+					const added = this.projects.add(cwd);
+					return { id: added.id, path: added.path };
+				} catch {
+					return undefined;
+				}
+			},
+			agent: (id) => {
+				const name = agents.get(id);
+				if (!name) return undefined;
+				try {
+					const model = this.sessions.agentDefinition(id).definition.models.default;
+					return { name, ...(model ? { model } : {}) };
+				} catch {
+					return { name };
+				}
+			},
+			log: this.log,
+		});
+		this.work.adopt(result.work, result.routines);
+		this.sessions.migrateTeams((id) => result.projectOf.get(id));
+		this.log(`Teams became ways of working in ${result.work.length} project${result.work.length === 1 ? "" : "s"} (docs/spec/26).`);
 	}
 
-	/** A team as the app sees it: its routines with a label, and a webhook's URL. */
-	private teamView(team: Team): Team {
-		return team.routines?.length ? { ...team, routines: team.routines.map((r) => this.routineView(team.id, r)) } : team;
+	/** A project's work as the app sees it. */
+	private workView(work: ProjectWork) {
+		return { project: work.project, cwd: work.cwd, way: work.way, ...(work.git ? { git: work.git } : {}), tasks: work.tasks, createdAt: work.createdAt };
 	}
 
-	private routineView(teamId: string, r: TeamRoutine): TeamRoutine & { label: string; url?: string } {
-		const url = r.on === "webhook" && this.hooks.port ? this.hooks.url(teamId, r.id) : undefined;
+	private routineView(projectId: string, r: ProjectRoutine): ProjectRoutine & { label: string; url?: string } {
+		const url = r.on === "webhook" && this.hooks.port ? this.hooks.url(projectId, r.id) : undefined;
 		return { ...r, label: routineLabel(r), ...(url ? { url } : {}) };
 	}
 
 	async stop(): Promise<void> {
 		this.telegram?.stop();
 		this.watchers?.stop();
-		this.teams?.stop();
+		this.work?.stop();
 		for (const conn of this.authed) conn.close();
 		await this.backfill;
 		for (const off of this.subscriptions.values()) off();
@@ -836,147 +855,90 @@ export class Engine {
 					const upcoming = runs.upcoming.map((u) => (u.kind === "schedule" ? { ...u, label: "" } : u));
 					agents.push({ id: a.ref.id, name: a.title, runs: runs.runs, upcoming, held: runs.outbox.length });
 				}
-				const projects = this.projects.list().map((x) => ({ id: x.id, name: x.name, routines: this.teams.routines(x.id) }));
-				const teams = this.teams.list().map((t) => {
-					const place = this.projects.projectFor(t.cwd);
-					const name = place ? this.projects.list().find((x) => x.id === place.id)?.name : undefined;
-					return { id: t.id, name: t.name, ...(place && name ? { project: { id: place.id, name } } : {}), tasks: t.tasks };
+				const all = this.projects.list();
+				const projects = all.map((x) => ({ id: x.id, name: x.name, routines: this.work.routines(x.id) }));
+				const boards = this.work.list().flatMap((w) => {
+					const name = all.find((x) => x.id === w.project)?.name;
+					return name ? [{ project: { id: w.project, name }, tasks: w.tasks }] : [];
 				});
-				return buildAgenda({ now: Date.now(), tz: systemZone(), ...(p.since ? { since: Date.parse(p.since) } : {}), agents, projects, teams }) satisfies Result<"home.agenda">;
+				return buildAgenda({ now: Date.now(), tz: systemZone(), ...(p.since ? { since: Date.parse(p.since) } : {}), agents, projects, boards }) satisfies Result<"home.agenda">;
 			}
-			case "teams.templates":
-				return { templates: this.teams.templates().map((t) => ({ id: t.id, name: t.name, description: t.description, workplace: t.workplace, roles: t.roles, ...(t.source ? { source: t.source } : {}), ...(t.folder ? { folder: t.folder } : {}) })) } satisfies Result<"teams.templates">;
-			case "teams.list":
-				return { teams: this.teams.list().map((t) => this.teamView(t)) } satisfies Result<"teams.list">;
-			case "teams.get": {
-				const p = params as Params<"teams.get">;
-				return { team: this.teamView(this.teams.get(p.id)) } satisfies Result<"teams.get">;
+			case "work.list":
+				return { work: this.work.list().map((w) => this.workView(w)) } satisfies Result<"work.list">;
+			case "work.get": {
+				const p = params as Params<"work.get">;
+				const work = this.work.find(this.projects.get(p.project).id);
+				return (work ? { work: this.workView(work) } : {}) satisfies Result<"work.get">;
 			}
-			case "teams.create": {
-				const p = params as Params<"teams.create">;
-				const slug = (p.name.trim() || TEAM_TEMPLATES.find((t) => t.id === p.template)?.name || "team").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
-				let folder = join(this.teamsDir, slug);
-				for (let n = 2; existsSync(folder); n++) folder = join(this.teamsDir, `${slug}-${n}`);
-				// Every team works in a project (docs/spec/20 PT2): the folder you chose, or a new one named after the team.
-				const project = p.cwd ? this.projects.add(p.cwd) : this.projects.create(p.name.trim() || TEAM_TEMPLATES.find((t) => t.id === p.template)?.name || "Team");
-				await this.sessions.syncFolder(project.path);
-				const team = await this.teams.create({
-					name: p.name,
-					template: p.template,
-					folder,
-					cwd: project.path,
-					...(p.goal ? { goal: p.goal } : {}),
-					...(p.testCommand ? { testCommand: p.testCommand } : {}),
-					...(p.memberMode ? { memberMode: p.memberMode } : {}),
-					...(p.maxParallel ? { maxParallel: p.maxParallel } : {}),
-					...(p.initGit ? { initGit: true } : {}),
-					...(p.definition ? { definition: p.definition } : {}),
-					...(p.roles?.length ? { roles: p.roles } : {}),
-					...(p.style ? { style: p.style } : {}),
-					...(p.model ? { model: p.model.provider === "openrouter" ? p.model.id : `${p.model.provider}:${p.model.id}` } : {}),
-				});
-				return { team: this.teamView(team) } satisfies Result<"teams.create">;
+			case "work.configure": {
+				const p = params as Params<"work.configure">;
+				const { project, ...change } = p;
+				return { work: this.workView(await this.work.configure(project, change)) } satisfies Result<"work.configure">;
 			}
-			case "teams.addTask": {
-				const p = params as Params<"teams.addTask">;
-				const task = await this.teams.createTask(p.id, { title: p.title, brief: p.brief, ...(p.done ? { done: p.done } : {}), ...(p.role ? { role: p.role } : {}) }, "you");
-				return { task } satisfies Result<"teams.addTask">;
+			case "work.accept": {
+				const p = params as Params<"work.accept">;
+				this.sessions.plannerIn({ kind: "build", id: p.sessionId }, this.projects.get(p.project).path);
+				const work = await this.work.configure(p.project, { parallel: true });
+				await this.sessions.planInParallel({ kind: "build", id: p.sessionId });
+				return { work: this.workView(work) } satisfies Result<"work.accept">;
 			}
-			case "teams.draft": {
-				const p = params as Params<"teams.draft">;
-				if (!p.description.trim()) throw new EngineError("INVALID", "Describe the team: who's on it and what it does.");
-				return { draft: await draftTeam(p.description, (system, prompt) => this.hub.utility(system, prompt, "team-draft")) } satisfies Result<"teams.draft">;
+			case "work.playbooks": {
+				const p = params as Params<"work.playbooks">;
+				return { playbooks: this.work.playbooks(this.projects.get(p.project).path).map((x) => ({ id: x.id, name: x.name, description: x.description, source: x.source })) } satisfies Result<"work.playbooks">;
 			}
-			case "teams.createDefinition": {
-				const p = params as Params<"teams.createDefinition">;
-				const name = p.name?.trim() || this.teams.templates().find((t) => t.id === p.template)?.name || "Team";
-				const slug = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
-				let folder = join(this.teamsDir, slug);
-				for (let n = 2; existsSync(folder); n++) folder = join(this.teamsDir, `${slug}-${n}`);
-				const def = this.teams.createDefinition({ ...(p.template ? { template: p.template } : {}), ...(p.name ? { name: p.name } : {}), ...(p.style ? { style: p.style } : {}), ...(p.instructions !== undefined ? { instructions: p.instructions } : {}), ...(p.roles ? { roles: p.roles } : {}) }, folder);
-				for (const conn of this.authed) conn.notify("teams.changed", { id: def.id });
-				return { definition: this.definitionView(def.id) } satisfies Result<"teams.createDefinition">;
+			case "work.fitCheck": {
+				const p = params as Params<"work.fitCheck">;
+				return fitCheck(p.cwd) satisfies Result<"work.fitCheck">;
 			}
-			case "teams.saveTemplate": {
-				const p = params as Params<"teams.saveTemplate">;
-				return this.teams.saveTemplate(p.id, { ...(p.name ? { name: p.name } : {}), ...(p.description ? { description: p.description } : {}) }) satisfies Result<"teams.saveTemplate">;
+			case "work.job": {
+				const p = params as Params<"work.job">;
+				return (await this.work.jobCost(p.project, p.conversationId)) satisfies Result<"work.job">;
 			}
-			case "teams.definitions":
-				return { definitions: this.teams.definitions().map((d) => this.definitionView(d.id)) } satisfies Result<"teams.definitions">;
-			case "teams.updateDefinition": {
-				const p = params as Params<"teams.updateDefinition">;
-				const def = this.teams.updateDefinition(p.id, { ...(p.name !== undefined ? { name: p.name } : {}), ...(p.roles ? { roles: p.roles } : {}), ...(p.model !== undefined ? { model: p.model } : {}), ...(p.saved !== undefined ? { saved: p.saved } : {}), ...(p.reviewLimit !== undefined ? { reviewLimit: p.reviewLimit } : {}), ...(p.budgetPerJob !== undefined ? { budgetPerJob: p.budgetPerJob } : {}), ...(p.memberMode ? { memberMode: p.memberMode } : {}) });
-				return { definition: this.definitionView(def.id) } satisfies Result<"teams.updateDefinition">;
+			case "work.addTask": {
+				const p = params as Params<"work.addTask">;
+				const task = await this.work.createTask(p.project, { title: p.title, brief: p.brief, ...(p.done ? { done: p.done } : {}) }, "you");
+				return { task } satisfies Result<"work.addTask">;
 			}
-			case "teams.removeDefinition": {
-				const p = params as Params<"teams.removeDefinition">;
-				this.teams.removeDefinition(p.id);
-				for (const conn of this.authed) conn.notify("teams.changed", { id: p.id });
-				return {} satisfies Result<"teams.removeDefinition">;
+			case "work.updateTask": {
+				const p = params as Params<"work.updateTask">;
+				await this.work.updateTask(p.project, p.taskId, { ...(p.state ? { state: p.state } : {}), ...(p.title ? { title: p.title } : {}), ...(p.brief ? { brief: p.brief } : {}) });
+				return {} satisfies Result<"work.updateTask">;
 			}
-			case "teams.update": {
-				const p = params as Params<"teams.update">;
-				return { team: this.teamView(await this.teams.update(p.id, { ...(p.testCommand !== undefined ? { testCommand: p.testCommand } : {}), ...(p.maxParallel !== undefined ? { maxParallel: p.maxParallel } : {}) })) } satisfies Result<"teams.update">;
+			case "work.landing": {
+				const p = params as Params<"work.landing">;
+				return (await this.work.landing(p.project)) satisfies Result<"work.landing">;
 			}
-			case "teams.remove": {
-				const p = params as Params<"teams.remove">;
-				await this.teams.remove(p.id);
-				this.sessions.detachTeam(p.id);
-				return {} satisfies Result<"teams.remove">;
+			case "work.land": {
+				const p = params as Params<"work.land">;
+				return (await this.work.land(p.project, p.action)) satisfies Result<"work.land">;
+			}
+			case "work.migrationReport": {
+				const file = join(this.options.paths.home, REPORT_FILE);
+				return (existsSync(file) ? { report: readFileSync(file, "utf8").trim() } : {}) satisfies Result<"work.migrationReport">;
+			}
+			case "work.dismissMigrationReport": {
+				const file = join(this.options.paths.home, REPORT_FILE);
+				if (existsSync(file)) renameSync(file, join(this.options.paths.home, `${REPORT_FILE.replace(/\.md$/, "")}.seen.md`));
+				return {} satisfies Result<"work.dismissMigrationReport">;
 			}
 			case "routines.list": {
 				const p = params as Params<"routines.list">;
-				return { routines: this.teams.routines(p.project).map((r) => this.routineView(p.project, r)) } satisfies Result<"routines.list">;
+				return { routines: this.work.routines(p.project).map((r) => this.routineView(p.project, r)) } satisfies Result<"routines.list">;
 			}
 			case "routines.add": {
 				const p = params as Params<"routines.add">;
 				this.projects.get(p.project);
-				const routine = await this.teams.addRoutine(p.project, { on: p.on, prompt: p.prompt, ...(p.when ? { when: p.when } : {}), ...(p.folder ? { folder: p.folder } : {}), ...(p.from ? { from: p.from } : {}), ...(p.subject ? { subject: p.subject } : {}) }, "you");
+				const routine = await this.work.addRoutine(p.project, { on: p.on, prompt: p.prompt, ...(p.when ? { when: p.when } : {}), ...(p.folder ? { folder: p.folder } : {}), ...(p.from ? { from: p.from } : {}), ...(p.subject ? { subject: p.subject } : {}) }, "you");
 				return { routine: this.routineView(p.project, routine) } satisfies Result<"routines.add">;
 			}
 			case "routines.remove": {
 				const p = params as Params<"routines.remove">;
-				await this.teams.removeRoutine(p.project, p.routineId);
+				await this.work.removeRoutine(p.project, p.routineId);
 				return {} satisfies Result<"routines.remove">;
 			}
 			case "routines.run": {
 				const p = params as Params<"routines.run">;
-				return (await this.teams.fireRoutine(p.project, p.routineId, "Run by the user.")) satisfies Result<"routines.run">;
-			}
-			case "teams.promoteMember": {
-				const p = params as Params<"teams.promoteMember">;
-				const agent = await this.teams.promoteMember(p.id, p.roleId);
-				return { agent: { kind: "agent", id: agent } } satisfies Result<"teams.promoteMember">;
-			}
-			case "teams.draftFor": {
-				const p = params as Params<"teams.draftFor">;
-				return (await draftFor(p.cwd, p.request ?? "", (system, prompt) => this.hub.utility(system, prompt, "team-draft"), this.sessions.consultAgents())) satisfies Result<"teams.draftFor">;
-			}
-			case "teams.adopt": {
-				const p = params as Params<"teams.adopt">;
-				await this.sessions.adoptLead({ kind: "build", id: p.sessionId }, p.id);
-				return {} satisfies Result<"teams.adopt">;
-			}
-			case "teams.fitCheck": {
-				const p = params as Params<"teams.fitCheck">;
-				return fitCheck(p.cwd) satisfies Result<"teams.fitCheck">;
-			}
-			case "teams.job": {
-				const p = params as Params<"teams.job">;
-				return (await this.teams.jobCost(p.id, p.conversationId)) satisfies Result<"teams.job">;
-			}
-			case "teams.landing": {
-				const p = params as Params<"teams.landing">;
-				return (await this.teams.landing(p.id)) satisfies Result<"teams.landing">;
-			}
-			case "teams.land": {
-				const p = params as Params<"teams.land">;
-				return (await this.teams.land(p.id, p.action)) satisfies Result<"teams.land">;
-			}
-			case "teams.updateTask": {
-				const p = params as Params<"teams.updateTask">;
-				await this.teams.updateTask(p.id, p.taskId, { ...(p.state ? { state: p.state } : {}), ...(p.role ? { role: p.role } : {}), ...(p.title ? { title: p.title } : {}), ...(p.brief ? { brief: p.brief } : {}) });
-				return {} satisfies Result<"teams.updateTask">;
+				return (await this.work.fireRoutine(p.project, p.routineId, "Run by the user.")) satisfies Result<"routines.run">;
 			}
 			case "agents.runs": {
 				const p = params as Params<"agents.runs">;

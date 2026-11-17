@@ -116,7 +116,6 @@ struct AgentPage: View {
     @State private var instructions = ""
     /// The Setup section a glance cell opens.
     @State private var setupSection: String?
-    @State private var joining = false
     /// Agents whose identity card you've answered (ids, comma-separated).
     @AppStorage("agentIntroSeen") private var introSeen = ""
     /// It just set itself up: its avatar animates in (design 5a-3).
@@ -151,7 +150,6 @@ struct AgentPage: View {
             if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETUP_SECTION"] { setupSection = demo; tab = .setup }
         }
         .onChange(of: engine.searchTarget?.id) { _, _ in openSearchTarget() }
-        .sheet(isPresented: $joining) { JoinTeamSheet(engine: engine, agent: summary) { joining = false } }
         // It comes alive (design 5a-3): its avatar and colour arrive with a soft ring, here and in the sidebar at once.
         .onChange(of: summary.agent?.draft == true) { was, isDraft in
             guard was, !isDraft else { return }
@@ -276,11 +274,10 @@ struct AgentPage: View {
                     }
                     Divider()
                 }
-                Button("Join a Team…") { joining = true }
                 Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
             } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
                 .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-                .help("Pause, conversations, join a team, Finder")
+                .help("Pause, conversations, Finder")
         }
     }
 

@@ -78,7 +78,7 @@ extension Area {
             guard let s = engine.buildSessions.first(where: { $0.ref.id == id }) else { return nil }
             self = s.profile == .chat ? .chat : .build
         case .chat: self = .chat
-        case .agent, .start(.agent), .team, .start(.team): self = .agents
+        case .agent, .start(.agent): self = .agents
         case .start(.project): self = Areas.shared.contains(.build) ? .build : .chat
         case .newSession: self = .build
         case .start: self = .chat
@@ -276,12 +276,12 @@ extension AreaSet {
         case .project, .board: showsProjects
         case .session(let id): engine.buildSessions.first { $0.ref.id == id }.map { showsSession(chatProfile: $0.profile == .chat) } ?? showsProjects
         case .chat: showsChats
-        case .agent, .team: showsAgents
+        case .agent: showsAgents
         case .newSession: showsProjects
         case .start(let kind):
             switch kind {
             case .chat: showsChats
-            case .agent, .team: showsAgents
+            case .agent: showsAgents
             case .project: showsProjects
             }
         }
@@ -291,7 +291,7 @@ extension AreaSet {
         switch section {
         case .pinned: true
         case .projects: showsProjects
-        case .agents, .teams: showsAgents
+        case .agents: showsAgents
         case .chats: showsChats
         }
     }

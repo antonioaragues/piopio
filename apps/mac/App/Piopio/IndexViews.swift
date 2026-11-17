@@ -293,24 +293,15 @@ struct SectionIndex: View {
     }
 }
 
-/// Agents (docs/spec/18 §16): the place the sidebar's Agents row opens, beside Home. Your agents and your saved teams,
-/// one tab each; the one black button makes the kind you're looking at. A row opens the agent's conversation or the
-/// team's page.
+/// Agents (docs/spec/18 §16, 26 CL2): the place the sidebar's Agents row opens, beside Home. Your agents, the ones
+/// that live with you; the black button makes one. A row opens the agent's conversation.
 struct AgentsIndex: View {
     let engine: EngineController
     @Binding var item: SidebarItem
-    @AppStorage("agentsTab") private var tab: Tab = .agents
     @State private var filter = ""
-
-    enum Tab: String { case agents, teams }
 
     private var agents: [SessionSummary] {
         filter.isEmpty ? engine.agents : engine.agents.filter { $0.title.localizedCaseInsensitiveContains(filter) }
-    }
-
-    private var teams: [TeamDefinition] {
-        let saved = engine.teamDefinitions.filter(\.saved)
-        return filter.isEmpty ? saved : saved.filter { $0.name.localizedCaseInsensitiveContains(filter) }
     }
 
     var body: some View {
@@ -319,20 +310,14 @@ struct AgentsIndex: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Agents").font(.system(size: 28, weight: .bold)).tracking(-0.6)
-                        Text(tab == .agents
-                             ? "Conversations that live on their own: schedules, channels and memory."
-                             : "Agents in roles, reused across projects: a lead plans, members do the work.")
+                        Text("Conversations that live on their own: schedules, channels and memory.")
                             .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
                     }
                     Spacer()
-                    Button(tab == .agents ? "New Agent" : "New Team") {
-                        if tab == .agents { NotificationCenter.default.post(name: .newAgent, object: nil) } else { item = .start(.team) }
-                    }
-                    .buttonStyle(PillStyle(kind: .strong))
+                    Button("New Agent") { NotificationCenter.default.post(name: .newAgent, object: nil) }
+                        .buttonStyle(PillStyle(kind: .strong))
                 }
                 HStack(spacing: 10) {
-                    NeutralSegmented(selection: $tab, options: [(.agents, "Agents  \(engine.agents.count)"), (.teams, "Teams  \(engine.teamDefinitions.filter(\.saved).count)")])
-                        .frame(width: 220)
                     HStack(spacing: 7) {
                         Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                         TextField("Filter", text: $filter).textFieldStyle(.plain).font(.system(size: 13))
@@ -342,19 +327,11 @@ struct AgentsIndex: View {
                 }
                 .padding(.top, 20)
                 VStack(spacing: 0) {
-                    if tab == .agents {
-                        ForEach(Array(agents.enumerated()), id: \.element.ref.id) { i, a in
-                            if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-                            agentRow(a)
-                        }
-                        if agents.isEmpty { empty(engine.agents.isEmpty ? "No agents yet." : "Nothing matches.", start: "New agent…") { NotificationCenter.default.post(name: .newAgent, object: nil) } }
-                    } else {
-                        ForEach(Array(teams.enumerated()), id: \.element.id) { i, t in
-                            if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-                            teamRow(t)
-                        }
-                        if teams.isEmpty { empty(engine.teamDefinitions.contains(where: \.saved) ? "Nothing matches." : "No teams yet.", start: "New team…") { item = .start(.team) } }
+                    ForEach(Array(agents.enumerated()), id: \.element.ref.id) { i, a in
+                        if i > 0 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+                        agentRow(a)
                     }
+                    if agents.isEmpty { empty(engine.agents.isEmpty ? "No agents yet." : "Nothing matches.", start: "New agent…") { NotificationCenter.default.post(name: .newAgent, object: nil) } }
                 }
                 .overlay(alignment: .top) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
                 .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
@@ -406,35 +383,5 @@ struct AgentsIndex: View {
             else { Text(BuildSessionView.relative(a.updatedAt)) }
         }
         .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-    }
-
-    private func teamRow(_ t: TeamDefinition) -> some View {
-        let places = Set(t.projects.map(\.teamId))
-        let tasks = engine.teams.filter { places.contains($0.id) }.flatMap(\.tasks)
-        let working = tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
-        let where_ = t.projects.map { URL(fileURLWithPath: $0.cwd).lastPathComponent }
-        return Button { item = .team(t.id) } label: {
-            HStack(spacing: 12) {
-                TeamStack(colors: TeamStack.colors(t.roles, team: t.id), size: 14, ring: .dsWin).frame(width: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(t.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Color.dsFg).lineLimit(1)
-                    Text(t.roles.map(\.name).joined(separator: ", ")).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                }
-                Spacer(minLength: 12)
-                Text(where_.isEmpty ? "Not in a project" : "In " + ListFormatter.localizedString(byJoining: where_))
-                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
-                    .frame(width: 180, alignment: .leading)
-                HStack(spacing: 6) {
-                    if working > 0 { SidebarDot(status: .running); Text("\(working) working") }
-                    else if tasks.contains(where: { $0.state == "blocked" }) { SidebarDot(status: .waiting); Text("Blocked") }
-                    else { Text("\(t.roles.count) member\(t.roles.count == 1 ? "" : "s")") }
-                }
-                .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                .frame(width: 100, alignment: .trailing)
-            }
-            .padding(.horizontal, 16).frame(height: 52)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }

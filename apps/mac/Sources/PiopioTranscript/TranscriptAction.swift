@@ -45,7 +45,7 @@ public enum TranscriptAction: Equatable, Sendable {
     case openVisual(itemId: String)
     /// A visual's `piopio.prefill`: this text in the composer, for you to finish.
     case prefill(text: String)
-    /// One of Piopio's offers taken: "team" (bring in a team), "agent" (make it an agent), "routine" (a routine here).
+    /// One of Piopio's offers taken: "parallel" (work in parallel), "agent" (make it an agent), "routine" (a routine here).
     case offer(kind: String, callId: String)
     public enum PlanAnswer: String, Sendable { case approve, edit, revise }
 

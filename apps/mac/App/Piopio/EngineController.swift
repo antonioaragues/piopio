@@ -14,10 +14,8 @@ final class EngineController {
     private(set) var threads: [SessionSummary] = []
     /// Agents (docs/spec/06-agents).
     private(set) var agents: [SessionSummary] = []
-    /// Teams (docs/spec/19): a lead, members and a board.
-    private(set) var teams: [TeamInfo] = []
-    /// Teams as definitions (docs/spec/20 P3): the Teams section and the team pages.
-    private(set) var teamDefinitions: [TeamDefinition] = []
+    /// Projects' work (docs/spec/26): each one's way of working and board.
+    private(set) var work: [ProjectWork] = []
     /// Build: folders added as projects, and their sessions (newest first).
     private(set) var projects: [ProjectInfo] = []
     private(set) var buildSessions: [SessionSummary] = []
@@ -326,7 +324,7 @@ final class EngineController {
             }
         }
         Task { [weak self] in await self?.loadInbox() }
-        Task { [weak self] in await self?.loadTeams() }
+        Task { [weak self] in await self?.loadWork() }
         Task { [weak self] in
             for await note in client.providerEvents {
                 guard let self else { return }
@@ -338,8 +336,8 @@ final class EngineController {
                     if self.login?.loginId == auth.loginId { self.login?.apply(auth.event) }
                 case .connectorsChanged:
                     await self.loadConnectors()
-                case .teamsChanged:
-                    await self.loadTeams()
+                case .workChanged:
+                    await self.loadWork()
                 case .connectorAuth(let auth):
                     if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
                     if auth.event.type == "done" { await self.loadConnectors() }
@@ -497,15 +495,6 @@ final class EngineController {
         return ref
     }
 
-    /// A conversation with a team's lead in its project (docs/spec/20 PT4): a Build conversation there, with the
-    /// board's tools.
-    func createTeamConversation(_ team: TeamInfo, mode: ApprovalMode?, model: ModelRef?) async throws -> ContainerRef {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
-        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: team.cwd, model: model ?? self.model(for: .build), approvalMode: Areas.shared.contains(.build) ? mode : .readOnly, team: team.id), as: CreateSessionResult.self).ref
-        try? await refreshCatalog()
-        return ref
-    }
-
     /// Worktree sessions: merge into the base branch, or discard.
     func finish(_ ref: ContainerRef, _ action: FinishParams.Action) async throws {
         guard let client else { return }
@@ -615,44 +604,48 @@ final class EngineController {
 
     // MARK: Agents
 
-    // MARK: Teams (docs/spec/19)
+    // MARK: A project's work (docs/spec/26)
 
-    func loadTeams() async {
-        if let list = try? await client?.call("teams.list", Empty(), as: TeamsListResult.self).teams { teams = list }
-        if let defs = try? await client?.call("teams.definitions", Empty(), as: TeamDefinitionsResult.self).definitions { teamDefinitions = defs }
+    func loadWork() async {
+        if let list = try? await client?.call("work.list", Empty(), as: WorkListResult.self).work { work = list }
     }
 
-    /// You edit a team (name, members, default model: "" clears it); every project it works in follows.
-    func updateTeamDefinition(_ def: TeamDefinition, name: String? = nil, roles: [TeamRole]? = nil, model: String? = nil, saved: Bool? = nil, reviewLimit: Int? = nil, budgetPerJob: Double? = nil, memberMode: String? = nil) async throws {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.updateDefinition", UpdateTeamDefinitionParams(id: def.id, name: name, roles: roles, model: model, saved: saved, reviewLimit: reviewLimit, budgetPerJob: budgetPerJob, memberMode: memberMode), as: Empty.self)
-        await loadTeams()
+    /// A project's work: its way of working and board; nil until parallel work was first switched on there.
+    func work(in project: ProjectInfo) -> ProjectWork? {
+        work.first { $0.project == project.id }
     }
 
-    /// A team drafted from a description: the background model's, or one from your words.
-    func draftTeam(_ description: String) async throws -> TeamDraft {
+    /// How work is done here (docs/spec/26 §4). "" clears a model or the checks; a budget of 0 clears it.
+    @discardableResult
+    func configureWork(_ params: ConfigureWorkParams) async throws -> ProjectWork {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        return try await client.call("teams.draft", TeamDraftParams(description: description), as: TeamDraftResult.self).draft
+        let result = try await client.call("work.configure", params, as: WorkResult.self).work
+        await loadWork()
+        return result
     }
 
-    /// A new team, not in a project yet: from a template, or from a draft you adjusted.
-    func createTeamDefinition(_ params: CreateTeamDefinitionParams) async throws -> TeamDefinition {
+    /// "Work in parallel" on Piopio's offer: parallel work goes on, and that conversation plans it.
+    func acceptParallel(_ ref: ContainerRef, in project: ProjectInfo) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let def = try await client.call("teams.createDefinition", params, as: TeamDefinitionResult.self).definition
-        await loadTeams()
-        return def
+        _ = try await client.call("work.accept", AcceptWorkParams(project: project.id, sessionId: ref.id), as: WorkResult.self)
+        await loadWork()
     }
 
-    /// Save as template: a folder you can edit or share; returns it.
-    func saveTeamTemplate(_ def: TeamDefinition, name: String?) async throws -> String {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        return try await client.call("teams.saveTemplate", SaveTeamTemplateParams(id: def.id, name: name), as: SaveTeamTemplateResult.self).folder
+    /// The playbooks a project can plan with.
+    func playbooks(in project: ProjectInfo) async -> [Playbook] {
+        (try? await client?.call("work.playbooks", ProjectParams(project: project.id), as: PlaybooksResult.self).playbooks) ?? []
     }
 
-    func removeTeamDefinition(_ def: TeamDefinition) async throws {
+    func addTask(_ project: ProjectInfo, title: String, brief: String) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.removeDefinition", TeamIdParams(id: def.id), as: Empty.self)
-        await loadTeams()
+        _ = try await client.call("work.addTask", AddWorkTaskParams(project: project.id, title: title, brief: brief), as: Empty.self)
+        await loadWork()
+    }
+
+    func updateTask(_ project: ProjectInfo, _ task: WorkTask, state: String? = nil) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("work.updateTask", UpdateWorkTaskParams(project: project.id, taskId: task.id, state: state), as: Empty.self)
+        await loadWork()
     }
 
     /// A model's display name from its "provider:id".
@@ -663,52 +656,13 @@ final class EngineController {
         return models.first { $0.id == id && (parts.count < 2 || $0.provider == parts[0]) }?.name ?? id
     }
 
-    func teamTemplates() async -> [TeamTemplate] {
-        (try? await client?.call("teams.templates", Empty(), as: TeamTemplatesResult.self).templates) ?? []
-    }
-
-    /// The team that works in a project's folder (a project's team, docs/spec/19 §10).
-    func team(in project: ProjectInfo) -> TeamInfo? {
-        teams.first { $0.cwd == project.path }
-    }
-
-    func createTeam(name: String, template: String, cwd: String?, goal: String?, testCommand: String?, initGit: Bool = false, definition: String? = nil, roles: [TeamRole]? = nil, style: String? = nil) async throws -> TeamInfo {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let team = try await client.call("teams.create", CreateTeamParams(name: name, template: template, cwd: cwd, goal: goal, testCommand: testCommand, model: model(for: .build), initGit: initGit, definition: definition, roles: roles, style: style), as: TeamResult.self).team
-        await loadTeams()
-        await loadProjects() // a team without a folder gets a project (docs/spec/20 PT2)
-        try? await refreshCatalog()
-        return team
-    }
-
-    /// The project's Settings: the team's checks (empty removes them) and how many tasks run at once.
-    func updateTeam(_ team: TeamInfo, testCommand: String? = nil, maxParallel: Int? = nil) async throws {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.update", UpdateTeamParams(id: team.id, testCommand: testCommand, maxParallel: maxParallel), as: Empty.self)
-        await loadTeams()
-    }
-
-    /// The project works with Piopio again: the team's conversations stay, as plain ones.
-    func removeTeam(_ team: TeamInfo) async throws {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.remove", TeamIdParams(id: team.id), as: Empty.self)
-        await loadTeams()
-        try? await refreshCatalog()
-    }
-
-    func addTeamTask(_ team: TeamInfo, title: String, brief: String, role: String?) async throws {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.addTask", AddTeamTaskParams(id: team.id, title: title, brief: brief, role: role), as: Empty.self)
-        await loadTeams()
-    }
-
     /// Home's agenda (docs/spec/21 D2): `since` is your last visit.
     func homeAgenda(since: String?) async -> HomeAgenda? {
         try? await client?.call("home.agenda", HomeAgendaParams(since: since), as: HomeAgenda.self)
     }
 
-    /// A project's routines (docs/spec/21 AD5): each run opens a session there, with the team's lead when it has one.
-    func routines(in project: ProjectInfo) async -> [TeamRoutine] {
+    /// A project's routines (docs/spec/21 AD5): each run opens a conversation with Piopio there.
+    func routines(in project: ProjectInfo) async -> [ProjectRoutine] {
         (try? await client?.call("routines.list", ProjectParams(project: project.id), as: RoutinesResult.self).routines) ?? []
     }
 
@@ -717,70 +671,48 @@ final class EngineController {
         _ = try await client.call("routines.add", AddRoutineParams(project: project.id, on: on, prompt: prompt, when: when, folder: folder, from: from, subject: subject), as: Empty.self)
     }
 
-    func removeRoutine(_ project: ProjectInfo, _ routine: TeamRoutine) async throws {
+    func removeRoutine(_ project: ProjectInfo, _ routine: ProjectRoutine) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         _ = try await client.call("routines.remove", RoutineParams(project: project.id, routineId: routine.id), as: Empty.self)
     }
 
-    func runRoutine(_ project: ProjectInfo, _ routine: TeamRoutine) async throws {
+    func runRoutine(_ project: ProjectInfo, _ routine: ProjectRoutine) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         _ = try await client.call("routines.run", RoutineParams(project: project.id, routineId: routine.id), as: Empty.self)
         try? await refreshCatalog()
     }
 
-    /// Make it one of your agents (docs/spec/21 AD3).
-    func promoteMember(_ def: TeamDefinition, _ role: TeamRole) async throws -> ContainerRef {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let ref = try await client.call("teams.promoteMember", PromoteMemberParams(id: def.id, roleId: role.id), as: PromoteMemberResult.self).agent
-        await loadTeams()
-        try? await refreshCatalog()
-        return ref
+    /// What the work branch would bring to the project's; nil for a project whose work isn't on a branch.
+    func landing(_ work: ProjectWork) async -> WorkLanding? {
+        guard work.git != nil else { return nil }
+        return try? await client?.call("work.landing", ProjectParams(project: work.project), as: WorkLanding.self)
     }
 
-    /// What the team's branch would bring to the project's; nil for a team without a branch.
-    func teamLanding(_ team: TeamInfo) async -> TeamLanding? {
-        guard team.git != nil else { return nil }
-        return try? await client?.call("teams.landing", TeamIdParams(id: team.id), as: TeamLanding.self)
+    /// What a conversation's tasks cost so far, and the budget per job.
+    func job(_ work: ProjectWork, conversationId: String) async -> WorkJob? {
+        try? await client?.call("work.job", WorkJobParams(project: work.project, conversationId: conversationId), as: WorkJob.self)
     }
 
-    /// What a lead conversation's tasks cost so far, and the team's budget per job.
-    func teamJob(_ team: TeamInfo, conversationId: String) async -> TeamJob? {
-        try? await client?.call("teams.job", TeamJobParams(id: team.id, conversationId: conversationId), as: TeamJob.self)
-    }
-
-    /// A team for a project, read from it and from what was asked (docs/spec/21 D7).
-    func draftTeam(for project: ProjectInfo, request: String?) async throws -> DraftFor {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        return try await client.call("teams.draftFor", DraftForParams(cwd: project.path, request: request), as: DraftFor.self)
-    }
-
-    /// The conversation becomes the team's lead's (docs/spec/21 D7): the open model goes, so it reopens with the lead.
-    func adopt(_ ref: ContainerRef, into team: TeamInfo) async throws {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        openThreads[ref.key]?.close()
-        openThreads[ref.key] = nil
-        _ = try await client.call("teams.adopt", AdoptParams(id: team.id, sessionId: ref.id), as: Empty.self)
-        try? await refreshCatalog()
-        await loadTeams()
-    }
-
-    /// Before a team works in a folder (docs/spec/21 D6): git, checks, AGENTS.md.
+    /// Before parallel work goes on in a folder (docs/spec/21 D6): git, checks, AGENTS.md.
     func fitCheck(_ cwd: String) async -> FitCheck? {
-        try? await client?.call("teams.fitCheck", FitCheckParams(cwd: cwd), as: FitCheck.self)
+        try? await client?.call("work.fitCheck", FitCheckParams(cwd: cwd), as: FitCheck.self)
     }
 
-    /// Merges the team's branch into the project's ("merge"), or pushes it for a pull request ("push").
-    func landTeam(_ team: TeamInfo, action: String) async throws -> TeamLandResult {
+    /// Merges the work branch into the project's ("merge"), or pushes it for a pull request ("push").
+    func land(_ work: ProjectWork, action: String) async throws -> WorkLandResult {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let result = try await client.call("teams.land", TeamLandParams(id: team.id, action: action), as: TeamLandResult.self)
-        await loadTeams()
+        let result = try await client.call("work.land", WorkLandParams(project: work.project, action: action), as: WorkLandResult.self)
+        await loadWork()
         return result
     }
 
-    func updateTeamTask(_ team: TeamInfo, _ task: TeamTask, state: String? = nil, role: String? = nil) async throws {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("teams.updateTask", UpdateTeamTaskParams(id: team.id, taskId: task.id, state: state, role: role), as: Empty.self)
-        await loadTeams()
+    /// What changed when teams became ways of working (docs/spec/26 §8), until you dismiss it.
+    func migrationReport() async -> String? {
+        try? await client?.call("work.migrationReport", Empty(), as: MigrationReport.self).report
+    }
+
+    func dismissMigrationReport() async {
+        _ = try? await client?.call("work.dismissMigrationReport", Empty(), as: Empty.self)
     }
 
     func agentTemplates() async -> [AgentTemplate] {

@@ -4,10 +4,10 @@ import SwiftUI
 
 // A project's settings (docs/spec/18 §19, design docs/design/project-settings): a sheet, opened from the settings
 // button on the project's sidebar row, its context menu, or "Write them" on a new project's page. There's no project
-// page: the row folds its conversations, + starts one, and a team's board is a row under the project.
+// page: the row folds its conversations, + starts one, and its board is a row under the project.
 //
 // The sheet has Folders (its own and linked ones), Instructions (AGENTS.md) and Memory (NOTES.md), How it works
-// (permissions for new conversations, who works here, a team's tasks at once and checks) and Routines. Changes apply as
+// (permissions for new conversations, and how work is done here: docs/spec/26 §4) and Routines. Changes apply as
 // they're made; Done closes. Instructions and Memory are edited in the sheet itself or in your editor.
 
 extension Notification.Name {
@@ -68,9 +68,6 @@ struct ProjectSettingsSheet: View {
     @Binding var item: SidebarItem
     let close: () -> Void
     @State private var file: ProjectFile?
-    @State private var templates: [TeamTemplate] = []
-    @State private var choosing: TeamChoice?
-    @State private var testCommand = ""
     @State private var error: String?
     @State private var dropping = false
     @State private var confirmRemove = false
@@ -103,12 +100,10 @@ struct ProjectSettingsSheet: View {
             }
         }
         .background(Color.dsWin)
-        .task { templates = await engine.teamTemplates() }
     }
 
     private func settings(_ project: ProjectInfo) -> some View {
-        let team = engine.team(in: project)
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: "folder").font(.system(size: 14)).foregroundStyle(Color.dsFg2)
                     .frame(width: 32, height: 32)
@@ -127,10 +122,10 @@ struct ProjectSettingsSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     folders(project).inspectorBlock()
                     files(project).inspectorBlock()
-                    how(project, team).inspectorBlock()
+                    how(project).inspectorBlock()
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Routines").font(.system(size: 13, weight: .semibold))
-                        ProjectRoutinesList(engine: engine, project: project, team: team)
+                        ProjectRoutinesList(engine: engine, project: project)
                     }
                     .inspectorBlock(last: true)
                 }
@@ -147,8 +142,6 @@ struct ProjectSettingsSheet: View {
             .padding(.horizontal, 20).padding(.vertical, 12)
         }
         .onExitCommand(perform: close)
-        .task(id: team?.id) { testCommand = team?.testCommand ?? "" }
-        .sheet(item: $choosing) { choice in FitCheckSheet(engine: engine, project: project, choice: choice) { choosing = nil } }
         .alert("Remove “\(project.name)” from Piopio?", isPresented: $confirmRemove) {
             Button("Remove", role: .destructive) {
                 close()
@@ -316,7 +309,7 @@ struct ProjectSettingsSheet: View {
 
     // MARK: How it works
 
-    private func how(_ project: ProjectInfo, _ team: TeamInfo?) -> some View {
+    private func how(_ project: ProjectInfo) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("How it works").font(.system(size: 13, weight: .semibold))
             HStack(spacing: 10) {
@@ -334,42 +327,12 @@ struct ProjectSettingsSheet: View {
                 Text(project.approvalMode.line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("Who works here").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-                WhoWorksHere(engine: engine, project: project, team: team, item: $item, templates: templates, choosing: $choosing)
-            }
-            if let team {
-                HStack(spacing: 10) {
-                    Text("Tasks at once").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 180, alignment: .leading)
-                    Stepper(value: Binding(get: { team.maxParallel }, set: { n in act { try await engine.updateTeam(team, maxParallel: n) } }), in: 1...8) {
-                        Text("\(team.maxParallel)").font(.system(size: 13).monospacedDigit())
-                    }
-                    .fixedSize()
-                }
-                HStack(spacing: 10) {
-                    Text("Checks").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 180, alignment: .leading)
-                    TextField("", text: $testCommand, prompt: Text("npm test"))
-                        .textFieldStyle(.roundedBorder).font(.system(size: 12.5, design: .monospaced)).frame(width: 170)
-                        .onSubmit { saveChecks(team) }
-                    if testCommand.trimmingCharacters(in: .whitespaces) != (team.testCommand ?? "") {
-                        Button("Save") { saveChecks(team) }.buttonStyle(PillStyle(compact: true))
-                    }
-                }
-                Text(team.git == nil ? "Checks run after each task, in the project's folder." : "Checks run on the team's branch after each merge; a failure sends the task back.")
-                    .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.leading, 190)
+                Text("How work is done here").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                WayOfWorkingSection(engine: engine, project: project)
             }
         }
     }
 
-    private func saveChecks(_ team: TeamInfo) {
-        let command = testCommand
-        act { try await engine.updateTeam(team, testCommand: command) }
-    }
-
-    private func act(_ work: @escaping () async throws -> Void) {
-        Task {
-            do { try await work(); error = nil } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
-        }
-    }
 }
 
 // MARK: The editor
@@ -583,30 +546,51 @@ struct ProjectFileEditor: View {
 
 // MARK: The board
 
-/// A team's board, from the "Board" row under its project (the project page that held it is gone).
+/// A project's board (docs/spec/26 §5), from the "Board" row under the project. Until parallel work is on there, it
+/// says what goes here and has the switch.
 struct ProjectBoardPage: View {
     let engine: EngineController
     let projectId: String
     @Binding var item: SidebarItem
+    @State private var fitting = false
 
     var body: some View {
         let project = engine.projects.first { $0.id == projectId }
-        let team = project.flatMap { engine.team(in: $0) }
+        let work = project.flatMap { engine.work(in: $0) }
         VStack(spacing: 0) {
             PageHeader {
-                PageTitle(name: "Board", subtitle: [project?.name, team.map { "with \($0.name)" }].compactMap { $0 }.joined(separator: " · "))
+                PageTitle(name: "Board", subtitle: project?.name ?? "")
             } actions: {
                 if let project {
                     Button { NotificationCenter.default.post(name: .projectSettings, object: project.id) } label: { Image(systemName: "slider.horizontal.3") }
                         .buttonStyle(IconButtonStyle()).help("Project settings").accessibilityLabel("Project settings")
                 }
             }
-            if let team { TeamBoard(engine: engine, team: team, item: $item) }
-            else {
-                Text(project == nil ? "This project is gone." : "No team works here. Choose one in the project's settings.")
-                    .font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)
+            if let project, let work, work.way.parallel || !work.tasks.isEmpty {
+                WorkBoard(engine: engine, project: project, work: work, item: $item)
+            } else if let project {
+                empty(project, work: work)
+            } else {
+                Text("This project is gone.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: projectId) { await engine.loadTeams() }
+        .task(id: projectId) { await engine.loadWork() }
+    }
+
+    /// The empty Board (design 4b, 26 §5): what goes here, and the switch for parallel work.
+    private func empty(_ project: ProjectInfo, work: ProjectWork?) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Piopio puts parallel work here").font(.system(size: 15, weight: .semibold))
+            Text("When something you ask splits into parts that can be done at once, Piopio makes a helper for each part and puts it here. Each part is reviewed, then merged; you merge the whole into \(project.name) when it's ready. Small things Piopio still does in the conversation.")
+                .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+            Button(work == nil ? "Switch on parallel work…" : "Switch on parallel work") {
+                if work == nil { fitting = true } else { Task { try? await engine.configureWork(ConfigureWorkParams(project: project.id, parallel: true)) } }
+            }
+            .buttonStyle(PillStyle(kind: .primary))
+        }
+        .frame(maxWidth: 520, alignment: .leading)
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .sheet(isPresented: $fitting) { ParallelFitSheet(engine: engine, project: project) { fitting = false } }
     }
 }

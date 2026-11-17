@@ -1,12 +1,12 @@
 /**
  * Home's agenda (docs/spec/21 D2, design 5e): one place for what waits on you, what happened while you were away and
- * today's timeline, across agents (their runs, schedules and event routines), projects (their routines) and teams (their
- * tasks). Built from plain inputs so it can be tested without an engine; `home.agenda` gathers them.
+ * today's timeline, across agents (their runs, schedules and event routines) and projects (their routines and their
+ * boards' tasks). Built from plain inputs so it can be tested without an engine; `home.agenda` gathers them.
  */
 import { dayOf } from "@piopio/runtime";
-import { routineLabel, type TeamRoutine } from "./teams/routines.js";
+import { routineLabel, type ProjectRoutine } from "./work/routines.js";
 
-export type Source = { kind: "agent" | "project" | "team"; id: string; name: string };
+export type Source = { kind: "agent" | "project"; id: string; name: string };
 
 export type AgendaInput = {
 	now: number;
@@ -20,13 +20,14 @@ export type AgendaInput = {
 		upcoming: { id: string; kind: string; label: string; next?: string }[];
 		held: number;
 	}[];
-	projects: { id: string; name: string; routines: TeamRoutine[] }[];
-	teams: { id: string; name: string; project?: { id: string; name: string }; tasks: { id: string; title: string; state: string; attempts: number; updatedAt: string }[] }[];
+	projects: { id: string; name: string; routines: ProjectRoutine[] }[];
+	/** Projects' boards (docs/spec/26): their tasks show under the project's name. */
+	boards: { project: { id: string; name: string }; tasks: { id: string; title: string; state: string; attempts: number; updatedAt: string }[] }[];
 };
 
 /** A row of today's timeline: a time (or "any" for an event routine), what, whose, and how it went. */
 export type TodayItem = { at?: string; label: string; source: Source; state: "done" | "failed" | "skipped" | "running" | "upcoming" | "event"; tomorrow?: boolean };
-/** A line of "While you were away": one per agent or team. Quiet runs (nothing new) are marked. */
+/** A line of "While you were away": one per agent or project. Quiet runs (nothing new) are marked. */
 export type AwayItem = { at: string; source: Source; text: string; costUsd?: number; quiet: boolean; failed?: boolean };
 
 export type Agenda = { today: TodayItem[]; away: AwayItem[]; held: number };
@@ -83,8 +84,8 @@ export function buildAgenda(input: AgendaInput): Agenda {
 		}
 	}
 
-	for (const t of input.teams) {
-		const source: Source = { kind: "team", id: t.id, name: t.project ? `${t.project.name} team` : t.name };
+	for (const t of input.boards) {
+		const source: Source = { kind: "project", id: t.project.id, name: t.project.name };
 		const doing = t.tasks.filter((x) => ["doing", "review", "integrating"].includes(x.state));
 		if (doing.length) items.push({ at: new Date(input.now).toISOString(), label: doing.length === 1 ? short(doing[0]!.title).toLowerCase() : `${doing.length} tasks`, source, state: "running" });
 		const changed = t.tasks.filter((x) => after(x.updatedAt));

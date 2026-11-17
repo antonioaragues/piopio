@@ -38,10 +38,10 @@ import type { HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
-import { runCommand, type TeamHost, type TeamRunner } from "./teams/runner.js";
-import type { TeamBridge } from "./teams/extension.js";
+import { runCommand, type WorkHost, type WorkRunner } from "./work/runner.js";
+import type { BoardBridge } from "./work/extension.js";
 import type { ConsultBridge } from "./consult.js";
-import { routineLabel } from "./teams/routines.js";
+import { routineLabel } from "./work/routines.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
 import { migrateChat } from "./migrate-chats.js";
@@ -120,10 +120,10 @@ export class Sessions {
 	onInbox?: (change: { count: number; approval?: { agent: ContainerRef; agentName: string; approvalId: string; title: string } }) => void;
 	/** Agents on Telegram from this Mac (channels/manager.ts), set by the engine. */
 	telegram?: TelegramChannels;
-	/** Teams (docs/spec/19): their boards, set by the engine. */
-	teams?: TeamRunner;
-	/** A team changed (the app refreshes its board). */
-	onTeams?: (id: string) => void;
+	/** Projects' work (docs/spec/26): their boards, set by the engine. */
+	work?: WorkRunner;
+	/** A project's work changed (the app refreshes its board). */
+	onWork?: (project: string) => void;
 	/** Event routines on this Mac (watchers.ts), and a webhook's local URL; set by the engine. */
 	watchers?: AgentWatchers;
 	hookUrl?: (agentId: string, triggerId: string) => string;
@@ -413,10 +413,7 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; team?: string }): Promise<ContainerRef> {
-		// A conversation with a team's lead (docs/spec/20 PT4): in its project, with the board's tools.
-		const lead = params.team ? this.teams?.leadRole(params.team) : undefined;
-		if (params.team && (params.kind !== "build" || !lead)) throw new EngineError("INVALID", "A team's conversation is a folder conversation in its project.");
+	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat" }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.planMode && params.kind !== "build") throw new EngineError("INVALID", "Only folder conversations support Plan mode.");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
@@ -448,7 +445,6 @@ export class Sessions {
 			...(params.planMode ? { planMode: true } : {}),
 			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
 			...(params.kind === "thread" ? { cwd: this.scratch(ref.id) } : {}),
-			...(params.team && lead ? { team: { id: params.team, role: lead.id, kind: "lead" as const } } : {}),
 		};
 		this.entries.set(ref.id, entry);
 		this.save();
@@ -841,31 +837,35 @@ export class Sessions {
 		return this.consultBridge().agents();
 	}
 
-	/**
-	 * A conversation with Piopio becomes the team's lead's (docs/spec/21 D7, design 5b-3): same history, the board's
-	 * tools from its next turn. The lead is told to plan what was asked.
-	 */
-	async adoptLead(ref: ContainerRef, teamId: string): Promise<void> {
+	/** A conversation with Piopio in this project (not a helper's or a subagent's), or an error saying why not. */
+	plannerIn(ref: ContainerRef, projectPath: string): void {
 		const entry = this.entry(ref);
-		const teams = this.teams;
-		if (!teams?.has(teamId)) throw new EngineError("NOT_FOUND", "No such team.");
-		const team = teams.get(teamId);
-		if (entry.ref.kind !== "build" || entry.parent) throw new EngineError("INVALID", "Only a project conversation can be the lead's.");
-		if (entry.team) throw new EngineError("INVALID", entry.team.kind === "lead" ? "It's already with the lead." : "A member's session can't be the lead's.");
-		if ((entry.projectPath ?? entry.cwd) !== team.cwd) throw new EngineError("INVALID", "The team works in another project.");
-		const open = this.open.get(ref.id);
-		if (open) {
-			const runtime = await open.catch(() => undefined);
-			if (runtime?.snapshot().state.status === "running") throw new EngineError("BUSY", "Wait for the answer to finish, or stop it.");
-			this.open.delete(ref.id);
-			await runtime?.close();
-		}
-		entry.team = { id: team.id, role: teams.leadRole(team.id).id, kind: "lead" };
-		this.save();
-		this.changed(entry);
+		if (entry.ref.kind !== "build" || entry.parent || entry.helper) throw new EngineError("INVALID", "Only a conversation with Piopio in a project can plan parallel work.");
+		if ((entry.projectPath ?? entry.cwd) !== projectPath) throw new EngineError("INVALID", "That conversation is in another project.");
+	}
+
+	/** "Work in parallel" on Piopio's offer: that conversation plans what was asked, now with the board. */
+	async planInParallel(ref: ContainerRef): Promise<void> {
 		const runtime = await this.runtime(ref);
-		await runtime.submit(`[Board] The user brought in ${team.name}; you lead it now, in this conversation. Plan what they asked above: put the parts on the board as tasks, then tell them in a sentence or two.`, { whenBusy: "followUp" });
+		await runtime.submit("[Board] The user chose to work in parallel. Plan what they asked above: put the independent parts on the board as tasks, then tell them in a sentence or two.", { whenBusy: "followUp" });
 		this.touch(ref);
+	}
+
+	/**
+	 * Sessions from before docs/spec/26: a lead's conversation is a plain one with Piopio; a member's is a helper's,
+	 * under its team's project (`projectOf`, from the migration).
+	 */
+	migrateTeams(projectOf: (teamId: string) => string | undefined): void {
+		let changed = false;
+		for (const entry of this.entries.values()) {
+			const old = (entry as CatalogEntry & { team?: { id: string; kind: string; taskId?: string } }).team;
+			if (!old) continue;
+			delete (entry as { team?: unknown }).team;
+			const project = projectOf(old.id);
+			if (old.kind !== "lead" && project && old.taskId) entry.helper = { project, kind: old.kind === "review" ? "review" : "build", taskId: old.taskId };
+			changed = true;
+		}
+		if (changed) this.save();
 	}
 
 	/** Answers your conversations wait for (docs/spec/21 D6), by request id. */
@@ -1215,58 +1215,54 @@ export class Sessions {
 		return Boolean(this.policy.projectFor(cwd)) || [...this.entries.values()].some((e) => e.ref.kind === "build" && e.cwd === cwd);
 	}
 
-	// ── Teams (docs/spec/19) ─────────────────────────────────────────────
+	// ── Projects' work (docs/spec/26) ─────────────────────────────────────
 
-	/** A project's team was removed: its lead conversations become plain ones; members' sessions stay out of lists. */
-	detachTeam(teamId: string): void {
-		for (const entry of this.entries.values()) {
-			if (entry.team?.id !== teamId || entry.team.kind !== "lead") continue;
-			delete entry.team;
-			this.changed(entry);
-		}
-		this.save();
-	}
-
-	/** The board's tools for a team's session: the lead's, or a reviewer's verdict. */
-	private teamBridge(entry: CatalogEntry): TeamBridge {
-		const teams = this.teams!;
-		const team = () => teams.get(entry.team!.id);
+	/**
+	 * The board's tools: Piopio's in a conversation in a project with parallel work on, or a reviewer helper's verdict.
+	 * Piopio's brief is read each turn, so it's empty once parallel work goes off.
+	 */
+	private boardBridge(entry: CatalogEntry, kind: BoardBridge["kind"]): BoardBridge {
+		const work = this.work!;
+		const project = () => {
+			const p = this.policy.projectFor(entry.projectPath ?? entry.cwd!);
+			if (!p) throw new EngineError("NOT_FOUND", "This conversation isn't in a project.");
+			return p.id;
+		};
 		return {
-			kind: entry.team!.kind,
-			brief: () => teams.leadBrief(team()),
+			kind,
+			brief: () => (work.find(project())?.way.parallel ? work.brief(project()) : ""),
 			createTask: async (task) => {
-				const t = await teams.createTask(team().id, task, "lead", entry.ref.id);
-				return `Added ${t.id} “${t.title}” for ${t.role}: ${t.state === "doing" ? "started" : "waits for a free slot"}.`;
+				const t = await work.createTask(project(), task, "piopio", entry.ref.id);
+				return `Added ${t.id} “${t.title}” for a ${t.helper}: ${t.state === "doing" ? "started" : "waits for a free slot"}.`;
 			},
-			board: () => teams.board(team().id, entry.ref.id),
-			message: (taskId, text) => teams.message(team().id, taskId, text),
-			verdict: (pass, notes) => teams.verdict(entry.ref.id, pass, notes),
-			// The project's routines (docs/spec/21 AD5): the lead sets them for the project it works in.
+			board: () => work.board(project(), entry.ref.id),
+			message: (taskId, text) => work.message(project(), taskId, text),
+			verdict: (pass, notes) => work.verdict(entry.ref.id, pass, notes),
+			// The project's routines (docs/spec/21 AD5).
 			addRoutine: async (input) => {
-				const project = teams.projectOf(team().id);
-				const r = await teams.addRoutine(project, input, "lead");
-				const url = r.on === "webhook" ? teams.hookUrl?.(project, r.id) : undefined;
+				const r = await work.addRoutine(project(), input, "piopio");
+				const url = r.on === "webhook" ? work.hookUrl?.(project(), r.id) : undefined;
 				return `Set ${r.id}: ${routineLabel(r)}${r.next ? `, first ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}.${url ? ` Its URL (POST, from this Mac): ${url}` : ""} The user sees it in the project.`;
 			},
-			routines: () => teams.routineList(teams.projectOf(team().id)),
+			routines: () => work.routineList(project()),
 			cancelRoutine: async (id) => {
-				const r = await teams.removeRoutine(teams.projectOf(team().id), id);
+				const r = await work.removeRoutine(project(), id);
 				return `Removed ${r.id}: ${routineLabel(r)}.`;
 			},
 		};
 	}
 
-	/** What the team runner needs from the catalog: sessions, their turns, git and the checks. */
-	teamHost(options: { stateFile: string; worktreesDir: string; log: (line: string) => void; project?: TeamHost["project"] }): TeamHost {
+	/** What the work runner needs from the catalog: sessions, their turns, git and the checks. */
+	workHost(options: { stateFile: string; routinesFile: string; worktreesDir: string; log: (line: string) => void; project: WorkHost["project"] }): WorkHost {
 		const answerOf = (runtime: Runtime) => {
 			const last = [...runtime.snapshot().items].reverse().find((i) => i.kind === "assistant");
 			return last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
 		};
 		return {
-			createSession: async ({ cwd, title, model, approvalMode, team }) => {
+			createSession: async ({ cwd, title, model, approvalMode, helper }) => {
 				const ref = await this.create({ kind: "build", cwd, title, ...(approvalMode ? { approvalMode } : {}), ...(model ? { model: model.includes(":") ? { provider: model.split(":")[0]!, id: model.split(":").slice(1).join(":") } : { provider: "openrouter", id: model } } : {}) });
 				const entry = this.entry(ref);
-				if (team) entry.team = { id: team.id, role: team.role, kind: team.kind, ...(team.taskId ? { taskId: team.taskId } : {}) };
+				if (helper) entry.helper = helper;
 				this.save();
 				this.changed(entry);
 				return ref.id;
@@ -1300,20 +1296,12 @@ export class Sessions {
 			addWorktree: (repo, path, branch, base) => addWorktree(repo, path, branch, base),
 			removeWorktree: (repo, path, branch, force) => removeWorktree(repo, path, branch, force),
 			run: (cwd, command) => runCommand(cwd, command),
-			...(options.project ? { project: options.project } : {}),
-			makeAgent: async ({ name, instructions, model }) => (await this.createAgent({ name, instructions, ...(model ? { model: model.includes(":") ? { provider: model.split(":")[0]!, id: model.split(":").slice(1).join(":") } : { provider: "openrouter", id: model } } : {}) })).id,
+			project: options.project,
 			cost: async (id) => (await this.runtime({ kind: "build", id })).snapshot().state.usage?.costUsd ?? 0,
-			agent: (id) => {
-				try {
-					const { definition, instructions } = this.agentDefinition(id);
-					return { name: this.entry({ kind: "agent", id }).title, instructions, model: definition.models.default };
-				} catch {
-					return undefined;
-				}
-			},
 			worktreesDir: options.worktreesDir,
 			stateFile: options.stateFile,
-			changed: (id) => this.onTeams?.(id),
+			routinesFile: options.routinesFile,
+			changed: (project) => this.onWork?.(project),
 			log: options.log,
 		};
 	}
@@ -1576,12 +1564,15 @@ export class Sessions {
 					this.save();
 				},
 			},
-			...(entry.parent || entry.team ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
-			...(entry.team && this.teams?.has(entry.team.id) ? { team: this.teamBridge(entry) } : {}),
-			// Your agents, from your conversations (not a member's task or a subagent): ask_agent and @Name.
-			...(!entry.parent && (!entry.team || entry.team.kind === "lead") ? { consult: { bridge: this.consultBridge(), from: () => entry.title } } : {}),
-			// Piopio's offers (docs/spec/21 D7): in a project conversation with Piopio, not a lead's or a member's.
-			...(!entry.parent && !entry.team && this.policy.projectFor(entry.projectPath ?? entry.cwd!) ? { offers: { canOfferTeam: () => !!this.teams && !this.teams.list().some((t) => t.cwd === (entry.projectPath ?? entry.cwd)) } } : {}),
+			...(entry.parent || entry.helper ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
+			// The board (docs/spec/26): Piopio's tools where parallel work is on, a reviewer's verdict.
+			...(entry.helper?.kind === "review" && this.work ? { board: this.boardBridge(entry, "review") } : {}),
+			// Piopio's board tools are declared each turn only while parallel work is on in the project (work/extension.ts).
+			...(!entry.parent && !entry.helper && this.work && this.policy.projectFor(entry.projectPath ?? entry.cwd!) ? { board: this.boardBridge(entry, "piopio") } : {}),
+			// Your agents, from your conversations (not a helper's task or a subagent): ask_agent and @Name.
+			...(!entry.parent && !entry.helper ? { consult: { bridge: this.consultBridge(), from: () => entry.title } } : {}),
+			// Piopio's offers: in a project conversation with Piopio, not a helper's.
+			...(!entry.parent && !entry.helper && this.policy.projectFor(entry.projectPath ?? entry.cwd!) ? { offers: { canOfferParallel: () => !!this.work && !this.work.parallelAt(entry.projectPath ?? entry.cwd!) } } : {}),
 			onAttention: (kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind, message }),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			toolsOff: () => [...new Set([...(entry.toolsOff ?? []), ...((entry.parent && this.entries.get(entry.parent.id)?.toolsOff) || [])])],
