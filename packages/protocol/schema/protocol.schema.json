@@ -10901,6 +10901,111 @@
 						}
 					}
 				},
+				"side": {
+					"type": "object",
+					"required": [
+						"parent",
+						"how",
+						"state"
+					],
+					"properties": {
+						"parent": {
+							"type": "object",
+							"required": [
+								"id",
+								"title"
+							],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"title": {
+									"type": "string"
+								}
+							}
+						},
+						"how": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "asked"
+								},
+								{
+									"type": "string",
+									"const": "manual"
+								},
+								{
+									"type": "string",
+									"const": "offered"
+								},
+								{
+									"type": "string",
+									"const": "proposed"
+								}
+							]
+						},
+						"state": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "queued"
+								},
+								{
+									"type": "string",
+									"const": "working"
+								},
+								{
+									"type": "string",
+									"const": "needs_you"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								},
+								{
+									"type": "string",
+									"const": "stopped"
+								}
+							]
+						},
+						"line": {
+							"type": "string"
+						}
+					}
+				},
+				"sideProposals": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"title",
+							"why",
+							"expiresAt"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							},
+							"why": {
+								"type": "string"
+							},
+							"project": {
+								"type": "string"
+							},
+							"expiresAt": {
+								"type": "string"
+							}
+						}
+					}
+				},
 				"continuedIn": {
 					"type": "object",
 					"required": [
@@ -18273,6 +18378,111 @@
 									}
 								}
 							},
+							"side": {
+								"type": "object",
+								"required": [
+									"parent",
+									"how",
+									"state"
+								],
+								"properties": {
+									"parent": {
+										"type": "object",
+										"required": [
+											"id",
+											"title"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"title": {
+												"type": "string"
+											}
+										}
+									},
+									"how": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "asked"
+											},
+											{
+												"type": "string",
+												"const": "manual"
+											},
+											{
+												"type": "string",
+												"const": "offered"
+											},
+											{
+												"type": "string",
+												"const": "proposed"
+											}
+										]
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "queued"
+											},
+											{
+												"type": "string",
+												"const": "working"
+											},
+											{
+												"type": "string",
+												"const": "needs_you"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											},
+											{
+												"type": "string",
+												"const": "stopped"
+											}
+										]
+									},
+									"line": {
+										"type": "string"
+									}
+								}
+							},
+							"sideProposals": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"title",
+										"why",
+										"expiresAt"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"title": {
+											"type": "string"
+										},
+										"why": {
+											"type": "string"
+										},
+										"project": {
+											"type": "string"
+										},
+										"expiresAt": {
+											"type": "string"
+										}
+									}
+								}
+							},
 							"continuedIn": {
 								"type": "object",
 								"required": [
@@ -18763,6 +18973,111 @@
 									},
 									"taskId": {
 										"type": "string"
+									}
+								}
+							},
+							"side": {
+								"type": "object",
+								"required": [
+									"parent",
+									"how",
+									"state"
+								],
+								"properties": {
+									"parent": {
+										"type": "object",
+										"required": [
+											"id",
+											"title"
+										],
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"title": {
+												"type": "string"
+											}
+										}
+									},
+									"how": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "asked"
+											},
+											{
+												"type": "string",
+												"const": "manual"
+											},
+											{
+												"type": "string",
+												"const": "offered"
+											},
+											{
+												"type": "string",
+												"const": "proposed"
+											}
+										]
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "queued"
+											},
+											{
+												"type": "string",
+												"const": "working"
+											},
+											{
+												"type": "string",
+												"const": "needs_you"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											},
+											{
+												"type": "string",
+												"const": "stopped"
+											}
+										]
+									},
+									"line": {
+										"type": "string"
+									}
+								}
+							},
+							"sideProposals": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"title",
+										"why",
+										"expiresAt"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"title": {
+											"type": "string"
+										},
+										"why": {
+											"type": "string"
+										},
+										"project": {
+											"type": "string"
+										},
+										"expiresAt": {
+											"type": "string"
+										}
 									}
 								}
 							},
@@ -28110,6 +28425,28 @@
 						},
 						"followUps": {
 							"type": "boolean"
+						},
+						"sideOnUnrelated": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "start"
+								},
+								{
+									"type": "string",
+									"const": "off"
+								}
+							]
+						},
+						"sidePropose": {
+							"type": "boolean"
+						},
+						"sideWake": {
+							"type": "boolean"
 						}
 					}
 				},
@@ -28364,6 +28701,28 @@
 						},
 						"followUps": {
 							"type": "boolean"
+						},
+						"sideOnUnrelated": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "start"
+								},
+								{
+									"type": "string",
+									"const": "off"
+								}
+							]
+						},
+						"sidePropose": {
+							"type": "boolean"
+						},
+						"sideWake": {
+							"type": "boolean"
 						}
 					}
 				},
@@ -28605,6 +28964,28 @@
 							}
 						},
 						"followUps": {
+							"type": "boolean"
+						},
+						"sideOnUnrelated": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "ask"
+								},
+								{
+									"type": "string",
+									"const": "start"
+								},
+								{
+									"type": "string",
+									"const": "off"
+								}
+							]
+						},
+						"sidePropose": {
+							"type": "boolean"
+						},
+						"sideWake": {
 							"type": "boolean"
 						}
 					}
@@ -30413,6 +30794,196 @@
 				"held": {
 					"type": "number",
 					"description": "Messages held by quiet hours or limits, across agents"
+				}
+			}
+		},
+		"sessions.side.answer.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"id",
+				"choice"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"id": {
+					"type": "string",
+					"description": "The offer's or proposal's tool call id"
+				},
+				"choice": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "new"
+						},
+						{
+							"type": "string",
+							"const": "here"
+						},
+						{
+							"type": "string",
+							"const": "start"
+						},
+						{
+							"type": "string",
+							"const": "dismiss"
+						}
+					]
+				}
+			}
+		},
+		"sessions.side.answer.result": {
+			"type": "object",
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"askAlways": {
+					"type": "boolean"
+				}
+			}
+		},
+		"sessions.side.start.params": {
+			"type": "object",
+			"required": [
+				"ref",
+				"brief"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
+				},
+				"brief": {
+					"type": "string",
+					"minLength": 1
+				},
+				"title": {
+					"type": "string"
+				}
+			}
+		},
+		"sessions.side.start.result": {
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"properties": {
+				"ref": {
+					"type": "object",
+					"required": [
+						"kind",
+						"id"
+					],
+					"properties": {
+						"kind": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "build"
+								},
+								{
+									"type": "string",
+									"const": "thread"
+								},
+								{
+									"type": "string",
+									"const": "agent"
+								}
+							]
+						},
+						"id": {
+							"type": "string"
+						},
+						"conversationId": {
+							"type": "string"
+						}
+					}
 				}
 			}
 		},

@@ -470,6 +470,13 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var helper: Helper?
     /// Listed with the project's conversations: yours, all with Piopio; helpers' sessions are reached from their tasks.
     public var listed: Bool { parent == nil && helper == nil }
+    /// A side conversation (docs/spec/24): where it was started from, how ("asked" or "manual"), its state
+    /// (queued, working, needs_you, done, failed, stopped) and, while it works, a line on what it's doing.
+    public struct Side: Codable, Sendable, Hashable { public var parent: Link; public var how: String; public var state: String; public var line: String? }
+    public var side: Side?
+    /// Side conversations Piopio proposed from here (docs/spec/24 §3): cards you may start until they expire.
+    public struct SideProposal: Codable, Sendable, Hashable, Identifiable { public var id, title, why, expiresAt: String; public var project: String? }
+    public var sideProposals: [SideProposal]?
     /// A chat continued in a project folder, and the conversation it continued from (18 §5).
     public struct Link: Codable, Sendable, Hashable { public var id: String; public var title: String }
     public var continuedIn: Link?
@@ -611,6 +618,19 @@ public struct ProjectWork: Codable, Sendable, Hashable, Identifiable {
     public var git: Git?
     public var tasks: [WorkTask]
     public var id: String { project }
+}
+/// Your answer to a side card: an offer's "new" or "here", a proposal's "start" or "dismiss".
+public struct AnswerSideParams: Encodable, Sendable {
+    public var ref: ContainerRef
+    public var id, choice: String
+    public init(ref: ContainerRef, id: String, choice: String) { self.ref = ref; self.id = id; self.choice = choice }
+}
+public struct AnswerSideResult: Decodable, Sendable { public var ref: ContainerRef?; public var askAlways: Bool? }
+/// A side conversation by hand (`/side <what>`, docs/spec/24 §6).
+public struct StartSideParams: Encodable, Sendable {
+    public var ref: ContainerRef
+    public var brief: String
+    public init(ref: ContainerRef, brief: String) { self.ref = ref; self.brief = brief }
 }
 public struct WorkListResult: Decodable, Sendable { public var work: [ProjectWork] }
 public struct WorkGetResult: Decodable, Sendable { public var work: ProjectWork? }
@@ -909,7 +929,11 @@ public struct EngineSettings: Codable, Sendable, Hashable {
         public init(utility: UtilityChoice? = nil) { self.utility = utility }
     }
     public var models: Models?
-    public struct Chat: Codable, Sendable, Hashable { public var mcp: Bool; public var mcpServers: [String]?; public var followUps: Bool? }
+    public struct Chat: Codable, Sendable, Hashable {
+        public var mcp: Bool; public var mcpServers: [String]?; public var followUps: Bool?
+        /// Side conversations (docs/spec/24 §6): "ask" (default), "start" or "off"; proposals; notes that wake.
+        public var sideOnUnrelated: String?; public var sidePropose: Bool?; public var sideWake: Bool?
+    }
     public struct AboutMe: Codable, Sendable, Hashable { public var enabled, capture, inThreads: Bool; public var inAgents: Bool?; public var provider: String }
     public struct Memory: Codable, Sendable, Hashable {
         public var providers: [McpMemoryProvider]
@@ -989,7 +1013,10 @@ public struct MemoryRecallResult: Decodable, Sendable { public struct Hit: Decod
 public struct SettingsPatch: Encodable, Sendable {
     public struct Chat: Encodable, Sendable {
         public var mcp: Bool?; public var followUps: Bool?
-        public init(mcp: Bool? = nil, followUps: Bool? = nil) { self.mcp = mcp; self.followUps = followUps }
+        public var sideOnUnrelated: String?; public var sidePropose: Bool?; public var sideWake: Bool?
+        public init(mcp: Bool? = nil, followUps: Bool? = nil, sideOnUnrelated: String? = nil, sidePropose: Bool? = nil, sideWake: Bool? = nil) {
+            self.mcp = mcp; self.followUps = followUps; self.sideOnUnrelated = sideOnUnrelated; self.sidePropose = sidePropose; self.sideWake = sideWake
+        }
     }
     public struct AboutMe: Encodable, Sendable {
         public var enabled, capture, inThreads, inAgents: Bool?

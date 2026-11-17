@@ -354,6 +354,20 @@ struct Composer: View {
     private func send(steer: Bool) {
         let message = text
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // `/side <what>` (docs/spec/24 §6): a side conversation with your words as its brief; this one goes on.
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedMessage.hasPrefix("/side ") {
+            let brief = String(trimmedMessage.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !brief.isEmpty else { return }
+            text = ""
+            Task {
+                do { try await engine.startSide(from: thread.ref, brief: brief) } catch {
+                    text = message
+                    attachError = (error as? EngineError)?.message ?? error.localizedDescription
+                }
+            }
+            return
+        }
         // Piopio's own commands run here; pi's templates, skills and extension commands go to the agent as typed.
         if isBuild, let command = BuiltInCommand.all.first(where: { "/\($0.name)" == message.trimmingCharacters(in: .whitespacesAndNewlines) }) {
             text = ""
@@ -596,6 +610,7 @@ struct BuiltInCommand: Hashable {
         BuiltInCommand(name: "review", summary: "Review this session's changes"),
         BuiltInCommand(name: "commit", summary: "Commit changes"),
         BuiltInCommand(name: "new", summary: "New session, on a branch or a worktree"),
+        BuiltInCommand(name: "side", summary: "A side conversation for something else: /side <what>"),
     ]
 
     @MainActor func run(_ thread: ThreadModel) {
@@ -626,7 +641,8 @@ extension Composer {
             // Conversations: templates and skills after "/".
             if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
                 let q = trimmed.dropFirst().lowercased()
-                suggestions = Array(sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.prefix(12).map(Suggestion.command))
+                let side = BuiltInCommand.all.filter { $0.name == "side" && (q.isEmpty || $0.name.hasPrefix(q)) }.map(Suggestion.builtIn)
+                suggestions = Array((side + sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.map(Suggestion.command)).prefix(12))
             } else if let query = mentionQuery, query.count >= 2, !chatMentions(query).isEmpty {
                 // A chat outside projects: your other such chats whose title matches, sent along as background.
                 suggestions = chatMentions(query)
@@ -689,6 +705,8 @@ extension Composer {
         case .conversation(let id, _):
             if let query = mentionQuery { text.removeLast(query.count + 1) }
             text += "@conversation:\(id) "
+        case .builtIn(let c) where c.name == "side":
+            text = "/side "
         case .builtIn(let c):
             text = ""
             c.run(thread)

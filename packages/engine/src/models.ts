@@ -475,7 +475,9 @@ function installEcho(faux: FauxHandle): void {
 		if (call) return fauxAssistantMessage(thinking ? [fauxThinking(thinking), call] : [call], { stopReason: "toolUse" });
 		return fauxAssistantMessage([fauxText(`Echo: ${text}`)]);
 	};
-	faux.setResponses([step]);
+	// Each step queues the next; a few ahead, so conversations asking at the same moment (a side conversation started
+	// mid-turn, say) don't find the queue empty.
+	faux.setResponses(Array.from({ length: 8 }, () => step));
 }
 
 function scriptedTools(text: string): { name: string; args: Record<string, unknown> }[] {

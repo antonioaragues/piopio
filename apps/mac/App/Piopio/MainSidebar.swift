@@ -313,8 +313,10 @@ struct MainSidebar: View {
         if !collapsedProjects.contains(project.id), !all.isEmpty || work != nil {
             VStack(alignment: .leading, spacing: 1) {
                 if let work { boardRow(project, work) }
-                ForEach(showAll ? live + earlier : live, id: \.ref.id) { s in
-                    if s.ref.kind == .thread { chatRow(s) } else { sessionRow(s, indent: true) }
+                // Side conversations sit one level under the conversation they came from (docs/spec/24 §6).
+                ForEach(Self.nested(showAll ? live + earlier : live), id: \.0.ref.id) { s, depth in
+                    Group { if s.ref.kind == .thread { chatRow(s) } else { sessionRow(s, indent: true) } }
+                        .padding(.leading, CGFloat(depth) * 14)
                 }
                 if !earlier.isEmpty {
                     Button {
@@ -439,8 +441,24 @@ struct MainSidebar: View {
         }
     }
 
+    /// Conversations with their side conversations right under them, one level deeper each (docs/spec/24 §6). A side
+    /// conversation whose parent isn't in the list stays where it is.
+    static func nested(_ list: [SessionSummary]) -> [(SessionSummary, Int)] {
+        let ids = Set(list.map(\.ref.id))
+        let children = Dictionary(grouping: list.filter { $0.side.map { ids.contains($0.parent.id) } ?? false }, by: { $0.side!.parent.id })
+        var out: [(SessionSummary, Int)] = []
+        func add(_ s: SessionSummary, _ depth: Int) {
+            out.append((s, depth))
+            for child in (children[s.ref.id] ?? []).sorted(by: { $0.createdAt < $1.createdAt }) { add(child, depth + 1) }
+        }
+        for s in list where !(s.side.map { ids.contains($0.parent.id) } ?? false) { add(s, 0) }
+        return out
+    }
+
     private func dotStatus(_ s: SessionSummary) -> SidebarDot.Status {
-        switch engine.liveStatus[s.ref.id] {
+        // A parent shows that one of its side conversations needs you (docs/spec/24 §6).
+        if engine.liveStatus[s.ref.id] != .running, engine.sides(of: s.ref.id).contains(where: { $0.side?.state == "needs_you" }) { return .waiting }
+        return switch engine.liveStatus[s.ref.id] {
         case .running?: .running
         case .waitingApproval?: .waiting
         case .error?: .failed
@@ -541,7 +559,7 @@ struct MainSidebar: View {
         header(.chats, total: threads.count, shown: min(cap, threads.count), add: nil)
         if !collapsed.contains(SidebarSection.chats.rawValue) {
             draftRow(.chat)
-            ForEach(threads.prefix(cap), id: \.ref.id) { chatRow($0) }
+            ForEach(Self.nested(Array(threads.prefix(cap))), id: \.0.ref.id) { t, depth in chatRow(t).padding(.leading, CGFloat(depth) * 14) }
             if threads.count > cap { more("\(threads.count - cap) earlier", .index(.chats)) }
         }
     }

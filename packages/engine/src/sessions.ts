@@ -40,6 +40,7 @@ import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
 import { runCommand, type WorkHost, type WorkRunner } from "./work/runner.js";
 import type { BoardBridge } from "./work/extension.js";
+import type { SideBridge, SideLine } from "./tools/side.js";
 import type { ConsultBridge } from "./consult.js";
 import { routineLabel } from "./work/routines.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
@@ -66,10 +67,22 @@ type CatalogEntry = SessionSummary & {
 	planMode?: boolean;
 	/** Agents: the definition folder. */
 	agentFolder?: string;
+	/** A side conversation (docs/spec/24): its brief while queued, and who drove its last turn (a turn you drove doesn't wake its parent). */
+	sideBrief?: string;
+	sideBy?: "parent" | "you";
+	/** A conversation with side conversations: turns their notes woke in a row since your last message, and notes waiting for a sibling. */
+	sideWoke?: number;
+	sidePending?: string[];
+	/** Offer cards this conversation left (by tool call id), answered or not; and its proposals' briefs. */
+	sideOffers?: Record<string, { title: string; brief?: string; project?: string; answered?: "new" | "here" }>;
+	sideBriefs?: Record<string, string>;
 };
 
 /** At most this many subagents run at once per session (docs/spec/05-build §4). */
 const MAX_SUBAGENTS = 3;
+/** Side conversations (docs/spec/24 §4–§5): at most this many of one parent run at once, and their notes wake it at most this many turns in a row without you. */
+const SIDE_MAX = 4;
+const WAKE_LIMIT = 5;
 
 /** Where Build sessions get their default approval mode and "always allow" rules (the projects). */
 export type ApprovalPolicy = {
@@ -479,6 +492,8 @@ export class Sessions {
 			pending = this.openRuntime(entry);
 			this.open.set(ref.id, pending);
 			pending.catch(() => this.open.delete(ref.id));
+			// A side conversation reports to its parent whenever it's open (docs/spec/24 §5).
+			if (entry.side) void pending.then((runtime) => this.watchSide(entry, runtime)).catch(() => undefined);
 		}
 		return pending;
 	}
@@ -1215,6 +1230,306 @@ export class Sessions {
 		return Boolean(this.policy.projectFor(cwd)) || [...this.entries.values()].some((e) => e.ref.kind === "build" && e.cwd === cwd);
 	}
 
+	// ── Side conversations (docs/spec/24) ─────────────────────────────────
+
+	/** A conversation's side conversations, oldest first. */
+	sidesOf(parentId: string): CatalogEntry[] {
+		return [...this.entries.values()].filter((e) => e.side?.parent.id === parentId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+	}
+
+	private sideLine(e: CatalogEntry): SideLine {
+		return { id: e.ref.id, title: e.title, state: e.side!.state.replace("_", " "), ...(e.worktree?.branch ? { branch: e.worktree.branch } : {}), ...(e.side!.line ? { line: e.side!.line } : {}) };
+	}
+
+	/**
+	 * A side conversation of `parentRef`: an ordinary conversation of the same kind in the same project, with the
+	 * parent's model and permissions (never wider), in a worktree of its own when it will change files in a git project
+	 * (SC5, SC6). The brief is its first message; past SIDE_MAX running, it waits as queued.
+	 */
+	async startSide(parentRef: ContainerRef, input: { title?: string; brief: string; workOn?: "worktree" | "here"; project?: string }, how: NonNullable<CatalogEntry["side"]>["how"]): Promise<CatalogEntry> {
+		const parent = this.entry(parentRef);
+		if ((parent.ref.kind !== "build" && parent.ref.kind !== "thread") || parent.parent || parent.helper) throw new EngineError("INVALID", "Only your own conversations start side conversations.");
+		const brief = input.brief.trim();
+		if (!brief) throw new EngineError("INVALID", "Say what the side conversation should do.");
+		const first = brief.split("\n")[0]!.replace(/\s+/g, " ");
+		const title = (input.title?.trim() || (first.length > 60 ? `${first.slice(0, 59).trimEnd()}…` : first)).slice(0, 80);
+		// In another of your projects when it's plainly about it (SCQ5, 26 CL11): that project's folder and permissions.
+		const elsewhere = input.project?.trim() ? this.projectNamed?.(input.project.trim()) : undefined;
+		if (input.project?.trim() && !elsewhere) throw new EngineError("NOT_FOUND", `No project called “${input.project.trim()}”.`);
+		const folder = elsewhere ? elsewhere.path : parent.ref.kind === "build" ? (parent.projectPath ?? parent.cwd!) : undefined;
+		const mode = elsewhere ? this.policy.modeFor(elsewhere.path) : (parent.approvalMode ?? (folder ? this.policy.modeFor(folder) : undefined));
+		let workOn: WorkOn | undefined;
+		if (folder && input.workOn !== "here" && mode !== "read_only" && (await gitStatus(folder)).repo) {
+			const slug = title.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "side";
+			workOn = { kind: "worktree", branch: `side/${slug}-${randomUUID().slice(0, 4)}` };
+		}
+		const running = this.sidesOf(parent.ref.id).filter((s) => s.side!.state === "working").length;
+		const ref = await this.create({ kind: elsewhere ? "build" : parent.ref.kind, ...(folder ? { cwd: folder } : {}), ...(parent.model ? { model: parent.model } : {}), ...(parent.thinking ? { thinking: parent.thinking } : {}), ...(mode ? { approvalMode: mode } : {}), ...(parent.profile && !elsewhere ? { profile: parent.profile } : {}), title, ...(workOn ? { workOn } : {}) });
+		const child = this.entry(ref);
+		child.side = { parent: { id: parent.ref.id, title: parent.title }, how, state: running >= SIDE_MAX ? "queued" : "working" };
+		child.sideBy = "parent";
+		if (parent.toolsOff?.length && !elsewhere) child.toolsOff = [...parent.toolsOff];
+		const opening = `${brief}\n\n(This is a side conversation started from “${parent.title}” (${parent.ref.id}). It works on its own; read that conversation with read_conversation only if you need its background.)`;
+		if (child.side.state === "queued") child.sideBrief = opening;
+		this.save();
+		this.changed(child);
+		if (child.side.state === "working") await this.sideSubmit(child, opening);
+		return child;
+	}
+
+	private async sideSubmit(child: CatalogEntry, text: string): Promise<void> {
+		const runtime = await this.runtime(child.ref);
+		this.watchSide(child, runtime);
+		await runtime.submit(text, { whenBusy: "followUp" });
+		this.touch(child.ref, text);
+	}
+
+	private readonly sideWatched = new WeakSet<Runtime>();
+
+	/** Follows a side conversation's turns: its live line, and a note to its parent when a turn ends or it needs you. */
+	private watchSide(child: CatalogEntry, runtime: Runtime): void {
+		if (this.sideWatched.has(runtime)) return;
+		this.sideWatched.add(runtime);
+		let started = runtime.snapshot().state.status === "running";
+		let lineAt = 0;
+		runtime.onEvents((events) => {
+			for (const e of events) {
+				const side = child.side;
+				if (!side) return;
+				if ((e.type === "item.added" || e.type === "item.updated") && e.item.kind === "tool" && e.item.status === "running" && Date.now() - lineAt > 1000) {
+					lineAt = Date.now();
+					side.line = progressLine(e.item.tool, e.item.args);
+					this.changed(child);
+				}
+				if (e.type !== "state") continue;
+				if (e.state.status === "running" && !started) {
+					started = true;
+					this.setSideState(child, "working");
+				} else if (e.state.status === "waiting_approval" && side.state !== "needs_you") {
+					this.setSideState(child, "needs_you");
+					void this.sideNote(child, `[Side] “${child.title}” (${child.ref.id}) needs the user: it's waiting for an approval there.`, `Message from ${child.title} · needs you`).catch(() => undefined);
+				} else if (e.state.status === "idle" && started) {
+					started = false;
+					void this.sideSettled(child, runtime).catch(() => undefined);
+				}
+			}
+		});
+	}
+
+	private setSideState(child: CatalogEntry, state: NonNullable<CatalogEntry["side"]>["state"]): void {
+		if (!child.side) return;
+		child.side.state = state;
+		if (state !== "working") delete child.side.line;
+		this.save();
+		this.changed(child);
+	}
+
+	/** A side conversation's turn ended: its state, a note to its parent, and the next queued sibling starts. */
+	private async sideSettled(child: CatalogEntry, runtime: Runtime): Promise<void> {
+		const snap = runtime.snapshot();
+		const last = [...snap.items].reverse().find((i) => i.kind === "assistant");
+		const answer = last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("").trim() : "";
+		const state = last?.kind === "assistant" && last.status === "error" ? "failed" : last?.kind === "assistant" && last.status === "aborted" ? "stopped" : "done";
+		this.setSideState(child, state);
+		const word = state === "done" ? "finished" : state === "failed" ? "failed" : "was stopped";
+		const cut = answer.length > 400 ? `${answer.slice(0, 400).trimEnd()}…` : answer;
+		const branch = child.worktree && !child.worktree.finished ? ` Its work is on ${child.worktree.branch}, not in this checkout until the user merges it.` : "";
+		const cost = snap.state.usage?.costUsd ? ` It cost $${snap.state.usage.costUsd.toFixed(2)}.` : "";
+		await this.sideNote(child, `[Side] “${child.title}” (${child.ref.id}) ${word}.${branch}${cost}${cut ? `\n\n${cut.split("\n").map((l) => `> ${l}`).join("\n")}` : ""}`, `Message from ${child.title} · ${state}`);
+		const parentId = child.side!.parent.id;
+		const next = this.sidesOf(parentId).find((s) => s.side!.state === "queued");
+		if (next && this.sidesOf(parentId).filter((s) => s.side!.state === "working").length < SIDE_MAX) {
+			const brief = next.sideBrief ?? next.title;
+			delete next.sideBrief;
+			this.setSideState(next, "working");
+			await this.sideSubmit(next, brief);
+		}
+	}
+
+	/**
+	 * A note to the parent (SC7). It wakes the parent (a follow-up message) unless you drove that turn yourself, the
+	 * parent has been woken WAKE_LIMIT times in a row without you, or a sibling is still working (then it waits for
+	 * the sibling, so a burst costs one turn). A note that doesn't wake is shown and read on the parent's next turn.
+	 */
+	private async sideNote(child: CatalogEntry, text: string, summary: string): Promise<void> {
+		const parent = this.entries.get(child.side?.parent.id ?? "");
+		if (!parent) return;
+		const quiet = child.sideBy === "you" || (parent.sideWoke ?? 0) >= WAKE_LIMIT || this.chat?.settings.get().chat.sideWake === false;
+		if (quiet) {
+			const runtime = await this.runtime(parent.ref);
+			if (runtime instanceof BuildRuntime) await runtime.sideNote(text, summary);
+			return;
+		}
+		parent.sidePending = [...(parent.sidePending ?? []), text];
+		this.save();
+		if (this.sidesOf(parent.ref.id).some((s) => s !== child && s.side!.state === "working")) return;
+		const notes = parent.sidePending;
+		parent.sidePending = [];
+		parent.sideWoke = (parent.sideWoke ?? 0) + 1;
+		this.save();
+		const runtime = await this.runtime(parent.ref);
+		await runtime.submit(notes.join("\n\n"), { whenBusy: "followUp" });
+		this.touch(parent.ref);
+	}
+
+	/** You wrote in a conversation yourself: its side conversations may wake it again, and a side conversation you drive doesn't wake its parent. */
+	youWrote(ref: ContainerRef): void {
+		const entry = this.entries.get(ref.id);
+		if (!entry) return;
+		entry.sideWoke = 0;
+		if (entry.side) entry.sideBy = "you";
+		this.save();
+	}
+
+	/** One of `parent`'s side conversations, or an error for the model. */
+	private ownSide(parent: CatalogEntry, id: string): CatalogEntry {
+		const child = this.entries.get(id);
+		if (!child || child.side?.parent.id !== parent.ref.id) throw new EngineError("NOT_FOUND", `${id} isn't one of this conversation's side conversations.`);
+		return child;
+	}
+
+	/** A project by name (or id), for a side conversation in another project; set by the engine. */
+	projectNamed?: (name: string) => { id: string; path: string } | undefined;
+	/** Your projects' names; set by the engine. */
+	projectNames?: () => string[];
+	/** New conversation answers in a row (SCQ3): after three, the app offers Always start. */
+	private sideStreak = 0;
+
+	private sideSettings(): { onUnrelated: "ask" | "start" | "off"; propose: boolean } {
+		const chat = this.chat?.settings.get().chat;
+		return { onUnrelated: chat?.sideOnUnrelated ?? "ask", propose: chat?.sidePropose !== false };
+	}
+
+	/** Whether the turn now running began with your own words (not a note, the board or a routine). */
+	private async yourTurn(entry: CatalogEntry): Promise<boolean> {
+		const user = [...(await this.runtime(entry.ref)).snapshot().items].reverse().find((i) => i.kind === "user");
+		return !!user && user.kind === "user" && !/^\[(Side|Board|Routine)\]/.test(user.text);
+	}
+
+	/**
+	 * Your answer to a side card (docs/spec/24 §1): an offer's New conversation or Do it here, a proposal's Start or
+	 * Dismiss. Each card is answered once.
+	 */
+	async answerSide(ref: ContainerRef, id: string, choice: "new" | "here" | "start" | "dismiss"): Promise<{ ref?: ContainerRef; askAlways?: boolean }> {
+		const entry = this.entry(ref);
+		if (choice === "new" || choice === "here") {
+			const offer = entry.sideOffers?.[id];
+			if (!offer) throw new EngineError("NOT_FOUND", "That offer isn't here.");
+			if (offer.answered) throw new EngineError("INVALID", offer.answered === "new" ? "It already has its own conversation." : "You chose to do it here.");
+			offer.answered = choice;
+			this.save();
+			if (choice === "here") {
+				this.sideStreak = 0;
+				this.youWrote(ref);
+				await (await this.runtime(ref)).submit("Do it here.", { whenBusy: "followUp" });
+				this.touch(ref);
+				return {};
+			}
+			// Its brief: the part of your words the offer named, else your whole message (§3: a fresh conversation would do it from your words alone).
+			const user = [...(await this.runtime(ref)).snapshot().items].reverse().find((i) => i.kind === "user");
+			const brief = offer.brief?.trim() || (user?.kind === "user" ? user.text : offer.title);
+			const child = await this.startSide(ref, { title: offer.title, brief, ...(offer.project ? { project: offer.project } : {}) }, "offered");
+			this.sideStreak++;
+			return { ref: child.ref, ...(this.sideStreak >= 3 && this.sideSettings().onUnrelated === "ask" ? { askAlways: true } : {}) };
+		}
+		const proposal = entry.sideProposals?.find((p) => p.id === id);
+		if (!proposal) throw new EngineError("NOT_FOUND", "That proposal is gone (started, dismissed or expired).");
+		const brief = entry.sideBriefs?.[id] ?? proposal.title;
+		this.dropProposal(entry, id);
+		if (choice === "dismiss") return {};
+		const child = await this.startSide(ref, { title: proposal.title, brief, ...(proposal.project ? { project: proposal.project } : {}) }, "proposed");
+		return { ref: child.ref };
+	}
+
+	private dropProposal(entry: CatalogEntry, id: string): void {
+		entry.sideProposals = entry.sideProposals?.filter((p) => p.id !== id);
+		if (!entry.sideProposals?.length) delete entry.sideProposals;
+		if (entry.sideBriefs) delete entry.sideBriefs[id];
+		this.save();
+		this.changed(entry);
+	}
+
+	/** The side tools for one of your conversations (tools/side.ts). */
+	private sideBridge(entry: CatalogEntry): SideBridge {
+		return {
+			settings: () => this.sideSettings(),
+			projects: () => (entry.ref.kind === "thread" ? (this.projectNames?.() ?? []) : []),
+			list: () => [
+				...this.sidesOf(entry.ref.id).map((s) => this.sideLine(s)),
+				...(entry.sideProposals ?? []).filter((p) => Date.parse(p.expiresAt) > Date.now()).map((p) => ({ id: p.id, title: p.title, state: "proposed" })),
+			],
+			offer: async (callId, input) => {
+				if (this.sideSettings().onUnrelated === "off") throw new EngineError("INVALID", "The user turned these offers off: do the work here.");
+				if (!(await this.yourTurn(entry))) throw new EngineError("INVALID", "Offer a side conversation only for the user's own message.");
+				if (input.project?.trim() && !this.projectNamed?.(input.project.trim())) throw new EngineError("NOT_FOUND", `No project called “${input.project.trim()}”.`);
+				entry.sideOffers = { ...entry.sideOffers, [callId]: { title: input.title.trim(), ...(input.brief?.trim() ? { brief: input.brief.trim() } : {}), ...(input.project?.trim() ? { project: input.project.trim() } : {}) } };
+				this.save();
+				return "Offered. Stop here and wait for their choice.";
+			},
+			propose: async (callId, input) => {
+				if (!this.sideSettings().propose) throw new EngineError("INVALID", "The user turned proposals off.");
+				const open = (entry.sideProposals ?? []).filter((p) => Date.parse(p.expiresAt) > Date.now());
+				if (open.some((p) => p.title.toLowerCase() === input.title.trim().toLowerCase())) throw new EngineError("INVALID", "That's already proposed.");
+				if (open.length >= 6) throw new EngineError("INVALID", "Six proposals are waiting already: dismiss one first.");
+				if (input.project?.trim() && !this.projectNamed?.(input.project.trim())) throw new EngineError("NOT_FOUND", `No project called “${input.project.trim()}”.`);
+				entry.sideProposals = [...open, { id: callId, title: input.title.trim(), why: input.why.trim(), ...(input.project?.trim() ? { project: input.project.trim() } : {}), expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString() }];
+				entry.sideBriefs = { ...entry.sideBriefs, [callId]: input.brief.trim() };
+				this.save();
+				this.changed(entry);
+				return `Proposed as ${callId}. The user may start it until it expires in a week.`;
+			},
+			dismiss: async (id) => {
+				if (!entry.sideProposals?.some((p) => p.id === id)) throw new EngineError("NOT_FOUND", `No proposal ${id}.`);
+				this.dropProposal(entry, id);
+				return `Withdrew ${id}.`;
+			},
+			start: async (input) => {
+				// Only on the user's own words: a turn a note, the board or a routine started can't start one (§4).
+				if (!(await this.yourTurn(entry))) throw new EngineError("INVALID", "Start a side conversation only when the user asks for separate work in their own message.");
+				return this.sideLine(await this.startSide(entry.ref, input, "asked"));
+			},
+			send: async (id, message) => {
+				const child = this.ownSide(entry, id);
+				child.sideBy = "parent";
+				if (child.side!.state === "queued") {
+					child.sideBrief = `${child.sideBrief ?? ""}\n\n${message}`;
+					this.save();
+					return `Added to ${id}'s brief; it starts when there's room.`;
+				}
+				await this.sideSubmit(child, message);
+				return `Sent to ${id}.`;
+			},
+			read: async (id, from = 0) => {
+				const child = this.ownSide(entry, id);
+				const snap = (await this.runtime(child.ref)).snapshot();
+				const last = [...snap.items].reverse().find((i) => i.kind === "assistant");
+				const answer = last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("").trim() : "";
+				const part = answer.slice(from, from + 6000);
+				const changed = child.worktree ? (await runGit(child.cwd!, ["diff", "--stat", `${child.worktree.base ?? "HEAD"}...HEAD`]).catch(() => "")).trim() : "";
+				const uncommitted = child.worktree ? (await runGit(child.cwd!, ["status", "--short"]).catch(() => "")).trim() : "";
+				return [
+					`${child.title} (${id}) · ${child.side!.state.replace("_", " ")}${child.worktree ? ` · branch ${child.worktree.branch}${child.worktree.finished ? ` (${child.worktree.finished})` : ""}` : ""} · $${(snap.state.usage?.costUsd ?? 0).toFixed(2)}`,
+					changed ? `Committed on its branch:\n${changed}` : "",
+					uncommitted ? `Changed and not committed:\n${uncommitted}` : "",
+					`Its last answer${from ? ` from character ${from}` : ""}:\n${part || "(none yet)"}`,
+					from + 6000 < answer.length ? `(More: side_read with from ${from + 6000}.)` : "",
+				]
+					.filter(Boolean)
+					.join("\n\n");
+			},
+			stop: async (id) => {
+				const child = this.ownSide(entry, id);
+				if (child.side!.state === "queued") {
+					delete child.sideBrief;
+					this.setSideState(child, "stopped");
+					return `${id} won't start.`;
+				}
+				await (await this.runtime(child.ref)).abort();
+				return `Stopped ${id}'s turn.`;
+			},
+		};
+	}
+
 	// ── Projects' work (docs/spec/26) ─────────────────────────────────────
 
 	/**
@@ -1569,6 +1884,8 @@ export class Sessions {
 			...(entry.helper?.kind === "review" && this.work ? { board: this.boardBridge(entry, "review") } : {}),
 			// Piopio's board tools are declared each turn only while parallel work is on in the project (work/extension.ts).
 			...(!entry.parent && !entry.helper && this.work && this.policy.projectFor(entry.projectPath ?? entry.cwd!) ? { board: this.boardBridge(entry, "piopio") } : {}),
+			// Side conversations (docs/spec/24): your own conversations, not a helper's or a subagent's.
+			...(!entry.parent && !entry.helper ? { side: this.sideBridge(entry) } : {}),
 			// Your agents, from your conversations (not a helper's task or a subagent): ask_agent and @Name.
 			...(!entry.parent && !entry.helper ? { consult: { bridge: this.consultBridge(), from: () => entry.title } } : {}),
 			// Piopio's offers: in a project conversation with Piopio, not a helper's.
@@ -1642,6 +1959,8 @@ export class Sessions {
 			...this.browserFor(entry.ref),
 			...this.visualsFor(entry.ref),
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
+			// Side conversations (docs/spec/24), here or in one of your projects (SCQ5).
+			side: this.sideBridge(entry),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			// Global MCP servers that aren't on for chats (Settings › MCP servers) are refused, as are those turned off here.
 			toolsOff: () => [...(entry.toolsOff ?? []), ...(this.chat?.mcpOff() ?? []).map((name) => `mcp:${name}`)],
@@ -1670,7 +1989,13 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, ...rest }: CatalogEntry): SessionSummary {
+	// Proposals go after a week (docs/spec/24 §3).
+	if (rest.sideProposals) {
+		const live = rest.sideProposals.filter((p) => Date.parse(p.expiresAt) > Date.now());
+		if (live.length) rest.sideProposals = live;
+		else delete rest.sideProposals;
+	}
 	// A chat's folder is the engine's: the app knows a chat by having no project.
 	if (rest.ref.kind === "thread") delete rest.cwd;
 	return rest;

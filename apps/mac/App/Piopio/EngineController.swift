@@ -604,6 +604,31 @@ final class EngineController {
 
     // MARK: Agents
 
+    // MARK: Side conversations (docs/spec/24)
+
+    /// A side conversation by hand: `/side <what>`, with your words as its brief.
+    @discardableResult
+    func startSide(from ref: ContainerRef, brief: String) async throws -> ContainerRef {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let child = try await client.call("sessions.side.start", StartSideParams(ref: ref, brief: brief), as: CreateSessionResult.self).ref
+        try? await refreshCatalog()
+        return child
+    }
+
+    /// Your answer to a side card (docs/spec/24 §1): returns the new conversation, and whether to offer Always start.
+    @discardableResult
+    func answerSide(_ ref: ContainerRef, id: String, choice: String) async throws -> AnswerSideResult {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let result = try await client.call("sessions.side.answer", AnswerSideParams(ref: ref, id: id, choice: choice), as: AnswerSideResult.self)
+        try? await refreshCatalog()
+        return result
+    }
+
+    /// A conversation's side conversations, oldest first.
+    func sides(of id: String) -> [SessionSummary] {
+        (buildSessions + threads).filter { $0.side?.parent.id == id }.sorted { $0.createdAt < $1.createdAt }
+    }
+
     // MARK: A project's work (docs/spec/26)
 
     func loadWork() async {

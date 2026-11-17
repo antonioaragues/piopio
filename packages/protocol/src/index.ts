@@ -412,6 +412,12 @@ export const EngineSettings = Type.Object({
 		mcpServers: Type.Optional(Type.Array(Type.String())),
 		/** After an answer, suggest a few next messages (docs/design v2 "You could also"). */
 		followUps: Type.Optional(Type.Boolean()),
+		/** Side conversations (docs/spec/24 §6): when you bring up something unrelated, ask (default), start one, or do nothing. */
+		sideOnUnrelated: Type.Optional(literals("ask", "start", "off")),
+		/** Piopio proposes follow-ups it notices as cards you start (default on). */
+		sidePropose: Type.Optional(Type.Boolean()),
+		/** A side conversation's report wakes the conversation it came from (default on). */
+		sideWake: Type.Optional(Type.Boolean()),
 	}),
 	/** Build sessions (docs/research/deepseek-harness.md). Absent fields: their defaults. */
 	build: Type.Optional(
@@ -530,6 +536,13 @@ export const SessionSummary = Type.Object({
 	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
 	/** A helper's session (docs/spec/26 CL4): made by Piopio for a task on a project's board; not listed with yours. */
 	helper: Type.Optional(Type.Object({ project: Type.String(), kind: literals("build", "review"), taskId: Type.String() })),
+	/**
+	 * A side conversation (docs/spec/24): the conversation it was started from, how (asked in words, or by hand with
+	 * /side), its state (queued while 4 others of its parent run), and while it works, a line on what it's doing.
+	 */
+	side: Type.Optional(Type.Object({ parent: Type.Object({ id: Type.String(), title: Type.String() }), how: literals("asked", "manual", "offered", "proposed"), state: literals("queued", "working", "needs_you", "done", "failed", "stopped"), line: Type.Optional(Type.String()) })),
+	/** Side conversations Piopio proposed from here (docs/spec/24 §3): each a card you may start, until it expires. */
+	sideProposals: Type.Optional(Type.Array(Type.Object({ id: Type.String(), title: Type.String(), why: Type.String(), project: Type.Optional(Type.String()), expiresAt: Type.String() }))),
 	/** A chat continued in a project folder (18 §5): the new conversation, and in it, where it came from. */
 	continuedIn: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
 	continuedFrom: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
@@ -1499,6 +1512,13 @@ export const methods = {
 		}),
 	},
 	/** Every project's work (docs/spec/26): its way of working, board and branch. */
+	/**
+	 * Your answer to a side card (docs/spec/24 §1): an offer's New conversation ("new") or Do it here ("here"), a
+	 * proposal's Start or Dismiss. `askAlways` after three New in a row: offer "Don't ask again" (SCQ3).
+	 */
+	"sessions.side.answer": { params: Type.Object({ ref: ContainerRef, id: Type.String({ description: "The offer's or proposal's tool call id" }), choice: literals("new", "here", "start", "dismiss") }), result: Type.Object({ ref: Type.Optional(ContainerRef), askAlways: Type.Optional(Type.Boolean()) }) },
+	/** A side conversation by hand (docs/spec/24 §6, `/side <what>`): your words are its brief. */
+	"sessions.side.start": { params: Type.Object({ ref: ContainerRef, brief: Type.String({ minLength: 1 }), title: Type.Optional(Type.String()) }), result: Type.Object({ ref: ContainerRef }) },
 	"work.list": { params: Type.Object({}), result: Type.Object({ work: Type.Array(WorkInfo) }) },
 	/** A project's work; none until parallel work was first switched on there. */
 	"work.get": { params: Type.Object({ project: Type.String() }), result: Type.Object({ work: Type.Optional(WorkInfo) }) },

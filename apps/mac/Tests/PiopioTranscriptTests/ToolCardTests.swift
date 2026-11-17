@@ -132,3 +132,27 @@ import Testing
     #expect(routine.string.contains("Routine · Every Monday at 09:00: Write the brief"))
     #expect(!routine.string.contains("[Routine]"))
 }
+
+/// A side conversation's report (docs/spec/24 §5): "Message from <title> · finished", the answer under it; two at once
+/// are two rows.
+@Test @MainActor func sideNotesAreMessageRows() {
+    let one = ItemRenderer.sideNotes("“About page” (ses_1) finished. Its work is on side/about-1, not in this checkout until the user merges it.\n\n> Added about.html.\n> Checked it.")
+    #expect(one.count == 1)
+    #expect(one[0].title == "Message from About page · finished")
+    #expect(one[0].body.contains("Added about.html.\nChecked it."))
+    let two = ItemRenderer.sideNotes("“A” (ses_1) finished.\n\n> a\n\n[Side] “B” (ses_2) needs the user: it's waiting for an approval there.")
+    #expect(two.map(\.title) == ["Message from A · finished", "Message from B · needs the user"])
+    let rendered = ItemRenderer().render(.user(UserItem(id: "u1", at: "", text: "[Side] “A” (ses_1) finished.\n\n> a")))
+    #expect(!rendered.string.contains("[Side]"))
+}
+
+/// Piopio's offer of a side conversation (docs/spec/24 §1): the task, its brief, New conversation and Do it here.
+@Test @MainActor func sideOfferIsACardWithTwoChoices() {
+    let offer = ToolItem(id: "t1", at: "", callId: "c9", tool: "side_offer", args: .object(["title": .string("Centered start page"), "brief": .string("Bring back the centered start page for + and New project")]), status: .done, output: "Offered.")
+    let card = ItemRenderer().render(.tool(offer)).string
+    #expect(card.contains("This looks like its own task"))
+    #expect(card.contains("Centered start page"))
+    #expect(card.contains("Bring back the centered start page"))
+    let proposed = ToolItem(id: "t2", at: "", callId: "c10", tool: "side_propose", args: .object(["title": .string("Fix the team page"), "why": .string("Same bug")]), status: .done, output: "Proposed.")
+    #expect(ItemRenderer().render(.tool(proposed)).string.contains("Proposed a side conversation: Fix the team page"))
+}

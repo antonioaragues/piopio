@@ -33,6 +33,7 @@ import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
 import { buildPromptExtension } from "../tools/build-prompt.js";
 import { boardExtension, type BoardBridge } from "../work/extension.js";
+import { sideExtension, type SideBridge } from "../tools/side.js";
 import { consultExtension, type ConsultBridge } from "../consult.js";
 import { offersExtension, type OffersBridge } from "../offers.js";
 import { guardsExtension } from "../tools/guards.js";
@@ -115,6 +116,8 @@ export type BuildOpenOptions = {
 	consult?: { bridge: ConsultBridge; from: () => string };
 	/** Piopio's offers in a project: parallel work for divisible work, an agent or a routine for repeated work. */
 	offers?: OffersBridge;
+	/** Side conversations (docs/spec/24): your conversations, not a helper's or a subagent's. */
+	side?: SideBridge;
 };
 
 export class BuildRuntime implements Runtime {
@@ -237,6 +240,7 @@ export class BuildRuntime implements Runtime {
 				codingVisualsExtension(o.visuals),
 				goalExtension(),
 				...(o.history ? [historySdkExtension(o.history)] : []),
+				...(o.side ? [sideExtension(o.side)] : []),
 				planExtension({
 					active: o.plan.active,
 					setActive: (on) => {
@@ -690,6 +694,15 @@ export class BuildRuntime implements Runtime {
 	 * Context the model reads before the first message (docs/spec/18 §5, Continue in): a custom message in the pi
 	 * session, shown in the transcript as one line (`summary`). It doesn't start a turn.
 	 */
+	/**
+	 * A note this conversation reads on its next turn without starting one (a side conversation's report that
+	 * shouldn't wake it, docs/spec/24 §5). It shows as a line with its summary.
+	 */
+	async sideNote(text: string, summary: string): Promise<void> {
+		await this.session.sendCustomMessage({ customType: "piopio.side_note", content: [{ type: "text", text }], display: true, details: { summary } }, { triggerTurn: false });
+		this.emitter.emit(this.builder.flush());
+	}
+
 	async seed(text: string, images: { type: "image"; data: string; mimeType: string }[], summary: string): Promise<void> {
 		await this.session.sendCustomMessage({ customType: "piopio.continued", content: [{ type: "text", text }, ...images], display: true, details: { summary } }, { triggerTurn: false });
 		this.emitter.emit(this.builder.flush());
@@ -1060,6 +1073,7 @@ function chatFactories(o: BuildOpenOptions, runtime: () => BuildRuntime | undefi
 				]
 			: []),
 		...(o.history ? [historySdkExtension(o.history)] : []),
+		...(o.side ? [sideExtension(o.side)] : []),
 		...(o.chat!.extensions ?? []),
 	];
 }

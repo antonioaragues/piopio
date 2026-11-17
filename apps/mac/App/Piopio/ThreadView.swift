@@ -74,6 +74,7 @@ struct ThreadView: View {
         VStack(spacing: 0) {
             header
             if let next = summary.continuedIn { continuedBanner(next) }
+            if let side = summary.side { SideStartedBar(engine: engine, side: side) }
             ZStack(alignment: .bottom) {
                 TranscriptView(document: thread.document)
                 // The thread dissolves before it reaches the composer (chat v3).
@@ -84,10 +85,12 @@ struct ThreadView: View {
                     if !thread.isFollowing {
                         JumpToLatestButton { thread.scrollToLatest() }
                     }
+                    SideConversations(engine: engine, parentId: summary.ref.id)
                     Composer(engine: engine, thread: thread).frame(maxWidth: 680)
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 20)
+                .modifier(SideOffers(engine: engine, ref: summary.ref))
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                     thread.document.bottomInset = height + 40
                 }

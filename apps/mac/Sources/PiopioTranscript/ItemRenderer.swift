@@ -38,6 +38,12 @@ nonisolated struct ItemRenderer: Sendable {
 
     func render(_ item: TimelineItem) -> NSAttributedString {
         switch item {
+        case .user(let u) where u.text.hasPrefix("[Side] "):
+            // A side conversation's report (docs/spec/24 §5): "Message from About page · finished", the report under it.
+            if compact { return NSAttributedString() }
+            return Self.sideNotes(String(u.text.dropFirst(7))).reduce(into: NSMutableAttributedString()) { out, n in
+                out.append(n.body.isEmpty ? note(n.title) : thinkingCard(DisclosureCard(kind: .thinking, title: n.title, body: n.body)))
+            }
         case .user(let u) where u.text.hasPrefix("[Board] ") || u.text.hasPrefix("[Routine] "):
             // A board update or a routine firing (docs/spec/20 §4): an event, not something you wrote. Its first line
             // shows; the report opens under it.
@@ -84,8 +90,11 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .tool(let t) where t.tool == "ask_agent":
             return agentAnswer(t)
-        case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat") && t.status == .done:
+        case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat" || t.tool == "side_offer") && t.status == .done:
             return offerCard(t)
+        case .tool(let t) where t.tool == "side_propose" && t.status == .done:
+            // The card itself lives above the composer, with Start and Dismiss (docs/spec/24 §6).
+            return note("Proposed a side conversation: \(t.args?["title"]?.stringValue ?? "")")
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
         case .tool(let t) where t.tool == "present_files" && t.status == .done:
@@ -199,7 +208,20 @@ nonisolated struct ItemRenderer: Sendable {
         func line(_ text: String, color: NSColor = DS.fg2) {
             m.append(NSAttributedString(string: lineSeparator + text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: color]))
         }
-        if t.tool == "offer_parallel" {
+        if t.tool == "side_offer" {
+            // "This looks like its own task" (docs/spec/24 §1, §6): New conversation, or Do it here.
+            title("This looks like its own task")
+            line(t.args?["title"]?.stringValue ?? "")
+            if let brief = t.args?["brief"]?.stringValue, !brief.isEmpty {
+                let short = brief.count > 160 ? String(brief.prefix(159)) + "…" : brief
+                line(short.replacingOccurrences(of: "\n", with: " "), color: DS.fg3)
+            }
+            if let project = t.args?["project"]?.stringValue, !project.isEmpty { line("In \(project)", color: DS.fg3) }
+            m.append(NSAttributedString(string: lineSeparator, attributes: [.font: small]))
+            m.append(pill("New conversation", .offer(kind: "side-new", callId: t.callId), .primary))
+            m.append(gap)
+            m.append(pill("Do it here", .offer(kind: "side-here", callId: t.callId), .secondary))
+        } else if t.tool == "offer_parallel" {
             title("This could go faster in parallel")
             if let why = t.args?["why"]?.stringValue { line(why) }
             if case .array(let parts)? = t.args?["parts"] { line(parts.compactMap(\.stringValue).joined(separator: " · "), color: DS.fg3) }
@@ -222,6 +244,26 @@ nonisolated struct ItemRenderer: Sendable {
             m.append(pill("No", .reply(text: "No, just this once."), .secondary))
         }
         return card(m, .approval, lineHeight: 1.6)
+    }
+
+    /// One or more side conversations' reports (they arrive together when several finish in a burst), each as
+    /// "Message from <title> · <what happened>" and its quoted answer.
+    static func sideNotes(_ text: String) -> [(title: String, body: String)] {
+        // Each report starts with “Title” (id) and what happened; several are joined by "[Side] ".
+        text.components(separatedBy: "\n\n[Side] ").map { report in
+            let first = report.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? report
+            let body = report.dropFirst(first.count).trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(separator: "\n", omittingEmptySubsequences: false).map { $0.hasPrefix("> ") ? String($0.dropFirst(2)) : String($0) }.joined(separator: "\n")
+            var title = first
+            if let open = first.firstIndex(of: "“"), let close = first[open...].firstIndex(of: "”") {
+                let name = first[first.index(after: open)..<close]
+                var what = String(first[first.index(after: close)...]).trimmingCharacters(in: .whitespaces)
+                if what.hasPrefix("("), let end = what.firstIndex(of: ")") { what = String(what[what.index(after: end)...]).trimmingCharacters(in: .whitespaces) }
+                let verb = what.split(whereSeparator: { $0 == "." || $0 == ":" }).first.map(String.init) ?? what
+                title = "Message from \(name) · \(verb.trimmingCharacters(in: .whitespaces))"
+            }
+            return (title, body)
+        }
     }
 
     /// A board update worth a line in the conversation (AD9): a task sent back, or blocked.

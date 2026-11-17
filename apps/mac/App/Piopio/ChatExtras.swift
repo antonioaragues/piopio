@@ -57,6 +57,36 @@ struct ChatPane: View {
                 }))
             }
             .padding(.bottom, 22)
+            // Side conversations (docs/spec/24 §6): what happens when you bring up something unrelated.
+            CardTitle("Side conversations")
+            ListCard {
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("When I bring up something unrelated").font(.system(size: 13))
+                            Text("A new subject can get its own conversation, linked to this one").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                        }
+                        Spacer()
+                        Picker("", selection: Binding(get: { settings?.chat.sideOnUnrelated ?? "ask" }, set: { v in
+                            Task { await engine.updateSettings(SettingsPatch(chat: .init(sideOnUnrelated: v))) }
+                        })) {
+                            Text("Ask").tag("ask")
+                            Text("Always start one").tag("start")
+                            Text("Do nothing").tag("off")
+                        }
+                        .labelsHidden().fixedSize()
+                    }
+                    .padding(.horizontal, 14).frame(minHeight: 46)
+                    RowDivider(inset: 14)
+                }
+                ToggleRow(title: "Propose follow-ups", subtitle: "Work Piopio notices along the way, as cards you can start", isOn: Binding(get: { settings?.chat.sidePropose ?? true }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(chat: .init(sidePropose: v))) }
+                }))
+                ToggleRow(title: "Let side conversations wake this one", subtitle: "Their reports start a turn here; off, they wait for your next message", last: true, isOn: Binding(get: { settings?.chat.sideWake ?? true }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(chat: .init(sideWake: v))) }
+                }))
+            }
+            .padding(.bottom, 22)
             CardTitle("About me")
             ListCard {
                 HStack(spacing: 12) {

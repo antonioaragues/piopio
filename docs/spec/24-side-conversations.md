@@ -170,6 +170,11 @@ as with `piopio-history`.
     answer to it is still running, stops it here.
   - "Move to a side conversation" on a card answered Do it here isn't offered: history can't be split after the fact.
     Fork is the tool for that.
+- **A reference for SD3's cards (2026-11-17):** Claude Code's own offer of a new session. A card headed "New
+  session", the title, two lines of the brief, then **Options**, **Do it here** and **Start**. Options opens a small
+  sheet with where it runs, its own worktree (a switch), the model, the effort and the permissions, each prefilled
+  from this conversation. Ours can take the same shape: the offer and the proposal are one card, and Options holds
+  what §4 leaves to the model (`workOn`, `model`) for you to change before it starts.
 - **Settings › Conversations:** *When I bring up something unrelated:* Ask (default) · Always start a side
   conversation · Do nothing. *Propose follow-ups:* on. *Let side conversations wake their parent:* on.
 
@@ -248,3 +253,106 @@ All seven went with the proposal.
   always Piopio, so read "a project with parallel work on"; SC5's "who" is Piopio or an agent.
 - SCQ7 · **No auto-archive in v1.** A done side conversation stays until you archive it; the card in the parent stays
   the way back. Revisit after real use.
+
+## 10. SD1–SD2 as built (2026-11-17)
+
+- **Engine** (`sessions.ts`, `tools/side.ts`):
+  - `startSide` makes a side conversation as an ordinary conversation of the parent's kind, in its project. It gets
+    the parent's model, thinking, permissions, profile and tools turned off.
+  - In a git project, when it isn't Read only, it gets a worktree on `side/<title>-<id>`. With `workOn: "here"` it
+    shares the folder.
+  - Its first message is the brief, plus a line naming the parent it can read with `read_conversation`.
+  - Past 4 running for one parent, it waits as queued and starts when one ends.
+  - The link is `SessionSummary.side`: `{ parent, how: "asked" | "manual", state, line }`. The state is queued,
+    working, needs_you, done, failed or stopped. The line ("Editing about.html") updates at most once a second.
+- **Tools**, for your own conversations (not a helper's or a subagent's):
+  - `side_start` is refused unless the turn's last user message is yours, not one starting `[Side]`, `[Board]` or
+    `[Routine]`.
+  - `side_send` is queued if the side conversation is busy, and added to the brief if it's queued.
+  - `side_read` gives the state, branch, cost, what's committed and changed on its branch, and its last answer, in
+    6,000-character pieces.
+  - `side_stop`.
+  - Each turn's system prompt has the rule of §3 for asked work, and "Side conversations now".
+- **Notes back** (§5), when a turn ends, or when the side conversation waits on an approval:
+  - the note says what happened, its branch, its cost and the first 400 characters of its answer;
+  - it comes as a `[Side] “Title” (id) finished…` follow-up that wakes the parent;
+  - while a sibling is still working, notes wait for it, and arrive together in one turn;
+  - after 5 woken turns in a row without you, or from a turn you drove in the side conversation yourself, the note is
+    quiet: a `piopio.side_note` message, shown as "Message from <title> · done" and read on the parent's next turn;
+  - writing in a conversation yourself resets the count.
+- **`/side <what>`** in any composer is `sessions.side.start`, with your words as the brief. It shows in the `/` list.
+- **The app:**
+  - "Started from <parent> ›" in a side conversation;
+  - a "Side conversations" block above the parent's composer: a row each with its dot, title, live line and branch,
+    which opens it, and **Merge** / **Discard** on a finished one whose worktree isn't merged;
+  - `[Side]` notes as "Message from <title> · finished" rows that open to the answer;
+  - side conversations nested under their parent in the sidebar, with the parent's dot showing when one needs you;
+  - Build conversations in a worktree now find their project by its path, not the worktree's.
+- **Also:** the scripted test model keeps 8 responses queued, so conversations asking at the same moment don't run
+  it dry.
+- **Tests:** `side.test.ts` covers:
+  - asked in words: worktree, note, waking, `side_read`;
+  - refused on a board turn and for a stranger's id;
+  - `/side` twice, reporting in one turn;
+  - a turn you drove reporting quietly.
+
+  `ToolCardTests` checks the note rows.
+- **Fixed with SD3:** chats with no project didn't get the side tools (their runtime opens on its own path).
+- **Not done:**
+  - `context: "copy"` (a side conversation always starts fresh, and reads its parent if it needs to);
+  - the stale-edit check for shared folders (SCQ4);
+  - the session panel section;
+  - the message action "Start a side conversation from here";
+  - the parent's cost line "+ $0.42 in 2 side conversations";
+  - the settings of §6, so waking is always on;
+  - a turn you drove in the side conversation is remembered until the parent writes to it again.
+
+## 11. SD3 as built (2026-11-17)
+
+Built before the week of SD1–SD2 by hand that §8 asks for, so the noticing rule is untuned and the replay set doesn't
+exist yet. That's what's left of SD3 (below).
+
+- **Settings › Chat › Side conversations** (`chat.sideOnUnrelated`, `chat.sidePropose`, `chat.sideWake`):
+  - *When I bring up something unrelated*: Ask (default), Always start one, or Do nothing;
+  - *Propose follow-ups*: on;
+  - *Let side conversations wake this one*: on.
+- **The rule of §3** is in each turn's prompt, by setting:
+  - Ask: on a new task, the first action is `side_offer`, then stop.
+  - Always start: the first action is `side_start`.
+  - Off: neither.
+
+  The definition of a new task, what stays, and "when unsure, it stays" are always there with Ask or Always start.
+  `side_propose` gets its rule when proposals are on.
+- **`side_offer({ title, brief?, project? })` doesn't wait** (a change from §4). It leaves the card and the model stops,
+  as `offer_parallel` does, so the card and its answer survive a restart without a pending tool call. Its brief is the
+  part of your words that's the new task; without one, your whole message. It's refused when offers are off, and on
+  a turn that a note, the board or a routine started.
+- **The card** (`ItemRenderer`): "This looks like its own task", the title, the brief and **New conversation** ·
+  **Do it here**. It stays out of folded steps.
+  - **New conversation** (`sessions.side.answer`, choice `new`) starts the side conversation, with `how: "offered"`.
+    You stay where you are, and it shows in the block above the composer.
+  - **Do it here** sends "Do it here." as your words.
+  - A card answers once; a second click says why it can't.
+  - After three New conversation in a row (since the engine started), the app asks "Start these on their own?",
+    and Always start sets the setting (SCQ3).
+- **`side_propose({ title, brief, why, project? })`** leaves a proposal on the conversation (`sideProposals`). It
+  expires after a week, a proposal with the same title is refused, and at most 6 are open. The block above the
+  composer shows it dashed, with its reason, "until 24 Nov", **Start** and **Dismiss**. `side_dismiss({ id })`
+  withdraws one. Started ones have `how: "proposed"`.
+- **Another project** (SCQ5, 26 CL11): `side_start`, `side_offer` and `side_propose` take `project`, one of your
+  projects by name or id. The side conversation works in that project's folder, with its permissions, in a worktree
+  when it's a git repo. A conversation with no project gets your projects' names in its prompt, so "in piopio, fix
+  X; in wiki, add Y" from Home becomes two side conversations, each in its project, reporting back to Home.
+- **Tests:** in `side.test.ts`:
+  - offered, with New, Do it here, answering once, and three in a row;
+  - proposed, with Start, Dismiss, a duplicate refused, `side_dismiss`, and the off settings;
+  - from a chat with no project, into a project.
+
+  In `ToolCardTests`, the card and the proposal line.
+- **Left of SD3:**
+  - the replay set of ~60 real messages and its acceptance (≥ 90% of new tasks offered, ≤ 1 false offer in 20
+    continuations) on the default models, after a week of use;
+  - Options on the card (where it runs, worktree, model, permissions), as in the reference;
+  - the card can't show it was answered, since the transcript doesn't know the answer; the block does;
+  - "at most three proposals per turn" is the prompt's, not enforced;
+  - the streak for "Always start" resets when the engine restarts.

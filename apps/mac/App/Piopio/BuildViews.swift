@@ -75,12 +75,13 @@ struct BuildSessionView: View {
     @State private var committing = false
     @AppStorage("buildTerminal") private var showTerminal = false
 
-    private var project: ProjectInfo? { engine.projects.first { $0.path == summary.cwd } }
+    private var project: ProjectInfo? { engine.projects.first { $0.path == (summary.projectPath ?? summary.cwd) } }
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 if !reviewing { header }
+                if !reviewing, let side = summary.side { SideStartedBar(engine: engine, side: side) }
                 if let notice = git?.notice {
                     Text(notice.text).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                         .lineLimit(2).padding(.horizontal, 24).padding(.bottom, 6).frame(maxWidth: .infinity, alignment: .leading)
@@ -211,6 +212,7 @@ struct BuildSessionView: View {
                 }
                 // This conversation's tasks on the board (docs/spec/26 §5), live, then the merge card.
                 if let work = project.flatMap({ engine.work(in: $0) }) { ConversationPlan(engine: engine, work: work, conversationId: summary.ref.id) }
+                SideConversations(engine: engine, parentId: summary.ref.id)
                 Composer(engine: engine, thread: session).frame(maxWidth: 680)
             }
             .padding(.horizontal, 40)
@@ -219,6 +221,7 @@ struct BuildSessionView: View {
                 session.document.bottomInset = height + 40
             }
         }
+        .modifier(SideOffers(engine: engine, ref: summary.ref))
         .onReceive(NotificationCenter.default.publisher(for: .transcriptOffer)) { note in
             guard note.object as? String == summary.ref.id, let kind = note.userInfo?["kind"] as? String, let call = note.userInfo?["call"] as? String else { return }
             takeOffer(kind, call: call)

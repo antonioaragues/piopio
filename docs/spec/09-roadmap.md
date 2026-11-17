@@ -30,26 +30,27 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 
 One build track at a time, plus Track A running beside it as use, not as building.
 
+**Done 2026-11-17:** spec 26 C1–C2 (teams became projects' ways of working, 26 §11–§12, merged into main) and side
+conversations SD1–SD3 (24 §10–§11). C4, the real-model trial, is still to run.
+
 **Now**
-1. **Spec 26 C1–C2** (decided 2026-11-17; built 2026-11-17 on branch `agents-clarified`, 26 §11–§12): one
-   orchestrator, then teams leave the app. This replaces finishing 21's team pages (D5–D7), which 26 removes; what's
-   left of 21's agent pages (D2–D4) stays. Next: C4, the real-model trial, before merging.
-2. **Track A alongside:** do the day's real work in Piopio and tick the acceptance boxes as they pass. What breaks
-   goes ahead of new features.
+1. **Non-blocking `task` DP4** (17 §3), on the report bridge side conversations use, so `task`, board helpers and side
+   conversations are one mechanism (26 §7.1). Then **Watchdog DP1** (17 §4).
+2. **Track A alongside:** do the day's real work in Piopio and tick the acceptance boxes as they pass, C4 among them.
+   What breaks goes ahead of new features.
 
 **Next**
-3. **Side conversations SD1–SD2** (24) with **Watchdog DP1** (17). Neither needs anything unbuilt, both help daily
-   use at once, and the report bridge they add also serves board helpers and `task` (26 §7.1).
+3. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on board, worktree and
+   side-conversation cards.
 4. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
    reads pages and, asking per site, clicks and types in a Browser panel; the interim Playwright browser is gone.
-5. **GitHub PR loop G4–G8** (Phase 6). It closes Build's loop and unblocks Create PR on board, worktree and
-   side-conversation cards.
 
 **Later** (each waits for something)
 - **Cloud 5.1–5.5 and WhatsApp:** for agents proven locally first (Track A's schedule item) and your Cloudflare
   account.
 - **Browser W2–W3, computer use U0–U4:** after W1 shows how often reading alone is enough.
-- **Side conversations SD3–SD4:** after a week of SD1–SD2 by hand, which produces the replay set.
+- **Side conversations:** SD3 is built (24 §11) but untuned; its replay set comes after a week of using SD1–SD3. SD4
+  (hand-off mid-task) after that.
 - **Connectors C2–C3:** after Piopio's own Google and Microsoft OAuth apps exist.
 - **Memory M4–M6, notarization and Sparkle:** when daily use asks for them, or when someone else is
   about to install it.

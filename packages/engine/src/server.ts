@@ -38,7 +38,7 @@ import type { ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over and visuals (they read as part of the conversation). */
-const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_parallel" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
+const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_parallel" || tool.tool === "side_offer" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
 import { AppServices } from "./app-services.js";
 import { BrowserSites } from "./tools/browser-tools.js";
 import { TelegramChannels } from "./channels/manager.js";
@@ -257,6 +257,12 @@ export class Engine {
 			}),
 		);
 		this.sessions.work = this.work;
+		// Side conversations in another project (docs/spec/24 SCQ5, 26 CL11): by its name or id.
+		this.sessions.projectNamed = (name) => {
+			const p = this.projects.list().find((x) => x.missing !== true && (x.id === name || x.name.toLowerCase() === name.toLowerCase()));
+			return p ? { id: p.id, path: p.path } : undefined;
+		};
+		this.sessions.projectNames = () => this.projects.list().filter((x) => x.missing !== true).map((x) => x.name);
 		// A project's webhook routine has the same kind of URL as an agent's trigger, with the project's id.
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.work.hasProject(agent) ? this.work.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
 		this.work.hookUrl = (project, routine) => (this.hooks.port ? this.hooks.url(project, routine) : undefined);
@@ -586,6 +592,8 @@ export class Engine {
 				const p = params as Params<"sessions.submit">;
 				const runtime = await this.sessions.runtime(p.ref);
 				const isFirst = runtime.snapshot().items.length === 0;
+				// Your own words (docs/spec/24 §5): side conversations may wake this one again; one you drive doesn't wake its parent.
+				this.sessions.youWrote(p.ref);
 				const { disposition } = await runtime.submit(p.input.text, {
 					whenBusy: p.whenBusy ?? "followUp",
 					...(p.clientRequestId ? { requestId: p.clientRequestId } : {}),
@@ -862,6 +870,15 @@ export class Engine {
 					return name ? [{ project: { id: w.project, name }, tasks: w.tasks }] : [];
 				});
 				return buildAgenda({ now: Date.now(), tz: systemZone(), ...(p.since ? { since: Date.parse(p.since) } : {}), agents, projects, boards }) satisfies Result<"home.agenda">;
+			}
+			case "sessions.side.answer": {
+				const p = params as Params<"sessions.side.answer">;
+				return (await this.sessions.answerSide(p.ref, p.id, p.choice)) satisfies Result<"sessions.side.answer">;
+			}
+			case "sessions.side.start": {
+				const p = params as Params<"sessions.side.start">;
+				const child = await this.sessions.startSide(p.ref, { brief: p.brief, ...(p.title ? { title: p.title } : {}) }, "manual");
+				return { ref: child.ref } satisfies Result<"sessions.side.start">;
 			}
 			case "work.list":
 				return { work: this.work.list().map((w) => this.workView(w)) } satisfies Result<"work.list">;
