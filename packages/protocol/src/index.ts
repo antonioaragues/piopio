@@ -526,8 +526,8 @@ export const SessionSummary = Type.Object({
 	profile: Type.Optional(literals("build", "chat")),
 	/** A subagent's session: the parent session and the `task` call that started it. */
 	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
-	/** A team's session (docs/spec/19): its lead, or a member working a task. */
-	team: Type.Optional(Type.Object({ id: Type.String(), role: Type.String(), kind: literals("lead", "write", "review", "integrate"), taskId: Type.Optional(Type.String()) })),
+	/** A helper's session (docs/spec/26 CL4): made by Piopio for a task on a project's board; not listed with yours. */
+	helper: Type.Optional(Type.Object({ project: Type.String(), kind: literals("build", "review"), taskId: Type.String() })),
 	/** A chat continued in a project folder (18 §5): the new conversation, and in it, where it came from. */
 	continuedIn: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
 	continuedFrom: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
@@ -749,18 +749,19 @@ export const GitStatus = Type.Object({
 });
 export type GitStatus = Static<typeof GitStatus>;
 
-/** Teams (docs/spec/19): a role card, a task on the board, a team. */
-export const TeamRole = Type.Object({ id: Type.String(), name: Type.String(), kind: literals("lead", "write", "review", "integrate"), responsibility: Type.String(), done: Type.Optional(Type.String()), model: Type.Optional(Type.String()), agent: Type.Optional(Type.String({ description: "An agent this member is: its instructions, and its model when the role has none" })) });
-export type TeamRole = Static<typeof TeamRole>;
-export const TeamTask = Type.Object({
+/**
+ * A project's work (docs/spec/26): its way of working, its board and its branch. Every conversation in a project is
+ * with Piopio, which puts parallel work on the board for helpers it makes (a kind, a brief, a model).
+ */
+export const WorkTask = Type.Object({
 	id: Type.String(),
 	title: Type.String(),
 	brief: Type.String(),
 	done: Type.Optional(Type.String()),
-	role: Type.String(),
+	helper: Type.String({ description: "What the helper is called on the board: “Builder”, “Researcher”" }),
 	state: literals("todo", "doing", "review", "integrating", "done", "blocked"),
-	by: literals("lead", "you"),
-	conversationId: Type.Optional(Type.String({ description: "The lead conversation that made it" })),
+	by: literals("piopio", "you"),
+	conversationId: Type.Optional(Type.String({ description: "The conversation that made it; its updates go there" })),
 	sessionId: Type.Optional(Type.String()),
 	reviewSessionId: Type.Optional(Type.String()),
 	branch: Type.Optional(Type.String()),
@@ -773,9 +774,9 @@ export const TeamTask = Type.Object({
 	createdAt: Type.String(),
 	updatedAt: Type.String(),
 });
-export type TeamTask = Static<typeof TeamTask>;
-/** What a team's branch would bring to the project's branch (the merge card). */
-export const TeamLanding = Type.Object({
+export type WorkTask = Static<typeof WorkTask>;
+/** What the project's work branch would bring to its branch (the merge card). */
+export const WorkLanding = Type.Object({
 	base: Type.String(),
 	branch: Type.String(),
 	ahead: Type.Number(),
@@ -787,9 +788,9 @@ export const TeamLanding = Type.Object({
 	remote: Type.Optional(Type.String()),
 	compareUrl: Type.Optional(Type.String()),
 });
-export type TeamLanding = Static<typeof TeamLanding>;
-/** What starts a team's work on its own (docs/spec/19 T1): a time, a folder, an email, a webhook. */
-export const TeamRoutine = Type.Object({
+export type WorkLanding = Static<typeof WorkLanding>;
+/** What starts a project's work on its own (docs/spec/21 AD5): a time, a folder, an email, a webhook. */
+export const ProjectRoutine = Type.Object({
 	id: Type.String(),
 	on: literals("time", "folder", "email", "webhook"),
 	prompt: Type.String(),
@@ -799,7 +800,7 @@ export const TeamRoutine = Type.Object({
 	folder: Type.Optional(Type.String()),
 	from: Type.Optional(Type.String()),
 	subject: Type.Optional(Type.String()),
-	by: literals("lead", "you"),
+	by: literals("piopio", "you"),
 	createdAt: Type.String(),
 	next: Type.Optional(Type.Number({ description: "time: the next fire, epoch ms" })),
 	lastRun: Type.Optional(Type.String()),
@@ -808,50 +809,30 @@ export const TeamRoutine = Type.Object({
 	label: Type.Optional(Type.String({ description: "“Every Monday at 09:00”, “When a file appears in ~/Inbox”" })),
 	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
 });
-export type TeamRoutine = Static<typeof TeamRoutine>;
-/** A team as a definition (docs/spec/20 P3): its members and way of working, reused by the projects it works in. */
-export const TeamDefinition = Type.Object({
-	id: Type.String(),
-	name: Type.String(),
-	template: Type.String(),
-	roles: Type.Array(TeamRole),
-	style: Type.String(),
-	folder: Type.String({ description: "TEAM.md and NOTES.md" }),
-	model: Type.Optional(Type.String()),
-	memberMode: ApprovalMode,
-	saved: Type.Boolean({ description: "Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1)" }),
-	reviewLimit: Type.Optional(Type.Number({ description: "Times a task may be sent back before you're asked (default 3)" })),
+export type ProjectRoutine = Static<typeof ProjectRoutine>;
+/** How work is done in a project (docs/spec/26 §4). */
+export const WayOfWorking = Type.Object({
+	parallel: Type.Boolean({ description: "Piopio may split work onto the board" }),
+	review: Type.Boolean({ description: "Every task is reviewed by a helper with fresh eyes" }),
+	reviewLimit: Type.Number({ description: "Times a task may be sent back before you're asked" }),
+	testCommand: Type.Optional(Type.String({ description: "The checks, run after each merge" })),
+	maxParallel: Type.Number({ description: "Tasks at once" }),
+	buildModel: Type.Optional(Type.String({ description: "The helpers' model for doing tasks; unset: the project's" })),
+	reviewModel: Type.Optional(Type.String({ description: "The reviewers' model; unset: the build model" })),
+	helperMode: ApprovalMode,
 	budgetPerJob: Type.Optional(Type.Number({ description: "USD one conversation's tasks may spend" })),
-	createdAt: Type.String(),
-	projects: Type.Array(Type.Object({ teamId: Type.String(), cwd: Type.String() })),
+	playbook: Type.String({ description: "The playbook Piopio plans with: development, research, writing, or a project's own" }),
 });
-export type TeamDefinition = Static<typeof TeamDefinition>;
-export const TeamInfo = Type.Object({
-	id: Type.String(),
-	definitionId: Type.Optional(Type.String()),
-	name: Type.String(),
-	slug: Type.String(),
-	template: Type.String(),
-	roles: Type.Array(TeamRole),
-	style: Type.String(),
+export type WayOfWorking = Static<typeof WayOfWorking>;
+export const WorkInfo = Type.Object({
+	project: Type.String(),
 	cwd: Type.String(),
-	folder: Type.String(),
+	way: WayOfWorking,
 	git: Type.Optional(Type.Object({ base: Type.String(), branch: Type.String(), integration: Type.String() })),
-	leadSessionId: Type.Optional(Type.String()),
-	model: Type.Optional(Type.String()),
-	memberMode: ApprovalMode,
-	maxParallel: Type.Number(),
-	testCommand: Type.Optional(Type.String()),
-	goal: Type.Optional(Type.String()),
-	tasks: Type.Array(TeamTask),
-	nextTask: Type.Number(),
-	reviewLimit: Type.Optional(Type.Number()),
-	budgetPerJob: Type.Optional(Type.Number()),
-	routines: Type.Optional(Type.Array(TeamRoutine)),
-	fired: Type.Optional(Type.Array(Type.String())),
+	tasks: Type.Array(WorkTask),
 	createdAt: Type.String(),
 });
-export type TeamInfo = Static<typeof TeamInfo>;
+export type WorkInfo = Static<typeof WorkInfo>;
 
 export const GitBranch = Type.Object({ name: Type.String(), upstream: Type.Optional(Type.String()), lastCommitAt: Type.Optional(Type.String()), current: Type.Boolean() });
 export type GitBranch = Static<typeof GitBranch>;
@@ -916,8 +897,6 @@ export const methods = {
 			model: Type.Optional(ModelRef),
 			thinking: Type.Optional(Type.String()),
 			title: Type.Optional(Type.String()),
-			/** A conversation with this team's lead, in its project (docs/spec/20 PT4). */
-			team: Type.Optional(Type.String()),
 		}),
 		result: Type.Object({ ref: ContainerRef }),
 	},
@@ -1507,89 +1486,70 @@ export const methods = {
 	},
 	/**
 	 * Home's agenda (docs/spec/21 D2): today's timeline (runs, what's next, event routines and work in progress) across
-	 * agents, projects and teams, and what happened since `since` (your last visit), one line per agent or team.
+	 * agents and projects, and what happened since `since` (your last visit), one line per agent or project.
 	 */
 	"home.agenda": {
 		params: Type.Object({ since: Type.Optional(Type.String()) }),
 		result: Type.Object({
-			today: Type.Array(Type.Object({ at: Type.Optional(Type.String()), label: Type.String(), source: Type.Object({ kind: literals("agent", "project", "team"), id: Type.String(), name: Type.String() }), state: literals("done", "failed", "skipped", "running", "upcoming", "event"), tomorrow: Type.Optional(Type.Boolean({ description: "Upcoming after midnight, within the next 24 hours" })) })),
-			away: Type.Array(Type.Object({ at: Type.String(), source: Type.Object({ kind: literals("agent", "project", "team"), id: Type.String(), name: Type.String() }), text: Type.String(), costUsd: Type.Optional(Type.Number()), quiet: Type.Boolean(), failed: Type.Optional(Type.Boolean()) })),
+			today: Type.Array(Type.Object({ at: Type.Optional(Type.String()), label: Type.String(), source: Type.Object({ kind: literals("agent", "project"), id: Type.String(), name: Type.String() }), state: literals("done", "failed", "skipped", "running", "upcoming", "event"), tomorrow: Type.Optional(Type.Boolean({ description: "Upcoming after midnight, within the next 24 hours" })) })),
+			away: Type.Array(Type.Object({ at: Type.String(), source: Type.Object({ kind: literals("agent", "project"), id: Type.String(), name: Type.String() }), text: Type.String(), costUsd: Type.Optional(Type.Number()), quiet: Type.Boolean(), failed: Type.Optional(Type.Boolean()) })),
 			held: Type.Number({ description: "Messages held by quiet hours or limits, across agents" }),
 		}),
 	},
-	/** Team templates (docs/spec/19): development, research, writing. */
-	"teams.templates": {
-		params: Type.Object({}),
-		result: Type.Object({ templates: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), description: Type.String(), workplace: literals("project", "folder"), roles: Type.Array(TeamRole), source: Type.Optional(literals("builtin", "yours")), folder: Type.Optional(Type.String()) })) }),
+	/** Every project's work (docs/spec/26): its way of working, board and branch. */
+	"work.list": { params: Type.Object({}), result: Type.Object({ work: Type.Array(WorkInfo) }) },
+	/** A project's work; none until parallel work was first switched on there. */
+	"work.get": { params: Type.Object({ project: Type.String() }), result: Type.Object({ work: Type.Optional(WorkInfo) }) },
+	/**
+	 * How work is done here (docs/spec/26 §4). Switching parallel work on the first time runs the fit check and prefills
+	 * the checks. null clears an optional field.
+	 */
+	"work.configure": {
+		params: Type.Object({
+			project: Type.String(),
+			parallel: Type.Optional(Type.Boolean()),
+			review: Type.Optional(Type.Boolean()),
+			reviewLimit: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
+			testCommand: Type.Optional(Type.String({ description: "Empty removes it" })),
+			maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })),
+			buildModel: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+			reviewModel: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+			helperMode: Type.Optional(ApprovalMode),
+			budgetPerJob: Type.Optional(Type.Union([Type.Number({ minimum: 0 }), Type.Null()])),
+			playbook: Type.Optional(Type.String()),
+		}),
+		result: Type.Object({ work: WorkInfo }),
 	},
-	"teams.list": { params: Type.Object({}), result: Type.Object({ teams: Type.Array(TeamInfo) }) },
-	/** Teams as definitions (docs/spec/20 P3), with the projects each works in. */
-	"teams.definitions": { params: Type.Object({}), result: Type.Object({ definitions: Type.Array(TeamDefinition) }) },
-	/** You edit a team: its name, members or default model (null clears it). Every project it works in follows. */
-	"teams.updateDefinition": {
-		params: Type.Object({ id: Type.String(), name: Type.Optional(Type.String()), roles: Type.Optional(Type.Array(TeamRole)), model: Type.Optional(Type.Union([Type.String(), Type.Null()])), saved: Type.Optional(Type.Boolean()), reviewLimit: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })), budgetPerJob: Type.Optional(Type.Union([Type.Number({ minimum: 0 }), Type.Null()])), memberMode: Type.Optional(ApprovalMode) }),
-		result: Type.Object({ definition: TeamDefinition }),
-	},
-	/** Make it one of your agents (docs/spec/21 AD3): a team-only member becomes an agent of yours. */
-	"teams.promoteMember": { params: Type.Object({ id: Type.String(), roleId: Type.String() }), result: Type.Object({ agent: ContainerRef }) },
-	/** What a conversation's tasks have cost (a job), against the team's budget per job. */
-	"teams.job": { params: Type.Object({ id: Type.String(), conversationId: Type.String() }), result: Type.Object({ cost: Type.Number(), tasks: Type.Number(), budget: Type.Optional(Type.Number()) }) },
-	/** What a team needs in a project (docs/spec/21 D6, design 5c-2): git, checks it can run, AGENTS.md. */
-	"teams.fitCheck": {
+	/** "Work in parallel" on Piopio's offer (docs/spec/26 CL9): parallel work goes on, and that conversation plans it. */
+	"work.accept": { params: Type.Object({ project: Type.String(), sessionId: Type.String() }), result: Type.Object({ work: WorkInfo }) },
+	/** The playbooks a project can plan with: built in, and the project's own (docs/spec/26 CL6). */
+	"work.playbooks": { params: Type.Object({ project: Type.String() }), result: Type.Object({ playbooks: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), description: Type.String(), source: literals("builtin", "project") })) }) },
+	/** What parallel work needs in a project (docs/spec/21 D6): git, checks it can run, AGENTS.md. */
+	"work.fitCheck": {
 		params: Type.Object({ cwd: Type.String() }),
 		result: Type.Object({ git: Type.Boolean(), checks: Type.Optional(Type.String({ description: "The test command found in the folder" })), agentsMd: Type.Boolean(), language: Type.Optional(Type.String()) }),
 	},
-	/** A team for a project, read from it (docs/spec/21 D7, design 5b-2): a draft, what was found, your agents that fit. */
-	"teams.draftFor": {
-		params: Type.Object({ cwd: Type.String(), request: Type.Optional(Type.String({ description: "What the conversation asked for" })) }),
-		result: Type.Object({
-			draft: Type.Object({ name: Type.String(), description: Type.String(), style: Type.String(), instructions: Type.String(), roles: Type.Array(TeamRole) }),
-			found: Type.Object({ git: Type.Boolean(), checks: Type.Optional(Type.String()), agentsMd: Type.Boolean(), language: Type.Optional(Type.String()) }),
-			suggestions: Type.Array(Type.Object({ role: Type.String({ description: "A role id in the draft" }), agent: Type.String(), name: Type.String() })),
-		}),
-	},
-	/** A conversation with Piopio in the team's project becomes the lead's (docs/spec/21 D7, design 5b-3). */
-	"teams.adopt": { params: Type.Object({ id: Type.String(), sessionId: Type.String() }), result: Type.Object({}) },
-	/** A project's routines (docs/spec/21 AD5): each run opens a session there, with the team's lead when it has one. */
-	"routines.list": { params: Type.Object({ project: Type.String() }), result: Type.Object({ routines: Type.Array(TeamRoutine) }) },
+	/** What a conversation's tasks have cost (a job), against the budget per job. */
+	"work.job": { params: Type.Object({ project: Type.String(), conversationId: Type.String() }), result: Type.Object({ cost: Type.Number(), tasks: Type.Number(), budget: Type.Optional(Type.Number()) }) },
+	/** You add a card to the board. */
+	"work.addTask": { params: Type.Object({ project: Type.String(), title: Type.String(), brief: Type.String(), done: Type.Optional(Type.String()) }), result: Type.Object({ task: WorkTask }) },
+	/** You move or edit a card. */
+	"work.updateTask": { params: Type.Object({ project: Type.String(), taskId: Type.String(), state: Type.Optional(literals("todo", "blocked", "done")), title: Type.Optional(Type.String()), brief: Type.Optional(Type.String()) }), result: Type.Object({}) },
+	/** What the project's work branch would bring to its branch. */
+	"work.landing": { params: Type.Object({ project: Type.String() }), result: WorkLanding },
+	/** You land the work: merge the work branch into the project's, or push it for a pull request. */
+	"work.land": { params: Type.Object({ project: Type.String(), action: literals("merge", "push") }), result: Type.Object({ commit: Type.Optional(Type.String()), compareUrl: Type.Optional(Type.String()), output: Type.Optional(Type.String()) }) },
+	/** What changed when teams became projects' ways of working (docs/spec/26 §8): shown once, until dismissed. */
+	"work.migrationReport": { params: Type.Object({}), result: Type.Object({ report: Type.Optional(Type.String({ description: "Markdown" })) }) },
+	"work.dismissMigrationReport": { params: Type.Object({}), result: Type.Object({}) },
+	/** A project's routines (docs/spec/21 AD5): each run opens a conversation there with Piopio. */
+	"routines.list": { params: Type.Object({ project: Type.String() }), result: Type.Object({ routines: Type.Array(ProjectRoutine) }) },
 	"routines.add": {
 		params: Type.Object({ project: Type.String(), on: literals("time", "folder", "email", "webhook"), prompt: Type.String(), when: Type.Optional(Type.String()), folder: Type.Optional(Type.String()), from: Type.Optional(Type.String()), subject: Type.Optional(Type.String()) }),
-		result: Type.Object({ routine: TeamRoutine }),
+		result: Type.Object({ routine: ProjectRoutine }),
 	},
 	"routines.remove": { params: Type.Object({ project: Type.String(), routineId: Type.String() }), result: Type.Object({}) },
 	"routines.run": { params: Type.Object({ project: Type.String(), routineId: Type.String() }), result: Type.Object({ runId: Type.String() }) },
-	/** A team drafted from your description (docs/spec/20 P4): nothing is made until you create it. */
-	"teams.draft": {
-		params: Type.Object({ description: Type.String() }),
-		result: Type.Object({ draft: Type.Object({ name: Type.String(), description: Type.String(), style: Type.String(), instructions: Type.String(), roles: Type.Array(TeamRole) }) }),
-	},
-	/** A new team, not yet in a project: from a template, or from members (a draft you adjusted). */
-	"teams.createDefinition": {
-		params: Type.Object({ template: Type.Optional(Type.String()), name: Type.Optional(Type.String()), style: Type.Optional(Type.String()), instructions: Type.Optional(Type.String()), roles: Type.Optional(Type.Array(TeamRole)) }),
-		result: Type.Object({ definition: TeamDefinition }),
-	},
-	/** Save as template: a folder in ~/Piopio/Teams/Templates with TEAM.md and a role card per member. */
-	"teams.saveTemplate": { params: Type.Object({ id: Type.String(), name: Type.Optional(Type.String()), description: Type.Optional(Type.String()) }), result: Type.Object({ id: Type.String(), folder: Type.String() }) },
-	/** A team no project uses; its folder stays on disk. */
-	"teams.removeDefinition": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
-	"teams.get": { params: Type.Object({ id: Type.String() }), result: Type.Object({ team: TeamInfo }) },
-	/** A team from a template; `cwd` is its project (development). With a goal, its lead starts on it. */
-	"teams.create": {
-		params: Type.Object({ roles: Type.Optional(Type.Array(TeamRole, { description: "Members in place of the template's (a draft, docs/spec/21 D7)" })), style: Type.Optional(Type.String()), name: Type.String(), template: Type.String(), cwd: Type.Optional(Type.String()), goal: Type.Optional(Type.String()), testCommand: Type.Optional(Type.String()), memberMode: Type.Optional(ApprovalMode), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })), model: Type.Optional(ModelRef), initGit: Type.Optional(Type.Boolean({ description: "A new project's folder: make it a git repo first, so tasks get branches" })), definition: Type.Optional(Type.String({ description: "An existing team (definition) to work in this project; else a new one from the template" })) }),
-		result: Type.Object({ team: TeamInfo }),
-	},
-	/** You add a card to the board (TD5). */
-	"teams.addTask": { params: Type.Object({ id: Type.String(), title: Type.String(), brief: Type.String(), done: Type.Optional(Type.String()), role: Type.Optional(Type.String()) }), result: Type.Object({ task: TeamTask }) },
-	/** The project's Settings: the team's checks and how many tasks run at once. An empty testCommand removes it. */
-	"teams.update": { params: Type.Object({ id: Type.String(), testCommand: Type.Optional(Type.String()), maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })) }), result: Type.Object({ team: TeamInfo }) },
-	/** The project works without its team again; its lead conversations stay as plain ones, its branch is kept. */
-	"teams.remove": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
-	/** What the team's branch would bring to the project's (a team that works on a branch). */
-	"teams.landing": { params: Type.Object({ id: Type.String() }), result: TeamLanding },
-	/** You land the team's work: merge its branch into the project's, or push it for a pull request. */
-	"teams.land": { params: Type.Object({ id: Type.String(), action: literals("merge", "push") }), result: Type.Object({ commit: Type.Optional(Type.String()), compareUrl: Type.Optional(Type.String()), output: Type.Optional(Type.String()) }) },
-	/** You move, reassign or edit a card. */
-	"teams.updateTask": { params: Type.Object({ id: Type.String(), taskId: Type.String(), state: Type.Optional(literals("todo", "blocked", "done")), role: Type.Optional(Type.String()), title: Type.Optional(Type.String()), brief: Type.Optional(Type.String()) }), result: Type.Object({}) },
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */
 	"agents.runs": {
 		params: Type.Object({ ref: ContainerRef }),
@@ -1789,8 +1749,8 @@ export const notifications = {
 	"connectors.changed": Type.Object({}),
 	/** Providers or their models changed (connected, disconnected, needs attention): list them again. */
 	"providers.changed": Type.Object({}),
-	/** A team or its board changed (docs/spec/19). */
-	"teams.changed": Type.Object({ id: Type.String() }),
+	/** A project's work or its board changed (docs/spec/26). */
+	"work.changed": Type.Object({ project: Type.String() }),
 	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
 } satisfies Record<string, TSchema>;
 

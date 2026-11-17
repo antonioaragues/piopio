@@ -213,3 +213,71 @@ the built-in Development playbook is the lead's current brief.
   every week. Under CL2 the agent stays a contact, and the project routine does the writing. Is that enough, or should
   an agent's routine be able to open a project conversation?
 - **Names:** "helper", "playbook" and "way of working" are working names.
+
+## 11. C1 as built (2026-11-17)
+
+The engine side, on branch `agents-clarified`; the app still shows teams until C2, so the two merge together.
+
+**The model in the engine** (`packages/engine/src/work/`):
+- **A project's work** (`runner.ts`, `<home>/work.json`): one record per project, keyed by its id, made the first time
+  parallel work goes on. It holds the way of working (§4: parallel, review and its limit, checks, tasks at once, build
+  and review models, what helpers may do, budget per job, playbook), the work branch in a git project
+  (`work/<folder>-<id>`), and the board. There are no members and no definitions.
+- **Helpers** have two kinds, `build` and `review`. Merging is the board's, as CI was: in a git project an approved
+  task is merged into the work branch and the checks run. A helper is told the playbook's part for its kind, the
+  task's brief and where to work. A task can name its helper ("Editor") when the playbook has more than one kind of
+  builder.
+- **Playbooks** (`playbooks.ts`): Development, General, Research and Writing are built in, from the templates' text.
+  A project's own is a skill in `.pi/skills/<id>/SKILL.md`, with sections *Planning*, *Doing tasks: <name>* and
+  *Reviewing: <name>*. One playbook per project for now; choosing one when planning is C3. A new project gets
+  Development when it's code or git, General otherwise.
+- **Piopio's brief** (`PIOPIO_BOARD` plus the playbook's plan) is added to a project conversation's system prompt
+  each turn while parallel work is on. It says what §7.1 and §7.2 say: do it here by default, split only independent
+  parts, and look at the diff before saying a task is done. A finished task's board message says the same, with the
+  `git diff` to run.
+- **Rules in the tools** (§7.2): the send-back limit, merging only approved work, the budget stop and "parallel work
+  is off" are refusals from the board, not lines in the prompt.
+
+**Conversations:**
+- Every project conversation is with Piopio. It has the board's tools (`create_task`, `list_tasks`,
+  `message_task`, and the routine tools) only while parallel work is on there. Switching it on or off closes the
+  project's idle conversations, so they open again with or without them. A conversation that's answering keeps
+  what it had, and `create_task` refuses once parallel work is off.
+- Piopio with the board keeps `task` subagents (a lead didn't have them). Helpers have neither, nor `ask_agent`.
+- `offer_team` is `offer_parallel`, offered while parallel work is off. **Work in parallel** is `work.accept`:
+  parallel work goes on (with the fit check's checks) and that conversation is told to plan.
+- A helper's session carries `helper: { project, kind, taskId }` in place of `team`. `sessions.create` lost `team`.
+- A card you add on the Board has no conversation, so its updates go nowhere but the Board (a team's first lead
+  conversation used to hear them).
+
+**Protocol:** `work.list`, `work.get`, `work.configure`, `work.accept`, `work.playbooks`, `work.fitCheck`, `work.job`,
+`work.addTask`, `work.updateTask`, `work.landing`, `work.land`, `work.migrationReport`, `work.dismissMigrationReport`,
+and the `work.changed` notification. Every `teams.*` call is gone. Routines are `ProjectRoutine`, `by: "piopio" |
+"you"`. Home's agenda shows a board's tasks under the project's name.
+
+**Migration** (`migrate.ts`, at the first start, before anything is served):
+- Each team becomes its project's work, with parallel work on, its board, branch and tasks, `reviewLimit`,
+  `memberMode`, `budgetPerJob` and tasks at once. Its writer's model becomes the build model, its reviewer's the
+  review model. A member that was one of your agents brings its model, not its instructions.
+- A team whose members match a built-in template uses that playbook. Any other gets one in its project,
+  `how-<team>-works`, with its style and every member's text. A second builder is named in the plan, so Piopio can
+  give it tasks.
+- TEAM.md and the team's NOTES.md are added to the project's NOTES.md under "From <team>".
+- Saved teams no project used, and your templates, become playbooks in pi's skills folder.
+- Lead conversations become plain ones; members' sessions become helpers'. Routines Piopio had set say
+  `by: "piopio"`.
+- `teams.json` and `team-definitions.json` are renamed `*.before-26.json`, so it runs once. The team folders aren't
+  touched. A report, `<home>/work-migration.md`, is served by `work.migrationReport` until it's dismissed.
+
+**CL12:** `tell_agent` says it's for notices, not for handing work to another agent. The WhatsApp front agent isn't
+built yet, so there's nothing to change there.
+
+**Tests:** `work.test.ts` (the board end to end, review limits, review off without git, models, parallel off,
+landing, two conversations, catching up, routines), `work-budget.test.ts`, `work-migration.test.ts`, and
+`offers.test.ts`.
+
+**Not done in C1:**
+- The app (C2).
+- Choosing among playbooks, and saving one (C3).
+- Routine tools for Piopio in a project without parallel work (it offers a routine instead, as before).
+- A real trial (C4).

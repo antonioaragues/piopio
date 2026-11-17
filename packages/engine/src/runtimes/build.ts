@@ -32,7 +32,7 @@ import { chatProfileExtension, READ_ONLY_OFF, READ_ONLY_ON } from "../tools/chat
 import { skillSource } from "../tools/chat-resources.js";
 import type { WebOptions } from "../tools/web.js";
 import { buildPromptExtension } from "../tools/build-prompt.js";
-import { teamExtension, type TeamBridge } from "../teams/extension.js";
+import { boardExtension, type BoardBridge } from "../work/extension.js";
 import { consultExtension, type ConsultBridge } from "../consult.js";
 import { offersExtension, type OffersBridge } from "../offers.js";
 import { guardsExtension } from "../tools/guards.js";
@@ -107,11 +107,11 @@ export type BuildOpenOptions = {
 	externalAgents?: readonly string[];
 	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
 	runTask?: SubagentBridge["run"];
-	/** A team's session: the lead's board tools, or a reviewer's verdict (docs/spec/19). */
-	team?: TeamBridge;
+	/** The board's tools: Piopio's in a project with parallel work on, or a reviewer helper's verdict (docs/spec/26). */
+	board?: BoardBridge;
 	/** Your agents, asked from this conversation with ask_agent or @Name (docs/spec/21 D6). */
 	consult?: { bridge: ConsultBridge; from: () => string };
-	/** Piopio's offers in a project: a team for divisible work, an agent or a routine for repeated work (D7). */
+	/** Piopio's offers in a project: parallel work for divisible work, an agent or a routine for repeated work. */
 	offers?: OffersBridge;
 };
 
@@ -175,7 +175,7 @@ export class BuildRuntime implements Runtime {
 						]
 					: []),
 				guardsExtension(),
-				...(o.team ? [teamExtension(o.team)] : []),
+				...(o.board ? [boardExtension(o.board)] : []),
 				...(o.consult ? [consultExtension(o.consult.bridge, o.consult.from)] : []),
 				...(o.offers ? [offersExtension(o.offers)] : []),
 				// Full access runs commands as before; otherwise they write only inside the project.

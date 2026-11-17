@@ -6,10 +6,10 @@ import { afterEach, expect, test } from "vitest";
 import { mentioned } from "../src/consult.js";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
-import { detectChecks } from "../src/teams/fit.js";
+import { detectChecks } from "../src/work/fit.js";
 import { TestClient } from "./client.js";
 
-// Working with a team (docs/spec/21 D6): your agents in a conversation (@Name, ask_agent) and the fit check.
+// Your agents in a conversation (docs/spec/21 D6, 26 CL8: @Name, ask_agent) and the fit check for parallel work.
 
 type Ctx = { engine: Engine; client: TestClient };
 const open: Ctx[] = [];
@@ -92,12 +92,12 @@ test("a conversation asks one of your agents: it answers in its conversation wit
 test("the fit check: git, the checks it can run, AGENTS.md", async () => {
 	const a = await start();
 	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-d6-f-")));
-	expect(await a.client.call("teams.fitCheck", { cwd: folder })).toEqual({ git: false, agentsMd: false });
+	expect(await a.client.call("work.fitCheck", { cwd: folder })).toEqual({ git: false, agentsMd: false });
 	mkdirSync(join(folder, ".git"));
 	writeFileSync(join(folder, "AGENTS.md"), "# Agents\n");
 	writeFileSync(join(folder, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }));
 	writeFileSync(join(folder, "pnpm-lock.yaml"), "");
-	expect(await a.client.call("teams.fitCheck", { cwd: folder })).toEqual({ git: true, checks: "pnpm test", agentsMd: true, language: "JavaScript" });
+	expect(await a.client.call("work.fitCheck", { cwd: folder })).toEqual({ git: true, checks: "pnpm test", agentsMd: true, language: "JavaScript" });
 
 	const other = realpathSync(mkdtempSync(join(tmpdir(), "piopio-d6-g-")));
 	writeFileSync(join(other, "package.json"), JSON.stringify({ scripts: { test: 'echo "Error: no test specified" && exit 1' } }));

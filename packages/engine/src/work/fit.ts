@@ -1,7 +1,7 @@
 /**
- * The fit check (docs/spec/21 D6, design 5c-2): before a team works in a project, what it needs there. Git (each task
- * works on its own branch), checks (run after each merge), and AGENTS.md (what every member is told). Each missing one
- * has a fix the app offers in one click.
+ * The fit check (docs/spec/21 D6, 26 §4): when parallel work is first switched on in a project, what it needs there.
+ * Git (each task works on its own branch), checks (run after each merge), and AGENTS.md (what every helper is told).
+ * Each missing one has a fix the app offers in one click.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";

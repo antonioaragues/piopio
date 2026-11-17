@@ -10441,37 +10441,26 @@
 						}
 					}
 				},
-				"team": {
+				"helper": {
 					"type": "object",
 					"required": [
-						"id",
-						"role",
-						"kind"
+						"project",
+						"kind",
+						"taskId"
 					],
 					"properties": {
-						"id": {
-							"type": "string"
-						},
-						"role": {
+						"project": {
 							"type": "string"
 						},
 						"kind": {
 							"anyOf": [
 								{
 									"type": "string",
-									"const": "lead"
-								},
-								{
-									"type": "string",
-									"const": "write"
+									"const": "build"
 								},
 								{
 									"type": "string",
 									"const": "review"
-								},
-								{
-									"type": "string",
-									"const": "integrate"
 								}
 							]
 						},
@@ -17536,37 +17525,26 @@
 									}
 								}
 							},
-							"team": {
+							"helper": {
 								"type": "object",
 								"required": [
-									"id",
-									"role",
-									"kind"
+									"project",
+									"kind",
+									"taskId"
 								],
 								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"role": {
+									"project": {
 										"type": "string"
 									},
 									"kind": {
 										"anyOf": [
 											{
 												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "write"
+												"const": "build"
 											},
 											{
 												"type": "string",
 												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrate"
 											}
 										]
 									},
@@ -18040,37 +18018,26 @@
 									}
 								}
 							},
-							"team": {
+							"helper": {
 								"type": "object",
 								"required": [
-									"id",
-									"role",
-									"kind"
+									"project",
+									"kind",
+									"taskId"
 								],
 								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"role": {
+									"project": {
 										"type": "string"
 									},
 									"kind": {
 										"anyOf": [
 											{
 												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "write"
+												"const": "build"
 											},
 											{
 												"type": "string",
 												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrate"
 											}
 										]
 									},
@@ -18461,9 +18428,6 @@
 					"type": "string"
 				},
 				"title": {
-					"type": "string"
-				},
-				"team": {
 					"type": "string"
 				}
 			}
@@ -24658,6 +24622,27 @@
 							},
 							"missing": {
 								"type": "boolean"
+							},
+							"folders": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"path",
+										"edit"
+									],
+									"properties": {
+										"path": {
+											"type": "string"
+										},
+										"edit": {
+											"type": "boolean"
+										},
+										"missing": {
+											"type": "boolean"
+										}
+									}
+								}
 							}
 						}
 					}
@@ -24816,6 +24801,27 @@
 						},
 						"missing": {
 							"type": "boolean"
+						},
+						"folders": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"path",
+									"edit"
+								],
+								"properties": {
+									"path": {
+										"type": "string"
+									},
+									"edit": {
+										"type": "boolean"
+									},
+									"missing": {
+										"type": "boolean"
+									}
+								}
+							}
 						}
 					}
 				}
@@ -25046,6 +25052,27 @@
 						},
 						"missing": {
 							"type": "boolean"
+						},
+						"folders": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"path",
+									"edit"
+								],
+								"properties": {
+									"path": {
+										"type": "string"
+									},
+									"edit": {
+										"type": "boolean"
+									},
+									"missing": {
+										"type": "boolean"
+									}
+								}
+							}
 						}
 					}
 				}
@@ -25107,6 +25134,24 @@
 							}
 						]
 					}
+				},
+				"linkFolder": {
+					"type": "object",
+					"required": [
+						"path",
+						"edit"
+					],
+					"properties": {
+						"path": {
+							"type": "string"
+						},
+						"edit": {
+							"type": "boolean"
+						}
+					}
+				},
+				"unlinkFolder": {
+					"type": "string"
 				}
 			}
 		},
@@ -25247,6 +25292,27 @@
 						},
 						"missing": {
 							"type": "boolean"
+						},
+						"folders": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"path",
+									"edit"
+								],
+								"properties": {
+									"path": {
+										"type": "string"
+									},
+									"edit": {
+										"type": "boolean"
+									},
+									"missing": {
+										"type": "boolean"
+									}
+								}
+							}
 						}
 					}
 				}
@@ -29377,10 +29443,6 @@
 											{
 												"type": "string",
 												"const": "project"
-											},
-											{
-												"type": "string",
-												"const": "team"
 											}
 										]
 									},
@@ -29458,10 +29520,6 @@
 											{
 												"type": "string",
 												"const": "project"
-											},
-											{
-												"type": "string",
-												"const": "team"
 											}
 										]
 									},
@@ -29494,228 +29552,102 @@
 				}
 			}
 		},
-		"teams.templates.params": {
+		"work.list.params": {
 			"type": "object",
 			"properties": {}
 		},
-		"teams.templates.result": {
+		"work.list.result": {
 			"type": "object",
 			"required": [
-				"templates"
+				"work"
 			],
 			"properties": {
-				"templates": {
+				"work": {
 					"type": "array",
 					"items": {
 						"type": "object",
 						"required": [
-							"id",
-							"name",
-							"description",
-							"workplace",
-							"roles"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"name": {
-								"type": "string"
-							},
-							"description": {
-								"type": "string"
-							},
-							"workplace": {
-								"anyOf": [
-									{
-										"type": "string",
-										"const": "project"
-									},
-									{
-										"type": "string",
-										"const": "folder"
-									}
-								]
-							},
-							"roles": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"required": [
-										"id",
-										"name",
-										"kind",
-										"responsibility"
-									],
-									"properties": {
-										"id": {
-											"type": "string"
-										},
-										"name": {
-											"type": "string"
-										},
-										"kind": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "lead"
-												},
-												{
-													"type": "string",
-													"const": "write"
-												},
-												{
-													"type": "string",
-													"const": "review"
-												},
-												{
-													"type": "string",
-													"const": "integrate"
-												}
-											]
-										},
-										"responsibility": {
-											"type": "string"
-										},
-										"done": {
-											"type": "string"
-										},
-										"model": {
-											"type": "string"
-										},
-										"agent": {
-											"type": "string",
-											"description": "An agent this member is: its instructions, and its model when the role has none"
-										}
-									}
-								}
-							},
-							"source": {
-								"anyOf": [
-									{
-										"type": "string",
-										"const": "builtin"
-									},
-									{
-										"type": "string",
-										"const": "yours"
-									}
-								]
-							},
-							"folder": {
-								"type": "string"
-							}
-						}
-					}
-				}
-			}
-		},
-		"teams.list.params": {
-			"type": "object",
-			"properties": {}
-		},
-		"teams.list.result": {
-			"type": "object",
-			"required": [
-				"teams"
-			],
-			"properties": {
-				"teams": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"name",
-							"slug",
-							"template",
-							"roles",
-							"style",
+							"project",
 							"cwd",
-							"folder",
-							"memberMode",
-							"maxParallel",
+							"way",
 							"tasks",
-							"nextTask",
 							"createdAt"
 						],
 						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"definitionId": {
-								"type": "string"
-							},
-							"name": {
-								"type": "string"
-							},
-							"slug": {
-								"type": "string"
-							},
-							"template": {
-								"type": "string"
-							},
-							"roles": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"required": [
-										"id",
-										"name",
-										"kind",
-										"responsibility"
-									],
-									"properties": {
-										"id": {
-											"type": "string"
-										},
-										"name": {
-											"type": "string"
-										},
-										"kind": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "lead"
-												},
-												{
-													"type": "string",
-													"const": "write"
-												},
-												{
-													"type": "string",
-													"const": "review"
-												},
-												{
-													"type": "string",
-													"const": "integrate"
-												}
-											]
-										},
-										"responsibility": {
-											"type": "string"
-										},
-										"done": {
-											"type": "string"
-										},
-										"model": {
-											"type": "string"
-										},
-										"agent": {
-											"type": "string",
-											"description": "An agent this member is: its instructions, and its model when the role has none"
-										}
-									}
-								}
-							},
-							"style": {
+							"project": {
 								"type": "string"
 							},
 							"cwd": {
 								"type": "string"
 							},
-							"folder": {
-								"type": "string"
+							"way": {
+								"type": "object",
+								"required": [
+									"parallel",
+									"review",
+									"reviewLimit",
+									"maxParallel",
+									"helperMode",
+									"playbook"
+								],
+								"properties": {
+									"parallel": {
+										"type": "boolean",
+										"description": "Piopio may split work onto the board"
+									},
+									"review": {
+										"type": "boolean",
+										"description": "Every task is reviewed by a helper with fresh eyes"
+									},
+									"reviewLimit": {
+										"type": "number",
+										"description": "Times a task may be sent back before you're asked"
+									},
+									"testCommand": {
+										"type": "string",
+										"description": "The checks, run after each merge"
+									},
+									"maxParallel": {
+										"type": "number",
+										"description": "Tasks at once"
+									},
+									"buildModel": {
+										"type": "string",
+										"description": "The helpers' model for doing tasks; unset: the project's"
+									},
+									"reviewModel": {
+										"type": "string",
+										"description": "The reviewers' model; unset: the build model"
+									},
+									"helperMode": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "read_only"
+											},
+											{
+												"type": "string",
+												"const": "ask"
+											},
+											{
+												"type": "string",
+												"const": "auto_edit"
+											},
+											{
+												"type": "string",
+												"const": "full_auto"
+											}
+										]
+									},
+									"budgetPerJob": {
+										"type": "number",
+										"description": "USD one conversation's tasks may spend"
+									},
+									"playbook": {
+										"type": "string",
+										"description": "The playbook Piopio plans with: development, research, writing, or a project's own"
+									}
+								}
 							},
 							"git": {
 								"type": "object",
@@ -29736,41 +29668,6 @@
 									}
 								}
 							},
-							"leadSessionId": {
-								"type": "string"
-							},
-							"model": {
-								"type": "string"
-							},
-							"memberMode": {
-								"anyOf": [
-									{
-										"type": "string",
-										"const": "read_only"
-									},
-									{
-										"type": "string",
-										"const": "ask"
-									},
-									{
-										"type": "string",
-										"const": "auto_edit"
-									},
-									{
-										"type": "string",
-										"const": "full_auto"
-									}
-								]
-							},
-							"maxParallel": {
-								"type": "number"
-							},
-							"testCommand": {
-								"type": "string"
-							},
-							"goal": {
-								"type": "string"
-							},
 							"tasks": {
 								"type": "array",
 								"items": {
@@ -29779,7 +29676,7 @@
 										"id",
 										"title",
 										"brief",
-										"role",
+										"helper",
 										"state",
 										"by",
 										"attempts",
@@ -29799,8 +29696,9 @@
 										"done": {
 											"type": "string"
 										},
-										"role": {
-											"type": "string"
+										"helper": {
+											"type": "string",
+											"description": "What the helper is called on the board: “Builder”, “Researcher”"
 										},
 										"state": {
 											"anyOf": [
@@ -29834,7 +29732,7 @@
 											"anyOf": [
 												{
 													"type": "string",
-													"const": "lead"
+													"const": "piopio"
 												},
 												{
 													"type": "string",
@@ -29844,7 +29742,7 @@
 										},
 										"conversationId": {
 											"type": "string",
-											"description": "The lead conversation that made it"
+											"description": "The conversation that made it; its updates go there"
 										},
 										"sessionId": {
 											"type": "string"
@@ -29883,348 +29781,282 @@
 									}
 								}
 							},
-							"nextTask": {
-								"type": "number"
-							},
-							"reviewLimit": {
-								"type": "number"
-							},
-							"budgetPerJob": {
-								"type": "number"
-							},
-							"routines": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"required": [
-										"id",
-										"on",
-										"prompt",
-										"by",
-										"createdAt",
-										"runs"
-									],
-									"properties": {
-										"id": {
-											"type": "string"
-										},
-										"on": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "time"
-												},
-												{
-													"type": "string",
-													"const": "folder"
-												},
-												{
-													"type": "string",
-													"const": "email"
-												},
-												{
-													"type": "string",
-													"const": "webhook"
-												}
-											]
-										},
-										"prompt": {
-											"type": "string"
-										},
-										"cron": {
-											"type": "string"
-										},
-										"at": {
-											"type": "number"
-										},
-										"tz": {
-											"type": "string"
-										},
-										"folder": {
-											"type": "string"
-										},
-										"from": {
-											"type": "string"
-										},
-										"subject": {
-											"type": "string"
-										},
-										"by": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "lead"
-												},
-												{
-													"type": "string",
-													"const": "you"
-												}
-											]
-										},
-										"createdAt": {
-											"type": "string"
-										},
-										"next": {
-											"type": "number",
-											"description": "time: the next fire, epoch ms"
-										},
-										"lastRun": {
-											"type": "string"
-										},
-										"runs": {
-											"type": "number"
-										},
-										"lastConversation": {
-											"type": "string"
-										},
-										"label": {
+							"createdAt": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"work.get.params": {
+			"type": "object",
+			"required": [
+				"project"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				}
+			}
+		},
+		"work.get.result": {
+			"type": "object",
+			"properties": {
+				"work": {
+					"type": "object",
+					"required": [
+						"project",
+						"cwd",
+						"way",
+						"tasks",
+						"createdAt"
+					],
+					"properties": {
+						"project": {
+							"type": "string"
+						},
+						"cwd": {
+							"type": "string"
+						},
+						"way": {
+							"type": "object",
+							"required": [
+								"parallel",
+								"review",
+								"reviewLimit",
+								"maxParallel",
+								"helperMode",
+								"playbook"
+							],
+							"properties": {
+								"parallel": {
+									"type": "boolean",
+									"description": "Piopio may split work onto the board"
+								},
+								"review": {
+									"type": "boolean",
+									"description": "Every task is reviewed by a helper with fresh eyes"
+								},
+								"reviewLimit": {
+									"type": "number",
+									"description": "Times a task may be sent back before you're asked"
+								},
+								"testCommand": {
+									"type": "string",
+									"description": "The checks, run after each merge"
+								},
+								"maxParallel": {
+									"type": "number",
+									"description": "Tasks at once"
+								},
+								"buildModel": {
+									"type": "string",
+									"description": "The helpers' model for doing tasks; unset: the project's"
+								},
+								"reviewModel": {
+									"type": "string",
+									"description": "The reviewers' model; unset: the build model"
+								},
+								"helperMode": {
+									"anyOf": [
+										{
 											"type": "string",
-											"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+											"const": "read_only"
 										},
-										"url": {
+										{
 											"type": "string",
-											"description": "webhook: where to POST"
+											"const": "ask"
+										},
+										{
+											"type": "string",
+											"const": "auto_edit"
+										},
+										{
+											"type": "string",
+											"const": "full_auto"
 										}
-									}
+									]
+								},
+								"budgetPerJob": {
+									"type": "number",
+									"description": "USD one conversation's tasks may spend"
+								},
+								"playbook": {
+									"type": "string",
+									"description": "The playbook Piopio plans with: development, research, writing, or a project's own"
 								}
-							},
-							"fired": {
-								"type": "array",
-								"items": {
+							}
+						},
+						"git": {
+							"type": "object",
+							"required": [
+								"base",
+								"branch",
+								"integration"
+							],
+							"properties": {
+								"base": {
+									"type": "string"
+								},
+								"branch": {
+									"type": "string"
+								},
+								"integration": {
 									"type": "string"
 								}
-							},
-							"createdAt": {
-								"type": "string"
 							}
+						},
+						"tasks": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"title",
+									"brief",
+									"helper",
+									"state",
+									"by",
+									"attempts",
+									"createdAt",
+									"updatedAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"brief": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"helper": {
+										"type": "string",
+										"description": "What the helper is called on the board: “Builder”, “Researcher”"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "todo"
+											},
+											{
+												"type": "string",
+												"const": "doing"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrating"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "blocked"
+											}
+										]
+									},
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "piopio"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"conversationId": {
+										"type": "string",
+										"description": "The conversation that made it; its updates go there"
+									},
+									"sessionId": {
+										"type": "string"
+									},
+									"reviewSessionId": {
+										"type": "string"
+									},
+									"branch": {
+										"type": "string"
+									},
+									"cwd": {
+										"type": "string"
+									},
+									"report": {
+										"type": "string"
+									},
+									"review": {
+										"type": "string"
+									},
+									"attempts": {
+										"type": "number"
+									},
+									"blocked": {
+										"type": "string"
+									},
+									"landed": {
+										"type": "string",
+										"description": "When its work was merged into the project's branch"
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"updatedAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"createdAt": {
+							"type": "string"
 						}
 					}
 				}
 			}
 		},
-		"teams.definitions.params": {
-			"type": "object",
-			"properties": {}
-		},
-		"teams.definitions.result": {
+		"work.configure.params": {
 			"type": "object",
 			"required": [
-				"definitions"
+				"project"
 			],
 			"properties": {
-				"definitions": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"name",
-							"template",
-							"roles",
-							"style",
-							"folder",
-							"memberMode",
-							"saved",
-							"createdAt",
-							"projects"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"name": {
-								"type": "string"
-							},
-							"template": {
-								"type": "string"
-							},
-							"roles": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"required": [
-										"id",
-										"name",
-										"kind",
-										"responsibility"
-									],
-									"properties": {
-										"id": {
-											"type": "string"
-										},
-										"name": {
-											"type": "string"
-										},
-										"kind": {
-											"anyOf": [
-												{
-													"type": "string",
-													"const": "lead"
-												},
-												{
-													"type": "string",
-													"const": "write"
-												},
-												{
-													"type": "string",
-													"const": "review"
-												},
-												{
-													"type": "string",
-													"const": "integrate"
-												}
-											]
-										},
-										"responsibility": {
-											"type": "string"
-										},
-										"done": {
-											"type": "string"
-										},
-										"model": {
-											"type": "string"
-										},
-										"agent": {
-											"type": "string",
-											"description": "An agent this member is: its instructions, and its model when the role has none"
-										}
-									}
-								}
-							},
-							"style": {
-								"type": "string"
-							},
-							"folder": {
-								"type": "string",
-								"description": "TEAM.md and NOTES.md"
-							},
-							"model": {
-								"type": "string"
-							},
-							"memberMode": {
-								"anyOf": [
-									{
-										"type": "string",
-										"const": "read_only"
-									},
-									{
-										"type": "string",
-										"const": "ask"
-									},
-									{
-										"type": "string",
-										"const": "auto_edit"
-									},
-									{
-										"type": "string",
-										"const": "full_auto"
-									}
-								]
-							},
-							"saved": {
-								"type": "boolean",
-								"description": "Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1)"
-							},
-							"reviewLimit": {
-								"type": "number",
-								"description": "Times a task may be sent back before you're asked (default 3)"
-							},
-							"budgetPerJob": {
-								"type": "number",
-								"description": "USD one conversation's tasks may spend"
-							},
-							"createdAt": {
-								"type": "string"
-							},
-							"projects": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"required": [
-										"teamId",
-										"cwd"
-									],
-									"properties": {
-										"teamId": {
-											"type": "string"
-										},
-										"cwd": {
-											"type": "string"
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		},
-		"teams.updateDefinition.params": {
-			"type": "object",
-			"required": [
-				"id"
-			],
-			"properties": {
-				"id": {
+				"project": {
 					"type": "string"
 				},
-				"name": {
-					"type": "string"
+				"parallel": {
+					"type": "boolean"
 				},
-				"roles": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"name",
-							"kind",
-							"responsibility"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"name": {
-								"type": "string"
-							},
-							"kind": {
-								"anyOf": [
-									{
-										"type": "string",
-										"const": "lead"
-									},
-									{
-										"type": "string",
-										"const": "write"
-									},
-									{
-										"type": "string",
-										"const": "review"
-									},
-									{
-										"type": "string",
-										"const": "integrate"
-									}
-								]
-							},
-							"responsibility": {
-								"type": "string"
-							},
-							"done": {
-								"type": "string"
-							},
-							"model": {
-								"type": "string"
-							},
-							"agent": {
-								"type": "string",
-								"description": "An agent this member is: its instructions, and its model when the role has none"
-							}
-						}
-					}
+				"review": {
+					"type": "boolean"
 				},
-				"model": {
+				"reviewLimit": {
+					"type": "number",
+					"minimum": 1,
+					"maximum": 10
+				},
+				"testCommand": {
+					"type": "string",
+					"description": "Empty removes it"
+				},
+				"maxParallel": {
+					"type": "number",
+					"minimum": 1,
+					"maximum": 8
+				},
+				"buildModel": {
 					"anyOf": [
 						{
 							"type": "string"
@@ -30234,26 +30066,17 @@
 						}
 					]
 				},
-				"saved": {
-					"type": "boolean"
-				},
-				"reviewLimit": {
-					"type": "number",
-					"minimum": 1,
-					"maximum": 10
-				},
-				"budgetPerJob": {
+				"reviewModel": {
 					"anyOf": [
 						{
-							"type": "number",
-							"minimum": 0
+							"type": "string"
 						},
 						{
 							"type": "null"
 						}
 					]
 				},
-				"memberMode": {
+				"helperMode": {
 					"anyOf": [
 						{
 							"type": "string",
@@ -30272,65 +30095,174 @@
 							"const": "full_auto"
 						}
 					]
+				},
+				"budgetPerJob": {
+					"anyOf": [
+						{
+							"type": "number",
+							"minimum": 0
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"playbook": {
+					"type": "string"
 				}
 			}
 		},
-		"teams.updateDefinition.result": {
+		"work.configure.result": {
 			"type": "object",
 			"required": [
-				"definition"
+				"work"
 			],
 			"properties": {
-				"definition": {
+				"work": {
 					"type": "object",
 					"required": [
-						"id",
-						"name",
-						"template",
-						"roles",
-						"style",
-						"folder",
-						"memberMode",
-						"saved",
-						"createdAt",
-						"projects"
+						"project",
+						"cwd",
+						"way",
+						"tasks",
+						"createdAt"
 					],
 					"properties": {
-						"id": {
+						"project": {
 							"type": "string"
 						},
-						"name": {
+						"cwd": {
 							"type": "string"
 						},
-						"template": {
-							"type": "string"
+						"way": {
+							"type": "object",
+							"required": [
+								"parallel",
+								"review",
+								"reviewLimit",
+								"maxParallel",
+								"helperMode",
+								"playbook"
+							],
+							"properties": {
+								"parallel": {
+									"type": "boolean",
+									"description": "Piopio may split work onto the board"
+								},
+								"review": {
+									"type": "boolean",
+									"description": "Every task is reviewed by a helper with fresh eyes"
+								},
+								"reviewLimit": {
+									"type": "number",
+									"description": "Times a task may be sent back before you're asked"
+								},
+								"testCommand": {
+									"type": "string",
+									"description": "The checks, run after each merge"
+								},
+								"maxParallel": {
+									"type": "number",
+									"description": "Tasks at once"
+								},
+								"buildModel": {
+									"type": "string",
+									"description": "The helpers' model for doing tasks; unset: the project's"
+								},
+								"reviewModel": {
+									"type": "string",
+									"description": "The reviewers' model; unset: the build model"
+								},
+								"helperMode": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "read_only"
+										},
+										{
+											"type": "string",
+											"const": "ask"
+										},
+										{
+											"type": "string",
+											"const": "auto_edit"
+										},
+										{
+											"type": "string",
+											"const": "full_auto"
+										}
+									]
+								},
+								"budgetPerJob": {
+									"type": "number",
+									"description": "USD one conversation's tasks may spend"
+								},
+								"playbook": {
+									"type": "string",
+									"description": "The playbook Piopio plans with: development, research, writing, or a project's own"
+								}
+							}
 						},
-						"roles": {
+						"git": {
+							"type": "object",
+							"required": [
+								"base",
+								"branch",
+								"integration"
+							],
+							"properties": {
+								"base": {
+									"type": "string"
+								},
+								"branch": {
+									"type": "string"
+								},
+								"integration": {
+									"type": "string"
+								}
+							}
+						},
+						"tasks": {
 							"type": "array",
 							"items": {
 								"type": "object",
 								"required": [
 									"id",
-									"name",
-									"kind",
-									"responsibility"
+									"title",
+									"brief",
+									"helper",
+									"state",
+									"by",
+									"attempts",
+									"createdAt",
+									"updatedAt"
 								],
 								"properties": {
 									"id": {
 										"type": "string"
 									},
-									"name": {
+									"title": {
 										"type": "string"
 									},
-									"kind": {
+									"brief": {
+										"type": "string"
+									},
+									"done": {
+										"type": "string"
+									},
+									"helper": {
+										"type": "string",
+										"description": "What the helper is called on the board: “Builder”, “Researcher”"
+									},
+									"state": {
 										"anyOf": [
 											{
 												"type": "string",
-												"const": "lead"
+												"const": "todo"
 											},
 											{
 												"type": "string",
-												"const": "write"
+												"const": "doing"
 											},
 											{
 												"type": "string",
@@ -30338,181 +30270,378 @@
 											},
 											{
 												"type": "string",
-												"const": "integrate"
+												"const": "integrating"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "blocked"
 											}
 										]
 									},
-									"responsibility": {
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "piopio"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"conversationId": {
+										"type": "string",
+										"description": "The conversation that made it; its updates go there"
+									},
+									"sessionId": {
+										"type": "string"
+									},
+									"reviewSessionId": {
+										"type": "string"
+									},
+									"branch": {
+										"type": "string"
+									},
+									"cwd": {
+										"type": "string"
+									},
+									"report": {
+										"type": "string"
+									},
+									"review": {
+										"type": "string"
+									},
+									"attempts": {
+										"type": "number"
+									},
+									"blocked": {
+										"type": "string"
+									},
+									"landed": {
+										"type": "string",
+										"description": "When its work was merged into the project's branch"
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"updatedAt": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"createdAt": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"work.accept.params": {
+			"type": "object",
+			"required": [
+				"project",
+				"sessionId"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				},
+				"sessionId": {
+					"type": "string"
+				}
+			}
+		},
+		"work.accept.result": {
+			"type": "object",
+			"required": [
+				"work"
+			],
+			"properties": {
+				"work": {
+					"type": "object",
+					"required": [
+						"project",
+						"cwd",
+						"way",
+						"tasks",
+						"createdAt"
+					],
+					"properties": {
+						"project": {
+							"type": "string"
+						},
+						"cwd": {
+							"type": "string"
+						},
+						"way": {
+							"type": "object",
+							"required": [
+								"parallel",
+								"review",
+								"reviewLimit",
+								"maxParallel",
+								"helperMode",
+								"playbook"
+							],
+							"properties": {
+								"parallel": {
+									"type": "boolean",
+									"description": "Piopio may split work onto the board"
+								},
+								"review": {
+									"type": "boolean",
+									"description": "Every task is reviewed by a helper with fresh eyes"
+								},
+								"reviewLimit": {
+									"type": "number",
+									"description": "Times a task may be sent back before you're asked"
+								},
+								"testCommand": {
+									"type": "string",
+									"description": "The checks, run after each merge"
+								},
+								"maxParallel": {
+									"type": "number",
+									"description": "Tasks at once"
+								},
+								"buildModel": {
+									"type": "string",
+									"description": "The helpers' model for doing tasks; unset: the project's"
+								},
+								"reviewModel": {
+									"type": "string",
+									"description": "The reviewers' model; unset: the build model"
+								},
+								"helperMode": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "read_only"
+										},
+										{
+											"type": "string",
+											"const": "ask"
+										},
+										{
+											"type": "string",
+											"const": "auto_edit"
+										},
+										{
+											"type": "string",
+											"const": "full_auto"
+										}
+									]
+								},
+								"budgetPerJob": {
+									"type": "number",
+									"description": "USD one conversation's tasks may spend"
+								},
+								"playbook": {
+									"type": "string",
+									"description": "The playbook Piopio plans with: development, research, writing, or a project's own"
+								}
+							}
+						},
+						"git": {
+							"type": "object",
+							"required": [
+								"base",
+								"branch",
+								"integration"
+							],
+							"properties": {
+								"base": {
+									"type": "string"
+								},
+								"branch": {
+									"type": "string"
+								},
+								"integration": {
+									"type": "string"
+								}
+							}
+						},
+						"tasks": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"required": [
+									"id",
+									"title",
+									"brief",
+									"helper",
+									"state",
+									"by",
+									"attempts",
+									"createdAt",
+									"updatedAt"
+								],
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"title": {
+										"type": "string"
+									},
+									"brief": {
 										"type": "string"
 									},
 									"done": {
 										"type": "string"
 									},
-									"model": {
+									"helper": {
+										"type": "string",
+										"description": "What the helper is called on the board: “Builder”, “Researcher”"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "todo"
+											},
+											{
+												"type": "string",
+												"const": "doing"
+											},
+											{
+												"type": "string",
+												"const": "review"
+											},
+											{
+												"type": "string",
+												"const": "integrating"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "blocked"
+											}
+										]
+									},
+									"by": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "piopio"
+											},
+											{
+												"type": "string",
+												"const": "you"
+											}
+										]
+									},
+									"conversationId": {
+										"type": "string",
+										"description": "The conversation that made it; its updates go there"
+									},
+									"sessionId": {
 										"type": "string"
 									},
-									"agent": {
-										"type": "string",
-										"description": "An agent this member is: its instructions, and its model when the role has none"
-									}
-								}
-							}
-						},
-						"style": {
-							"type": "string"
-						},
-						"folder": {
-							"type": "string",
-							"description": "TEAM.md and NOTES.md"
-						},
-						"model": {
-							"type": "string"
-						},
-						"memberMode": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "read_only"
-								},
-								{
-									"type": "string",
-									"const": "ask"
-								},
-								{
-									"type": "string",
-									"const": "auto_edit"
-								},
-								{
-									"type": "string",
-									"const": "full_auto"
-								}
-							]
-						},
-						"saved": {
-							"type": "boolean",
-							"description": "Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1)"
-						},
-						"reviewLimit": {
-							"type": "number",
-							"description": "Times a task may be sent back before you're asked (default 3)"
-						},
-						"budgetPerJob": {
-							"type": "number",
-							"description": "USD one conversation's tasks may spend"
-						},
-						"createdAt": {
-							"type": "string"
-						},
-						"projects": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"teamId",
-									"cwd"
-								],
-								"properties": {
-									"teamId": {
+									"reviewSessionId": {
+										"type": "string"
+									},
+									"branch": {
 										"type": "string"
 									},
 									"cwd": {
 										"type": "string"
+									},
+									"report": {
+										"type": "string"
+									},
+									"review": {
+										"type": "string"
+									},
+									"attempts": {
+										"type": "number"
+									},
+									"blocked": {
+										"type": "string"
+									},
+									"landed": {
+										"type": "string",
+										"description": "When its work was merged into the project's branch"
+									},
+									"createdAt": {
+										"type": "string"
+									},
+									"updatedAt": {
+										"type": "string"
 									}
 								}
+							}
+						},
+						"createdAt": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"work.playbooks.params": {
+			"type": "object",
+			"required": [
+				"project"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				}
+			}
+		},
+		"work.playbooks.result": {
+			"type": "object",
+			"required": [
+				"playbooks"
+			],
+			"properties": {
+				"playbooks": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"name",
+							"description",
+							"source"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"source": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "builtin"
+									},
+									{
+										"type": "string",
+										"const": "project"
+									}
+								]
 							}
 						}
 					}
 				}
 			}
 		},
-		"teams.promoteMember.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"roleId"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"roleId": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.promoteMember.result": {
-			"type": "object",
-			"required": [
-				"agent"
-			],
-			"properties": {
-				"agent": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"teams.job.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"conversationId"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"conversationId": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.job.result": {
-			"type": "object",
-			"required": [
-				"cost",
-				"tasks"
-			],
-			"properties": {
-				"cost": {
-					"type": "number"
-				},
-				"tasks": {
-					"type": "number"
-				},
-				"budget": {
-					"type": "number"
-				}
-			}
-		},
-		"teams.fitCheck.params": {
+		"work.fitCheck.params": {
 			"type": "object",
 			"required": [
 				"cwd"
@@ -30523,7 +30652,7 @@
 				}
 			}
 		},
-		"teams.fitCheck.result": {
+		"work.fitCheck.result": {
 			"type": "object",
 			"required": [
 				"git",
@@ -30545,168 +30674,365 @@
 				}
 			}
 		},
-		"teams.draftFor.params": {
+		"work.job.params": {
 			"type": "object",
 			"required": [
-				"cwd"
+				"project",
+				"conversationId"
 			],
 			"properties": {
-				"cwd": {
+				"project": {
 					"type": "string"
 				},
-				"request": {
-					"type": "string",
-					"description": "What the conversation asked for"
+				"conversationId": {
+					"type": "string"
 				}
 			}
 		},
-		"teams.draftFor.result": {
+		"work.job.result": {
 			"type": "object",
 			"required": [
-				"draft",
-				"found",
-				"suggestions"
+				"cost",
+				"tasks"
 			],
 			"properties": {
-				"draft": {
+				"cost": {
+					"type": "number"
+				},
+				"tasks": {
+					"type": "number"
+				},
+				"budget": {
+					"type": "number"
+				}
+			}
+		},
+		"work.addTask.params": {
+			"type": "object",
+			"required": [
+				"project",
+				"title",
+				"brief"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				},
+				"title": {
+					"type": "string"
+				},
+				"brief": {
+					"type": "string"
+				},
+				"done": {
+					"type": "string"
+				}
+			}
+		},
+		"work.addTask.result": {
+			"type": "object",
+			"required": [
+				"task"
+			],
+			"properties": {
+				"task": {
 					"type": "object",
 					"required": [
-						"name",
-						"description",
-						"style",
-						"instructions",
-						"roles"
+						"id",
+						"title",
+						"brief",
+						"helper",
+						"state",
+						"by",
+						"attempts",
+						"createdAt",
+						"updatedAt"
 					],
 					"properties": {
-						"name": {
+						"id": {
 							"type": "string"
 						},
-						"description": {
+						"title": {
 							"type": "string"
 						},
-						"style": {
+						"brief": {
 							"type": "string"
 						},
-						"instructions": {
+						"done": {
 							"type": "string"
 						},
-						"roles": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"name",
-									"kind",
-									"responsibility"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"name": {
-										"type": "string"
-									},
-									"kind": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "write"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrate"
-											}
-										]
-									},
-									"responsibility": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"model": {
-										"type": "string"
-									},
-									"agent": {
-										"type": "string",
-										"description": "An agent this member is: its instructions, and its model when the role has none"
-									}
+						"helper": {
+							"type": "string",
+							"description": "What the helper is called on the board: “Builder”, “Researcher”"
+						},
+						"state": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "todo"
+								},
+								{
+									"type": "string",
+									"const": "doing"
+								},
+								{
+									"type": "string",
+									"const": "review"
+								},
+								{
+									"type": "string",
+									"const": "integrating"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "blocked"
 								}
-							}
-						}
-					}
-				},
-				"found": {
-					"type": "object",
-					"required": [
-						"git",
-						"agentsMd"
-					],
-					"properties": {
-						"git": {
-							"type": "boolean"
+							]
 						},
-						"checks": {
+						"by": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "piopio"
+								},
+								{
+									"type": "string",
+									"const": "you"
+								}
+							]
+						},
+						"conversationId": {
+							"type": "string",
+							"description": "The conversation that made it; its updates go there"
+						},
+						"sessionId": {
 							"type": "string"
 						},
-						"agentsMd": {
-							"type": "boolean"
+						"reviewSessionId": {
+							"type": "string"
 						},
-						"language": {
+						"branch": {
+							"type": "string"
+						},
+						"cwd": {
+							"type": "string"
+						},
+						"report": {
+							"type": "string"
+						},
+						"review": {
+							"type": "string"
+						},
+						"attempts": {
+							"type": "number"
+						},
+						"blocked": {
+							"type": "string"
+						},
+						"landed": {
+							"type": "string",
+							"description": "When its work was merged into the project's branch"
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"updatedAt": {
 							"type": "string"
 						}
 					}
+				}
+			}
+		},
+		"work.updateTask.params": {
+			"type": "object",
+			"required": [
+				"project",
+				"taskId"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
 				},
-				"suggestions": {
+				"taskId": {
+					"type": "string"
+				},
+				"state": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "todo"
+						},
+						{
+							"type": "string",
+							"const": "blocked"
+						},
+						{
+							"type": "string",
+							"const": "done"
+						}
+					]
+				},
+				"title": {
+					"type": "string"
+				},
+				"brief": {
+					"type": "string"
+				}
+			}
+		},
+		"work.updateTask.result": {
+			"type": "object",
+			"properties": {}
+		},
+		"work.landing.params": {
+			"type": "object",
+			"required": [
+				"project"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				}
+			}
+		},
+		"work.landing.result": {
+			"type": "object",
+			"required": [
+				"base",
+				"branch",
+				"ahead",
+				"behind",
+				"files",
+				"tasks",
+				"open"
+			],
+			"properties": {
+				"base": {
+					"type": "string"
+				},
+				"branch": {
+					"type": "string"
+				},
+				"ahead": {
+					"type": "number"
+				},
+				"behind": {
+					"type": "number"
+				},
+				"files": {
 					"type": "array",
 					"items": {
 						"type": "object",
 						"required": [
-							"role",
-							"agent",
-							"name"
+							"path",
+							"added",
+							"removed"
 						],
 						"properties": {
-							"role": {
-								"type": "string",
-								"description": "A role id in the draft"
-							},
-							"agent": {
+							"path": {
 								"type": "string"
 							},
-							"name": {
+							"added": {
+								"type": "number"
+							},
+							"removed": {
+								"type": "number"
+							}
+						}
+					}
+				},
+				"tasks": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"title"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"title": {
 								"type": "string"
 							}
 						}
 					}
-				}
-			}
-		},
-		"teams.adopt.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"sessionId"
-			],
-			"properties": {
-				"id": {
+				},
+				"open": {
+					"type": "number"
+				},
+				"checkedOut": {
 					"type": "string"
 				},
-				"sessionId": {
+				"remote": {
+					"type": "string"
+				},
+				"compareUrl": {
 					"type": "string"
 				}
 			}
 		},
-		"teams.adopt.result": {
+		"work.land.params": {
+			"type": "object",
+			"required": [
+				"project",
+				"action"
+			],
+			"properties": {
+				"project": {
+					"type": "string"
+				},
+				"action": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "merge"
+						},
+						{
+							"type": "string",
+							"const": "push"
+						}
+					]
+				}
+			}
+		},
+		"work.land.result": {
+			"type": "object",
+			"properties": {
+				"commit": {
+					"type": "string"
+				},
+				"compareUrl": {
+					"type": "string"
+				},
+				"output": {
+					"type": "string"
+				}
+			}
+		},
+		"work.migrationReport.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"work.migrationReport.result": {
+			"type": "object",
+			"properties": {
+				"report": {
+					"type": "string",
+					"description": "Markdown"
+				}
+			}
+		},
+		"work.dismissMigrationReport.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"work.dismissMigrationReport.result": {
 			"type": "object",
 			"properties": {}
 		},
@@ -30788,7 +31114,7 @@
 								"anyOf": [
 									{
 										"type": "string",
-										"const": "lead"
+										"const": "piopio"
 									},
 									{
 										"type": "string",
@@ -30938,7 +31264,7 @@
 							"anyOf": [
 								{
 									"type": "string",
-									"const": "lead"
+									"const": "piopio"
 								},
 								{
 									"type": "string",
@@ -31018,2011 +31344,6 @@
 					"type": "string"
 				}
 			}
-		},
-		"teams.draft.params": {
-			"type": "object",
-			"required": [
-				"description"
-			],
-			"properties": {
-				"description": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.draft.result": {
-			"type": "object",
-			"required": [
-				"draft"
-			],
-			"properties": {
-				"draft": {
-					"type": "object",
-					"required": [
-						"name",
-						"description",
-						"style",
-						"instructions",
-						"roles"
-					],
-					"properties": {
-						"name": {
-							"type": "string"
-						},
-						"description": {
-							"type": "string"
-						},
-						"style": {
-							"type": "string"
-						},
-						"instructions": {
-							"type": "string"
-						},
-						"roles": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"name",
-									"kind",
-									"responsibility"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"name": {
-										"type": "string"
-									},
-									"kind": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "write"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrate"
-											}
-										]
-									},
-									"responsibility": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"model": {
-										"type": "string"
-									},
-									"agent": {
-										"type": "string",
-										"description": "An agent this member is: its instructions, and its model when the role has none"
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		},
-		"teams.createDefinition.params": {
-			"type": "object",
-			"properties": {
-				"template": {
-					"type": "string"
-				},
-				"name": {
-					"type": "string"
-				},
-				"style": {
-					"type": "string"
-				},
-				"instructions": {
-					"type": "string"
-				},
-				"roles": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"name",
-							"kind",
-							"responsibility"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"name": {
-								"type": "string"
-							},
-							"kind": {
-								"anyOf": [
-									{
-										"type": "string",
-										"const": "lead"
-									},
-									{
-										"type": "string",
-										"const": "write"
-									},
-									{
-										"type": "string",
-										"const": "review"
-									},
-									{
-										"type": "string",
-										"const": "integrate"
-									}
-								]
-							},
-							"responsibility": {
-								"type": "string"
-							},
-							"done": {
-								"type": "string"
-							},
-							"model": {
-								"type": "string"
-							},
-							"agent": {
-								"type": "string",
-								"description": "An agent this member is: its instructions, and its model when the role has none"
-							}
-						}
-					}
-				}
-			}
-		},
-		"teams.createDefinition.result": {
-			"type": "object",
-			"required": [
-				"definition"
-			],
-			"properties": {
-				"definition": {
-					"type": "object",
-					"required": [
-						"id",
-						"name",
-						"template",
-						"roles",
-						"style",
-						"folder",
-						"memberMode",
-						"saved",
-						"createdAt",
-						"projects"
-					],
-					"properties": {
-						"id": {
-							"type": "string"
-						},
-						"name": {
-							"type": "string"
-						},
-						"template": {
-							"type": "string"
-						},
-						"roles": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"name",
-									"kind",
-									"responsibility"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"name": {
-										"type": "string"
-									},
-									"kind": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "write"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrate"
-											}
-										]
-									},
-									"responsibility": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"model": {
-										"type": "string"
-									},
-									"agent": {
-										"type": "string",
-										"description": "An agent this member is: its instructions, and its model when the role has none"
-									}
-								}
-							}
-						},
-						"style": {
-							"type": "string"
-						},
-						"folder": {
-							"type": "string",
-							"description": "TEAM.md and NOTES.md"
-						},
-						"model": {
-							"type": "string"
-						},
-						"memberMode": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "read_only"
-								},
-								{
-									"type": "string",
-									"const": "ask"
-								},
-								{
-									"type": "string",
-									"const": "auto_edit"
-								},
-								{
-									"type": "string",
-									"const": "full_auto"
-								}
-							]
-						},
-						"saved": {
-							"type": "boolean",
-							"description": "Listed under Agents for reuse; false: it lives only in its project (docs/spec/21 AD1)"
-						},
-						"reviewLimit": {
-							"type": "number",
-							"description": "Times a task may be sent back before you're asked (default 3)"
-						},
-						"budgetPerJob": {
-							"type": "number",
-							"description": "USD one conversation's tasks may spend"
-						},
-						"createdAt": {
-							"type": "string"
-						},
-						"projects": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"teamId",
-									"cwd"
-								],
-								"properties": {
-									"teamId": {
-										"type": "string"
-									},
-									"cwd": {
-										"type": "string"
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		},
-		"teams.saveTemplate.params": {
-			"type": "object",
-			"required": [
-				"id"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"name": {
-					"type": "string"
-				},
-				"description": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.saveTemplate.result": {
-			"type": "object",
-			"required": [
-				"id",
-				"folder"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"folder": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.removeDefinition.params": {
-			"type": "object",
-			"required": [
-				"id"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.removeDefinition.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"teams.get.params": {
-			"type": "object",
-			"required": [
-				"id"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.get.result": {
-			"type": "object",
-			"required": [
-				"team"
-			],
-			"properties": {
-				"team": {
-					"type": "object",
-					"required": [
-						"id",
-						"name",
-						"slug",
-						"template",
-						"roles",
-						"style",
-						"cwd",
-						"folder",
-						"memberMode",
-						"maxParallel",
-						"tasks",
-						"nextTask",
-						"createdAt"
-					],
-					"properties": {
-						"id": {
-							"type": "string"
-						},
-						"definitionId": {
-							"type": "string"
-						},
-						"name": {
-							"type": "string"
-						},
-						"slug": {
-							"type": "string"
-						},
-						"template": {
-							"type": "string"
-						},
-						"roles": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"name",
-									"kind",
-									"responsibility"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"name": {
-										"type": "string"
-									},
-									"kind": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "write"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrate"
-											}
-										]
-									},
-									"responsibility": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"model": {
-										"type": "string"
-									},
-									"agent": {
-										"type": "string",
-										"description": "An agent this member is: its instructions, and its model when the role has none"
-									}
-								}
-							}
-						},
-						"style": {
-							"type": "string"
-						},
-						"cwd": {
-							"type": "string"
-						},
-						"folder": {
-							"type": "string"
-						},
-						"git": {
-							"type": "object",
-							"required": [
-								"base",
-								"branch",
-								"integration"
-							],
-							"properties": {
-								"base": {
-									"type": "string"
-								},
-								"branch": {
-									"type": "string"
-								},
-								"integration": {
-									"type": "string"
-								}
-							}
-						},
-						"leadSessionId": {
-							"type": "string"
-						},
-						"model": {
-							"type": "string"
-						},
-						"memberMode": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "read_only"
-								},
-								{
-									"type": "string",
-									"const": "ask"
-								},
-								{
-									"type": "string",
-									"const": "auto_edit"
-								},
-								{
-									"type": "string",
-									"const": "full_auto"
-								}
-							]
-						},
-						"maxParallel": {
-							"type": "number"
-						},
-						"testCommand": {
-							"type": "string"
-						},
-						"goal": {
-							"type": "string"
-						},
-						"tasks": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"title",
-									"brief",
-									"role",
-									"state",
-									"by",
-									"attempts",
-									"createdAt",
-									"updatedAt"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"title": {
-										"type": "string"
-									},
-									"brief": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"role": {
-										"type": "string"
-									},
-									"state": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "todo"
-											},
-											{
-												"type": "string",
-												"const": "doing"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrating"
-											},
-											{
-												"type": "string",
-												"const": "done"
-											},
-											{
-												"type": "string",
-												"const": "blocked"
-											}
-										]
-									},
-									"by": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "you"
-											}
-										]
-									},
-									"conversationId": {
-										"type": "string",
-										"description": "The lead conversation that made it"
-									},
-									"sessionId": {
-										"type": "string"
-									},
-									"reviewSessionId": {
-										"type": "string"
-									},
-									"branch": {
-										"type": "string"
-									},
-									"cwd": {
-										"type": "string"
-									},
-									"report": {
-										"type": "string"
-									},
-									"review": {
-										"type": "string"
-									},
-									"attempts": {
-										"type": "number"
-									},
-									"blocked": {
-										"type": "string"
-									},
-									"landed": {
-										"type": "string",
-										"description": "When its work was merged into the project's branch"
-									},
-									"createdAt": {
-										"type": "string"
-									},
-									"updatedAt": {
-										"type": "string"
-									}
-								}
-							}
-						},
-						"nextTask": {
-							"type": "number"
-						},
-						"reviewLimit": {
-							"type": "number"
-						},
-						"budgetPerJob": {
-							"type": "number"
-						},
-						"routines": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"on",
-									"prompt",
-									"by",
-									"createdAt",
-									"runs"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"on": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "time"
-											},
-											{
-												"type": "string",
-												"const": "folder"
-											},
-											{
-												"type": "string",
-												"const": "email"
-											},
-											{
-												"type": "string",
-												"const": "webhook"
-											}
-										]
-									},
-									"prompt": {
-										"type": "string"
-									},
-									"cron": {
-										"type": "string"
-									},
-									"at": {
-										"type": "number"
-									},
-									"tz": {
-										"type": "string"
-									},
-									"folder": {
-										"type": "string"
-									},
-									"from": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "string"
-									},
-									"by": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "you"
-											}
-										]
-									},
-									"createdAt": {
-										"type": "string"
-									},
-									"next": {
-										"type": "number",
-										"description": "time: the next fire, epoch ms"
-									},
-									"lastRun": {
-										"type": "string"
-									},
-									"runs": {
-										"type": "number"
-									},
-									"lastConversation": {
-										"type": "string"
-									},
-									"label": {
-										"type": "string",
-										"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
-									},
-									"url": {
-										"type": "string",
-										"description": "webhook: where to POST"
-									}
-								}
-							}
-						},
-						"fired": {
-							"type": "array",
-							"items": {
-								"type": "string"
-							}
-						},
-						"createdAt": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"teams.create.params": {
-			"type": "object",
-			"required": [
-				"name",
-				"template"
-			],
-			"properties": {
-				"roles": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"name",
-							"kind",
-							"responsibility"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"name": {
-								"type": "string"
-							},
-							"kind": {
-								"anyOf": [
-									{
-										"type": "string",
-										"const": "lead"
-									},
-									{
-										"type": "string",
-										"const": "write"
-									},
-									{
-										"type": "string",
-										"const": "review"
-									},
-									{
-										"type": "string",
-										"const": "integrate"
-									}
-								]
-							},
-							"responsibility": {
-								"type": "string"
-							},
-							"done": {
-								"type": "string"
-							},
-							"model": {
-								"type": "string"
-							},
-							"agent": {
-								"type": "string",
-								"description": "An agent this member is: its instructions, and its model when the role has none"
-							}
-						}
-					},
-					"description": "Members in place of the template's (a draft, docs/spec/21 D7)"
-				},
-				"style": {
-					"type": "string"
-				},
-				"name": {
-					"type": "string"
-				},
-				"template": {
-					"type": "string"
-				},
-				"cwd": {
-					"type": "string"
-				},
-				"goal": {
-					"type": "string"
-				},
-				"testCommand": {
-					"type": "string"
-				},
-				"memberMode": {
-					"anyOf": [
-						{
-							"type": "string",
-							"const": "read_only"
-						},
-						{
-							"type": "string",
-							"const": "ask"
-						},
-						{
-							"type": "string",
-							"const": "auto_edit"
-						},
-						{
-							"type": "string",
-							"const": "full_auto"
-						}
-					]
-				},
-				"maxParallel": {
-					"type": "number",
-					"minimum": 1,
-					"maximum": 8
-				},
-				"model": {
-					"type": "object",
-					"required": [
-						"provider",
-						"id"
-					],
-					"properties": {
-						"provider": {
-							"type": "string"
-						},
-						"id": {
-							"type": "string"
-						}
-					}
-				},
-				"initGit": {
-					"type": "boolean",
-					"description": "A new project's folder: make it a git repo first, so tasks get branches"
-				},
-				"definition": {
-					"type": "string",
-					"description": "An existing team (definition) to work in this project; else a new one from the template"
-				}
-			}
-		},
-		"teams.create.result": {
-			"type": "object",
-			"required": [
-				"team"
-			],
-			"properties": {
-				"team": {
-					"type": "object",
-					"required": [
-						"id",
-						"name",
-						"slug",
-						"template",
-						"roles",
-						"style",
-						"cwd",
-						"folder",
-						"memberMode",
-						"maxParallel",
-						"tasks",
-						"nextTask",
-						"createdAt"
-					],
-					"properties": {
-						"id": {
-							"type": "string"
-						},
-						"definitionId": {
-							"type": "string"
-						},
-						"name": {
-							"type": "string"
-						},
-						"slug": {
-							"type": "string"
-						},
-						"template": {
-							"type": "string"
-						},
-						"roles": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"name",
-									"kind",
-									"responsibility"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"name": {
-										"type": "string"
-									},
-									"kind": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "write"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrate"
-											}
-										]
-									},
-									"responsibility": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"model": {
-										"type": "string"
-									},
-									"agent": {
-										"type": "string",
-										"description": "An agent this member is: its instructions, and its model when the role has none"
-									}
-								}
-							}
-						},
-						"style": {
-							"type": "string"
-						},
-						"cwd": {
-							"type": "string"
-						},
-						"folder": {
-							"type": "string"
-						},
-						"git": {
-							"type": "object",
-							"required": [
-								"base",
-								"branch",
-								"integration"
-							],
-							"properties": {
-								"base": {
-									"type": "string"
-								},
-								"branch": {
-									"type": "string"
-								},
-								"integration": {
-									"type": "string"
-								}
-							}
-						},
-						"leadSessionId": {
-							"type": "string"
-						},
-						"model": {
-							"type": "string"
-						},
-						"memberMode": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "read_only"
-								},
-								{
-									"type": "string",
-									"const": "ask"
-								},
-								{
-									"type": "string",
-									"const": "auto_edit"
-								},
-								{
-									"type": "string",
-									"const": "full_auto"
-								}
-							]
-						},
-						"maxParallel": {
-							"type": "number"
-						},
-						"testCommand": {
-							"type": "string"
-						},
-						"goal": {
-							"type": "string"
-						},
-						"tasks": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"title",
-									"brief",
-									"role",
-									"state",
-									"by",
-									"attempts",
-									"createdAt",
-									"updatedAt"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"title": {
-										"type": "string"
-									},
-									"brief": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"role": {
-										"type": "string"
-									},
-									"state": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "todo"
-											},
-											{
-												"type": "string",
-												"const": "doing"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrating"
-											},
-											{
-												"type": "string",
-												"const": "done"
-											},
-											{
-												"type": "string",
-												"const": "blocked"
-											}
-										]
-									},
-									"by": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "you"
-											}
-										]
-									},
-									"conversationId": {
-										"type": "string",
-										"description": "The lead conversation that made it"
-									},
-									"sessionId": {
-										"type": "string"
-									},
-									"reviewSessionId": {
-										"type": "string"
-									},
-									"branch": {
-										"type": "string"
-									},
-									"cwd": {
-										"type": "string"
-									},
-									"report": {
-										"type": "string"
-									},
-									"review": {
-										"type": "string"
-									},
-									"attempts": {
-										"type": "number"
-									},
-									"blocked": {
-										"type": "string"
-									},
-									"landed": {
-										"type": "string",
-										"description": "When its work was merged into the project's branch"
-									},
-									"createdAt": {
-										"type": "string"
-									},
-									"updatedAt": {
-										"type": "string"
-									}
-								}
-							}
-						},
-						"nextTask": {
-							"type": "number"
-						},
-						"reviewLimit": {
-							"type": "number"
-						},
-						"budgetPerJob": {
-							"type": "number"
-						},
-						"routines": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"on",
-									"prompt",
-									"by",
-									"createdAt",
-									"runs"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"on": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "time"
-											},
-											{
-												"type": "string",
-												"const": "folder"
-											},
-											{
-												"type": "string",
-												"const": "email"
-											},
-											{
-												"type": "string",
-												"const": "webhook"
-											}
-										]
-									},
-									"prompt": {
-										"type": "string"
-									},
-									"cron": {
-										"type": "string"
-									},
-									"at": {
-										"type": "number"
-									},
-									"tz": {
-										"type": "string"
-									},
-									"folder": {
-										"type": "string"
-									},
-									"from": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "string"
-									},
-									"by": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "you"
-											}
-										]
-									},
-									"createdAt": {
-										"type": "string"
-									},
-									"next": {
-										"type": "number",
-										"description": "time: the next fire, epoch ms"
-									},
-									"lastRun": {
-										"type": "string"
-									},
-									"runs": {
-										"type": "number"
-									},
-									"lastConversation": {
-										"type": "string"
-									},
-									"label": {
-										"type": "string",
-										"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
-									},
-									"url": {
-										"type": "string",
-										"description": "webhook: where to POST"
-									}
-								}
-							}
-						},
-						"fired": {
-							"type": "array",
-							"items": {
-								"type": "string"
-							}
-						},
-						"createdAt": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"teams.addTask.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"title",
-				"brief"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"title": {
-					"type": "string"
-				},
-				"brief": {
-					"type": "string"
-				},
-				"done": {
-					"type": "string"
-				},
-				"role": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.addTask.result": {
-			"type": "object",
-			"required": [
-				"task"
-			],
-			"properties": {
-				"task": {
-					"type": "object",
-					"required": [
-						"id",
-						"title",
-						"brief",
-						"role",
-						"state",
-						"by",
-						"attempts",
-						"createdAt",
-						"updatedAt"
-					],
-					"properties": {
-						"id": {
-							"type": "string"
-						},
-						"title": {
-							"type": "string"
-						},
-						"brief": {
-							"type": "string"
-						},
-						"done": {
-							"type": "string"
-						},
-						"role": {
-							"type": "string"
-						},
-						"state": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "todo"
-								},
-								{
-									"type": "string",
-									"const": "doing"
-								},
-								{
-									"type": "string",
-									"const": "review"
-								},
-								{
-									"type": "string",
-									"const": "integrating"
-								},
-								{
-									"type": "string",
-									"const": "done"
-								},
-								{
-									"type": "string",
-									"const": "blocked"
-								}
-							]
-						},
-						"by": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "lead"
-								},
-								{
-									"type": "string",
-									"const": "you"
-								}
-							]
-						},
-						"conversationId": {
-							"type": "string",
-							"description": "The lead conversation that made it"
-						},
-						"sessionId": {
-							"type": "string"
-						},
-						"reviewSessionId": {
-							"type": "string"
-						},
-						"branch": {
-							"type": "string"
-						},
-						"cwd": {
-							"type": "string"
-						},
-						"report": {
-							"type": "string"
-						},
-						"review": {
-							"type": "string"
-						},
-						"attempts": {
-							"type": "number"
-						},
-						"blocked": {
-							"type": "string"
-						},
-						"landed": {
-							"type": "string",
-							"description": "When its work was merged into the project's branch"
-						},
-						"createdAt": {
-							"type": "string"
-						},
-						"updatedAt": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"teams.update.params": {
-			"type": "object",
-			"required": [
-				"id"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"testCommand": {
-					"type": "string"
-				},
-				"maxParallel": {
-					"type": "number",
-					"minimum": 1,
-					"maximum": 8
-				}
-			}
-		},
-		"teams.update.result": {
-			"type": "object",
-			"required": [
-				"team"
-			],
-			"properties": {
-				"team": {
-					"type": "object",
-					"required": [
-						"id",
-						"name",
-						"slug",
-						"template",
-						"roles",
-						"style",
-						"cwd",
-						"folder",
-						"memberMode",
-						"maxParallel",
-						"tasks",
-						"nextTask",
-						"createdAt"
-					],
-					"properties": {
-						"id": {
-							"type": "string"
-						},
-						"definitionId": {
-							"type": "string"
-						},
-						"name": {
-							"type": "string"
-						},
-						"slug": {
-							"type": "string"
-						},
-						"template": {
-							"type": "string"
-						},
-						"roles": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"name",
-									"kind",
-									"responsibility"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"name": {
-										"type": "string"
-									},
-									"kind": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "write"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrate"
-											}
-										]
-									},
-									"responsibility": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"model": {
-										"type": "string"
-									},
-									"agent": {
-										"type": "string",
-										"description": "An agent this member is: its instructions, and its model when the role has none"
-									}
-								}
-							}
-						},
-						"style": {
-							"type": "string"
-						},
-						"cwd": {
-							"type": "string"
-						},
-						"folder": {
-							"type": "string"
-						},
-						"git": {
-							"type": "object",
-							"required": [
-								"base",
-								"branch",
-								"integration"
-							],
-							"properties": {
-								"base": {
-									"type": "string"
-								},
-								"branch": {
-									"type": "string"
-								},
-								"integration": {
-									"type": "string"
-								}
-							}
-						},
-						"leadSessionId": {
-							"type": "string"
-						},
-						"model": {
-							"type": "string"
-						},
-						"memberMode": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "read_only"
-								},
-								{
-									"type": "string",
-									"const": "ask"
-								},
-								{
-									"type": "string",
-									"const": "auto_edit"
-								},
-								{
-									"type": "string",
-									"const": "full_auto"
-								}
-							]
-						},
-						"maxParallel": {
-							"type": "number"
-						},
-						"testCommand": {
-							"type": "string"
-						},
-						"goal": {
-							"type": "string"
-						},
-						"tasks": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"title",
-									"brief",
-									"role",
-									"state",
-									"by",
-									"attempts",
-									"createdAt",
-									"updatedAt"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"title": {
-										"type": "string"
-									},
-									"brief": {
-										"type": "string"
-									},
-									"done": {
-										"type": "string"
-									},
-									"role": {
-										"type": "string"
-									},
-									"state": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "todo"
-											},
-											{
-												"type": "string",
-												"const": "doing"
-											},
-											{
-												"type": "string",
-												"const": "review"
-											},
-											{
-												"type": "string",
-												"const": "integrating"
-											},
-											{
-												"type": "string",
-												"const": "done"
-											},
-											{
-												"type": "string",
-												"const": "blocked"
-											}
-										]
-									},
-									"by": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "you"
-											}
-										]
-									},
-									"conversationId": {
-										"type": "string",
-										"description": "The lead conversation that made it"
-									},
-									"sessionId": {
-										"type": "string"
-									},
-									"reviewSessionId": {
-										"type": "string"
-									},
-									"branch": {
-										"type": "string"
-									},
-									"cwd": {
-										"type": "string"
-									},
-									"report": {
-										"type": "string"
-									},
-									"review": {
-										"type": "string"
-									},
-									"attempts": {
-										"type": "number"
-									},
-									"blocked": {
-										"type": "string"
-									},
-									"landed": {
-										"type": "string",
-										"description": "When its work was merged into the project's branch"
-									},
-									"createdAt": {
-										"type": "string"
-									},
-									"updatedAt": {
-										"type": "string"
-									}
-								}
-							}
-						},
-						"nextTask": {
-							"type": "number"
-						},
-						"reviewLimit": {
-							"type": "number"
-						},
-						"budgetPerJob": {
-							"type": "number"
-						},
-						"routines": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"required": [
-									"id",
-									"on",
-									"prompt",
-									"by",
-									"createdAt",
-									"runs"
-								],
-								"properties": {
-									"id": {
-										"type": "string"
-									},
-									"on": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "time"
-											},
-											{
-												"type": "string",
-												"const": "folder"
-											},
-											{
-												"type": "string",
-												"const": "email"
-											},
-											{
-												"type": "string",
-												"const": "webhook"
-											}
-										]
-									},
-									"prompt": {
-										"type": "string"
-									},
-									"cron": {
-										"type": "string"
-									},
-									"at": {
-										"type": "number"
-									},
-									"tz": {
-										"type": "string"
-									},
-									"folder": {
-										"type": "string"
-									},
-									"from": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "string"
-									},
-									"by": {
-										"anyOf": [
-											{
-												"type": "string",
-												"const": "lead"
-											},
-											{
-												"type": "string",
-												"const": "you"
-											}
-										]
-									},
-									"createdAt": {
-										"type": "string"
-									},
-									"next": {
-										"type": "number",
-										"description": "time: the next fire, epoch ms"
-									},
-									"lastRun": {
-										"type": "string"
-									},
-									"runs": {
-										"type": "number"
-									},
-									"lastConversation": {
-										"type": "string"
-									},
-									"label": {
-										"type": "string",
-										"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
-									},
-									"url": {
-										"type": "string",
-										"description": "webhook: where to POST"
-									}
-								}
-							}
-						},
-						"fired": {
-							"type": "array",
-							"items": {
-								"type": "string"
-							}
-						},
-						"createdAt": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"teams.remove.params": {
-			"type": "object",
-			"required": [
-				"id"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.remove.result": {
-			"type": "object",
-			"properties": {}
-		},
-		"teams.landing.params": {
-			"type": "object",
-			"required": [
-				"id"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.landing.result": {
-			"type": "object",
-			"required": [
-				"base",
-				"branch",
-				"ahead",
-				"behind",
-				"files",
-				"tasks",
-				"open"
-			],
-			"properties": {
-				"base": {
-					"type": "string"
-				},
-				"branch": {
-					"type": "string"
-				},
-				"ahead": {
-					"type": "number"
-				},
-				"behind": {
-					"type": "number"
-				},
-				"files": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"path",
-							"added",
-							"removed"
-						],
-						"properties": {
-							"path": {
-								"type": "string"
-							},
-							"added": {
-								"type": "number"
-							},
-							"removed": {
-								"type": "number"
-							}
-						}
-					}
-				},
-				"tasks": {
-					"type": "array",
-					"items": {
-						"type": "object",
-						"required": [
-							"id",
-							"title"
-						],
-						"properties": {
-							"id": {
-								"type": "string"
-							},
-							"title": {
-								"type": "string"
-							}
-						}
-					}
-				},
-				"open": {
-					"type": "number"
-				},
-				"checkedOut": {
-					"type": "string"
-				},
-				"remote": {
-					"type": "string"
-				},
-				"compareUrl": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.land.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"action"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"action": {
-					"anyOf": [
-						{
-							"type": "string",
-							"const": "merge"
-						},
-						{
-							"type": "string",
-							"const": "push"
-						}
-					]
-				}
-			}
-		},
-		"teams.land.result": {
-			"type": "object",
-			"properties": {
-				"commit": {
-					"type": "string"
-				},
-				"compareUrl": {
-					"type": "string"
-				},
-				"output": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.updateTask.params": {
-			"type": "object",
-			"required": [
-				"id",
-				"taskId"
-			],
-			"properties": {
-				"id": {
-					"type": "string"
-				},
-				"taskId": {
-					"type": "string"
-				},
-				"state": {
-					"anyOf": [
-						{
-							"type": "string",
-							"const": "todo"
-						},
-						{
-							"type": "string",
-							"const": "blocked"
-						},
-						{
-							"type": "string",
-							"const": "done"
-						}
-					]
-				},
-				"role": {
-					"type": "string"
-				},
-				"title": {
-					"type": "string"
-				},
-				"brief": {
-					"type": "string"
-				}
-			}
-		},
-		"teams.updateTask.result": {
-			"type": "object",
-			"properties": {}
 		},
 		"agents.runs.params": {
 			"type": "object",

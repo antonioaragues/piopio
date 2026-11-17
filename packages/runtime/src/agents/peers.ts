@@ -347,7 +347,7 @@ export class Peers {
 		});
 		const tell = defineTool({
 			name: "tell_agent",
-			description: "Tell another of the owner's agents something, without waiting for an answer (it may write back on its own).",
+			description: "Tell another of the owner's agents something it should know (a notice: “the report is ready”, “the owner is away this week”), without waiting for an answer. Not for handing it work to do: work goes to the owner, or to a project conversation with Piopio.",
 			parameters: Type.Object({ agent: agentParam, message: Type.String() }),
 			execute: async (args, api) => {
 				try {
