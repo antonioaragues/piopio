@@ -2,7 +2,8 @@
 
 Status: plan, 2026-11-10; nothing here is built yet. The design is `docs/design/agents-teams` (Claude Design: open
 `Agents and teams.dc.html` in a browser; the README is the written spec, and it wins over `docs/design/agents-brief.md`).
-It builds on 20 (projects, agents and teams) and changes some of its choices (§2).
+It builds on 20 (projects, agents and teams) and changes some of its choices (§2). **Since 2026-11-17, 26 (agents,
+clarified) replaces AD1–AD3 and AD7 and the team pages;** the agent pages, AD4–AD6, AD8 and AD9 stay.
 
 **The idea, in the design's words:** start from what you want to happen, not from which kind of object to create.
 Agents, teams and projects share one visual language: an avatar, a colour and a role verb.

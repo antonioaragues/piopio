@@ -244,6 +244,7 @@ All seven went with the proposal.
   ("in piopio, …"), the offer card carries that project's chip, which you can change or clear: a Continue-in in one
   step. Before SD3 a loose chat's side conversation stays loose.
 - SCQ6 · **In a team project, the lead decides.** Parts of the job in front of it go on the board; another subject
-  becomes a new lead conversation (PT6), offered as any side conversation is.
+  becomes a new lead conversation (PT6), offered as any side conversation is. Since 26 (2026-11-17) the lead is
+  always Piopio, so read "a project with parallel work on"; SC5's "who" is Piopio or an agent.
 - SCQ7 · **No auto-archive in v1.** A done side conversation stays until you archive it; the card in the parent stays
   the way back. Revisit after real use.

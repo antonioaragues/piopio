@@ -1,6 +1,8 @@
 # 20 · Projects, agents and teams: who works where
 
-Status: decided with the user 2026-11-10; nothing here is built yet. It reorganizes what 19 built (teams, the board,
+Status: decided with the user 2026-11-10; nothing here is built yet. **Since 2026-11-17, 26 (agents, clarified)
+replaces PT1, PT3, PT4, PT7 and PT8:** there are no teams, every project conversation is with Piopio, and PT5–PT6
+hold with Piopio as the lead. It reorganizes what 19 built (teams, the board,
 team per project, merging, routines) around one idea, and replaces 19 §4.2 ("where teams show up") and the team page
 of 19 §11. 18 (conversation first) still holds: you always start by writing, and a project is a folder.
 

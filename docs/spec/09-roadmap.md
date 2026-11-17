@@ -18,7 +18,7 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 | Track | Specs | Built | Left |
 |---|---|---|---|
 | **A · Make it real** | [status](../status.md), [acceptance](../acceptance.md) | Scripted tests, captures, one real-model team trial (20 §14) | The eight acceptance items; real providers (ChatGPT sign-in, a real Ollama/LiteLLM); real Google and Microsoft accounts; sleep/wake schedules; VoiceOver |
-| **B · Agents and teams** | 06, 19, 20, 21 | 19 T0–T2; 20 P1–P4; 21 D1–D7 | The "not yet" lists of D2–D7; the real-model trial |
+| **B · Agents and teams** | 06, 19, 20, 21, 26 | 19 T0–T2; 20 P1–P4; 21 D1–D7 | 26 **C1–C4** (teams become a project's way of working and playbooks, decided 2026-11-17); the "not yet" lists of D2–D4 |
 | **C · Conversations** | 18, 24, 17 | 18 phases 1–3 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the rest of 17 became teams, TD2). Debate (16) was removed 2026-11-15 |
 | **D · Reach** (what the model can touch) | 22, 23, 12, 10 | Connectors C1; providers P0–P1; browser **W1–W2** (22 §14–15) | Browser **W3–W4**; computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); MCP Apps (D6); image generation (D11) |
 | **E · Cloud and channels** | 13, 19 T3–T4 | Spikes S4 and S7 (go); Telegram from the Mac | 13 **5.1–5.5**: deploy, Telegram by webhook, Mac Bridge, WhatsApp. Nothing is on a real account |
@@ -31,8 +31,9 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 One build track at a time, plus Track A running beside it as use, not as building.
 
 **Now**
-1. **Finish spec 21: D5, D6, D7,** then its real-model trial. It's mid-flight: the agent pages follow the new design
-   and the team pages don't yet.
+1. **Spec 26 C1–C2** (decided 2026-11-17): one orchestrator, then teams leave the app. This replaces finishing 21's
+   team pages (D5–D7), which 26 removes; what's left of 21's agent pages (D2–D4) stays. C4, the real-model trial,
+   follows.
 2. **Track A alongside:** do the day's real work in Piopio and tick the acceptance boxes as they pass. What breaks
    goes ahead of new features.
 

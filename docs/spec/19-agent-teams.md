@@ -1,6 +1,8 @@
 # 19 — Agent teams
 
-Draft, 2026-11-09; the choices are decided (§8). Nothing here is built unless it says so. It ties together 06-agents (personal
+Draft, 2026-11-09; the choices are decided (§8). Nothing here is built unless it says so. **Since 2026-11-17, 26
+(agents, clarified) replaces teams as something you make:** TD1, TD2, TD6 and TD7 give way to helpers Piopio makes,
+a project's way of working and playbooks; the board, worktrees, review and merging stay. It ties together 06-agents (personal
 agents), 13-cloud-engine (Durable Objects, Telegram, WhatsApp), 17-dispatch (a coordinator for Build) and 18 phase 3
 (turn a conversation into an agent), which today are four separate ideas.
 
