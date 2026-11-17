@@ -540,7 +540,9 @@ final class EngineController {
     /// The model a new session of that kind starts with: the user's choice, else the chat default, else the engine's.
     func model(for role: ModelRole) -> ModelRef? {
         _ = preferenceTick
-        if let raw = UserDefaults.standard.string(forKey: role.rawValue), let i = raw.firstIndex(of: "/") {
+        // With PIOPIO_FAUX the scripted model is the only connected one: a choice saved by the real app
+        // (UserDefaults outlive a scratch PIOPIO_HOME) would fail every send.
+        if let raw = UserDefaults.standard.string(forKey: role.rawValue), let i = raw.firstIndex(of: "/"), !faux || raw[..<i] == "faux" {
             return ModelRef(provider: String(raw[..<i]), id: String(raw[raw.index(after: i)...]))
         }
         return role == .chat ? defaultModel : model(for: .chat)
