@@ -150,6 +150,10 @@ turn. A child session is for one of three reasons: the context would get too lar
 isn't a reason; that's a playbook. (Anthropic, *When to fold subagents into your main agent loop*, 2026-10-22, and
 20 §14.)
 
+**As built (2026-11-17):** `task` and side conversations share the start that doesn't block, the report bridge
+(notes that wake the parent, batched while a sibling works, the loop guard) and the live line (17 §9, 24 §10). Board
+helpers still report through the work runner's `[Board]` messages; moving them onto the same bridge is left.
+
 ### 7.2 Rules in the tools, not the prompt (added 2026-11-17)
 
 - **A report isn't proof.** Before Piopio says a helper's task is done or offers the merge card, it reads the diff and

@@ -55,7 +55,7 @@ export const ToolDetails = Type.Union([
 	/** The agent's checklist (piopio-todos). */
 	Type.Object({ type: Type.Literal("todos"), items: Type.Array(Type.Object({ text: Type.String(), status: literals("pending", "in_progress", "done") })) }),
 	/** A subagent (piopio-subagents): its child session, once started, and the outcome. */
-	Type.Object({ type: Type.Literal("task"), sessionId: Type.Optional(Type.String()), status: Type.Optional(literals("done", "error", "stopped")), costUsd: Type.Optional(Type.Number()) }),
+	Type.Object({ type: Type.Literal("task"), sessionId: Type.Optional(Type.String()), status: Type.Optional(literals("started", "queued", "done", "error", "stopped")), costUsd: Type.Optional(Type.Number()) }),
 	/** Files the agent handed over (piopio-present): where they are, what they are, and which ones don't exist. */
 	Type.Object({
 		type: Type.Literal("files"),
@@ -532,8 +532,11 @@ export const SessionSummary = Type.Object({
 	worktree: Type.Optional(WorktreeInfo),
 	/** Project sessions: the profile they were created with (04-chat P2). */
 	profile: Type.Optional(literals("build", "chat")),
-	/** A subagent's session: the parent session and the `task` call that started it. */
-	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String() })),
+	/**
+	 * A subagent's session: the parent session and the `task` call that started it; its state (queued while 3 others
+	 * of its parent run, docs/spec/17 §3) and, while it works, a line on what it's doing.
+	 */
+	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String(), state: Type.Optional(literals("queued", "working", "done", "failed", "stopped")), line: Type.Optional(Type.String()) })),
 	/** A helper's session (docs/spec/26 CL4): made by Piopio for a task on a project's board; not listed with yours. */
 	helper: Type.Optional(Type.Object({ project: Type.String(), kind: literals("build", "review"), taskId: Type.String() })),
 	/**

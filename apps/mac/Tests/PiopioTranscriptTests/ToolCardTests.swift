@@ -136,12 +136,13 @@ import Testing
 /// A side conversation's report (docs/spec/24 §5): "Message from <title> · finished", the answer under it; two at once
 /// are two rows.
 @Test @MainActor func sideNotesAreMessageRows() {
-    let one = ItemRenderer.sideNotes("“About page” (ses_1) finished. Its work is on side/about-1, not in this checkout until the user merges it.\n\n> Added about.html.\n> Checked it.")
+    let one = ItemRenderer.sideNotes("[Side] “About page” (ses_1) finished. Its work is on side/about-1, not in this checkout until the user merges it.\n\n> Added about.html.\n> Checked it.")
     #expect(one.count == 1)
     #expect(one[0].title == "Message from About page · finished")
     #expect(one[0].body.contains("Added about.html.\nChecked it."))
-    let two = ItemRenderer.sideNotes("“A” (ses_1) finished.\n\n> a\n\n[Side] “B” (ses_2) needs the user: it's waiting for an approval there.")
-    #expect(two.map(\.title) == ["Message from A · finished", "Message from B · needs the user"])
+    let two = ItemRenderer.sideNotes("[Side] “A” (ses_1) finished.\n\n> a\n\n[Task] “B” (ses_2) was stopped.")
+    #expect(two.map(\.title) == ["Message from A · finished", "Result from B · was stopped"])
+    #expect(two[0].body == "a")
     let rendered = ItemRenderer().render(.user(UserItem(id: "u1", at: "", text: "[Side] “A” (ses_1) finished.\n\n> a")))
     #expect(!rendered.string.contains("[Side]"))
 }

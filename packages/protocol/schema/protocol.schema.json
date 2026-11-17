@@ -489,6 +489,14 @@
 											"anyOf": [
 												{
 													"type": "string",
+													"const": "started"
+												},
+												{
+													"type": "string",
+													"const": "queued"
+												},
+												{
+													"type": "string",
 													"const": "done"
 												},
 												{
@@ -1052,6 +1060,14 @@
 													},
 													"status": {
 														"anyOf": [
+															{
+																"type": "string",
+																"const": "started"
+															},
+															{
+																"type": "string",
+																"const": "queued"
+															},
 															{
 																"type": "string",
 																"const": "done"
@@ -2352,6 +2368,14 @@
 															"anyOf": [
 																{
 																	"type": "string",
+																	"const": "started"
+																},
+																{
+																	"type": "string",
+																	"const": "queued"
+																},
+																{
+																	"type": "string",
 																	"const": "done"
 																},
 																{
@@ -2915,6 +2939,14 @@
 																	},
 																	"status": {
 																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "started"
+																			},
+																			{
+																				"type": "string",
+																				"const": "queued"
+																			},
 																			{
 																				"type": "string",
 																				"const": "done"
@@ -3954,6 +3986,14 @@
 															"anyOf": [
 																{
 																	"type": "string",
+																	"const": "started"
+																},
+																{
+																	"type": "string",
+																	"const": "queued"
+																},
+																{
+																	"type": "string",
 																	"const": "done"
 																},
 																{
@@ -4517,6 +4557,14 @@
 																	},
 																	"status": {
 																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "started"
+																			},
+																			{
+																				"type": "string",
+																				"const": "queued"
+																			},
 																			{
 																				"type": "string",
 																				"const": "done"
@@ -5536,6 +5584,14 @@
 															"anyOf": [
 																{
 																	"type": "string",
+																	"const": "started"
+																},
+																{
+																	"type": "string",
+																	"const": "queued"
+																},
+																{
+																	"type": "string",
 																	"const": "done"
 																},
 																{
@@ -6099,6 +6155,14 @@
 																	},
 																	"status": {
 																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "started"
+																			},
+																			{
+																				"type": "string",
+																				"const": "queued"
+																			},
 																			{
 																				"type": "string",
 																				"const": "done"
@@ -7453,6 +7517,14 @@
 																		"anyOf": [
 																			{
 																				"type": "string",
+																				"const": "started"
+																			},
+																			{
+																				"type": "string",
+																				"const": "queued"
+																			},
+																			{
+																				"type": "string",
 																				"const": "done"
 																			},
 																			{
@@ -8016,6 +8088,14 @@
 																				},
 																				"status": {
 																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "started"
+																						},
+																						{
+																							"type": "string",
+																							"const": "queued"
+																						},
 																						{
 																							"type": "string",
 																							"const": "done"
@@ -9351,6 +9431,14 @@
 														"anyOf": [
 															{
 																"type": "string",
+																"const": "started"
+															},
+															{
+																"type": "string",
+																"const": "queued"
+															},
+															{
+																"type": "string",
 																"const": "done"
 															},
 															{
@@ -9914,6 +10002,14 @@
 																},
 																"status": {
 																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "started"
+																		},
+																		{
+																			"type": "string",
+																			"const": "queued"
+																		},
 																		{
 																			"type": "string",
 																			"const": "done"
@@ -10870,6 +10966,33 @@
 						},
 						"callId": {
 							"type": "string"
+						},
+						"state": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "queued"
+								},
+								{
+									"type": "string",
+									"const": "working"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								},
+								{
+									"type": "string",
+									"const": "stopped"
+								}
+							]
+						},
+						"line": {
+							"type": "string"
 						}
 					}
 				},
@@ -11638,6 +11761,14 @@
 																		"anyOf": [
 																			{
 																				"type": "string",
+																				"const": "started"
+																			},
+																			{
+																				"type": "string",
+																				"const": "queued"
+																			},
+																			{
+																				"type": "string",
 																				"const": "done"
 																			},
 																			{
@@ -12201,6 +12332,14 @@
 																				},
 																				"status": {
 																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "started"
+																						},
+																						{
+																							"type": "string",
+																							"const": "queued"
+																						},
 																						{
 																							"type": "string",
 																							"const": "done"
@@ -13240,6 +13379,14 @@
 																		"anyOf": [
 																			{
 																				"type": "string",
+																				"const": "started"
+																			},
+																			{
+																				"type": "string",
+																				"const": "queued"
+																			},
+																			{
+																				"type": "string",
 																				"const": "done"
 																			},
 																			{
@@ -13803,6 +13950,14 @@
 																				},
 																				"status": {
 																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "started"
+																						},
+																						{
+																							"type": "string",
+																							"const": "queued"
+																						},
 																						{
 																							"type": "string",
 																							"const": "done"
@@ -14822,6 +14977,14 @@
 																		"anyOf": [
 																			{
 																				"type": "string",
+																				"const": "started"
+																			},
+																			{
+																				"type": "string",
+																				"const": "queued"
+																			},
+																			{
+																				"type": "string",
 																				"const": "done"
 																			},
 																			{
@@ -15385,6 +15548,14 @@
 																				},
 																				"status": {
 																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "started"
+																						},
+																						{
+																							"type": "string",
+																							"const": "queued"
+																						},
 																						{
 																							"type": "string",
 																							"const": "done"
@@ -16739,6 +16910,14 @@
 																					"anyOf": [
 																						{
 																							"type": "string",
+																							"const": "started"
+																						},
+																						{
+																							"type": "string",
+																							"const": "queued"
+																						},
+																						{
+																							"type": "string",
 																							"const": "done"
 																						},
 																						{
@@ -17302,6 +17481,14 @@
 																							},
 																							"status": {
 																								"anyOf": [
+																									{
+																										"type": "string",
+																										"const": "started"
+																									},
+																									{
+																										"type": "string",
+																										"const": "queued"
+																									},
 																									{
 																										"type": "string",
 																										"const": "done"
@@ -18347,6 +18534,33 @@
 									},
 									"callId": {
 										"type": "string"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "queued"
+											},
+											{
+												"type": "string",
+												"const": "working"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											},
+											{
+												"type": "string",
+												"const": "stopped"
+											}
+										]
+									},
+									"line": {
+										"type": "string"
 									}
 								}
 							},
@@ -18944,6 +19158,33 @@
 										"type": "string"
 									},
 									"callId": {
+										"type": "string"
+									},
+									"state": {
+										"anyOf": [
+											{
+												"type": "string",
+												"const": "queued"
+											},
+											{
+												"type": "string",
+												"const": "working"
+											},
+											{
+												"type": "string",
+												"const": "done"
+											},
+											{
+												"type": "string",
+												"const": "failed"
+											},
+											{
+												"type": "string",
+												"const": "stopped"
+											}
+										]
+									},
+									"line": {
 										"type": "string"
 									}
 								}
@@ -20044,6 +20285,14 @@
 														"anyOf": [
 															{
 																"type": "string",
+																"const": "started"
+															},
+															{
+																"type": "string",
+																"const": "queued"
+															},
+															{
+																"type": "string",
 																"const": "done"
 															},
 															{
@@ -20607,6 +20856,14 @@
 																},
 																"status": {
 																	"anyOf": [
+																		{
+																			"type": "string",
+																			"const": "started"
+																		},
+																		{
+																			"type": "string",
+																			"const": "queued"
+																		},
 																		{
 																			"type": "string",
 																			"const": "done"
@@ -21990,6 +22247,14 @@
 																"anyOf": [
 																	{
 																		"type": "string",
+																		"const": "started"
+																	},
+																	{
+																		"type": "string",
+																		"const": "queued"
+																	},
+																	{
+																		"type": "string",
 																		"const": "done"
 																	},
 																	{
@@ -22553,6 +22818,14 @@
 																		},
 																		"status": {
 																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "started"
+																				},
+																				{
+																					"type": "string",
+																					"const": "queued"
+																				},
 																				{
 																					"type": "string",
 																					"const": "done"

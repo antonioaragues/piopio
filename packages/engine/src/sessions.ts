@@ -159,6 +159,9 @@ export class Sessions {
 				delete (e as { projectId?: string }).projectId;
 				// Debates are gone (2026-11-15): a debate thread opens as a chat with its author.
 				delete (e as { debate?: unknown }).debate;
+				// A side conversation or subagent the engine stopped in the middle of (a quit, a crash) won't go on by itself.
+				if (e.side && (e.side.state === "working" || e.side.state === "queued")) e.side.state = "stopped";
+				if (e.parent?.state === "working" || e.parent?.state === "queued") e.parent.state = "stopped";
 				this.entries.set(e.ref.id, e);
 			}
 		}
@@ -493,7 +496,7 @@ export class Sessions {
 			this.open.set(ref.id, pending);
 			pending.catch(() => this.open.delete(ref.id));
 			// A side conversation reports to its parent whenever it's open (docs/spec/24 §5).
-			if (entry.side) void pending.then((runtime) => this.watchSide(entry, runtime)).catch(() => undefined);
+			if (entry.side || entry.parent) void pending.then((runtime) => this.watchChild(entry, runtime)).catch(() => undefined);
 		}
 		return pending;
 	}
@@ -592,13 +595,111 @@ export class Sessions {
 		return ref;
 	}
 
-	// ── Subagents (piopio-subagents) ─────────────────────────────────────────
+	// ── Subagents (piopio-subagents, docs/spec/17 §3) ──────────────────────────
 
+	/** Claude Code / Codex tasks running per parent (they wait for a slot; Piopio's own subagents are counted by state). */
 	private subagents = new Map<string, { running: number; waiting: (() => void)[] }>();
+	/** A blocking `task`'s progress lines, `task_wait`'s waiters, and results nobody has collected yet, by child id. */
+	private readonly taskProgress = new Map<string, (line: string) => void>();
+	private readonly taskWaiters = new Map<string, ((result: TaskResult) => void)[]>();
+	private readonly taskResults = new Map<string, TaskResult>();
 
 	/**
-	 * Runs a `task` as a child Build session (same folder, model and approval mode), one level deep,
-	 * at most MAX_SUBAGENTS at a time per parent. Its final answer goes back to the parent.
+	 * Starts a `task` as a child Build session (same folder, model and approval mode), one level deep, and returns at
+	 * once. Past MAX_SUBAGENTS working for one parent it waits as queued. Its result goes back to the parent as a
+	 * `[Task]` note (the side conversations' bridge, 26 §7.1), unless `task_wait` collects it.
+	 */
+	async startTask(parentRef: ContainerRef, task: { callId: string; description: string; prompt: string }): Promise<{ sessionId: string; queued: boolean }> {
+		const parent = this.entry(parentRef);
+		const working = this.childrenOf(parent.ref.id).filter((c) => c.parent && c.parent.state === "working").length;
+		// A child never gets more than its parent: the same profile (a Chat-lens parent has no bash) and the same tools
+		// turned off (see `toolsOff` in build(), which also follows later changes to the parent).
+		const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
+		const child = this.entry(ref);
+		child.parent = { id: parent.ref.id, callId: task.callId, state: working >= MAX_SUBAGENTS ? "queued" : "working" };
+		if (parent.toolsOff?.length) child.toolsOff = [...parent.toolsOff];
+		if (parent.projectPath) child.projectPath = parent.projectPath;
+		if (child.parent.state === "queued") child.sideBrief = task.prompt;
+		this.save();
+		this.changed(child);
+		if (child.parent.state === "working") await this.childSubmit(child, task.prompt);
+		return { sessionId: ref.id, queued: child.parent.state === "queued" };
+	}
+
+	/** One of `parent`'s subagents, or an error for the model. */
+	private ownTask(parent: CatalogEntry, id: string): CatalogEntry {
+		const child = this.entries.get(id);
+		if (!child || child.parent?.id !== parent.ref.id) throw new EngineError("NOT_FOUND", `${id} isn't one of this conversation's subagents.`);
+		return child;
+	}
+
+	/** `task_wait`: their results, as each finishes. A waited-for result doesn't also come back as a note. */
+	async waitTasks(parentRef: ContainerRef, ids: readonly string[], signal?: AbortSignal): Promise<TaskResult[]> {
+		const parent = this.entry(parentRef);
+		const children = ids.map((id) => this.ownTask(parent, id));
+		return Promise.all(
+			children.map(async (child) => {
+				const kept = this.taskResults.get(child.ref.id);
+				if (kept) {
+					this.taskResults.delete(child.ref.id);
+					return kept;
+				}
+				if (child.parent!.state !== "working" && child.parent!.state !== "queued") return this.taskResultOf(child, await this.runtime(child.ref));
+				return new Promise<TaskResult>((resolve, reject) => {
+					this.taskWaiters.set(child.ref.id, [...(this.taskWaiters.get(child.ref.id) ?? []), resolve]);
+					signal?.addEventListener("abort", () => reject(new Error("Stopped waiting.")), { once: true });
+				});
+			}),
+		);
+	}
+
+	/** `task_stop`: a queued one won't start; a working one's turn stops. */
+	async stopTask(parentRef: ContainerRef, id: string): Promise<string> {
+		const child = this.ownTask(this.entry(parentRef), id);
+		if (child.parent!.state === "queued") {
+			delete child.sideBrief;
+			this.setChildState(child, "stopped");
+			return `${id} won't start.`;
+		}
+		await (await this.runtime(child.ref)).abort();
+		return `Stopped ${id}.`;
+	}
+
+	private taskResultOf(child: CatalogEntry, runtime: Runtime): TaskResult {
+		const snap = runtime.snapshot();
+		const last = [...snap.items].reverse().find((i) => i.kind === "assistant");
+		const text = last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
+		const status = last?.kind === "assistant" && last.status === "aborted" ? "stopped" : last?.kind === "assistant" && last.status === "error" ? "error" : "done";
+		return { text: status === "error" && last?.kind === "assistant" ? (last.error ?? text) : text, sessionId: child.ref.id, costUsd: snap.state.usage.costUsd, status };
+	}
+
+	/** A subagent's turn ended: its result to whoever waits for it, else a [Task] note; the next queued one starts. */
+	private async taskSettled(child: CatalogEntry, runtime: Runtime): Promise<void> {
+		const result = this.taskResultOf(child, runtime);
+		this.setChildState(child, result.status === "error" ? "failed" : result.status);
+		const waiters = this.taskWaiters.get(child.ref.id);
+		if (waiters?.length) {
+			this.taskWaiters.delete(child.ref.id);
+			for (const w of waiters) w(result);
+		} else {
+			this.taskResults.set(child.ref.id, result);
+			const word = result.status === "done" ? "finished" : result.status === "error" ? "failed" : "was stopped";
+			const text = result.text.length > 8000 ? `${result.text.slice(0, 8000).trimEnd()}… (read the rest with read_conversation ${child.ref.id})` : result.text;
+			await this.reportToParent(child, `[Task] “${child.title}” (${child.ref.id}) ${word}.${result.costUsd ? ` It cost $${result.costUsd.toFixed(2)}.` : ""}${text.trim() ? `\n\n${text.trim().split("\n").map((l) => `> ${l}`).join("\n")}` : ""}`, `Result from ${child.title} · ${result.status === "error" ? "failed" : result.status}`);
+		}
+		const parentId = child.parent!.id;
+		const next = this.childrenOf(parentId).find((c) => c.parent?.state === "queued");
+		if (next && this.childrenOf(parentId).filter((c) => c.parent?.state === "working").length < MAX_SUBAGENTS) {
+			const prompt = next.sideBrief ?? next.title;
+			delete next.sideBrief;
+			this.setChildState(next, "working");
+			await this.childSubmit(next, prompt);
+		}
+	}
+
+	/**
+	 * A `task` that waits (`wait: true`, Claude Code, Codex): runs it to completion. Piopio's own go through
+	 * startTask and wait for it, with their progress on the card.
 	 */
 	private async runTask(
 		parent: CatalogEntry,
@@ -607,61 +708,36 @@ export class Sessions {
 		onStart: (sessionId: string) => void,
 		onProgress: (line: string) => void,
 	): Promise<TaskResult> {
-		const slot = this.subagents.get(parent.ref.id) ?? { running: 0, waiting: [] };
-		this.subagents.set(parent.ref.id, slot);
-		if (slot.running >= MAX_SUBAGENTS) {
-			onProgress("Waiting for another subagent to finish…");
-			await new Promise<void>((resolve) => slot.waiting.push(resolve));
-		}
-		slot.running++;
-		try {
-			// Claude Code / Codex (external-agents.ts): the user's own CLI, in this folder, with the session's mode.
-			if (task.agent === "claude" || task.agent === "codex") {
+		// Claude Code / Codex (external-agents.ts): the user's own CLI, in this folder, with the session's mode.
+		if (task.agent === "claude" || task.agent === "codex") {
+			const slot = this.subagents.get(parent.ref.id) ?? { running: 0, waiting: [] };
+			this.subagents.set(parent.ref.id, slot);
+			if (slot.running >= MAX_SUBAGENTS) {
+				onProgress("Waiting for another subagent to finish…");
+				await new Promise<void>((resolve) => slot.waiting.push(resolve));
+			}
+			slot.running++;
+			try {
 				const path = this.findExternal(task.agent);
 				if (!path) return { text: `${AGENT_NAMES[task.agent]} isn't installed on this Mac.`, sessionId: "", costUsd: 0, status: "error" };
 				return await runExternalAgent(task.agent, { path, cwd: parent.cwd!, prompt: task.prompt, mode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), ...(signal ? { signal } : {}), onProgress });
-			}
-			// A child never gets more than its parent: the same profile (a Chat-lens parent has no bash) and the
-			// same tools turned off (see `toolsOff` in build(), which also follows later changes to the parent).
-			const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
-			const child = this.entry(ref);
-			child.parent = { id: parent.ref.id, callId: task.callId };
-			if (parent.toolsOff?.length) child.toolsOff = [...parent.toolsOff];
-			if (parent.projectPath) child.projectPath = parent.projectPath;
-			this.save();
-			this.changed(child);
-			onStart(ref.id);
-			const runtime = await this.build(ref);
-			let started = false;
-			let off = () => {};
-			const settled = new Promise<void>((resolve) => {
-				off = runtime.onEvents((events) => {
-					for (const e of events) {
-						if ((e.type === "item.added" || e.type === "item.updated") && e.item.kind === "tool" && e.item.status === "running") onProgress(progressLine(e.item.tool, e.item.args));
-						if (e.type === "state" && e.state.status === "waiting_approval") onProgress("Waiting for your approval in the subagent…");
-						if (e.type === "state" && e.state.status === "running") started = true;
-						if (e.type === "state" && e.state.status === "idle" && started) resolve();
-					}
-				});
-			});
-			const stop = () => void runtime.abort();
-			signal?.addEventListener("abort", stop, { once: true });
-			try {
-				await runtime.submit(task.prompt, { whenBusy: "reject" });
-				this.touch(ref);
-				await settled;
 			} finally {
-				off();
-				signal?.removeEventListener("abort", stop);
+				slot.running--;
+				slot.waiting.shift()?.();
 			}
-			const snap = runtime.snapshot();
-			const last = [...snap.items].reverse().find((i) => i.kind === "assistant");
-			const text = last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
-			const status = signal?.aborted || last?.status === "aborted" ? "stopped" : last?.status === "error" ? "error" : "done";
-			return { text: status === "error" ? (last?.kind === "assistant" ? (last.error ?? text) : text) : text, sessionId: ref.id, costUsd: snap.state.usage.costUsd, status };
+		}
+		const { sessionId, queued } = await this.startTask(parent.ref, task);
+		onStart(sessionId);
+		if (queued) onProgress("Waiting for another subagent to finish…");
+		this.taskProgress.set(sessionId, onProgress);
+		const stop = () => void this.stopTask(parent.ref, sessionId).catch(() => undefined);
+		signal?.addEventListener("abort", stop, { once: true });
+		try {
+			const [result] = await this.waitTasks(parent.ref, [sessionId]);
+			return result!;
 		} finally {
-			slot.running--;
-			slot.waiting.shift()?.();
+			this.taskProgress.delete(sessionId);
+			signal?.removeEventListener("abort", stop);
 		}
 	}
 
@@ -1273,53 +1349,74 @@ export class Sessions {
 		if (child.side.state === "queued") child.sideBrief = opening;
 		this.save();
 		this.changed(child);
-		if (child.side.state === "working") await this.sideSubmit(child, opening);
+		if (child.side.state === "working") await this.childSubmit(child, opening);
 		return child;
 	}
 
-	private async sideSubmit(child: CatalogEntry, text: string): Promise<void> {
+	// ── Children: side conversations and subagents share one bridge (docs/spec/26 §7.1) ──
+
+	/** A side conversation's or a subagent's parent. */
+	private parentIdOf(e: CatalogEntry): string | undefined {
+		return e.side?.parent.id ?? e.parent?.id;
+	}
+
+	/** A conversation's side conversations and subagents. */
+	private childrenOf(parentId: string): CatalogEntry[] {
+		return [...this.entries.values()].filter((e) => this.parentIdOf(e) === parentId);
+	}
+
+	private async childSubmit(child: CatalogEntry, text: string): Promise<void> {
 		const runtime = await this.runtime(child.ref);
-		this.watchSide(child, runtime);
+		this.watchChild(child, runtime);
 		await runtime.submit(text, { whenBusy: "followUp" });
 		this.touch(child.ref, text);
 	}
 
-	private readonly sideWatched = new WeakSet<Runtime>();
+	private readonly childWatched = new WeakSet<Runtime>();
 
-	/** Follows a side conversation's turns: its live line, and a note to its parent when a turn ends or it needs you. */
-	private watchSide(child: CatalogEntry, runtime: Runtime): void {
-		if (this.sideWatched.has(runtime)) return;
-		this.sideWatched.add(runtime);
+	/** Follows a child's turns: its live line, its state, and its report to the parent when a turn ends or it needs you. */
+	private watchChild(child: CatalogEntry, runtime: Runtime): void {
+		if (this.childWatched.has(runtime)) return;
+		this.childWatched.add(runtime);
 		let started = runtime.snapshot().state.status === "running";
 		let lineAt = 0;
 		runtime.onEvents((events) => {
 			for (const e of events) {
-				const side = child.side;
-				if (!side) return;
-				if ((e.type === "item.added" || e.type === "item.updated") && e.item.kind === "tool" && e.item.status === "running" && Date.now() - lineAt > 1000) {
-					lineAt = Date.now();
-					side.line = progressLine(e.item.tool, e.item.args);
-					this.changed(child);
+				const link = child.side ?? child.parent;
+				if (!link) return;
+				if ((e.type === "item.added" || e.type === "item.updated") && e.item.kind === "tool" && e.item.status === "running") {
+					const line = progressLine(e.item.tool, e.item.args);
+					this.taskProgress.get(child.ref.id)?.(line);
+					if (Date.now() - lineAt > 1000) {
+						lineAt = Date.now();
+						link.line = line;
+						this.changed(child);
+					}
 				}
+				if (e.type === "state" && e.state.status === "waiting_approval") this.taskProgress.get(child.ref.id)?.("Waiting for your approval in the subagent…");
 				if (e.type !== "state") continue;
 				if (e.state.status === "running" && !started) {
 					started = true;
-					this.setSideState(child, "working");
-				} else if (e.state.status === "waiting_approval" && side.state !== "needs_you") {
-					this.setSideState(child, "needs_you");
-					void this.sideNote(child, `[Side] “${child.title}” (${child.ref.id}) needs the user: it's waiting for an approval there.`, `Message from ${child.title} · needs you`).catch(() => undefined);
+					this.setChildState(child, "working");
+				} else if (e.state.status === "waiting_approval" && child.side && child.side.state !== "needs_you") {
+					this.setChildState(child, "needs_you");
+					void this.reportToParent(child, `[Side] “${child.title}” (${child.ref.id}) needs the user: it's waiting for an approval there.`, `Message from ${child.title} · needs you`).catch(() => undefined);
 				} else if (e.state.status === "idle" && started) {
 					started = false;
-					void this.sideSettled(child, runtime).catch(() => undefined);
+					void (child.side ? this.sideSettled(child, runtime) : this.taskSettled(child, runtime)).catch(() => undefined);
 				}
 			}
 		});
 	}
 
-	private setSideState(child: CatalogEntry, state: NonNullable<CatalogEntry["side"]>["state"]): void {
-		if (!child.side) return;
-		child.side.state = state;
-		if (state !== "working") delete child.side.line;
+	private setChildState(child: CatalogEntry, state: NonNullable<CatalogEntry["side"]>["state"]): void {
+		if (child.side) {
+			child.side.state = state;
+			if (state !== "working") delete child.side.line;
+		} else if (child.parent && state !== "needs_you") {
+			child.parent.state = state;
+			if (state !== "working") delete child.parent.line;
+		} else return;
 		this.save();
 		this.changed(child);
 	}
@@ -1330,31 +1427,32 @@ export class Sessions {
 		const last = [...snap.items].reverse().find((i) => i.kind === "assistant");
 		const answer = last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("").trim() : "";
 		const state = last?.kind === "assistant" && last.status === "error" ? "failed" : last?.kind === "assistant" && last.status === "aborted" ? "stopped" : "done";
-		this.setSideState(child, state);
+		this.setChildState(child, state);
 		const word = state === "done" ? "finished" : state === "failed" ? "failed" : "was stopped";
 		const cut = answer.length > 400 ? `${answer.slice(0, 400).trimEnd()}…` : answer;
 		const branch = child.worktree && !child.worktree.finished ? ` Its work is on ${child.worktree.branch}, not in this checkout until the user merges it.` : "";
 		const cost = snap.state.usage?.costUsd ? ` It cost $${snap.state.usage.costUsd.toFixed(2)}.` : "";
-		await this.sideNote(child, `[Side] “${child.title}” (${child.ref.id}) ${word}.${branch}${cost}${cut ? `\n\n${cut.split("\n").map((l) => `> ${l}`).join("\n")}` : ""}`, `Message from ${child.title} · ${state}`);
+		await this.reportToParent(child, `[Side] “${child.title}” (${child.ref.id}) ${word}.${branch}${cost}${cut ? `\n\n${cut.split("\n").map((l) => `> ${l}`).join("\n")}` : ""}`, `Message from ${child.title} · ${state}`);
 		const parentId = child.side!.parent.id;
 		const next = this.sidesOf(parentId).find((s) => s.side!.state === "queued");
 		if (next && this.sidesOf(parentId).filter((s) => s.side!.state === "working").length < SIDE_MAX) {
 			const brief = next.sideBrief ?? next.title;
 			delete next.sideBrief;
-			this.setSideState(next, "working");
-			await this.sideSubmit(next, brief);
+			this.setChildState(next, "working");
+			await this.childSubmit(next, brief);
 		}
 	}
 
 	/**
-	 * A note to the parent (SC7). It wakes the parent (a follow-up message) unless you drove that turn yourself, the
-	 * parent has been woken WAKE_LIMIT times in a row without you, or a sibling is still working (then it waits for
-	 * the sibling, so a burst costs one turn). A note that doesn't wake is shown and read on the parent's next turn.
+	 * A child's report to its parent (docs/spec/24 SC7, 17 §3). It wakes the parent (a follow-up message) unless you
+	 * drove that turn yourself, the parent has been woken WAKE_LIMIT times in a row without you, waking is off for side
+	 * conversations, or another child of the parent is still working (then it waits for it, so a burst costs one turn).
+	 * A report that doesn't wake is shown and read on the parent's next turn.
 	 */
-	private async sideNote(child: CatalogEntry, text: string, summary: string): Promise<void> {
-		const parent = this.entries.get(child.side?.parent.id ?? "");
+	private async reportToParent(child: CatalogEntry, text: string, summary: string): Promise<void> {
+		const parent = this.entries.get(this.parentIdOf(child) ?? "");
 		if (!parent) return;
-		const quiet = child.sideBy === "you" || (parent.sideWoke ?? 0) >= WAKE_LIMIT || this.chat?.settings.get().chat.sideWake === false;
+		const quiet = child.sideBy === "you" || (parent.sideWoke ?? 0) >= WAKE_LIMIT || (!!child.side && this.chat?.settings.get().chat.sideWake === false);
 		if (quiet) {
 			const runtime = await this.runtime(parent.ref);
 			if (runtime instanceof BuildRuntime) await runtime.sideNote(text, summary);
@@ -1362,7 +1460,7 @@ export class Sessions {
 		}
 		parent.sidePending = [...(parent.sidePending ?? []), text];
 		this.save();
-		if (this.sidesOf(parent.ref.id).some((s) => s !== child && s.side!.state === "working")) return;
+		if (this.childrenOf(parent.ref.id).some((c) => c !== child && (c.side?.state === "working" || c.parent?.state === "working"))) return;
 		const notes = parent.sidePending;
 		parent.sidePending = [];
 		parent.sideWoke = (parent.sideWoke ?? 0) + 1;
@@ -1403,7 +1501,7 @@ export class Sessions {
 	/** Whether the turn now running began with your own words (not a note, the board or a routine). */
 	private async yourTurn(entry: CatalogEntry): Promise<boolean> {
 		const user = [...(await this.runtime(entry.ref)).snapshot().items].reverse().find((i) => i.kind === "user");
-		return !!user && user.kind === "user" && !/^\[(Side|Board|Routine)\]/.test(user.text);
+		return !!user && user.kind === "user" && !/^\[(Side|Task|Board|Routine)\]/.test(user.text);
 	}
 
 	/**
@@ -1496,7 +1594,7 @@ export class Sessions {
 					this.save();
 					return `Added to ${id}'s brief; it starts when there's room.`;
 				}
-				await this.sideSubmit(child, message);
+				await this.childSubmit(child, message);
 				return `Sent to ${id}.`;
 			},
 			read: async (id, from = 0) => {
@@ -1521,7 +1619,7 @@ export class Sessions {
 				const child = this.ownSide(entry, id);
 				if (child.side!.state === "queued") {
 					delete child.sideBrief;
-					this.setSideState(child, "stopped");
+					this.setChildState(child, "stopped");
 					return `${id} won't start.`;
 				}
 				await (await this.runtime(child.ref)).abort();
@@ -1879,7 +1977,13 @@ export class Sessions {
 					this.save();
 				},
 			},
-			...(entry.parent || entry.helper ? {} : { runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress), externalAgents: this.externalAgents() }),
+			...(entry.parent || entry.helper
+				? {}
+				: {
+						runTask: (task, signal, onStart, onProgress) => this.runTask(entry, task, signal, onStart, onProgress),
+						tasks: { start: (task) => this.startTask(entry.ref, task), wait: (ids, signal) => this.waitTasks(entry.ref, ids, signal), stop: (id) => this.stopTask(entry.ref, id) },
+						externalAgents: this.externalAgents(),
+					}),
 			// The board (docs/spec/26): Piopio's tools where parallel work is on, a reviewer's verdict.
 			...(entry.helper?.kind === "review" && this.work ? { board: this.boardBridge(entry, "review") } : {}),
 			// Piopio's board tools are declared each turn only while parallel work is on in the project (work/extension.ts).

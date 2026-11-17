@@ -34,8 +34,8 @@ One build track at a time, plus Track A running beside it as use, not as buildin
 conversations SD1–SD3 (24 §10–§11). C4, the real-model trial, is still to run.
 
 **Now**
-1. **Non-blocking `task` DP4** (17 §3), on the report bridge side conversations use, so `task`, board helpers and side
-   conversations are one mechanism (26 §7.1). Then **Watchdog DP1** (17 §4).
+1. **Watchdog DP1** (17 §4). Non-blocking `task` DP4 is built (17 §9), on the report bridge side conversations use
+   (26 §7.1).
 2. **Track A alongside:** do the day's real work in Piopio and tick the acceptance boxes as they pass, C4 among them.
    What breaks goes ahead of new features.
 

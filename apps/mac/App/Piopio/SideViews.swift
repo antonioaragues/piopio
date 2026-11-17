@@ -49,17 +49,23 @@ struct SideConversations: View {
         return (me?.sideProposals ?? []).filter { (Self.iso.date(from: $0.expiresAt) ?? .distantFuture) > Date() }
     }
 
+    /// Subagents still at work (docs/spec/17 §3): their results come back as [Task] rows; finished ones leave here.
+    private var subagents: [SessionSummary] {
+        engine.buildSessions.filter { $0.parent?.id == parentId && ($0.parent?.state == "working" || $0.parent?.state == "queued") }.sorted { $0.createdAt < $1.createdAt }
+    }
+
     var body: some View {
         let sides = engine.sides(of: parentId)
         let proposals = proposals
-        if !sides.isEmpty || !proposals.isEmpty {
+        let subagents = subagents
+        if !sides.isEmpty || !proposals.isEmpty || !subagents.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
                             .rotationEffect(.degrees(open ? 90 : 0))
-                        Text("Side conversations").font(.system(size: 12.5, weight: .semibold))
-                        Text([sides.isEmpty ? nil : Self.summary(sides), proposals.isEmpty ? nil : "\(proposals.count) proposed"].compactMap { $0 }.joined(separator: " · "))
+                        Text(sides.isEmpty && proposals.isEmpty ? "Subagents" : "Side conversations").font(.system(size: 12.5, weight: .semibold))
+                        Text([sides.isEmpty ? nil : Self.summary(sides), proposals.isEmpty ? nil : "\(proposals.count) proposed", subagents.isEmpty ? nil : "\(subagents.count) subagent\(subagents.count == 1 ? "" : "s") running"].compactMap { $0 }.joined(separator: " · "))
                             .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                         Spacer()
                     }
@@ -71,6 +77,7 @@ struct SideConversations: View {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(sides, id: \.ref.id) { row($0) }
                         ForEach(proposals) { proposal($0) }
+                        ForEach(subagents, id: \.ref.id) { subagent($0) }
                     }
                     .padding(.bottom, 6)
                     if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn).padding(.horizontal, 12).padding(.bottom, 8) }
@@ -126,6 +133,23 @@ struct SideConversations: View {
             Button("Dismiss") { answer(p.id, "dismiss") }.buttonStyle(PillStyle(compact: true))
         }
         .padding(.horizontal, 12).padding(.vertical, 5)
+    }
+
+    /// A subagent at work: its title and what it's doing; it opens its session.
+    private func subagent(_ s: SessionSummary) -> some View {
+        Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.session(s.ref.id).raw) } label: {
+            HStack(spacing: 10) {
+                if s.parent?.state == "working" { ProgressView().controlSize(.mini).frame(width: 7, height: 7) } else { Circle().fill(Color.dsFg3).frame(width: 7, height: 7) }
+                Text("Subagent").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                Text(s.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                Text(s.parent?.state == "queued" ? "queued" : (s.parent?.line ?? "working")).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                Spacer(minLength: 8)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open it")
+        .padding(.horizontal, 12).padding(.vertical, 4)
     }
 
     private func answer(_ id: String, _ choice: String) {

@@ -503,7 +503,8 @@ function scriptedTools(text: string): { name: string; args: Record<string, unkno
 			calls.push({ name: "propose_plan", args: { summary, steps } });
 		} else if (line.startsWith("task: ")) {
 			const [description, ...prompt] = parts(line.slice(6));
-			calls.push({ name: "task", args: { description, prompt: prompt.join(" | ").replaceAll(" ; ", "\n") } });
+			// The shorthand waits for its answer (the blocking `task`); `call: task | {…}` scripts the non-blocking one.
+			calls.push({ name: "task", args: { description, prompt: prompt.join(" | ").replaceAll(" ; ", "\n"), wait: true } });
 		} else if (line.startsWith("ask: ")) {
 			const [question, ...options] = parts(line.slice(5));
 			calls.push({ name: "ask_user", args: { question, ...(options.length ? { options } : {}) } });

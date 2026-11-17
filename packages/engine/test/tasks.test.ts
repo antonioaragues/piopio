@@ -1,0 +1,104 @@
+import { mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, expect, test } from "vitest";
+import { enginePaths } from "../src/paths.js";
+import { Engine } from "../src/server.js";
+import { TestClient } from "./client.js";
+
+// Non-blocking subagents (docs/spec/17 §3, 26 §7.1): `task` returns at once, the result comes back as a [Task]
+// message on the side conversations' bridge; task_wait collects results here instead; task_stop stops one.
+
+type Ref = { kind: string; id: string };
+type Item = { kind: string; text?: string; tool?: string; status?: string; output?: string; details?: { sessionId?: string; status?: string } };
+
+const open: { engine: Engine; client: TestClient }[] = [];
+afterEach(async () => {
+	for (const o of open.splice(0)) {
+		o.client.close();
+		await o.engine.stop();
+	}
+});
+
+async function until<T>(get: () => Promise<T> | T, ok: (v: T) => boolean, ms = 30_000): Promise<T> {
+	const end = Date.now() + ms;
+	for (;;) {
+		const v = await get();
+		if (ok(v)) return v;
+		if (Date.now() > end) throw new Error(`timed out: ${JSON.stringify(v).slice(0, 1500)}`);
+		await new Promise((r) => setTimeout(r, 80));
+	}
+}
+
+async function start() {
+	const home = mkdtempSync(join(tmpdir(), "piopio-tasks-"));
+	const paths = enginePaths(home);
+	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), teamsDir: join(home, "Teams"), hooksPort: 0, log: () => {} });
+	await engine.listen();
+	const client = await TestClient.connect(paths.socket);
+	open.push({ engine, client });
+	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0", services: [] });
+	const dir = realpathSync(mkdtempSync(join(tmpdir(), "piopio-tasks-dir-")));
+	await client.call("projects.add", { path: dir });
+	const { ref } = (await client.call("sessions.create", { kind: "build", cwd: dir, approvalMode: "full_auto" })) as { ref: Ref };
+	return { client, ref, dir };
+}
+
+const items = async (client: TestClient, ref: Ref) => (await client.call("sessions.open", { ref })).items as Item[];
+const idle = (client: TestClient, ref: Ref) => until(async () => ((await client.call("sessions.open", { ref })) as { state: { status: string } }).state.status, (s) => s === "idle");
+const task = (description: string, prompt: string) => `call: task | ${JSON.stringify({ description, prompt })}`;
+type Child = { ref: Ref; title: string; parent?: { id: string; state?: string } };
+const children = async (client: TestClient, parent: Ref) => ((await client.call("sessions.list", { kind: "build" })).sessions as Child[]).filter((s) => s.parent?.id === parent.id);
+
+test("task returns at once; the parent's turn ends; the result comes back as a [Task] message that wakes it", async () => {
+	const { client, ref, dir } = await start();
+	await client.call("sessions.submit", { ref, input: { text: task("Write a", "write: a.txt | from the child") } });
+	const first = await until(() => items(client, ref), (x) => x.some((i) => i.tool === "task" && i.status === "done"));
+	const started = first.find((i) => i.tool === "task")!;
+	expect(started.output).toMatch(/^Started ses_\w+\. Its result comes back as a \[Task\] message/);
+	expect(started.details).toMatchObject({ status: "started" });
+	const [child] = await until(() => children(client, ref), (c) => c[0]?.parent?.state === "done");
+	expect(child).toMatchObject({ title: "Write a", parent: { id: ref.id, state: "done" } });
+	expect(readFileSync(join(dir, "a.txt"), "utf8")).toBe("from the child");
+	const after = await until(() => items(client, ref), (x) => x.some((i) => i.kind === "user" && i.text?.startsWith("[Task] “Write a”")) && x.at(-1)?.kind === "assistant");
+	expect(after.find((i) => i.kind === "user" && i.text?.startsWith("[Task]"))!.text).toContain(`(${child!.ref.id}) finished.`);
+}, 60_000);
+
+test("task_wait collects a result here, and then no [Task] message comes; task_stop stops one", async () => {
+	const { client, ref } = await start();
+	await client.call("sessions.submit", { ref, input: { text: task("Slow one", "$ sleep 3\nwrite: slow.txt | done") } });
+	await idle(client, ref);
+	const id = (await items(client, ref)).find((i) => i.tool === "task")!.details!.sessionId!;
+	await client.call("sessions.submit", { ref, input: { text: `call: task_wait | ${JSON.stringify({ ids: [id] })}` } });
+	const waited = await until(() => items(client, ref), (x) => x.some((i) => i.tool === "task_wait" && i.status === "done") && x.at(-1)?.kind === "assistant");
+	expect(waited.find((i) => i.tool === "task_wait")!.output).toContain(`${id}: Echo:`);
+	await idle(client, ref);
+	await new Promise((r) => setTimeout(r, 500));
+	expect((await items(client, ref)).some((i) => i.kind === "user" && i.text?.startsWith("[Task]"))).toBe(false);
+
+	// Stop: its turn ends, and its note says so.
+	await client.call("sessions.submit", { ref, input: { text: task("Long one", "$ sleep 20") } });
+	await idle(client, ref);
+	const long = (await items(client, ref)).filter((i) => i.tool === "task").at(-1)!.details!.sessionId!;
+	await until(() => children(client, ref), (c) => c.find((x) => x.ref.id === long)?.parent?.state === "working");
+	await client.call("sessions.submit", { ref, input: { text: `call: task_stop | ${JSON.stringify({ id: long })}` } });
+	await until(() => children(client, ref), (c) => c.find((x) => x.ref.id === long)?.parent?.state === "stopped");
+	await until(() => items(client, ref), (x) => x.some((i) => i.kind === "user" && i.text?.includes(`(${long}) was stopped.`)));
+	// Another conversation's subagent isn't this one's to wait for.
+	await idle(client, ref);
+	await client.call("sessions.submit", { ref, input: { text: `call: task_wait | ${JSON.stringify({ ids: ["ses_nope"] })}` } });
+	await until(() => items(client, ref), (x) => x.some((i) => i.tool === "task_wait" && i.status === "error" && i.output?.includes("isn't one of this conversation's subagents")));
+}, 90_000);
+
+test("past three running, a task waits as queued and starts when one ends; their results come back in one turn", async () => {
+	const { client, ref } = await start();
+	const four = [1, 2, 3, 4].map((n) => task(`Task ${n}`, `$ sleep 1\nwrite: t${n}.txt | ${n}`)).join("\n");
+	await client.call("sessions.submit", { ref, input: { text: four } });
+	const outputs = await until(() => items(client, ref), (x) => x.filter((i) => i.tool === "task" && i.status === "done").length === 4).then((x) => x.filter((i) => i.tool === "task").map((i) => i.output!));
+	expect(outputs.filter((o) => o.includes("(queued: 3 are running)"))).toHaveLength(1);
+	await until(() => children(client, ref), (c) => c.length === 4 && c.every((x) => x.parent?.state === "done"), 60_000);
+	const woke = await until(() => items(client, ref), (x) => x.some((i) => i.kind === "user" && i.text?.startsWith("[Task]")) && x.at(-1)?.kind === "assistant").then((x) => x.filter((i) => i.kind === "user" && i.text?.startsWith("[Task]")));
+	// The first three report together once the last of them ends; the queued one reports on its own after.
+	await until(() => items(client, ref), (x) => x.filter((i) => i.kind === "user" && i.text?.startsWith("[Task]")).flatMap((i) => i.text!.match(/\[Task\] “Task \d”/g) ?? []).length === 4);
+	expect(woke.length).toBeLessThanOrEqual(2);
+}, 90_000);

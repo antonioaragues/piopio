@@ -258,3 +258,34 @@ With the scripted model and a fake clock:
   allowed per project.
 - DPQ6 · **W6 (off-track check) on by default?** Proposed: on when the on-device utility model is available, off
   otherwise.
+
+## 9. DP4 as built (2026-11-17): non-blocking subagents
+
+On the bridge side conversations use (24 §5), so `task`, side conversations and their reports are one mechanism
+(26 §7.1).
+
+- **`task` returns at once** by default, with the child's id ("Started ses_…"); `wait: true` keeps the old blocking
+  call, and Claude Code / Codex tasks always wait.
+  - Past 3 working for one parent, a task waits as queued and starts when one ends.
+  - The child is a Build session with `parent: { id, callId, state, line }`. Its state is queued, working, done,
+    failed or stopped, and the line is what it's doing now.
+- **Its result comes back as a `[Task] “Title” (id) finished.` message**, quoted and cut at 8,000 characters, that
+  wakes the parent. While another child of the parent (a subagent or a side conversation) still works, results wait
+  for it and arrive in one turn. The loop guard (5 woken turns without you) is shared.
+- **`task_wait({ ids })`** collects results in this turn; those then don't come back as messages. **`task_stop({ id })`**
+  stops one, or keeps a queued one from starting.
+- A blocking `task` now goes through the same path (start, then wait), so its card still shows progress.
+- A subagent or side conversation that the engine was in the middle of when it quit is marked stopped at the next
+  start.
+- **In the app:**
+  - the task card reads "started · its result comes back here";
+  - `[Task]` messages are "Result from <title> · finished" rows that open to the answer;
+  - running subagents show in the block above the composer ("Subagents · 1 subagent running"), with what each is
+    doing, and open their session.
+- **The scripted model:** its `task:` shorthand waits (the blocking path); `call: task | {…}` scripts the
+  non-blocking one.
+- **Tests:** `tasks.test.ts` covers:
+  - return at once, then a waking result;
+  - `task_wait` with no message after it;
+  - `task_stop`, and a stranger's id refused;
+  - queued past three, and batched results.

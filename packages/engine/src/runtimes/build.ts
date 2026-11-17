@@ -110,6 +110,8 @@ export type BuildOpenOptions = {
 	externalAgents?: readonly string[];
 	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
 	runTask?: SubagentBridge["run"];
+	/** Non-blocking `task`, `task_wait` and `task_stop` (docs/spec/17 §3). */
+	tasks?: Required<Pick<SubagentBridge, "start" | "wait" | "stop">>;
 	/** The board's tools: Piopio's in a project with parallel work on, or a reviewer helper's verdict (docs/spec/26). */
 	board?: BoardBridge;
 	/** Your agents, asked from this conversation with ask_agent or @Name (docs/spec/21 D6). */
@@ -258,7 +260,7 @@ export class BuildRuntime implements Runtime {
 						};
 					},
 				}),
-				subagentsExtension(o.runTask ? { run: o.runTask, ...(o.externalAgents?.length ? { agents: o.externalAgents } : {}) } : undefined),
+				subagentsExtension(o.runTask ? { run: o.runTask, ...(o.tasks ?? {}), ...(o.externalAgents?.length ? { agents: o.externalAgents } : {}) } : undefined),
 				notifyExtension({
 					ask: async (question, signal) => {
 						const response = await broker.ask({ kind: "question", title: question.question, callId: question.callId, ...(question.options ? { options: question.options } : {}) }, signal);

@@ -38,10 +38,11 @@ nonisolated struct ItemRenderer: Sendable {
 
     func render(_ item: TimelineItem) -> NSAttributedString {
         switch item {
-        case .user(let u) where u.text.hasPrefix("[Side] "):
-            // A side conversation's report (docs/spec/24 §5): "Message from About page · finished", the report under it.
+        case .user(let u) where u.text.hasPrefix("[Side] ") || u.text.hasPrefix("[Task] "):
+            // Reports from side conversations and subagents (docs/spec/24 §5, 17 §3): "Message from About page ·
+            // finished" or "Result from Explore auth · finished", the answer under it. Several arrive together.
             if compact { return NSAttributedString() }
-            return Self.sideNotes(String(u.text.dropFirst(7))).reduce(into: NSMutableAttributedString()) { out, n in
+            return Self.sideNotes(u.text).reduce(into: NSMutableAttributedString()) { out, n in
                 out.append(n.body.isEmpty ? note(n.title) : thinkingCard(DisclosureCard(kind: .thinking, title: n.title, body: n.body)))
             }
         case .user(let u) where u.text.hasPrefix("[Board] ") || u.text.hasPrefix("[Routine] "):
@@ -249,8 +250,18 @@ nonisolated struct ItemRenderer: Sendable {
     /// One or more side conversations' reports (they arrive together when several finish in a burst), each as
     /// "Message from <title> · <what happened>" and its quoted answer.
     static func sideNotes(_ text: String) -> [(title: String, body: String)] {
-        // Each report starts with “Title” (id) and what happened; several are joined by "[Side] ".
-        text.components(separatedBy: "\n\n[Side] ").map { report in
+        // Each report starts with [Side] or [Task], “Title” (id) and what happened; several are joined by a blank line.
+        let pattern = try! NSRegularExpression(pattern: "(?:^|\\n\\n)\\[(Side|Task)\\] ")
+        let ns = text as NSString
+        let matches = pattern.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        let reports: [(task: Bool, text: String)] = matches.isEmpty
+            ? [(false, text)]
+            : matches.enumerated().map { i, m in
+                let end = i + 1 < matches.count ? matches[i + 1].range.location : ns.length
+                let start = m.range.location + m.range.length
+                return (ns.substring(with: m.range(at: 1)) == "Task", ns.substring(with: NSRange(location: start, length: end - start)))
+            }
+        return reports.map { kind, report in
             let first = report.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? report
             let body = report.dropFirst(first.count).trimmingCharacters(in: .whitespacesAndNewlines)
                 .split(separator: "\n", omittingEmptySubsequences: false).map { $0.hasPrefix("> ") ? String($0.dropFirst(2)) : String($0) }.joined(separator: "\n")
@@ -260,7 +271,7 @@ nonisolated struct ItemRenderer: Sendable {
                 var what = String(first[first.index(after: close)...]).trimmingCharacters(in: .whitespaces)
                 if what.hasPrefix("("), let end = what.firstIndex(of: ")") { what = String(what[what.index(after: end)...]).trimmingCharacters(in: .whitespaces) }
                 let verb = what.split(whereSeparator: { $0 == "." || $0 == ":" }).first.map(String.init) ?? what
-                title = "Message from \(name) · \(verb.trimmingCharacters(in: .whitespaces))"
+                title = "\(kind ? "Result" : "Message") from \(name) · \(verb.trimmingCharacters(in: .whitespaces))"
             }
             return (title, body)
         }
@@ -660,6 +671,8 @@ nonisolated struct ItemRenderer: Sendable {
         case .task(let sessionId, let status, let cost):
             var trailing = [String]()
             if status == "error" { trailing.append("failed") } else if status == "stopped" { trailing.append("stopped") }
+            // Non-blocking (docs/spec/17 §3): its result comes back later as a [Task] row.
+            else if status == "started" { trailing.append("started · its result comes back here") } else if status == "queued" { trailing.append("queued") }
             if let cost, cost > 0 { trailing.append(cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)) }
             if trailing.isEmpty, !duration.isEmpty { trailing.append(duration) }
             card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .text(t.output ?? ""))

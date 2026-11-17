@@ -463,7 +463,8 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var projectPath: String?
     public var worktree: WorktreeInfo?
     /// A subagent's session: the parent session and its `task` call.
-    public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String }
+    /// A subagent's parent, and its state (queued, working, done, failed, stopped) with a line while it works (17 §3).
+    public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String; public var state: String?; public var line: String? }
     public var parent: Parent?
     /// A helper's session (docs/spec/26 CL4): made by Piopio for a task on a project's board.
     public struct Helper: Codable, Sendable, Hashable { public var project: String; public var kind: String; public var taskId: String }
