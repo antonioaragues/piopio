@@ -213,14 +213,23 @@ changes model.
 1. ~~**Default for moving to credits.**~~ **Decided 2026-11-18 (the user): Ask before using credits** (PO6). It keeps
    10 FR4's spirit and costs one click; the ask card's "Always switch" is there for those who want "plan first, then
    credits" to just happen.
-2. **Another model as a backup (idea C).** Recommended: later, and as an explicit choice per default (for example
-   "Build: Claude Sonnet, backup GPT-6 Sol"), always asked, never chained silently. Worth it only if plan limits keep
-   stopping you after B is in.
-3. **Where a merged model lives in the picker.** Recommended: in its first route's section (§6.2), which keeps today's
-   grouping by provider. The other option is grouping by maker (Anthropic, OpenAI, Google…) with the route on each row,
-   which reads better with many providers but changes the picker more.
-4. **Waiting vs switching on short limits.** A `retry-after` of 90 s: wait and stay on the plan, or switch? Recommended:
-   wait when the reset is under 2 minutes, in an attended conversation only.
+2. ~~**Another model as a backup (idea C).**~~ **Decided 2026-11-18 (the user): later.** When it comes, it's an
+   explicit choice per default (for example "Build: Claude Sonnet, backup GPT-6 Sol"), always asked, never chained
+   silently, and one mechanism with 28's "fallback within a role" (§11). Worth it only if plan limits keep stopping
+   you after B is in.
+3. **Where a merged model lives in the picker.** Still open (the user, 2026-11-18: not sure). Two options:
+   - *In its first route's section* (§6.2, the recommendation): today's grouping by provider stays, and the OpenRouter
+     section shrinks to what nothing above it offers. Least change; the section a model sits in moves when you
+     reorder.
+   - *Grouped by maker* (Anthropic, OpenAI, Google…) with the route on each row: a model never moves when you reorder,
+     and it reads better with many providers, but it's a bigger change to the picker and local endpoints need a
+     section of their own anyway.
+
+   It only matters from phase 2 (§8); phase 1 doesn't depend on it. Decide it with both options mocked up in the
+   design pass for phase 2, with a real catalog (ChatGPT, OpenRouter, an OpenAI key and Ollama connected).
+4. ~~**Waiting vs switching on short limits.**~~ **Decided 2026-11-18 (the user), as recommended:** when the route
+   resets in under 2 minutes, an attended conversation waits and stays on the plan (the chip says "Waiting for ChatGPT
+   · 1:30", with **Switch now**). Automations don't wait; they follow PO9.
 
 ## 11. With 28 (Auto model)
 
