@@ -2,59 +2,68 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// Home, the landing screen and the one start (docs/spec/18 §4), and the agenda of everyone who works for you
-/// (docs/spec/21 D2, design 5e): a greeting and the box where you write, then two columns. Left: what's waiting on you
-/// (with its action in the row) and what happened while you were away. Right: today, as a timeline of every routine,
-/// agents' and projects', with what's running now.
+/// Home, the landing screen and the one start (docs/spec/18 §4, design docs/design/home 3a): the date and a greeting,
+/// the box where you write with piopio perched on it, then one panel with three tabs: what's waiting on you (with its
+/// action in the row), what happened while you were away, and today, as a timeline of every routine, agents' and
+/// projects'. A tab shows only with something in it. With nothing in any of them (3b), the box moves to the middle of
+/// the page and one quiet line says so.
 struct HomeView: View {
     let engine: EngineController
     @Binding var item: SidebarItem
-    @State private var agenda: HomeAgenda?
+    @State private var agenda: HomeAgenda? = HomeView.lastAgenda
+    /// The agenda from the last visit: coming back to Home doesn't flash the empty state while it loads.
+    @MainActor private static var lastAgenda: HomeAgenda?
     /// Your last visit: "While you were away" starts there.
     @AppStorage("homeLastVisit") private var lastVisit = ""
-    /// Two columns when there's room for them.
-    @State private var wide = true
+    /// The tab you picked; the first one with something in it until then.
+    @State private var tab: Tab?
     /// The waiting row that's open (its full card), and whether all of them show.
     @State private var expanded: String?
     @State private var showAll = false
     /// What a notification or the menu bar's Inbox pointed at: Home opens that row.
     @AppStorage("inboxFocus") private var focus = ""
+    @State private var height: CGFloat = 0
+    private let piopio = Piopio.shared
+
+    enum Tab: Hashable, CaseIterable {
+        case waiting, away, today
+        var title: String {
+            switch self {
+            case .waiting: "Waiting on you"
+            case .away: "While you were away"
+            case .today: "Today"
+            }
+        }
+    }
+
+    /// Home's coordinate space: where the pointer is, for piopio's eyes.
+    static let space = "home"
 
     var body: some View {
         ScrollViewReader { proxy in
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    greeting
-                    AskBox(engine: engine, item: $item).padding(.top, 24)
-                }
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
-                Group {
-                    if wide && hasToday {
-                        HStack(alignment: .top, spacing: 40) {
-                            VStack(alignment: .leading, spacing: 0) { waiting; away }.frame(maxWidth: .infinity, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 0) { today }.frame(width: 300, alignment: .leading)
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 0) { waiting; away; today }
-                    }
-                }
-                .padding(.top, 12)
-                .onGeometryChange(for: Bool.self) { $0.size.width >= 760 } action: { wide = $0 }
+            ScrollView {
+                if isEmpty { empty } else { normal }
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 72)
-            .padding(.bottom, 48)
-            .frame(maxWidth: 980)
-            .frame(maxWidth: .infinity)
-        }
-        .task {
-            let since = lastVisit.isEmpty ? nil : lastVisit
-            agenda = await engine.homeAgenda(since: since)
-        }
-        .task(id: focus) { reveal(proxy) }
-        .onChange(of: engine.needsYouCount) { reveal(proxy) }
+            .coordinateSpace(.named(Self.space))
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+            .onContinuousHover(coordinateSpace: .named(Self.space)) { phase in
+                if case .active(let point) = phase { piopio.pointer(point) }
+            }
+            .task {
+                let since = lastVisit.isEmpty ? nil : lastVisit
+                agenda = await engine.homeAgenda(since: since)
+                Self.lastAgenda = agenda
+            }
+            .task {
+                // Re-read the clock each minute: piopio's mood and the greeting follow it.
+                while !Task.isCancelled {
+                    piopio.refreshMood()
+                    try? await Task.sleep(for: .seconds(60))
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in piopio.refreshMood() }
+            .task(id: focus) { reveal(proxy) }
+            .onChange(of: engine.needsYouCount) { reveal(proxy) }
         }
         .onDisappear { lastVisit = ISO8601DateFormatter().string(from: .now) }
     }
@@ -65,6 +74,7 @@ struct HomeView: View {
         let entries = Array(engine.needsYou.reversed())
         guard let i = entries.firstIndex(where: { $0.matches(focus) }) else { return }
         focus = ""
+        tab = .waiting
         if i >= Self.shown { showAll = true }
         expanded = entries[i].id
         withAnimation { proxy.scrollTo(entries[i].id, anchor: .center) }
@@ -73,38 +83,95 @@ struct HomeView: View {
     /// Rows before "Show N more".
     static let shown = 5
 
-    // MARK: Greeting
+    // MARK: Layout
 
-    private var greeting: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("\(Self.salutation()), \(Self.firstName)").font(.system(size: 28, weight: .bold)).tracking(-0.6).foregroundStyle(Color.dsFg)
-            Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide))).font(.system(size: 13.5)).foregroundStyle(Color.dsFg3)
+    /// 3a: the greeting and the box, then the tabs.
+    private var normal: some View {
+        VStack(alignment: .leading, spacing: 36) {
+            top(AskBox.Perch(model: piopio, size: 47, trailing: 28, top: 40))
+            if !tabs.isEmpty { panel }
+        }
+        .frame(maxWidth: 660)
+        .padding(.horizontal, 32)
+        .padding(.top, 72)
+        .padding(.bottom, 48)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 3b: only the prompt, in the middle (nudged up), and one line that all is quiet.
+    private var empty: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            top(AskBox.Perch(model: piopio, size: 56, trailing: 26, top: 44))
+            HStack(spacing: 8) {
+                Circle().fill(StatusTone.ready.dot).frame(width: 6, height: 6)
+                Text("All quiet. When something needs you, it'll show up here.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+            }
+            .padding(.top, 18)
+            .padding(.leading, 6)
+        }
+        .frame(maxWidth: 620)
+        .padding(.horizontal, 32)
+        .padding(.vertical, 48)
+        .frame(maxWidth: .infinity, minHeight: height)
+        .offset(y: -60)
+    }
+
+    private func top(_ perch: AskBox.Perch) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide))).font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                Text(piopio.mood.greeting(name: Self.firstName, date: .now)).font(.system(size: 32, weight: .semibold)).tracking(-0.8).foregroundStyle(Color.dsFg)
+            }
+            AskBox(engine: engine, item: $item, perch: perch)
         }
     }
 
-    static func salutation(_ date: Date = .now) -> String {
-        switch Calendar.current.component(.hour, from: date) {
-        case 5..<12: "Good morning"
-        case 12..<20: "Good afternoon"
-        default: "Good evening"
-        }
-    }
+    static func salutation(_ date: Date = .now) -> String { PiopioMood.salutation(date) }
 
     static var firstName: String {
         NSFullUserName().split(separator: " ").first.map(String.init) ?? NSUserName()
     }
 
-    // MARK: Agenda
+    // MARK: Tabs
 
-    private func sectionTitle(_ title: String, see: (String, () -> Void)? = nil) -> some View {
-        HStack {
-            Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)
-            Spacer()
-            if let see { Button(see.0, action: see.1).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
+    private var hasAway: Bool { !(agenda?.away ?? []).isEmpty }
+    private var hasToday: Bool { !(agenda?.today ?? []).isEmpty || (agenda?.held ?? 0) > 0 }
+    private var waitingCount: Int { engine.needsYou.count + readyToMerge.count }
+
+    /// The tabs with something in them.
+    private var tabs: [Tab] {
+        Tab.allCases.filter { t in
+            switch t {
+            case .waiting: waitingCount > 0
+            case .away: hasAway
+            case .today: hasToday
+            }
         }
-        .padding(.top, 32)
-        .padding(.bottom, 8)
     }
+
+    /// Nothing waiting, nothing while you were away, nothing today (once the agenda is in).
+    private var isEmpty: Bool { agenda != nil && tabs.isEmpty }
+
+    private var current: Tab { tab.flatMap { tabs.contains($0) ? $0 : nil } ?? tabs.first ?? .waiting }
+
+    private var panel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HomeTabs(tabs: tabs, selected: current, count: waitingCount) { t in tab = t }
+            VStack(alignment: .leading, spacing: 0) {
+                switch current {
+                case .waiting: waiting
+                case .away: away
+                case .today: today
+                }
+            }
+            .padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+        }
+    }
+
+    // MARK: Waiting on you
 
     /// Projects whose finished board work waits to be merged (open the project's Board).
     private var readyToMerge: [(work: ProjectWork, project: ProjectInfo, tasks: Int)] {
@@ -119,90 +186,100 @@ struct HomeView: View {
     @ViewBuilder private var waiting: some View {
         let entries = Array(engine.needsYou.reversed())
         let ready = readyToMerge
-        let count = entries.count + ready.count
-        if count > 0 {
-            sectionTitle("Waiting on you · \(count)")
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(showAll ? entries : Array(entries.prefix(Self.shown))) { entry in
-                    WaitingItem(engine: engine, entry: entry, item: $item, expanded: $expanded).id(entry.id)
+        ForEach(showAll ? entries : Array(entries.prefix(Self.shown))) { entry in
+            WaitingItem(engine: engine, entry: entry, item: $item, expanded: $expanded).id(entry.id)
+        }
+        if entries.count > Self.shown {
+            Button(showAll ? "Show fewer" : "Show \(entries.count - Self.shown) more") { withAnimation(.snappy(duration: 0.18)) { showAll.toggle() } }
+                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        if !ready.isEmpty {
+            if !entries.isEmpty { Rectangle().fill(Color.dsTrack).frame(height: 1).padding(.top, 2) }
+            ForEach(ready, id: \.work.id) { r in
+                HStack(spacing: 12) {
+                    StatusTile(tone: .ready)
+                    Text("\(r.project.name) · \(r.tasks) task\(r.tasks == 1 ? "" : "s") ready for \(r.work.git?.base ?? "main")")
+                        .font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(1)
+                    Spacer(minLength: 12)
+                    Button("Review") { item = .board(r.project.id) }.buttonStyle(HomePillStyle())
                 }
-                if entries.count > Self.shown {
-                    Button(showAll ? "Show fewer" : "Show \(entries.count - Self.shown) more") { withAnimation(.snappy(duration: 0.18)) { showAll.toggle() } }
-                        .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-                }
-                ForEach(ready, id: \.work.id) { r in
-                    AgendaLine(dot: .accentColor) {
-                        Text("\(r.project.name) · \(r.tasks) task\(r.tasks == 1 ? "" : "s") ready for \(r.work.git?.base ?? "main")").font(.system(size: 13.5))
-                    } trailing: {
-                        Button("Review") { item = .board(r.project.id) }.buttonStyle(PillStyle(compact: true))
-                    }
-                }
+                .padding(.horizontal, 12).padding(.vertical, 11)
             }
         }
     }
+
+    // MARK: While you were away
 
     @ViewBuilder private var away: some View {
-        if let lines = agenda?.away, !lines.isEmpty {
-            sectionTitle("While you were away")
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(lines.prefix(6).enumerated()), id: \.offset) { _, line in
-                    AgendaLine(dot: line.failed == true ? .dsWarn : line.quiet ? Color(white: 0.4) : .green) {
-                        (Text(line.source.name).foregroundStyle(line.quiet ? Color.dsFg3 : Color.dsFg) + Text(" \(line.text)").foregroundStyle(line.quiet ? Color.dsFg3 : Color.dsFg2))
-                            .font(.system(size: 13.5)).lineLimit(2)
-                    } trailing: {
-                        Text(Self.clock(line.at)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { open(line.source) }
+        ForEach(Array((agenda?.away ?? []).prefix(6).enumerated()), id: \.offset) { _, line in
+            Button { open(line.source) } label: {
+                HStack(spacing: 12) {
+                    Text(String(line.source.name.prefix(1)).uppercased())
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2)
+                        .frame(width: 28, height: 28)
+                        .background(Color.dsChip, in: Circle())
+                    (Text(line.source.name).fontWeight(.medium) + Text(" \(line.text)"))
+                        .font(.system(size: 13.5)).foregroundStyle(line.quiet ? Color.dsFg3 : Color.dsFg)
+                        .lineLimit(2).multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Circle().fill(line.failed == true ? StatusTone.approval.dot : line.quiet ? Color.dsFg3.opacity(0.55) : StatusTone.ready.dot)
+                        .frame(width: 6, height: 6)
+                    Text(Self.clock(line.at)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+                        .frame(minWidth: 38, alignment: .trailing)
                 }
+                .padding(.horizontal, 12).padding(.vertical, 11)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(HomeRowStyle())
         }
     }
 
-    /// Today shows only when something is on it: an empty column beside an empty Home reads as a stray note.
-    private var hasToday: Bool { !(agenda?.today ?? []).isEmpty || (agenda?.held ?? 0) > 0 }
+    // MARK: Today
 
     @ViewBuilder private var today: some View {
         let rows = agenda?.today ?? []
-        if hasToday { sectionTitle("Today") }
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
-                    // Past midnight: what's next tomorrow, under a divider.
-                    if row.tomorrow == true, i == 0 || rows[i - 1].tomorrow != true {
-                        Text("Tomorrow").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color.dsFg3).padding(.leading, 12).padding(.top, 10).padding(.bottom, 2)
-                    }
-                    timelineRow(row)
-                }
+        ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+            // Past midnight: what's next tomorrow, under a divider.
+            if row.tomorrow == true, i == 0 || rows[i - 1].tomorrow != true {
+                Text("Tomorrow").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color.dsFg3).padding(.leading, 12).padding(.top, 10).padding(.bottom, 2)
             }
-            .overlay(alignment: .leading) { Rectangle().fill(Color.dsLine).frame(width: 1).padding(.vertical, 6) }
+            timelineRow(row)
         }
         if let held = agenda?.held, held > 0 {
-            Text("\(held) message\(held == 1 ? "" : "s") held until quiet hours end").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 12)
+            Text("\(held) message\(held == 1 ? "" : "s") held until quiet hours end").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
         }
     }
 
-    /// A timeline row (design 5e): the time (or "any" for an event), who and what; past rows grey, "now" highlighted.
+    /// A timeline row: the time ("now" while it runs, "any" for an event), what, and whose on the right. Past rows are
+    /// grey with ✓ or ⚠; the running one is highlighted.
     private func timelineRow(_ row: HomeAgenda.Today) -> some View {
         let past = ["done", "failed", "skipped"].contains(row.state)
         let now = row.state == "running"
+        // An agent's own schedule has no label: the row is the agent.
+        let label = row.label.isEmpty ? row.source.name : row.label.capitalizedFirst
+        let origin = row.label.isEmpty ? row.source.kind : row.source.name + (now && row.source.kind == "project" ? " · board" : "")
+        let mark = row.state == "done" ? " ✓" : row.state == "failed" ? " ⚠" : ""
         return Button { open(row.source) } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(now ? "now" : row.at.map(Self.clock) ?? "any").font(.system(size: 12, weight: now ? .semibold : .regular).monospacedDigit())
-                    .foregroundStyle(now ? Color.accentColor : Color.dsFg3).frame(width: 40, alignment: .leading)
-                (Text(row.source.name).foregroundStyle(past ? Color.dsFg3 : Color.dsFg) + Text(row.label.isEmpty ? "" : " · \(row.label)").foregroundStyle(past ? Color.dsFg3 : Color.dsFg2))
-                    .font(.system(size: 13)).lineLimit(2).multilineTextAlignment(.leading)
-                Spacer(minLength: 4)
-                if row.state == "done" { Image(systemName: "checkmark").font(.system(size: 10)).foregroundStyle(Color.dsFg3) }
-                if row.state == "failed" { Image(systemName: "exclamationmark.triangle").font(.system(size: 10)).foregroundStyle(Color.dsWarn) }
+            HStack(spacing: 12) {
+                Text(now ? "now" : row.at.map(Self.clock) ?? "any")
+                    .font(.system(size: 12.5, weight: now ? .semibold : .regular).monospacedDigit())
+                    .foregroundStyle(now ? Color.accentColor : past ? Color.dsFg3.opacity(0.8) : Color.dsFg2)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .frame(width: 48, alignment: .leading)
+                (Text(label).foregroundStyle(past ? Color.dsFg3 : Color.dsFg).fontWeight(now ? .semibold : .regular) + Text(mark).foregroundStyle(Color.dsFg3))
+                    .font(.system(size: 13.5)).lineLimit(2).multilineTextAlignment(.leading)
+                Spacer(minLength: 8)
+                Text(origin).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
-            .padding(.leading, 12).padding(.vertical, 6).padding(.trailing, 6)
-            .background(now ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(now ? Color.accentColor.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(HomeRowStyle())
     }
 
     private func open(_ source: HomeAgenda.Source) {
@@ -236,21 +313,98 @@ struct HomeView: View {
     }
 }
 
-/// A line on Home's agenda: a dot, the text, and something on the right.
-private struct AgendaLine<Content: View, Trailing: View>: View {
-    var dot: Color = .accentColor
-    @ViewBuilder var content: Content
-    @ViewBuilder var trailing: Trailing
+/// Home's tabs (design 3a): a segmented control on the left, the selected tab white with a soft shadow; "Waiting on
+/// you" carries its count.
+private struct HomeTabs: View {
+    let tabs: [HomeView.Tab]
+    let selected: HomeView.Tab
+    let count: Int
+    let select: (HomeView.Tab) -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Circle().fill(dot).frame(width: 7, height: 7)
-            content
-            Spacer(minLength: 12)
-            trailing
+        HStack(spacing: 4) {
+            ForEach(tabs, id: \.self) { t in
+                let on = t == selected
+                Button { withAnimation(.snappy(duration: 0.18)) { select(t) } } label: {
+                    HStack(spacing: 6) {
+                        Text(t.title)
+                        if t == .waiting {
+                            Text("\(count)").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(StatusTone.badge, in: Capsule())
+                        }
+                    }
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.dsFg)
+                    .padding(.horizontal, 14).padding(.vertical, 6)
+                    .background {
+                        if on {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.dsSeg)
+                                .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
         }
-        .frame(minHeight: 38)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+        .padding(4)
+        .background(Color.dsTrack, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+    }
+}
+
+/// A status tile (design 3a): 28pt, tinted, with an 8pt dot.
+struct StatusTile: View {
+    let tone: StatusTone
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous).fill(tone.tint)
+            .frame(width: 28, height: 28)
+            .overlay(Circle().fill(tone.dot).frame(width: 8, height: 8))
+    }
+}
+
+/// A row action on Home (design 3a): a pill, 12.5pt. Primary is black; secondary has a hairline.
+struct HomePillStyle: ButtonStyle {
+    var primary = false
+    func makeBody(configuration: Configuration) -> some View { HomePillBody(configuration: configuration, primary: primary) }
+}
+
+private struct HomePillBody: View {
+    let configuration: ButtonStyleConfiguration
+    let primary: Bool
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
+
+    var body: some View {
+        configuration.label
+            .font(.system(size: 12.5, weight: primary ? .medium : .regular))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, primary ? 12 : 11).padding(.vertical, 5)
+            .foregroundStyle(primary ? Color.dsInvFg : Color.dsFg)
+            .background(primary ? Color.dsInv : hovering ? Color.dsChip : .clear, in: Capsule())
+            .overlay { if !primary { Capsule().strokeBorder(Color.dsLine, lineWidth: 1) } }
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
+            .contentShape(Capsule())
+            .onHover { hovering = $0 }
+    }
+}
+
+/// A clickable row on Home: a faint fill on hover, radius 10.
+struct HomeRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { HomeRowBody(configuration: configuration) }
+}
+
+private struct HomeRowBody: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var hovering = false
+
+    var body: some View {
+        configuration.label
+            .background(hovering || configuration.isPressed ? Color.dsChip.opacity(0.45) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .onHover { hovering = $0 }
     }
 }
 
@@ -267,17 +421,30 @@ struct AskBox: View {
     var showsWhere = true
     /// The New conversation page's box: a little larger, and a placeholder that doesn't repeat the title.
     var prominent = false
+    /// Home's box: piopio sits on its top edge, looks down while you type and hops when you send.
+    var perch: Perch?
     @State private var text = ""
+    /// A restored draft isn't typing.
+    @State private var restoring = false
     /// "chat", "project:<id>" or "agent:<id>"; the start routes set it (⌘N, ⌘O, a project's +).
     /// Back to "chat" (no project) after each send, so a loose question never lands in the last project.
     @AppStorage private var targetRaw: String
 
-    init(engine: EngineController, item: Binding<SidebarItem>, projectId: String? = nil, showsWhere: Bool = true, prominent: Bool = false) {
+    /// Where piopio sits: `trailing` from the box's right edge, its top `top` above the box's.
+    struct Perch {
+        let model: Piopio
+        var size: CGFloat
+        var trailing: CGFloat
+        var top: CGFloat
+    }
+
+    init(engine: EngineController, item: Binding<SidebarItem>, projectId: String? = nil, showsWhere: Bool = true, prominent: Bool = false, perch: Perch? = nil) {
         self.engine = engine
         _item = item
         self.projectId = projectId
         self.showsWhere = showsWhere
         self.prominent = prominent
+        self.perch = perch
         _targetRaw = AppStorage(wrappedValue: projectId.map { "project:" + $0 } ?? "chat", projectId.map { "projectBoxTarget:" + $0 } ?? "homeTarget")
     }
 
@@ -339,21 +506,21 @@ struct AskBox: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 14) {
                 if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                 TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3), axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: prominent ? 15 : 14))
+                    .font(.system(size: 15))
                     .lineLimit(1...6)
                     .focused($focused)
                     .onSubmit(send)
-                    .padding(.bottom, prominent ? 6 : 0)
+                    .padding(.horizontal, 4)
                 if !attachments.isEmpty { attachmentTiles }
-                // The same footer as a conversation's composer (Composer.box): attach, where it goes (18 §16) and
-                // permissions on the left, the model and send on the right, so the box reads the same before and after.
-                HStack(spacing: 2) {
-                    if agent == nil { AttachButton(pick: attach, help: "Add files, photos or PDFs (⌘U)") }
+                // Attach, where it goes (18 §16) as a pill and permissions on the left; the model, muted, and send on
+                // the right (docs/design/home 3a).
+                HStack(spacing: 8) {
+                    if agent == nil { AttachButton(pick: attach, help: "Add files, photos or PDFs (⌘U)", size: 28) }
                     targetMenu
                     if project != nil {
                         if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
@@ -361,36 +528,49 @@ struct AskBox: View {
                     Spacer(minLength: 6)
                     if agent == nil {
                         Button { showModels = true } label: { Text(modelLabel) }
-                            .buttonStyle(ComposerChipStyle())
+                            .buttonStyle(ComposerChipStyle(muted: true))
                             .popover(isPresented: $showModels, arrowEdge: .bottom) {
                                 ModelPicker(engine: engine, selected: model ?? defaultModel, role: project != nil ? .build : .chat) { m in model = m; showModels = false }
                             }
                     }
-                    SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: send)
+                    SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, size: 30, action: send)
                         .accessibilityLabel(sendLabel)
                         .keyboardShortcut(.return, modifiers: .command)
                 }
+                .font(.system(size: 13))
             }
-            .padding(.top, prominent ? 16 : 12)
-            .padding(.leading, prominent ? 16 : 14)
-            .padding(.trailing, 12)
-            .padding(.bottom, prominent ? 12 : 10)
-            .composerBox()
-            .shadow(color: .black.opacity(prominent ? 0.04 : 0), radius: 12, y: 4)
+            .padding(.top, 16)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+            .askBoxCard()
             // Sending moves this box into the conversation's composer (the same morph the start pages used).
             .composerMorph()
+            .overlay(alignment: .topTrailing) {
+                if let perch {
+                    PiopioPerch(model: perch.model, size: perch.size)
+                        .padding(.trailing, perch.trailing)
+                        .offset(y: -perch.top)
+                }
+            }
             // Before Return: where it goes, and whether Piopio may change anything (18 §4). Nothing without a folder.
             if showsWhere, let line = whereLine {
-                Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.leading, 14)
+                Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    .padding(.top, 10).padding(.leading, 6)
                     .accessibilityLabel(line)
             }
         }
-        .onChange(of: text) { _, t in mention(t); saveHomeDraft() }
+        .onChange(of: text) { _, t in
+            mention(t); saveHomeDraft()
+            if restoring { restoring = false } else { perch?.model.typed(t) }
+        }
         .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder; plan = false }
         .onAppear {
             // A project page's box starts in its project each time it opens.
             if let projectId { targetRaw = "project:" + projectId }
-            if let saved = DraftStore(home: engine.home).load(draftKey) { text = saved.text; pendingChat = saved.destination }
+            if let saved = DraftStore(home: engine.home).load(draftKey) {
+                if saved.text != text { restoring = true; text = saved.text }
+                pendingChat = saved.destination
+            }
             if case .project = target, project == nil { target = .chat }
             if case .agent = target, agent == nil { target = .chat }
             focused = true
@@ -407,13 +587,8 @@ struct AskBox: View {
     /// Where this goes (docs/spec/18 §4, §16): in the bottom row, plain text with its icon and no chevron (grey ink,
     /// principle 6); a popover with search over projects, folders on this Mac and agents.
     private var targetMenu: some View {
-        Button { picking = true } label: {
-            HStack(spacing: 5) {
-                Image(systemName: project != nil ? "folder" : agent != nil ? "person.crop.circle" : "bubble.left").font(.system(size: 11.5))
-                Text(targetLabel).lineLimit(1)
-            }
-        }
-        .buttonStyle(ComposerChipStyle()).fixedSize()
+        Button { picking = true } label: { Text(targetLabel).lineLimit(1) }
+        .buttonStyle(TargetPillStyle()).fixedSize()
         .help("Where this goes: no project, a project, or an agent")
         .accessibilityLabel("Where this goes: \(targetLabel)")
         .popover(isPresented: $picking, arrowEdge: .bottom) {
@@ -564,6 +739,7 @@ struct AskBox: View {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty, !sending else { return }
         sendError = nil
+        perch?.model.sent()
         switch target {
         case .chat:
             sendConversation(message)
@@ -755,19 +931,50 @@ extension View {
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
             .shadow(color: .black.opacity(0.04), radius: 5, y: 2)
     }
+
+    /// The start box (docs/design/home 3a): card fill, a 1pt line, radius 16, a hairline shadow and a soft one below.
+    func askBoxCard() -> some View {
+        self
+            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+            .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+            .shadow(color: .black.opacity(0.06), radius: 12, y: 8)
+    }
 }
 
-/// The 28pt round send button: grey while there's nothing to send, black once there is.
+/// Where the start box sends (docs/design/home 3a): a grey pill, 13pt.
+private struct TargetPillStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { TargetPillBody(configuration: configuration) }
+}
+
+private struct TargetPillBody: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var hovering = false
+
+    var body: some View {
+        configuration.label
+            .font(.system(size: 13))
+            .foregroundStyle(Color.dsFg)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Color.dsChip, in: Capsule())
+            .overlay { if hovering || configuration.isPressed { Capsule().fill(Color.dsChip) } }
+            .contentShape(Capsule())
+            .onHover { hovering = $0 }
+    }
+}
+
+/// The round send button (28pt; 30 on the start box): grey while there's nothing to send, black once there is.
 struct SendButton: View {
     let enabled: Bool
     var symbol = "arrow.up"
+    var size: CGFloat = 28
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+            Image(systemName: symbol).font(.system(size: size > 28 ? 13 : 12, weight: .semibold))
                 .foregroundStyle(enabled ? Color.dsInvFg : Color.dsFg3)
-                .frame(width: 28, height: 28)
+                .frame(width: size, height: size)
                 .background(enabled ? Color.dsInv : Color.dsChip, in: Circle())
                 .contentShape(Circle())
         }

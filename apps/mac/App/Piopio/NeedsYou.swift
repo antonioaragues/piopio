@@ -101,31 +101,38 @@ struct WaitingItem: View {
     @State private var busy = false
     @State private var error: String?
 
+    @State private var hovering = false
+
     private var isOpen: Bool { expanded == entry.id }
     private var thread: ThreadModel? { entry.kind == .buildPrompt ? entry.session.map { engine.thread($0.ref) } : nil }
 
+    /// Its tile (docs/design/home 3a): orange asks first, red failed, the accent for the rest.
+    private var tone: StatusTone {
+        if entry.isApproval { return .approval }
+        return entry.kind == .runFailed ? .failed : .other
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "chevron.right").font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Color.dsFg3)
-                    .rotationEffect(.degrees(isOpen ? 90 : 0)).frame(width: 10)
-                Circle().fill(entry.isApproval ? Color.dsWarn : .accentColor).frame(width: 7, height: 7)
+            HStack(alignment: .center, spacing: 12) {
+                StatusTile(tone: tone)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(line).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(2)
-                    Text("\(origin) · \(BuildSessionView.relative(entry.at))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    Text(line).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.tail)
+                    Text("\(origin) · \(BuildSessionView.relative(entry.at))").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
                 Spacer(minLength: 12)
                 quick
             }
-            .frame(minHeight: 46)
+            .padding(.horizontal, 12).padding(.vertical, 11)
             .contentShape(Rectangle())
             .onTapGesture { withAnimation(.snappy(duration: 0.18)) { expanded = isOpen ? nil : entry.id } }
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(isOpen ? "Hides the details" : "Shows the details")
-            if isOpen { detail.padding(.leading, 37).padding(.bottom, 14).transition(.opacity) }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn).padding(.leading, 37).padding(.bottom, 8) }
+            if isOpen { detail.padding(.leading, 52).padding(.trailing, 12).padding(.bottom, 12).transition(.opacity) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn).padding(.leading, 52).padding(.bottom, 8) }
         }
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+        .background(hovering ? Color.dsChip.opacity(0.45) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onHover { hovering = $0 }
         .disabled(busy)
         .task(id: entry.session?.ref.id) { if let thread { await thread.open() } }
     }
@@ -155,45 +162,45 @@ struct WaitingItem: View {
 
     // MARK: The row's actions
 
-    /// The one that resolves it, black; the others as text.
+    /// The one that resolves it, black; the others with a hairline.
     @ViewBuilder private var quick: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             switch entry.kind {
             case .approval:
-                Button("Not now") { decide(false) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                Button("Allow") { decide(true) }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                Button("Not now") { decide(false) }.buttonStyle(HomePillStyle())
+                Button("Allow") { decide(true) }.buttonStyle(HomePillStyle(primary: true))
             case .message:
                 TextField("", text: $reply, prompt: Text("Answer here…").foregroundStyle(Color.dsFg3))
-                    .textFieldStyle(.plain).font(.system(size: 12.5)).frame(width: 160)
-                    .padding(.horizontal, 8).frame(height: 26)
-                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                    .textFieldStyle(.plain).font(.system(size: 12.5))
+                    .padding(.horizontal, 10).padding(.vertical, 6).frame(width: 170)
+                    .background(Color.dsWin, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.dsLine, lineWidth: 1))
                     .onSubmit(send)
             case .buildPrompt:
                 if let thread, let prompt = thread.prompts.first, prompt.kind == .approval {
-                    Button("Deny") { respond(thread, prompt, .deny) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                    Button("Allow") { respond(thread, prompt, .allow) }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                    Button("Deny") { respond(thread, prompt, .deny) }.buttonStyle(HomePillStyle())
+                    Button("Allow") { respond(thread, prompt, .allow) }.buttonStyle(HomePillStyle(primary: true))
                 } else {
-                    Button("Answer") { withAnimation(.snappy(duration: 0.18)) { expanded = entry.id } }.buttonStyle(PillStyle(compact: true))
+                    Button("Answer") { withAnimation(.snappy(duration: 0.18)) { expanded = entry.id } }.buttonStyle(HomePillStyle())
                 }
             case .runFailed:
-                Button("Dismiss") { markRead() }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                Button("Dismiss") { markRead() }.buttonStyle(HomePillStyle())
                 if engine.needsKey {
-                    Button("Set up a provider") { setUpProvider() }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                    Button("Set up a provider") { setUpProvider() }.buttonStyle(HomePillStyle(primary: true))
                 } else {
-                    Button("Run again") { runAgain() }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                    Button("Run again") { runAgain() }.buttonStyle(HomePillStyle(primary: true))
                 }
             case .budget:
-                Button("Keep paused") { markRead() }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                Button("Keep paused") { markRead() }.buttonStyle(HomePillStyle())
                 if let budget = entry.agent?.agent?.status?.budgetUsd {
-                    Button("Raise to \(MainSidebar.money(max(1, budget * 2)))") { raise(to: max(1, budget * 2)) }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                    Button("Raise to \(MainSidebar.money(max(1, budget * 2)))") { raise(to: max(1, budget * 2)) }.buttonStyle(HomePillStyle(primary: true))
                 }
             case .watchdog:
                 // The Watchdog never stops anything itself (docs/spec/17 §4): you look, and decide.
                 if let note = entry.watchdog {
-                    Button("Dismiss") { Task { await engine.dismissWatchdog(note) } }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    Button("Dismiss") { Task { await engine.dismissWatchdog(note) } }.buttonStyle(HomePillStyle())
                 }
-                Button("Open") { open() }.buttonStyle(PillStyle(compact: true))
+                Button("Open") { open() }.buttonStyle(HomePillStyle(primary: true))
             }
         }
     }
@@ -201,22 +208,26 @@ struct WaitingItem: View {
     // MARK: The full card
 
     @ViewBuilder private var detail: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             if let thread {
                 ForEach(thread.prompts) { prompt in PromptCard(session: thread, prompt: prompt, primary: false) }
                 if thread.prompts.isEmpty { Text("Waiting on you…").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
             } else if let body = content, !body.isEmpty {
-                Text(body).font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                // What came in, in an inset box; a failed run's log in mono.
+                Text(body).font(entry.kind == .runFailed ? .system(size: 12.5, design: .monospaced) : .system(size: 13)).foregroundStyle(Color.dsFg)
+                    .lineSpacing(5).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: DS.bubble), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             // The Watchdog's row already has Open.
             if entry.kind != .watchdog {
                 HStack(spacing: 14) {
                     if entry.kind == .runFailed, engine.needsKey {
-                        Button("Run again") { runAgain() }.buttonStyle(PillStyle(compact: true))
+                        Button("Run again") { runAgain() }.buttonStyle(HomePillStyle())
                     }
-                    Button(openLabel) { open(); if entry.kind == .message || entry.kind == .runFailed { markRead() } }
-                        .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    Button("\(openLabel) →") { open(); if entry.kind == .message || entry.kind == .runFailed { markRead() } }
+                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
                 }
             }
         }

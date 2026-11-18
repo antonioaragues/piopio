@@ -525,12 +525,15 @@ struct ContextRing: View {
 /// hover (radius 6, 3×6). `active` means it's on (web search, a picked option): fg instead of fg2.
 struct ChipStyle: ButtonStyle {
     var active = false
-    func makeBody(configuration: Configuration) -> some View { ChipBody(configuration: configuration, active: active) }
+    /// Quieter than a selector: fg3 until hovered (the model on Home's box).
+    var muted = false
+    func makeBody(configuration: Configuration) -> some View { ChipBody(configuration: configuration, active: active, muted: muted) }
 }
 
 private struct ChipBody: View {
     let configuration: ButtonStyleConfiguration
     let active: Bool
+    var muted = false
     @State private var hovering = false
 
     var body: some View {
@@ -538,7 +541,7 @@ private struct ChipBody: View {
             .font(.system(size: 12.5))
             .lineLimit(1)
             .fixedSize()
-            .foregroundStyle(active || hovering ? Color.dsFg : Color.dsFg2)
+            .foregroundStyle(active || hovering ? Color.dsFg : muted ? Color.dsFg3 : Color.dsFg2)
             .padding(.horizontal, 6)
             .frame(height: 24)
             .background(hovering || configuration.isPressed ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous))
@@ -629,7 +632,8 @@ enum ThinkingLevel {
 
 /// Composer selectors (model, mode): plain text, a grey fill on hover (the same as ChipStyle).
 struct ComposerChipStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { ChipStyle().makeBody(configuration: configuration) }
+    var muted = false
+    func makeBody(configuration: Configuration) -> some View { ChipStyle(muted: muted).makeBody(configuration: configuration) }
 }
 
 /// What the conversation may do in its folder (docs/spec/18 §4): Read only, Ask, Auto-edit, Full auto (below a divider),

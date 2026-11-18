@@ -335,3 +335,37 @@ struct EmptyState<Actions: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+/// Home's status tiles (docs/design/home): a tinted 28pt tile with an 8pt dot. Orange asks first, red failed, green is
+/// ready; everything else follows the system accent. Tints are the dot at low strength in dark mode.
+enum StatusTone {
+    case approval, failed, ready, other
+
+    var dot: Color {
+        switch self {
+        case .approval: Color(nsColor: Self.dynamic(0xE87F25, 0xF0954A))
+        case .failed: Color(nsColor: Self.dynamic(0xDA534F, 0xEF7D72))
+        case .ready: Color(nsColor: Self.dynamic(0x4FA866, 0x6CC28A))
+        case .other: .accentColor
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .approval: Color(nsColor: Self.dynamic(0xFFE8D6, 0xF0954A, darkAlpha: 0.18))
+        case .failed: Color(nsColor: Self.dynamic(0xFFE7E4, 0xEF7D72, darkAlpha: 0.18))
+        case .ready: Color(nsColor: Self.dynamic(0xDCF7E1, 0x6CC28A, darkAlpha: 0.18))
+        case .other: Color(nsColor: NSColor(name: nil) { a in NSColor.controlAccentColor.withAlphaComponent(a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? 0.22 : 0.12) })
+        }
+    }
+
+    /// The "Waiting on you" count: white on orange.
+    static let badge = Color(nsColor: dynamic(0xEE8A3C, 0xEE8A3C))
+
+    private static func dynamic(_ light: UInt32, _ dark: UInt32, darkAlpha: CGFloat = 1) -> NSColor {
+        func rgb(_ hex: UInt32, _ alpha: CGFloat) -> NSColor {
+            NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
+        }
+        return NSColor(name: nil) { a in a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? rgb(dark, darkAlpha) : rgb(light, 1) }
+    }
+}
