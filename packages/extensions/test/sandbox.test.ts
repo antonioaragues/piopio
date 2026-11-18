@@ -2,8 +2,23 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { describe, expect, test } from "vitest";
-import { confine, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
+import { confine, sandboxExtension, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
+
+test("bash activity descriptions are optional metadata and do not change execution", async () => {
+	let tool: ToolDefinition | undefined;
+	sandboxExtension({ enabled: () => false })({
+		on() {},
+		registerTool(definition: ToolDefinition) { tool = definition; },
+	} as never);
+	expect(tool!.parameters.properties.description.type).toBe("string");
+	expect(tool!.parameters.required).not.toContain("description");
+	for (const description of [undefined, "Checking the project", "$(printf unexpected)"]) {
+		const result = await tool!.execute("label-test", { command: "printf label-test", ...(description ? { description } : {}) }, undefined, undefined, undefined as never);
+		expect(result.content).toEqual([{ type: "text", text: "label-test" }]);
+	}
+});
 
 describe.skipIf(process.platform !== "darwin")("piopio-sandbox", () => {
 	// Stand-ins for the real tools, after the wrappers on PATH: they print what they were given.

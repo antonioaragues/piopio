@@ -186,6 +186,7 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 		});
 		const parameters = Type.Object({
 			...(plain.parameters as unknown as { properties: Record<string, never> }).properties,
+			description: Type.Optional(Type.String({ description: "A short activity label in the user's language, 3–8 words, e.g. 'Checking the project tests'. Describe the task, not the shell syntax." })),
 			[OUTSIDE_PROJECT]: Type.Optional(Type.Boolean({ description: "Run without the sandbox, to write outside the project. The user is asked first. Only when a sandboxed run failed for that reason." })),
 		});
 		pi.on("session_start", (_event, ctx) => {
@@ -194,9 +195,9 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 		pi.registerTool({
 			...plain,
 			parameters: parameters as never,
-			promptGuidelines: [...(plain.promptGuidelines ?? []), SANDBOX_GUIDELINE],
+			promptGuidelines: [...(plain.promptGuidelines ?? []), SANDBOX_GUIDELINE, "Include a short description of the task in each bash call, in the user's language. Piopio uses it as the activity label."],
 			async execute(toolCallId: string, params: unknown, signal: AbortSignal | undefined, onUpdate: never, ctx: never) {
-				const { [OUTSIDE_PROJECT]: outside, ...input } = params as { command: string; timeout?: number; outside_project?: boolean };
+				const { [OUTSIDE_PROJECT]: outside, description: _description, ...input } = params as { command: string; timeout?: number; outside_project?: boolean; description?: string };
 				if (outside || !bridge.enabled()) return plain.execute(toolCallId, input as never, signal, onUpdate, ctx);
 				const unavailable = sandboxUnavailable();
 				if (unavailable) {

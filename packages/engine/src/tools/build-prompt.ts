@@ -16,6 +16,9 @@ export const PI_PREAMBLE =
 /** pi's documentation section: paths into node_modules, only useful to someone extending pi. */
 export const PI_DOCS = /\n\n<docs>\n[\s\S]*?\n<\/docs>/;
 
+/** Codemode accepts raw JavaScript, so its activity label is an ordinary comment, not another argument. */
+export const TOOL_ACTIVITY = "For codemode, add a leading // Task: comment with a short activity label in the user's language (3–8 words, e.g. 'Checking the project tests'). Put it after the optional // @options: line. The app shows this label; code stays in the expandable details.";
+
 export function piopioPreamble(model?: string): string {
 	const powered = model ? `, powered by ${/\bmodel$/i.test(model) ? model : `the ${model} model`}` : "";
 	return `You are the agent in Piopio, a Mac app${powered}. You work in the user's folder (code or documents) with the tools below. The user follows along in Piopio's window: your messages, a line for each step you take, the diff of your changes, and cards for the files you hand over with present_files.`;
@@ -42,6 +45,7 @@ When you're done:
 
 Your messages:
 - Lead with the result, briefly. Don't paste files you wrote; the user sees them in the diff.
+- ${TOOL_ACTIVITY}
 - Name files as \`path\` or \`path:line\`, relative to the project, so the user can click them.
 - Answer in the user's language.
 

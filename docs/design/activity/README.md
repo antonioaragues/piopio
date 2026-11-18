@@ -13,8 +13,13 @@ What a turn did before answering (thinking, reads, commands, edits) is one quiet
   glyph is a red ✕. Open (files) and Copy (commands) show while pointing at the row, in grey.
 - **Thinking** is the first step: "Thought for 4s", then two lines of it in small grey, with Show all / Show less (it
   scrolls past 360 pt). No second disclosure, no thick rule.
-- **Commands** drop a leading `cd` into the project (where the session already is); a `cd` elsewhere shows as
-  "in <folder>" on the right. They cut at the end, not the middle. Opened: `$ <full command>`, then its output.
+- **Commands and scripts** show a short activity label instead of executable code. Bash accepts an optional
+  `description`; codemode uses a leading `// Task:` comment, after any `// @options:` line. Labels use the user's
+  language; old calls without one show "Running a command/script" or "Ran a command/script". Opened: the exact
+  command or script, then its output. Commands retain Copy; a `cd` outside the project shows "in <folder>" on the
+  right. Approval rows still identify the actual command.
+- **External tools** show readable operation and server names. The original tool name, arguments and output are
+  available when opened.
 
 Code: `ItemRenderer.activityParts` (order), `displayCommand`, `toolCard` (glyph, Copy, full command),
 `DisclosureCardView.line` and `LogStepView` in `Cards.swift`.

@@ -24,8 +24,9 @@ import Testing
     let bash = ToolItem(id: "t2", at: "", callId: "c2", tool: "bash", args: .object(["command": .string("npm test\necho done")]), status: .error, output: "boom",
                         details: .object(["type": .string("terminal"), "command": .string("npm test"), "exitCode": .number(2)]), durationMs: 1500)
     let bashCard = ItemRenderer.toolCard(bash)
-    #expect(bashCard.title == "Ran")
-    #expect(bashCard.detail == "npm test")
+    #expect(bashCard.title == "Command failed")
+    #expect(bashCard.detail.isEmpty)
+    #expect(bashCard.body == "$ npm test\necho done\n\nboom")
     #expect(bashCard.trailing == "exit 2 · 2s")
     #expect(bashCard.failed)
     #expect(!bashCard.expanded)
@@ -43,9 +44,60 @@ import Testing
     let bash = ToolItem(id: "t", at: "", callId: "c", tool: "bash", args: .object(["command": .string("cd /Users/me/app && python3 -c 'print(1)'")]), status: .done, output: "1",
                         details: .object(["type": .string("terminal"), "command": .string("x"), "exitCode": .number(0)]), durationMs: 400)
     let card = ItemRenderer.toolCard(bash, root: "/Users/me/app")
-    #expect(card.detail == "python3 -c 'print(1)'")
+    #expect(card.title == "Ran a command")
+    #expect(card.detail.isEmpty)
     #expect(card.body.hasPrefix("$ cd /Users/me/app && python3"))
     #expect(card.glyph == "apple.terminal")
+}
+
+@Test func commandLabelsKeepTheExactCommandInDetailsAndApprovals() {
+    let command = "cd /p && python3 -c 'print(1)'\necho done"
+    var item = ToolItem(id: "t", at: "", callId: "c", tool: "bash", args: .object([
+        "command": .string(command), "description": .string("  Revisando\n el proyecto  ")
+    ]), status: .running, details: .object(["type": .string("terminal"), "command": .string(command)]))
+    let card = ItemRenderer.toolCard(item)
+    #expect(card.title == "Revisando el proyecto")
+    #expect(card.detail.isEmpty)
+    #expect(card.body == "$ " + command)
+    #expect(card.action?.1 == .copyText(command))
+    #expect(ItemRenderer.stepsCard(StepsItem(id: "s", at: "", tools: [item])).title == "Revisando el proyecto…")
+    item.status = .pendingApproval
+    #expect(ItemRenderer.toolCard(item).detail == command)
+    #expect(ItemRenderer.toolCard(item).waiting)
+    item.status = .interrupted
+    #expect(ItemRenderer.toolCard(item).trailing == "stopped")
+    item.args = .object(["command": .string(command), "description": .string(" \n ")])
+    #expect(ItemRenderer.toolCard(item).title == "Command stopped")
+}
+
+@Test func scriptLabelsDoNotReplaceOrLeakExecutableSource() {
+    let code = "// @options: {\"timeout_ms\": 60000}\n// Task: Consultando el roadmap\nawait tools.read({path: '/p/a'})"
+    var item = ToolItem(id: "t", at: "", callId: "c", tool: "codemode", args: .object(["code": .string(code)]), status: .done, output: "Read 3 items")
+    let card = ItemRenderer.toolCard(item)
+    #expect(card.title == "Consultando el roadmap")
+    #expect(card.detail.isEmpty)
+    #expect(card.body == code + "\n\nRead 3 items")
+    #expect(!card.expanded)
+    // Historical scripts have no label. A comment after executable code isn't activity metadata.
+    item.args = .object(["code": .string("text('done')\n// Task: Not a label")])
+    #expect(ItemRenderer.toolCard(item).title == "Ran a script")
+    #expect(ItemRenderer.toolCard(item).detail.isEmpty)
+    #expect(ItemRenderer.toolCard(item).body.contains("text('done')"))
+}
+
+@Test func externalToolsHaveReadableNamesAndInspectableArguments() {
+    let item = ToolItem(id: "t", at: "", callId: "c", tool: "mcp__Claude_Docs__read_document", args: .object(["id": .string("doc-42")]), status: .done, output: "Document contents")
+    let card = ItemRenderer.toolCard(item)
+    #expect(card.title == "Read document")
+    #expect(card.detail == "Claude Docs")
+    #expect(card.body.contains("mcp__Claude_Docs__read_document"))
+    #expect(card.body.contains("doc-42"))
+    #expect(card.body.hasSuffix("Document contents"))
+    #expect(!card.expanded)
+    let unknown = ToolItem(id: "t2", at: "", callId: "c2", tool: "lookupWorkspace", args: .object(["name": .string("piopio")]), status: .running)
+    #expect(ItemRenderer.toolCard(unknown).title == "Lookup Workspace")
+    #expect(ItemRenderer.toolCard(unknown).body.contains("lookupWorkspace"))
+    #expect(ItemRenderer.toolCard(unknown).body.contains("piopio"))
 }
 
 @Test func theActivityLineFollowsTheOrderThingsHappened() {

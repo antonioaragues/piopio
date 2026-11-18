@@ -371,10 +371,6 @@ nonisolated struct ItemRenderer: Sendable {
         card.failed = s.tools.contains { $0.status == .error }
         if waiting {
             card.title = "Waiting for you"
-        } else if let running, running.tool == "bash" {
-            // Commands are often long chains ("cd … && export … && pnpm test"): the line just says one is running, and
-            // opening it shows the command in full.
-            card.title = "Running a command…"
         } else if let running {
             let (verb, raw) = toolTitle(running)
             card.title = relative(raw, root: root).isEmpty ? "\(verb)…" : "\(verb) \(relative(raw, root: root))…"
@@ -694,24 +690,30 @@ nonisolated struct ItemRenderer: Sendable {
             // Ran without asking you because auto review judged it safe: said on the row, and why when opened.
             if t.review != nil { trailing.append("auto-reviewed") }
             if !duration.isEmpty { trailing.append(duration) }
-            let firstLine = shown.command.split(separator: "\n").first.map(String.init) ?? shown.command
             // Opened: the whole command, then what it printed.
             let output = (t.output ?? "").trimmingCharacters(in: .newlines)
             let review = t.review.map { "# Auto review ran this without asking: \($0)\n" } ?? ""
-            card = DisclosureCard(tool: title, detail: firstLine, trailing: trailing.joined(separator: " · "), content: .terminal(review + "$ \(full)" + (output.isEmpty ? "" : "\n\n\(output)")))
-            card.truncateTail = true
+            card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .terminal(review + "$ \(full)" + (output.isEmpty ? "" : "\n\n\(output)")))
             card.action = ("Copy", .copyText(full))
         default:
             var body = t.output ?? ""
             if t.tool == "propose_plan", case .array(let steps)? = t.args?["steps"] {
                 body = steps.enumerated().map { "\($0.offset + 1). \($0.element.stringValue ?? "")" }.joined(separator: "\n") + (body.isEmpty ? "" : "\n\n\(body)")
+            } else if t.tool == "bash" || t.tool == "codemode" {
+                // Older or interrupted calls may not have typed details. Keep their input available too.
+                let source = t.args?["command"]?.stringValue ?? t.args?["code"]?.stringValue ?? t.args?["script"]?.stringValue ?? ""
+                body = (t.tool == "bash" ? "$ " : "") + source + (body.isEmpty ? "" : "\n\n\(body)")
+            } else if t.tool.hasPrefix("mcp__") || title == readableToolName(t.tool) {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+                let arguments = t.args.flatMap { try? encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
+                body = "Tool: \(t.tool)" + (arguments.map { "\n\nArguments\n\($0)" } ?? "") + (body.isEmpty ? "" : "\n\nResult\n\(body)")
             }
             card = DisclosureCard(tool: title, detail: detail, trailing: duration, content: .text(body))
             card.expanded = t.tool == "propose_plan"
         }
         card.failed = failed
         card.glyph = glyph(t.tool)
-        if ["codemode"].contains(t.tool) { card.truncateTail = true }
         // Files the agent read or changed open in the viewer (BR4).
         if ["read", "edit", "write"].contains(t.tool), let path = t.args?["path"]?.stringValue, t.status != .denied {
             var line: Int?
@@ -723,7 +725,7 @@ nonisolated struct ItemRenderer: Sendable {
             card.waiting = true
             card.trailing = "waiting for you"
         case .denied: card.trailing = "denied"
-        case .interrupted where t.output != nil: card.trailing = "stopped"
+        case .interrupted: card.trailing = "stopped"
         default: break
         }
         return card
@@ -764,6 +766,8 @@ nonisolated struct ItemRenderer: Sendable {
     /// Human titles for known tools ("Searched the web" + the query); others show their name and status.
     static func toolTitle(_ t: ToolItem) -> (String, String) {
         if t.status == .pendingApproval || t.status == .denied {
+            // Approval rows still identify the actual command, not just a model-written description.
+            if t.tool == "bash" { return ("Run", t.args?["command"]?.stringValue ?? "") }
             let (_, detail) = toolTitle(ToolItem(id: t.id, at: t.at, callId: t.callId, tool: t.tool, args: t.args, status: .done))
             let verb = ["bash": "Run", "edit": "Edit", "write": "Write", "read": "Read", "web_fetch": "Open", "web_search": "Search the web"][t.tool] ?? t.tool
             return (verb, detail)
@@ -784,8 +788,7 @@ nonisolated struct ItemRenderer: Sendable {
         case "write":
             return (running ? "Writing" : failed ? "Write failed" : "Wrote", path)
         case "bash":
-            let command = t.args?["command"]?.stringValue ?? ""
-            return (running ? "Running" : "Ran", command.split(separator: "\n").first.map(String.init) ?? command)
+            return (activityLabel(t) ?? (running ? "Running a command" : failed ? "Command failed" : t.status == .interrupted ? "Command stopped" : "Ran a command"), "")
         case "grep":
             return (running ? "Searching" : "Searched", t.args?["pattern"]?.stringValue ?? "")
         case "find":
@@ -814,15 +817,14 @@ nonisolated struct ItemRenderer: Sendable {
             let status = t.args?["status"]?.stringValue
             return (status == "done" ? "Goal done" : status == "blocked" ? "Goal blocked" : "Goal", t.args?["note"]?.stringValue ?? "")
         case "codemode":
-            let script = t.args?["code"]?.stringValue ?? t.args?["script"]?.stringValue ?? ""
-            return (running ? "Running a script" : "Ran a script", script.split(separator: "\n").first.map(String.init) ?? "")
+            return (activityLabel(t) ?? (running ? "Running a script" : failed ? "Script failed" : t.status == .interrupted ? "Script stopped" : "Ran a script"), "")
         case "tool_search":
             return (running ? "Finding tools" : "Found tools", t.args?["query"]?.stringValue ?? "")
         case let name where name.hasPrefix("mcp__"):
-            let parts = name.split(separator: "_", omittingEmptySubsequences: true)
-            let server = parts.count > 1 ? String(parts[1]) : "MCP"
-            let tool = name.components(separatedBy: "__").dropFirst(2).joined(separator: "__")
-            return (server, tool.isEmpty ? name : tool)
+            let parts = name.components(separatedBy: "__")
+            let server = parts.count > 1 ? readableToolName(parts[1]) : "Connected app"
+            let tool = parts.dropFirst(2).joined(separator: "_")
+            return (tool.isEmpty ? "Using a connected app" : readableToolName(tool), server)
         case "remember_about_me":
             let facts = t.args?["add"]?.arrayValue?.compactMap(\.stringValue).joined(separator: ", ") ?? ""
             return (running ? "Saving to About me" : failed ? "Not saved to About me" : "Saved to About me", facts)
@@ -865,8 +867,34 @@ nonisolated struct ItemRenderer: Sendable {
             let host = URL(string: url)?.host() ?? url
             return (running ? "Reading" : t.status == .error ? "Couldn't read" : "Read", host)
         default:
-            return (t.tool, t.status == .running ? "running" : t.status.rawValue)
+            return (readableToolName(t.tool), t.status == .running ? "running" : t.status.rawValue)
         }
+    }
+
+    /// Explicit activity metadata only: never guess a task from the first line of executable code.
+    static func activityLabel(_ t: ToolItem) -> String? {
+        var label: String?
+        if t.tool == "bash" { label = t.args?["description"]?.stringValue }
+        if t.tool == "codemode" {
+            let source = t.args?["code"]?.stringValue ?? t.args?["script"]?.stringValue ?? ""
+            for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
+                let line = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if line.isEmpty { continue }
+                guard line.hasPrefix("//") else { break }
+                if line.hasPrefix("// Task:") { label = String(line.dropFirst("// Task:".count)); break }
+            }
+        }
+        guard let label else { return nil }
+        let compact = label.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard !compact.isEmpty else { return nil }
+        return compact.count > 100 ? String(compact.prefix(99)) + "…" : compact
+    }
+
+    static func readableToolName(_ name: String) -> String {
+        let words = name.replacingOccurrences(of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression)
+            .replacingOccurrences(of: "[_-]+", with: " ", options: .regularExpression)
+            .split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        return words.isEmpty ? "Tool" : words.prefix(1).uppercased() + words.dropFirst()
     }
 
     // MARK: Footers (shown on hover)

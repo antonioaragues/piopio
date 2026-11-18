@@ -697,7 +697,8 @@ struct DisclosureCardView: View {
                 HStack(spacing: 8) {
                     if card.working { RunningRing() }
                     if card.waiting { Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6) }
-                    Text(card.title).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: card.failed ? DS.fg : DS.fg3)).fixedSize()
+                    Text(card.title).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: card.failed ? DS.fg : DS.fg3))
+                        .lineLimit(1).truncationMode(.tail)
                     if !card.detail.isEmpty {
                         Text(card.detail)
                             .font(.system(size: 12, design: .monospaced))
@@ -880,7 +881,8 @@ struct LogStepView: View {
                 HStack(spacing: 10) {
                     glyph
                     HStack(spacing: 7) {
-                        Text(card.title).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: card.failed ? DS.fg2 : DS.fg3)).fixedSize()
+                        Text(card.title).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: card.failed ? DS.fg2 : DS.fg3))
+                            .lineLimit(1).truncationMode(.tail)
                         if !card.detail.isEmpty {
                             Text(card.detail).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color(nsColor: DS.fg2))
                                 .lineLimit(1).truncationMode(card.truncateTail ? .tail : .middle)
