@@ -47,7 +47,7 @@ Piopio uses pi as its agent harness but exposes OpenRouter as the only model pro
 - Local models and custom compatible endpoints.
 - Model search and favorites; reasoning/thinking level; model metadata and capabilities; catalog refresh.
 
-**Out of scope:** automatic provider fallback; several models at once for one task; intelligent model routing; several accounts for the same provider; consolidated subscription usage or billing dashboards.
+**Out of scope:** automatic provider fallback (revised by [29](29-provider-order.md): the same model through the next provider in your order, asking before credits); several models at once for one task; intelligent model routing; several accounts for the same provider; consolidated subscription usage or billing dashboards.
 
 ## 4. Functional requirements
 ### FR1 — Provider management
@@ -79,7 +79,7 @@ The model picker lists models from every connected provider.
 ### FR4 — Authentication and errors
 Handle missing credentials, invalid API keys, expired OAuth, rate limits, subscription or quota limits, unavailable models and network failures.
 
-Never silently switch to another paid provider on an error. Make clear that a ChatGPT subscription, OpenAI API billing and OpenRouter billing are separate arrangements.
+Never silently switch to another paid provider on an error (29 PO6: a switch along your order is never silent, and moving to credits asks by default). Make clear that a ChatGPT subscription, OpenAI API billing and OpenRouter billing are separate arrangements.
 
 ## 5. UX requirements
 **Model Providers settings:** connected accounts and available providers, with simple add, reconnect and disconnect. OpenAI offers two clearly different methods that coexist with OpenRouter:
