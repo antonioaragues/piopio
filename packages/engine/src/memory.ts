@@ -15,18 +15,6 @@ import { EngineError } from "./models.js";
 import type { Settings } from "./settings.js";
 import { transport, withTimeout } from "./tools/mcp-chat.js";
 
-/** Hindsight's MCP endpoint (one for every bank, `bank_id` as an argument). Checked against hindsight-api 1.0.0. */
-export const HINDSIGHT_PRESET: Omit<McpMemoryConfig, "id" | "name"> = {
-	url: "http://127.0.0.1:8888/mcp",
-	tools: {
-		recall: { tool: "recall", args: { query: "{query}", bank_id: "{bank}", max_tokens: "{budget}", budget: "mid" } },
-		retain: { tool: "retain", args: { content: "{content}", bank_id: "{bank}", timestamp: "{at}", context: "{source}" } },
-		list: { tool: "list_memories", args: { bank_id: "{bank}", limit: "{limit}" } },
-		forget: { tool: "invalidate_memory", args: { memory_id: "{id}", bank_id: "{bank}", reason: "Forgotten in Piopio" } },
-		reflect: { tool: "reflect", args: { query: "{query}", bank_id: "{bank}" } },
-	},
-};
-
 /** The default embedding model (docs/spec/14-memory §5.1): the same model through OpenRouter or the OpenAI API, so vectors match either way. */
 export const EMBEDDING_MODEL = { id: "openai/text-embedding-3-small@256", openrouter: "openai/text-embedding-3-small", openai: "text-embedding-3-small", dims: 256 };
 /** Search by meaning is opt-in (docs/spec/14 §7): on when set, or when a custom endpoint is configured. */

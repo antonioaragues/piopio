@@ -308,12 +308,6 @@ export function connectorTools(hub: ConnectorHub, scope: "chat" | "agent", off: 
 	return tools;
 }
 
-/** Which tools apply now: those whose capability some connected account offers. */
-export function availableTools(hub: ConnectorHub, scope: "chat" | "agent"): ConnectorTool[] {
-	const has = { calendar: hub.calendars(scope).length > 0, mail: hub.mailboxes(scope).length > 0 };
-	return connectorTools(hub, scope).filter((t) => has[t.capability]);
-}
-
 /** The prompt section: which apps are connected, the time zone, and that their content is data. */
 export function connectorsSection(hub: ConnectorHub, scope: "chat" | "agent", off: (connector: string) => boolean = () => false): string | undefined {
 	const calendars = hub.calendars(scope, off).map((c) => `${c.name} (${c.account.label})`);

@@ -182,7 +182,7 @@ export class Projects {
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; lenses?: Lens[]; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
 		if (change.linkFolder) this.link(entry, change.linkFolder);

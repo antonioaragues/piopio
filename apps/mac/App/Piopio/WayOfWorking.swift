@@ -218,37 +218,3 @@ struct ParallelFitSheet: View {
         }
     }
 }
-
-/// AGENTS.md and NOTES.md (design 4a): "Edited 2 days ago" and Open, or Create.
-struct ProjectFileRow: View {
-    let project: ProjectInfo
-    let name: String
-    let about: String
-    let starter: String
-    @State private var tick = 0
-
-    var body: some View {
-        let url = URL(fileURLWithPath: project.path).appendingPathComponent(name)
-        let modified = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
-        _ = tick
-        return HStack(spacing: 10) {
-            Image(systemName: "doc.text").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.system(size: 13, weight: .medium, design: .monospaced))
-                Text(about).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            }
-            Spacer()
-            if let modified {
-                Text("Edited \(RelativeDateTimeFormatter().localizedString(for: modified, relativeTo: Date()))").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                Button("Open") { NSWorkspace.shared.open(url) }.buttonStyle(PillStyle(compact: true))
-            } else {
-                Button("Create") {
-                    try? starter.write(to: url, atomically: true, encoding: .utf8)
-                    tick += 1
-                    NSWorkspace.shared.open(url)
-                }
-                .buttonStyle(PillStyle(compact: true))
-            }
-        }
-    }
-}

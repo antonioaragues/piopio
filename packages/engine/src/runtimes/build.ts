@@ -961,10 +961,6 @@ export class BuildRuntime implements Runtime {
 		this.rebuild(true);
 	}
 
-	async clearQueue(): Promise<void> {
-		this.session.clearQueue();
-	}
-
 	async close(): Promise<void> {
 		this.broker.cancelAll();
 		this.unsubscribe?.();

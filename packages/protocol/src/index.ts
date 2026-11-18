@@ -988,10 +988,6 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef, queueId: Type.String() }),
 		result: Type.Object({}),
 	},
-	"sessions.queue.clear": {
-		params: Type.Object({ ref: ContainerRef }),
-		result: Type.Object({}),
-	},
 	"sessions.export": {
 		params: Type.Object({ ref: ContainerRef, format: literals("markdown", "html", "jsonl") }),
 		result: Type.Object({ filename: Type.String(), mimeType: Type.String(), content: Type.String() }),
@@ -1036,10 +1032,6 @@ export const methods = {
 		}),
 	},
 	/** Checks a provider key without saving it (welcome, settings). */
-	"models.verifyKey": {
-		params: Type.Object({ provider: Type.String(), key: Type.String() }),
-		result: Type.Object({ ok: Type.Boolean(), message: Type.Optional(Type.String()), label: Type.Optional(Type.String()), usageUsd: Type.Optional(Type.Number()), limitUsd: Type.Optional(Type.Union([Type.Number(), Type.Null()])) }),
-	},
 	/** Whether Apple's on-device model can run on this Mac now (07-shared §1.3), and why not. */
 	"models.onDevice": { params: Type.Object({}), result: Type.Object({ available: Type.Boolean(), reason: Type.Optional(Type.String()) }) },
 	"models.list": {
@@ -1205,7 +1197,6 @@ export const methods = {
 			approvalMode: Type.Optional(ApprovalMode),
 			removeRule: Type.Optional(Type.String()),
 			trust: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])),
-			lenses: Type.Optional(Type.Array(literals("build", "chat"))),
 			/** Links a folder (absolute), or changes whether it can be edited when it's already linked (18 §18). */
 			linkFolder: Type.Optional(Type.Object({ path: Type.String(), edit: Type.Boolean() })),
 			/** Unlinks a folder (its path as `folders` lists it). Nothing on disk changes. */

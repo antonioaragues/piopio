@@ -470,10 +470,6 @@ final class EngineController {
         projects.filter { $0.lenses.contains(lens) }
     }
 
-    func setLenses(_ lenses: [ProjectInfo.Lens], for project: ProjectInfo) async {
-        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, lenses: lenses), as: ProjectsAddResult.self)
-    }
-
     func listDir(_ cwd: String, _ dir: String) async -> [DirEntry] {
         (try? await client?.call("projects.listDir", ListDirParams(cwd: cwd, dir: dir), as: ListDirResult.self).entries) ?? []
     }
@@ -555,11 +551,9 @@ final class EngineController {
 
     /// The model new conversations start with.
     var preferredModel: ModelRef? { model(for: .chat) }
-    func setPreferredModel(_ model: ModelRef) { setModel(model, for: .chat) }
 
     /// Quick Chat's model (a fast one by choice); defaults to the chat model.
     var quickChatModel: ModelRef? { model(for: .quick) }
-    func setQuickChatModel(_ model: ModelRef) { setModel(model, for: .quick) }
 
     private var preferenceTick = 0
 
@@ -851,10 +845,6 @@ final class EngineController {
     func agentRunNow(_ ref: ContainerRef, scheduleId: String? = nil, prompt: String? = nil, trial: Bool = false) async throws -> String {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         return try await client.call("agents.runNow", AgentRunNowParams(ref: ref, scheduleId: scheduleId, prompt: prompt, trial: trial), as: AgentRunNowResult.self).runId
-    }
-
-    func agentTriggers(_ ref: ContainerRef) async -> [AgentTriggersResult.Trigger] {
-        (try? await client?.call("agents.triggers", RefParams(ref: ref), as: AgentTriggersResult.self).triggers) ?? []
     }
 
     // MARK: Approvals, Undo, pause and the Inbox (06-agents §4.2, §9, §12)
@@ -1210,12 +1200,6 @@ final class EngineController {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if faux { await scriptedSecrets.set(secretOpenRouter, value: trimmed) } else { try Keychain.write(secretOpenRouter, value: trimmed) }
         hasKey = true
-        _ = try? await client?.call("secrets.changed", SecretChangedParams(name: secretOpenRouter), as: Empty.self)
-    }
-
-    func removeKey() async {
-        if faux { await scriptedSecrets.set(secretOpenRouter, value: nil) } else { Keychain.delete(secretOpenRouter) }
-        hasKey = false
         _ = try? await client?.call("secrets.changed", SecretChangedParams(name: secretOpenRouter), as: Empty.self)
     }
 }

@@ -8,8 +8,6 @@
 import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
-export const SIDE_TOOLS = ["side_start", "side_offer", "side_propose", "side_dismiss", "side_send", "side_read", "side_stop"] as const;
-
 /** One of this conversation's side conversations, as its context lists it. */
 export type SideLine = { id: string; title: string; state: string; branch?: string; line?: string };
 

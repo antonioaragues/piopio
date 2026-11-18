@@ -846,8 +846,6 @@ extension Composer {
         .glassPanel(radius: DS.Radius.panel, material: .regularMaterial)
     }
 
-    private func isFile(_ s: Suggestion) -> Bool { if case .file = s { true } else { false } }
-
     private func title(_ s: Suggestion) -> String {
         switch s {
         case .file(let f): f.path

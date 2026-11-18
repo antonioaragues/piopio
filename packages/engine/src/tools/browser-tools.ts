@@ -19,8 +19,6 @@ import type { AppServices } from "../app-services.js";
 import type { CallSite } from "../connectors/extension.js";
 import { isPrivateHost } from "./web.js";
 
-export const BROWSER_EXTENSION = "piopio-browser";
-
 type Image = { mimeType: string; data: string };
 export type BrowserResult = { text: string; images: Image[]; isError?: boolean };
 /** Asks the user to let the model act on a site: Allow (this conversation), Allow and don't ask again, or Deny. */

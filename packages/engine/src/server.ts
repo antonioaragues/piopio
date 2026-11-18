@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
-import { EngineError, keyHint, ModelHub, providerUsage, verifyProviderKey } from "./models.js";
+import { EngineError, keyHint, ModelHub, providerUsage } from "./models.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
@@ -565,7 +565,7 @@ export class Engine {
 		};
 	}
 
-	private async capability(ref: Params<"sessions.open">["ref"], name: "edit" | "regenerate" | "switchBranch" | "removeQueued" | "clearQueue"): Promise<Runtime> {
+	private async capability(ref: Params<"sessions.open">["ref"], name: "edit" | "regenerate" | "switchBranch" | "removeQueued"): Promise<Runtime> {
 		const runtime = await this.sessions.runtime(ref);
 		if (!runtime[name]) throw new EngineError("INVALID", `${ref.kind} sessions don't support ${name} yet.`);
 		return runtime;
@@ -685,11 +685,6 @@ export class Engine {
 				await this.capability(p.ref, "removeQueued").then((r) => r.removeQueued!(p.queueId));
 				return {};
 			}
-			case "sessions.queue.clear": {
-				const p = params as Params<"sessions.queue.clear">;
-				await this.capability(p.ref, "clearQueue").then((r) => r.clearQueue!());
-				return {};
-			}
 			case "sessions.configure": {
 				const p = params as Params<"sessions.configure">;
 				await this.sessions.configure(p.ref, { ...(p.model ? { model: p.model } : {}), ...(p.thinking ? { thinking: p.thinking } : {}), ...(p.web !== undefined ? { web: p.web } : {}), ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.planMode !== undefined ? { planMode: p.planMode } : {}), ...(p.toolsOff ? { toolsOff: p.toolsOff } : {}) });
@@ -719,7 +714,7 @@ export class Engine {
 			}
 			case "projects.configure": {
 				const p = params as Params<"projects.configure">;
-				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.lenses ? { lenses: p.lenses } : {}), ...(p.linkFolder ? { linkFolder: p.linkFolder } : {}), ...(p.unlinkFolder ? { unlinkFolder: p.unlinkFolder } : {}), ...(p.prEvents ? { prEvents: p.prEvents } : {}) };
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.linkFolder ? { linkFolder: p.linkFolder } : {}), ...(p.unlinkFolder ? { unlinkFolder: p.unlinkFolder } : {}), ...(p.prEvents ? { prEvents: p.prEvents } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
 			}
 			case "projects.create": {
@@ -1262,10 +1257,6 @@ export class Engine {
 			case "catalog.search": {
 				const p = params as Params<"catalog.search">;
 				return { results: await this.sessions.find(p.query, p.limit ?? 30, p.kind) } satisfies Result<"catalog.search">;
-			}
-			case "models.verifyKey": {
-				const p = params as Params<"models.verifyKey">;
-				return (await verifyProviderKey(p.provider, p.key)) satisfies Result<"models.verifyKey">;
 			}
 			case "models.onDevice":
 				return (await this.hub.onDevice.status()) satisfies Result<"models.onDevice">;

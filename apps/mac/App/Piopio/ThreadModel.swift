@@ -378,10 +378,6 @@ final class ThreadModel {
         await call("sessions.queue.remove", QueueRemoveParams(ref: ref, queueId: id))
     }
 
-    func clearQueue() async {
-        await call("sessions.queue.clear", RefParams(ref: ref))
-    }
-
     /// Calls the engine for this thread; failures show above the composer.
     private func call(_ method: String, _ params: some Encodable & Sendable) async {
         guard let client = engine?.client else { report(EngineError(code: "ENGINE_UNAVAILABLE", message: "Piopio is reconnecting. Try again when connected.")); return }

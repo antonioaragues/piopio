@@ -4,21 +4,6 @@ import SwiftUI
 
 // Small helpers several views share.
 
-/// An NSMenuItem that runs a closure (menus built in code).
-final class ClosureMenuItem: NSMenuItem {
-    private let run: () -> Void
-
-    init(title: String, run: @escaping () -> Void) {
-        self.run = run
-        super.init(title: title, action: #selector(fire), keyEquivalent: "")
-        target = self
-    }
-
-    @available(*, unavailable) required init(coder: NSCoder) { fatalError() }
-
-    @objc private func fire() { run() }
-}
-
 /// Runs `work`, and says what went wrong in an alert.
 @MainActor func run(_ work: @escaping () async throws -> Void) {
     Task {

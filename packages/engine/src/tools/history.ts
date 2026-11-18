@@ -14,9 +14,6 @@ import type { TimelineItem } from "@piopio/protocol";
 import { formatGap, keepEnds } from "@piopio/runtime";
 import { MARK_END, MARK_START } from "../search.js";
 
-export const HISTORY_EXTENSION = "piopio-history";
-export const HISTORY_TOOLS = ["search_conversations", "read_conversation"] as const;
-
 /** A conversation the model may look into. */
 export type HistoryHit = { id: string; title: string; at: string; snippet?: string };
 

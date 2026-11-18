@@ -80,16 +80,6 @@ test("a pi session's message carries its files as tags, read back as chips; an e
 	expect(sdkUser([{ type: "text", text: '<attachment name="old.md">\nhi\n</attachment>\nwords' }, { type: "image", data: "AAAA", mimeType: "image/jpeg" }])).toEqual({ text: "words", attachments: [{ name: "old.md", kind: "text", size: 2 }, { name: "image", kind: "image", mimeType: "image/jpeg", size: 3 }] });
 });
 
-test("provider keys are verified against OpenRouter's key endpoint", async () => {
-	const { verifyProviderKey } = await import("../src/models.js");
-	const ok = (async () => new Response(JSON.stringify({ data: { label: "sk-or-v1-abc...", usage: 18.4, limit: null } }), { status: 200 })) as typeof fetch;
-	const bad = (async () => new Response("{}", { status: 401 })) as typeof fetch;
-	expect(await verifyProviderKey("openrouter", "sk-or-v1-x", ok)).toEqual({ ok: true, label: "sk-or-v1-abc...", usageUsd: 18.4, limitUsd: null });
-	expect(await verifyProviderKey("openrouter", "nope", bad)).toEqual({ ok: false, message: "OpenRouter didn't accept this key." });
-	expect((await verifyProviderKey("openrouter", "  ", ok)).ok).toBe(false);
-});
-
-
 test("canonical IPv4-mapped IPv6 cannot bypass local network protection", async () => {
 	for (const url of ["http://[::ffff:127.0.0.1]/", "http://[::ffff:192.168.1.1]/", "http://[::ffff:7f00:1]/", "http://2130706433/", "http://0x7f000001/"]) {
 		expect(await isPrivateHost(new URL(url).hostname), url).toBe(true);

@@ -10,9 +10,7 @@ extension Color {
     static let dsSeg = Color(nsColor: DS.seg)
     static let dsCard = Color(nsColor: DS.card)
     static let dsChip = Color(nsColor: DS.chip)
-    static let dsBubble = Color(nsColor: DS.bubble)
     static let dsPill = Color(nsColor: DS.pill)
-    static let dsGlassEdge = Color(nsColor: DS.glassEdge)
     static let dsFg = Color(nsColor: DS.fg)
     static let dsFg2 = Color(nsColor: DS.fg2)
     static let dsFg3 = Color(nsColor: DS.fg3)
@@ -31,7 +29,6 @@ extension Color {
     })
     static let dsAccentSoft = Color(nsColor: DS.accentSoft)
     static let dsAccentLine = Color(nsColor: DS.accentLine)
-    static let dsYolk = Color(nsColor: DS.yolk)
     static let dsYolkSoft = Color(nsColor: DS.yolkSoft)
 }
 
@@ -336,16 +333,5 @@ struct EmptyState<Actions: View>: View {
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-/// A hairline box (radius 12) for the few things that need one.
-struct CardTile<Content: View>: View {
-    @ViewBuilder var content: Content
-    var body: some View {
-        content
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.card).strokeBorder(Color.dsLine, lineWidth: 0.5))
     }
 }

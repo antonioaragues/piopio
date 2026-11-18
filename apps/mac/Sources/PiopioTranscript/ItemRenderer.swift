@@ -834,8 +834,6 @@ nonisolated struct ItemRenderer: Sendable {
 
     // MARK: Footers (shown on hover)
 
-    private var footerFont: NSFont { .systemFont(ofSize: 11.5, weight: .medium) }
-
     /// A capsule button: a dark fill for the primary action (its thin spaces are its padding), plain text otherwise.
     func pill(_ title: String, _ action: TranscriptAction, _ style: PillStyle) -> NSAttributedString {
         NSAttributedString(string: "\u{2009}\u{2009}\u{2009}\u{2009}\(title)\u{2009}\u{2009}\u{2009}\u{2009}", attributes: [
@@ -1116,10 +1114,6 @@ nonisolated struct ItemRenderer: Sendable {
         m.addAttribute(.piopioCard, value: kind.rawValue, range: NSRange(location: 0, length: m.length))
         return m
     }
-}
-
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 /// What the app calls each model ("DeepSeek V4.1 Flash 1017" for "deepseek-v4.1-flash-1017"), so a message's footer names

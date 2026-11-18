@@ -24464,49 +24464,6 @@
 			"type": "object",
 			"properties": {}
 		},
-		"sessions.queue.clear.params": {
-			"type": "object",
-			"required": [
-				"ref"
-			],
-			"properties": {
-				"ref": {
-					"type": "object",
-					"required": [
-						"kind",
-						"id"
-					],
-					"properties": {
-						"kind": {
-							"anyOf": [
-								{
-									"type": "string",
-									"const": "build"
-								},
-								{
-									"type": "string",
-									"const": "thread"
-								},
-								{
-									"type": "string",
-									"const": "agent"
-								}
-							]
-						},
-						"id": {
-							"type": "string"
-						},
-						"conversationId": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		},
-		"sessions.queue.clear.result": {
-			"type": "object",
-			"properties": {}
-		},
 		"sessions.export.params": {
 			"type": "object",
 			"required": [
@@ -24999,51 +24956,6 @@
 				},
 				"totalUsd": {
 					"type": "number"
-				}
-			}
-		},
-		"models.verifyKey.params": {
-			"type": "object",
-			"required": [
-				"provider",
-				"key"
-			],
-			"properties": {
-				"provider": {
-					"type": "string"
-				},
-				"key": {
-					"type": "string"
-				}
-			}
-		},
-		"models.verifyKey.result": {
-			"type": "object",
-			"required": [
-				"ok"
-			],
-			"properties": {
-				"ok": {
-					"type": "boolean"
-				},
-				"message": {
-					"type": "string"
-				},
-				"label": {
-					"type": "string"
-				},
-				"usageUsd": {
-					"type": "number"
-				},
-				"limitUsd": {
-					"anyOf": [
-						{
-							"type": "number"
-						},
-						{
-							"type": "null"
-						}
-					]
 				}
 			}
 		},
@@ -26931,21 +26843,6 @@
 							"type": "null"
 						}
 					]
-				},
-				"lenses": {
-					"type": "array",
-					"items": {
-						"anyOf": [
-							{
-								"type": "string",
-								"const": "build"
-							},
-							{
-								"type": "string",
-								"const": "chat"
-							}
-						]
-					}
 				},
 				"linkFolder": {
 					"type": "object",

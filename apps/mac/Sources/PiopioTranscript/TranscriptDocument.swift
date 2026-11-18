@@ -1052,12 +1052,7 @@ extension TranscriptDocument {
     }
 }
 
-/// A turn's activity as words, for views outside the transcript: "Searched the web 5 times, read 3 pages".
-public enum TranscriptText {
-    public static func activity(_ steps: StepsItem) -> String { ItemRenderer.stepsCard(steps).title }
-}
-
-/// Markdown rendered in the transcript's style, for other views (the Chat lens file preview).
+/// Markdown rendered in the transcript's style, for other views (the file viewer).
 public enum MarkdownRendering {
     /// Files are hard-wrapped: lines of one paragraph join with a space, as Markdown reads them.
     public static func attributed(_ markdown: String) -> NSAttributedString {

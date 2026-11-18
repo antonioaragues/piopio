@@ -54,7 +54,6 @@ The single contract between clients (Mac app, later the iOS app) and engines (Lo
 | `sessions.fork({ref, fromItemId})` → new ref/conversation | Thread/Space fork, Build fork/clone |
 | `sessions.compact({ref, instructions?})` | Manual compaction |
 | `sessions.export({ref, format:"md"\|"html"\|"jsonl"})` | |
-| `sessions.queue.clear({ref})` | Clear queued follow-ups |
 
 ### 3.5 Approvals
 | Method / notification | Purpose |

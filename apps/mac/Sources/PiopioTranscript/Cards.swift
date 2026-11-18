@@ -15,10 +15,6 @@ extension NSAttributedString.Key {
     static let piopioPill = NSAttributedString.Key("piopio.pill")
     /// Natural (single-line) width of a user bubble's text; the document turns it into indents per column width.
     static let piopioBubbleWidth = NSAttributedString.Key("piopio.bubbleWidth")
-    /// Hover-revealed actions under a message (value: item id), and the link they open when shown.
-    static let piopioFooter = NSAttributedString.Key("piopio.footer")
-    static let piopioFooterLink = NSAttributedString.Key("piopio.footerLink")
-    static let piopioFooterColor = NSAttributedString.Key("piopio.footerColor")
     /// A quote's rule in another colour (an agent's answer, docs/spec/21 D6).
     static let piopioCardTint = NSAttributedString.Key("piopio.cardTint")
     /// A right-aligned tab stop this far from the column's right edge (a code card's Copy button); the document sets
@@ -367,7 +363,6 @@ public final class DisclosureCard: @unchecked Sendable {
     static let imageLineHeight: CGFloat = 40
     /// The quiet line's height for this card.
     var lineHeight: CGFloat { images.isEmpty ? Self.lineHeight : Self.imageLineHeight }
-    static let nestedSpacing: CGFloat = 6
 
     static let collapsedHeight: CGFloat = 26
     static let diffRowHeight: CGFloat = 17

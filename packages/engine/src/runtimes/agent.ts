@@ -360,10 +360,6 @@ export class AgentRuntime implements Runtime {
 		return this.owner.removeQueued(queueId);
 	}
 
-	clearQueue(): Promise<void> {
-		return this.owner.clearQueue();
-	}
-
 	async close(): Promise<void> {
 		this.core.close();
 		for (const view of await Promise.allSettled(this.views.values())) if (view.status === "fulfilled") await view.value.stop();
@@ -724,10 +720,6 @@ export class AgentView implements Runtime {
 		const submission = await this.agent.submission(queueId);
 		if (!submission) throw new EngineError("NOT_FOUND", "That message is no longer queued.");
 		await submission.abort(ctx);
-	}
-
-	async clearQueue(): Promise<void> {
-		for (const q of this.builder.snapshot().state.queue) await this.removeQueued(q.id).catch(() => undefined);
 	}
 
 	async stop(): Promise<void> {

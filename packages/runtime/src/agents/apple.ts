@@ -83,8 +83,6 @@ export const APPLE_TOOLS: { group: AppleGroup; name: string; description: string
 	{ group: "shortcuts", name: "shortcuts_run", description: "Run one of the owner's Shortcuts by name (only those allowed in your definition), with optional text input.", parameters: Type.Object({ name: Type.String(), input: opt(Type.String()) }) },
 ];
 
-export const appleGroupOf = (name: string): AppleGroup | undefined => APPLE_TOOLS.find((t) => t.name === name)?.group;
-
 /** The tools, executed through the host. */
 export function appleTools(host: AppleHost) {
 	return APPLE_TOOLS.map((spec) =>

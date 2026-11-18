@@ -47,9 +47,6 @@ import SwiftUI
         if let data = try? Data(contentsOf: url), let saved = try? JSONDecoder().decode([String: Draft].self, from: data) { drafts = saved }
     }
 
-    /// The draft key for a new session in a project.
-    static func sessionKey(_ projectId: String) -> String { "session:" + projectId }
-
     subscript(kind: StartKind) -> Draft { self[key: kind.rawValue] }
     subscript(key key: String) -> Draft { drafts[key] ?? Draft() }
 
@@ -509,20 +506,6 @@ private struct MainActionStyle: ButtonStyle {
     }
 }
 
-/// A 36pt icon-only button in the card's footer; `bordered` draws its outline (the new-session attach button).
-private struct FooterIcon: View {
-    let symbol: String
-    let label: String
-    var bordered = false
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) { Image(systemName: symbol).font(.system(size: 15)) }
-            .buttonStyle(IconButtonStyle(size: 36))
-            .overlay { if bordered { RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1).allowsHitTesting(false) } }
-            .help(label).accessibilityLabel(label)
-    }
-}
-
 /// The round 36pt send button: dark once there is something to send (the same on Chat and New session).
 private struct SendCircle: View {
     let enabled: Bool
@@ -599,25 +582,6 @@ struct StartError: View {
             Label(text, systemImage: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-}
-
-private struct LinkButton: View {
-    let title: String
-    let action: () -> Void
-    var body: some View {
-        Button(title, action: action).buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.accentColor)
-    }
-}
-
-/// A list in a card: rows divided by hairlines.
-private struct CardList<Content: View>: View {
-    @ViewBuilder var content: Content
-    var body: some View {
-        VStack(spacing: 0) { content }
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

@@ -19,7 +19,6 @@ export interface Runtime {
 	regenerate?(itemId: string): Promise<void>;
 	switchBranch?(branch: string): Promise<void>;
 	removeQueued?(queueId: string): Promise<void>;
-	clearQueue?(): Promise<void>;
 }
 
 export class Emitter {

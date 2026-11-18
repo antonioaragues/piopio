@@ -680,7 +680,6 @@ public struct StartSideParams: Encodable, Sendable {
     public init(ref: ContainerRef, brief: String) { self.ref = ref; self.brief = brief }
 }
 public struct WorkListResult: Decodable, Sendable { public var work: [ProjectWork] }
-public struct WorkGetResult: Decodable, Sendable { public var work: ProjectWork? }
 public struct WorkResult: Decodable, Sendable { public var work: ProjectWork }
 
 /// A change to how work is done in a project. "" clears a model or the checks; a budget of 0 clears it.
@@ -863,10 +862,6 @@ public struct InboxChanged: Decodable, Sendable {
     public struct Approval: Decodable, Sendable { public var agent: ContainerRef; public var agentName, approvalId, title: String }
     public var count: Int
     public var approval: Approval?
-}
-public struct AgentTriggersResult: Decodable, Sendable {
-    public struct Trigger: Decodable, Sendable, Hashable, Identifiable { public var id, url: String }
-    public var triggers: [Trigger]
 }
 public struct AgentMemoryResult: Decodable, Sendable {
     public struct Partition: Decodable, Sendable, Hashable, Identifiable { public var id, label, bank: String }
@@ -1648,14 +1643,13 @@ public struct ProjectsConfigureParams: Encodable, Sendable {
     public var approvalMode: ApprovalMode?
     public var removeRule: String?
     public var trust: Bool?
-    public var lenses: [ProjectInfo.Lens]?
     public struct LinkFolder: Encodable, Sendable { public var path: String; public var edit: Bool; public init(path: String, edit: Bool) { self.path = path; self.edit = edit } }
     /// Links a folder, or changes whether it can be edited (docs/spec/18 §18).
     public var linkFolder: LinkFolder?
     public var unlinkFolder: String?
     public var prEvents: String?
-    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, lenses: [ProjectInfo.Lens]? = nil, linkFolder: LinkFolder? = nil, unlinkFolder: String? = nil, prEvents: String? = nil) {
-        self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust; self.lenses = lenses
+    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, linkFolder: LinkFolder? = nil, unlinkFolder: String? = nil, prEvents: String? = nil) {
+        self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust
         self.linkFolder = linkFolder; self.unlinkFolder = unlinkFolder; self.prEvents = prEvents
     }
 }
@@ -1770,13 +1764,6 @@ public struct SearchResults: Decodable, Sendable { public var results: [SearchRe
 
 // MARK: Keys and engine info
 
-public struct VerifyKeyParams: Encodable, Sendable {
-    public var provider: String; public var key: String
-    public init(provider: String, key: String) { self.provider = provider; self.key = key }
-}
-public struct VerifyKeyResult: Decodable, Sendable, Equatable {
-    public var ok: Bool; public var message: String?; public var label: String?; public var usageUsd: Double?; public var limitUsd: Double?
-}
 public struct EngineStatusResult: Decodable, Sendable {
     public var uptimeMs: Double; public var openSessions: Int; public var subscriptions: Int; public var runtime: String; public var memoryMB: Double; public var dataPath: String
 }

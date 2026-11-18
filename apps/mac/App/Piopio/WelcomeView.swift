@@ -802,14 +802,3 @@ private struct WelcomeReadyStep: View {
         .buttonStyle(.plain)
     }
 }
-
-/// Small rounded badge ("Soon", "CLOUD").
-struct Badge: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-    var body: some View {
-        Text(text).font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
-            .padding(.horizontal, 7).padding(.vertical, 2)
-            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.badge))
-    }
-}

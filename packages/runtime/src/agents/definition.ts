@@ -8,8 +8,6 @@ import { Value } from "typebox/value";
 
 const SecretRef = Type.String({ pattern: "^secret:[A-Za-z0-9_]+$" });
 
-export const BUILTIN_TOOLS = ["web_search", "web_fetch", "memory", "schedule", "send_message", "http_request", "codemode", "files"] as const;
-
 export const Contact = Type.Object({
 	id: Type.String({ pattern: "^[a-z0-9_-]+$" }),
 	name: Type.String({ minLength: 1 }),
