@@ -179,6 +179,9 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 
 ## 6. Proactivity & scheduling
 
+> 27 (draft 2026-11-18) proposes moving schedules, the heartbeat, triggers, reminders and watches out of the agent into
+> automations, objects of their own that run as an agent or as Piopio. PR4 and PR5 stay with the agent.
+
 - **PR1** **Schedules:** cron + timezone, defined in the definition or created by the agent at runtime. Each fire creates a `run:<id>` conversation with the prompt + relevant memory. The run may call `send_message`, or decide not to (it records "nothing to report").
 - **PR2** **Heartbeat:** optional periodic wake during active hours, with the heartbeat prompt plus a digest of recent activity. Cost-capped (skipped when the budget is above 80%).
 - **PR3** **Triggers:** generic webhook endpoint per trigger (HMAC-signed URL). The payload is templated into a prompt and runs as a `run`. Later: RSS, email-in, calendar. Locally: `POST http://127.0.0.1:47615/hooks/<agentId>/<triggerId>/<token>`, where the token is an HMAC of agent and trigger under a key in the engine's home. The body (≤ 1 MB) replaces `{{body}}`; an `Idempotency-Key` or `X-Delivery-Id` header makes a retry the same run. Reaching it from the internet needs a tunnel (optional, the user's own).
