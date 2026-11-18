@@ -1,48 +1,48 @@
 import { expect, test } from "vitest";
 import { buildAgenda } from "../src/agenda.js";
 
-/** Home's agenda (docs/spec/21 D2, design 5e): a Tuesday morning in Madrid, back at 10:00 after leaving at 22:00. */
-test("Home's agenda: today's timeline across agents and projects (their routines and boards), and what happened while you were away", () => {
+/** Home's agenda (docs/spec/21 D2, 27 AU10): a Tuesday morning in Madrid, back at 10:00 after leaving at 22:00. */
+test("Home's agenda: today's timeline from automations and boards, and what happened while you were away, one line per automation", () => {
 	const tz = "Europe/Madrid";
 	const at = (h: number, m = 0, day = 10) => new Date(Date.UTC(2026, 10, day, h - 1, m)).toISOString(); // CET = UTC+1
+	const brief = { kind: "agent" as const, id: "agt_brief", name: "Morning briefing" };
+	const habit = { kind: "agent" as const, id: "agt_habit", name: "Habit coach" };
+	const piopio = { kind: "project" as const, id: "prj_p", name: "piopio" };
 	const agenda = buildAgenda({
 		now: Date.parse(at(10)),
 		tz,
 		since: Date.parse(at(22, 0, 9)),
-		agents: [
-			{
-				id: "agt_brief",
-				name: "Morning briefing",
-				runs: [{ id: "r1", kind: "schedule", source: "Morning briefing", prompt: "Send the briefing", firedAt: at(8), status: "done", summary: "Sent you today's briefing", sent: 1, costUsd: 0.0009 }],
-				upcoming: [{ id: "s1", kind: "schedule", label: "Morning briefing", next: at(8, 0, 11) }, { id: "w1", kind: "watch", label: "Bank emails" }],
-				held: 0,
-			},
-			{
-				id: "agt_habit",
-				name: "Habit coach",
-				runs: [{ id: "r2", kind: "schedule", source: "Check-in", prompt: "Check in", firedAt: at(21, 0, 9), status: "done", sent: 0, costUsd: 0.0004 }, { id: "r3", kind: "schedule", source: "Check-in", prompt: "Check in", firedAt: at(6, 30), status: "done", sent: 0 }],
-				upcoming: [{ id: "s2", kind: "schedule", label: "Check-in", next: at(21) }],
-				held: 2,
-			},
+		automations: [
+			{ id: "a_brief", name: "Morning briefing", source: brief, on: "time", label: "Every day at 08:00", next: Date.parse(at(8, 0, 11)), enabled: true },
+			{ id: "a_bank", name: "Bank emails", source: brief, on: "email", label: "When an email from the bank arrives", enabled: true },
+			{ id: "a_check", name: "Check-in", source: habit, on: "time", label: "Every day at 21:00", next: Date.parse(at(21)), enabled: true },
+			{ id: "a_week", name: "Weekly brief", source: piopio, on: "time", label: "Every Tuesday at 11:00", next: Date.parse(at(11)), enabled: true },
+			{ id: "a_off", name: "Paused one", source: piopio, on: "folder", label: "When a file appears in ~/Inbox", enabled: false },
 		],
-		projects: [{ id: "prj_p", name: "piopio", routines: [{ id: "rt", on: "time", prompt: "Write this week's brief", cron: "0 11 * * 2", tz, by: "you", createdAt: at(9, 0, 1), next: Date.parse(at(11)), runs: 0 }] }],
+		runs: [
+			{ automation: "a_brief", firedAt: at(8), status: "done", summary: "Sent you today's briefing", costUsd: 0.0009 },
+			{ automation: "a_check", firedAt: at(21, 0, 9), status: "quiet", costUsd: 0.0004 },
+			{ automation: "a_check", firedAt: at(6, 30), status: "quiet" },
+		],
 		boards: [{ project: { id: "prj_p", name: "piopio" }, tasks: [{ id: "T1", title: "Fix crash reports", state: "doing", attempts: 0, updatedAt: at(9, 30) }, { id: "T2", title: "Settings screen", state: "done", attempts: 1, updatedAt: at(9) }] }],
+		held: 2,
 	});
 	expect(agenda.today.map((x) => [x.at?.slice(11, 16), x.source.name, x.label, x.state])).toEqual([
-		["05:30", "Habit coach", "", "done"],
-		["07:00", "Morning briefing", "", "done"],
+		["05:30", "Habit coach", "Check-in", "done"],
+		["07:00", "Morning briefing", "Morning briefing", "done"],
 		["09:00", "piopio", "fix crash reports", "running"],
-		["10:00", "piopio", "Write this week's brief", "upcoming"],
+		["10:00", "piopio", "Weekly brief", "upcoming"],
 		["20:00", "Habit coach", "Check-in", "upcoming"],
 		// Within the next 24 hours: tomorrow's 8:00 briefing, after a "Tomorrow" divider.
 		["07:00", "Morning briefing", "Morning briefing", "upcoming"],
-		[undefined, "Morning briefing", "Bank emails", "event"],
+		[undefined, "Morning briefing", "Bank emails · when an email from the bank arrives", "event"],
 	]);
 	expect(agenda.today.find((x) => x.at?.startsWith("2026-11-11T07"))?.tomorrow).toBe(true);
+	expect(agenda.today.find((x) => x.label === "Weekly brief")?.automation).toBe("a_week");
 	expect(agenda.away.map((x) => [x.source.name, x.text, x.quiet])).toEqual([
 		["piopio", "finished a task; the reviewer sent one back", false],
-		["Morning briefing", "Sent you today's briefing", false],
-		["Habit coach", "had nothing new", true],
+		["Morning briefing", "Morning briefing: Sent you today's briefing", false],
+		["Habit coach", "Check-in: had nothing new", true],
 	]);
 	expect(agenda.held).toBe(2);
 });

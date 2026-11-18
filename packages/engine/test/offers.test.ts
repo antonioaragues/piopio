@@ -8,7 +8,7 @@ import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
 import { TestClient } from "./client.js";
 
-// Piopio offers (docs/spec/26 CL9): parallel work in a project that doesn't have it yet, or a routine; "Work in
+// Piopio offers (docs/spec/26 CL9): parallel work in a project that doesn't have it yet; "Work in
 // parallel" switches it on, and the same conversation plans the work with the board.
 
 type Ctx = { engine: Engine; client: TestClient };
@@ -51,7 +51,7 @@ function project(): string {
 
 const call = (tool: string, args: object) => `call: ${tool} | ${JSON.stringify(args)}`;
 
-test("Piopio offers parallel work or a routine in a project; Work in parallel switches it on and the conversation plans with the board", async () => {
+test("Piopio offers parallel work in a project and makes automations when asked; Work in parallel switches it on and the conversation plans with the board", async () => {
 	const a = await start();
 	const folder = project();
 	const { project: added } = await a.client.call("projects.add", { path: folder });
@@ -65,8 +65,11 @@ test("Piopio offers parallel work or a routine in a project; Work in parallel sw
 	await a.client.call("sessions.submit", { ref, input: { text: call("offer_parallel", { why: "Three screens can be built at once.", parts: ["Settings", "Profile", "Search"] }) } });
 	let xs = await until(items, (x) => tool(x, "offer_parallel").some((t) => t.status === "done") && x.at(-1)?.kind === "assistant");
 	expect(tool(xs, "offer_parallel")[0]).toMatchObject({ output: expect.stringContaining("Offered"), args: { parts: ["Settings", "Profile", "Search"] } });
-	await a.client.call("sessions.submit", { ref, input: { text: call("offer_repeat", { what: "Summarize yesterday's commits", when: "Every weekday at 9:00", cron: "0 9 * * 1-5" }) } });
-	xs = await until(items, (x) => tool(x, "offer_repeat").some((t) => t.status === "done") && x.at(-1)?.kind === "assistant");
+	// Something to repeat isn't an offer: Piopio makes the automation, here in the project (docs/spec/27 AU4, AU6).
+	await a.client.call("sessions.submit", { ref, input: { text: call("automate", { when: "0 9 * * 1-5", prompt: "Summarize yesterday's commits" }) } });
+	xs = await until(items, (x) => tool(x, "automate").some((t) => t.status === "done") && x.at(-1)?.kind === "assistant");
+	expect(tool(xs, "automate")[0]).toMatchObject({ output: expect.stringContaining("Every weekday at 09:00") });
+	expect((await a.client.call("automations.list", { project: added.id })).automations).toEqual([expect.objectContaining({ runsAs: "piopio", project: added.id, by: "piopio", result: "conversation", runnerName: `Piopio in ${added.name}` })]);
 	await idle();
 
 	// Another project's conversation can't accept for this one.

@@ -126,6 +126,8 @@ struct SideOffers: ViewModifier {
         content
             .onChange(of: sides, initial: true) { _, now in document.setSides(now, openProposals: proposals) }
             .onChange(of: proposals) { _, now in document.setSides(sides, openProposals: now) }
+            // Automation cards (docs/spec/27): one that's gone reads "Removed".
+            .onChange(of: engine.automationsGeneration, initial: true) { _, _ in document.setAutomations(Set(engine.automations.map(\.id))) }
             .onReceive(NotificationCenter.default.publisher(for: .transcriptOffer)) { note in
                 guard note.object as? String == ref.id, let kind = note.userInfo?["kind"] as? String, kind.hasPrefix("side-"),
                       let id = note.userInfo?["call"] as? String else { return }

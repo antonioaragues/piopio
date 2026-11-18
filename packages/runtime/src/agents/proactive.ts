@@ -12,7 +12,7 @@ import { cronError, type AgentDefinition } from "./definition.js";
 import type { ResultCard, UndoKind } from "./safety.js";
 import { cronLabel, dayOf, inWindow, nextDay, nextFire, nextHeartbeat, windowEnd } from "./time.js";
 
-export type RunKind = "schedule" | "heartbeat" | "reminder" | "trigger" | "manual";
+export type RunKind = "schedule" | "heartbeat" | "reminder" | "trigger" | "manual" | "automation";
 export type RunRecord = {
 	id: string;
 	kind: RunKind;
@@ -28,6 +28,10 @@ export type RunRecord = {
 	summary?: string;
 	sent: number;
 	costUsd?: number;
+	/** An automation's run (docs/spec/27): its name, what the run is told about its result, and its budget. */
+	label?: string;
+	note?: string;
+	budgetUsd?: number;
 };
 /**
  * An event routine the agent set itself (the `watch` tool, docs/spec/19 S3): a webhook (it gets a URL), a folder (a file
@@ -52,6 +56,35 @@ export type Reminder = { id: string; prompt: string; deliverTo?: string; at?: nu
 export type Outbound = { id: string; to: string; text: string; from: string; queuedAt: string; notBefore: number; reason: "quiet" | "limit" | "paused"; urgent?: boolean };
 /** A schedule, the heartbeat or a reminder, with its next fire (the Runs tab). */
 export type Upcoming = { id: string; kind: "schedule" | "heartbeat" | "reminder" | "watch"; label: string; next?: number; cron?: string };
+/**
+ * Automations (docs/spec/27): kept by the host, made and changed by the agent through its tools, always run as the
+ * agent itself (AU5). The host checks the rules and answers in words the agent can act on.
+ */
+export type AutomationToolInput = {
+	name?: string;
+	on?: "time" | "email" | "folder" | "webhook";
+	when?: string;
+	folder?: string;
+	from?: string;
+	subject?: string;
+	prompt?: string;
+	result?: "chat" | "telegram" | "quiet";
+	to?: string;
+	approval?: "wait" | "skip";
+	budget?: number;
+	enabled?: boolean;
+};
+/** What a card shows (the app's creation card, 27 §4). */
+export type AutomationSummary = { id: string; name: string; when: string; runsAs: string; does: string; tellsYou: string; runsOn: string; url?: string; next?: number };
+export interface AutomationsBridge {
+	add(input: AutomationToolInput, by: string): Promise<AutomationSummary>;
+	list(): Promise<string>;
+	/** Returns the record before the change, for Undo. */
+	change(id: string, input: AutomationToolInput): Promise<{ summary: AutomationSummary; before: JsonObject }>;
+	remove(id: string): Promise<{ summary: AutomationSummary; before: JsonObject }>;
+	/** Undo: removes a new one (`id`), or puts a record back as it was (`before`). */
+	undo(data: { id?: string; before?: JsonObject }): Promise<void>;
+}
 export type ProactiveState = {
 	runs?: RunRecord[];
 	reminders?: Reminder[];
@@ -100,6 +133,8 @@ export interface ProactiveHost {
 	watchUrl?(id: string): string | undefined;
 	/** Watches were added or removed: the host starts or stops watching. */
 	onWatches?(): void;
+	/** Automations (docs/spec/27): with this, the agent's tools are automate and friends, not schedule and watch. */
+	automations?: AutomationsBridge;
 }
 
 type ScheduleInput = { key: string; sig: string };
@@ -268,19 +303,19 @@ export class Proactivity {
 	// ── Runs ──
 
 	/** Starts a run: its own conversation, the prompt submitted once (`requestKey` makes a repeated fire a no-op). */
-	async startRun(kind: RunKind, source: string, prompt: string, deliverTo?: string, requestKey?: string): Promise<RunRecord> {
+	async startRun(kind: RunKind, source: string, prompt: string, deliverTo?: string, requestKey?: string, extra?: { label?: string; note?: string; budgetUsd?: number }): Promise<RunRecord> {
 		const key = requestKey ?? `${kind}:${source}@${this.host.now()}`;
 		const existing = ((await this.host.read()).runs ?? []).find((r) => r.id === runId(key));
 		if (existing) return existing;
 		const gate = (await this.host.gate?.()) ?? { ok: true as const };
 		if (!gate.ok) {
-			const skipped: RunRecord = { id: runId(key), kind, source, prompt, firedAt: new Date(this.host.now()).toISOString(), conversationId: "", status: "skipped", summary: gate.message, sent: 0, costUsd: 0 };
+			const skipped: RunRecord = { id: runId(key), kind, source, prompt, firedAt: new Date(this.host.now()).toISOString(), conversationId: "", status: "skipped", summary: gate.message, sent: 0, costUsd: 0, ...extras(extra) };
 			await this.host.write((s) => void (s.runs = [...(s.runs ?? []), skipped].slice(-MAX_RUNS)));
 			this.host.onRun?.(skipped);
 			return skipped;
 		}
 		const conversationId = await this.host.newConversation();
-		const run: RunRecord = { id: runId(key), kind, source, prompt, firedAt: new Date(this.host.now()).toISOString(), conversationId: String(conversationId), ...(deliverTo ? { deliverTo } : {}), status: "running", sent: 0 };
+		const run: RunRecord = { id: runId(key), kind, source, prompt, firedAt: new Date(this.host.now()).toISOString(), conversationId: String(conversationId), ...(deliverTo ? { deliverTo } : {}), status: "running", sent: 0, ...extras(extra) };
 		await this.host.write((s) => {
 			s.runs = [...(s.runs ?? []), run].slice(-MAX_RUNS);
 		});
@@ -307,18 +342,7 @@ export class Proactivity {
 	private async settle(id: string, status: "done" | "failed"): Promise<void> {
 		const run = ((await this.host.read()).runs ?? []).find((r) => r.id === id);
 		if (!run) return;
-		const conversation = await this.host.harness.conversation(Number(run.conversationId) as never, this.host.context);
-		// The active transcript, as the model sees it.
-		const entries = (await conversation!.context(this.host.context)).entries as unknown as readonly { kind: string; model?: { role: string; content?: unknown; usage?: { cost?: { total?: number } } }[] }[];
-		let costUsd = 0;
-		let summary = "";
-		for (const e of entries) {
-			const m = e.model?.[0];
-			if (m?.role !== "assistant") continue;
-			costUsd += m.usage?.cost?.total ?? 0;
-			const text = Array.isArray(m.content) ? (m.content as { type: string; text?: string }[]).filter((b) => b.type === "text").map((b) => b.text ?? "").join("") : "";
-			if (text.trim()) summary = text.trim();
-		}
+		const { costUsd, summary } = await this.spentIn(run.conversationId);
 		let settled: RunRecord | undefined;
 		await this.host.write((s) => {
 			const r = (s.runs ?? []).find((x) => x.id === id);
@@ -329,6 +353,31 @@ export class Proactivity {
 			settled = { ...r };
 		});
 		if (settled) this.host.onRun?.(settled);
+	}
+
+	/** What a conversation has cost so far (its active transcript, as the model sees it), and its last answer. */
+	async spentIn(conversationId: string): Promise<{ costUsd: number; summary: string }> {
+		const conversation = await this.host.harness.conversation(Number(conversationId) as never, this.host.context);
+		const entries = conversation ? ((await conversation.context(this.host.context)).entries as unknown as readonly { kind: string; model?: { role: string; content?: unknown; usage?: { cost?: { total?: number } } }[] }[]) : [];
+		let costUsd = 0;
+		let summary = "";
+		for (const e of entries) {
+			const m = e.model?.[0];
+			if (m?.role !== "assistant") continue;
+			costUsd += m.usage?.cost?.total ?? 0;
+			const text = Array.isArray(m.content) ? (m.content as { type: string; text?: string }[]).filter((b) => b.type === "text").map((b) => b.text ?? "").join("") : "";
+			if (text.trim()) summary = text.trim();
+		}
+		return { costUsd, summary };
+	}
+
+	/** An automation's run over its budget (docs/spec/27 AU8): the reason to stop, or undefined while there's room. */
+	async overBudget(conversationId: ConversationId | string): Promise<string | undefined> {
+		const run = await this.runOf(conversationId);
+		if (!run?.budgetUsd || run.status !== "running") return undefined;
+		const { costUsd } = await this.spentIn(run.conversationId);
+		if (costUsd < run.budgetUsd) return undefined;
+		return `This run reached its budget of $${run.budgetUsd.toFixed(2)}. Stop here: don't call more tools. Say in one or two lines what you did and what's left.`;
 	}
 
 	/** Runs (newest first), held messages, and what fires next: the Runs tab. */
@@ -380,9 +429,9 @@ export class Proactivity {
 	}
 
 	runPrompt(run: RunRecord): string {
-		const what = run.kind === "schedule" ? `the schedule “${run.source}”` : run.kind === "heartbeat" ? "your heartbeat" : run.kind === "reminder" ? `a reminder you set (${run.source})` : run.kind === "trigger" ? `the trigger “${run.source}”` : "a manual run";
+		const what = run.kind === "automation" ? `the automation “${run.label ?? run.source}”` : run.kind === "schedule" ? `the schedule “${run.source}”` : run.kind === "heartbeat" ? "your heartbeat" : run.kind === "reminder" ? `a reminder you set (${run.source})` : run.kind === "trigger" ? `the trigger “${run.source}”` : "a manual run";
 		const to = run.deliverTo ?? this.owner;
-		return `This is an automatic run, started by ${what} at ${run.firedAt.slice(0, 16).replace("T", " ")} UTC. Nobody reads this conversation. To tell someone something, use send_message (usually to “${to}”). If there's nothing worth saying, don't send anything and answer “Nothing to report.”`;
+		return `This is an automatic run, started by ${what} at ${run.firedAt.slice(0, 16).replace("T", " ")} UTC. Nobody reads this conversation. To tell someone something, use send_message (usually to “${to}”). If there's nothing worth saying, don't send anything and answer “Nothing to report.”${run.note ? ` ${run.note}` : ""}`;
 	}
 
 	// ── Messages ──
@@ -647,13 +696,128 @@ export class Proactivity {
 			},
 		});
 
-		return { send: sendTool, schedule: scheduleTool, list: listTool, cancel: cancelTool, watch: watchTool };
+		return { send: sendTool, schedule: scheduleTool, list: listTool, cancel: cancelTool, watch: watchTool, ...this.automationTools() };
+	}
+
+	/**
+	 * Automations (docs/spec/27): the agent makes, lists, changes and removes its own, always run as itself (AU5).
+	 * Each change is a card with Undo. Absent when the host keeps no automations (the cloud, for now).
+	 */
+	private automationTools() {
+		const self = this;
+		const bridge = () => {
+			const b = self.host.automations;
+			if (!b) throw new Error("Automations aren't available here.");
+			return b;
+		};
+		const fail = (error: unknown) => ({ output: [{ type: "text" as const, text: (error as Error).message }], isError: true });
+		const card = (title: string, s: AutomationSummary): ResultCard => ({ kind: "automation", title, detail: `${s.when} · ${s.does}`, automation: s });
+		const describe = (s: AutomationSummary) => `${s.id} “${s.name}”: ${s.when}; ${s.does}; tells: ${s.tellsYou}.${s.next ? ` First run ${new Date(s.next).toISOString().slice(0, 16).replace("T", " ")} UTC.` : ""}${s.url ? ` Its URL (POST, from this Mac): ${s.url}` : ""}`;
+		const trigger = {
+			on: Type.Optional(Type.Union([Type.Literal("time"), Type.Literal("email"), Type.Literal("folder"), Type.Literal("webhook")], { description: "What starts it (default time)" })),
+			when: Type.Optional(Type.String({ description: "time: a 5-field cron (\"0 9 * * 1\" is Mondays at 9) or a local date-time once (2026-11-23T09:00)" })),
+			from: Type.Optional(Type.String({ description: "email: part of the sender's name or address" })),
+			subject: Type.Optional(Type.String({ description: "email: words in the subject" })),
+			folder: Type.Optional(Type.String({ description: "folder: an absolute path, or one starting with ~/" })),
+		};
+		const rest = {
+			name: Type.Optional(Type.String({ description: "A few words, e.g. “Weekly competitor brief”" })),
+			result: Type.Optional(Type.Union([Type.Literal("chat"), Type.Literal("telegram"), Type.Literal("quiet")], { description: "Where the result goes: chat (your chat with the owner, the default), telegram (only if you're connected), quiet (only message when something needs them)" })),
+			approval: Type.Optional(Type.Union([Type.Literal("wait"), Type.Literal("skip")], { description: "When a run needs the owner's OK: wait for it (default) or skip that run" })),
+			budget: Type.Optional(Type.Number({ description: "USD per run; default 0.25" })),
+		};
+		const automate = defineTool({
+			name: "automate",
+			description:
+				"Make an automation: work you'll do on your own, when nobody asks. A time (once or repeating), a new email, a file in a folder, or a URL other apps can call. Each time it fires you get the prompt in an automatic run. Use it when the owner asks for something regular or for later (\"every Monday at 9…\", \"remind me Thursday…\", \"when an invoice arrives…\"). It always runs as you.",
+			parameters: Type.Object({ ...trigger, prompt: Type.String({ description: "What to do then, in plain words" }), ...rest, to: Type.Optional(Type.String({ description: "Who it's for (a contact id). Default: the owner" })) }),
+			execute: async (args, api) => {
+				try {
+					const by = (await self.personOf(api.conversationId)) ?? "run";
+					const s = await bridge().add(args as AutomationToolInput, by);
+					const undo = await self.host.recordUndo?.("automation.remove", { id: s.id }, `the automation “${s.name}”`, api.conversationId);
+					return { output: [{ type: "text", text: `Made ${describe(s)} The owner sees it in Automations.` }], details: { id: s.id, card: card(s.name, s), ...(undo ? { undo } : {}) } as never };
+				} catch (error) {
+					return fail(error);
+				}
+			},
+		});
+		const list = defineTool({
+			name: "list_automations",
+			description: "Your automations: what starts each one, what it does, where it tells, and when it runs next.",
+			parameters: Type.Object({}),
+			execute: async () => {
+				try {
+					return { output: [{ type: "text", text: await bridge().list() }] };
+				} catch (error) {
+					return fail(error);
+				}
+			},
+		});
+		const change = defineTool({
+			name: "change_automation",
+			description: "Change one of your automations, by id: its time or event, prompt, name, result, approval, budget, or pause it (enabled false) and resume it.",
+			parameters: Type.Object({ id: Type.String(), ...trigger, prompt: Type.Optional(Type.String()), ...rest, enabled: Type.Optional(Type.Boolean()) }),
+			execute: async (args, api) => {
+				try {
+					const { id, ...input } = args;
+					const { summary, before } = await bridge().change(id, input as AutomationToolInput);
+					const undo = await self.host.recordUndo?.("automation.restore", { before }, `the change to “${summary.name}”`, api.conversationId);
+					return { output: [{ type: "text", text: `Changed ${describe(summary)}` }], details: { id, card: card(`Changed · ${summary.name}`, summary), ...(undo ? { undo } : {}) } as never };
+				} catch (error) {
+					return fail(error);
+				}
+			},
+		});
+		const cancel = defineTool({
+			name: "cancel_automation",
+			description: "Remove one of your automations, by id.",
+			parameters: Type.Object({ id: Type.String() }),
+			execute: async (args, api) => {
+				try {
+					const { summary, before } = await bridge().remove(args.id);
+					const undo = await self.host.recordUndo?.("automation.restore", { before }, `removing “${summary.name}”`, api.conversationId);
+					return { output: [{ type: "text", text: `Removed ${summary.id} “${summary.name}”.` }], details: { card: { kind: "automation", title: `Removed · ${summary.name}`, detail: summary.when }, ...(undo ? { undo } : {}) } as never };
+				} catch (error) {
+					return fail(error);
+				}
+			},
+		});
+		return { automate, listAutomations: list, changeAutomation: change, cancelAutomation: cancel };
+	}
+
+	/**
+	 * Reminders and watches the agent set itself, handed over to the host's automations (docs/spec/27 §6) and cleared
+	 * here, with its runs for their history. Returns nothing to hand over the second time.
+	 */
+	async handOver(): Promise<{ reminders: Reminder[]; watches: Watch[]; runs: RunRecord[] }> {
+		const state = await this.host.read();
+		const reminders = state.reminders ?? [];
+		const watches = state.watches ?? [];
+		if (!reminders.length && !watches.length) return { reminders, watches, runs: [] };
+		await this.host.write((s) => {
+			s.reminders = [];
+			s.watches = [];
+		});
+		await this.reconcile();
+		this.host.onWatches?.();
+		return { reminders, watches, runs: state.runs ?? [] };
+	}
+
+	/** Undo of an automation change (the host keeps them). */
+	async undoAutomation(data: { id?: string; before?: JsonObject }): Promise<void> {
+		if (!this.host.automations) throw new Error("Automations aren't available here.");
+		await this.host.automations.undo(data);
 	}
 
 	private async personOf(conversationId: ConversationId | string): Promise<string | undefined> {
 		const people = (await this.host.read()).people;
 		return Object.entries(people).find(([, c]) => c === String(conversationId))?.[0];
 	}
+}
+
+function extras(extra?: { label?: string; note?: string; budgetUsd?: number }) {
+	return { ...(extra?.label ? { label: extra.label } : {}), ...(extra?.note ? { note: extra.note } : {}), ...(extra?.budgetUsd ? { budgetUsd: extra.budgetUsd } : {}) };
 }
 
 function runId(key: string): string {

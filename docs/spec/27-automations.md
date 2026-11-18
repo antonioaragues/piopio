@@ -1,6 +1,7 @@
 # 27 · Automations: when work starts on its own
 
-Status: draft 2026-11-18, from a conversation with the user; nothing here is built. It takes "when" away from agents
+Status: draft 2026-11-18, from a conversation with the user; A1 and A2 built 2026-11-18 (§10), A3 (a real-model
+trial) not done. It takes "when" away from agents
 and projects and makes it an object of its own. It changes 06 §6 (PR1–PR3, PR6, PR7's `schedule`), 19 S3 (watches),
 21 AD5 and 26 CL10 (routines with two owners). 26's model of agents (CL1–CL12) holds; this spec makes it simpler.
 The interaction is mocked up on a design canvas: a target-state board and a clickable prototype (agent chat →
@@ -237,3 +238,26 @@ did). A3 follows.
   the run. Is the per-run budget worth showing for agents, or only for Piopio in a project?
 - **The name.** "Automations" is chosen (AU12). Look at it again after A3, if people keep saying "routine" when they
   ask.
+
+## 10. A1 and A2 as built (2026-11-18)
+
+**Engine** (`packages/engine/src/automations/`): `model.ts` (the record, `whenLabel`, `parseWhen`), `service.ts` (store
+in `automations.json` and `automation-runs.json`, the clock, firing as an agent or as Piopio, webhook addresses and
+aliases, the rules, budgets for Piopio's runs), `tools.ts` (Piopio's `automate` family in every conversation with it,
+and the bridge an agent's tools call), `migrate.ts` (§6). The work runner no longer has routines; `routines.*` and
+`offer_repeat` are gone. Agents get `automate` and friends from the runtime (`proactive.ts`) when the host keeps
+automations; the cloud keeps `schedule` and `watch` for now. An agent's run stops at its budget in the tool hook.
+Home's agenda reads automations; each line carries its automation.
+
+**App:** Automations in the sidebar, the list (filters by runner or project, a switch per row), an automation's page
+(the sentence with menus, When, What it's told, While you're away, Runs, Delete), New Automation, the creation card in
+chats (an agent's with its Undo, Piopio's with Undo as removal), "From <name>" on an agent's run lines, the agent
+page's header link and glance cell, Setup's Automations section (quiet hours and time zone moved to Limits), the
+project settings' link, Home lines that open their automation, and the migration report. Captures:
+`docs/design/automations/app/`.
+
+**Checked:** engine tests (`automations.test.ts` and the updated agent, work, offers and agenda tests), the Swift
+tests, the app builds, and captures with the scripted model.
+
+**Not done:** A3 with real models; the budget stop for agents is checked before each tool call, not mid-answer; the
+design pass from `docs/design/automations-brief.md` hasn't happened, so the screens follow the first mockup.

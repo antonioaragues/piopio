@@ -28,6 +28,9 @@ nonisolated struct ItemRenderer: Sendable {
     var openProposals: [String: Date] = [:]
     /// Offers (side_offer call ids) you answered with Do it here: a grey line instead of the card.
     var keptHere: Set<String> = []
+    /// The automations that exist now (docs/spec/27); nil until the app says. A card for one that's gone reads
+    /// "Removed".
+    var automations: Set<String>?
 
     /// Answers 15 / 1.6 (chat v3); Quick Chat keeps the compact 13.5.
     private var bodySize: CGFloat { compact ? DS.transcriptSize : 15 }
@@ -55,6 +58,15 @@ nonisolated struct ItemRenderer: Sendable {
             return Self.sideNotes(u.text).reduce(into: NSMutableAttributedString()) { out, n in
                 out.append(n.body.isEmpty ? note(n.title) : thinkingCard(DisclosureCard(kind: .thinking, title: n.title, body: n.body)))
             }
+        case .user(let u) where u.text.hasPrefix("[Automation] "):
+            // An automation started this conversation (docs/spec/27 §5): "Automation · Weekly brief", what it was told
+            // opens under it.
+            if compact { return NSAttributedString() }
+            let text = String(u.text.dropFirst(13))
+            let first = text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? text
+            let name = first.range(of: "“").flatMap { open in first[open.upperBound...].range(of: "”").map { String(first[open.upperBound..<$0.lowerBound]) } } ?? "Automation"
+            let body = text.components(separatedBy: "\n\n").dropFirst().joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            return thinkingCard(DisclosureCard(kind: .thinking, title: "Automation · \(name)", body: body.isEmpty ? first : body))
         case .user(let u) where u.text.hasPrefix("[Board] ") || u.text.hasPrefix("[Routine] "):
             // A board update or a routine firing (docs/spec/20 §4): an event, not something you wrote. Its first line
             // shows; the report opens under it.
@@ -107,6 +119,12 @@ nonisolated struct ItemRenderer: Sendable {
             return sideOffer(t)
         case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat") && t.status == .done:
             return offerCard(t)
+        case .tool(let t) where t.tool == "automate" && t.status == .done:
+            // Piopio made an automation (docs/spec/27 §4): its card, Open in Automations and Undo.
+            guard case .object(let details)? = t.details, case .object(let s)? = details["automation"], let id = s["id"]?.stringValue else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+            let summary = AutomationSummary(id: id, name: s["name"]?.stringValue ?? "Automation", when: s["when"]?.stringValue ?? "", runsAs: s["runsAs"]?.stringValue ?? "",
+                                            does: s["does"]?.stringValue ?? "", tellsYou: s["tellsYou"]?.stringValue ?? "", runsOn: s["runsOn"]?.stringValue ?? "", url: s["url"]?.stringValue)
+            return automationCard(summary, undo: .removeAutomation(id: id))
         case .tool(let t) where t.tool == "side_propose" && t.status == .done:
             return sideProposal(t)
         case .tool(let t) where t.tool == "propose_plan":
@@ -177,8 +195,27 @@ nonisolated struct ItemRenderer: Sendable {
         return actionCard(title: title, meta: a.tool, secondary: [deny, CardButton(title: "Edit…", action: .editApproval(approvalId: a.approvalId))], primary: allow)
     }
 
+    /// An automation made in the conversation (docs/spec/27 §4): what it is in four lines, Open in Automations and
+    /// Undo. Once it's gone (undone, or removed in Automations) a grey line says so.
+    func automationCard(_ s: AutomationSummary, undo: TranscriptAction?, changed: Bool = false) -> NSAttributedString {
+        if let known = automations, !known.contains(s.id) { return note("Removed · \(s.name)") }
+        if compact { return note("\(changed ? "Changed" : "New automation") · \(s.name)") }
+        var lines: [(text: String, color: NSColor)] = [("\(s.when) · runs as \(s.runsAs)", DS.fg2)]
+        if !s.does.isEmpty { lines.append((s.does, DS.fg2)) }
+        lines.append(("Tells you: \(s.tellsYou) · \(s.runsOn)", DS.fg3))
+        if let url = s.url { lines.append(("Its address: \(url)", DS.fg3)) }
+        return actionCard(title: "\(changed ? "Changed" : "New automation") · \(s.name)", lines: lines,
+                          secondary: undo.map { [CardButton(title: "Undo", action: $0)] } ?? [],
+                          primary: CardButton(title: "Open in Automations", action: .openAutomation(id: s.id)))
+    }
+
     /// What a tool changed (06-agents §4.2 RC1): the change, and Undo while it can be undone.
     private func resultCard(_ r: ResultItem) -> NSAttributedString {
+        // An agent's automation (docs/spec/27 §4): the same card as Piopio's, with the agent's own Undo.
+        if r.card.kind == "automation", let s = r.card.automation {
+            if r.undo?.status == .undone { return note("Undone · \(r.card.title)") }
+            return automationCard(s, undo: r.undo?.status == .available ? .undoChange(undoId: r.undo!.id) : nil, changed: r.card.title.hasPrefix("Changed"))
+        }
         let icon = switch r.card.kind { case "reminder": "◷"; case "message": "✉︎"; default: "✎" }
         let undone = r.undo?.status == .undone
         let m = NSMutableAttributedString(string: "\(icon)  ", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg3])

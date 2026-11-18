@@ -45,8 +45,12 @@ public enum TranscriptAction: Equatable, Sendable {
     case openVisual(itemId: String)
     /// A visual's `piopio.prefill`: this text in the composer, for you to finish.
     case prefill(text: String)
-    /// One of Piopio's offers taken: "parallel" (work in parallel), "agent" (make it an agent), "routine" (a routine here).
+    /// One of Piopio's offers taken: "parallel" (work in parallel).
     case offer(kind: String, callId: String)
+    /// An automation's card (docs/spec/27 §4): open it in Automations, or take it out again (Undo, where the card has
+    /// no undo record of its own).
+    case openAutomation(id: String)
+    case removeAutomation(id: String)
     public enum PlanAnswer: String, Sendable { case approve, edit, revise }
 
     static let scheme = "piopio-action"
@@ -82,6 +86,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case .openVisual(let id): c.host = "visual"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .prefill(let text): c.host = "prefill"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         case .offer(let kind, let id): c.host = "offer"; c.queryItems = [URLQueryItem(name: "kind", value: kind), URLQueryItem(name: "call", value: id)]
+        case .openAutomation(let id): c.host = "automation"; c.queryItems = [URLQueryItem(name: "id", value: id)]
+        case .removeAutomation(let id): c.host = "remove-automation"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         }
         return c.url!
     }
@@ -117,6 +123,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case "visual": guard let id = q("item") else { return nil }; self = .openVisual(itemId: id)
         case "prefill": guard let text = q("text") else { return nil }; self = .prefill(text: text)
         case "offer": guard let kind = q("kind"), let id = q("call") else { return nil }; self = .offer(kind: kind, callId: id)
+        case "automation": guard let id = q("id") else { return nil }; self = .openAutomation(id: id)
+        case "remove-automation": guard let id = q("id") else { return nil }; self = .removeAutomation(id: id)
         default: return nil
         }
     }

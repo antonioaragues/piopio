@@ -10,7 +10,7 @@ import { Type } from "typebox";
 import { configure, defineDoc, defineExtension, defineTool, GenerationTask, hook, section, ToolTask, type ConversationId, type Extension, type Harness, type JsonObject } from "@earendil-works/pi-durable";
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
-import { OUT_ENTRY, Proactivity, type ProactiveState, type Reminder, type RunRecord, type Watch } from "./proactive.js";
+import { OUT_ENTRY, Proactivity, type AutomationsBridge, type ProactiveState, type Reminder, type RunRecord, type Watch } from "./proactive.js";
 import { Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
 import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange } from "../memory/learn.js";
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
@@ -89,6 +89,8 @@ export type AgentCoreOptions = {
 	/** Event routines (the `watch` tool): a webhook watch's URL, and a notice that the list changed. */
 	watchUrl?: (id: string) => string | undefined;
 	onWatches?: () => void;
+	/** Automations (docs/spec/27), kept by the host: the agent gets automate and friends in place of schedule and watch. */
+	automations?: AutomationsBridge;
 };
 
 /** What `set_up` changes. `instructions` is the body of instructions.md, without its heading. */
@@ -100,6 +102,12 @@ export const INTERVIEW_PROMPT = `You were just created and don't have a job yet.
 - Don't ask what you can decide yourself. A good default beats a question: suggest one in the question ("what time? I'd suggest 8:00").
 - Then call set_up with a short name, a one-line description, an icon (one emoji) and your instructions: in the second person, with the standing details they told you.
 - Then set the routines it needs: schedule for times ("every weekday at 8"), watch for events (an email from someone, a file in a folder, a webhook). Say in one or two lines what you set up and when they'll hear from you.`;
+
+/** The same interview where the host keeps automations (docs/spec/27): the last step makes them with automate. */
+export const INTERVIEW_PROMPT_AUTOMATIONS = INTERVIEW_PROMPT.replace(
+	/- Then set the routines it needs:.*$/s,
+	"- Then make the automations it needs with automate: a time (\"every weekday at 8\"), or an event (an email from someone, a file in a folder, a URL). Say in one or two lines what you set up and when they'll hear from you.",
+);
 
 /** An entry in a person's conversation: what the agent learned after a quiet moment, with Undo (M2). */
 export const LEARN_ENTRY = "piopio.learned";
@@ -158,6 +166,7 @@ export class AgentCore {
 			recallForRun: (conversationId, prompt) => this.recallInto(conversationId, ["owner", "shared"], prompt),
 			...(options.watchUrl ? { watchUrl: options.watchUrl } : {}),
 			...(options.onWatches ? { onWatches: options.onWatches } : {}),
+			...(options.automations ? { automations: options.automations } : {}),
 			onOutbound: (to, text, from) => {
 				// What the agent sent on its own goes to that person's memory too, so later turns know about it.
 				const contact = this.contact(to);
@@ -172,7 +181,7 @@ export class AgentCore {
 				options.onOutbound?.(to, text, from);
 			},
 			onRun: (run) => {
-				if (run.status === "failed") void this.safety.inbox({ kind: "run_failed", title: "Run failed", body: `${run.kind === "heartbeat" ? "Heartbeat" : run.source}: ${run.summary ?? run.prompt.slice(0, 120)}`, needsYou: true, conversation: `run:${run.id}` });
+				if (run.status === "failed") void this.safety.inbox({ kind: "run_failed", title: "Run failed", body: `${run.kind === "heartbeat" ? "Heartbeat" : (run.label ?? run.source)}: ${run.summary ?? run.prompt.slice(0, 120)}`, needsYou: true, conversation: `run:${run.id}` });
 				if (run.status === "done" || run.status === "failed") void this.safety.checkBudget().catch(() => undefined);
 				options.onRun?.(run);
 			},
@@ -245,6 +254,10 @@ export class AgentCore {
 				return this.proactive.restoreWatch(d.watch as Watch);
 			case "outbox.withdraw":
 				return this.proactive.withdraw(String(d.outboxId));
+			case "automation.remove":
+				return this.proactive.undoAutomation({ id: String(d.id) });
+			case "automation.restore":
+				return this.proactive.undoAutomation({ before: d.before as JsonObject });
 			case "memory.forget": {
 				const provider = this.options.memory();
 				if (!provider.forget) throw new Error("This memory can't forget.");
@@ -358,7 +371,10 @@ export class AgentCore {
 		const off = [
 			...(builtin.includes("memory") ? [] : this.memoryTools),
 			...(builtin.includes("send_message") ? [] : [p.send]),
-			...(builtin.includes("schedule") ? [] : [p.schedule, p.list, p.cancel, p.watch]),
+			// "schedule" turns on making its own work for later: automations where the host keeps them (docs/spec/27),
+			// else the older schedule and watch tools.
+			...(this.options.automations ? [p.schedule, p.list, p.cancel, p.watch] : [p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation]),
+			...(builtin.includes("schedule") ? [] : this.options.automations ? [p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation] : [p.schedule, p.list, p.cancel, p.watch]),
 			// The web extension brings both tools when either is on: only the listed ones stay.
 			...(["web_search", "web_fetch"] as const).filter((t) => !builtin.includes(t)).map((name) => ({ name })),
 			...this.apple.filter((t) => !this.appleGroups.includes(APPLE_TOOLS.find((s) => s.name === t.name)!.group)),
@@ -620,12 +636,17 @@ export class AgentCore {
 		const p = this.proactive.tools;
 		return defineExtension({
 			name: "piopio-agent",
-			tools: [remember, recall, forget, setUp, askOwner, p.send, p.schedule, p.list, p.cancel, p.watch, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
+			tools: [remember, recall, forget, setUp, askOwner, p.send, p.schedule, p.list, p.cancel, p.watch, p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
 			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
 			hooks: [
 				hook(ToolTask, {
-					beforeTool: (call, api, context) => core.safety.beforeTool(call, api.conversationId, context) as Promise<{ arguments?: JsonObject; block?: string } | undefined>,
+					beforeTool: async (call, api, context) => {
+						// An automation's run stops at its budget (docs/spec/27 AU8).
+						const over = await core.proactive.overBudget(api.conversationId);
+						if (over) return { block: over };
+						return core.safety.beforeTool(call, api.conversationId, context) as Promise<{ arguments?: JsonObject; block?: string } | undefined>;
+					},
 					afterTool: (_call, result) => trimResult(result),
 				}),
 				// The clock and the repeated-call nudge (context/), in the agent's time zone.
@@ -660,7 +681,7 @@ export class AgentCore {
 							: core.def.channels?.telegram
 								? "\n\nYou're also on Telegram: the owner's messages there come to this same conversation, and your answers go back there."
 								: "\n\nIf the owner wants to talk with you on Telegram: they make a bot with @BotFather (/newbot) and paste the token it gives them in this chat. Piopio connects it and sends them a link; you never see the token.";
-					const interview = core.def.interview && contact?.role === "owner" ? `\n\n${INTERVIEW_PROMPT}` : "";
+					const interview = core.def.interview && contact?.role === "owner" ? `\n\n${core.options.automations ? INTERVIEW_PROMPT_AUTOMATIONS : INTERVIEW_PROMPT}` : "";
 					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
 				}),
 				section("agent-memory", async (input, context) => {

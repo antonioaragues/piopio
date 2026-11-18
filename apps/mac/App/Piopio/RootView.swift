@@ -205,6 +205,11 @@ struct RootView: View {
             ConversationStart(engine: engine, item: itemBinding)
         case .board(let id):
             ProjectBoardPage(engine: engine, projectId: id, item: itemBinding)
+        case .automations(let filter):
+            AutomationsPage(engine: engine, filter: filter, item: itemBinding)
+        case .automation(let id):
+            AutomationPage(engine: engine, id: id, item: itemBinding)
+                .id(id)
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.agents):

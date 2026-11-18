@@ -215,13 +215,13 @@ struct HomeView: View {
 
     @ViewBuilder private var away: some View {
         ForEach(Array((agenda?.away ?? []).prefix(6).enumerated()), id: \.offset) { _, line in
-            Button { open(line.source) } label: {
+            Button { open(line.source, automation: line.automation) } label: {
                 HStack(spacing: 12) {
                     Text(String(line.source.name.prefix(1)).uppercased())
                         .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2)
                         .frame(width: 28, height: 28)
                         .background(Color.dsChip, in: Circle())
-                    (Text(line.source.name).fontWeight(.medium) + Text(" \(line.text)"))
+                    (Text(line.source.name).fontWeight(.medium) + Text(line.automation == nil ? " \(line.text)" : " · \(line.text)"))
                         .font(.system(size: 13.5)).foregroundStyle(line.quiet ? Color.dsFg3 : Color.dsFg)
                         .lineLimit(2).multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,7 +263,7 @@ struct HomeView: View {
         let label = row.label.isEmpty ? row.source.name : row.label.capitalizedFirst
         let origin = row.label.isEmpty ? row.source.kind : row.source.name + (now && row.source.kind == "project" ? " · board" : "")
         let mark = row.state == "done" ? " ✓" : row.state == "failed" ? " ⚠" : ""
-        return Button { open(row.source) } label: {
+        return Button { open(row.source, automation: row.automation) } label: {
             HStack(spacing: 12) {
                 Text(now ? "now" : row.at.map(Self.clock) ?? "any")
                     .font(.system(size: 12.5, weight: now ? .semibold : .regular).monospacedDigit())
@@ -282,9 +282,12 @@ struct HomeView: View {
         .buttonStyle(HomeRowStyle())
     }
 
-    private func open(_ source: HomeAgenda.Source) {
+    /// A line that belongs to an automation opens it (docs/spec/27 AU10); a board's opens the project.
+    private func open(_ source: HomeAgenda.Source, automation: String? = nil) {
+        if let automation { item = .automation(automation); return }
         switch source.kind {
         case "agent": item = .agent(source.id)
+        case "piopio": item = .automations("piopio")
         default: item = .project(source.id)
         }
     }

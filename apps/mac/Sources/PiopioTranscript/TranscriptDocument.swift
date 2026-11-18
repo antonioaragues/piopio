@@ -367,6 +367,21 @@ public final class TranscriptDocument {
         }
     }
 
+    /// The automations that exist now (docs/spec/27): a card for one that's gone is drawn again as "Removed".
+    public func setAutomations(_ ids: Set<String>) {
+        guard ids != renderer.automations else { return }
+        renderer.automations = ids
+        guard !loading else { return }
+        for id in documentIDs {
+            guard let item = items.last(where: { $0.id == id }) else { continue }
+            switch item {
+            case .tool(let t) where t.tool == "automate": replace(item)
+            case .result(let r) where r.card.kind == "automation": replace(item)
+            default: break
+            }
+        }
+    }
+
     /// When a turn goes on, its earlier text loses its action row (and the space it took).
     private func refreshMidTurn() {
         let next = Self.midTurn(items)

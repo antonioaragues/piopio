@@ -246,18 +246,12 @@ struct BuildSessionView: View {
                 }
             }
         case "agent":
+            // An older card's "Make it an agent" (offer_repeat is gone: Piopio makes automations, docs/spec/27 AU4).
             Task { try? await engine.turnIntoAgent(summary.ref) }
         case "routine":
-            guard let project, let cron = t.args?["cron"]?.stringValue, let what = t.args?["what"]?.stringValue else { return }
-            let when = t.args?["when"]?.stringValue ?? cron
-            Task {
-                do {
-                    try await engine.addRoutine(project, on: "time", prompt: what, when: cron)
-                    await session.send("I set it as a routine in this project: \(when). Each run is a new conversation here.")
-                } catch {
-                    await session.send("Setting the routine failed: \((error as? EngineError)?.message ?? error.localizedDescription)")
-                }
-            }
+            // An older card's "Just a routine here": the same thing is an automation now; ask Piopio to make it.
+            guard let what = t.args?["what"]?.stringValue else { return }
+            Task { await session.send("Make it an automation here: \(t.args?["when"]?.stringValue ?? "on its schedule"), \(what)") }
         default: break
         }
     }

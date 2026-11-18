@@ -7,7 +7,7 @@ import SwiftUI
 // page: the row folds its conversations, + starts one, and its board is a row under the project.
 //
 // The sheet has Folders (its own and linked ones), Instructions (AGENTS.md) and Memory (NOTES.md), How it works
-// (permissions for new conversations, and how work is done here: docs/spec/26 §4) and Routines. Changes apply as
+// (permissions for new conversations, and how work is done here: docs/spec/26 §4) and Automations. Changes apply as
 // they're made; Done closes. Instructions and Memory are edited in the sheet itself or in your editor.
 
 extension Notification.Name {
@@ -124,8 +124,8 @@ struct ProjectSettingsSheet: View {
                     files(project).inspectorBlock()
                     how(project).inspectorBlock()
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Routines").font(.system(size: 13, weight: .semibold))
-                        ProjectRoutinesList(engine: engine, project: project)
+                        Text("Automations").font(.system(size: 13, weight: .semibold))
+                        ProjectAutomationsLink(engine: engine, project: project)
                     }
                     .inspectorBlock(last: true)
                 }

@@ -1,34 +1,31 @@
 /**
- * Home's agenda (docs/spec/21 D2, design 5e): one place for what waits on you, what happened while you were away and
- * today's timeline, across agents (their runs, schedules and event routines) and projects (their routines and their
- * boards' tasks). Built from plain inputs so it can be tested without an engine; `home.agenda` gathers them.
+ * Home's agenda (docs/spec/21 D2, design 5e; docs/spec/27 AU10): one place for what happened while you were away and
+ * today's timeline. It reads automations (their next times, their events and their runs) and projects' boards. Each
+ * line names its automation, so the app can open it. Built from plain inputs so it can be tested without an engine;
+ * `home.agenda` gathers them.
  */
 import { dayOf } from "@piopio/runtime";
-import { routineLabel, type ProjectRoutine } from "./work/routines.js";
 
-export type Source = { kind: "agent" | "project"; id: string; name: string };
+/** Who did it: an agent, Piopio in a project, or Piopio. */
+export type Source = { kind: "agent" | "project" | "piopio"; id: string; name: string };
 
 export type AgendaInput = {
 	now: number;
 	tz: string;
 	/** Your last visit (epoch ms): "While you were away" starts there. */
 	since?: number;
-	agents: {
-		id: string;
-		name: string;
-		runs: { id: string; kind: string; source: string; prompt: string; firedAt: string; status: "running" | "done" | "failed" | "skipped"; summary?: string; sent: number; costUsd?: number }[];
-		upcoming: { id: string; kind: string; label: string; next?: string }[];
-		held: number;
-	}[];
-	projects: { id: string; name: string; routines: ProjectRoutine[] }[];
+	automations: { id: string; name: string; source: Source; on: "time" | "folder" | "email" | "webhook"; label: string; next?: number; enabled: boolean }[];
+	runs: { automation: string; firedAt: string; status: "running" | "done" | "quiet" | "waiting" | "skipped" | "failed"; summary?: string; costUsd?: number }[];
 	/** Projects' boards (docs/spec/26): their tasks show under the project's name. */
 	boards: { project: { id: string; name: string }; tasks: { id: string; title: string; state: string; attempts: number; updatedAt: string }[] }[];
+	/** Messages held by quiet hours or limits, across agents. */
+	held: number;
 };
 
-/** A row of today's timeline: a time (or "any" for an event routine), what, whose, and how it went. */
-export type TodayItem = { at?: string; label: string; source: Source; state: "done" | "failed" | "skipped" | "running" | "upcoming" | "event"; tomorrow?: boolean };
-/** A line of "While you were away": one per agent or project. Quiet runs (nothing new) are marked. */
-export type AwayItem = { at: string; source: Source; text: string; costUsd?: number; quiet: boolean; failed?: boolean };
+/** A row of today's timeline: a time (or none for an event automation), what, whose, and how it went. */
+export type TodayItem = { at?: string; label: string; source: Source; automation?: string; state: "done" | "failed" | "skipped" | "running" | "upcoming" | "event"; tomorrow?: boolean };
+/** A line of "While you were away": one per automation (or project board). Quiet runs (nothing new) are marked. */
+export type AwayItem = { at: string; source: Source; automation?: string; text: string; costUsd?: number; quiet: boolean; failed?: boolean };
 
 export type Agenda = { today: TodayItem[]; away: AwayItem[]; held: number };
 
@@ -41,47 +38,36 @@ export function buildAgenda(input: AgendaInput): Agenda {
 	const today = dayOf(input.now, input.tz);
 	const isToday = (iso?: string) => !!iso && dayOf(Date.parse(iso), input.tz) === today;
 	// What's next: the rest of today, and up to this time tomorrow (late at night, tomorrow morning is what matters).
-	const soon = (iso?: string) => !!iso && Date.parse(iso) > input.now && Date.parse(iso) <= input.now + 24 * 3_600_000;
-	const upcoming = (iso: string, label: string, source: Source): TodayItem => ({ at: iso, label, source, state: "upcoming", ...(isToday(iso) ? {} : { tomorrow: true }) });
+	const soon = (t?: number) => t !== undefined && t > input.now && t <= input.now + 24 * 3_600_000;
 	const since = input.since ?? input.now - 12 * 3_600_000;
 	const after = (iso: string) => Date.parse(iso) > since;
 	const items: TodayItem[] = [];
 	const away: AwayItem[] = [];
+	const byId = new Map(input.automations.map((a) => [a.id, a]));
 
-	for (const a of input.agents) {
-		const source: Source = { kind: "agent", id: a.id, name: a.name };
-		for (const r of a.runs) {
-			if (r.kind === "manual") continue;
-			// A run of one of its own schedules reads as the agent; a reminder or trigger by what it was for.
-			if (isToday(r.firedAt)) items.push({ at: r.firedAt, label: r.kind === "schedule" ? "" : short(r.prompt), source, state: r.status === "running" ? "running" : r.status });
-		}
-		for (const u of a.upcoming) {
-			if (u.kind === "watch") items.push({ label: short(u.label), source, state: "event" });
-			else if (u.next && soon(u.next)) items.push(upcoming(u.next, short(u.label), source));
-		}
-		// One line per agent: its latest run since your last visit, and how many there were.
-		const recent = a.runs.filter((r) => r.kind !== "manual" && after(r.firedAt) && r.status !== "running");
-		const last = recent.sort((x, y) => y.firedAt.localeCompare(x.firedAt))[0];
-		if (last) {
-			const quiet = last.status !== "failed" && last.sent === 0;
-			const cost = recent.reduce((n, r) => n + (r.costUsd ?? 0), 0);
-			const text = last.status === "failed" ? `A run failed: ${short(last.summary ?? last.prompt)}` : quiet ? "had nothing new" : short(last.summary ?? `sent you ${last.sent === 1 ? "a message" : `${last.sent} messages`}`, 90);
-			away.push({ at: last.firedAt, source, text: recent.length > 1 ? `${text} (${recent.length} runs)` : text, ...(cost ? { costUsd: cost } : {}), quiet, ...(last.status === "failed" ? { failed: true } : {}) });
-		}
+	for (const r of input.runs) {
+		const a = byId.get(r.automation);
+		if (!a || !isToday(r.firedAt)) continue;
+		const state = r.status === "quiet" ? "done" : r.status === "waiting" ? "running" : r.status;
+		items.push({ at: r.firedAt, label: a.name, source: a.source, automation: a.id, state });
 	}
-
-	for (const p of input.projects) {
-		const source: Source = { kind: "project", id: p.id, name: p.name };
-		for (const r of p.routines) {
-			const label = short(r.prompt);
-			if (r.on !== "time") {
-				items.push({ label: `${label} · ${routineLabel(r).replace(/^When /, "when ")}`, source, state: "event" });
-				continue;
-			}
-			if (r.lastRun && isToday(r.lastRun)) items.push({ at: r.lastRun, label, source, state: "done" });
-			if (r.next && soon(new Date(r.next).toISOString())) items.push(upcoming(new Date(r.next).toISOString(), label, source));
-			if (r.lastRun && after(r.lastRun)) away.push({ at: r.lastRun, source, text: `ran “${label}”`, quiet: false });
+	for (const a of input.automations) {
+		if (!a.enabled) continue;
+		if (a.on !== "time") items.push({ label: `${a.name} · ${a.label.replace(/^When /, "when ")}`, source: a.source, automation: a.id, state: "event" });
+		else if (soon(a.next)) {
+			const at = new Date(a.next!).toISOString();
+			items.push({ at, label: a.name, source: a.source, automation: a.id, state: "upcoming", ...(isToday(at) ? {} : { tomorrow: true }) });
 		}
+		// One line per automation: its latest run since your last visit, and how many there were.
+		const recent = input.runs.filter((r) => r.automation === a.id && after(r.firedAt) && r.status !== "running");
+		const last = [...recent].sort((x, y) => y.firedAt.localeCompare(x.firedAt))[0];
+		if (!last) continue;
+		const quiet = last.status === "quiet";
+		const failed = last.status === "failed";
+		const cost = recent.reduce((n, r) => n + (r.costUsd ?? 0), 0);
+		const what = failed ? `A run failed: ${short(last.summary ?? "no reason given")}` : quiet ? "had nothing new" : last.status === "waiting" ? "waits for your OK" : last.status === "skipped" ? `skipped: ${short(last.summary ?? "it needed your OK")}` : short(last.summary ?? "ran", 90);
+		const text = `${a.name}: ${what}${recent.length > 1 ? ` (${recent.length} runs)` : ""}`;
+		away.push({ at: last.firedAt, source: a.source, automation: a.id, text, ...(cost ? { costUsd: cost } : {}), quiet, ...(failed ? { failed: true } : {}) });
 	}
 
 	for (const t of input.boards) {
@@ -99,8 +85,8 @@ export function buildAgenda(input: AgendaInput): Agenda {
 		}
 	}
 
-	// Timed rows by time; event routines ("any time") last.
+	// Timed rows by time; event automations ("any time") last.
 	items.sort((x, y) => (x.at && y.at ? x.at.localeCompare(y.at) : x.at ? -1 : y.at ? 1 : 0));
 	away.sort((x, y) => y.at.localeCompare(x.at));
-	return { today: items, away, held: input.agents.reduce((n, a) => n + a.held, 0) };
+	return { today: items, away, held: input.held };
 }

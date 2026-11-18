@@ -4,7 +4,7 @@ import PiopioTranscript
 import SwiftUI
 
 /// The Setup tab (docs/spec/21 D3, design 2c): a form over agent.json and instructions.md, ordered by questions (What it
-/// does · When it acts · What it can use · Who it talks to · What it knows · Limits), with them on the left and "History ·
+/// does · What it can use · Who it talks to · What it knows · Limits · Automations), with them on the left and "History ·
 /// View as file" at its foot. Saving validates first; errors show at the top with their path. Each save is a commit in
 /// the folder's git history.
 struct AgentDefinitionView: View {
@@ -15,8 +15,6 @@ struct AgentDefinitionView: View {
     /// Starts a request in its chat (routines set by asking).
     var askInChat: (String) -> Void = { _ in }
     @State private var runs: AgentRunsResult?
-    /// The schedule being edited (its cron shows, as "Custom").
-    @State private var editingSchedule: Int?
     @State private var loaded: AgentGetResult?
     @State private var def: AgentDef?
     @State private var original: AgentDef?
@@ -31,7 +29,7 @@ struct AgentDefinitionView: View {
 
     private var dirty: Bool { def != original || instructions != originalInstructions || (editingJSON && raw != rawText(original)) }
 
-    private static let groups = ["What it does", "When it acts", "What it can use", "Who it talks to", "What it knows", "Limits"]
+    private static let groups = ["What it does", "What it can use", "Who it talks to", "What it knows", "Limits", "Automations"]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,11 +54,6 @@ struct AgentDefinitionView: View {
                                 }
                                 .id("What it does")
                                 VStack(alignment: .leading, spacing: 22) {
-                                    question("When it acts", "Routines it follows on its own. Ask it in the chat, or add one here.")
-                                    routinesGroup
-                                }
-                                .id("When it acts")
-                                VStack(alignment: .leading, spacing: 22) {
                                     question("What it can use", "One list for every tool. Choose, per tool, whether it asks you first.")
                                     toolsGroup
                                 }
@@ -81,6 +74,11 @@ struct AgentDefinitionView: View {
                                     limitsGroup
                                 }
                                 .id("Limits")
+                                VStack(alignment: .leading, spacing: 22) {
+                                    question("Automations")
+                                    automationsGroup
+                                }
+                                .id("Automations")
                             }
                             historyGroup.id("History")
                         }
@@ -184,69 +182,33 @@ struct AgentDefinitionView: View {
         .padding(.top, 8)
     }
 
-    /// When it acts (design 2c): its schedules and the routines it set itself, as sentences, in one list; the cron only
-    /// when editing ("Custom"). Times are added here; events by asking it.
-    private var routinesGroup: some View {
-        SetupGroup("Routines") {
-            ForEach(Array((def?.schedules ?? []).enumerated()), id: \.offset) { i, s in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("At a time").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).frame(width: 74, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(CronText.describe(s.cron)).font(.system(size: 13.5, weight: .medium))
-                            if editingSchedule != i { Text(s.prompt).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(2) }
+    /// Its automations (docs/spec/27 AU3): when it acts is set in Automations, not here. Each one opens there; more
+    /// come by asking it.
+    private var automationsGroup: some View {
+        let mine = engine.automations.filter { $0.runsAs == summary.ref.id }
+        return SetupGroup("Automations", footer: "When \(summary.title) acts on its own is set in Automations, not here. You can also just ask \(summary.title).") {
+            ForEach(mine) { a in
+                Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automation(a.id).raw) } label: {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(a.name).font(.system(size: 13)).foregroundStyle(a.enabled ? Color.dsFg : Color.dsFg3)
+                            Text("\(a.label) · \(a.resultLabel)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
                         }
                         Spacer()
-                        if let next = runs?.upcoming.first(where: { $0.id == s.id })?.next {
-                            Text("Next: \(HomeView.at(next).lowercased())").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                        }
-                        Button(editingSchedule == i ? "Done" : "Edit") { editingSchedule = editingSchedule == i ? nil : i }
-                            .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                        Text(AutomationText.status(a)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.dsFg3)
                     }
-                    if editingSchedule == i {
-                        HStack(spacing: 6) {
-                            Text("Custom").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                            TextField("0 8 * * 1-5", text: scheduleBinding(i, \.cron)).textFieldStyle(.roundedBorder).frame(width: 120).font(.system(size: 12, design: .monospaced))
-                            Text("minute hour day month weekday").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                            Spacer()
-                            Button("Remove") { def?.schedules?.remove(at: i); editingSchedule = nil }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                        }
-                        TextField("What to do", text: scheduleBinding(i, \.prompt)).textFieldStyle(.roundedBorder)
-                    }
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-            }
-            // The ones it set itself (reminders and event routines): changed by asking it.
-            ForEach((runs?.upcoming ?? []).filter { $0.kind == "reminder" || $0.kind == "watch" }, id: \.id) { u in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(u.kind == "watch" ? "On an event" : "At a time").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).frame(width: 74, alignment: .leading)
-                    Text(u.label).font(.system(size: 13)).lineLimit(2)
-                    Spacer()
-                    if let next = u.next { Text("Next: \(HomeView.at(next).lowercased())").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                    Button("Change…") { askInChat("About the routine “\(u.label)”: ") }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 10)
+                .buttonStyle(.plain)
             }
             HStack(spacing: 14) {
-                Button("+ At a time") {
-                    var list = def?.schedules ?? []
-                    list.append(.init(id: "schedule\(list.count + 1)", cron: "0 9 * * *", tz: TimeZone.current.identifier, prompt: "", deliverTo: "owner"))
-                    def?.schedules = list
-                    editingSchedule = list.count - 1
-                }
-                Button("+ When an email arrives") { askInChat("When an email from ") }
-                Button("+ When a file appears") { askInChat("When a file appears in ~/") }
-                Button("+ From a link (webhook)") { askInChat("Give me a link other apps can call; when it's called, ") }
+                Button(mine.isEmpty ? "Ask \(summary.title) for one" : "Ask for another") { askInChat("Every morning at 8, ") }
+                Button("Open Automations ›") { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automations(summary.ref.id).raw) }
             }
             .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.accentColor)
             .padding(.horizontal, 14).frame(height: 40, alignment: .leading)
-            SetupRow("Quiet hours", subtitle: "Messages wait until they end; urgent ones don't") {
-                TextField("22:30-07:30", text: policy(\.quietHours)).textFieldStyle(.roundedBorder).frame(width: 110)
-            }
-            SetupRow("Time zone", subtitle: def?.timezone == nil ? "From this Mac" : nil) {
-                TextField(TimeZone.current.identifier, text: Binding(get: { def?.timezone ?? "" }, set: { def?.timezone = $0.isEmpty ? nil : $0 }))
-                    .textFieldStyle(.roundedBorder).frame(width: 180)
-            }
         }
     }
 
@@ -257,7 +219,7 @@ struct AgentDefinitionView: View {
         .init(title: "Search and read the web", detail: "", tools: ["web_search", "web_fetch"], apple: nil),
         .init(title: "Remember things", detail: "remember, recall, forget", tools: ["memory"], apple: nil),
         .init(title: "Send messages", detail: "to you, and to people it knows", tools: ["send_message"], apple: nil),
-        .init(title: "Set reminders and schedules", detail: "", tools: ["schedule"], apple: nil),
+        .init(title: "Make its own automations", detail: "times and events, run as itself", tools: ["schedule"], apple: nil),
         .init(title: "Reminders", detail: "read, add, tick", tools: [], apple: "reminders"),
         .init(title: "Calendar", detail: "events and free time", tools: [], apple: "calendar"),
         .init(title: "Contacts", detail: "look people up", tools: [], apple: "contacts"),
@@ -423,6 +385,13 @@ struct AgentDefinitionView: View {
 
     private var limitsGroup: some View {
         SetupGroup("Limits") {
+            SetupRow("Quiet hours", subtitle: "Messages wait until they end; urgent ones don't") {
+                TextField("22:30-07:30", text: policy(\.quietHours)).textFieldStyle(.roundedBorder).frame(width: 110)
+            }
+            SetupRow("Time zone", subtitle: def?.timezone == nil ? "From this Mac" : nil) {
+                TextField(TimeZone.current.identifier, text: Binding(get: { def?.timezone ?? "" }, set: { def?.timezone = $0.isEmpty ? nil : $0 }))
+                    .textFieldStyle(.roundedBorder).frame(width: 180)
+            }
             SetupRow("Monthly budget", subtitle: "It pauses itself when it's used up") {
                 TextField("15", text: Binding(get: { def?.policies?.budgetUsdPerMonth.map { String(format: "%g", $0) } ?? "" }, set: { v in var p = def?.policies ?? .init(); p.budgetUsdPerMonth = Double(v); def?.policies = p }))
                     .textFieldStyle(.roundedBorder).frame(width: 70)

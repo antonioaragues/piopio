@@ -44,7 +44,9 @@ import type { SideBridge, SideLine } from "./tools/side.js";
 import type { Watchdog, WatchdogRule } from "./watchdog.js";
 import type { GitHub, PrStatus } from "./github.js";
 import type { ConsultBridge } from "./consult.js";
-import { routineLabel } from "./work/routines.js";
+import { agentBridge, automationsExtension } from "./automations/tools.js";
+import { PIOPIO, type Automation } from "./automations/model.js";
+import type { Automations } from "./automations/service.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
 import { migrateChat } from "./migrate-chats.js";
@@ -151,6 +153,12 @@ export class Sessions {
 	/** Event routines on this Mac (watchers.ts), and a webhook's local URL; set by the engine. */
 	watchers?: AgentWatchers;
 	hookUrl?: (agentId: string, triggerId: string) => string;
+	/** Automations (docs/spec/27), set by the engine: agents and Piopio make them by asking. */
+	automations?: Automations;
+	/** What an agent's schedules became (27 §6): lines for the migration report. Set by the engine. */
+	onAutomationsMigrated?: (lines: string[]) => void;
+	/** The engine's log, set by the engine. */
+	log: (line: string) => void = () => {};
 
 	constructor(
 		private readonly paths: EnginePaths,
@@ -778,6 +786,9 @@ export class Sessions {
 		// Nothing said yet (no template, no instructions): it interviews the owner and sets itself up (docs/spec/19 S2).
 		const interview = !params.template && !params.instructions?.trim();
 		const made = newDefinition({ id, slug: basename(folder), name, owner: params.owner?.trim() || "Owner", model: model.provider === "openrouter" ? model.id : `${model.provider}:${model.id}`, ...(params.template ? { template: params.template } : {}), ...(params.avatar ? { avatar: params.avatar } : {}), ...(params.instructions !== undefined ? { instructions: params.instructions } : {}), ...(params.schedule !== undefined ? { schedule: params.schedule } : {}), ...(interview ? { interview: true } : {}) });
+		// A template's schedule is an automation the agent runs (docs/spec/27 AU2), not part of who it is.
+		const scheduled = this.automations && made.definition.schedules?.length ? (await import("./automations/migrate.js")).fromAgent({ id, name, definition: made.definition }, { reminders: [], watches: [], runs: [] }, Date.now()).automations : [];
+		if (this.automations) delete made.definition.schedules;
 		await this.host.files.create(folder, made);
 		this.definitions.set(id, made);
 		const now = new Date().toISOString();
@@ -787,6 +798,7 @@ export class Sessions {
 		this.entries.set(id, entry);
 		this.save();
 		this.changed(entry);
+		if (scheduled.length) this.automations!.adopt(scheduled.map((a) => ({ ...a, fresh: true })), []);
 		if (interview) {
 			const owner = made.definition.contacts[0]!.name;
 			const hi = owner && owner !== "Owner" ? `Hi ${owner}!` : "Hi!";
@@ -850,6 +862,12 @@ export class Sessions {
 		this.save();
 		this.changed(entry);
 		if (this.open.has(ref.id)) await (await this.agent(ref)).reconfigure();
+		// Schedules, a heartbeat or webhook triggers written into the definition become its automations (docs/spec/27);
+		// opening the agent hands them over.
+		if (this.automations && (def.schedules?.length || def.heartbeat || def.triggers?.length)) {
+			if (this.open.has(ref.id)) await this.handOverToAutomations(ref.id, await this.agent(ref));
+			else await this.agent(ref);
+		}
 		await this.telegram?.sync();
 		return { errors: [], saved };
 	}
@@ -891,6 +909,79 @@ export class Sessions {
 			runs: runs.map(({ conversationId: _c, deliverTo: _d, ...r }) => r),
 			outbox: outbox.map((o) => ({ id: o.id, to: o.to, text: o.text, notBefore: iso(o.notBefore), reason: o.reason })),
 			upcoming: upcoming.map((u) => ({ id: u.id, kind: u.kind, label: u.label, ...(u.next ? { next: iso(u.next) } : {}), ...(u.cron ? { cron: u.cron } : {}) })),
+		};
+	}
+
+	/**
+	 * An agent's schedules, heartbeat and webhook triggers (its definition), and the reminders and watches it set itself,
+	 * become automations it runs (docs/spec/27 §6), once. The definition keeps a copy beside it as it was.
+	 */
+	private async handOverToAutomations(id: string, agent: AgentRuntime): Promise<void> {
+		const automations = this.automations;
+		if (!automations) return;
+		const { definition } = this.agentDefinition(id);
+		const fromDefinition = Boolean(definition.schedules?.length || definition.heartbeat || definition.triggers?.length);
+		const legacy = await agent.handOver();
+		if (!fromDefinition && !legacy.reminders.length && !legacy.watches.length) return;
+		const { fromAgent } = await import("./automations/migrate.js");
+		const migrated = fromAgent({ id, name: definition.name, definition }, legacy, Date.now());
+		automations.adopt(migrated.automations, migrated.runs);
+		if (fromDefinition) {
+			// Written here, not through saveAgent: this runs while the agent opens, and saveAgent would wait for it.
+			const entry = this.entry({ kind: "agent", id });
+			const { instructions } = this.agentDefinition(id);
+			const next = structuredClone(definition);
+			delete next.schedules;
+			delete next.heartbeat;
+			delete next.triggers;
+			if (entry.agentFolder) {
+				writeFileSync(join(entry.agentFolder, "definition.before-27.json"), JSON.stringify(definition, null, "\t"));
+				await this.host.files.save(entry.agentFolder, { definition: next, instructions }, "Schedules became automations");
+			}
+			this.definitions.set(id, { definition: next, instructions });
+			this.setAgentInfo(entry, next);
+			this.save();
+			this.changed(entry);
+			await agent.reconfigure();
+		}
+		this.onAutomationsMigrated?.(migrated.lines);
+	}
+
+	/**
+	 * An automation run as Piopio (docs/spec/27 §5): a new conversation, in the project's folder or loose, titled after
+	 * it, with its message. Its id.
+	 */
+	async automationConversation(automation: Automation, text: string, projectPath?: string): Promise<string> {
+		const ref = projectPath ? await this.create({ kind: "build", cwd: projectPath, title: automation.name }) : await this.create({ kind: "thread", title: automation.name });
+		const runtime = await this.runtime(ref);
+		await runtime.submit(text, { whenBusy: "followUp" });
+		this.touch(ref);
+		return ref.id;
+	}
+
+	/** A conversation now, for an automation's run: running, waiting on you, and what it has cost. */
+	async sessionState(id: string): Promise<{ running: boolean; waiting: boolean; costUsd: number } | undefined> {
+		const entry = this.entries.get(id);
+		if (!entry) return undefined;
+		const state = (await this.runtime(entry.ref)).snapshot().state;
+		return { running: state.status === "running", waiting: (state.prompts?.length ?? 0) > 0, costUsd: state.usage?.costUsd ?? 0 };
+	}
+
+	/** Stops a conversation's turn (an automation's budget or skip). */
+	async stopSession(id: string): Promise<void> {
+		const entry = this.entries.get(id);
+		if (entry) await (await this.runtime(entry.ref)).abort();
+	}
+
+	/** Piopio's automation tools in a conversation (docs/spec/27 AU4): its project, and your agents by name. */
+	private automationsBridge(entry: CatalogEntry) {
+		return {
+			service: this.automations!,
+			agents: () => this.agentList().map((a) => ({ id: a.id, name: a.name, telegram: Boolean(a.definition.channels?.telegram) })),
+			project: () => {
+				const p = entry.cwd || entry.projectPath ? this.policy.projectFor(entry.projectPath ?? entry.cwd!) : undefined;
+				return p ? { id: p.id, name: basename(p.path) } : undefined;
+			},
 		};
 	}
 
@@ -1685,7 +1776,7 @@ export class Sessions {
 	/** Whether the turn now running began with your own words (not a note, the board or a routine). */
 	private async yourTurn(entry: CatalogEntry): Promise<boolean> {
 		const user = [...(await this.runtime(entry.ref)).snapshot().items].reverse().find((i) => i.kind === "user");
-		return !!user && user.kind === "user" && !/^\[(Side|Task|Board|Routine|PR)\]/.test(user.text);
+		return !!user && user.kind === "user" && !/^\[(Side|Task|Board|Routine|Automation|PR)\]/.test(user.text);
 	}
 
 	/**
@@ -1835,22 +1926,11 @@ export class Sessions {
 			board: () => work.board(project(), entry.ref.id),
 			message: (taskId, text) => work.message(project(), taskId, text),
 			verdict: (pass, notes) => work.verdict(entry.ref.id, pass, notes),
-			// The project's routines (docs/spec/21 AD5).
-			addRoutine: async (input) => {
-				const r = await work.addRoutine(project(), input, "piopio");
-				const url = r.on === "webhook" ? work.hookUrl?.(project(), r.id) : undefined;
-				return `Set ${r.id}: ${routineLabel(r)}${r.next ? `, first ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : ""}.${url ? ` Its URL (POST, from this Mac): ${url}` : ""} The user sees it in the project.`;
-			},
-			routines: () => work.routineList(project()),
-			cancelRoutine: async (id) => {
-				const r = await work.removeRoutine(project(), id);
-				return `Removed ${r.id}: ${routineLabel(r)}.`;
-			},
 		};
 	}
 
 	/** What the work runner needs from the catalog: sessions, their turns, git and the checks. */
-	workHost(options: { stateFile: string; routinesFile: string; worktreesDir: string; log: (line: string) => void; project: WorkHost["project"] }): WorkHost {
+	workHost(options: { stateFile: string; worktreesDir: string; log: (line: string) => void; project: WorkHost["project"] }): WorkHost {
 		const answerOf = (runtime: Runtime) => {
 			const last = [...runtime.snapshot().items].reverse().find((i) => i.kind === "assistant");
 			return last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
@@ -1897,7 +1977,6 @@ export class Sessions {
 			cost: async (id) => (await this.runtime({ kind: "build", id })).snapshot().state.usage?.costUsd ?? 0,
 			worktreesDir: options.worktreesDir,
 			stateFile: options.stateFile,
-			routinesFile: options.routinesFile,
 			changed: (project) => this.onWork?.(project),
 			log: options.log,
 		};
@@ -2090,7 +2169,9 @@ export class Sessions {
 		if (entry.ref.kind === "agent") {
 			const id = entry.ref.id;
 			this.agentDefinition(id);
-			return AgentRuntime.open({
+			let opened: AgentRuntime | undefined;
+			const automations = this.automations;
+			const agent = await AgentRuntime.open({
 				ref: entry.ref,
 				file: entry.file!,
 				hub: this.hub,
@@ -2107,16 +2188,42 @@ export class Sessions {
 				...(this.agentLearn ? this.agentLearn : {}),
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {
-					if (approval.status === "pending") this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });
-					if (approval.status === "pending") this.telegram?.approval(id, approval.title);
+					if (approval.status !== "pending") return;
+					void (async () => {
+						// An automation's run set to skip what needs your OK (docs/spec/27 AU8) is denied and ends as skipped.
+						const run = opened ? await opened.core.proactive.runOf(approval.conversationId) : undefined;
+						const a = run?.kind === "automation" ? automations?.find(run.source) : undefined;
+						if (run && a?.approval === "skip") {
+							await opened!.core.safety.decide(approval.id, { approve: false, reason: "This automation skips runs that need your OK." }).catch(() => undefined);
+							automations!.skipped({ agent: id, agentRun: run.id }, `Skipped: it needed your OK (${approval.title})`);
+							return;
+						}
+						this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });
+						this.telegram?.approval(id, approval.title);
+					})();
 				},
 				onAnswer: (contactId, said, answer, visuals) => void this.telegram?.answered(id, contactId, said, answer, visuals),
-				onOutbound: (to, text) => this.telegram?.outbound(id, to, text),
+				onOutbound: (to, text, from) => {
+					// An automation whose result goes to Telegram sends there even when the chat is where they usually talk.
+					const run = automations?.runOf({ agent: id, agentRun: from });
+					this.telegram?.outbound(id, to, text, run?.automation?.result === "telegram");
+				},
 				...(this.telegram ? { connectTelegram: (token: string) => this.telegram!.connect(id, token) } : {}),
 				...(this.hookUrl ? { watchUrl: (watchId: string) => this.hookUrl!(id, watchId) } : {}),
 				onWatches: () => void this.watchers?.sync().catch(() => undefined),
 				updateSelf: (change) => this.updateAgentSelf(id, change),
+				...(automations
+					? {
+							automations: agentBridge(automations, id),
+							onRun: (run: { id: string; status: "running" | "done" | "failed" | "skipped"; summary?: string; sent: number; costUsd?: number; kind: string }) => {
+								if (run.kind === "automation") automations.agentRunChanged(id, run);
+							},
+						}
+					: {}),
 			});
+			opened = agent;
+			await this.handOverToAutomations(id, agent).catch((error: unknown) => this.log(`Automations: couldn't move ${entry.title}'s schedules: ${(error as Error).message}`));
+			return agent;
 		}
 		if (entry.ref.kind === "thread") return this.openChat(entry, model);
 		const runtime = await BuildRuntime.open({
@@ -2174,6 +2281,7 @@ export class Sessions {
 			...(!entry.parent && !entry.helper && this.work && this.policy.projectFor(entry.projectPath ?? entry.cwd!) ? { board: this.boardBridge(entry, "piopio") } : {}),
 			// Side conversations (docs/spec/24): your own conversations, not a helper's or a subagent's.
 			...(!entry.parent && !entry.helper ? { side: this.sideBridge(entry) } : {}),
+			...(!entry.parent && !entry.helper && this.automations ? { automations: this.automationsBridge(entry) } : {}),
 			// Your agents, from your conversations (not a helper's task or a subagent): ask_agent and @Name.
 			...(!entry.parent && !entry.helper ? { consult: { bridge: this.consultBridge(), from: () => entry.title } } : {}),
 			// Piopio's offers: in a project conversation with Piopio, not a helper's.
@@ -2249,6 +2357,7 @@ export class Sessions {
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
 			// Side conversations (docs/spec/24), here or in one of your projects (SCQ5).
 			side: this.sideBridge(entry),
+			...(this.automations ? { automations: this.automationsBridge(entry) } : {}),
 			...(this.connectors ? { connectors: this.connectors } : {}),
 			// Global MCP servers that aren't on for chats (Settings › MCP servers) are refused, as are those turned off here.
 			toolsOff: () => [...(entry.toolsOff ?? []), ...(this.chat?.mcpOff() ?? []).map((name) => `mcp:${name}`)],
@@ -2328,7 +2437,7 @@ function buildMode(approvalMode: ApprovalMode): { approvalMode: ApprovalMode; pr
 }
 
 /** Tools whose card already asks the user for their answer: suggestions under it would ask a second time. */
-const ASKS_ON_A_CARD = new Set(["ask_user", "ask_owner", "side_offer", "side_propose", "offer_parallel", "offer_repeat", "propose_plan"]);
+const ASKS_ON_A_CARD = new Set(["ask_user", "ask_owner", "side_offer", "side_propose", "offer_parallel", "propose_plan"]);
 
 /**
  * Whether a turn's end may get suggested replies: not when it ended on a card that waits for the user (it asks
@@ -2339,7 +2448,7 @@ export function followUpsFit(items: readonly TimelineItem[]): boolean {
 	const last = items.findLastIndex((i) => i.kind === "user");
 	if (last < 0) return false;
 	const asked = items[last]!;
-	if (asked.kind === "user" && /^\[(Side|Task|Board|Routine)\] /.test(asked.text)) return false;
+	if (asked.kind === "user" && /^\[(Side|Task|Board|Routine|Automation)\] /.test(asked.text)) return false;
 	return !items.slice(last + 1).some((i) => (i.kind === "tool" && ASKS_ON_A_CARD.has(i.tool)) || (i.kind === "steps" && i.tools.some((t) => ASKS_ON_A_CARD.has(t.tool))));
 }
 

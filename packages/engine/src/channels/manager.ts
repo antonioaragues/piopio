@@ -136,8 +136,9 @@ export class TelegramChannels {
 	}
 
 	/** The agent sent a message on its own (send_message, a run): to Telegram when that's the person's channel. */
-	outbound(agentId: string, to: string, text: string): void {
-		const chatId = this.chatOf(agentId, to);
+	/** `force`: an automation whose result goes to Telegram (docs/spec/27 AU7), even where they usually talk in the app. */
+	outbound(agentId: string, to: string, text: string, force = false): void {
+		const chatId = this.chatOf(agentId, to, force);
 		const live = this.live.get(agentId);
 		if (!chatId || !live) return;
 		void live.bot.send(chatId, text).catch((error: unknown) => this.host.log(`Telegram: couldn't send: ${(error as Error).message}`));
@@ -150,9 +151,9 @@ export class TelegramChannels {
 		if (owner) this.outbound(agentId, owner.id, `I need your OK before I go on: ${title}. Open Piopio to answer.`);
 	}
 
-	private chatOf(agentId: string, contactId: string): string | undefined {
+	private chatOf(agentId: string, contactId: string, force = false): string | undefined {
 		const contact = this.host.definition(agentId)?.contacts.find((c) => c.id === contactId);
-		return contact?.channels?.telegram && contact.preferred === "telegram" ? contact.channels.telegram : undefined;
+		return contact?.channels?.telegram && (force || contact.preferred === "telegram") ? contact.channels.telegram : undefined;
 	}
 
 	private async poll(agentId: string, live: Live): Promise<void> {

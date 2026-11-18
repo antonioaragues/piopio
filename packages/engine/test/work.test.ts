@@ -38,7 +38,7 @@ async function start(home = mkdtempSync(join(tmpdir(), "piopio-work-"))) {
 	const client = await TestClient.connect(paths.socket);
 	open.push({ engine, client });
 	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0", services: [] });
-	return { home, client };
+	return { home, client, engine };
 }
 
 const git = (dir: string, ...args: string[]) => execFileSync("git", args, { cwd: dir, env: { ...process.env, GIT_AUTHOR_NAME: "T", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "T", GIT_COMMITTER_EMAIL: "t@t" } }).toString();
@@ -275,58 +275,6 @@ test("a task starts from the project as it is: the work branch catches up with c
 	expect(existsSync(join(work.git!.integration, "contact.html"))).toBe(true);
 }, 60_000);
 
-type Routine = { id: string; on: string; by: string; label: string; url?: string; next?: number; runs: number };
-
-test("routines start a project's work on their own: Piopio sets them, a file or a webhook opens a conversation with it, you run or remove them", async () => {
-	const { client } = await start();
-	const inbox = mkdtempSync(join(tmpdir(), "piopio-work-inbox-"));
-	const created = (await client.call("projects.create", { name: "Market" })) as { project: { id: string; path: string } };
-	const project = created.project.id;
-	await client.call("work.configure", { project, parallel: true });
-	const piopio = await conversation(client, created.project.path);
-	await client.call("sessions.submit", { ref: piopio, input: { text: `call: schedule | ${JSON.stringify({ when: "0 9 * * 1", prompt: "Write this week's brief" })}\ncall: watch | ${JSON.stringify({ on: "folder", folder: inbox, prompt: "Summarize the new report" })}` } });
-	const list = async () => ((await client.call("routines.list", { project })) as { routines: Routine[] }).routines;
-	const set = await until(list, (r) => r.length === 2);
-	expect(set.map((r) => [r.on, r.by, r.label])).toEqual([["time", "piopio", "Every Monday at 09:00"], ["folder", "piopio", `When a file appears or changes in ${inbox}`]]);
-
-	// A file appears: a new conversation with Piopio in the project gets it, with the path.
-	const runs = async () => {
-		const all = (await client.call("sessions.list", { kind: "build" })).sessions as { ref: { id: string }; cwd?: string }[];
-		return (await Promise.all(all.filter((s) => s.cwd === created.project.path && s.ref.id !== piopio.id).map((s) => textOf(client, s.ref.id)))).join("\n");
-	};
-	await new Promise((r) => setTimeout(r, 300));
-	writeFileSync(join(inbox, "q3.pdf"), "report");
-	await until(runs, (s) => s.includes("[Routine] When a file appears or changes in") && s.includes("q3.pdf"));
-
-	const { routine } = (await client.call("routines.add", { project, on: "webhook", prompt: "Look into the new lead" })) as { routine: Routine };
-	expect(routine).toMatchObject({ by: "you", url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/hooks\/prj_/) });
-	for (let i = 0; i < 2; i++) expect((await fetch(routine.url!, { method: "POST", headers: { "Idempotency-Key": "d1" }, body: '{"name":"Acme"}' })).status).toBe(202);
-	await until(runs, (s) => s.includes("[Routine] When its URL is called") && s.includes("Acme"));
-	expect((await list()).find((r) => r.id === routine.id)).toMatchObject({ runs: 1 });
-
-	const { runId } = (await client.call("routines.run", { project, routineId: set[0]!.id })) as { runId: string };
-	await until(() => textOf(client, runId), (s) => s.includes("[Routine] Every Monday at 09:00: Write this week's brief"));
-	await client.call("routines.remove", { project, routineId: set[1]!.id });
-	expect((await list()).map((r) => r.on)).toEqual(["time", "webhook"]);
-}, 60_000);
-
-test("a time routine missed while the engine was off runs once when it's back", async () => {
-	const first = await start();
-	const created = (await first.client.call("projects.create", { name: "Weekly" })) as { project: { id: string; path: string } };
-	const project = created.project.id;
-	await first.client.call("routines.add", { project, on: "time", when: "0 9 * * 1", prompt: "Write the weekly brief" });
-	const o = open.splice(0)[0]!;
-	o.client.close();
-	await o.engine.stop();
-	const file = join(first.home, "project-routines.json");
-	const places = JSON.parse(readFileSync(file, "utf8")) as { routines: { next: number }[] }[];
-	places[0]!.routines[0]!.next = Date.now() - 60_000;
-	writeFileSync(file, JSON.stringify(places));
-	const { client } = await start(first.home);
-	const ran = await until(async () => ((await client.call("routines.list", { project })) as { routines: (Routine & { lastConversation?: string })[] }).routines[0]!, (r) => r.runs === 1);
-	expect(ran.next).toBeGreaterThan(Date.now());
-	await until(() => textOf(client, ran.lastConversation!), (s) => s.includes("[Routine] Every Monday at 09:00: Write the weekly brief"));
-}, 40_000);
 
 test("the fit check's fix: a folder without git becomes a repo when parallel work goes on, so tasks get branches", async () => {
 	const { client } = await start();

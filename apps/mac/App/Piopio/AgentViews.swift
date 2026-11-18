@@ -258,9 +258,15 @@ struct AgentPage: View {
             if summary.agent?.invalid == true {
                 Button("Setup has errors") { tab = .setup }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
             }
+            // Its automations (docs/spec/27 AU3): they live in Automations; the header leads there.
+            let count = engine.automations.filter { $0.runsAs == summary.ref.id }.count
+            if count > 0 {
+                Button("\(count) automation\(count == 1 ? "" : "s") ›") { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automations(summary.ref.id).raw) }
+                    .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
+            }
             NeutralSegmented(selection: Binding(get: { tab == .setup ? "setup" : "chat" }, set: { tab = $0 == "setup" ? .setup : .chat }), options: [("chat", "Chat"), ("setup", "Setup")])
                 .frame(width: 150)
-            Button("Run now", action: runNow).buttonStyle(PillStyle(compact: true)).help("Run it now, as if its schedule fired")
+            Button("Run now", action: runNow).buttonStyle(PillStyle(compact: true)).help("Run its next automation now, or its usual check")
             Menu {
                 if let status = summary.agent?.status {
                     Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
@@ -287,7 +293,7 @@ struct AgentPage: View {
     /// Each opens its section in Setup.
     private var glance: some View {
         HStack(spacing: 0) {
-            cell("Next", section: "When it acts") { nextLine }
+            automationsCell
             divider
             cell("Can", section: "What it can use") { Text(canLine).lineLimit(1) }
             divider
@@ -317,6 +323,34 @@ struct AgentPage: View {
         }
         .buttonStyle(.plain)
         .help("Change it in Setup")
+    }
+
+    /// Its automations (docs/spec/27 AU3): the next one, or how many; it opens them in Automations.
+    private var automationsCell: some View {
+        let mine = engine.automations.filter { $0.runsAs == summary.ref.id && $0.enabled }
+        let next = mine.filter { $0.next != nil }.min { ($0.next ?? 0) < ($1.next ?? 0) }
+        return Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automations(summary.ref.id).raw) } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Next").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                Group {
+                    if summary.agent?.status?.paused == true {
+                        Text("Paused").foregroundStyle(Color.dsFg2)
+                    } else if let next, let at = next.next {
+                        Text("\(MainSidebar.when(AutomationText.date(at)).capitalizedFirst)\(Text(" · \(next.name)").foregroundStyle(Color.dsFg3))").lineLimit(1)
+                    } else if !mine.isEmpty {
+                        Text(mine.count == 1 ? "When something happens" : "\(mine.count) automations").foregroundStyle(Color.dsFg2)
+                    } else {
+                        Text("Only when you ask").foregroundStyle(Color.dsFg2)
+                    }
+                }
+                .font(.system(size: 13))
+            }
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Its automations")
     }
 
     /// "Tomorrow 8:00 · weekdays", "When an email arrives", "Nothing scheduled".
@@ -388,8 +422,13 @@ struct AgentPage: View {
 
     private func runNow() {
         Task {
-            let upcoming = runs?.upcoming.first { $0.kind == "schedule" }
-            _ = try? await engine.agentRunNow(summary.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
+            // Its next automation (docs/spec/27), else its usual check.
+            let mine = engine.automations.filter { $0.runsAs == summary.ref.id }
+            if let first = mine.filter({ $0.next != nil }).min(by: { ($0.next ?? 0) < ($1.next ?? 0) }) ?? mine.first {
+                _ = try? await engine.runAutomation(first.id)
+            } else {
+                _ = try? await engine.agentRunNow(summary.ref, scheduleId: nil, prompt: "Run your usual check now.")
+            }
             conversation = nil
             tab = .chat
             await load()

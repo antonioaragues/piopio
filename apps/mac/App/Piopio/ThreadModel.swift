@@ -301,8 +301,12 @@ final class ThreadModel {
         case .prefill(let text):
             draft = text
         case .offer(let kind, let callId):
-            // Piopio's offers (docs/spec/26 CL9): the conversation's page acts on them (parallel work, an agent, a routine).
+            // Piopio's offers (docs/spec/26 CL9): the conversation's page acts on them (parallel work).
             NotificationCenter.default.post(name: .transcriptOffer, object: ref.id, userInfo: ["kind": kind, "call": callId])
+        case .openAutomation(let id):
+            NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automation(id).raw)
+        case .removeAutomation(let id):
+            Task { do { try await engine?.removeAutomation(id) } catch { report(error) } }
         case .quote(let text):
             // Select and ask: the fragment as a Markdown quote, above what's already in the composer.
             draft = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }.joined(separator: "\n") + "\n\n"

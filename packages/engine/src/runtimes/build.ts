@@ -34,6 +34,7 @@ import type { WebOptions } from "../tools/web.js";
 import { buildPromptExtension } from "../tools/build-prompt.js";
 import { boardExtension, type BoardBridge } from "../work/extension.js";
 import { sideExtension, type SideBridge } from "../tools/side.js";
+import { automationsExtension, type PiopioAutomationsBridge } from "../automations/tools.js";
 import { consultExtension, type ConsultBridge } from "../consult.js";
 import { offersExtension, type OffersBridge } from "../offers.js";
 import { guardsExtension } from "../tools/guards.js";
@@ -120,6 +121,8 @@ export type BuildOpenOptions = {
 	offers?: OffersBridge;
 	/** Side conversations (docs/spec/24): your conversations, not a helper's or a subagent's. */
 	side?: SideBridge;
+	/** Automations (docs/spec/27 AU4): Piopio makes them by asking, in your conversations. */
+	automations?: PiopioAutomationsBridge;
 };
 
 export class BuildRuntime implements Runtime {
@@ -243,6 +246,7 @@ export class BuildRuntime implements Runtime {
 				goalExtension(),
 				...(o.history ? [historySdkExtension(o.history)] : []),
 				...(o.side ? [sideExtension(o.side)] : []),
+				...(o.automations ? [automationsExtension(o.automations)] : []),
 				planExtension({
 					active: o.plan.active,
 					setActive: (on) => {
@@ -1080,6 +1084,7 @@ function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () =>
 			: []),
 		...(o.history ? [historySdkExtension(o.history)] : []),
 		...(o.side ? [sideExtension(o.side)] : []),
+		...(o.automations ? [automationsExtension(o.automations)] : []),
 		...(o.chat!.extensions ?? []),
 	];
 }

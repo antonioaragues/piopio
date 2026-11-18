@@ -6,17 +6,15 @@
  * helper when the review fails, and then is merged into the project's work branch with the checks. Every step is
  * reported to the conversation that made the task. The board is persisted; a restart picks up where it was.
  *
- * The project's routines live here too (docs/spec/21 AD5): each fire opens a conversation with Piopio there.
+ * What starts a project's work on its own is an automation run by Piopio there (docs/spec/27, automations/).
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ApprovalMode, WayOfWorking, WorkLanding, WorkTask } from "@piopio/protocol";
-import type { Watch } from "@piopio/runtime";
 import { EngineError } from "../models.js";
 import { detectLanguage, fitCheck } from "./fit.js";
 import { BUILTIN_PLAYBOOKS, defaultPlaybook, partFor, PIOPIO_BOARD, playbookOf, projectPlaybooks, type HelperKind, type Playbook } from "./playbooks.js";
-import { nextOf, parseWhen, routineLabel, systemZone, type ProjectRoutine } from "./routines.js";
 
 export type TaskState = WorkTask["state"];
 export type { WayOfWorking, WorkLanding, WorkTask };
@@ -37,7 +35,7 @@ export type ProjectWork = {
 };
 
 export type WorkHost = {
-	/** A Build session: a helper's, or (without `helper`) a conversation with Piopio (a routine's run). */
+	/** A Build session: a helper's. */
 	createSession(params: { cwd: string; title: string; model?: string; approvalMode?: ApprovalMode; helper?: { project: string; kind: HelperKind; taskId: string } }): Promise<string>;
 	/** A project by id or path: its id and folder. */
 	project(idOrPath: string): { id: string; path: string } | undefined;
@@ -58,22 +56,12 @@ export type WorkHost = {
 	run(cwd: string, command: string): Promise<{ ok: boolean; output: string }>;
 	worktreesDir: string;
 	stateFile: string;
-	/** Where the project routines are kept. */
-	routinesFile: string;
 	changed(project: string): void;
 	log(line: string): void;
 };
 
-/** A project's routines, keyed by the project's id. */
-type ProjectRoutines = { project: string; path: string; routines: ProjectRoutine[]; fired?: string[] };
-
 export const DEFAULT_WAY: Omit<WayOfWorking, "playbook"> = { parallel: false, review: true, reviewLimit: 3, maxParallel: 3, helperMode: "auto_edit" };
 
-/** A conversation's title from a request: its first line, at most 60 characters. */
-const titleOf = (text: string) => {
-	const line = text.trim().split("\n")[0]!.replace(/\s+/g, " ");
-	return line.length > 60 ? `${line.slice(0, 59).trimEnd()}…` : line || "Routine";
-};
 /** States still on the board's way to done. */
 const OPEN = new Set<TaskState>(["todo", "doing", "review", "integrating"]);
 const iso = () => new Date().toISOString();
@@ -88,45 +76,20 @@ export class WorkRunner {
 	private readonly watching = new Map<string, () => void>();
 	/** Review verdicts given in a turn that hasn't settled yet, by review session. */
 	private readonly verdicts = new Map<string, { pass: boolean; notes: string }>();
-	private timer?: NodeJS.Timeout;
 	/** Each project's merges, in turn. */
 	private readonly merging = new Map<string, Promise<void>>();
 	private stopped = false;
-	/** A webhook routine's URL (the hooks endpoint), set by the engine. */
-	hookUrl?: (projectId: string, routineId: string) => string | undefined;
-	/** Folder and email routines changed: the watchers start or stop theirs. */
-	onRoutines?: () => void;
 	/** Tests: the clock. */
 	now: () => number = () => Date.now();
 
-	private places: ProjectRoutines[] = [];
-
 	constructor(private readonly host: WorkHost) {
 		this.work = readJson<ProjectWork[]>(host.stateFile) ?? [];
-		this.places = readJson<ProjectRoutines[]>(host.routinesFile) ?? [];
-		// Routines Piopio set used to be the lead's.
-		let renamed = false;
-		for (const r of this.places.flatMap((p) => p.routines)) {
-			if ((r.by as string) === "lead") {
-				r.by = "piopio";
-				renamed = true;
-			}
-		}
-		if (renamed) this.saveRoutines();
 	}
 
 	/** The migration's records, written before anything runs. */
-	adopt(work: ProjectWork[], routines: ProjectRoutines[]): void {
+	adopt(work: ProjectWork[]): void {
 		for (const w of work) if (!this.work.some((x) => x.project === w.project)) this.work.push(w);
-		for (const place of routines) {
-			const mine = this.places.find((p) => p.project === place.project);
-			if (mine) {
-				mine.routines.push(...place.routines.filter((r) => !mine.routines.some((x) => x.id === r.id)));
-				mine.fired = [...(mine.fired ?? []), ...(place.fired ?? [])].slice(-200);
-			} else this.places.push(place);
-		}
 		this.save();
-		this.saveRoutines();
 	}
 
 	list(): ProjectWork[] {
@@ -274,8 +237,7 @@ export class WorkRunner {
 			`How work is split here (the ${pb.name} playbook):\n${pb.plan}`,
 			`The helpers:\n${helpers.join("\n")}`,
 			`${where} At most ${way.maxParallel} tasks run at once; the rest wait their turn.${way.budgetPerJob ? ` This conversation's tasks may spend $${way.budgetPerJob.toFixed(2)} in all; new tasks wait once that's reached.` : ""} ${join(work.cwd, "NOTES.md")} is the project's notes, which helpers read too.`,
-			"This is one of several conversations in the project; each has its own tasks, and the board shows them all. Updates on the tasks you made come here, as messages that start with [Board]: they're from the board, not from the user. Messages that start with [Routine] are one of the project's routines firing: plan them as you would the user's request.",
-			"When the user wants work to start on its own (every Monday, when a file arrives, when an email comes), set a routine: schedule for times, watch for events. list_routines shows them; cancel_routine removes one.",
+			"This is one of several conversations in the project; each has its own tasks, and the board shows them all. Updates on the tasks you made come here, as messages that start with [Board]: they're from the board, not from the user. A conversation that starts with [Automation] was opened by one of the user's automations: plan it as you would the user's request.",
 		].join("\n\n");
 	}
 
@@ -290,150 +252,6 @@ export class WorkRunner {
 		return { cost, tasks: tasks.length, ...(work.way.budgetPerJob ? { budget: work.way.budgetPerJob } : {}) };
 	}
 
-	// ── Routines (docs/spec/21 AD5): a project's, fired with Piopio ──
-
-	/** A project's routines, by its id. Its path comes from the engine's projects. */
-	private placeOf(projectId: string, create = false): ProjectRoutines | undefined {
-		let place = this.places.find((p) => p.project === projectId);
-		if (!place && create) {
-			const project = this.host.project(projectId);
-			if (!project) throw new EngineError("NOT_FOUND", `No project “${projectId}”.`);
-			place = { project: project.id, path: project.path, routines: [] };
-			this.places.push(place);
-		}
-		return place;
-	}
-
-	hasProject(id: string): boolean {
-		return this.places.some((p) => p.project === id);
-	}
-
-	routines(projectId: string): ProjectRoutine[] {
-		return this.placeOf(projectId)?.routines ?? [];
-	}
-
-	/** A routine for a project: Piopio's (`schedule`, `watch`) or yours (the project's settings). */
-	async addRoutine(projectId: string, input: { on: ProjectRoutine["on"]; prompt: string; when?: string; folder?: string; from?: string; subject?: string }, by: "piopio" | "you"): Promise<ProjectRoutine> {
-		const prompt = input.prompt.trim();
-		if (!prompt) throw new EngineError("INVALID", "Say what should happen then.");
-		const now = this.now();
-		const tz = systemZone();
-		const routine: ProjectRoutine = { id: `r${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, on: input.on, prompt, by, createdAt: new Date(now).toISOString(), runs: 0 };
-		if (input.on === "time") {
-			const when = parseWhen(input.when ?? "", tz, now);
-			if ("error" in when) throw new EngineError("INVALID", when.error);
-			Object.assign(routine, when, { tz });
-			routine.next = nextOf(routine, now);
-		} else if (input.on === "folder") {
-			const folder = input.folder?.trim() ?? "";
-			if (!/^(\/|~\/)/.test(folder)) throw new EngineError("INVALID", "Give the folder as an absolute path (/Users/…) or one starting with ~/.");
-			routine.folder = folder;
-		} else if (input.on === "email") {
-			if (!input.from?.trim() && !input.subject?.trim()) throw new EngineError("INVALID", "Say whose emails (from) or which subject to watch for.");
-			if (input.from?.trim()) routine.from = input.from.trim();
-			if (input.subject?.trim()) routine.subject = input.subject.trim();
-		}
-		const place = this.placeOf(projectId, true)!;
-		place.routines.push(routine);
-		this.saveRoutines();
-		this.routinesChanged();
-		return routine;
-	}
-
-	async removeRoutine(projectId: string, routineId: string): Promise<ProjectRoutine> {
-		const place = this.placeOf(projectId);
-		const routine = place?.routines.find((r) => r.id === routineId);
-		if (!place || !routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
-		place.routines = place.routines.filter((r) => r.id !== routineId);
-		this.saveRoutines();
-		this.routinesChanged();
-		return routine;
-	}
-
-	/** For Piopio's `list_routines`. */
-	routineList(projectId: string): string {
-		const list = this.routines(projectId);
-		if (!list.length) return "No routines.";
-		return list
-			.map((r) => {
-				const url = r.on === "webhook" ? this.hookUrl?.(projectId, r.id) : undefined;
-				const next = r.next ? `, next ${new Date(r.next).toISOString().slice(0, 16).replace("T", " ")} UTC` : "";
-				return `- ${r.id}: ${routineLabel(r)}${next}${url ? ` (POST ${url})` : ""}: ${r.prompt}`;
-			})
-			.join("\n");
-	}
-
-	/** Folder and email routines, in the shape the watchers take (keyed by project id). */
-	routineWatches(): { agentId: string; watches: Watch[] }[] {
-		return this.places
-			.map((place) => ({
-				agentId: place.project,
-				watches: place.routines
-					.filter((r) => r.on === "folder" || r.on === "email")
-					.map((r) => ({ id: r.id, on: r.on as "folder" | "email", prompt: r.prompt, ...(r.folder ? { folder: r.folder } : {}), ...(r.from ? { from: r.from } : {}), ...(r.subject ? { subject: r.subject } : {}), createdAt: r.createdAt, by: r.by })),
-			}))
-			.filter((x) => x.watches.length);
-	}
-
-	/**
-	 * A routine fires: a new conversation with Piopio in its project, titled after it, gets it as a `[Routine]`
-	 * message. `key` keeps an event from firing twice. The run's id is that conversation's.
-	 */
-	async fireRoutine(projectId: string, routineId: string, happened?: string, key?: string): Promise<{ runId: string }> {
-		const place = this.placeOf(projectId);
-		const routine = place?.routines.find((r) => r.id === routineId);
-		if (!place || !routine) throw new EngineError("NOT_FOUND", `No routine ${routineId}.`);
-		const dedupe = key ? `${routine.id}:${key}` : undefined;
-		if (dedupe && place.fired?.includes(dedupe)) return { runId: routine.lastConversation ?? routine.id };
-		if (dedupe) place.fired = [...(place.fired ?? []), dedupe].slice(-200);
-		routine.runs++;
-		routine.lastRun = new Date(this.now()).toISOString();
-		this.saveRoutines();
-		const what = happened?.trim() ? `\n\nWhat happened:\n${quote(happened.trim().slice(0, 4000))}` : "";
-		const conversation = await this.host.createSession({ cwd: place.path, title: titleOf(routine.prompt) });
-		routine.lastConversation = conversation;
-		this.saveRoutines();
-		await this.host.submit(conversation, `[Routine] ${routineLabel(routine)}: ${routine.prompt}${what}`);
-		return { runId: conversation };
-	}
-
-	private saveRoutines(): void {
-		mkdirSync(dirname(this.host.routinesFile), { recursive: true });
-		writeFileSync(this.host.routinesFile, JSON.stringify(this.places, null, "\t"));
-	}
-
-	private routinesChanged(): void {
-		this.arm();
-		this.onRoutines?.();
-	}
-
-	/** Sleeps until the next time routine (at most an hour, so a changed clock is picked up). */
-	private arm(): void {
-		clearTimeout(this.timer);
-		if (this.stopped) return;
-		const next = Math.min(...this.places.flatMap((p) => p.routines.map((r) => r.next ?? Infinity)));
-		if (!Number.isFinite(next)) return;
-		this.timer = setTimeout(() => void this.tick().catch((error: unknown) => this.host.log(`Routines: ${(error as Error).message}`)), Math.min(Math.max(next - this.now(), 0), 3_600_000));
-		this.timer.unref?.();
-	}
-
-	/** Fires what's due (a fire missed while the engine was off runs once), then sets each one's next. */
-	private async tick(): Promise<void> {
-		const now = this.now();
-		for (const place of this.places) {
-			const due = place.routines.filter((r) => r.next !== undefined && r.next <= now);
-			for (const r of due) {
-				r.next = nextOf(r, now);
-				await this.fireRoutine(place.project, r.id, undefined, `time:${Math.floor(now / 60_000)}`).catch((error: unknown) => this.host.log(`Routine ${r.id}: ${(error as Error).message}`));
-			}
-			// A once that has fired is done.
-			if (due.length) {
-				place.routines = place.routines.filter((r) => r.on !== "time" || r.next !== undefined);
-				this.saveRoutines();
-			}
-		}
-		this.arm();
-	}
 
 	// ── The board ──
 
@@ -865,12 +683,10 @@ export class WorkRunner {
 			}
 			await this.pump(work).catch(() => undefined);
 		}
-		this.arm();
 	}
 
 	stop(): void {
 		this.stopped = true;
-		clearTimeout(this.timer);
 		for (const off of this.watching.values()) off();
 		this.watching.clear();
 	}

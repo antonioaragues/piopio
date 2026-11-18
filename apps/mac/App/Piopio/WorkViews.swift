@@ -303,200 +303,38 @@ struct LandingCard: View {
     }
 }
 
-/// A project's routines (docs/spec/21 AD5): what starts work here on its own. Each run is a new conversation with
-/// Piopio in the project. You add, run or remove them here; Piopio sets them when you ask it.
-struct ProjectRoutinesList: View {
+/// What starts work in a project on its own (docs/spec/27 AU10): automations Piopio runs here. They live in
+/// Automations; the project's settings show them and lead there.
+struct ProjectAutomationsLink: View {
     let engine: EngineController
     let project: ProjectInfo
-    @State private var routines: [ProjectRoutine] = []
-    @State private var adding = false
-    @State private var error: String?
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        let mine = engine.automations.filter { $0.project == project.id }
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("What starts work here on its own: each run is a new conversation with Piopio in this project. Ask Piopio (“every Monday, a brief on our competitors”), or add one.")
-                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 16)
-                Button("Add routine…") { adding = true }.buttonStyle(PillStyle(compact: true))
-            }
-            ForEach(routines) { row($0) }
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
-        }
-        .task(id: project.id) { await reload() }
-        .sheet(isPresented: $adding, onDismiss: { Task { await reload() } }) { AddRoutine(engine: engine, project: project) { adding = false } }
-    }
-
-    private func reload() async { routines = await engine.routines(in: project) }
-
-    private func row(_ r: ProjectRoutine) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: Self.icon(r.on)).font(.system(size: 14)).foregroundStyle(Color.dsFg2).frame(width: 20).padding(.top, 1)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(r.label ?? r.on).font(.system(size: 13.5, weight: .semibold))
-                Text(r.prompt).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-                Text(meta(r)).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                if let url = r.url {
-                    HStack(spacing: 6) {
-                        Text(url).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                        Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(url, forType: .string) }
-                            .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Color.dsFg2)
+            Text(mine.isEmpty
+                 ? "Nothing starts work here on its own yet. Ask Piopio in a conversation here (“every Monday, a brief on our competitors”), or make one in Automations."
+                 : "Each run is a new conversation with Piopio in this project. Ask Piopio to change them, or open one.")
+                .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+            ForEach(mine) { a in
+                Button { select(.automation(a.id)) } label: {
+                    HStack(spacing: 8) {
+                        Text(a.name).font(.system(size: 13)).foregroundStyle(a.enabled ? Color.dsFg : Color.dsFg3).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(a.enabled ? a.label : "Paused").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
-            Spacer(minLength: 12)
-            Button("Run now") { act { try await engine.runRoutine(project, r) } }.buttonStyle(PillStyle(compact: true))
-                .help("It runs now, as if it had fired")
-            Button { act { try await engine.removeRoutine(project, r) } } label: { Image(systemName: "trash").font(.system(size: 12)) }
-                .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Remove this routine").padding(.top, 4)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-    }
-
-    private func meta(_ r: ProjectRoutine) -> String {
-        var parts: [String] = []
-        if let next = r.next { parts.append("Next \(Self.day.string(from: Date(timeIntervalSince1970: next / 1000)))") }
-        parts.append(r.runs == 0 ? "Hasn't run yet" : "Ran \(r.runs == 1 ? "once" : "\(r.runs) times")")
-        if let last = r.lastRun.flatMap(Self.iso.date(from:)) { parts.append("last \(Self.day.string(from: last))") }
-        parts.append(r.by == "you" ? "set by you" : "set by Piopio")
-        return parts.joined(separator: " · ")
-    }
-
-    private static let iso: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let day: DateFormatter = {
-        let f = DateFormatter()
-        f.setLocalizedDateFormatFromTemplate("EEE d MMM HH:mm")
-        return f
-    }()
-
-    static func icon(_ on: String) -> String {
-        switch on {
-        case "folder": "folder"
-        case "email": "envelope"
-        case "webhook": "link"
-        default: "clock"
+            Button(mine.isEmpty ? "Open Automations ›" : "\(mine.count) automation\(mine.count == 1 ? "" : "s") work here ›") { select(.automations(project.id)) }
+                .buttonStyle(.plain).foregroundStyle(Color.accentColor).font(.system(size: 12.5))
         }
     }
 
-    private func act(_ work: @escaping () async throws -> Void) {
-        Task {
-            do { try await work(); error = nil } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
-            await reload()
-        }
-    }
-}
-
-/// A routine by hand: a time (repeating or once), a folder, an email or a webhook, and what Piopio does then.
-private struct AddRoutine: View {
-    let engine: EngineController
-    let project: ProjectInfo
-    let done: () -> Void
-    @State private var on = "time"
-    @State private var repeats = "weekly"
-    @State private var weekday = 2 // Calendar: 1 is Sunday
-    @State private var time = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
-    @State private var once = Date().addingTimeInterval(3600)
-    @State private var folder = ""
-    @State private var from = ""
-    @State private var subject = ""
-    @State private var prompt = ""
-    @State private var error: String?
-    @State private var saving = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("New routine").font(.system(size: 15, weight: .semibold))
-            Picker("When", selection: $on) {
-                Text("At a time").tag("time")
-                Text("A file in a folder").tag("folder")
-                Text("An email").tag("email")
-                Text("A webhook call").tag("webhook")
-            }
-            switch on {
-            case "time":
-                Picker("Repeats", selection: $repeats) {
-                    Text("Every day").tag("daily")
-                    Text("Every weekday").tag("weekdays")
-                    Text("Every week").tag("weekly")
-                    Text("Once").tag("once")
-                }
-                if repeats == "weekly" {
-                    Picker("On", selection: $weekday) {
-                        ForEach(1...7, id: \.self) { d in Text(Calendar.current.weekdaySymbols[d % 7]).tag((d % 7) + 1) }
-                    }
-                }
-                if repeats == "once" { DatePicker("At", selection: $once, in: Date()...) }
-                else { DatePicker("At", selection: $time, displayedComponents: .hourAndMinute) }
-            case "folder":
-                HStack {
-                    TextField("Folder", text: $folder, prompt: Text("~/Inbox/Reports")).textFieldStyle(.roundedBorder)
-                    Button("Choose…", action: chooseFolder)
-                }
-            case "email":
-                TextField("From", text: $from, prompt: Text("Part of the sender's name or address")).textFieldStyle(.roundedBorder)
-                TextField("Subject", text: $subject, prompt: Text("Words in the subject")).textFieldStyle(.roundedBorder)
-                Text("Checked every 5 minutes in your connected mail.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            default:
-                Text("You get a URL on this Mac that other apps can POST to; the body comes with the routine.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            }
-            Text("Then Piopio…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg2)
-            TextEditor(text: $prompt).font(.system(size: 13)).scrollContentBackground(.hidden).padding(6).frame(height: 90)
-                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                .accessibilityLabel("What Piopio does then")
-            Text("Each run starts a new conversation in the project with this request.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn) }
-            HStack {
-                Spacer()
-                Button("Cancel", action: done).keyboardShortcut(.cancelAction)
-                Button("Add", action: save)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(saving || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 460)
-    }
-
-    /// A cron for the repeating times, a local date-time for once.
-    private var when: String {
-        let c = Calendar.current.dateComponents([.hour, .minute], from: time)
-        let hm = "\(c.minute ?? 0) \(c.hour ?? 9)"
-        switch repeats {
-        case "daily": return "\(hm) * * *"
-        case "weekdays": return "\(hm) * * 1-5"
-        case "weekly": return "\(hm) * * \(weekday - 1)"
-        default:
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "yyyy-MM-dd'T'HH:mm"
-            return f.string(from: once)
-        }
-    }
-
-    private func save() {
-        saving = true
-        Task {
-            defer { saving = false }
-            do {
-                try await engine.addRoutine(project, on: on, prompt: prompt, when: on == "time" ? when : nil, folder: on == "folder" ? folder : nil, from: on == "email" ? from : nil, subject: on == "email" ? subject : nil)
-                done()
-            } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
-        }
-    }
-
-    private func chooseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        folder = url.path
+    private func select(_ item: SidebarItem) {
+        dismiss()
+        NotificationCenter.default.post(name: .selectItem, object: item.raw)
     }
 }

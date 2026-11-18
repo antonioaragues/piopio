@@ -223,7 +223,11 @@ extension ToolItem {
 public struct SystemItem: Codable, Sendable, Hashable {
     public enum Level: String, Codable, Sendable { case info, warn, error }
     /// A run of an agent, shown in its owner's conversation as a line (docs/spec/21 D3); it opens as `run:<id>`.
-    public struct Run: Codable, Sendable, Hashable { public var id, status: String; public var sent: Int; public var summary: String?; public var costUsd: Double? }
+    /// `automation`: the automation that started it (docs/spec/27 §4), "From <name>".
+    public struct Run: Codable, Sendable, Hashable {
+        public struct Origin: Codable, Sendable, Hashable { public var id, name: String }
+        public var id, status: String; public var sent: Int; public var summary: String?; public var costUsd: Double?; public var automation: Origin?
+    }
     public var id, at: String
     public var level: Level
     public var text: String
@@ -293,7 +297,8 @@ public struct ApprovalItem: Codable, Sendable, Hashable {
 
 /// What an agent's tool changed, with Undo while it lasts (06-agents §4.2).
 public struct ResultItem: Codable, Sendable, Hashable {
-    public struct Card: Codable, Sendable, Hashable { public var kind, title: String; public var detail: String? }
+    /// `automation`: an automation made or changed (docs/spec/27 §4), with what its card shows.
+    public struct Card: Codable, Sendable, Hashable { public var kind, title: String; public var detail: String?; public var automation: AutomationSummary? }
     public struct Undo: Codable, Sendable, Hashable {
         public enum Status: String, Codable, Sendable { case available, undone, failed, expired }
         public var id: String; public var status: Status; public var until: String
@@ -736,42 +741,88 @@ public struct FitCheck: Decodable, Sendable, Hashable { public var git: Bool; pu
 /// Home's agenda (docs/spec/21 D2): today's timeline and what happened since your last visit.
 public struct HomeAgenda: Decodable, Sendable, Hashable {
     public struct Source: Decodable, Sendable, Hashable { public var kind, id, name: String }
-    public struct Today: Decodable, Sendable, Hashable { public var at: String?; public var label: String; public var source: Source; public var state: String; public var tomorrow: Bool? }
-    public struct Away: Decodable, Sendable, Hashable { public var at: String; public var source: Source; public var text: String; public var costUsd: Double?; public var quiet: Bool; public var failed: Bool? }
+    /// `automation`: the automation the line belongs to (docs/spec/27 AU10); clicking it opens it.
+    public struct Today: Decodable, Sendable, Hashable { public var at: String?; public var label: String; public var source: Source; public var automation: String?; public var state: String; public var tomorrow: Bool? }
+    public struct Away: Decodable, Sendable, Hashable { public var at: String; public var source: Source; public var automation: String?; public var text: String; public var costUsd: Double?; public var quiet: Bool; public var failed: Bool? }
     public var today: [Today]
     public var away: [Away]
     public var held: Int
 }
 public struct HomeAgendaParams: Encodable, Sendable { public var since: String?; public init(since: String?) { self.since = since } }
 
-/// What starts a project's work on its own (docs/spec/21 AD5): a time, a folder, an email, a webhook.
-public struct ProjectRoutine: Codable, Sendable, Hashable, Identifiable {
-    public var id, on, prompt, by, createdAt: String
+/// An automation (docs/spec/27): work that starts when nobody started it. A trigger (`on`: a time, a folder, an email,
+/// a webhook), who runs it (`runsAs`: "piopio" or an agent's id), the prompt, a project (Piopio only), where the result
+/// goes, and what it may do while you're away. `label`, `runnerName` and `resultLabel` are the engine's words for it.
+public struct Automation: Codable, Sendable, Hashable, Identifiable {
+    public var id, name, on, runsAs, prompt, result, approval, by, createdAt: String
     public var cron: String?
     public var at: Double?
+    public var tz: String?
     public var folder: String?
     public var from: String?
     public var subject: String?
+    public var project: String?
+    public var deliverTo: String?
+    public var budgetPerRunUsd: Double?
+    public var enabled: Bool
     public var next: Double?
     public var lastRun: String?
-    public var runs: Int
-    public var label: String?
+    public var runCount: Int
+    public var fresh: Bool?
+    public var label, runnerName, resultLabel: String
     public var url: String?
+    public var lastStatus: String?
+    public var lastSummary: String?
+    public var isPiopio: Bool { runsAs == "piopio" }
 }
-/// A project's routine (docs/spec/21 AD5): `project` is the project's id.
-public struct AddRoutineParams: Encodable, Sendable {
-    public var project, on, prompt: String
-    public var when, folder, from, subject: String?
-    public init(project: String, on: String, prompt: String, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil) {
-        self.project = project; self.on = on; self.prompt = prompt; self.when = when; self.folder = folder; self.from = from; self.subject = subject
+public struct AutomationRun: Codable, Sendable, Hashable, Identifiable {
+    public var id, automation, firedAt, cause, status: String
+    public var summary: String?
+    public var costUsd: Double?
+    /// A Piopio run's conversation (a session id), or an agent's run (`run:<id>`, opened in that agent).
+    public var conversation: String?
+    public var agent: String?
+    public var agentRun: String?
+}
+/// What a card shows (docs/spec/27 §4): when, who runs it, what it does, where the result goes, where it runs.
+public struct AutomationSummary: Codable, Sendable, Hashable {
+    public var id, name, when, runsAs, does, tellsYou, runsOn: String
+    public var url: String?
+    public var next: Double?
+    public init(id: String, name: String, when: String, runsAs: String, does: String, tellsYou: String, runsOn: String, url: String? = nil, next: Double? = nil) {
+        self.id = id; self.name = name; self.when = when; self.runsAs = runsAs; self.does = does; self.tellsYou = tellsYou; self.runsOn = runsOn; self.url = url; self.next = next
     }
 }
-public struct RoutineParams: Encodable, Sendable {
-    public var project, routineId: String
-    public init(project: String, routineId: String) { self.project = project; self.routineId = routineId }
+/// A new automation or a change: the trigger in words (`when`), the rest as the record. `project` and
+/// `budgetPerRunUsd` set to `.clear` remove them.
+public struct AutomationChange: Encodable, Sendable {
+    public enum Value<T: Encodable & Sendable>: Encodable, Sendable {
+        case set(T), clear
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            switch self { case .set(let v): try c.encode(v); case .clear: try c.encodeNil() }
+        }
+    }
+    public var id: String?
+    public var name, on, when, folder, from, subject, runsAs, prompt, result, approval: String?
+    public var project: Value<String>?
+    public var budgetPerRunUsd: Value<Double>?
+    public var enabled: Bool?
+    public init(id: String? = nil, name: String? = nil, on: String? = nil, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil, runsAs: String? = nil, project: Value<String>? = nil, prompt: String? = nil, result: String? = nil, approval: String? = nil, budgetPerRunUsd: Value<Double>? = nil, enabled: Bool? = nil) {
+        self.id = id; self.name = name; self.on = on; self.when = when; self.folder = folder; self.from = from; self.subject = subject; self.runsAs = runsAs
+        self.project = project; self.prompt = prompt; self.result = result; self.approval = approval; self.budgetPerRunUsd = budgetPerRunUsd; self.enabled = enabled
+    }
 }
+public struct AutomationsParams: Encodable, Sendable {
+    public var runsAs, project: String?
+    public init(runsAs: String? = nil, project: String? = nil) { self.runsAs = runsAs; self.project = project }
+}
+public struct AutomationIdParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
+public struct AutomationsResult: Decodable, Sendable { public var automations: [Automation] }
+public struct AutomationResult: Decodable, Sendable { public var automation: Automation }
+public struct AutomationDetail: Decodable, Sendable { public var automation: Automation; public var runs: [AutomationRun]; public var summary: AutomationSummary }
+public struct AutomationRunResult: Decodable, Sendable { public var run: AutomationRun }
 public struct ProjectParams: Encodable, Sendable { public var project: String; public init(project: String) { self.project = project } }
-public struct RoutinesResult: Decodable, Sendable { public var routines: [ProjectRoutine] }
 
 public struct AddWorkTaskParams: Encodable, Sendable {
     public var project, title, brief: String
@@ -1513,7 +1564,7 @@ public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
     public init(type: String, message: String? = nil) { self.type = type; self.message = message }
 }
 public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
-public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged, automationsChanged }
 
 // MARK: Connected apps (docs/spec/12-connectors)
 

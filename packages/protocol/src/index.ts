@@ -166,7 +166,7 @@ export const SystemItem = Type.Object({
 	level: literals("info", "warn", "error"),
 	text: Type.String(),
 	/** A run of the agent, shown in its owner's conversation as a divider (docs/spec/21 D3); opens as `run:<id>`. */
-	run: Type.Optional(Type.Object({ id: Type.String(), status: literals("running", "done", "failed", "skipped"), sent: Type.Number(), summary: Type.Optional(Type.String()), costUsd: Type.Optional(Type.Number()) })),
+	run: Type.Optional(Type.Object({ id: Type.String(), status: literals("running", "done", "failed", "skipped"), sent: Type.Number(), summary: Type.Optional(Type.String()), costUsd: Type.Optional(Type.Number()), automation: Type.Optional(Type.Object({ id: Type.String(), name: Type.String() }, { description: "The automation that started it (docs/spec/27 §4): “From <name>”" })) })),
 });
 export const CompactionItem = Type.Object({
 	kind: Type.Literal("compaction"),
@@ -217,13 +217,32 @@ export const ApprovalItem = Type.Object({
 	/** "connector": a connected app's change in a chat (Allow / Deny, no editing; `sessions.decide`). Else an agent's. */
 	source: Type.Optional(Type.Literal("connector")),
 });
+/** An automation as its card shows it (docs/spec/27 §4): when, who runs it, what it does, where the result goes. */
+export const AutomationSummary = Type.Object({
+	id: Type.String(),
+	name: Type.String(),
+	when: Type.String({ description: "“Every Monday at 09:00”, “When an email from the bank arrives”" }),
+	runsAs: Type.String({ description: "“Rita”, “Piopio in shop”" }),
+	does: Type.String(),
+	tellsYou: Type.String({ description: "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”" }),
+	runsOn: Type.String({ description: "“This Mac, only while it's awake”" }),
+	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
+	next: Type.Optional(Type.Number({ description: "time: the next run, epoch ms" })),
+});
+export type AutomationSummary = Static<typeof AutomationSummary>;
 /** What an agent's tool changed, with Undo while it can be undone (06-agents §4.2 RC1–RC2). */
 export const ResultItem = Type.Object({
 	kind: Type.Literal("result"),
 	id: Type.String(),
 	at: Type.String(),
 	callId: Type.String(),
-	card: Type.Object({ kind: literals("reminder", "message", "memory", "event", "contact", "note", "music", "shortcut", "setup"), title: Type.String(), detail: Type.Optional(Type.String()) }),
+	card: Type.Object({
+		kind: literals("reminder", "message", "memory", "event", "contact", "note", "music", "shortcut", "setup", "automation"),
+		title: Type.String(),
+		detail: Type.Optional(Type.String()),
+		/** An automation made or changed (docs/spec/27 §4): what its card shows. */
+		automation: Type.Optional(AutomationSummary),
+	}),
 	undo: Type.Optional(Type.Object({ id: Type.String(), status: literals("available", "undone", "failed", "expired"), until: Type.String() })),
 });
 /** A message between two of the owner's agents (06-agents §7 AA5): sent (`out`, with the answer once it comes) or received (`in`). */
@@ -827,27 +846,76 @@ export const WorkLanding = Type.Object({
 	compareUrl: Type.Optional(Type.String()),
 });
 export type WorkLanding = Static<typeof WorkLanding>;
-/** What starts a project's work on its own (docs/spec/21 AD5): a time, a folder, an email, a webhook. */
-export const ProjectRoutine = Type.Object({
+/**
+ * An automation (docs/spec/27): work that starts when nobody started it. A trigger (a time, an email, a file in a
+ * folder, a URL), who runs it (Piopio or an agent), the prompt, a project (Piopio only), where the result goes, and
+ * what it may do while you're away.
+ */
+export const Automation = Type.Object({
 	id: Type.String(),
+	name: Type.String(),
 	on: literals("time", "folder", "email", "webhook"),
-	prompt: Type.String(),
 	cron: Type.Optional(Type.String()),
-	at: Type.Optional(Type.Number()),
+	at: Type.Optional(Type.Number({ description: "time, once: epoch ms" })),
 	tz: Type.Optional(Type.String()),
 	folder: Type.Optional(Type.String()),
 	from: Type.Optional(Type.String()),
 	subject: Type.Optional(Type.String()),
-	by: literals("piopio", "you"),
+	runsAs: Type.String({ description: "“piopio”, or an agent's id" }),
+	project: Type.Optional(Type.String({ description: "A project's id; only when Piopio runs it" })),
+	prompt: Type.String(),
+	result: literals("chat", "telegram", "conversation", "quiet"),
+	deliverTo: Type.Optional(Type.String({ description: "An agent's contact the result is for (default its owner)" })),
+	approval: literals("wait", "skip"),
+	budgetPerRunUsd: Type.Optional(Type.Number()),
+	enabled: Type.Boolean(),
+	by: Type.String({ description: "“you”, “piopio”, or the agent that made it" }),
 	createdAt: Type.String(),
-	next: Type.Optional(Type.Number({ description: "time: the next fire, epoch ms" })),
+	next: Type.Optional(Type.Number({ description: "time: the next run, epoch ms" })),
 	lastRun: Type.Optional(Type.String()),
-	runs: Type.Number(),
-	lastConversation: Type.Optional(Type.String()),
-	label: Type.Optional(Type.String({ description: "“Every Monday at 09:00”, “When a file appears in ~/Inbox”" })),
+	runCount: Type.Number(),
+	fresh: Type.Optional(Type.Boolean({ description: "Not opened since it was made (the list's “New” badge)" })),
+	aliases: Type.Optional(Type.Array(Type.String())),
+	/** Words for the app. */
+	label: Type.String({ description: "“Every Monday at 09:00”, “When a file appears in ~/Inbox”" }),
+	runnerName: Type.String({ description: "“Piopio”, “Piopio in shop”, “Rita”" }),
+	resultLabel: Type.String({ description: "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”" }),
 	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
+	lastStatus: Type.Optional(literals("running", "done", "quiet", "waiting", "skipped", "failed")),
+	lastSummary: Type.Optional(Type.String()),
 });
-export type ProjectRoutine = Static<typeof ProjectRoutine>;
+export type Automation = Static<typeof Automation>;
+export const AutomationRun = Type.Object({
+	id: Type.String(),
+	automation: Type.String(),
+	firedAt: Type.String(),
+	cause: literals("time", "event", "now"),
+	status: literals("running", "done", "quiet", "waiting", "skipped", "failed"),
+	summary: Type.Optional(Type.String()),
+	costUsd: Type.Optional(Type.Number()),
+	/** A Piopio run's conversation (a session id), or an agent's run (`run:<id>`, opened in that agent). */
+	conversation: Type.Optional(Type.String()),
+	agent: Type.Optional(Type.String()),
+	agentRun: Type.Optional(Type.String()),
+});
+export type AutomationRun = Static<typeof AutomationRun>;
+/** What `automations.add` and `automations.update` take: the trigger in words (`when`), the rest as the record. */
+export const AutomationChange = Type.Object({
+	name: Type.Optional(Type.String()),
+	on: Type.Optional(literals("time", "folder", "email", "webhook")),
+	when: Type.Optional(Type.String({ description: "time: a 5-field cron, or a local date-time once" })),
+	folder: Type.Optional(Type.String()),
+	from: Type.Optional(Type.String()),
+	subject: Type.Optional(Type.String()),
+	runsAs: Type.Optional(Type.String()),
+	project: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+	prompt: Type.Optional(Type.String()),
+	result: Type.Optional(literals("chat", "telegram", "conversation", "quiet")),
+	approval: Type.Optional(literals("wait", "skip")),
+	budgetPerRunUsd: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+	enabled: Type.Optional(Type.Boolean()),
+});
+export type AutomationChange = Static<typeof AutomationChange>;
 /** How work is done in a project (docs/spec/26 §4). */
 export const WayOfWorking = Type.Object({
 	parallel: Type.Boolean({ description: "Piopio may split work onto the board" }),
@@ -1521,8 +1589,8 @@ export const methods = {
 	"home.agenda": {
 		params: Type.Object({ since: Type.Optional(Type.String()) }),
 		result: Type.Object({
-			today: Type.Array(Type.Object({ at: Type.Optional(Type.String()), label: Type.String(), source: Type.Object({ kind: literals("agent", "project"), id: Type.String(), name: Type.String() }), state: literals("done", "failed", "skipped", "running", "upcoming", "event"), tomorrow: Type.Optional(Type.Boolean({ description: "Upcoming after midnight, within the next 24 hours" })) })),
-			away: Type.Array(Type.Object({ at: Type.String(), source: Type.Object({ kind: literals("agent", "project"), id: Type.String(), name: Type.String() }), text: Type.String(), costUsd: Type.Optional(Type.Number()), quiet: Type.Boolean(), failed: Type.Optional(Type.Boolean()) })),
+			today: Type.Array(Type.Object({ at: Type.Optional(Type.String()), label: Type.String(), source: Type.Object({ kind: literals("agent", "project", "piopio"), id: Type.String(), name: Type.String() }), automation: Type.Optional(Type.String({ description: "The automation it belongs to (docs/spec/27)" })), state: literals("done", "failed", "skipped", "running", "upcoming", "event"), tomorrow: Type.Optional(Type.Boolean({ description: "Upcoming after midnight, within the next 24 hours" })) })),
+			away: Type.Array(Type.Object({ at: Type.String(), source: Type.Object({ kind: literals("agent", "project", "piopio"), id: Type.String(), name: Type.String() }), automation: Type.Optional(Type.String({ description: "The automation it belongs to (docs/spec/27)" })), text: Type.String(), costUsd: Type.Optional(Type.Number()), quiet: Type.Boolean(), failed: Type.Optional(Type.Boolean()) })),
 			held: Type.Number({ description: "Messages held by quiet hours or limits, across agents" }),
 		}),
 	},
@@ -1599,14 +1667,25 @@ export const methods = {
 	/** What changed when teams became projects' ways of working (docs/spec/26 §8): shown once, until dismissed. */
 	"work.migrationReport": { params: Type.Object({}), result: Type.Object({ report: Type.Optional(Type.String({ description: "Markdown" })) }) },
 	"work.dismissMigrationReport": { params: Type.Object({}), result: Type.Object({}) },
-	/** A project's routines (docs/spec/21 AD5): each run opens a conversation there with Piopio. */
-	"routines.list": { params: Type.Object({ project: Type.String() }), result: Type.Object({ routines: Type.Array(ProjectRoutine) }) },
-	"routines.add": {
-		params: Type.Object({ project: Type.String(), on: literals("time", "folder", "email", "webhook"), prompt: Type.String(), when: Type.Optional(Type.String()), folder: Type.Optional(Type.String()), from: Type.Optional(Type.String()), subject: Type.Optional(Type.String()) }),
-		result: Type.Object({ routine: ProjectRoutine }),
+	/** Automations (docs/spec/27): every one, or those a runner or a project has. */
+	"automations.list": {
+		params: Type.Object({ runsAs: Type.Optional(Type.String()), project: Type.Optional(Type.String()) }),
+		result: Type.Object({ automations: Type.Array(Automation) }),
 	},
-	"routines.remove": { params: Type.Object({ project: Type.String(), routineId: Type.String() }), result: Type.Object({}) },
-	"routines.run": { params: Type.Object({ project: Type.String(), routineId: Type.String() }), result: Type.Object({ runId: Type.String() }) },
+	/** One, its latest runs, and the card's words. Opening it clears its “New” badge. */
+	"automations.get": {
+		params: Type.Object({ id: Type.String() }),
+		result: Type.Object({ automation: Automation, runs: Type.Array(AutomationRun), summary: AutomationSummary }),
+	},
+	"automations.add": { params: Type.Intersect([AutomationChange, Type.Object({ prompt: Type.String() })]), result: Type.Object({ automation: Automation }) },
+	"automations.update": { params: Type.Intersect([Type.Object({ id: Type.String() }), AutomationChange]), result: Type.Object({ automation: Automation }) },
+	"automations.remove": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
+	/** Run now: a run even while it's paused. */
+	"automations.run": { params: Type.Object({ id: Type.String() }), result: Type.Object({ run: AutomationRun }) },
+	"automations.runs": { params: Type.Object({ id: Type.Optional(Type.String()), limit: Type.Optional(Type.Number()) }), result: Type.Object({ runs: Type.Array(AutomationRun) }) },
+	/** What changed when schedules, watches and routines became automations (docs/spec/27 §6): shown until dismissed. */
+	"automations.migrationReport": { params: Type.Object({}), result: Type.Object({ report: Type.Optional(Type.String({ description: "Markdown" })) }) },
+	"automations.dismissMigrationReport": { params: Type.Object({}), result: Type.Object({}) },
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */
 	"agents.runs": {
 		params: Type.Object({ ref: ContainerRef }),
@@ -1614,7 +1693,7 @@ export const methods = {
 			runs: Type.Array(
 				Type.Object({
 					id: Type.String(),
-					kind: literals("schedule", "heartbeat", "reminder", "trigger", "manual"),
+					kind: literals("schedule", "heartbeat", "reminder", "trigger", "manual", "automation"),
 					source: Type.String(),
 					prompt: Type.String(),
 					firedAt: Type.String(),
@@ -1816,6 +1895,8 @@ export const notifications = {
 	"providers.changed": Type.Object({}),
 	/** A project's work or its board changed (docs/spec/26). */
 	"work.changed": Type.Object({ project: Type.String() }),
+	/** An automation or one of its runs changed (docs/spec/27): list them again. */
+	"automations.changed": Type.Object({}),
 	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
 } satisfies Record<string, TSchema>;
 

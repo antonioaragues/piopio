@@ -310,7 +310,7 @@ struct AgentsIndex: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Agents").font(.system(size: 28, weight: .bold)).tracking(-0.6)
-                        Text("Conversations that live on their own: schedules, channels and memory.")
+                        Text("Assistants that remember you and reach you where you are. What they do on their own is in Automations.")
                             .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
                     }
                     Spacer()
@@ -361,8 +361,8 @@ struct AgentsIndex: View {
                     if let d = a.agent?.description, !d.isEmpty { Text(d).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
                 }
                 Spacer(minLength: 12)
-                // "Next run tomorrow 8:00" or "Paused"; nothing when the engine hasn't said (its description is above).
-                Text(MainSidebar.agentLine(a) == (a.agent?.description ?? "Local agent") ? "" : MainSidebar.agentLine(a))
+                // Its automations (docs/spec/27 AU3): how many; "Paused" when it is.
+                Text(a.agent?.status?.paused == true ? "Paused" : automationsLine(a))
                     .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
                     .frame(width: 180, alignment: .leading)
                 agentStatus(a).frame(width: 100, alignment: .trailing)
@@ -371,6 +371,11 @@ struct AgentsIndex: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func automationsLine(_ a: SessionSummary) -> String {
+        let n = engine.automations.filter { $0.runsAs == a.ref.id }.count
+        return n == 0 ? "" : "\(n) automation\(n == 1 ? "" : "s")"
     }
 
     @ViewBuilder private func agentStatus(_ a: SessionSummary) -> some View {

@@ -20,10 +20,16 @@ enum SidebarItem: Hashable {
     case start(StartKind)
     /// A new session in a project (its id): the composer alone, in place of the old sheet.
     case newSession(String)
+    /// Automations (docs/spec/27): the list, filtered to a runner ("piopio" or an agent's id) or a project when given.
+    case automations(String?)
+    /// One automation (its id): the sentence, what it's told, while you're away, its runs.
+    case automation(String)
 
     var raw: String {
         switch self {
         case .home: "home"
+        case .automations(let filter): filter.map { "automations:\($0)" } ?? "automations"
+        case .automation(let id): "automation:\(id)"
         case .index(let s): "index:\(s.rawValue)"
         case .project(let id): "project:\(id)"
         case .board(let id): "board:\(id)"
@@ -49,6 +55,8 @@ enum SidebarItem: Hashable {
         case "chat": self = .chat(value)
         case "start": self = StartKind(rawValue: value).map { .start($0) } ?? .home
         case "newsession": self = .newSession(value)
+        case "automations": self = .automations(value.isEmpty ? nil : value)
+        case "automation": self = .automation(value)
         default: self = .home
         }
     }

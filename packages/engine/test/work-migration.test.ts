@@ -121,7 +121,7 @@ test("teams become ways of working: boards, branches, tasks and routines stay; n
 	expect(playbook).toContain("## Doing tasks: Writer\n\nYou write posts for bakers.\n\nDone means: A post with a recipe.");
 	expect(playbook).toContain("## Reviewing: Proofreader\n\nYou check spelling.");
 	expect(((await client.call("work.playbooks", { project: blogProject })) as { playbooks: { id: string; source: string }[] }).playbooks[0]).toEqual(expect.objectContaining({ id: "how-bakery-blog-works", source: "project" }));
-	expect(((await client.call("routines.list", { project: blogProject })) as { routines: { id: string; by: string }[] }).routines).toEqual([expect.objectContaining({ id: "r1", by: "piopio" })]);
+	expect(((await client.call("automations.list", { project: blogProject })) as { automations: { id: string; by: string; runsAs: string }[] }).automations).toEqual([expect.objectContaining({ id: "r1", by: "piopio", runsAs: "piopio" })]);
 
 	// Unused saved teams and your templates: playbooks in your skills library.
 	expect(existsSync(join(home, "pi-agent", "skills", "how-podcast-works", "SKILL.md"))).toBe(true);

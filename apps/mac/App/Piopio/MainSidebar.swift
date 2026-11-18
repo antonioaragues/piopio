@@ -46,6 +46,8 @@ struct MainSidebar: View {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     searchRow
                     navRow(.home, "Home", symbol: "house", count: engine.needsYouCount)
+                    // Automations (docs/spec/27 AU10): what starts on its own, for Piopio and every agent.
+                    automationsRow
                     if areas.showsAgents { agentsRow }
                     pinnedSection
                     if areas.showsProjects { projectsSection }
@@ -467,6 +469,29 @@ struct MainSidebar: View {
     /// The selection as the older views take it (a thread id or a "space/topic" key).
     private var chatSelection: Binding<String?> {
         Binding(get: { item.engineId }, set: { id in item = id.flatMap(engine.item(for:)) ?? .home })
+    }
+
+    // MARK: Automations
+
+    /// Automations (docs/spec/27 AU10): one row that opens the list. It stays selected on one of them, and shows how
+    /// many there are; a ring while one runs.
+    private var automationsRow: some View {
+        let selected: Bool = switch item {
+        case .automations, .automation: true
+        default: false
+        }
+        let running = engine.automations.contains { $0.lastStatus == "running" }
+        return Button { item = .automations(nil) } label: {
+            HStack(spacing: 10) {
+                RowGlyph(symbol: "clock.arrow.circlepath")
+                Text("Automations").font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                Spacer()
+                if running { SidebarDot(status: .running).help("An automation is running") }
+                else if !engine.automations.isEmpty { Text("\(engine.automations.count)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
+            }
+            .rowChrome(selected: selected)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Agents

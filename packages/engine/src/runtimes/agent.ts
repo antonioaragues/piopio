@@ -59,6 +59,10 @@ export type AgentOpenOptions = {
 	/** Event routines (docs/spec/19 S3): a webhook watch's URL, and a notice that the agent's watches changed. */
 	watchUrl?: (watchId: string) => string | undefined;
 	onWatches?: () => void;
+	/** Automations (docs/spec/27): the agent makes its own through these; the engine keeps and fires them. */
+	automations?: AgentCoreOptions["automations"];
+	/** A run started or settled (an automation's run follows it). */
+	onRun?: (run: RunRecord) => void;
 	/** Apple app tools through the Mac app (06 §4.1). */
 	appTool?: AgentCoreOptions["appTool"];
 	/** The other agents (06 §7). */
@@ -132,6 +136,7 @@ export class AgentRuntime implements Runtime {
 			onPeerLog: () => options.onActivity?.(),
 			onRun: (run) => {
 				options.onActivity?.();
+				options.onRun?.(run);
 				// Its owner's conversation shows each run as a divider (docs/spec/21 D3), placed when it fired.
 				for (const view of runtime?.live ?? []) if (view.isOwner) view.runLine(run, true);
 			},
@@ -149,6 +154,7 @@ export class AgentRuntime implements Runtime {
 			onStatus: () => options.onStatus?.(),
 			...(options.watchUrl ? { watchUrl: options.watchUrl } : {}),
 			...(options.onWatches ? { onWatches: options.onWatches } : {}),
+			...(options.automations ? { automations: options.automations } : {}),
 			...(options.updateSelf ? { updateSelf: options.updateSelf } : {}),
 		});
 		for (const e of [web, core.extension, ...(apps ? [apps] : [])]) registry.install(e as never);
@@ -231,6 +237,29 @@ export class AgentRuntime implements Runtime {
 		const text = body.length > 20_000 ? `${body.slice(0, 20_000)}\n… (cut)` : body;
 		const prompt = t.prompt.includes("{{body}}") ? t.prompt.replaceAll("{{body}}", text) : `${t.prompt}\n\n${text}`;
 		return this.core.proactive.startRun("trigger", t.id, prompt, undefined, deliveryId ? `trigger:${t.id}:${deliveryId}` : undefined);
+	}
+
+	/**
+	 * An automation fired (docs/spec/27): a run with its prompt, told where its result goes and its budget. `key` makes
+	 * the same fire the same run.
+	 */
+	async runAutomation(automation: { id: string; name: string; result: string; deliverTo?: string; budgetPerRunUsd?: number }, prompt: string, key: string): Promise<RunRecord> {
+		await this.ensureCredential();
+		const owner = ownerOf(this.options.definition());
+		const to = automation.deliverTo ?? owner;
+		const note =
+			automation.result === "quiet"
+				? `Only message “${to}” if something needs their attention; otherwise send nothing.`
+				: automation.result === "telegram"
+					? `Send the result to “${to}” with send_message; it goes to them on Telegram.`
+					: `Send the result to “${to}” with send_message, even when it's short.`;
+		return this.core.proactive.startRun("automation", automation.id, prompt, automation.deliverTo, key, { label: automation.name, note, ...(automation.budgetPerRunUsd ? { budgetUsd: automation.budgetPerRunUsd } : {}) });
+	}
+
+	/** The reminders and watches it set itself, handed to automations (docs/spec/27 §6), and its runs. */
+	async handOver() {
+		const legacy = await this.core.proactive.handOver();
+		return { ...legacy, runs: legacy.runs.length ? legacy.runs : (await this.core.proactive.overview()).runs };
 	}
 
 	/** Something a routine waits for happened (a file, an email, a webhook): a run (docs/spec/19 S3). */
@@ -478,7 +507,8 @@ export class AgentView implements Runtime {
 	 * write · $0.0004"; a run that wrote shows its message after it. Placed when it fired; updated when it ends.
 	 */
 	runLine(run: RunRecord, live: boolean): void {
-		const how = run.source === "trial" ? "Trial run" : run.kind === "manual" ? "Run now" : "Automatic run";
+		// An automation's run says which one (docs/spec/27 §4): "From Daily price check · …".
+		const how = run.source === "trial" ? "Trial run" : run.kind === "manual" ? "Run now" : run.kind === "automation" ? `From ${run.label ?? "an automation"}` : "Automatic run";
 		const short = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, 120);
 		const what =
 			run.status === "running"
@@ -499,7 +529,7 @@ export class AgentView implements Runtime {
 			at: run.firedAt,
 			level: run.status === "failed" ? "warn" : "info",
 			text: `${how} · ${what}${cost}`,
-			run: { id: run.id, status: run.status, sent: run.sent, ...(run.summary ? { summary: run.summary } : {}), ...(run.costUsd !== undefined ? { costUsd: run.costUsd } : {}) },
+			run: { id: run.id, status: run.status, sent: run.sent, ...(run.summary ? { summary: run.summary } : {}), ...(run.costUsd !== undefined ? { costUsd: run.costUsd } : {}), ...(run.kind === "automation" ? { automation: { id: run.source, name: run.label ?? "Automation" } } : {}) },
 		};
 		const had = this.runLines.has(item.id);
 		this.runLines.set(item.id, item);

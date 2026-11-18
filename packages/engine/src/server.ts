@@ -2,7 +2,7 @@
 import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { appendFileSync, existsSync, mkdirSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { createConnection, createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
@@ -40,7 +40,7 @@ import type { TimelineItem, ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over and visuals (they read as part of the conversation). */
-const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_parallel" || tool.tool === "side_offer" || tool.tool === "side_start" || tool.tool === "side_propose" || tool.tool === "offer_repeat" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
+const keepAlone = (tool: ToolItem) => tool.tool === "task" || tool.tool === "ask_user" || tool.tool === "ask_owner" || tool.tool === "ask_agent" || tool.tool === "offer_parallel" || tool.tool === "side_offer" || tool.tool === "side_start" || tool.tool === "side_propose" || tool.tool === "automate" || tool.tool === "propose_plan" || tool.tool === "present_files" || tool.tool === "show_visual";
 /** Folds a turn's tool calls into steps lines; a visual that a later one replaced (docs/spec/25 §3.4) folds in too. */
 const fold = (items: readonly TimelineItem[]): TimelineItem[] => {
 	const replaced = replacedVisuals(items);
@@ -50,7 +50,10 @@ import { AppServices } from "./app-services.js";
 import { BrowserSites } from "./tools/browser-tools.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
-import { routineLabel, systemZone, type ProjectRoutine } from "./work/routines.js";
+import { Automations } from "./automations/service.js";
+import { PIOPIO, systemZone, type Automation } from "./automations/model.js";
+import { fromProjects, REPORT_FILE as AUTOMATIONS_REPORT, reportOf as automationsReport, type LegacyPlace } from "./automations/migrate.js";
+import type { Automation as AutomationView } from "@piopio/protocol";
 import { WorkRunner, type ProjectWork } from "./work/runner.js";
 import { migrateTeams, needsMigration, REPORT_FILE } from "./work/migrate.js";
 import { buildAgenda } from "./agenda.js";
@@ -119,6 +122,7 @@ export class Engine {
 	readonly telegram: TelegramChannels;
 	readonly watchers: AgentWatchers;
 	readonly work: WorkRunner;
+	readonly automations: Automations;
 	readonly watchdog: Watchdog;
 	readonly github: GitHub;
 	private prTimer?: NodeJS.Timeout;
@@ -181,6 +185,12 @@ export class Engine {
 			for (const conn of this.authed) conn.notify("work.changed", { project });
 		};
 		this.sessions.onAttention = (change) => {
+			// A Piopio run set to skip what needs your OK (docs/spec/27 AU8) stops there and ends as skipped.
+			if (change.kind === "waiting" && this.automations?.runOf({ conversation: change.ref.id })?.automation?.approval === "skip") {
+				void this.sessions.stopSession(change.ref.id).catch(() => undefined);
+				this.automations.skipped({ conversation: change.ref.id }, `Skipped: it needed your OK (${change.message})`);
+				return;
+			}
 			for (const conn of this.authed) conn.notify("session.attention", change);
 		};
 		// A test agent folder: pi's own lookups (MCP config, codemode) read it from the environment.
@@ -234,14 +244,43 @@ export class Engine {
 			...(options.telegram?.retryMs !== undefined ? { retryMs: options.telegram.retryMs } : {}),
 		});
 		this.sessions.telegram = this.telegram;
-		// Event routines agents set themselves (docs/spec/19 S3): folders and connected mail; webhooks go through hooks.
-		this.watchers = new AgentWatchers({
-			// Agents' watches, and projects' folder and email routines (keyed by the project's id).
-			watches: async () => [...(await this.sessions.agentWatches()), ...this.work.routineWatches()],
-			fire: async (id, watchId, happened, key) => {
-				if (this.work.hasProject(id)) await this.work.fireRoutine(id, watchId, happened, key);
-				else await (await this.sessions.agent({ kind: "agent", id })).fireWatch(watchId, happened, key);
+		// Automations (docs/spec/27): one list of what starts on its own, run as Piopio or as one of your agents.
+		this.automations = new Automations({
+			file: join(options.paths.home, "automations.json"),
+			runsFile: join(options.paths.home, "automation-runs.json"),
+			log: this.log,
+			agent: (id) => {
+				const a = this.sessions.agentList().find((x) => x.id === id);
+				return a ? { id: a.id, name: a.name, telegram: Boolean(a.definition.channels?.telegram) } : undefined;
 			},
+			project: (id) => {
+				try {
+					const p = this.projects.get(id);
+					return { id: p.id, name: p.name, path: p.path };
+				} catch {
+					return undefined;
+				}
+			},
+			runAgent: async (agentId, a, prompt, key) => {
+				const run = await (await this.sessions.agent({ kind: "agent", id: agentId })).runAutomation(a, prompt, key);
+				return { runId: run.id, conversationId: run.conversationId, status: run.status, ...(run.summary ? { summary: run.summary } : {}) };
+			},
+			runPiopio: (a, text) => this.sessions.automationConversation(a, text, a.project ? this.projects.get(a.project).path : undefined),
+			session: (id) => this.sessions.sessionState(id),
+			stopSession: (id) => this.sessions.stopSession(id),
+			hookUrl: (id) => (this.hooks?.port ? this.hooks.url("a", id) : undefined),
+			changed: () => {
+				for (const conn of this.authed) conn.notify("automations.changed", {});
+			},
+			watchesChanged: () => void this.watchers?.sync().catch(() => undefined),
+		});
+		this.sessions.automations = this.automations;
+		this.sessions.log = this.log;
+		this.sessions.onAutomationsMigrated = (lines) => this.appendAutomationReport(lines);
+		// Folders and connected mail for automations that wait for them (docs/spec/27 §5); webhooks go through hooks.
+		this.watchers = new AgentWatchers({
+			watches: async () => this.automations.watches(),
+			fire: async (_owner, id, happened, key) => void (await this.automations.fire(id, "event", happened, key)),
 			mail: () => this.connectors.mailboxes("agent").map((b) => ({ name: b.name, search: (q: string, n: number) => b.mailbox.search(q, n) })),
 			stateFile: join(options.paths.home, "watchers.json"),
 			log: this.log,
@@ -255,7 +294,6 @@ export class Engine {
 		this.work = new WorkRunner(
 			this.sessions.workHost({
 				stateFile: join(options.paths.home, "work.json"),
-				routinesFile: join(options.paths.home, "project-routines.json"),
 				worktreesDir: join(options.paths.home, "worktrees", "work"),
 				log: this.log,
 				// A project by id or by folder (a worktree's is its project's).
@@ -304,10 +342,8 @@ export class Engine {
 			return p ? { id: p.id, path: p.path } : undefined;
 		};
 		this.sessions.projectNames = () => this.projects.list().filter((x) => x.missing !== true).map((x) => x.name);
-		// A project's webhook routine has the same kind of URL as an agent's trigger, with the project's id.
-		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (agent, trigger, body, delivery) => (this.work.hasProject(agent) ? this.work.fireRoutine(agent, trigger, `Its URL was called. Body:\n${body}`, delivery ?? `${Date.now()}`) : this.sessions.fireTrigger(agent, trigger, body, delivery)), this.log);
-		this.work.hookUrl = (project, routine) => (this.hooks.port ? this.hooks.url(project, routine) : undefined);
-		this.work.onRoutines = () => void this.watchers.sync().catch(() => undefined);
+		// Webhook automations: `/hooks/a/<id>/…`, or an address one had before (an agent's trigger, a project's routine).
+		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (first, second, body, delivery) => this.automations.fireHook(first, second, body, delivery), this.log);
 		this.sessions.hookUrl = (agent, trigger) => this.hooks.url(agent, trigger);
 		this.sessions.policy = {
 			projectFor: (cwd) => this.projects.projectFor(cwd),
@@ -341,6 +377,8 @@ export class Engine {
 		this.removeInterimBrowser();
 		// Teams from before docs/spec/26 become their projects' ways of working, once.
 		this.migrateTeams();
+		// Project routines from before docs/spec/27 become automations, once (agents' schedules move when each opens).
+		this.migrateRoutines();
 		this.server = createServer((stream) => this.accept(new RpcConnectionFor(stream)));
 		await new Promise<void>((resolve, reject) => {
 			this.server!.once("error", reject);
@@ -356,6 +394,8 @@ export class Engine {
 		this.sessions.watchPiSessions(folders);
 		// Agents: webhook triggers, then every agent's schedules (they run with the app closed).
 		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
+		// Automations' clock: what was due while the engine was off runs once (docs/spec/27 AU9).
+		this.automations.start();
 		void this.sessions.startAgents(this.log);
 		void this.work.resume().catch((error: unknown) => this.log(`Work: ${(error as Error).message}`));
 		// Open pull requests: what happens on them goes to the conversation that owns them (docs/spec/17 §5).
@@ -459,9 +499,48 @@ export class Engine {
 			},
 			log: this.log,
 		});
-		this.work.adopt(result.work, result.routines);
+		this.work.adopt(result.work);
+		// The teams' routines are automations run by Piopio in their projects (docs/spec/27 §6).
+		if (result.routines.length) this.adoptRoutines(result.routines);
 		this.sessions.migrateTeams((id) => result.projectOf.get(id));
 		this.log(`Teams became ways of working in ${result.work.length} project${result.work.length === 1 ? "" : "s"} (docs/spec/26).`);
+	}
+
+	/** docs/spec/27 §6: project-routines.json, read once, becomes automations run by Piopio in their projects. */
+	private migrateRoutines(): void {
+		const file = join(this.options.paths.home, "project-routines.json");
+		if (!existsSync(file)) return;
+		let places: LegacyPlace[] = [];
+		try {
+			places = JSON.parse(readFileSync(file, "utf8")) as LegacyPlace[];
+		} catch (error) {
+			this.log(`Automations: couldn't read the project routines: ${(error as Error).message}`);
+		}
+		this.adoptRoutines(places);
+		renameSync(file, join(this.options.paths.home, "project-routines.before-27.json"));
+	}
+
+	private adoptRoutines(places: LegacyPlace[]): void {
+		const name = (id: string) => {
+			try {
+				return this.projects.get(id).name;
+			} catch {
+				return undefined;
+			}
+		};
+		const migrated = fromProjects(places, name, Date.now());
+		if (!migrated.automations.length) return;
+		this.automations.adopt(migrated.automations, migrated.runs);
+		this.appendAutomationReport(migrated.lines);
+		this.log(`${migrated.automations.length} project routine${migrated.automations.length === 1 ? " is" : "s are"} now automations (docs/spec/27).`);
+	}
+
+	/** Lines for "What changed in your routines" (27 §6), shown in the app until you dismiss it. */
+	private appendAutomationReport(lines: string[]): void {
+		if (!lines.length) return;
+		const file = join(this.options.paths.home, AUTOMATIONS_REPORT);
+		const before = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l.startsWith("- ")) : [];
+		writeFileSync(file, automationsReport([...before, ...lines]));
 	}
 
 	/** A project's work as the app sees it. */
@@ -469,14 +548,24 @@ export class Engine {
 		return { project: work.project, cwd: work.cwd, way: work.way, ...(work.git ? { git: work.git } : {}), tasks: work.tasks, createdAt: work.createdAt };
 	}
 
-	private routineView(projectId: string, r: ProjectRoutine): ProjectRoutine & { label: string; url?: string } {
-		const url = r.on === "webhook" && this.hooks.port ? this.hooks.url(projectId, r.id) : undefined;
-		return { ...r, label: routineLabel(r), ...(url ? { url } : {}) };
+	/** An automation as the app sees it: the record, and its words. */
+	private automationView(a: Automation): AutomationView {
+		const s = this.automations.summary(a);
+		const last = this.automations.lastRun(a.id);
+		return {
+			...a,
+			label: s.when,
+			runnerName: s.runsAs,
+			resultLabel: s.tellsYou,
+			...(s.url ? { url: s.url } : {}),
+			...(last ? { lastStatus: last.status, ...(last.summary ? { lastSummary: last.summary } : {}) } : {}),
+		};
 	}
 
 	async stop(): Promise<void> {
 		this.telegram?.stop();
 		this.watchers?.stop();
+		this.automations?.stop();
 		this.work?.stop();
 		this.watchdog?.stop();
 		clearInterval(this.prTimer);
@@ -902,21 +991,31 @@ export class Engine {
 			}
 			case "home.agenda": {
 				const p = params as Params<"home.agenda">;
-				const agents = [];
-				for (const a of this.sessions.list("agent")) {
-					const runs = await this.sessions.agentRuns(a.ref).catch(() => undefined);
-					if (!runs) continue;
-					// Its own schedules read as the agent ("8:00 · Morning briefing").
-					const upcoming = runs.upcoming.map((u) => (u.kind === "schedule" ? { ...u, label: "" } : u));
-					agents.push({ id: a.ref.id, name: a.title, runs: runs.runs, upcoming, held: runs.outbox.length });
-				}
+				// Messages held by quiet hours or limits, across agents.
+				let held = 0;
+				for (const a of this.sessions.list("agent")) held += (await this.sessions.agentRuns(a.ref).catch(() => undefined))?.outbox.length ?? 0;
 				const all = this.projects.list();
-				const projects = all.map((x) => ({ id: x.id, name: x.name, routines: this.work.routines(x.id) }));
+				const agents = new Map(this.sessions.agentList().map((a) => [a.id, a.name]));
+				const automations = this.automations.list().map((a) => ({
+					id: a.id,
+					name: a.name,
+					on: a.on,
+					label: this.automations.summary(a).when,
+					...(a.next ? { next: a.next } : {}),
+					enabled: a.enabled,
+					source:
+						a.runsAs !== PIOPIO
+							? { kind: "agent" as const, id: a.runsAs, name: agents.get(a.runsAs) ?? "An agent" }
+							: a.project
+								? { kind: "project" as const, id: a.project, name: all.find((x) => x.id === a.project)?.name ?? "A project" }
+								: { kind: "piopio" as const, id: PIOPIO, name: "Piopio" },
+				}));
+				const runs = await this.automations.runsOf(undefined, 500);
 				const boards = this.work.list().flatMap((w) => {
 					const name = all.find((x) => x.id === w.project)?.name;
 					return name ? [{ project: { id: w.project, name }, tasks: w.tasks }] : [];
 				});
-				return buildAgenda({ now: Date.now(), tz: systemZone(), ...(p.since ? { since: Date.parse(p.since) } : {}), agents, projects, boards }) satisfies Result<"home.agenda">;
+				return buildAgenda({ now: Date.now(), tz: systemZone(), ...(p.since ? { since: Date.parse(p.since) } : {}), automations, runs, boards, held }) satisfies Result<"home.agenda">;
 			}
 			case "github.status":
 				return (await this.github.status()) satisfies Result<"github.status">;
@@ -1032,24 +1131,52 @@ export class Engine {
 				if (existsSync(file)) renameSync(file, join(this.options.paths.home, `${REPORT_FILE.replace(/\.md$/, "")}.seen.md`));
 				return {} satisfies Result<"work.dismissMigrationReport">;
 			}
-			case "routines.list": {
-				const p = params as Params<"routines.list">;
-				return { routines: this.work.routines(p.project).map((r) => this.routineView(p.project, r)) } satisfies Result<"routines.list">;
+			case "automations.list": {
+				const p = params as Params<"automations.list">;
+				// Runs still going are read again first, so "Running now" doesn't outlast them.
+				await this.automations.runsOf(undefined, 200);
+				const list = this.automations.list().filter((a) => (!p.runsAs || a.runsAs === p.runsAs) && (!p.project || a.project === p.project));
+				return { automations: list.map((a) => this.automationView(a)) } satisfies Result<"automations.list">;
 			}
-			case "routines.add": {
-				const p = params as Params<"routines.add">;
-				this.projects.get(p.project);
-				const routine = await this.work.addRoutine(p.project, { on: p.on, prompt: p.prompt, ...(p.when ? { when: p.when } : {}), ...(p.folder ? { folder: p.folder } : {}), ...(p.from ? { from: p.from } : {}), ...(p.subject ? { subject: p.subject } : {}) }, "you");
-				return { routine: this.routineView(p.project, routine) } satisfies Result<"routines.add">;
+			case "automations.get": {
+				const p = params as Params<"automations.get">;
+				const a = this.automations.get(p.id);
+				this.automations.opened(a.id);
+				return { automation: this.automationView(a), runs: await this.automations.runsOf(a.id, 20), summary: this.automations.summary(a) } satisfies Result<"automations.get">;
 			}
-			case "routines.remove": {
-				const p = params as Params<"routines.remove">;
-				await this.work.removeRoutine(p.project, p.routineId);
-				return {} satisfies Result<"routines.remove">;
+			case "automations.add": {
+				const { id: _ignored, ...p } = params as Params<"automations.add"> & { id?: string };
+				const a = this.automations.add(p, "you");
+				this.automations.opened(a.id);
+				return { automation: this.automationView(a) } satisfies Result<"automations.add">;
 			}
-			case "routines.run": {
-				const p = params as Params<"routines.run">;
-				return (await this.work.fireRoutine(p.project, p.routineId, "Run by the user.")) satisfies Result<"routines.run">;
+			case "automations.update": {
+				const { id, ...change } = params as Params<"automations.update">;
+				return { automation: this.automationView(this.automations.update(id, change)) } satisfies Result<"automations.update">;
+			}
+			case "automations.remove": {
+				const p = params as Params<"automations.remove">;
+				this.automations.remove(p.id);
+				return {} satisfies Result<"automations.remove">;
+			}
+			case "automations.run": {
+				const p = params as Params<"automations.run">;
+				const run = await this.automations.fire(p.id, "now", "Run now, by the user.");
+				if (!run) throw new EngineError("INVALID", "It didn't run.");
+				return { run } satisfies Result<"automations.run">;
+			}
+			case "automations.runs": {
+				const p = params as Params<"automations.runs">;
+				return { runs: await this.automations.runsOf(p.id, p.limit ?? 50) } satisfies Result<"automations.runs">;
+			}
+			case "automations.migrationReport": {
+				const file = join(this.options.paths.home, AUTOMATIONS_REPORT);
+				return (existsSync(file) ? { report: readFileSync(file, "utf8").trim() } : {}) satisfies Result<"automations.migrationReport">;
+			}
+			case "automations.dismissMigrationReport": {
+				const file = join(this.options.paths.home, AUTOMATIONS_REPORT);
+				if (existsSync(file)) renameSync(file, join(this.options.paths.home, `${AUTOMATIONS_REPORT.replace(/\.md$/, "")}.seen.md`));
+				return {} satisfies Result<"automations.dismissMigrationReport">;
 			}
 			case "agents.runs": {
 				const p = params as Params<"agents.runs">;

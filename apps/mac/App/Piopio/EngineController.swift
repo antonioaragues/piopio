@@ -16,6 +16,12 @@ final class EngineController {
     private(set) var agents: [SessionSummary] = []
     /// Projects' work (docs/spec/26): each one's way of working and board.
     private(set) var work: [ProjectWork] = []
+    /// Automations (docs/spec/27): what starts on its own, run as Piopio or one of your agents. Bumps
+    /// `automationsGeneration` on every change, so open pages read their runs again.
+    private(set) var automations: [Automation] = []
+    private(set) var automationsGeneration = 0
+    /// Which migration report is showing ("work" or "automations").
+    @ObservationIgnored private var reportFrom = "work"
     /// The Watchdog's notes about your conversations (docs/spec/17 §4): in Needs you.
     private(set) var watchdogNotes: [WatchdogNote] = []
     /// Build: folders added as projects, and their sessions (newest first).
@@ -326,7 +332,7 @@ final class EngineController {
             }
         }
         Task { [weak self] in await self?.loadInbox() }
-        Task { [weak self] in await self?.loadWork(); await self?.loadWatchdog() }
+        Task { [weak self] in await self?.loadWork(); await self?.loadWatchdog(); await self?.loadAutomations() }
         Task { [weak self] in
             for await note in client.providerEvents {
                 guard let self else { return }
@@ -342,6 +348,8 @@ final class EngineController {
                     await self.loadWork()
                 case .watchdogChanged:
                     await self.loadWatchdog()
+                case .automationsChanged:
+                    await self.loadAutomations()
                 case .connectorAuth(let auth):
                     if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
                     if auth.event.type == "done" { await self.loadConnectors() }
@@ -760,25 +768,56 @@ final class EngineController {
         try? await client?.call("home.agenda", HomeAgendaParams(since: since), as: HomeAgenda.self)
     }
 
-    /// A project's routines (docs/spec/21 AD5): each run opens a conversation with Piopio there.
-    func routines(in project: ProjectInfo) async -> [ProjectRoutine] {
-        (try? await client?.call("routines.list", ProjectParams(project: project.id), as: RoutinesResult.self).routines) ?? []
+    // MARK: Automations (docs/spec/27)
+
+    func loadAutomations() async {
+        if let list = try? await client?.call("automations.list", AutomationsParams(), as: AutomationsResult.self).automations {
+            automations = list
+            automationsGeneration += 1
+        }
     }
 
-    func addRoutine(_ project: ProjectInfo, on: String, prompt: String, when: String? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil) async throws {
-        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("routines.add", AddRoutineParams(project: project.id, on: on, prompt: prompt, when: when, folder: folder, from: from, subject: subject), as: Empty.self)
+    /// One automation, its latest runs and its card's words; opening it clears its "New" badge.
+    func automation(_ id: String) async -> AutomationDetail? {
+        try? await client?.call("automations.get", AutomationIdParams(id: id), as: AutomationDetail.self)
     }
 
-    func removeRoutine(_ project: ProjectInfo, _ routine: ProjectRoutine) async throws {
+    @discardableResult
+    func addAutomation(_ change: AutomationChange) async throws -> Automation {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("routines.remove", RoutineParams(project: project.id, routineId: routine.id), as: Empty.self)
+        let made = try await client.call("automations.add", change, as: AutomationResult.self).automation
+        await loadAutomations()
+        return made
     }
 
-    func runRoutine(_ project: ProjectInfo, _ routine: ProjectRoutine) async throws {
+    @discardableResult
+    func updateAutomation(_ id: String, _ change: AutomationChange) async throws -> Automation {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("routines.run", RoutineParams(project: project.id, routineId: routine.id), as: Empty.self)
+        var change = change
+        change.id = id
+        let changed = try await client.call("automations.update", change, as: AutomationResult.self).automation
+        await loadAutomations()
+        return changed
+    }
+
+    func removeAutomation(_ id: String) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("automations.remove", AutomationIdParams(id: id), as: Empty.self)
+        await loadAutomations()
+    }
+
+    /// Run now, even while it's paused.
+    func runAutomation(_ id: String) async throws -> AutomationRun {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let run = try await client.call("automations.run", AutomationIdParams(id: id), as: AutomationRunResult.self).run
         try? await refreshCatalog()
+        await loadAutomations()
+        return run
+    }
+
+    /// Who an automation runs as, as a name: "Piopio", or the agent's.
+    func runnerName(_ runsAs: String) -> String {
+        runsAs == "piopio" ? "Piopio" : (agents.first { $0.ref.id == runsAs }?.title ?? "An agent")
     }
 
     /// What the work branch would bring to the project's; nil for a project whose work isn't on a branch.
@@ -806,12 +845,19 @@ final class EngineController {
     }
 
     /// What changed when teams became ways of working (docs/spec/26 §8), until you dismiss it.
+    /// What changed when teams became ways of working (26 §8), else when routines became automations (27 §6), until
+    /// you dismiss it.
     func migrationReport() async -> String? {
-        try? await client?.call("work.migrationReport", Empty(), as: MigrationReport.self).report
+        if let report = try? await client?.call("work.migrationReport", Empty(), as: MigrationReport.self).report {
+            reportFrom = "work"
+            return report
+        }
+        reportFrom = "automations"
+        return try? await client?.call("automations.migrationReport", Empty(), as: MigrationReport.self).report
     }
 
     func dismissMigrationReport() async {
-        _ = try? await client?.call("work.dismissMigrationReport", Empty(), as: Empty.self)
+        _ = try? await client?.call("\(reportFrom).dismissMigrationReport", Empty(), as: Empty.self)
     }
 
     func agentTemplates() async -> [AgentTemplate] {

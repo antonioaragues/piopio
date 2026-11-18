@@ -421,7 +421,8 @@ test("turn into an agent: a draft from the conversation, with the schedule it sa
 	expect(draft.instructions).toContain("check the weather in Valencia");
 	// The start page then creates it as any agent.
 	const { ref: agent } = await a.client.call("agents.create", { name: draft.name, instructions: draft.instructions, schedule: draft.schedule, model: { provider: "faux", id: "faux-1" } });
-	expect(((await a.client.call("agents.get", { ref: agent })).definition as { schedules?: { cron: string }[] }).schedules?.[0]?.cron).toBe("30 7 * * 1-5");
+	// Its schedule is an automation it runs (docs/spec/27).
+	expect(((await a.client.call("automations.list", { runsAs: agent.id })) as { automations: { cron?: string }[] }).automations[0]?.cron).toBe("30 7 * * 1-5");
 });
 
 test("a chat continues in a project folder with its text and images; the chat stays, linked (docs/spec/18 §5)", async () => {
@@ -1714,11 +1715,15 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 		const got = await a.client.call("agents.get", { ref: mine.ref });
 		expect(got.instructions).toContain("Tell Antonio the weather first.");
 		expect(got.errors).toEqual([]);
-		expect(got.definition).toMatchObject({ avatar: "symbol:sun.max", schedules: [{ id: "morning", cron: "30 7 * * *", prompt: "Write today's briefing.", deliverTo: "owner" }] });
+		expect(got.definition).toMatchObject({ avatar: "symbol:sun.max" });
+		// The template's schedule is an automation the agent runs (docs/spec/27), not part of its definition.
+		const auto = async (id: string) => ((await a.client.call("automations.list", { runsAs: id })) as { automations: { cron?: string; prompt: string; result: string }[] }).automations;
+		expect(await auto(mine.ref.id)).toEqual([expect.objectContaining({ cron: "30 7 * * *", prompt: "Write today's briefing.", result: "chat" })]);
 		const none = await a.client.call("agents.create", { name: "Quiet", template: "daily-briefing", owner: "Antonio", schedule: null, model: { provider: "faux", id: "faux-1" } });
 		expect((await a.client.call("agents.get", { ref: none.ref })).definition).not.toHaveProperty("schedules");
 		const scratch = await a.client.call("agents.create", { name: "Scratch", owner: "Antonio", instructions: "Check the plants.", schedule: "0 9 * * *", model: { provider: "faux", id: "faux-1" } });
-		expect((await a.client.call("agents.get", { ref: scratch.ref })).definition).toMatchObject({ schedules: [{ cron: "0 9 * * *", deliverTo: "owner" }] });
+		expect(await auto(scratch.ref.id)).toEqual([expect.objectContaining({ cron: "0 9 * * *" })]);
+		expect(await auto(none.ref.id)).toEqual([]);
 	});
 
 	test("an agent from a template: owner chat with compact steps and memory, edits with validation, contacts kept apart, restart, delete", async () => {
@@ -1755,8 +1760,8 @@ describe("Agents: definition and runtime (milestone 4.2)", () => {
 		]);
 
 		// Edits: an invalid one is refused; a valid one adds María.
-		const def = got.definition as Record<string, unknown> & { contacts: object[]; schedules: { cron: string }[] };
-		const bad = await a.client.call("agents.save", { ref, definition: { ...def, schedules: [{ ...def.schedules[0], cron: "0 25 * * *" }] }, instructions: got.instructions });
+		const def = got.definition as Record<string, unknown> & { contacts: object[] };
+		const bad = await a.client.call("agents.save", { ref, definition: { ...def, schedules: [{ id: "morning", cron: "0 25 * * *", prompt: "Write the briefing." }] }, instructions: got.instructions });
 		expect(bad).toEqual({ saved: false, errors: [{ path: "/schedules/0/cron", message: "The hour must be between 0 and 23." }] });
 		const good = await a.client.call("agents.save", { ref, definition: { ...def, contacts: [...def.contacts, { id: "maria", name: "María", role: "contact" }] }, instructions: got.instructions, message: "Add María" });
 		expect(good).toEqual({ saved: true, errors: [] });
@@ -1901,26 +1906,30 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 	const send = (to: string, text: string) => `call: send_message | ${JSON.stringify({ to, text })}`;
 	const hhmm = (t: number) => new Date(t).toISOString().slice(11, 16);
 
-	test("reminders and triggers start runs that message the owner; quiet hours and the daily limit hold messages; restart resumes", async () => {
+	test("automations start runs that message the owner; old webhook triggers keep their URL; quiet hours and the daily limit hold messages; restart resumes", async () => {
 		const a = await start();
 		// With instructions, so it doesn't open with an interview (docs/spec/19 S2).
 		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", instructions: "Help Antonio.", model: { provider: "faux", id: "faux-1" } });
 		const got = await a.client.call("agents.get", { ref });
-		const base = { ...(got.definition as object), timezone: "UTC", tools: { builtin: ["memory", "schedule", "send_message"] }, triggers: [{ id: "strava", type: "webhook", prompt: "New activity: {{body}}" }] };
-		const save = async (policies: object) => expect(await a.client.call("agents.save", { ref, definition: { ...base, policies }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
-		await save({ maxOutboundPerDay: 2 });
+		// A webhook trigger written into the definition becomes an automation the agent runs (docs/spec/27 §6).
+		const base = { ...(got.definition as object), timezone: "UTC", tools: { builtin: ["memory", "schedule", "send_message"] } };
+		const save = async (policies: object, more: object = {}) => expect(await a.client.call("agents.save", { ref, definition: { ...base, ...more, policies }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+		await save({ maxOutboundPerDay: 2 }, { triggers: [{ id: "strava", type: "webhook", prompt: "New activity: {{body}}" }] });
+		expect((await a.client.call("agents.get", { ref })).definition).not.toHaveProperty("triggers");
 		const runs = () => a.client.call("agents.runs", { ref }) as Promise<Runs>;
+		const automations = async () => ((await a.client.call("automations.list", { runsAs: ref.id })) as { automations: { id: string; on: string; at?: number; aliases?: string[] }[] }).automations;
 		const ownerItems = async () => ((await a.client.call("sessions.open", { ref })) as Snapshot).items;
 		const outbound = (items: Snapshot["items"]) => items.filter((i) => i.kind === "assistant" && i.outbound).map((i) => (i.kind === "assistant" ? i.parts[0]!.text : ""));
 
-		// The owner asks for a reminder; it fires as a run, which messages the owner.
+		// The owner asks for a reminder; it's an automation that fires once as a run, which messages the owner.
 		const at = new Date(Date.now() + 2_000).toISOString();
-		await a.client.call("sessions.submit", { ref, input: { text: `call: schedule | ${JSON.stringify({ when: at, prompt: send("owner", "Time to stretch") })}` } });
-		const pending = await until(runs, (r) => r.upcoming.length === 1);
-		expect(pending.upcoming[0]).toMatchObject({ kind: "reminder", next: at });
+		await a.client.call("sessions.submit", { ref, input: { text: `call: automate | ${JSON.stringify({ when: at, prompt: send("owner", "Time to stretch"), name: "Stretch" })}` } });
+		const pending = await until(automations, (x) => x.some((y) => y.on === "time"));
+		expect(pending.find((y) => y.on === "time")).toMatchObject({ at: Date.parse(at) });
 		let r = await until(runs, (x) => x.runs[0]?.status === "done");
-		expect(r.runs[0]).toMatchObject({ kind: "reminder", sent: 1, summary: expect.stringContaining("Echo:") });
-		expect(r.upcoming).toEqual([]);
+		expect(r.runs[0]).toMatchObject({ kind: "automation", sent: 1, summary: expect.stringContaining("Echo:") });
+		// A once that has fired is done and goes.
+		await until(automations, (x) => !x.some((y) => y.on === "time"));
 		expect(outbound(await until(ownerItems, (items) => outbound(items).length === 1))).toEqual(["Time to stretch"]);
 		const owner = await until(() => a.client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner` }), (m) => m.records.some((x) => x.text.includes("on its own")));
 		expect(owner.records.some((x) => x.text === "Helper (on its own): Time to stretch")).toBe(true);
@@ -1931,26 +1940,28 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 		expect(runSnap.items.map((i) => i.kind)).toEqual(["user", "steps", "result", "assistant"]);
 		await expect(a.client.call("sessions.submit", { ref: runRef, input: { text: "hi" } })).rejects.toThrow(/read-only/);
 
-		// A webhook trigger: signed URL, the body in the prompt, a retried delivery is the same run.
-		const [trigger] = (await a.client.call("agents.triggers", { ref })).triggers;
-		expect(trigger!.url).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:\\d+/hooks/${ref.id}/strava/[A-Za-z0-9_-]{32}$`));
-		const post = (url: string) => fetch(url, { method: "POST", body: "Ran 10 km", headers: { "idempotency-key": "d1" } });
-		expect((await post(trigger!.url.replace(/[A-Za-z0-9_-]{32}$/, "x".repeat(32)))).status).toBe(403);
-		const first = (await (await post(trigger!.url)).json()) as { runId: string };
-		const again = (await (await post(trigger!.url)).json()) as { runId: string };
+		// The old webhook trigger: the same signed URL, the body in the prompt, a retried delivery is the same run.
+		const hook = (await automations()).find((y) => y.on === "webhook")!;
+		expect(hook.aliases).toEqual([`${ref.id}/strava`]);
+		const url = a.engine.hooks.url(ref.id, "strava");
+		expect(url).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:\\d+/hooks/${ref.id}/strava/[A-Za-z0-9_-]{32}$`));
+		const post = (to: string) => fetch(to, { method: "POST", body: "Ran 10 km", headers: { "idempotency-key": "d1" } });
+		expect((await post(url.replace(/[A-Za-z0-9_-]{32}$/, "x".repeat(32)))).status).toBe(403);
+		const first = (await (await post(url)).json()) as { runId: string };
+		const again = (await (await post(url)).json()) as { runId: string };
 		expect(again.runId).toBe(first.runId);
-		r = await until(runs, (x) => x.runs[0]?.id === first.runId && x.runs[0].status === "done");
-		expect(r.runs[0]).toMatchObject({ kind: "trigger", source: "strava", sent: 0, summary: "Echo: New activity: Ran 10 km" });
+		r = await until(runs, (x) => x.runs[0]?.source === hook.id && x.runs[0].status === "done");
+		expect(r.runs[0]).toMatchObject({ kind: "automation", sent: 0, summary: "Echo: New activity: Ran 10 km" });
 
 		// Restart: a reminder due while the engine is off fires when it comes back.
 		const soon = new Date(Date.now() + 1_500).toISOString();
-		await a.client.call("sessions.submit", { ref, input: { text: `call: schedule | ${JSON.stringify({ when: soon, prompt: send("owner", "While you were away") })}` } });
-		await until(runs, (x) => x.upcoming.length === 1);
+		await a.client.call("sessions.submit", { ref, input: { text: `call: automate | ${JSON.stringify({ when: soon, prompt: send("owner", "While you were away"), name: "Away note" })}` } });
+		await until(automations, (x) => x.some((y) => y.on === "time"));
 		await stop(a);
 		await new Promise((resolve) => setTimeout(resolve, 2_500));
 		const b = await start(a.home);
 		Object.assign(a, { engine: b.engine, client: b.client });
-		r = await until(runs, (x) => x.runs[0]?.kind === "reminder" && x.runs[0].status === "done" && x.runs.length === 3);
+		r = await until(runs, (x) => x.runs[0]?.kind === "automation" && x.runs[0].status === "done" && x.runs.length === 3);
 		expect(outbound(await until(ownerItems, (items) => outbound(items).length === 2))).toEqual(["Time to stretch", "While you were away"]);
 
 		// Quiet hours (now, for the next hour): the message waits in the outbox.
@@ -1973,7 +1984,7 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 		const lines = items.flatMap((i) => (i.kind === "system" && i.run ? [i.text] : []));
 		// Each run is a line in the owner's conversation (docs/spec/21 D3), in order: the reminder and the trigger wrote;
 		// the held ones' messages haven't arrived.
-		expect(lines).toEqual(["Automatic run · wrote to you", "Automatic run · nothing new, didn't write", "Automatic run · wrote to you", "Run now · nothing new, didn't write", "Run now · nothing new, didn't write"]);
+		expect(lines).toEqual(["From Stretch · wrote to you", "From New activity · nothing new, didn't write", "From Away note · wrote to you", "Run now · nothing new, didn't write", "Run now · nothing new, didn't write"]);
 		expect(outbound(items)).toHaveLength(2);
 	}, 60_000);
 });

@@ -15,7 +15,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renam
 import { join } from "node:path";
 import type { ApprovalMode, WorkTask } from "@piopio/protocol";
 import { BUILTIN_PLAYBOOKS, parseCard, playbookFile, type HelperPart } from "./playbooks.js";
-import type { ProjectRoutine } from "./routines.js";
+import type { LegacyRoutine as ProjectRoutine } from "../automations/migrate.js";
 import { DEFAULT_WAY, type ProjectWork } from "./runner.js";
 
 type OldRole = { id: string; name: string; kind: "lead" | "write" | "review" | "integrate"; responsibility: string; done?: string; model?: string; agent?: string };
