@@ -77,7 +77,7 @@ than one of them, Piopio uses them top to bottom: the first one that can answer 
 | PO3 | **Routes of one model.** Models from different providers are the same model when they have the same maker and the same id once normalized (vendor prefix dropped, lowercase, `.` and `-` treated alike, date suffix dropped), and neither is a variant. A small table in `providers.ts` covers the known exceptions. Custom endpoints match only when their model id normalizes to the same id. You can split a wrong match in Settings (§6.1). | Each provider's model is a separate choice (10 FR2) |
 | PO4 | **Switching is per model request, before output.** A request that fails before streaming anything, for a reason in §5's "moves on" column, is tried on the next route of the same model, as long as the conversation fits that route. Partial output never moves silently. | Error card, you pick another model |
 | PO5 | **Resting routes, and coming back.** A route that hit a limit rests: until the reset time when the provider gives one, otherwise for a while (§5). Resting is shared by every conversation and automation. A turn sticks to the route it's on; each new turn starts at the first route that isn't resting, so you're back on the plan as soon as it resets. | n/a |
-| PO6 | **Ask before money.** Moving to a route billed per token asks first (a card in the conversation). Moving to a plan, a free model or something on this Mac doesn't ask; it's noted. The setting "When a provider can't answer" has three choices, explained: **Ask before using credits** (default), **Switch and tell me**, **Never switch** (today's behaviour). The ask card's "Always" sets the second choice. | Never switch (10 FR4) |
+| PO6 | **Ask before money.** Moving to a route billed per token asks first (a card in the conversation). Moving to a plan, a free model or something on this Mac doesn't ask; it's noted. The setting "When a provider can't answer" has three choices, explained: **Ask before using credits** (default, decided by the user 2026-11-18), **Switch and tell me**, **Never switch** (today's behaviour). The ask card's "Always" sets the second choice. | Never switch (10 FR4) |
 | PO7 | **You pick a model, the order picks the route.** In the picker a model with several routes is one row, in the section of its first route, with the rest named on the row. Picking it follows the order. "Only via OpenRouter" (right-click, or ⌥ while picking) pins a conversation to one route; a pinned conversation never switches. Sessions made before this spec are pinned, so nothing changes for them. | One row per route |
 | PO8 | **Always visible.** The composer chip names the route in use once more than one provider is connected (as today), and shows ↪ after a switch, with why in its tooltip. A switch leaves one quiet line in the transcript. Each reply's footer names the route next to its cost. | Chip names the picked provider |
 | PO9 | **While you're away, the automation's rules hold.** An automation or agent run follows the same order. "Ask before using credits" means the run waits in Home's Waiting on you, or skips, as its "If it needs your approval" says (27 AU8). Credits it spends count against its budget per run; plan routes count as $0. | The run fails |
@@ -210,10 +210,9 @@ changes model.
 
 ## 10. Open questions
 
-1. **Default for moving to credits.** Recommended: **Ask before using credits** (PO6), which keeps 10 FR4's spirit and
-   costs one click, with "Always switch" for those who want "plan first, then credits" to just happen. The other
-   option is switching and telling by default, which matches the question more literally but can spend money on the
-   first day without a yes.
+1. ~~**Default for moving to credits.**~~ **Decided 2026-11-18 (the user): Ask before using credits** (PO6). It keeps
+   10 FR4's spirit and costs one click; the ask card's "Always switch" is there for those who want "plan first, then
+   credits" to just happen.
 2. **Another model as a backup (idea C).** Recommended: later, and as an explicit choice per default (for example
    "Build: Claude Sonnet, backup GPT-6 Sol"), always asked, never chained silently. Worth it only if plan limits keep
    stopping you after B is in.
