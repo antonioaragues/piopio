@@ -5,7 +5,6 @@ import SwiftUI
 /// Agents modes and their separate selections. Stored as a string (`@AppStorage("sidebarItem")`).
 enum SidebarItem: Hashable {
     case home
-    case needsYou
     /// A section's full list ("Projects · 6", "N more ›").
     case index(SidebarSection)
     /// A project (its id). There's no project page (docs/spec/18 §19): it opens the project's New conversation page, or
@@ -25,7 +24,6 @@ enum SidebarItem: Hashable {
     var raw: String {
         switch self {
         case .home: "home"
-        case .needsYou: "needs"
         case .index(let s): "index:\(s.rawValue)"
         case .project(let id): "project:\(id)"
         case .board(let id): "board:\(id)"
@@ -41,7 +39,8 @@ enum SidebarItem: Hashable {
         let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
         let value = parts.count > 1 ? parts[1] : ""
         switch parts.first {
-        case "needs": self = .needsYou
+        // Needs you was a page of its own; it is part of Home now (docs/spec/21 D2).
+        case "needs": self = .home
         case "index": self = SidebarSection(rawValue: value).map { .index($0) } ?? .home
         case "project": self = .project(value)
         case "board": self = .board(value)

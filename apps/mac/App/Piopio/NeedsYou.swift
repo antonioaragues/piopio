@@ -48,65 +48,6 @@ extension EngineController {
     }
 }
 
-/// Needs you (docs/design/grey 14b): one centered column. Each item is a block between hairlines: who it's from and
-/// what happened in a grey line, the content in plain words, and its actions. One black button per item, the one that
-/// resolves it; the rest are text. Newest first.
-struct NeedsYouView: View {
-    let engine: EngineController
-    @Binding var item: SidebarItem
-    @AppStorage("needsYouFilter") private var filter: Filter = .all
-
-    enum Filter: String, CaseIterable { case all = "All", approvals = "Approvals", messages = "Messages", problems = "Problems" }
-
-    private func entries(_ f: Filter) -> [NeedsYouEntry] {
-        let all = Array(engine.needsYou.reversed())
-        switch f {
-        case .all: return all
-        case .approvals: return all.filter(\.isApproval)
-        case .messages: return all.filter { $0.kind == .message }
-        case .problems: return all.filter { $0.kind == .runFailed || $0.kind == .budget || $0.kind == .watchdog }
-        }
-    }
-
-    var body: some View {
-        let shown = entries(filter)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Needs you").font(.system(size: 28, weight: .bold)).tracking(-0.6).foregroundStyle(Color.dsFg)
-                        let n = engine.needsYou.count
-                        Text(n == 0 ? "Nothing waiting" : "\(n) thing\(n == 1 ? "" : "s"), newest first").font(.system(size: 13.5)).foregroundStyle(Color.dsFg3)
-                    }
-                    Spacer()
-                    HStack(spacing: 2) {
-                        ForEach(Filter.allCases, id: \.self) { f in
-                            Button(f.rawValue) { filter = f }.buttonStyle(SelectorStyle(active: filter == f))
-                                .font(.system(size: 12.5)).foregroundStyle(filter == f ? Color.dsFg : Color.dsFg2)
-                        }
-                    }
-                    .padding(.top, 6)
-                }
-                .padding(.bottom, 20)
-                ForEach(shown) { entry in
-                    Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                    NeedsYouCard(engine: engine, entry: entry, item: $item)
-                        .padding(.vertical, 18)
-                }
-                Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                Text(shown.isEmpty && filter != .all ? "Nothing here." : "That's everything. You'll get a notification when something new comes in.")
-                    .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-                    .padding(.top, 20)
-            }
-            .padding(.horizontal, 32)
-            .padding(.top, 72)
-            .padding(.bottom, 48)
-            .frame(maxWidth: 704)
-            .frame(maxWidth: .infinity)
-        }
-        .task { await engine.loadInbox() }
-    }
-}
 
 /// What a Needs you item is called and where it's from, shared with Home.
 enum NeedsYouText {
@@ -148,127 +89,164 @@ enum NeedsYouText {
     }
 }
 
-/// One Needs you item: "● Source  what happened · age", the content, then the actions.
-struct NeedsYouCard: View {
+/// One thing waiting on you, on Home (docs/spec/21 D2): a row with the action that resolves it on the right; a click
+/// opens its full card under it (what came in, a Build session's own prompt cards, where to look). The Needs you page
+/// is gone: everything waiting is here, and a notification opens Home with its row open.
+struct WaitingItem: View {
     let engine: EngineController
     let entry: NeedsYouEntry
     @Binding var item: SidebarItem
+    @Binding var expanded: String?
     @State private var reply = ""
     @State private var busy = false
     @State private var error: String?
 
+    private var isOpen: Bool { expanded == entry.id }
+    private var thread: ThreadModel? { entry.kind == .buildPrompt ? entry.session.map { engine.thread($0.ref) } : nil }
+
     var body: some View {
-        if entry.kind == .buildPrompt, let s = entry.session {
-            BuildPromptEntry(engine: engine, entry: entry, session: s, item: $item)
-        } else {
-            VStack(alignment: .leading, spacing: 10) {
-                NeedsYouHeadline(source: NeedsYouText.source(entry, engine: engine), what: NeedsYouText.what(entry), at: entry.at) {
-                    if entry.kind == .message || entry.kind == .approval {
-                        Button("Open conversation") { open(); if entry.kind == .message { markRead() } }
-                            .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                    }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "chevron.right").font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                    .rotationEffect(.degrees(isOpen ? 90 : 0)).frame(width: 10)
+                Circle().fill(entry.isApproval ? Color.dsWarn : .accentColor).frame(width: 7, height: 7)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(line).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(2)
+                    Text("\(origin) · \(BuildSessionView.relative(entry.at))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
-                if entry.kind == .approval {
-                    approvalCard.padding(.leading, 16)
-                } else {
-                    content.padding(.leading, 16)
-                    if entry.kind == .message { replyField.padding(.leading, 16) } else { actions.padding(.leading, 16) }
-                }
-                if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.leading, 16) }
+                Spacer(minLength: 12)
+                quick
             }
-            .disabled(busy)
+            .frame(minHeight: 46)
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.snappy(duration: 0.18)) { expanded = isOpen ? nil : entry.id } }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(isOpen ? "Hides the details" : "Shows the details")
+            if isOpen { detail.padding(.leading, 37).padding(.bottom, 14).transition(.opacity) }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn).padding(.leading, 37).padding(.bottom, 8) }
+        }
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+        .disabled(busy)
+        .task(id: entry.session?.ref.id) { if let thread { await thread.open() } }
+    }
+
+    /// "Morning briefing asks: read Calendar", "Family helper: “Which supermarket?”".
+    private var line: String {
+        let source = NeedsYouText.source(entry, engine: engine)
+        let title = NeedsYouText.title(entry, engine: engine)
+        switch entry.kind {
+        case .approval: return "\(source) asks: \(title)"
+        case .message: return "\(source): “\(title)”"
+        case .buildPrompt: return "\(source) · \(title)"
+        case .budget: return "\(source): \(title)"
+        case .watchdog: return "\(source) \(NeedsYouText.what(entry))"
+        case .runFailed: return title
         }
     }
 
-    /// The same card as in a conversation (11c).
-    private var approvalCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Circle().fill(Color.accentColor).frame(width: 6, height: 6)
-                let title = entry.inbox?.approval?.title ?? "Allow this"
-                Text(title.hasSuffix("?") ? title : title + "?").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
-            }
-            if let body = entry.inbox?.body, !body.isEmpty {
-                Text(body).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-            }
-            HStack(spacing: 14) {
-                Button("Deny") { decide(false) }.buttonStyle(PillStyle(compact: true))
-                Spacer()
-                Button("Allow") { decide(true) }.buttonStyle(PillStyle(kind: .primary, compact: true))
-            }
+    /// Where it's from: an agent, a project's session, the Watchdog.
+    private var origin: String {
+        switch entry.kind {
+        case .buildPrompt: entry.session.flatMap { engine.project(of: $0)?.name } ?? "Build"
+        case .watchdog: "Watchdog"
+        default: "Agent · \(NeedsYouText.what(entry))"
         }
-        .askCard()
     }
 
-    private var content: some View {
-        Text(entry.watchdog?.text ?? entry.inbox?.body ?? entry.inbox?.title ?? "").font(.system(size: 13.5)).foregroundStyle(Color.dsFg)
-            .lineSpacing(3).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-    }
+    // MARK: The row's actions
 
-    @ViewBuilder private var actions: some View {
-        HStack(spacing: 14) {
+    /// The one that resolves it, black; the others as text.
+    @ViewBuilder private var quick: some View {
+        HStack(spacing: 8) {
             switch entry.kind {
             case .approval:
-                EmptyView()
+                Button("Not now") { decide(false) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                Button("Allow") { decide(true) }.buttonStyle(PillStyle(kind: .primary, compact: true))
+            case .message:
+                TextField("", text: $reply, prompt: Text("Answer here…").foregroundStyle(Color.dsFg3))
+                    .textFieldStyle(.plain).font(.system(size: 12.5)).frame(width: 160)
+                    .padding(.horizontal, 8).frame(height: 26)
+                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+                    .onSubmit(send)
+            case .buildPrompt:
+                if let thread, let prompt = thread.prompts.first, prompt.kind == .approval {
+                    Button("Deny") { respond(thread, prompt, .deny) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    Button("Allow") { respond(thread, prompt, .allow) }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                } else {
+                    Button("Answer") { withAnimation(.snappy(duration: 0.18)) { expanded = entry.id } }.buttonStyle(PillStyle(compact: true))
+                }
             case .runFailed:
-                // The one black button is the one that fixes it.
+                Button("Dismiss") { markRead() }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
                 if engine.needsKey {
-                    Button("Set up a provider") {
-                        UserDefaults.standard.set("Models", forKey: "settingsSection")
-                        WindowOpener.shared.openSettings?()
-                    }
-                    .buttonStyle(PillStyle(kind: .primary, compact: true))
-                    Button("Run again") { runAgain() }.buttonStyle(PillStyle(compact: true))
+                    Button("Set up a provider") { setUpProvider() }.buttonStyle(PillStyle(kind: .primary, compact: true))
                 } else {
                     Button("Run again") { runAgain() }.buttonStyle(PillStyle(kind: .primary, compact: true))
                 }
-                Button("Open run") { open(); markRead() }.buttonStyle(PillStyle(compact: true))
-                Button("Dismiss") { markRead() }.buttonStyle(PillStyle(compact: true))
             case .budget:
+                Button("Keep paused") { markRead() }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
                 if let budget = entry.agent?.agent?.status?.budgetUsd {
                     Button("Raise to \(MainSidebar.money(max(1, budget * 2)))") { raise(to: max(1, budget * 2)) }.buttonStyle(PillStyle(kind: .primary, compact: true))
                 }
-                Button("Keep paused") { markRead() }.buttonStyle(PillStyle(compact: true))
             case .watchdog:
                 // The Watchdog never stops anything itself (docs/spec/17 §4): you look, and decide.
-                Button("Open conversation") { open() }.buttonStyle(PillStyle(kind: .primary, compact: true))
-                if let note = entry.watchdog { Button("Dismiss") { Task { await engine.dismissWatchdog(note) } }.buttonStyle(PillStyle(compact: true)) }
-            case .message, .buildPrompt:
-                EmptyView()
+                if let note = entry.watchdog {
+                    Button("Dismiss") { Task { await engine.dismissWatchdog(note) } }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                }
+                Button("Open") { open() }.buttonStyle(PillStyle(compact: true))
             }
         }
     }
 
-    /// The reply field; its send button appears once you type.
-    private var replyField: some View {
-        HStack(spacing: 8) {
-            TextField("", text: $reply, prompt: Text("Reply to \(NeedsYouText.source(entry, engine: engine))…").foregroundStyle(Color.dsFg3)).textFieldStyle(.plain).font(.system(size: 13)).onSubmit(send)
-            if !reply.trimmingCharacters(in: .whitespaces).isEmpty {
-                SendButton(enabled: true, action: send).scaleEffect(0.85)
-            } else {
-                Text("↩").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+    // MARK: The full card
+
+    @ViewBuilder private var detail: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let thread {
+                ForEach(thread.prompts) { prompt in PromptCard(session: thread, prompt: prompt, primary: false) }
+                if thread.prompts.isEmpty { Text("Waiting on you…").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+            } else if let body = content, !body.isEmpty {
+                Text(body).font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+            // The Watchdog's row already has Open.
+            if entry.kind != .watchdog {
+                HStack(spacing: 14) {
+                    if entry.kind == .runFailed, engine.needsKey {
+                        Button("Run again") { runAgain() }.buttonStyle(PillStyle(compact: true))
+                    }
+                    Button(openLabel) { open(); if entry.kind == .message || entry.kind == .runFailed { markRead() } }
+                        .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                }
             }
         }
-        .padding(.leading, 12).padding(.trailing, 6)
-        .frame(height: 36)
-        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
     }
 
-    private func runAgain() {
-        guard let agent = entry.agent else { return }
-        perform {
-            let upcoming = await engine.agentRuns(agent.ref)?.upcoming.first { $0.kind == "schedule" }
-            _ = try await engine.agentRunNow(agent.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
-            if let inbox = entry.inbox { await engine.markInboxRead([inbox]) }
+    private var content: String? {
+        if let note = entry.watchdog { return note.text }
+        guard let inbox = entry.inbox else { return nil }
+        if entry.kind == .approval, let title = inbox.approval?.title, inbox.body.isEmpty { return title }
+        return inbox.body.isEmpty ? inbox.title : inbox.body
+    }
+
+    private var openLabel: String {
+        switch entry.kind {
+        case .buildPrompt: "Open session"
+        case .runFailed: "Open run"
+        case .budget: "Open agent"
+        default: "Open conversation"
         }
     }
 
     // MARK: Actions
 
     private func open() {
+        if let s = entry.session {
+            item = engine.item(for: s.ref.id) ?? .session(s.ref.id)
+            return
+        }
         if let note = entry.watchdog {
-            item = engine.item(for: note.ref.id) ?? .needsYou
+            if let target = engine.item(for: note.ref.id) { item = target }
             return
         }
         guard let inbox = entry.inbox else { return }
@@ -287,6 +265,10 @@ struct NeedsYouCard: View {
         perform { try await engine.decide(inbox.agent, approvalId: approval.approvalId, approve: approve) }
     }
 
+    private func respond(_ thread: ThreadModel, _ prompt: PendingPrompt, _ decision: PromptResponse.Decision) {
+        Task { await thread.respond(prompt, PromptResponse(decision: decision)) }
+    }
+
     /// The answer goes to the agent's chat with you, as your next message.
     private func send() {
         let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -297,6 +279,20 @@ struct NeedsYouCard: View {
             await thread.open()
             await thread.send(text)
             await engine.markInboxRead([inbox])
+        }
+    }
+
+    private func setUpProvider() {
+        UserDefaults.standard.set("Models", forKey: "settingsSection")
+        WindowOpener.shared.openSettings?()
+    }
+
+    private func runAgain() {
+        guard let agent = entry.agent else { return }
+        perform {
+            let upcoming = await engine.agentRuns(agent.ref)?.upcoming.first { $0.kind == "schedule" }
+            _ = try await engine.agentRunNow(agent.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
+            if let inbox = entry.inbox { await engine.markInboxRead([inbox]) }
         }
     }
 
@@ -322,48 +318,9 @@ struct NeedsYouCard: View {
     }
 }
 
-/// "● Source  what happened · age", with something on the right.
-struct NeedsYouHeadline<Trailing: View>: View {
-    let source: String
-    let what: String
-    let at: String
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(Color.accentColor).frame(width: 6, height: 6)
-            Text(source).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
-            Text("\(what) · \(BuildSessionView.relative(at))").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
-            Spacer(minLength: 8)
-            trailing
-        }
-    }
-}
-
-/// A Build session waiting on you: where it is, then its own approval or question card.
-private struct BuildPromptEntry: View {
-    let engine: EngineController
-    let entry: NeedsYouEntry
-    let session: SessionSummary
-    @Binding var item: SidebarItem
-
-    var body: some View {
-        let thread = engine.thread(session.ref)
-        VStack(alignment: .leading, spacing: 10) {
-            NeedsYouHeadline(source: session.title, what: engine.project(of: session).map { "in \($0.name)" } ?? "is waiting on you", at: entry.at) {
-                Button("Open session") { item = .session(session.ref.id) }
-                    .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(thread.prompts.enumerated()), id: \.element.id) { i, prompt in
-                    PromptCard(session: thread, prompt: prompt, primary: i == 0)
-                }
-                if thread.prompts.isEmpty {
-                    Text("Waiting on you…").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-                }
-            }
-            .padding(.leading, 16)
-        }
-        .task(id: session.ref.id) { await thread.open() }
+extension NeedsYouEntry {
+    /// Whether a notification or the menu bar's Inbox pointed at this one (an inbox item, an approval, a session, a note).
+    func matches(_ focus: String) -> Bool {
+        id == focus || inbox?.id == focus || inbox?.approval?.approvalId == focus || session?.ref.id == focus || watchdog?.id == focus
     }
 }

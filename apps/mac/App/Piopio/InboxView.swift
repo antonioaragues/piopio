@@ -23,7 +23,7 @@ struct InboxMenu: View {
             Button("\(item.agentName): \(item.approval?.title ?? item.body)".prefix(80)) { show(item.approval?.approvalId ?? item.id) }
         }
         Divider()
-        Button("Open Inbox") { show(nil) }
+        Button("Open Home") { show(nil) }
     }
 
     private func show(_ id: String?) {

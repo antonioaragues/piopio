@@ -124,8 +124,11 @@ and D6. D4 and D5 can swap.
 ## 8. D2 as built (2026-11-11)
 
 - **Sidebar (1a):** Search · Home · Projects · Agents · Conversations.
-  - **Home** carries the count of what waits on you; the Needs you row is gone (its page stays, reached from Home's "See
-    all").
+  - **Home** carries the count of what waits on you; the Needs you row is gone, and so is its page (2026-11-18):
+    Home's "Waiting on you" lists everything, five rows and then "Show N more". Each row has the action that resolves
+    it (Allow, an answer, Run again, Raise the budget, Dismiss); a click opens its full card under it (what came in, a
+    Build session's own prompt cards, where to look). A notification or the menu bar's Inbox opens Home with that row
+    open.
   - **Agents** lists your agents, then your saved teams. An agent row has an 18 pt rounded-square avatar in its colour
     with its initial (or its glyph), and a blue dot when it wrote to you. A team row has its members as three
     overlapping circles and how many they are. + offers New agent or New team. The Teams section is gone.

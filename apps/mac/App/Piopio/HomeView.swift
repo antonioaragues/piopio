@@ -14,8 +14,14 @@ struct HomeView: View {
     @AppStorage("homeLastVisit") private var lastVisit = ""
     /// Two columns when there's room for them.
     @State private var wide = true
+    /// The waiting row that's open (its full card), and whether all of them show.
+    @State private var expanded: String?
+    @State private var showAll = false
+    /// What a notification or the menu bar's Inbox pointed at: Home opens that row.
+    @AppStorage("inboxFocus") private var focus = ""
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -47,8 +53,25 @@ struct HomeView: View {
             let since = lastVisit.isEmpty ? nil : lastVisit
             agenda = await engine.homeAgenda(since: since)
         }
+        .task(id: focus) { reveal(proxy) }
+        .onChange(of: engine.needsYouCount) { reveal(proxy) }
+        }
         .onDisappear { lastVisit = ISO8601DateFormatter().string(from: .now) }
     }
+
+    /// Opens and scrolls to the row a notification pointed at, once it's there.
+    private func reveal(_ proxy: ScrollViewProxy) {
+        guard !focus.isEmpty else { return }
+        let entries = Array(engine.needsYou.reversed())
+        guard let i = entries.firstIndex(where: { $0.matches(focus) }) else { return }
+        focus = ""
+        if i >= Self.shown { showAll = true }
+        expanded = entries[i].id
+        withAnimation { proxy.scrollTo(entries[i].id, anchor: .center) }
+    }
+
+    /// Rows before "Show N more".
+    static let shown = 5
 
     // MARK: Greeting
 
@@ -98,9 +121,17 @@ struct HomeView: View {
         let ready = readyToMerge
         let count = entries.count + ready.count
         if count > 0 {
-            sectionTitle("Waiting on you · \(count)", see: entries.isEmpty ? nil : ("See all", { item = .needsYou }))
+            sectionTitle("Waiting on you · \(count)")
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(entries.prefix(4)) { WaitingRow(engine: engine, entry: $0, item: $item) }
+                ForEach(showAll ? entries : Array(entries.prefix(Self.shown))) { entry in
+                    WaitingItem(engine: engine, entry: entry, item: $item, expanded: $expanded).id(entry.id)
+                }
+                if entries.count > Self.shown {
+                    Button(showAll ? "Show fewer" : "Show \(entries.count - Self.shown) more") { withAnimation(.snappy(duration: 0.18)) { showAll.toggle() } }
+                        .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+                }
                 ForEach(ready, id: \.work.id) { r in
                     AgendaLine(dot: .accentColor) {
                         Text("\(r.project.name) · \(r.tasks) task\(r.tasks == 1 ? "" : "s") ready for \(r.work.git?.base ?? "main")").font(.system(size: 13.5))
@@ -222,91 +253,6 @@ private struct AgendaLine<Content: View, Trailing: View>: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 }
-
-/// Something waiting on you, with its action in the row (design 5e): Allow, an answer, or Open.
-private struct WaitingRow: View {
-    let engine: EngineController
-    let entry: NeedsYouEntry
-    @Binding var item: SidebarItem
-    @State private var reply = ""
-    @State private var busy = false
-    @State private var error: String?
-
-    var body: some View {
-        AgendaLine(dot: entry.isApproval ? .dsWarn : .accentColor) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(line).font(.system(size: 13.5)).foregroundStyle(Color.dsFg).lineLimit(2)
-                if let error { Text(error).font(.system(size: 11.5)).foregroundStyle(Color.dsWarn) }
-            }
-        } trailing: {
-            switch entry.kind {
-            case .approval:
-                Button("Not now") { decide(false) }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                Button("Allow") { decide(true) }.buttonStyle(PillStyle(kind: .primary, compact: true))
-            case .message:
-                TextField("", text: $reply, prompt: Text("Answer here…").foregroundStyle(Color.dsFg3))
-                    .textFieldStyle(.plain).font(.system(size: 12.5)).frame(width: 160)
-                    .padding(.horizontal, 8).frame(height: 26)
-                    .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
-                    .onSubmit(send)
-            case .watchdog:
-                if let note = entry.watchdog {
-                    Button("Dismiss") { Task { await engine.dismissWatchdog(note) } }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                }
-                Button("Open") { open() }.buttonStyle(PillStyle(compact: true))
-            default:
-                Button("Open") { open() }.buttonStyle(PillStyle(compact: true))
-            }
-        }
-        .disabled(busy)
-    }
-
-    /// "Morning briefing wants to read Calendar", "Family helper: “Which supermarket?”".
-    private var line: String {
-        let source = NeedsYouText.source(entry, engine: engine)
-        let title = NeedsYouText.title(entry, engine: engine)
-        switch entry.kind {
-        case .approval: return "\(source) asks: \(title)"
-        case .message: return "\(source): “\(title)”"
-        case .buildPrompt: return "\(source) · \(title)"
-        default: return title
-        }
-    }
-
-    private func open() {
-        if let s = entry.session { item = engine.item(for: s.ref.id) ?? .needsYou }
-        else if let inbox = entry.inbox { item = .agent(inbox.agent.id) }
-        else { item = .needsYou }
-    }
-
-    private func decide(_ approve: Bool) {
-        guard let inbox = entry.inbox, let approval = inbox.approval else { return }
-        perform { try await engine.decide(inbox.agent, approvalId: approval.approvalId, approve: approve) }
-    }
-
-    private func send() {
-        let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let inbox = entry.inbox else { return }
-        reply = ""
-        let thread = engine.thread(ContainerRef(kind: .agent, id: inbox.agent.id))
-        perform {
-            await thread.open()
-            await thread.send(text)
-            await engine.markInboxRead([inbox])
-        }
-    }
-
-    private func perform(_ work: @escaping () async throws -> Void) {
-        busy = true
-        error = nil
-        Task {
-            do { try await work() } catch { self.error = (error as? EngineError)?.message ?? String(describing: error) }
-            busy = false
-        }
-    }
-}
-
 
 /// The one start (docs/spec/18 §4): write, and choose where it goes in the box itself. No project is a chat; a project
 /// with a folder is a conversation there, with permissions (Read only, Ask, Auto-edit, Full auto) said in a chip and in

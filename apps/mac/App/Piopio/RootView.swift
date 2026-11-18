@@ -192,8 +192,6 @@ struct RootView: View {
         switch item {
         case .home:
             HomeView(engine: engine, item: itemBinding)
-        case .needsYou:
-            NeedsYouView(engine: engine, item: itemBinding)
         case .index(.projects) where engine.projects.isEmpty && !Areas.shared.contains(.build):
             HatchEmpty(title: "Chat about a folder", message: "Add a folder and ask about what's in it: notes, documents, a project. Chats read its files; they don't run commands.") {
                 Button("Add a Folder…") { BuildActions.addFolderToChat(engine: engine) { itemRaw = SidebarItem.session($0).raw } }.buttonStyle(PillStyle(kind: .primary))
@@ -417,7 +415,7 @@ private struct StartSheets: ViewModifier {
             }
             .sheet(item: $trace) { TraceSheet(engine: engine, traceId: $0.id) }
             .onReceive(NotificationCenter.default.publisher(for: .openInbox)) { note in
-                item = .needsYou
+                item = .home
                 if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
             }
             // A new agent starts by talking (docs/spec/21 D4): an empty one that asks what it's for. "form" keeps the
