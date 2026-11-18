@@ -92,7 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The saved appearance, before the first window draws.
     func applicationWillFinishLaunching(_ notification: Notification) {
-        MainActor.assumeIsolated { AppAppearance.current.apply() }
+        MainActor.assumeIsolated {
+            AppAppearance.current.apply()
+            CursorKeeper.install()
+        }
     }
 
     /// Quick Chat keeps working with the main window closed.

@@ -37,6 +37,17 @@ enum DebugAutomation {
         if let appearance = env["PIOPIO_DEMO_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
         }
+        // PIOPIO_DEMO_HOVER_PROBE="x,y;c:x,y;…" (main-window points from the top left, "c:" clicks there first): after
+        // PIOPIO_DEMO_HOVER_DELAY seconds (default 8), moves the mouse through the points as events, leaves the I-beam set
+        // as a text field would, moves once more and writes the cursor at each point, and the view under it, to
+        // PIOPIO_DEMO_CURSOR_OUT (expected: the I-beam over text, the arrow elsewhere).
+        if let probe = env["PIOPIO_DEMO_HOVER_PROBE"], let out = env["PIOPIO_DEMO_CURSOR_OUT"] {
+            Task {
+                try? await Task.sleep(for: .seconds(Double(env["PIOPIO_DEMO_HOVER_DELAY"] ?? "") ?? 8))
+                let lines = await hoverProbe(probe)
+                try? lines.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
+            }
+        }
         // PIOPIO_DEMO_ITEM=<sidebar item> (home, index:projects, project:<id>…): select it after the demo set-up
         // (PIOPIO_DEMO_ITEM_DELAY seconds, default 10).
         if let raw = env["PIOPIO_DEMO_ITEM"] {
@@ -399,6 +410,50 @@ enum DebugAutomation {
                 if env["PIOPIO_QUIT_AFTER_SNAPSHOT"] == "1" { NSApp.terminate(nil) }
             }
         }
+    }
+
+    /// Posts mouse events through the app's queue, as the real mouse would, so tracking areas and event monitors see them.
+    private static func hoverProbe(_ probe: String) async -> [String] {
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && !($0 is NSPanel) }),
+              let content = window.contentView else { return ["no window"] }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate()
+        let height = content.bounds.height
+        func post(_ type: NSEvent.EventType, _ point: NSPoint) {
+            guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0) else { return }
+            NSApp.postEvent(event, atStart: false)
+        }
+        var lines: [String] = []
+        var last: NSPoint?
+        for raw in probe.split(separator: ";") {
+            let click = raw.hasPrefix("c:")
+            let xy = raw.dropFirst(click ? 2 : 0).split(separator: ",").compactMap { Double($0) }
+            guard xy.count == 2 else { continue }
+            let point = NSPoint(x: xy[0], y: height - xy[1])
+            // A few steps on the way, as a real move would send.
+            let from = last ?? point
+            for i in 1...6 {
+                let t = CGFloat(i) / 6
+                post(.mouseMoved, NSPoint(x: from.x + (point.x - from.x) * t, y: from.y + (point.y - from.y) * t))
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+            last = point
+            if click {
+                post(.leftMouseDown, point)
+                post(.leftMouseUp, point)
+            }
+            // The state a text field leaves behind: the I-beam, then one more move.
+            NSCursor.iBeam.set()
+            post(.mouseMoved, point)
+            try? await Task.sleep(for: .milliseconds(400))
+            let cursor = NSCursor.current == .arrow ? "arrow" : NSCursor.current == .iBeam ? "ibeam" : NSCursor.current == .pointingHand ? "hand" : "other"
+            var chain: [String] = []
+            var view = content.superview?.hitTest(content.superview!.convert(point, from: nil)) ?? content.hitTest(point)
+            while let v = view, chain.count < 4 { chain.append(String(describing: type(of: v))); view = v.superview }
+            let responder = window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
+            lines.append("\(raw) \(cursor) key=\(window.isKeyWindow) text=\(CursorKeeper.isText(content.superview?.hitTest(point) ?? content)) hit=\(chain.joined(separator: "<")) fr=\(responder)")
+        }
+        return lines
     }
 
     private static func waitIdle(_ thread: ThreadModel) async {
