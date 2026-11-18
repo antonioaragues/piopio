@@ -18,7 +18,7 @@ import {
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
-import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
+import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, SessionState, Snapshot } from "@piopio/protocol";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -40,6 +40,7 @@ import { offersExtension, type OffersBridge } from "../offers.js";
 import { guardsExtension } from "../tools/guards.js";
 import { CONVERSATION_MIME, formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
+import { ContextBreakdown } from "./context-breakdown.js";
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
@@ -128,6 +129,7 @@ export type BuildOpenOptions = {
 export class BuildRuntime implements Runtime {
 	private readonly emitter = new Emitter();
 	private readonly builder: TimelineBuilder;
+	private readonly contextBreakdown: ContextBreakdown;
 	private unsubscribe?: () => void;
 
 	private constructor(
@@ -143,6 +145,7 @@ export class BuildRuntime implements Runtime {
 		private readonly chat?: ChatProfile,
 	) {
 		this.builder = new TimelineBuilder(ref);
+		this.contextBreakdown = new ContextBreakdown(session);
 	}
 
 	get sessionFile(): string | undefined {
@@ -495,6 +498,7 @@ export class BuildRuntime implements Runtime {
 	}
 
 	private attach(): void {
+		this.contextBreakdown.observeRequests();
 		this.rebuild(false);
 		this.builder.flush();
 		// Waiting on the user: the session shows "waiting for you" and an approval's tool card waits too.
@@ -508,7 +512,9 @@ export class BuildRuntime implements Runtime {
 		this.unsubscribe = this.session.subscribe((event) => {
 			record?.(event);
 			this.mapper.apply(event as never);
-			if (event.type === "message_end" || event.type === "agent_settled") this.builder.setState(this.context());
+			if (event.type === "message_end" || event.type === "agent_settled" || (event.type === "message_start" && event.message.role === "assistant")) {
+				this.builder.setState(this.context());
+			}
 			// A new message of yours may stand beside an earlier version (an edit, a retry): refresh the switchers once
 			// pi has written it (after its message_end).
 			if ((event.type === "message_start" && (event as { message?: PiMessage }).message?.role !== "user") || event.type === "agent_settled") {
@@ -522,9 +528,14 @@ export class BuildRuntime implements Runtime {
 	}
 
 	/** The context meter (BR7): tokens in the model's context window. */
-	private context(): { context?: { tokens: number | null; window: number } } {
+	private context(): Pick<SessionState, "context"> {
 		const usage = this.session.getContextUsage();
-		return usage ? { context: { tokens: usage.tokens, window: usage.contextWindow } } : {};
+		if (!usage) return { context: undefined };
+		return { context: {
+			tokens: usage.tokens,
+			window: usage.contextWindow,
+			...(usage.tokens === null ? {} : { breakdown: this.contextBreakdown.read() }),
+		} };
 	}
 
 	snapshot(): Snapshot {

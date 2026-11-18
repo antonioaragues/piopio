@@ -343,6 +343,15 @@ export type SessionStatus = Static<typeof SessionStatus>;
 export const QueuedInput = Type.Object({ id: Type.String(), mode: Type.Union([Type.Literal("steer"), Type.Literal("followUp")]), text: Type.Optional(Type.String()) });
 export type QueuedInput = Static<typeof QueuedInput>;
 
+const ContextBreakdown = Type.Object({
+	source: literals("request", "session"),
+	groups: Type.Array(Type.Object({
+		kind: literals("instructions", "tools", "conversation", "toolUse", "attachments", "summaries"),
+		tokens: Type.Number(),
+		parts: Type.Array(Type.Object({ label: Type.String(), tokens: Type.Number() })),
+	})),
+});
+
 export const SessionState = Type.Object({
 	status: SessionStatus,
 	queue: Type.Array(QueuedInput),
@@ -358,7 +367,11 @@ export const SessionState = Type.Object({
 	todos: Type.Optional(Type.Array(Type.Object({ text: Type.String(), detail: Type.Optional(Type.String()), status: literals("pending", "in_progress", "done") }))),
 	planMode: Type.Optional(Type.Boolean()),
 	/** How full the model's context is (Build). `tokens` is null right after a compaction. */
-	context: Type.Optional(Type.Object({ tokens: Type.Union([Type.Number(), Type.Null()]), window: Type.Number() })),
+	context: Type.Optional(Type.Object({
+		tokens: Type.Union([Type.Number(), Type.Null()]),
+		window: Type.Number(),
+		breakdown: Type.Optional(ContextBreakdown),
+	})),
 });
 export type SessionState = Static<typeof SessionState>;
 

@@ -438,7 +438,12 @@ final class ThreadModel {
         await call("sessions.configure", ConfigureParams(ref: ref, planMode: on))
     }
 
+    private(set) var isCompactingContext = false
+
     func compact() async {
+        guard !isCompactingContext else { return }
+        isCompactingContext = true
+        defer { isCompactingContext = false }
         await call("sessions.compact", RefParams(ref: ref))
     }
 

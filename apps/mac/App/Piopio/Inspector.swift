@@ -56,32 +56,36 @@ struct InspectorPanel: View {
     }
 }
 
-/// Every panel's footer (§4): how full the context is, Compact, and what the session cost. The only place they appear.
+/// Every panel's footer (§4): how full the context is and what the session cost.
 struct InspectorFooter: View {
     let thread: ThreadModel
-    @State private var compacting = false
+    @State private var showingContext = false
 
     var body: some View {
         let cost = thread.state?.usage.costUsd ?? 0
         HStack(spacing: 8) {
             if let context = thread.state?.context {
-                let fraction = min(1, (context.tokens ?? 0) / max(1, context.window))
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.dsTrack)
-                    Capsule().fill(fraction > 0.85 ? Color.dsFg : Color.dsFg2).frame(width: max(2, 40 * fraction))
-                }
-                .frame(width: 40, height: 3)
-                Text("\(context.tokens.map { ContextRing.short($0) } ?? "–") of \(ContextRing.short(context.window))")
-                    .monospacedDigit().lineLimit(1).fixedSize()
-                    .help("\(Int((fraction * 100).rounded()))% of the context window")
-                if (context.tokens ?? 0) > 0 {
-                    SummaryLink(compacting ? "Compacting…" : "Compact") {
-                        compacting = true
-                        Task { await thread.compact(); compacting = false }
+                Button { showingContext.toggle() } label: {
+                    HStack(spacing: 7) {
+                        if let tokens = context.tokens {
+                            let fraction = min(1, max(0, tokens / context.window))
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color.dsTrack)
+                                Capsule().fill(fraction >= 0.85 ? Color.dsFg : Color.dsFg2).frame(width: 32 * fraction)
+                            }
+                            .frame(width: 32, height: 3)
+                        }
+                        Text("\(context.tokens.map(ContextPopover.short) ?? "—") of \(ContextPopover.short(context.window))")
+                            .monospacedDigit().lineLimit(1).fixedSize()
+                        Image(systemName: "chevron.up").font(.system(size: 8, weight: .semibold))
                     }
-                    .disabled(thread.isRunning || compacting)
-                    .help("Summarize the conversation so far to free up room")
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .help("View context breakdown")
+                .accessibilityLabel("Context breakdown")
+                .accessibilityValue(context.tokens.map { "\(ContextPopover.short($0)) of \(ContextPopover.short(context.window)) tokens" } ?? "Waiting for the next response")
+                .popover(isPresented: $showingContext, arrowEdge: .bottom) { ContextPopover(thread: thread) }
             }
             Spacer(minLength: 8)
             Text(cost > 0 && cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost))

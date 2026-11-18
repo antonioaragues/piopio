@@ -1904,6 +1904,89 @@
 						},
 						"window": {
 							"type": "number"
+						},
+						"breakdown": {
+							"type": "object",
+							"required": [
+								"source",
+								"groups"
+							],
+							"properties": {
+								"source": {
+									"anyOf": [
+										{
+											"type": "string",
+											"const": "request"
+										},
+										{
+											"type": "string",
+											"const": "session"
+										}
+									]
+								},
+								"groups": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"kind",
+											"tokens",
+											"parts"
+										],
+										"properties": {
+											"kind": {
+												"anyOf": [
+													{
+														"type": "string",
+														"const": "instructions"
+													},
+													{
+														"type": "string",
+														"const": "tools"
+													},
+													{
+														"type": "string",
+														"const": "conversation"
+													},
+													{
+														"type": "string",
+														"const": "toolUse"
+													},
+													{
+														"type": "string",
+														"const": "attachments"
+													},
+													{
+														"type": "string",
+														"const": "summaries"
+													}
+												]
+											},
+											"tokens": {
+												"type": "number"
+											},
+											"parts": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": [
+														"label",
+														"tokens"
+													],
+													"properties": {
+														"label": {
+															"type": "string"
+														},
+														"tokens": {
+															"type": "number"
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -7033,6 +7116,89 @@
 										},
 										"window": {
 											"type": "number"
+										},
+										"breakdown": {
+											"type": "object",
+											"required": [
+												"source",
+												"groups"
+											],
+											"properties": {
+												"source": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "request"
+														},
+														{
+															"type": "string",
+															"const": "session"
+														}
+													]
+												},
+												"groups": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"required": [
+															"kind",
+															"tokens",
+															"parts"
+														],
+														"properties": {
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "instructions"
+																	},
+																	{
+																		"type": "string",
+																		"const": "tools"
+																	},
+																	{
+																		"type": "string",
+																		"const": "conversation"
+																	},
+																	{
+																		"type": "string",
+																		"const": "toolUse"
+																	},
+																	{
+																		"type": "string",
+																		"const": "attachments"
+																	},
+																	{
+																		"type": "string",
+																		"const": "summaries"
+																	}
+																]
+															},
+															"tokens": {
+																"type": "number"
+															},
+															"parts": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"label",
+																		"tokens"
+																	],
+																	"properties": {
+																		"label": {
+																			"type": "string"
+																		},
+																		"tokens": {
+																			"type": "number"
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
 										}
 									}
 								}
@@ -8963,6 +9129,89 @@
 												},
 												"window": {
 													"type": "number"
+												},
+												"breakdown": {
+													"type": "object",
+													"required": [
+														"source",
+														"groups"
+													],
+													"properties": {
+														"source": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "request"
+																},
+																{
+																	"type": "string",
+																	"const": "session"
+																}
+															]
+														},
+														"groups": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"required": [
+																	"kind",
+																	"tokens",
+																	"parts"
+																],
+																"properties": {
+																	"kind": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "instructions"
+																			},
+																			{
+																				"type": "string",
+																				"const": "tools"
+																			},
+																			{
+																				"type": "string",
+																				"const": "conversation"
+																			},
+																			{
+																				"type": "string",
+																				"const": "toolUse"
+																			},
+																			{
+																				"type": "string",
+																				"const": "attachments"
+																			},
+																			{
+																				"type": "string",
+																				"const": "summaries"
+																			}
+																		]
+																	},
+																	"tokens": {
+																		"type": "number"
+																	},
+																	"parts": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"label",
+																				"tokens"
+																			],
+																			"properties": {
+																				"label": {
+																					"type": "string"
+																				},
+																				"tokens": {
+																					"type": "number"
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
+													}
 												}
 											}
 										}
@@ -10886,6 +11135,89 @@
 								},
 								"window": {
 									"type": "number"
+								},
+								"breakdown": {
+									"type": "object",
+									"required": [
+										"source",
+										"groups"
+									],
+									"properties": {
+										"source": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "request"
+												},
+												{
+													"type": "string",
+													"const": "session"
+												}
+											]
+										},
+										"groups": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"kind",
+													"tokens",
+													"parts"
+												],
+												"properties": {
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "instructions"
+															},
+															{
+																"type": "string",
+																"const": "tools"
+															},
+															{
+																"type": "string",
+																"const": "conversation"
+															},
+															{
+																"type": "string",
+																"const": "toolUse"
+															},
+															{
+																"type": "string",
+																"const": "attachments"
+															},
+															{
+																"type": "string",
+																"const": "summaries"
+															}
+														]
+													},
+													"tokens": {
+														"type": "number"
+													},
+													"parts": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"label",
+																"tokens"
+															],
+															"properties": {
+																"label": {
+																	"type": "string"
+																},
+																"tokens": {
+																	"type": "number"
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
 								}
 							}
 						}
@@ -16537,6 +16869,89 @@
 													},
 													"window": {
 														"type": "number"
+													},
+													"breakdown": {
+														"type": "object",
+														"required": [
+															"source",
+															"groups"
+														],
+														"properties": {
+															"source": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "request"
+																	},
+																	{
+																		"type": "string",
+																		"const": "session"
+																	}
+																]
+															},
+															"groups": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"kind",
+																		"tokens",
+																		"parts"
+																	],
+																	"properties": {
+																		"kind": {
+																			"anyOf": [
+																				{
+																					"type": "string",
+																					"const": "instructions"
+																				},
+																				{
+																					"type": "string",
+																					"const": "tools"
+																				},
+																				{
+																					"type": "string",
+																					"const": "conversation"
+																				},
+																				{
+																					"type": "string",
+																					"const": "toolUse"
+																				},
+																				{
+																					"type": "string",
+																					"const": "attachments"
+																				},
+																				{
+																					"type": "string",
+																					"const": "summaries"
+																				}
+																			]
+																		},
+																		"tokens": {
+																			"type": "number"
+																		},
+																		"parts": {
+																			"type": "array",
+																			"items": {
+																				"type": "object",
+																				"required": [
+																					"label",
+																					"tokens"
+																				],
+																				"properties": {
+																					"label": {
+																						"type": "string"
+																					},
+																					"tokens": {
+																						"type": "number"
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
 													}
 												}
 											}
@@ -18467,6 +18882,89 @@
 															},
 															"window": {
 																"type": "number"
+															},
+															"breakdown": {
+																"type": "object",
+																"required": [
+																	"source",
+																	"groups"
+																],
+																"properties": {
+																	"source": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"const": "request"
+																			},
+																			{
+																				"type": "string",
+																				"const": "session"
+																			}
+																		]
+																	},
+																	"groups": {
+																		"type": "array",
+																		"items": {
+																			"type": "object",
+																			"required": [
+																				"kind",
+																				"tokens",
+																				"parts"
+																			],
+																			"properties": {
+																				"kind": {
+																					"anyOf": [
+																						{
+																							"type": "string",
+																							"const": "instructions"
+																						},
+																						{
+																							"type": "string",
+																							"const": "tools"
+																						},
+																						{
+																							"type": "string",
+																							"const": "conversation"
+																						},
+																						{
+																							"type": "string",
+																							"const": "toolUse"
+																						},
+																						{
+																							"type": "string",
+																							"const": "attachments"
+																						},
+																						{
+																							"type": "string",
+																							"const": "summaries"
+																						}
+																					]
+																				},
+																				"tokens": {
+																					"type": "number"
+																				},
+																				"parts": {
+																					"type": "array",
+																					"items": {
+																						"type": "object",
+																						"required": [
+																							"label",
+																							"tokens"
+																						],
+																						"properties": {
+																							"label": {
+																								"type": "string"
+																							},
+																							"tokens": {
+																								"type": "number"
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
 															}
 														}
 													}
@@ -21995,6 +22493,89 @@
 								},
 								"window": {
 									"type": "number"
+								},
+								"breakdown": {
+									"type": "object",
+									"required": [
+										"source",
+										"groups"
+									],
+									"properties": {
+										"source": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "request"
+												},
+												{
+													"type": "string",
+													"const": "session"
+												}
+											]
+										},
+										"groups": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"kind",
+													"tokens",
+													"parts"
+												],
+												"properties": {
+													"kind": {
+														"anyOf": [
+															{
+																"type": "string",
+																"const": "instructions"
+															},
+															{
+																"type": "string",
+																"const": "tools"
+															},
+															{
+																"type": "string",
+																"const": "conversation"
+															},
+															{
+																"type": "string",
+																"const": "toolUse"
+															},
+															{
+																"type": "string",
+																"const": "attachments"
+															},
+															{
+																"type": "string",
+																"const": "summaries"
+															}
+														]
+													},
+													"tokens": {
+														"type": "number"
+													},
+													"parts": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"label",
+																"tokens"
+															],
+															"properties": {
+																"label": {
+																	"type": "string"
+																},
+																"tokens": {
+																	"type": "number"
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
 								}
 							}
 						}
@@ -23966,6 +24547,89 @@
 										},
 										"window": {
 											"type": "number"
+										},
+										"breakdown": {
+											"type": "object",
+											"required": [
+												"source",
+												"groups"
+											],
+											"properties": {
+												"source": {
+													"anyOf": [
+														{
+															"type": "string",
+															"const": "request"
+														},
+														{
+															"type": "string",
+															"const": "session"
+														}
+													]
+												},
+												"groups": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"required": [
+															"kind",
+															"tokens",
+															"parts"
+														],
+														"properties": {
+															"kind": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "instructions"
+																	},
+																	{
+																		"type": "string",
+																		"const": "tools"
+																	},
+																	{
+																		"type": "string",
+																		"const": "conversation"
+																	},
+																	{
+																		"type": "string",
+																		"const": "toolUse"
+																	},
+																	{
+																		"type": "string",
+																		"const": "attachments"
+																	},
+																	{
+																		"type": "string",
+																		"const": "summaries"
+																	}
+																]
+															},
+															"tokens": {
+																"type": "number"
+															},
+															"parts": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": [
+																		"label",
+																		"tokens"
+																	],
+																	"properties": {
+																		"label": {
+																			"type": "string"
+																		},
+																		"tokens": {
+																			"type": "number"
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
 										}
 									}
 								}

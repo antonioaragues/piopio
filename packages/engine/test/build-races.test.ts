@@ -2,10 +2,10 @@
  * Two races at pi's edges in a conversation in a folder (found reading T3 Code's pi adapter, 2026-11-15):
  * a message sent while a compaction runs, and Stop with messages still queued.
  */
-import { mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import type { Snapshot } from "@piopio/protocol";
 import { afterEach, expect, test } from "vitest";
 import { enginePaths } from "../src/paths.js";
@@ -45,6 +45,50 @@ async function idle(a: Ctx, ref: unknown, until: (s: Snapshot) => boolean = () =
 
 const lines = (s: Snapshot) =>
 	s.items.map((i) => (i.kind === "user" ? `> ${i.text}` : i.kind === "assistant" ? i.parts.map((p) => p.text).join("") : i.kind === "system" ? `[${i.level}] ${i.text}` : i.kind));
+
+test("the context panel counts the prepared request and waits for new usage after compaction", async () => {
+	const a = await start();
+	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-context-")));
+	writeFileSync(join(folder, "AGENTS.md"), "Keep answers concise.");
+	writeFileSync(join(folder, "notes.md"), "Notes read with a tool.");
+	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+	const faux = a.engine.hub.faux!;
+	faux.setResponses([
+		fauxAssistantMessage([fauxToolCall("read", { path: "notes.md" })], { stopReason: "toolUse" }),
+		fauxAssistantMessage("Initial answer."),
+	]);
+	const submit = (text: string, attachments?: { kind: "text"; name: string; text: string }[]) =>
+		a.client.call("sessions.submit", { ref, input: { text, ...(attachments ? { attachments } : {}) } });
+	const answered = (answer: string) => idle(a, ref, (s) => s.items.some((i) => i.kind === "assistant" && i.parts.some((p) => p.text === answer)));
+
+	await submit("Read the notes", [{ kind: "text", name: "attached.txt", text: "Attached text from the user." }]);
+	const first = (await answered("Initial answer.")).state.context?.breakdown;
+	expect(first?.source).toBe("request");
+	expect(first?.groups).toEqual(expect.arrayContaining([
+		expect.objectContaining({ kind: "instructions", parts: expect.arrayContaining([expect.objectContaining({ label: "Project instructions (AGENTS.md)" })]) }),
+		expect.objectContaining({ kind: "tools", tokens: expect.any(Number) }),
+		expect.objectContaining({ kind: "toolUse", parts: [expect.objectContaining({ label: "Files" })] }),
+		expect.objectContaining({ kind: "attachments", parts: [expect.objectContaining({ label: "Text and documents" })] }),
+	]));
+
+	for (const answer of ["Next answer.", "Latest answer."]) {
+		faux.setResponses([fauxAssistantMessage(answer)]);
+		await submit("A longer conversation. ".repeat(2_500));
+		await answered(answer);
+	}
+	faux.setResponses([fauxAssistantMessage("Summary of earlier messages.")]);
+	await a.client.call("sessions.compact", { ref });
+	const pending = (await idle(a, ref)).state.context;
+	expect(pending?.tokens).toBeNull();
+	expect(pending?.breakdown).toBeUndefined();
+
+	faux.setResponses([fauxAssistantMessage("After compacting.")]);
+	await submit("Continue");
+	const updated = (await answered("After compacting.")).state.context;
+	expect(updated?.tokens).toBeGreaterThan(0);
+	expect(updated?.breakdown?.groups.some((g) => g.kind === "summaries")).toBe(true);
+	expect(updated?.breakdown?.groups.some((g) => g.kind === "attachments")).toBe(false);
+}, 20_000);
 
 test("a message sent while the conversation compacts waits for it, instead of failing", async () => {
 	const a = await start();

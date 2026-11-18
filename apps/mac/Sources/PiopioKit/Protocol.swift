@@ -405,7 +405,26 @@ public struct SessionState: Codable, Sendable, Hashable {
     public var tools: Tools?
     public var usage: Usage
     /// How full the model's context is (Build). `tokens` is nil right after a compaction.
-    public struct Context: Codable, Sendable, Hashable { public var tokens: Double?; public var window: Double }
+    public struct Context: Codable, Sendable, Hashable {
+        public struct Breakdown: Codable, Sendable, Hashable {
+            public enum Source: String, Codable, Sendable { case request, session }
+            public struct Group: Codable, Sendable, Hashable {
+                public enum Kind: String, Codable, Sendable { case instructions, tools, conversation, toolUse, attachments, summaries }
+                public struct Part: Codable, Sendable, Hashable {
+                    public var label: String
+                    public var tokens: Double
+                }
+                public var kind: Kind
+                public var tokens: Double
+                public var parts: [Part]
+            }
+            public var source: Source
+            public var groups: [Group]
+        }
+        public var tokens: Double?
+        public var window: Double
+        public var breakdown: Breakdown?
+    }
     public var context: Context?
     /// Build: approval mode and what the session waits on you for.
     public var approvalMode: ApprovalMode?

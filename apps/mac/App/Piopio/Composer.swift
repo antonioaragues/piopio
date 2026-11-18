@@ -4,7 +4,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The composer (docs/design/grey 11b, 11e): a box as wide as the reading column. Attachments, text, then + (attach),
-/// the edit mode (Build) and web search as plain text, and on the right the context ring past 60%, the model with its
+/// the edit mode (Build) and web search as plain text, and on the right the model with its
 /// thinking level, and send. ↩ sends (queued while answering, shown above the box), ⌥↩ steers, ⇧↩ adds a line,
 /// esc or ⌘. stops or cancels an edit. With the box empty, Tab takes the
 /// highlighted "Ask next" suggestion and ↑/↓ move it.
@@ -16,6 +16,7 @@ struct Composer: View {
     @Binding private var attachments: [PendingAttachment]
     @State private var attachError: String?
     @State private var dropTargeted = false
+    @State private var showingContext = false
     @FocusState private var focused: Bool
     /// Build: @-mention and /command suggestions shown above the box (docs/spec/05-build BR5).
     @State private var suggestions: [Suggestion] = []
@@ -63,12 +64,15 @@ struct Composer: View {
                 }
                 .padding(.horizontal, 16)
             }
-            if let context = thread.state?.context, let tokens = context.tokens, tokens / max(1, context.window) >= 0.85 {
+            let contextFraction = thread.state?.context.map { ($0.tokens ?? 0) / max(1, $0.window) } ?? 0
+            if contextFraction >= 0.85 || showingContext {
                 HStack(spacing: 4) {
-                    Text("This conversation is at \(Int(min(1, tokens / max(1, context.window)) * 100))% of its context.").foregroundStyle(Color.dsFg3)
-                    if isBuild {
-                        Button("Compact now") { Task { await thread.compact() } }.buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                    if contextFraction >= 0.85 {
+                        Text("This conversation is at \(Int(min(1, contextFraction) * 100))% of its context.").foregroundStyle(Color.dsFg3)
                     }
+                    Button("View context") { showingContext.toggle() }
+                        .buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                        .popover(isPresented: $showingContext, arrowEdge: .bottom) { ContextPopover(thread: thread) }
                     Spacer()
                 }
                 .font(.system(size: 12.5))
@@ -486,37 +490,6 @@ struct Composer: View {
         let files = attachments.map(\.attachment)
         attachError = nil
         Task { await thread.send(message, attachments: files, steer: steer && thread.isRunning) }
-    }
-}
-
-/// The context ring: only past 60% of the model's context, in grey ink. Clicking compacts the conversation (Build).
-/// Otherwise the number lives in the inspector.
-struct ContextRing: View {
-    let context: SessionState.Context
-    let compact: (() -> Void)?
-
-    var body: some View {
-        if fraction > 0.6 {
-            Button { compact?() } label: {
-                ZStack {
-                    Circle().stroke(Color.dsLine, lineWidth: 3)
-                    Circle().trim(from: 0, to: fraction).stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round)).rotationEffect(.degrees(-90))
-                }
-                .frame(width: 18, height: 18)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(compact == nil)
-            .help("Context \(Int(fraction * 100))% full: \(context.tokens.map { "\(Self.short($0)) of " } ?? "")\(Self.short(context.window)) tokens." + (compact != nil ? " Click to compact the conversation." : ""))
-        }
-    }
-
-    private var fraction: Double { min(1, (context.tokens ?? 0) / max(1, context.window)) }
-    private var color: Color { fraction > 0.85 ? .dsFg : .dsFg2 }
-
-    static func short(_ n: Double) -> String {
-        n >= 1_000_000 ? String(format: "%.1fM", n / 1_000_000).replacingOccurrences(of: ".0M", with: "M") : n >= 1000 ? "\(Int((n / 1000).rounded()))k" : "\(Int(n))"
     }
 }
 
