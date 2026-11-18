@@ -289,6 +289,12 @@ export class Engine {
 			options.watchdog ?? {},
 		);
 		this.sessions.watchdog = this.watchdog;
+		// A deleted conversation's notes go with it; the ones it left behind before this go on start.
+		const known = new Set(this.sessions.list().map((s) => s.ref.id));
+		this.watchdog.prune((id) => known.has(id));
+		this.sessions.onChange((change) => {
+			if (change.removed.length) this.watchdog.forget(change.removed.map((r) => r.id));
+		});
 		// GitHub (docs/spec/05-build G4–G8): pull requests linked to conversations, polled for what happens on them.
 		this.github = new GitHub(this.secrets, options.github ?? {});
 		this.sessions.github = this.github;

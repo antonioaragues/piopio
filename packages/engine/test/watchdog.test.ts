@@ -31,8 +31,9 @@ async function until<T>(get: () => Promise<T> | T, ok: (v: T) => boolean, ms = 3
 	}
 }
 
-async function start(mode = "full_auto", git = false) {
+async function start(mode = "full_auto", git = false, seed?: (home: string) => void) {
 	const home = mkdtempSync(join(tmpdir(), "piopio-wd-"));
+	seed?.(home);
 	const paths = enginePaths(home);
 	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), teamsDir: join(home, "Teams"), hooksPort: 0, watchdog: { silentMs: 1500, waitingMs: 1500, tickMs: 200 }, log: () => {} });
 	await engine.listen();
@@ -72,6 +73,21 @@ test("W2: the same failing command three times is a note that stays after the tu
 	await until(async () => ((await client.call("sessions.open", { ref })) as { state: { status: string } }).state.status, (s) => s === "idle");
 	expect((await notes(client)).map((n) => n.rule)).toEqual(["looping"]);
 	await client.call("watchdog.dismiss", { id: note!.id });
+	expect(await notes(client)).toEqual([]);
+}, 30_000);
+
+test("deleting a conversation takes its notes with it", async () => {
+	const { client, ref } = await start();
+	await client.call("sessions.submit", { ref, input: { text: "$ ls /nope-not-here\n$ ls /nope-not-here\n$ ls /nope-not-here" } });
+	await until(() => notes(client), (n) => n.some((x) => x.rule === "looping"));
+	await until(async () => ((await client.call("sessions.open", { ref })) as { state: { status: string } }).state.status, (s) => s === "idle");
+	await client.call("sessions.delete", { ref });
+	expect(await notes(client)).toEqual([]);
+}, 30_000);
+
+test("on start, notes about conversations that no longer exist are dropped", async () => {
+	const orphan = { id: "wd_old", ref: { kind: "thread", id: "thr_gone" }, title: "Gone", rule: "looping", text: "It is repeating itself.", at: "2026-11-17T23:11:54.132Z" };
+	const { client } = await start("full_auto", false, (home) => writeFileSync(join(home, "watchdog.json"), JSON.stringify([orphan])));
 	expect(await notes(client)).toEqual([]);
 }, 30_000);
 

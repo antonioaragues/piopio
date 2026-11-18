@@ -98,7 +98,7 @@ struct HomeView: View {
         let ready = readyToMerge
         let count = entries.count + ready.count
         if count > 0 {
-            sectionTitle("Waiting on you · \(count)", see: entries.count > 4 ? ("See all", { item = .needsYou }) : nil)
+            sectionTitle("Waiting on you · \(count)", see: entries.isEmpty ? nil : ("See all", { item = .needsYou }))
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(entries.prefix(4)) { WaitingRow(engine: engine, entry: $0, item: $item) }
                 ForEach(ready, id: \.work.id) { r in
@@ -250,6 +250,11 @@ private struct WaitingRow: View {
                     .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
                     .onSubmit(send)
+            case .watchdog:
+                if let note = entry.watchdog {
+                    Button("Dismiss") { Task { await engine.dismissWatchdog(note) } }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                }
+                Button("Open") { open() }.buttonStyle(PillStyle(compact: true))
             default:
                 Button("Open") { open() }.buttonStyle(PillStyle(compact: true))
             }

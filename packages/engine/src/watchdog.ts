@@ -99,6 +99,18 @@ export class Watchdog {
 		this.drop((n) => n.id === id);
 	}
 
+	/** A conversation was deleted: its notes go with it (nothing could make them move on any more). */
+	forget(ids: readonly string[]): void {
+		const gone = new Set(ids);
+		for (const id of gone) this.watched.delete(id);
+		this.drop((n) => gone.has(n.ref.id));
+	}
+
+	/** On start: notes left over from conversations deleted before forget existed (or while the engine was down). */
+	prune(exists: (id: string) => boolean): void {
+		this.drop((n) => !exists(n.ref.id));
+	}
+
 	/** Follows a conversation (a Build session or a chat) while it's open. */
 	watch(ref: ContainerRef, runtime: Runtime): void {
 		if (this.seen.has(runtime)) return;
