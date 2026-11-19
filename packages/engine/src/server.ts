@@ -96,15 +96,19 @@ export type EngineOptions = {
 	watchers?: { mailEveryMs?: number; settleMs?: number };
 	/** Telegram's API (tests: a fake one) and how long a poll waits. */
 	telegram?: { fetch?: typeof fetch; pollSeconds?: number; retryMs?: number };
+	/** Tests: how the engine reaches your cloud (a fake fetch, a WebSocket to Miniflare). */
+	cloud?: { fetch?: typeof fetch; webSocket?: (url: string, token: string) => WebSocket };
 	log?: (line: string) => void;
 };
 
 import { InputReceipts } from "./requests.js";
+import { CloudLink } from "./cloud.js";
 
 export class Engine {
 	private readonly inputReceipts: InputReceipts;
 	readonly id = randomUUID();
 	readonly secrets = new SecretBroker();
+	cloud!: CloudLink;
 	private readonly logins: LoginFlows;
 	readonly hub: ModelHub;
 	readonly connectors: ConnectorHub;
@@ -222,7 +226,8 @@ export class Engine {
 		if (options.agentLearn) this.sessions.agentLearn = options.agentLearn;
 		// Agents on Telegram from this Mac (docs/spec/19 S4): polling, so no webhook or cloud.
 		this.telegram = new TelegramChannels({
-			agents: () => this.sessions.agentList(),
+			// A cloud agent's bot is read by the cloud, by webhook (docs/spec/30 K1).
+			agents: () => this.sessions.agentList().filter((a) => !this.sessions.isCloud(a.id)),
 			definition: (id) => this.sessions.agentList().find((a) => a.id === id)?.definition,
 			save: (id, change, message) => this.sessions.changeAgent(id, change, message),
 			submit: async (id, contactId, text) => {
@@ -244,6 +249,10 @@ export class Engine {
 			...(options.telegram?.retryMs !== undefined ? { retryMs: options.telegram.retryMs } : {}),
 		});
 		this.sessions.telegram = this.telegram;
+		// Your cloud (docs/spec/30 K1): agents that keep going with the Mac off.
+		this.cloud = new CloudLink({ file: join(options.paths.home, "cloud.json"), secrets: this.secrets, log: this.log, ...(options.cloud ?? {}) });
+		this.sessions.cloud = this.cloud;
+		this.sessions.secrets = this.secrets;
 		// Automations (docs/spec/27): one list of what starts on its own, run as Piopio or as one of your agents.
 		this.automations = new Automations({
 			file: join(options.paths.home, "automations.json"),
@@ -565,6 +574,7 @@ export class Engine {
 	}
 
 	async stop(): Promise<void> {
+		this.cloud?.close();
 		this.telegram?.stop();
 		this.watchers?.stop();
 		this.automations?.stop();
@@ -1254,6 +1264,22 @@ export class Engine {
 				const p = params as Params<"inbox.read">;
 				await this.sessions.inboxRead(p.items);
 				return {} satisfies Result<"inbox.read">;
+			}
+			case "agents.move": {
+				const p = params as Params<"agents.move">;
+				return { lines: await this.sessions.moveAgent(p.ref, p.to) } satisfies Result<"agents.move">;
+			}
+			case "cloud.status":
+				return (await this.cloud.status()) satisfies Result<"cloud.status">;
+			case "cloud.connect": {
+				const p = params as Params<"cloud.connect">;
+				return (await this.cloud.connect(p.url, p.token)) satisfies Result<"cloud.connect">;
+			}
+			case "cloud.disconnect": {
+				const up = this.sessions.agentList().filter((a) => this.sessions.isCloud(a.id));
+				if (up.length) throw new EngineError("INVALID", `${up.map((a) => a.name).join(", ")} ${up.length === 1 ? "runs" : "run"} in your cloud. Move ${up.length === 1 ? "it" : "them"} to this Mac first.`);
+				await this.cloud.disconnect();
+				return {} satisfies Result<"cloud.disconnect">;
 			}
 			case "agents.memory": {
 				const p = params as Params<"agents.memory">;

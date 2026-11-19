@@ -6,8 +6,14 @@
   "compatibility_flags": ["nodejs_compat", "no_nodejs_global_timers"],
   "workers_dev": true,
   "durable_objects": {
-    "bindings": [{ "name": "AGENT", "class_name": "AgentDO" }]
+    "bindings": [
+      { "name": "AGENT", "class_name": "AgentDO" },
+      { "name": "REGISTRY", "class_name": "RegistryDO" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentDO"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["AgentDO"] },
+    { "tag": "v2", "new_sqlite_classes": ["RegistryDO"] }
+  ],
   "observability": { "enabled": true }
 }

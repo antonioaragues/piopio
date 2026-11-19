@@ -1,5 +1,7 @@
 export interface Env {
 	AGENT: DurableObjectNamespace<import("./agent-do.js").AgentDO>;
+	/** One object ("registry"): the agents deployed here (docs/spec/30 K1). */
+	REGISTRY: DurableObjectNamespace<import("./registry-do.js").RegistryDO>;
 	/** Owner bearer token, checked by `engine.hello`. */
 	OWNER_TOKEN: string;
 	OPENROUTER_API_KEY?: string;

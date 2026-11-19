@@ -1,6 +1,7 @@
 # 30 · The cloud, target state: where things run, and what they can do there
 
-Status: draft 2026-11-19; **the six questions decided by the user the same day (§11)**; nothing here is built. Mockup: [docs/design/cloud](../design/cloud/Cloud.html).
+Status: draft 2026-11-19; **the six questions decided by the user the same day (§11)**; **K1 built the same day (§13)**,
+checked in workerd (Miniflare) and the app build, not yet on the real account. Mockup: [docs/design/cloud](../design/cloud/Cloud.html).
 It extends 13 (Phase 5 plan) with the two goals the user set, and with what a cloud agent can use:
 
 1. **You choose where a conversation runs:** a chat, a notebook or a Build session runs on this Mac or in your cloud.
@@ -277,3 +278,61 @@ Sources (read 2026-11-19): [Browser Run changelog](https://developers.cloudflare
 [Sandbox git workflows](https://developers.cloudflare.com/sandbox/guides/git-workflows/),
 [Agents SDK MCP client](https://developers.cloudflare.com/agents/api-reference/mcp-client-api),
 [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+
+## 13. K1 as built (2026-11-19)
+
+An agent made on the Mac goes up to your cloud and comes back, and its conversation shows in the Mac app while it's
+there. Checked in workerd (Miniflare) with the real engine from source and the faux model; the app builds. **Not yet
+on the account:** the Worker there predates K1 and needs a redeploy (`node scripts/deploy.ts`, which adds the
+registry's migration `v1 → v2`).
+
+**What you do**
+- **Settings › This Mac & cloud › Cloud › Connect…**: the Worker's address and owner token (kept in the Keychain).
+  Both are checked before anything is saved (`/v1/health`, then `/v1/agents` with the token). The card then shows
+  whether it answers, its version and the agents up there; **Disconnect** is refused while an agent runs there.
+- **An agent's ⋯ menu › Keep It Always On…** (or **Move to This Mac…**), with a confirmation that says what moves.
+  Without a cloud, it explains and opens Settings. The result says what moved and what didn't, in lines.
+- **New agent › Runs on**: `This Mac` or `Cloud` once a cloud is connected. It's made on the Mac and sent up (CT1).
+- **Badges:** a `cloud` glyph by the name in the sidebar, the Agents list and the agent's header, and "Cloud" in its
+  line under the name.
+
+**What moves, up**
+- The definition and instructions, as data (`agents.deploy`; no Worker redeploy). A model the cloud can't reach (a
+  subscription, a local server, an API-key provider other than OpenRouter) becomes the Worker's default, and the line
+  says so; the Mac's copy of the definition is changed to match.
+- Its **time automations** become the cloud definition's schedules (cron) and reminders (once). Ones that watch a
+  folder, your email or a URL, and ones that are off, **stay on the Mac, off** (kept in its catalog entry) and come
+  back with it.
+- **Memory** from the built-in provider, every partition; the Mac's copy is wiped once the cloud has it. Another
+  provider's memory doesn't move (the line says so).
+- **Telegram:** the bot token goes up and the cloud sets its webhook; the Mac stops polling that bot. The owner's chat
+  id is in the definition, so pairing carries over.
+
+**What moves, back**
+- `agents.export` (read only) → the Mac saves the definition (without schedules), memory and the bot token, turns
+  the cloud's schedules and reminders into automations again (27's migration), and adds back what was parked. Then
+  `agents.retire` stops the webhook, removes it from the registry and deletes its data there.
+- **Its conversations from the cloud are not merged** into the Mac's: each person's is saved as Markdown in the agent's
+  folder (`cloud-conversations/`), and the Mac shows the conversation it had before it went up.
+
+**How it's wired**
+- **Worker:** `RegistryDO` (one object, `registry`) lists the agents; `GET /v1/agents` reads it (owner only).
+  `AgentDO` answers `agents.deploy`, `agents.export`, `agents.retire` and `agents.conversations`. A retired object keeps
+  only a marker and refuses everything until it's deployed again. A deploy without `schedules` keeps the ones the
+  cloud has, so editing the definition on the Mac doesn't drop them.
+- **Engine:** `CloudLink` (`packages/engine/src/cloud.ts`) with one socket **per cloud agent**, opened on use and
+  reopened after a drop (the open conversations subscribe again and send a fresh snapshot). A cloud agent's catalog
+  entry has `cloud`; `sessions.*` for it go to `CloudAgentView`, which keeps the cloud's snapshot in step. Runs,
+  conversations and definition edits are forwarded; the rest (Run now, pause, approvals, Inbox, trace) says it
+  isn't available in the cloud yet.
+- **Decided while building:** the gateway with one socket for everything (§8) waits for K3, where the phone needs it;
+  for the Mac's engine, one socket per agent is simpler and enough.
+
+**Not in K1 (next)**
+- Run now, pause and resume, approvals and the Inbox, budgets and spend for cloud agents; automations you add on the
+  Mac for a cloud agent (they'd fail to run: make them by asking the agent).
+- Connect by Cloudflare API token, with the app deploying the bundled Worker (13 §5.2's setup). Today the Worker is
+  deployed with `scripts/deploy.ts` and connected by address and token.
+- The definition the cloud agent changes itself (its interview, a Telegram pairing) shows on the Mac only when it moves
+  back; an edit on the Mac in between replaces it.
+- Attachments in a cloud agent's chat.

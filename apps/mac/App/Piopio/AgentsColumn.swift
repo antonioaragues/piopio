@@ -106,6 +106,8 @@ struct AgentsColumn: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(a.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        // In your cloud (docs/spec/30 §7): a glyph, not a chip.
+                        if a.agent?.location == "cloud" { Image(systemName: "cloud").font(.system(size: 10.5)).foregroundStyle(Color.dsFg2).help("In your cloud: keeps going with your Mac off") }
                         Spacer(minLength: 4)
                         Text(Self.time(previews[a.ref.id]?.at ?? a.updatedAt)).font(.system(size: 11)).foregroundStyle(Color.dsFg3).monospacedDigit()
                     }

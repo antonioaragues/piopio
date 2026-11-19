@@ -50,7 +50,10 @@ import type { Automations } from "./automations/service.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
 import { migrateChat } from "./migrate-chats.js";
-import type { SessionEvent } from "@piopio/protocol";
+import type { CloudMemory, SessionEvent } from "@piopio/protocol";
+import { CloudAgentView, type CloudLink } from "./cloud.js";
+import type { SecretBroker } from "./secrets.js";
+import { TelegramChannels as TelegramSecrets } from "./channels/manager.js";
 
 type CatalogEntry = SessionSummary & {
 	thinking?: string;
@@ -71,6 +74,11 @@ type CatalogEntry = SessionSummary & {
 	planMode?: boolean;
 	/** Agents: the definition folder. */
 	agentFolder?: string;
+	/**
+	 * Agents in your cloud (docs/spec/30 K1): when it went up, and its automations that need this Mac (a folder, an
+	 * email, a URL), kept here off until it comes back.
+	 */
+	cloud?: { deployedAt: string; parked?: Automation[] };
 	/** A side conversation (docs/spec/24): its brief while queued, and who drove its last turn (a turn you drove doesn't wake its parent). */
 	sideBrief?: string;
 	sideBy?: "parent" | "you";
@@ -159,6 +167,11 @@ export class Sessions {
 	onAutomationsMigrated?: (lines: string[]) => void;
 	/** The engine's log, set by the engine. */
 	log: (line: string) => void = () => {};
+	/** Your cloud (docs/spec/30 K1) and the Keychain, set by the engine. */
+	cloud?: CloudLink;
+	secrets?: SecretBroker;
+	/** A cloud agent's open conversations, by `<agent>|<conversation>`. */
+	private cloudViews = new Map<string, Promise<CloudAgentView>>();
 
 	constructor(
 		private readonly paths: EnginePaths,
@@ -506,6 +519,7 @@ export class Sessions {
 	}
 
 	async runtime(ref: ContainerRef): Promise<Runtime> {
+		if (ref.kind === "agent" && this.entries.get(ref.id)?.cloud) return this.cloudView(ref);
 		let view: Runtime | undefined;
 		if (ref.kind === "agent" && ref.conversationId?.startsWith("run:")) view = await (await this.agent(ref)).runView(ref.conversationId.slice(4));
 		else if (ref.kind === "agent" && ref.conversationId?.startsWith("agent:")) view = await (await this.agent(ref)).peerView(ref.conversationId.slice(6));
@@ -782,6 +796,8 @@ export class Sessions {
 	// ── Agents (docs/spec/06-agents) ─────────────────────────────────────────
 
 	async agent(ref: ContainerRef): Promise<AgentRuntime> {
+		const cloud = this.entries.get(ref.id);
+		if (cloud?.cloud) throw new EngineError("INVALID", `${cloud.title} runs in your cloud, where this isn't available yet. Move it to this Mac for it.`);
 		const runtime = await this.runtime({ kind: "agent", id: ref.id });
 		if (!(runtime instanceof AgentRuntime)) throw new EngineError("INVALID", "Not an agent.");
 		return runtime;
@@ -879,6 +895,11 @@ export class Sessions {
 		entry.updatedAt = new Date().toISOString();
 		this.save();
 		this.changed(entry);
+		if (entry.cloud) {
+			// It runs in your cloud: the change goes up as data (its schedules there stay unless this one has some).
+			await this.cloudLink().call(ref.id, "agents.deploy", { ref: { kind: "agent", id: ref.id }, definition: def, instructions });
+			return { errors: [], saved };
+		}
 		if (this.open.has(ref.id)) await (await this.agent(ref)).reconfigure();
 		// Schedules, a heartbeat or webhook triggers written into the definition become its automations (docs/spec/27);
 		// opening the agent hands them over.
@@ -891,6 +912,7 @@ export class Sessions {
 	}
 
 	async agentConversations(ref: ContainerRef) {
+		if (this.entries.get(ref.id)?.cloud) return (await this.cloudLink().call(ref.id, "agents.conversations", { ref: { kind: "agent", id: ref.id } })).people;
 		const def = this.agentDefinition(ref.id).definition;
 		const runtime = await this.agent(ref);
 		const people = await runtime.people();
@@ -904,6 +926,7 @@ export class Sessions {
 
 	/** Runs, held messages and what fires next (the Runs tab). */
 	async agentRuns(ref: ContainerRef) {
+		if (this.entries.get(ref.id)?.cloud) return this.cloudLink().call(ref.id, "agents.runs", { ref: { kind: "agent", id: ref.id } });
 		const { runs, outbox, upcoming } = await (await this.agent(ref)).runs();
 		const iso = (t: number) => new Date(t).toISOString();
 		// A schedule the runtime hasn't armed yet has no next time: it comes from its cron (Home, the agent page).
@@ -1005,7 +1028,7 @@ export class Sessions {
 
 	/** Opens every agent, so their schedules, reminders and held messages run while the app is closed (06 §6). */
 	async startAgents(log: (line: string) => void): Promise<void> {
-		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent")) {
+		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent" && !e.cloud)) {
 			await this.agent(entry.ref).catch((error: unknown) => log(`Agent ${entry.title}: couldn't start: ${(error as Error).message}`));
 			await this.agentStatus(entry);
 		}
@@ -1033,6 +1056,187 @@ export class Sessions {
 					return [];
 				}
 			});
+	}
+
+	// ── Your cloud (docs/spec/30 K1) ─────────────────────────────────────────
+
+	isCloud(id: string): boolean {
+		return Boolean(this.entries.get(id)?.cloud);
+	}
+
+	private cloudLink(): CloudLink {
+		if (!this.cloud?.connected) throw new EngineError("INVALID", "No cloud is connected. Connect one in Settings › This Mac & cloud.");
+		return this.cloud;
+	}
+
+	/** A cloud agent's conversation, opened through its socket (one per conversation, shared by subscribers). */
+	private cloudView(ref: ContainerRef): Promise<CloudAgentView> {
+		const key = `${ref.id}|${ref.conversationId ?? ""}`;
+		let view = this.cloudViews.get(key);
+		if (!view) {
+			view = CloudAgentView.open(this.cloudLink().agent(ref.id), ref);
+			view.catch(() => this.cloudViews.delete(key));
+			this.cloudViews.set(key, view);
+		}
+		return view;
+	}
+
+	private async closeCloudViews(id: string): Promise<void> {
+		for (const [key, view] of [...this.cloudViews]) {
+			if (!key.startsWith(`${id}|`)) continue;
+			this.cloudViews.delete(key);
+			await (await view.catch(() => undefined))?.close();
+		}
+	}
+
+	/** Moves an agent to your cloud or back to this Mac (docs/spec/30 §3.2). What moved, in lines. */
+	async moveAgent(ref: ContainerRef, to: "cloud" | "local"): Promise<string[]> {
+		const cloud = this.cloudLink();
+		const entry = this.entry({ kind: "agent", id: ref.id });
+		if (to === "cloud") {
+			if (entry.cloud) throw new EngineError("INVALID", `${entry.title} already runs in your cloud.`);
+			return this.moveUp(entry, cloud);
+		}
+		if (!entry.cloud) throw new EngineError("INVALID", `${entry.title} already runs on this Mac.`);
+		return this.moveDown(entry, cloud);
+	}
+
+	private async moveUp(entry: CatalogEntry, cloud: CloudLink): Promise<string[]> {
+		const id = entry.ref.id;
+		const ref: ContainerRef = { kind: "agent", id };
+		const local = await this.agent(ref);
+		if (local.snapshot().state.status === "running" || (await local.runs()).runs.some((r) => r.status === "running")) throw new EngineError("BUSY", `${entry.title} is working. Move it when it's done.`);
+		const { definition, instructions } = this.agentDefinition(id);
+		const def = structuredClone(definition);
+		const lines: string[] = [];
+
+		// Its model: the cloud reaches API-key providers through OpenRouter; anything else needs this Mac.
+		const socket = cloud.agent(id);
+		const hello = await socket.hello();
+		const model = modelOf(def.models.default);
+		if (model.provider !== "openrouter") {
+			const fallback = hello.capabilities.models[0] ?? "openrouter/anthropic/claude-haiku-5.5";
+			const slash = fallback.indexOf("/");
+			const [provider, modelId] = [fallback.slice(0, slash), fallback.slice(slash + 1)];
+			def.models.default = provider === "openrouter" ? modelId : `${provider}:${modelId}`;
+			lines.push(`Its model (${model.modelId}) needs this Mac, so in the cloud it uses ${modelId}. Change it in its definition.`);
+		}
+
+		// Automations at a time go up as its schedules and reminders; the ones that watch something here stay, off.
+		const mine = this.automations?.list().filter((a) => a.runsAs === id) ?? [];
+		const schedules: NonNullable<AgentDefinition["schedules"]> = [];
+		const reminders: { id: string; prompt: string; at: number; tz?: string; deliverTo?: string; createdAt: string; by: string }[] = [];
+		const parked: Automation[] = [];
+		for (const a of mine) {
+			if (a.on === "time" && a.enabled && a.cron) schedules.push({ id: a.id.toLowerCase().replace(/[^a-z0-9_-]/g, "") || "schedule", cron: a.cron, ...(a.tz ? { tz: a.tz } : {}), prompt: a.prompt, ...(a.deliverTo ? { deliverTo: a.deliverTo } : {}) });
+			else if (a.on === "time" && a.enabled && a.at !== undefined) reminders.push({ id: a.id, prompt: a.prompt, at: a.at, ...(a.tz ? { tz: a.tz } : {}), ...(a.deliverTo ? { deliverTo: a.deliverTo } : {}), createdAt: a.createdAt, by: a.by === "you" ? "owner" : a.by });
+			else {
+				parked.push(a);
+				lines.push(a.on === "time" ? `“${a.name}” is off, so it stays on this Mac.` : `“${a.name}” watches ${a.on === "folder" ? "a folder" : a.on === "email" ? "your email" : "a URL"} on this Mac, so it stays here, off, until ${entry.title} comes back.`);
+			}
+		}
+		def.schedules = schedules;
+		if (schedules.length || reminders.length) lines.push(`Automations: ${schedules.length + reminders.length} now run in the cloud.`);
+
+		// Memory, from the built-in provider (the others aren't reachable from the cloud yet).
+		const provider = def.memory?.provider ?? "builtin";
+		const memory: CloudMemory[] = [];
+		const prefix = `${id}/`;
+		const builtin = this.host.memory.builtin;
+		if (provider === "builtin") {
+			for (const { bank } of builtin.banks().filter((b) => b.bank.startsWith(prefix))) {
+				let cursor: string | undefined;
+				do {
+					const page = await builtin.list(bank, { limit: 200, ...(cursor ? { cursor } : {}) });
+					for (const r of page.records) if (!r.endedAt) memory.push({ partition: bank.slice(prefix.length), text: r.text, kind: r.kind, createdBy: r.createdBy, at: r.at, ...(r.tags?.length ? { tags: r.tags } : {}), ...(r.pinned ? { pinned: true } : {}) });
+					cursor = page.cursor;
+				} while (cursor);
+			}
+		} else lines.push(`Its memory is in ${provider}, which the cloud can't reach yet: there it starts with none.`);
+
+		// Telegram: the cloud reads the bot by webhook; this Mac stops polling it.
+		const bot = def.channels?.telegram?.bot;
+		const token = bot?.startsWith("secret:") ? await this.secrets?.get(bot.slice("secret:".length), `Telegram for ${entry.title}`) : undefined;
+
+		const deployed = await cloud.call(id, "agents.deploy", { ref, definition: def, instructions, memory, reminders, ...(token ? { telegram: { token } } : {}) });
+		lines.push(...deployed.lines.filter((l) => !l.startsWith("Reminders:")));
+
+		// Up there now: nothing of it runs here.
+		for (const a of mine) this.automations!.remove(a.id);
+		if (provider === "builtin") for (const { bank } of builtin.banks().filter((b) => b.bank.startsWith(prefix))) builtin.wipe(bank);
+		this.open.delete(id);
+		await local.close();
+		if (def.models.default !== definition.models.default) {
+			const next = { ...structuredClone(definition), models: { ...definition.models, default: def.models.default } };
+			await this.host.files.save(entry.agentFolder!, { definition: next, instructions }, "Moved to the cloud: a model it can use there");
+			this.definitions.set(id, { definition: next, instructions });
+		}
+		entry.cloud = { deployedAt: deployed.deployedAt, ...(parked.length ? { parked } : {}) };
+		this.setAgentInfo(entry, this.agentDefinition(id).definition);
+		this.save();
+		this.changed(entry);
+		await this.telegram?.sync();
+		return [`${entry.title} runs in your cloud now: it keeps going with your Mac off.`, ...lines];
+	}
+
+	private async moveDown(entry: CatalogEntry, cloud: CloudLink): Promise<string[]> {
+		const id = entry.ref.id;
+		const ref: ContainerRef = { kind: "agent", id };
+		const exported = await cloud.call(id, "agents.export", { ref });
+		const cloudDef = exported.definition as AgentDefinition;
+		const lines: string[] = [];
+
+		// Its conversations up there are kept as text in its folder (the Mac shows the ones from before it went up).
+		const people = await this.agentConversations(ref).catch(() => []);
+		const kept: string[] = [];
+		for (const person of people.filter((p) => p.started)) {
+			const view = await this.cloudView({ ...ref, conversationId: person.conversationId }).catch(() => undefined);
+			const items = view?.snapshot().items ?? [];
+			if (!items.length) continue;
+			const file = exportTranscript(`${entry.title} with ${person.name} (cloud)`, items, "markdown", { what: "conversation", speaker: entry.title });
+			const dir = join(entry.agentFolder!, "cloud-conversations");
+			mkdirSync(dir, { recursive: true });
+			writeFileSync(join(dir, `${new Date().toISOString().slice(0, 10)} ${file.filename}`), file.content);
+			kept.push(person.name);
+		}
+		if (kept.length) lines.push(`Its conversations in the cloud (with ${kept.join(", ")}) are saved as text in its folder, under cloud-conversations.`);
+
+		// The definition as the cloud had it; its schedules and reminders become automations here again.
+		const { fromAgent } = await import("./automations/migrate.js");
+		const migrated = fromAgent({ id, name: cloudDef.name, definition: cloudDef }, { reminders: exported.reminders as never[], watches: [], runs: [] }, Date.now());
+		const next = structuredClone(cloudDef);
+		delete next.schedules;
+		delete next.heartbeat;
+		delete next.triggers;
+		if (exported.telegram && this.secrets) {
+			const name = TelegramSecrets.secretName(id);
+			await this.secrets.set(name, exported.telegram.token);
+			next.channels = { ...next.channels, telegram: { bot: `secret:${name}` } };
+		}
+		await this.host.files.save(entry.agentFolder!, { definition: next, instructions: exported.instructions }, "Moved back from the cloud");
+		this.definitions.set(id, { definition: next, instructions: exported.instructions });
+
+		const builtin = this.host.memory.builtin;
+		if ((next.memory?.provider ?? "builtin") === "builtin") {
+			for (const r of exported.memory) await builtin.retain(`${id}/${r.partition}`, { content: r.text, kind: r.kind as never, createdBy: r.createdBy, at: r.at, ...(r.tags ? { tags: r.tags } : {}), ...(r.pinned ? { pinned: true } : {}) });
+			if (exported.memory.length) lines.push(`Memory: ${exported.memory.length} ${exported.memory.length === 1 ? "record" : "records"}.`);
+		}
+		const parked = entry.cloud?.parked ?? [];
+		if (this.automations && (migrated.automations.length || parked.length)) {
+			this.automations.adopt([...migrated.automations, ...parked], []);
+			lines.push(`Automations: ${migrated.automations.length + parked.length} run on this Mac again.`);
+		}
+
+		await cloud.call(id, "agents.retire", { ref });
+		await this.closeCloudViews(id);
+		cloud.drop(id);
+		delete entry.cloud;
+		this.setAgentInfo(entry, next);
+		this.save();
+		this.changed(entry);
+		await this.agent(ref);
+		await this.telegram?.sync();
+		return [`${entry.title} runs on this Mac again: it stops while your Mac sleeps or is off.`, ...lines];
 	}
 
 	/** Changes an agent's definition in code (channels pairing), saved like an edit. */
@@ -1341,7 +1545,7 @@ export class Sessions {
 			...(def.avatar ? { avatar: def.avatar } : {}),
 			...(def.description ? { description: def.description } : {}),
 			folder: entry.agentFolder!,
-			location: "local",
+			location: entry.cloud ? "cloud" : "local",
 			model: def.models.default,
 			contacts: def.contacts.map((c) => ({ id: c.id, name: c.name, role: c.role })),
 		};

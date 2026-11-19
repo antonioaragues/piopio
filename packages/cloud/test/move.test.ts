@@ -1,0 +1,110 @@
+/**
+ * K1 (docs/spec/30 §3.2): an agent goes up from the Mac as data and comes back. Deploy stores its definition, memory
+ * and reminders and lists it in the registry; export reads all of that back; retire deletes it and stops it there.
+ */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { newDefinition } from "@piopio/runtime";
+import { convertV4MiniflareOptions, Miniflare } from "miniflare";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { WsClient } from "./client.js";
+
+const TOKEN = "move-token";
+const config = JSON.parse(readFileSync(new URL("../wrangler.json", import.meta.url), "utf8")) as { name: string; compatibility_date: string; compatibility_flags: string[] };
+
+let mf: Miniflare;
+let base: URL;
+const clients: WsClient[] = [];
+
+beforeAll(async () => {
+	mf = new Miniflare(
+		convertV4MiniflareOptions({
+			name: config.name,
+			modules: true,
+			scriptPath: fileURLToPath(new URL("../dist/index.js", import.meta.url)),
+			compatibilityDate: config.compatibility_date,
+			compatibilityFlags: config.compatibility_flags,
+			durableObjects: { AGENT: { className: "AgentDO", useSQLite: true }, REGISTRY: { className: "RegistryDO", useSQLite: true } },
+			bindings: { OWNER_TOKEN: TOKEN, PIOPIO_FAUX_MODEL: "1", PIOPIO_FAUX_TPS: "100", PIOPIO_TEST_HOOKS: "1" },
+		}),
+	);
+	base = await mf.ready;
+});
+
+afterAll(async () => {
+	for (const c of clients) c.close();
+	await mf?.dispose();
+});
+
+async function connect(agent: string): Promise<WsClient> {
+	const client = await WsClient.connect(`${base.href.replace(/^http/, "ws")}v1/ws?agent=${agent}`, TOKEN);
+	clients.push(client);
+	await client.call("engine.hello", { token: TOKEN, client: "test", protocolVersion: "1.0" });
+	return client;
+}
+
+const registry = async () => {
+	const res = await mf.dispatchFetch(`${base.href}v1/agents`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+	return ((await res.json()) as { agents: { id: string; name: string }[] }).agents;
+};
+
+describe("moving an agent between the Mac and the cloud (K1)", () => {
+	test("/v1/agents needs the owner's token", async () => {
+		expect((await mf.dispatchFetch(`${base.href}v1/agents`)).status).toBe(401);
+		expect((await mf.dispatchFetch(`${base.href}v1/agents`, { headers: { Authorization: "Bearer nope" } })).status).toBe(401);
+	});
+
+	test("deploy, export, retire", async () => {
+		const id = "agt_movetest";
+		const made = newDefinition({ id, slug: "helper", name: "Helper", owner: "Ana", model: "faux:echo", template: "personal-assistant" });
+		const c = await connect(id);
+		const ref = { kind: "agent" as const, id };
+
+		// A definition for another agent, or one that doesn't validate, is refused and nothing is stored.
+		await expect(c.call("agents.deploy", { ref, definition: { ...made.definition, id: "agt_other" }, instructions: made.instructions })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		await expect(c.call("agents.deploy", { ref, definition: { ...made.definition, contacts: "nope" }, instructions: made.instructions })).rejects.toMatchObject({ data: { code: "INVALID" } });
+
+		const at = Date.now() + 3600_000;
+		const reminder = { id: "r1", prompt: "Water the plants", at, createdAt: new Date().toISOString(), by: "owner" };
+		const passed = { ...reminder, id: "r0", at: Date.now() - 1000 };
+		const deployed = await c.call<{ deployedAt: string; lines: string[] }>("agents.deploy", {
+			ref,
+			definition: made.definition,
+			instructions: made.instructions,
+			memory: [
+				{ partition: "owner", text: "Ana lives in Bilbao", kind: "fact", createdBy: "agent", at: "2026-11-01T10:00:00.000Z", pinned: true },
+				{ partition: "owner", text: "Ana runs in the mornings", kind: "fact", createdBy: "user", at: "2026-11-02T10:00:00.000Z", tags: ["habits"] },
+			],
+			reminders: [reminder, passed],
+		});
+		expect(deployed.lines).toEqual(["Memory: 2 records.", "Reminders: 1."]);
+		expect(await registry()).toEqual([{ id, name: "Helper", avatar: "symbol:calendar", deployedAt: deployed.deployedAt }]);
+
+		const people = await c.call<{ people: { contactId: string; name: string; role: string }[] }>("agents.conversations", { ref });
+		expect(people.people.map((p) => [p.name, p.role])).toEqual([["Ana", "owner"]]);
+		const runs = await c.call<{ upcoming: { kind: string; label: string }[] }>("agents.runs", { ref });
+		expect(runs.upcoming.map((u) => u.kind)).toContain("reminder");
+
+		const exported = await c.call<{ definition: { name: string }; instructions: string; memory: { text: string; pinned?: boolean; tags?: string[] }[]; reminders: { id: string }[] }>("agents.export", { ref });
+		expect(exported.definition.name).toBe("Helper");
+		expect(exported.instructions).toBe(made.instructions);
+		expect(exported.memory).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ partition: "owner", text: "Ana lives in Bilbao", kind: "fact", pinned: true }),
+				expect.objectContaining({ partition: "owner", text: "Ana runs in the mornings", tags: ["habits"] }),
+			]),
+		);
+		expect(exported.reminders.map((r) => r.id)).toEqual(["r1"]);
+
+		await c.call("agents.retire", { ref });
+		expect(await registry()).toEqual([]);
+		await expect(c.call("agents.runs", { ref })).rejects.toThrow(/moved back to the Mac/);
+
+		// Deployed again later, it starts fresh: nothing from before the move back.
+		const again = await c.call<{ lines: string[] }>("agents.deploy", { ref, definition: made.definition, instructions: made.instructions });
+		expect(again.lines).toEqual([]);
+		const fresh = await c.call<{ memory: unknown[]; reminders: unknown[] }>("agents.export", { ref });
+		expect(fresh).toMatchObject({ memory: [], reminders: [] });
+		expect((await registry()).map((a) => a.id)).toEqual([id]);
+	});
+});

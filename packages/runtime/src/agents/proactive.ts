@@ -807,6 +807,11 @@ export class Proactivity {
 		return { reminders, watches, runs: state.runs ?? [] };
 	}
 
+	/** The reminders it set itself, as they are (moving an agent between the Mac and the cloud reads them). */
+	async reminders(): Promise<Reminder[]> {
+		return structuredClone((await this.host.read()).reminders ?? []);
+	}
+
 	/** Undo of an automation change (the host keeps them). */
 	async undoAutomation(data: { id?: string; before?: JsonObject }): Promise<void> {
 		if (!this.host.automations) throw new Error("Automations aren't available here.");

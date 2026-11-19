@@ -21,7 +21,7 @@ beforeAll(async () => {
 			scriptPath: fileURLToPath(new URL("../dist/index.js", import.meta.url)),
 			compatibilityDate: config.compatibility_date,
 			compatibilityFlags: config.compatibility_flags,
-			durableObjects: { AGENT: { className: "AgentDO", useSQLite: true } },
+			durableObjects: { AGENT: { className: "AgentDO", useSQLite: true }, REGISTRY: { className: "RegistryDO", useSQLite: true } },
 			bindings: { OWNER_TOKEN: "t", PIOPIO_FAUX_MODEL: "1", PIOPIO_FAUX_TPS: "100", PIOPIO_TEST_HOOKS: "1", PIOPIO_TEST_WAKE_MS: "1000" },
 		}),
 	);

@@ -8,15 +8,16 @@ The Cloud Engine: a Cloudflare Worker with `RegistryDO` + one `AgentDO` per agen
 
 | Path | What |
 |---|---|
-| `src/index.ts` | Worker `piopio-cloud`. `GET /v1/ws?agent=<id>` → that agent's `AgentDO`, only with the owner's token. `GET /v1/health` is the one open route. |
+| `src/index.ts` | Worker `piopio-cloud`. `GET /v1/ws?agent=<id>` → that agent's `AgentDO`, only with the owner's token. `GET /v1/agents` lists the registry (owner only). `GET /v1/health` is the one open route. |
+| `src/registry-do.ts` | (K1) `RegistryDO`, one object named `registry`: the agents deployed here. An agent adds itself on deploy and leaves on retire. |
 | `src/auth.ts` | The owner check at the Worker: `Authorization: Bearer <OWNER_TOKEN>`, compared in constant time; no `OWNER_TOKEN` → everything is refused (503). |
 | `src/agent.ts` | (S7) `AgentHost`: `AgentCore` on the harness pi opened, memory on the object's SQLite. `AgentWake`: the Lifecycle job that wakes the agent for its schedules and lets it rest in between. |
-| `src/agent-do.ts` | `AgentDO`: a plain `DurableObject` with `Lifecycle.install(this).use(PiHarness).use(WebSockets)`. JSON-RPC over the socket: `engine.hello`, `engine.status`, `sessions.subscribe` / `unsubscribe` / `submit` / `abort`, and `session.events` notifications. |
+| `src/agent-do.ts` | `AgentDO`: a plain `DurableObject` with `Lifecycle.install(this).use(PiHarness).use(WebSockets)`. JSON-RPC over the socket: `engine.hello`, `engine.status`, `sessions.subscribe` / `unsubscribe` / `submit` / `abort`, `agents.runs` / `conversations`, and `session.events` notifications. K1: `agents.deploy` / `export` / `retire` move an agent between the Mac and here (docs/spec/30 §13). |
 | `src/telegram.ts` | (5.3) The agent's bot by webhook: connect by pasting the token, pair the owner with a `/start` link, a person's message and its answer, messages the agent sends on its own. The Bot API client is `@piopio/runtime`'s, shared with the Mac. |
 | `src/models.ts` | pi-ai `Models`: OpenRouter (key from the `OPENROUTER_API_KEY` secret), or the faux echo model when `PIOPIO_FAUX_MODEL` is set. |
 | `src/timeline/` | **Copied** from `packages/engine/src/timeline/` (builder + pi-durable adapter). Should move to `packages/runtime` so both engines share one copy. |
 | `scripts/deploy.ts` | Deploy with the Cloudflare REST API and an API token (no `wrangler deploy`). |
-| `test/` | Miniflare (workerd) tests of the built bundle with the faux model, the deploy script against a fake API, and an opt-in real OpenRouter test. |
+| `test/` | Miniflare (workerd) tests of the built bundle with the faux model, the deploy script against a fake API, and an opt-in real OpenRouter test. `move.test.ts` and `engine-move.test.ts` (K1): deploy, export and retire on the object, and the real engine (from source) moving an agent up and back. |
 
 Refs on the socket are `{ kind: "agent", id: <agent id>, conversationId?: "person:<contact id>" | "run:<run id>" }`, as
 on the Mac. With no `conversationId` it's the owner's conversation (`person:owner`), the one the agent's runs write
@@ -208,9 +209,21 @@ didn't pair: the owner sent `/start <code>` by hand, and the bot now asks for th
 **Not yet:** approvals as inline buttons, `/pause` answered in the chat, photos and voice notes (R2). A bot read by the
 cloud can't also be polled by the Mac: use a new bot for the cloud agent.
 
+## Moving agents from the Mac (K1, 2026-11-19)
+
+The Mac's engine connects with the Worker's address and owner token (Settings › This Mac & cloud), then moves agents
+up and back over each agent's socket. What moves and how: [docs/spec/30 §13](../../docs/spec/30-cloud-target.md).
+
+- **Deploy:** `agents.deploy` carries the definition and instructions (validated, and for this object's id only), and
+  on a move the memory records, reminders and Telegram token. A deploy without `schedules` keeps the cloud's.
+- **Back:** `agents.export` reads it all (nothing changes); `agents.retire` then deletes the webhook, the registry entry
+  and the object's data, and leaves a marker so it refuses everything until deployed again.
+- **A Worker deployed before K1** needs a redeploy (`node scripts/deploy.ts`) for the registry: its migration `v2` adds
+  `RegistryDO`, and the engine says so if `/v1/agents` is missing.
+
 ## Open items for Phase 5
 
-- One socket per agent (`?agent=`). The app wants one `/v1/ws` for all agents: terminate it in a gateway (Worker or `RegistryDO`) that fans out to `AgentDO`s over RPC.
+- One socket per agent (`?agent=`). The phone app (30 K3) wants one `/v1/ws` for everything: terminate it in a gateway (Worker or `RegistryDO`) that fans out to `AgentDO`s over RPC. The Mac's engine keeps one per agent until then.
 - Move `src/timeline/` to `packages/runtime`, and validate `session.events` against the protocol schema in tests. The
   copy here is older than the Mac's: a message the agent sent on its own shows as a user item with
   "(… sent this message on its own …)", where the Mac shows the agent's outbound message.

@@ -841,6 +841,8 @@ private struct AgentStart: View {
     @State private var creating = false
     @State private var error: String?
     @FocusState private var focus: StartField?
+    /// Where it runs (docs/spec/30 CT1): this Mac, unless you pick your cloud (offered once one is connected).
+    @State private var inCloud = false
 
     private var draft: StartDrafts.Draft { drafts[.agent] }
     private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -868,7 +870,18 @@ private struct AgentStart: View {
                 }
                 .font(.system(size: 13)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6)
                 .help("It writes to you here, with a Mac notification. To talk on Telegram, paste a bot token from @BotFather in its chat.")
-                Text("Runs on this Mac").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.leading, 4)
+                if engine.cloudConnected {
+                    Menu {
+                        Button { inCloud = false } label: { Label("This Mac", systemImage: inCloud ? "" : "checkmark") }
+                        Button { inCloud = true } label: { Label("Cloud", systemImage: inCloud ? "checkmark" : "") }
+                    } label: {
+                        Text(inCloud ? "Runs in your cloud" : "Runs on this Mac").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                    }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().padding(.leading, 4)
+                    .help(inCloud ? "Keeps going with your Mac off. Can't open files or apps on this Mac." : "Stops while your Mac sleeps or is off.")
+                } else {
+                    Text("Runs on this Mac").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.leading, 4)
+                }
             } action: {
                 MainAction(title: "Create ⌘↩", busy: creating, enabled: canCreate, action: create)
                     .help(instructions.isEmpty && draft.template == nil ? "Create it: it asks you what it's for" : "Create the agent")
@@ -881,6 +894,7 @@ private struct AgentStart: View {
         }
         Color.clear.frame(height: 0)
             .task {
+                await engine.loadCloud()
                 templates = await engine.agentTemplates()
                 focus = name.isEmpty ? .name : .text
             }
@@ -919,6 +933,12 @@ private struct AgentStart: View {
             defer { creating = false }
             do {
                 let ref = try await engine.createAgent(name: name.isEmpty ? "New agent" : name, template: draft.template, avatar: draft.avatar.trimmingCharacters(in: .whitespaces), instructions: instructions, schedule: schedule)
+                // Made here, then sent up (it starts on this Mac either way, docs/spec/30 §3.3).
+                if inCloud && engine.cloudConnected {
+                    do { _ = try await engine.moveAgent(ref, to: "cloud") } catch {
+                        self.error = "It was made on this Mac, but couldn't move to your cloud: " + ((error as? EngineError)?.message ?? String(describing: error))
+                    }
+                }
                 UserDefaults.standard.set("Chat", forKey: "agentTab")
                 drafts.clear(.agent)
                 morph(to: .agent(ref.id), $item)

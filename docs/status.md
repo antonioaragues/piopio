@@ -1,6 +1,6 @@
 # Current status — personal alpha
 
-Updated 2026-11-15. This is a personal-use application. Implementation milestones describe available code;
+Updated 2026-11-19. This is a personal-use application. Implementation milestones describe available code;
 they do not establish that every provider, OS permission flow or production service has been validated.
 
 | Area | Implemented | Acceptance still pending |
@@ -10,7 +10,7 @@ they do not establish that every provider, OS permission flow or production serv
 | Local Agents | Definitions, conversations, memory, schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
 | Distribution | Bundled engine/Node, release scripts, background engine and update infrastructure | Developer ID/notarization/Gatekeeper validation and public distribution |
-| Cloud | Local workerd spikes with hibernation, alarms and the shared agent runtime | Production account deployment, authenticated gateway, deployment UI, channels, real billing and long runs |
+| Cloud | The Worker on a real account (owner token, a real model, alarms, Telegram by webhook); K1: Settings › This Mac & cloud connects it, agents move up and back with memory and automations, their conversations through the Mac's engine (docs/spec/30 §13) | K1 on the account (the Worker there needs a redeploy); Run now, pause, approvals and the Inbox for cloud agents; deploy from the app; chats and the phone app (K2–K3); real billing and long runs |
 
 ## Automated checks
 
@@ -73,6 +73,9 @@ Steps, pass criteria, evidence and a results table for each item: [acceptance.md
 - The browser (spec 22 W1–W2, §14–15): a WebKit view per conversation tab, in your profile, shown in the
   conversation's Browser panel. It reads freely; clicking and typing ask per site (Settings › Browser keeps the
   answers). Passwords, codes and card details are always yours. It needs the app open; agents don't have it yet.
-- Cloud and channels remain separate roadmap work. The phases and what each one still needs are in
+- Cloud agents (spec 30 K1) answer and run their time automations with the Mac off. Automations that watch a folder,
+  your email or a URL stay on the Mac, off, while the agent is up there. Run now, pause, approvals and the Inbox don't
+  reach cloud agents yet; their conversations from the cloud come back as Markdown files, not merged into the chat.
+- The rest of the cloud and the phone app remain roadmap work. The phases and what each one still needs are in
   [09-roadmap.md](spec/09-roadmap.md); what each milestone delivered, with dates, is in
   [history/milestones.md](history/milestones.md).

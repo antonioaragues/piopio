@@ -23,7 +23,7 @@ test.skipIf(!key)(
 				scriptPath: fileURLToPath(new URL("../dist/index.js", import.meta.url)),
 				compatibilityDate: config.compatibility_date,
 				compatibilityFlags: config.compatibility_flags,
-				durableObjects: { AGENT: { className: "AgentDO", useSQLite: true } },
+				durableObjects: { AGENT: { className: "AgentDO", useSQLite: true }, REGISTRY: { className: "RegistryDO", useSQLite: true } },
 				bindings: { OWNER_TOKEN: "t", OPENROUTER_API_KEY: key!, ...(process.env.PIOPIO_DEFAULT_MODEL ? { PIOPIO_DEFAULT_MODEL: process.env.PIOPIO_DEFAULT_MODEL } : {}) },
 			}),
 		);

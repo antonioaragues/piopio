@@ -120,6 +120,11 @@ struct AgentPage: View {
     @AppStorage("agentIntroSeen") private var introSeen = ""
     /// It just set itself up: its avatar animates in (design 5a-3).
     @State private var alive = false
+    /// Moving it to your cloud or back (docs/spec/30 §3.2): the question, the move under way, and what moved.
+    @State private var confirmingMove = false
+    @State private var moving = false
+    @State private var moved: [String]?
+    @State private var noCloud = false
 
     /// Chat first, Setup for later (docs/spec/21 D3, design 2a). "Activity" is gone: runs are lines in the chat.
     enum Tab: String, CaseIterable { case chat = "Chat", activity = "Activity", setup = "Setup" }
@@ -158,6 +163,40 @@ struct AgentPage: View {
             guard let id = note.object as? String else { return }
             conversation = id
             tab = .chat
+        }
+        .task { await engine.loadCloud() }
+        .confirmationDialog(inCloud ? "Move \(summary.title) to this Mac?" : "Keep \(summary.title) always on?", isPresented: $confirmingMove) {
+            Button(inCloud ? "Move to This Mac" : "Move to Cloud") { move() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(inCloud
+                ? "It stops while your Mac sleeps or is off. Its memory and automations come back; its conversations in the cloud are saved as text in its folder."
+                : "It moves to your cloud and keeps going with your Mac off: its instructions, memory, automations at a time, and Telegram. Automations that watch a folder or your email stay on this Mac, off, until it comes back.")
+        }
+        .alert(inCloud ? "In your cloud" : "On this Mac", isPresented: Binding(get: { moved != nil }, set: { if !$0 { moved = nil } })) {
+            Button("OK") { moved = nil }
+        } message: { Text((moved ?? []).joined(separator: "\n\n")) }
+        .alert("Keep it always on", isPresented: $noCloud) {
+            Button("Open Settings") { ToolChoices.openSettings("This Mac & cloud") }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("An agent in your cloud answers and runs its automations with your Mac off. Connect your cloud first, in Settings › This Mac & cloud.")
+        }
+    }
+
+    private var inCloud: Bool { summary.agent?.location == "cloud" }
+
+    private func move() {
+        moving = true
+        Task {
+            defer { moving = false }
+            do {
+                moved = try await engine.moveAgent(summary.ref, to: inCloud ? "local" : "cloud")
+                conversation = nil
+                await load()
+            } catch {
+                moved = [(error as? EngineError)?.message ?? error.localizedDescription]
+            }
         }
     }
 
@@ -245,6 +284,11 @@ struct AgentPage: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(summary.title).font(.system(size: 24, weight: .bold)).tracking(-0.5).foregroundStyle(Color.dsFg).lineLimit(1)
+                        if inCloud {
+                            Image(systemName: "cloud").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.dsFg2)
+                                .help("Cloud · keeps going with your Mac off").accessibilityLabel("In your cloud")
+                        }
+                        if moving { ProgressView().controlSize(.small) }
                         if summary.agent?.status?.paused == true {
                             Text("Paused").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6).padding(.vertical, 1).background(Color.dsChip, in: Capsule())
                         }
@@ -286,7 +330,7 @@ struct AgentPage: View {
     private var identityLine: String {
         if summary.agent?.draft == true { return AgentQuickReplies.question(engine.thread(summary.ref).document.items) ?? "Learning its job" }
         let model = engine.model(modelRef(summary.agent?.model)).map(ModelChip.short) ?? summary.agent?.model
-        return [summary.agent?.description ?? def?.description, model].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
+        return [summary.agent?.description ?? def?.description, model, inCloud ? "Cloud" : nil].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
     }
 
     private func tabButton(_ t: Tab) -> some View {
@@ -304,8 +348,14 @@ struct AgentPage: View {
     /// Run now, pause, its other conversations, Finder.
     private var moreMenu: some View {
         Menu {
-            Button("Run Now", action: runNow)
-            if let status = summary.agent?.status {
+            Button("Run Now", action: runNow).disabled(inCloud)
+            // Where it runs (docs/spec/30 §3.3): up to your cloud, always on; or back to this Mac.
+            if inCloud {
+                Button("Move to This Mac…") { confirmingMove = true }.disabled(moving)
+            } else {
+                Button("Keep It Always On…") { if engine.cloudConnected { confirmingMove = true } else { noCloud = true } }.disabled(moving || summary.agent?.draft == true)
+            }
+            if !inCloud, let status = summary.agent?.status {
                 Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
             }
             Divider()

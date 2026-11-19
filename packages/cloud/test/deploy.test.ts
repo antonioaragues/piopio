@@ -61,16 +61,25 @@ test("first deploy: upload with DO migration, secrets, workers.dev, health check
 		main_module: "index.js",
 		compatibility_date: config.compatibility_date,
 		compatibility_flags: config.compatibility_flags,
-		bindings: [{ type: "durable_object_namespace", name: "AGENT", class_name: "AgentDO" }],
+		bindings: [
+			{ type: "durable_object_namespace", name: "AGENT", class_name: "AgentDO" },
+			{ type: "durable_object_namespace", name: "REGISTRY", class_name: "RegistryDO" },
+		],
 		keep_bindings: ["secret_text"],
-		migrations: { new_tag: "v1", steps: [{ new_sqlite_classes: ["AgentDO"] }] },
+		migrations: { new_tag: "v2", steps: [{ new_sqlite_classes: ["AgentDO"] }, { new_sqlite_classes: ["RegistryDO"] }] },
 		observability: { enabled: true },
 	});
 	expect(calls[2]!.body).toEqual({ name: "OWNER_TOKEN", text: "o", type: "secret_text" });
 });
 
-test("redeploy at the same migration tag sends no migrations", async () => {
+test("a Worker from before the registry gets only its migration (K1: v1 → v2)", async () => {
 	const { calls, fetchImpl } = fakeCloudflare("v1");
+	await deploy({ api: new CloudflareApi("tok", "acc", fetchImpl), config, bundle, secrets: {}, vars: {}, fetchImpl });
+	expect((calls[1]!.body as Record<string, { text?: any }>).metadata!.text.migrations).toEqual({ old_tag: "v1", new_tag: "v2", steps: [{ new_sqlite_classes: ["RegistryDO"] }] });
+});
+
+test("redeploy at the same migration tag sends no migrations", async () => {
+	const { calls, fetchImpl } = fakeCloudflare("v2");
 	await deploy({ api: new CloudflareApi("tok", "acc", fetchImpl), config, bundle, secrets: {}, vars: { PIOPIO_DEFAULT_MODEL: "openrouter/x" }, fetchImpl });
 	const metadata = (calls[1]!.body as Record<string, { text?: any }>).metadata!.text;
 	expect(metadata.migrations).toBeUndefined();

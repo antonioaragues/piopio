@@ -1855,3 +1855,28 @@ public struct ExtraCostSummary: Decodable, Sendable {
     }
     public var scope: String; public var knownUsd: Double; public var unknownCalls, calls: Int; public var breakdown: [Breakdown]
 }
+
+// MARK: Your cloud (docs/spec/30 K1)
+
+/// Your cloud as the Mac's engine sees it: connected, reachable, and the agents its registry lists.
+public struct CloudStatus: Decodable, Sendable, Hashable {
+    public struct Agent: Decodable, Sendable, Hashable, Identifiable { public var id: String; public var name: String; public var avatar: String?; public var deployedAt: String }
+    public var connected: Bool
+    public var url: String?
+    public var reachable: Bool?
+    public var version: String?
+    public var error: String?
+    public var connectedAt: String?
+    public var agents: [Agent]
+    public init(connected: Bool, agents: [Agent]) { self.connected = connected; self.agents = agents }
+}
+public struct CloudConnectParams: Encodable, Sendable {
+    public var url: String; public var token: String
+    public init(url: String, token: String) { self.url = url; self.token = token }
+}
+/// Moves an agent to your cloud ("cloud") or back to this Mac ("local"); `lines` says what moved.
+public struct AgentMoveParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var to: String
+    public init(ref: ContainerRef, to: String) { self.ref = ref; self.to = to }
+}
+public struct AgentMoveResult: Decodable, Sendable { public var lines: [String] }

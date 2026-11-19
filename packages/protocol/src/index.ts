@@ -556,6 +556,32 @@ export type AgentInfo = Static<typeof AgentInfo>;
 
 export const DefinitionError = Type.Object({ path: Type.String(), message: Type.String() });
 
+/** A memory record on its way between the Mac and the cloud: its partition (the bank is `<agent>/<partition>`). */
+export const CloudMemory = Type.Object({
+	partition: Type.String(),
+	text: Type.String(),
+	kind: Type.String(),
+	createdBy: literals("agent", "user", "extraction"),
+	at: Type.String(),
+	tags: Type.Optional(Type.Array(Type.String())),
+	pinned: Type.Optional(Type.Boolean()),
+});
+export type CloudMemory = Static<typeof CloudMemory>;
+
+/** Your cloud as the Mac sees it (docs/spec/30 K1). */
+export const CloudStatus = Type.Object({
+	connected: Type.Boolean(),
+	url: Type.Optional(Type.String()),
+	/** It answered `/v1/health` just now (false: offline, or the token stopped working; see `error`). */
+	reachable: Type.Optional(Type.Boolean()),
+	version: Type.Optional(Type.String()),
+	error: Type.Optional(Type.String()),
+	connectedAt: Type.Optional(Type.String()),
+	/** The agents the Worker's registry lists. */
+	agents: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), deployedAt: Type.String() })),
+});
+export type CloudStatus = Static<typeof CloudStatus>;
+
 export const SessionSummary = Type.Object({
 	ref: ContainerRef,
 	title: Type.String(),
@@ -1788,6 +1814,32 @@ export const methods = {
 		params: Type.Object({ items: Type.Array(Type.Object({ agentId: Type.String(), id: Type.String() })) }),
 		result: Type.Object({}),
 	},
+	/**
+	 * Where an agent runs (docs/spec/30 §3.2, K1): up to your cloud, or back to this Mac. Its definition, instructions,
+	 * memory, time automations and reminders move; `lines` says what moved and what couldn't (events need the Mac).
+	 */
+	"agents.move": {
+		params: Type.Object({ ref: ContainerRef, to: literals("cloud", "local") }),
+		result: Type.Object({ lines: Type.Array(Type.String()) }),
+	},
+	/** The cloud engine (docs/spec/30 K1): the Mac's engine sends an agent up as data, with no Worker redeploy. */
+	"agents.deploy": {
+		params: Type.Object({ ref: ContainerRef, definition: Type.Unknown(), instructions: Type.String(), memory: Type.Optional(Type.Array(CloudMemory)), reminders: Type.Optional(Type.Array(Type.Unknown())), telegram: Type.Optional(Type.Object({ token: Type.String() })) }),
+		result: Type.Object({ deployedAt: Type.String(), lines: Type.Array(Type.String()) }),
+	},
+	/** The cloud engine: everything an agent has, to bring it back to the Mac (read only; `agents.retire` ends it there). */
+	"agents.export": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({ definition: Type.Unknown(), instructions: Type.String(), memory: Type.Array(CloudMemory), reminders: Type.Array(Type.Unknown()), telegram: Type.Optional(Type.Object({ token: Type.String() })) }),
+	},
+	/** The cloud engine: the agent stops there and its data is deleted (after `agents.export` was saved on the Mac). */
+	"agents.retire": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({}) },
+	/** Your cloud (Settings › This Mac & cloud, docs/spec/30 K1): connected or not, and what's up there. */
+	"cloud.status": { params: Type.Object({}), result: CloudStatus },
+	/** Connects to a Worker already deployed: its address and owner token (checked before anything is saved). */
+	"cloud.connect": { params: Type.Object({ url: Type.String(), token: Type.String() }), result: CloudStatus },
+	/** Forgets the cloud on this Mac. Refused while agents run there (move them back first). */
+	"cloud.disconnect": { params: Type.Object({}), result: Type.Object({}) },
 	/** The agent's memory: its provider and partitions, each a bank (06 §8). */
 	"agents.memory": {
 		params: Type.Object({ ref: ContainerRef }),

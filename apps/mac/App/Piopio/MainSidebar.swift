@@ -527,6 +527,7 @@ struct MainSidebar: View {
             HStack(spacing: 10) {
                 SidebarAvatar(id: agent.ref.id, name: agent.title, glyph: agent.agent?.avatar).frame(width: 18)
                 Text(agent.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                if agent.agent?.location == "cloud" { Image(systemName: "cloud").font(.system(size: 10)).foregroundStyle(Color.dsFg2).help("In your cloud") }
                 Spacer(minLength: 4)
                 if engine.liveStatus[agent.ref.key] == .running { SidebarDot(status: .running) }
                 // Unread (design 1a): a blue dot when it wrote to you.

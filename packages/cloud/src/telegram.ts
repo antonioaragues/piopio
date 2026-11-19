@@ -96,6 +96,19 @@ export class CloudTelegram {
 			: `Connected, from the cloud. Send /start ${code} to the bot on Telegram within an hour.`;
 	}
 
+	/** The bot's token, when one is connected (moving the agent to the Mac takes it along). */
+	async token(): Promise<string | undefined> {
+		return (await this.state())?.token;
+	}
+
+	/** Stops the webhook (the agent moved to the Mac, which reads the bot by polling) and forgets the bot here. */
+	async disconnect(): Promise<void> {
+		const s = await this.state();
+		if (!s) return;
+		await this.bot(s.token).deleteWebhook().catch(() => undefined);
+		await this.host.storage.delete(KEY);
+	}
+
 	/** Telegram's POST. Checked by its secret header, answered at once; the turn goes on after. */
 	async webhook(request: Request): Promise<Response> {
 		const state = await this.state();

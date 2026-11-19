@@ -21,7 +21,7 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 | **B · Agents and teams** | 06, 19, 20, 21, 26, 27 | 19 T0–T2; 20 P1–P4; 21 D1–D7 | 26 **C1–C4** (teams become a project's way of working and playbooks, decided 2026-11-17); 27 **A1–A3** (automations replace agents' schedules and projects' routines; built 2026-11-18, real-model trial A3 2026-11-19, 27 §11); the "not yet" lists of D2–D4 |
 | **C · Conversations** | 18, 24, 17 | 18 phases 1–3 | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the router is dropped: from Home, Piopio starts side conversations across projects, 26 CL11). Debate (16) was removed 2026-11-15 |
 | **D · Reach** (what the model can touch) | 22, 23, 12, 10 | Connectors C1; providers P0–P1; browser **W1–W2** (22 §14–15) | Browser **W3–W4**; computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); MCP Apps (D6); image generation (D11) |
-| **E · Cloud and channels** | 13, 19 T3–T4 | Spikes S4 and S7 (go); Telegram from the Mac; the Worker on a real account (2026-11-19: owner token at the door, a real model, a reminder fired by the alarm with nothing connected; packages/cloud README) | 13 **5.1–5.5**: the protocol and people over the socket, deploy from the app, Telegram by webhook, Mac Bridge, WhatsApp |
+| **E · Cloud and channels** | 13, 19 T3–T4, **30** | Spikes S4 and S7 (go); Telegram from the Mac; the Worker on a real account (2026-11-19: owner token at the door, a real model, a reminder fired by the alarm with nothing connected; Telegram by webhook; packages/cloud README); **30 K1** (2026-11-19: connect from Settings, agents move up and back, their conversations through the Mac's engine; 30 §13) | 30 **K1 on the account** and its gaps (30 §13); **K2** chats in the cloud; **K3** the iPhone app; K4–K7; channels as add-ons |
 | **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8 and 17 DP5, built 2026-11-17); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
 | **G · Memory** | 14 | M0–M3 | **M4** past chats, **M5** project lessons, **M6** Hindsight |
 | **H · Small things** | Backlog below | Most of batch 1 and 2 | Voice input (D5), a composer that keeps formatting (D7), web search visible everywhere (D12), Q2 worktree wording, Q3 context files, Q4 where things run, F1 3D |
@@ -35,17 +35,24 @@ conversations SD1–SD3 (24 §10–§11), non-blocking `task` DP4 (17 §9), the 
 GitHub PR loop G4–G8 with PR events DP5 (05 §8, as built), and C4, the real-model trial (26 §13): about $0.66, three
 fixes. The OpenRouter key expired during it.
 
+**Changed 2026-11-19:** the user decided the cloud's order (30 CT5): agents from the Mac app (K1), chats in the cloud
+(K2), then the iPhone app (K3); then capabilities, the Mac Bridge, the cloud browser and Build (K4–K7). Cloud moved
+from Later to Now.
+
 **Now**
-1. **Track A:** do the day's real work in Piopio and tick the acceptance boxes as they pass, a real PR through G6–G8
-   among them. What breaks goes ahead of new features.
+1. **Cloud K1 on the account** (30 §13, built 2026-11-19 and checked in workerd): redeploy the Worker, connect it from
+   Settings, move a real agent up and leave the Mac off for a day. Then K1's gaps: Run now, pause, approvals and the
+   Inbox for cloud agents, and connecting by Cloudflare token with the app deploying the Worker.
+2. **Track A** beside it: do the day's real work in Piopio and tick the acceptance boxes as they pass. What breaks goes
+   ahead of new features.
 
 **Next**
-2. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
+3. **Cloud K2** (chats in the cloud), then **K3** (the iPhone app; needs the Apple developer account for push).
+4. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
    reads pages and, asking per site, clicks and types in a Browser panel; the interim Playwright browser is gone.
 
 **Later** (each waits for something)
-- **Cloud 5.1–5.5 and WhatsApp:** for agents proven locally first (Track A's schedule item) and your Cloudflare
-  account.
+- **Cloud K4–K7 and WhatsApp** (30 §10): after K3.
 - **Browser W2–W3, computer use U0–U4:** after W1 shows how often reading alone is enough.
 - **Side conversations:** SD3 is built (24 §11) but untuned; its replay set comes after a week of using SD1–SD3. SD4
   (hand-off mid-task) after that.

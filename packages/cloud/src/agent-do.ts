@@ -14,11 +14,13 @@ import { Lifecycle } from "agents/lifecycle";
 import { WebSockets } from "agents/websockets";
 import { DurableObject } from "cloudflare:workers";
 import { Value } from "typebox/value";
+import { validate, type AgentDefinition, type MemoryRecord, type Reminder } from "@piopio/runtime";
 import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js";
 import { sameSecret } from "./auth.js";
 import { CloudTelegram } from "./telegram.js";
 import type { Env } from "./env.js";
 import { createCloudModels, defaultModel } from "./models.js";
+import { REGISTRY_NAME } from "./registry-do.js";
 import { TimelineBuilder } from "./timeline/builder.js";
 import { DurableViewMapper, type DurableView, type Entry } from "./timeline/pi-durable.js";
 
@@ -155,6 +157,7 @@ export class AgentDO extends DurableObject<Env> {
 	/** The agent, once pi is open and its tasks have started (after any wake). */
 	async agent(): Promise<AgentHost> {
 		this.hostReady ??= (async () => {
+			if (await this.ctx.storage.get(RETIRED_KEY)) throw new RpcError("NOT_FOUND", "This agent moved back to the Mac.");
 			await this.harness.session().busy(); // opens pi (and the agent, in the factory above)
 			await this.host!.core.start();
 			return this.host!;
@@ -182,6 +185,8 @@ export class AgentDO extends DurableObject<Env> {
 
 	/** Runs on every cold start and every wake from hibernation, after pi has opened. */
 	async onStart(): Promise<void> {
+		// Moved back to the Mac: nothing runs here until it's deployed again.
+		if (await this.ctx.storage.get(RETIRED_KEY)) return;
 		await this.agent();
 		await this.wake.rearm();
 		this.telegram.resume();
@@ -373,6 +378,20 @@ export class AgentDO extends DurableObject<Env> {
 					upcoming: o.upcoming.map((u) => ({ id: u.id, kind: u.kind, label: u.label, ...(u.next !== undefined ? { next: iso(u.next)! } : {}), ...(u.cron ? { cron: u.cron } : {}) })),
 				} satisfies Result<"agents.runs">;
 			}
+			case "agents.deploy":
+				return this.deploy(params as Params<"agents.deploy">);
+			case "agents.export":
+				return this.exportAgent(params as Params<"agents.export">);
+			case "agents.retire":
+				return this.retire(params as Params<"agents.retire">);
+			case "agents.conversations": {
+				const p = params as Params<"agents.conversations">;
+				this.ownAgent(p.ref);
+				const people = await (await this.agent()).core.people();
+				return {
+					people: this.agentDef!.definition.contacts.map((c) => ({ contactId: c.id, name: c.name, role: c.role, conversationId: `person:${c.id}`, started: people[c.id] !== undefined })),
+				} satisfies Result<"agents.conversations">;
+			}
 			case "sessions.abort": {
 				const p = params as Params<"sessions.abort">;
 				await this.harness.session((await this.target(p.ref)).session).abort();
@@ -381,6 +400,86 @@ export class AgentDO extends DurableObject<Env> {
 			default:
 				throw new RpcError("NOT_FOUND", `Unknown method ${method}`);
 		}
+	}
+
+	// ── Moving between the Mac and the cloud (docs/spec/30 §3.2, K1) ───────
+
+	/**
+	 * The Mac sends the agent up as data: its definition and instructions, and on a move its memory, reminders and
+	 * Telegram bot. The definition is checked first; nothing is stored when it doesn't validate.
+	 */
+	private async deploy(p: Params<"agents.deploy">): Promise<Result<"agents.deploy">> {
+		this.ownAgent(p.ref);
+		const definition = p.definition as AgentDefinition;
+		const errors = validate(definition);
+		if (errors.length) throw new RpcError("INVALID", `The definition doesn't validate: ${errors.map((e) => `${e.path} ${e.message}`).join("; ")}`);
+		if (definition.id !== this.agentId) throw new RpcError("INVALID", `This object is agent ${this.agentId}, not ${definition.id}.`);
+		await this.ctx.storage.delete(RETIRED_KEY);
+		const stored: StoredAgent = { definition, instructions: p.instructions };
+		await this.ctx.storage.put(AGENT_KEY, stored);
+		this.agentDef = stored;
+		const host = await this.agent();
+		await host.core.configureAll();
+		const lines: string[] = [];
+		if (p.memory?.length) {
+			for (const r of p.memory) await host.memory.retain(`${this.agentId}/${r.partition}`, { content: r.text, kind: r.kind as MemoryRecord["kind"], createdBy: r.createdBy, at: r.at, ...(r.tags ? { tags: r.tags } : {}), ...(r.pinned ? { pinned: true } : {}) });
+			lines.push(`Memory: ${p.memory.length} ${p.memory.length === 1 ? "record" : "records"}.`);
+		}
+		let reminders = 0;
+		for (const r of (p.reminders ?? []) as Reminder[]) {
+			try {
+				await host.core.proactive.restoreReminder(r);
+				reminders++;
+			} catch {
+				// its moment passed on the way
+			}
+		}
+		if (reminders) lines.push(`Reminders: ${reminders}.`);
+		if (p.telegram) lines.push(await this.telegram.connect(p.telegram.token));
+		await this.wake.rearm().catch(() => undefined);
+		const deployedAt = new Date().toISOString();
+		await this.env.REGISTRY.getByName(REGISTRY_NAME).put({ id: this.agentId, name: definition.name, ...(definition.avatar ? { avatar: definition.avatar } : {}), deployedAt });
+		return { deployedAt, lines };
+	}
+
+	/** Everything the Mac needs to run the agent again: read only, so a failed save on the Mac loses nothing here. */
+	private async exportAgent(p: Params<"agents.export">): Promise<Result<"agents.export">> {
+		this.ownAgent(p.ref);
+		const host = await this.agent();
+		const memory: Result<"agents.export">["memory"] = [];
+		const prefix = `${this.agentId}/`;
+		for (const { bank } of host.memory.banks().filter((b) => b.bank.startsWith(prefix))) {
+			let cursor: string | undefined;
+			do {
+				const page = await host.memory.list(bank, { limit: 200, ...(cursor ? { cursor } : {}) });
+				for (const r of page.records) {
+					if (r.endedAt) continue;
+					memory.push({ partition: bank.slice(prefix.length), text: r.text, kind: r.kind, createdBy: r.createdBy, at: r.at, ...(r.tags?.length ? { tags: r.tags } : {}), ...(r.pinned ? { pinned: true } : {}) });
+				}
+				cursor = page.cursor;
+			} while (cursor);
+		}
+		const token = await this.telegram.token();
+		return { definition: this.agentDef!.definition, instructions: this.agentDef!.instructions, memory, reminders: await host.core.proactive.reminders(), ...(token ? { telegram: { token } } : {}) };
+	}
+
+	/** The agent moved to the Mac: its bot's webhook stops, it leaves the registry, and its data here is deleted. */
+	private async retire(p: Params<"agents.retire">): Promise<Result<"agents.retire">> {
+		this.ownAgent(p.ref);
+		if (!(await this.ctx.storage.get(RETIRED_KEY))) await this.agent();
+		await this.telegram.disconnect();
+		await this.env.REGISTRY.getByName(REGISTRY_NAME).remove(this.agentId);
+		this.hostReady = undefined;
+		this.host = undefined;
+		for (const view of this.views.values()) await (await view.catch(() => undefined))?.close();
+		this.views.clear();
+		await this.harness.dispose();
+		for (const connection of this.webSockets.getConnections<ConnState>()) connection.setState({ authed: connection.state?.authed ?? false } satisfies ConnState);
+		await this.ctx.storage.deleteAlarm();
+		await this.ctx.storage.deleteAll();
+		await this.ctx.storage.put(RETIRED_KEY, new Date().toISOString());
+		this.agentDef = undefined;
+		return {};
 	}
 
 	// ── Subscriptions ─────────────────────────────────────────────────────
@@ -493,5 +592,7 @@ const ALARMS_KEY = "piopio:alarms";
 const ORIGIN_KEY = "piopio:origin";
 const AGENT_KEY = "piopio:agent";
 const RESTS_KEY = "piopio:rests";
+/** Set when the agent moved back to the Mac (everything else was deleted). */
+const RETIRED_KEY = "piopio:retired";
 
-const SUPPORTED = new Set<string>(["engine.hello", "engine.status", "sessions.subscribe", "sessions.unsubscribe", "sessions.submit", "sessions.abort", "agents.runs"]);
+const SUPPORTED = new Set<string>(["engine.hello", "engine.status", "sessions.subscribe", "sessions.unsubscribe", "sessions.submit", "sessions.abort", "agents.runs", "agents.conversations", "agents.deploy", "agents.export", "agents.retire"]);

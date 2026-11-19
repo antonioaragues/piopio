@@ -9,6 +9,8 @@ import { SECRET_HEADER } from "./telegram.js";
 import type { Env } from "./env.js";
 
 export { AgentDO } from "./agent-do.js";
+export { RegistryDO } from "./registry-do.js";
+import { REGISTRY_NAME } from "./registry-do.js";
 
 const AGENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -22,6 +24,14 @@ export default {
 		if (telegram) {
 			if (request.method !== "POST" || !request.headers.get(SECRET_HEADER)) return new Response("Unauthorized", { status: 401 });
 			return env.AGENT.getByName(telegram[1]!).fetch(request);
+		}
+
+		// The agents deployed here (docs/spec/30 K1), for the Mac's Settings › Cloud.
+		if (url.pathname === "/v1/agents") {
+			const refused = await ownerOnly(request, env.OWNER_TOKEN);
+			if (refused) return refused;
+			if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
+			return Response.json({ agents: await env.REGISTRY.getByName(REGISTRY_NAME).list() });
 		}
 
 		const ws = url.pathname === "/v1/ws";

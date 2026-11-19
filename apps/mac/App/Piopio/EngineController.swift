@@ -640,6 +640,39 @@ final class EngineController {
         return project
     }
 
+    // MARK: Your cloud (docs/spec/30 K1)
+
+    /// The last status read (nil until Settings or an agent's panel asks). `cloudConnected` hides cloud choices until then.
+    private(set) var cloud: CloudStatus?
+    var cloudConnected: Bool { cloud?.connected == true }
+
+    @discardableResult
+    func loadCloud() async -> CloudStatus? {
+        guard let client else { return cloud }
+        if let status = try? await client.call("cloud.status", Empty(), as: CloudStatus.self) { cloud = status }
+        return cloud
+    }
+
+    func connectCloud(url: String, token: String) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        cloud = try await client.call("cloud.connect", CloudConnectParams(url: url, token: token), as: CloudStatus.self)
+    }
+
+    func disconnectCloud() async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("cloud.disconnect", Empty(), as: Empty.self)
+        cloud = CloudStatus(connected: false, agents: [])
+    }
+
+    /// Moves an agent to the cloud or back ("cloud" / "local"); what moved, in lines.
+    func moveAgent(_ ref: ContainerRef, to place: String) async throws -> [String] {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let lines = try await client.call("agents.move", AgentMoveParams(ref: ContainerRef(kind: .agent, id: ref.id), to: place), as: AgentMoveResult.self).lines
+        try? await refreshCatalog()
+        await loadCloud()
+        return lines
+    }
+
     func prDraft(_ ref: ContainerRef) async throws -> PrDraft {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         return try await client.call("sessions.pr.draft", RefParams(ref: ref), as: PrDraft.self)

@@ -305,8 +305,143 @@ private struct ApprovalsPane: View {
 
 // MARK: This Mac & cloud
 
+/// Your cloud (docs/spec/30 §3.3, K1): connect a Worker you deployed (its address and owner token), see whether it
+/// answers and which agents run there, and disconnect once none do. Agents go up from their info panel.
+private struct CloudCard: View {
+    let engine: EngineController
+    @State private var connecting = false
+    @State private var error: String?
+    @State private var busy = false
+
+    var body: some View {
+        let cloud = engine.cloud
+        VStack(alignment: .leading, spacing: 8) {
+            ListCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "cloud.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg2)
+                        .frame(width: 34, height: 34).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text("Cloudflare").font(.system(size: 14, weight: .semibold))
+                            if cloud?.connected == true {
+                                if cloud?.reachable == true { StatusText(color: .dsFg3, text: "Connected").font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
+                                else { StatusText(color: .dsFg, text: "Can't reach it").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg) }
+                            }
+                        }
+                        Text(line(cloud)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
+                    }
+                    Spacer()
+                    if cloud?.connected == true {
+                        Button("Disconnect") { disconnect() }.buttonStyle(PillStyle(compact: true)).disabled(busy)
+                    } else {
+                        Button("Connect…") { connecting = true }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                    }
+                }
+                .padding(.horizontal, 14).frame(minHeight: 62)
+                if let cloud, cloud.connected {
+                    RowDivider(inset: 14)
+                    VStack(alignment: .leading, spacing: 6) {
+                        if cloud.agents.isEmpty {
+                            Text("No agents there yet. Open an agent's info panel and choose Keep it always on.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+                        } else {
+                            ForEach(cloud.agents) { agent in
+                                HStack(spacing: 8) {
+                                    Image(systemName: "cloud").font(.system(size: 11)).foregroundStyle(Color.dsFg2)
+                                    Text(agent.name).font(.system(size: 13))
+                                    Spacer()
+                                    Text("Up since \(Self.day(agent.deployedAt))").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                                }
+                            }
+                        }
+                        if let e = cloud.error { Text(e).font(.system(size: 12)).foregroundStyle(Color.dsWarn).fixedSize(horizontal: false, vertical: true) }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn).fixedSize(horizontal: false, vertical: true) }
+        }
+        .task(id: engine.status) { await engine.loadCloud() }
+        .sheet(isPresented: $connecting) { CloudConnectSheet(engine: engine) { connecting = false } }
+    }
+
+    private func line(_ cloud: CloudStatus?) -> String {
+        guard let cloud, cloud.connected, let url = cloud.url else { return "Agents that keep going with your Mac off, in your own Cloudflare account" }
+        let host = URL(string: url)?.host ?? url
+        return [host, cloud.version.map { "version \($0)" }].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    static func day(_ iso: String) -> String {
+        guard let date = ISODate.parse(iso) else { return iso }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func disconnect() {
+        busy = true
+        error = nil
+        Task {
+            defer { busy = false }
+            do { try await engine.disconnectCloud() } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+        }
+    }
+}
+
+/// Connect your cloud: what goes there, what it costs, and the Worker's address and owner token.
+private struct CloudConnectSheet: View {
+    let engine: EngineController
+    let done: () -> Void
+    @State private var url = ""
+    @State private var token = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Connect your cloud").font(.system(size: 15, weight: .semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                point("checkmark.circle", "Agents you put there answer and run their automations with your Mac off.")
+                point("tray.full", "Their conversations, memory and channel messages are kept in your Cloudflare account.")
+                point("creditcard", "The free plan is enough to try. For daily use, Workers Paid is $5 a month.")
+            }
+            Text("Paste the address and owner token of the Worker you deployed (packages/cloud, node scripts/deploy.ts). The token is kept in your Keychain.")
+                .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+            TextField("https://piopio-cloud.<you>.workers.dev", text: $url).textFieldStyle(.roundedBorder)
+            SecureField("Owner token", text: $token).textFieldStyle(.roundedBorder)
+            if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn).fixedSize(horizontal: false, vertical: true) }
+            HStack {
+                if busy { ProgressView().controlSize(.small) }
+                Spacer()
+                Button("Cancel", action: done).keyboardShortcut(.cancelAction)
+                Button("Connect", action: connect).keyboardShortcut(.defaultAction)
+                    .disabled(busy || url.trimmingCharacters(in: .whitespaces).isEmpty || token.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 480)
+    }
+
+    private func point(_ symbol: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 16)
+            Text(text).font(.system(size: 12.5)).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func connect() {
+        busy = true
+        error = nil
+        Task {
+            defer { busy = false }
+            do {
+                try await engine.connectCloud(url: url, token: token)
+                done()
+            } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+        }
+    }
+}
+
 /// Where agents run (design handoff g1): the local engine with its status and actions, keep running when Piopio quits,
-/// the runtime details under Details, and the cloud (Cloudflare) as coming soon.
+/// the runtime details under Details, and your cloud (docs/spec/30 K1).
 private struct EnginesPane: View {
     let engine: EngineController
     @State private var status: EngineStatusResult?
@@ -364,19 +499,7 @@ private struct EnginesPane: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             CardTitle("Cloud").padding(.top, 22)
-            ListCard {
-                HStack(spacing: 12) {
-                    Image(systemName: "cloud.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg2)
-                        .frame(width: 34, height: 34).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Cloudflare").font(.system(size: 14, weight: .semibold))
-                        Text("Runs agents 24/7 in your own account, even when your Mac sleeps").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    }
-                    Spacer()
-                    SettingsBadge("Coming soon")
-                }
-                .padding(.horizontal, 14).frame(minHeight: 62)
-            }
+            CloudCard(engine: engine)
         }
         .task(id: engine.status) {
             status = try? await engine.client?.call("engine.status", Empty(), as: EngineStatusResult.self)
