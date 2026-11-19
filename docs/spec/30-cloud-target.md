@@ -8,6 +8,9 @@ It extends 13 (Phase 5 plan) with the two goals the user set, and with what a cl
    and drives them like local ones.
 3. **They can do real things there:** your services (connectors), the web (search, fetch, a browser), a computer, and
    your Mac's apps when the Mac is on.
+4. **A Piopio app on your phone** shows the same conversations as the Mac: you read them, write in them, approve, and
+   take over a hand-off there. Telegram, WhatsApp, Slack and the rest are **add-ons**: extra ways an agent can reach
+   you or other people, not the way you use Piopio away from the Mac. (Added 2026-11-19, from the user.)
 
 It resolves roadmap Q4 ("Where things run") and picks up 05 §"Cloud build sessions", 04's "Move to cloud", 18 CF7
 (the location chip), 22 and 23 (browser and computer use) for the cloud, and 02 §5 (the Worker's topology).
@@ -23,11 +26,13 @@ It resolves roadmap Q4 ("Where things run") and picks up 05 §"Cloud build sessi
 
 ## 2. The idea in one paragraph
 
-Everything you talk to has a **place**: This Mac or Cloud. The place decides two things only: whether it keeps going
+You use Piopio from **two apps**, the Mac app and the phone app, and both show the same conversations. Everything you
+talk to has a **place**: This Mac or Cloud. The place decides two things only: whether it keeps going
 when your Mac is off, and which of your things it can reach directly. What it *can do* is the same list everywhere
 (§4), and each capability says where it really runs: on the Mac, in the cloud, or **through your Mac** (the Mac Bridge,
 §5) when it needs something only the Mac has. When a capability can't be reached right now, the agent says so and
-waits or asks, instead of the tool silently missing.
+waits or asks, instead of the tool silently missing. Channels (Telegram, WhatsApp, Slack…) are optional, per agent,
+for when you want an agent in a messaging app or reachable by other people.
 
 ## 3. Where things run
 
@@ -35,7 +40,7 @@ waits or asks, instead of the tool silently missing.
 
 | Kind | This Mac | Cloud | Default |
 |---|---|---|---|
-| **Chat** (no project) | The local engine, as today | A conversation object in your Worker; reachable from Telegram and, later, the iOS app | This Mac |
+| **Chat** (no project) | The local engine, as today | A conversation object in your Worker; reachable from the phone app | This Mac |
 | **Notebook** | As today, with its files on the Mac | Its files in R2; the organizer runs in the cloud | This Mac |
 | **Build session** | Your folder, or a separate copy (worktree) | A cloud machine (container) with the project's GitHub repo cloned; it works on a branch and ends in a PR | This Mac |
 | **Agent** | The local engine | Its own `AgentDO`, always on | **Cloud**, once your cloud is connected (§3.3) |
@@ -82,7 +87,7 @@ promises what it can't do (the `watch` fix of 2026-11-19 is the first case of th
 | **Code, files, scripts** | The project folder, the shell | **A cloud machine** (container) on demand, with a workspace in R2 | §4.3 |
 | **Mac apps** (Calendar, Reminders, Mail, Notes, Shortcuts) | Yes | **Through your Mac**, when it's on | §5 |
 | **Computer use** (23) | One granted app, attended | **Through your Mac**, attended only | §4.4 |
-| **Channels** | Telegram by polling | Telegram and WhatsApp by webhook | 13 §5.3, §5.5 |
+| **Channels** (add-ons) | Telegram by polling | Telegram, WhatsApp, Slack… by webhook | Optional per agent; 13 §5.3, §5.5 |
 | **Other agents** (`ask_agent`) | Yes | Yes, between objects; a cloud agent asks a Mac agent through the Mac | 13 §5.4 |
 
 ### 4.1 Your services: connectors in the cloud
@@ -94,7 +99,8 @@ promises what it can't do (the `watch` fix of 2026-11-19 is the first case of th
 - **What's offered:** remote MCP servers (most services: Google, Notion, Linear, GitHub, Slack…) and the custom ones
   you add by URL. Local MCP servers (a process on the Mac) and Apple apps are reached through the Mac (§5).
 - **Rules stay the same:** reading never asks; changing, sending and deleting ask, by the connector's marks (12 §4).
-  From the cloud, the ask goes to the app's Needs you **and** to Telegram as buttons; the first answer wins.
+  From the cloud, the ask goes to Needs you in both apps (a notification on the phone), and to a channel as buttons
+  only if the agent has one and you asked for it there; the first answer wins.
 - **Plumbing:** the Agents SDK's MCP client (`addMcpServer`, OAuth with `authenticating` → `authUrl`), or pi-mcp in
   workerd if it runs there (to check). The tools reach `AgentCore` the same way pi-mcp's do on the Mac.
 
@@ -105,10 +111,10 @@ promises what it can't do (the `watch` fix of 2026-11-19 is the first case of th
   depend on where it runs.
 - **Sign-ins and payments are hand-offs,** as on the Mac (22 §4.3): the agent stops and asks you to take over. In the
   cloud you take over in **Live View**, Browser Run's real-time view of the session, opened from the app (a pane like
-  the Mac browser's), from Needs you, or from a Telegram button on your phone. The agent resumes when you hand back
+  the Mac browser's), from Needs you, or from the phone app, where Live View opens full screen. The agent resumes when you hand back
   (Browser Run's structured hand-off).
 - **Profiles:** one per agent, so a site you signed in to stays signed in for that agent. Whether Browser Run keeps
-  cookies across sessions, and for how long, is not verified (§10); if it doesn't, the profile's cookies are saved
+  cookies across sessions, and for how long, is not verified (§12); if it doesn't, the profile's cookies are saved
   in the agent's storage, encrypted, and restored at the start of a session.
 - **Levels per site** (22 §4.4) are decided by the engine, so they're the same in the cloud.
 - **Cost:** browser hours. Workers Paid includes 10 hours a month, then about $0.09 an hour (third-party figure, to
@@ -142,7 +148,8 @@ The link that lets cloud work use what only your Mac has.
   WebSocket to the Worker (no port opened on the Mac). The Worker routes `app.tool` requests from cloud objects to it,
   the same reverse requests the Mac's own agents use (03 §3.12, 22 §8).
 - **What goes through it:** Mac apps (Calendar, Reminders, Mail, Notes, Shortcuts), local MCP servers, files on the
-  Mac you've granted, computer use, and asking a Mac agent.
+  Mac you've granted, computer use, asking a Mac agent, and the phone app's requests for conversations that live on
+  the Mac (§6).
 - **When the Mac is off or asleep:** those tools stay listed with `needs your Mac`. A call returns at once with that,
   and the agent says so ("I'll add it to your calendar when your Mac is back on"), parks the step, and it runs on
   reconnect, or asks you. Nothing is queued silently for more than a day.
@@ -150,7 +157,29 @@ The link that lets cloud work use what only your Mac has.
   connect). The grants are the Mac's: a cloud agent gets Calendar only if that agent has Calendar on.
 - **Status:** Settings › Cloud and the sidebar footer (`This Mac · reachable from the cloud`).
 
-## 6. What you see
+## 6. The Piopio app on your phone
+
+The second client, not a channel. It shows what the Mac app shows, sized for a phone.
+
+- **What's in it:** Home (what needs you, what's running), your agents, chats, notebooks and projects' sessions, each
+  conversation as on the Mac: the transcript, processing lines, visuals, approvals in the composer tray.
+- **What it can reach:**
+  - **Cloud items, always.** The phone talks to your Worker's gateway directly, so they're live with the Mac off.
+  - **Mac items, while the Mac is on,** through the Mac Bridge (§5): the gateway relays the phone's requests to the
+    Mac's engine. With the Mac off they show their last state, read-only, with `On your Mac · off`, and "Move to cloud"
+    is offered for a chat (it moves when the Mac is back) or "Continue in cloud" for a Build session with a branch.
+- **What you do there:** write, start a new chat (in the cloud by default from the phone), approve or deny, answer an
+  agent's question, take over a hand-off (Live View full screen), stop a run, read a diff and merge a PR.
+- **Notifications:** what needs you and what an agent sends you on its own arrive as push notifications, sent by the
+  Worker through Apple's push service. An approval can be answered from the notification itself.
+- **Sign-in:** pair the phone from the Mac (Settings › Cloud › Add a phone shows a QR code). The phone gets its own
+  device token, which you can revoke; the owner token never leaves the Mac.
+- **Built with:** SwiftUI, sharing the Mac app's models, protocol client and transcript views; the Engine Protocol over
+  the same gateway socket.
+- **Without a cloud:** the phone app needs one (it's the always-on part); before you connect it, it says what it's
+  for and how to connect from the Mac.
+
+## 7. What you see
 
 - **Badges, not colors:** a small `cloud` glyph in `fg2` next to cloud agents and conversations in the sidebar
   (grey's "no decoration" holds: no chips). Toolbar subtitle: `Cloud · keeps going with your Mac off`.
@@ -160,16 +189,21 @@ The link that lets cloud work use what only your Mac has.
   `needs your Mac` while the Mac is away.
 - **Settings › Cloud:** the account and Worker, the Mac Bridge's state, usage this month (requests, duration, browser
   hours, machine time, models), the agents and conversations up there, Disconnect.
-- **Needs you:** approvals and hand-offs from the cloud, with where they come from. Each also goes to Telegram.
-- **Telegram:** approvals as buttons (Approve / Deny), a hand-off as a button that opens Live View on the phone.
+- **Needs you:** approvals and hand-offs from the cloud, with where they come from, in both apps.
+- **Channels, when an agent has one:** approvals as buttons (Approve / Deny) there too, if you choose; never instead
+  of the app.
 
-## 7. Under the hood
+## 8. Under the hood
 
-- **One socket for the app:** `GET /v1/ws` goes to a gateway (the Worker plus `RegistryDO`) that fans out to objects
+- **One socket per app:** `GET /v1/ws` goes to a gateway (the Worker plus `RegistryDO`) that fans out to objects
   over RPC (13's open item), instead of one socket per agent.
 - **CloudLink in the local engine:** the app keeps talking to its local engine only; the engine relays `sessions.*`
   for cloud refs (`location: "cloud"` on the ref) to the gateway, and merges the lists. The app needs no second
   connection, and works offline with the cloud's items marked unreachable.
+- **The phone app** connects to the gateway directly with its device token. Requests for Mac items are relayed over the
+  Mac Bridge; the gateway knows which items live where from the registry.
+- **Push:** an APNs key (from your Apple developer account) is a Worker secret; the registry keeps each phone's push
+  token. Notifications carry a title and a short line, not the conversation.
 - **Objects:**
   - `RegistryDO`: agents and their definition versions, cloud conversations, routing (bots, numbers), connector
     tokens and channel credentials (encrypted), deploy history, the Mac Bridge's connection.
@@ -182,48 +216,55 @@ The link that lets cloud work use what only your Mac has.
   host serves; `AgentCore` offers a tool only where it can run or reach it, and marks bridge tools `needs your Mac`
   when the bridge is down.
 
-## 8. Security and data
+## 9. Security and data
 
 - **Your account, your data:** everything in the cloud is in your Cloudflare account. Model calls go from Cloudflare
   to the provider, as they go from the Mac today.
-- **Doors:** the owner token for the app and the Mac Bridge; channel webhooks by their own secrets; OAuth callbacks by
+- **Doors:** the owner token for the Mac app and the Mac Bridge; a revocable device token per phone; channel webhooks by their own secrets; OAuth callbacks by
   state; nothing else open (as built).
 - **Secrets:** Worker secrets for `OWNER_TOKEN`, `MASTER_KEY` and model keys; connector and channel tokens encrypted
   with `MASTER_KEY` in the registry, never in transcripts (the Telegram token interception is the pattern).
 - **What pages and tool results say is data** (22 §4.5): the same rule and prompt in the cloud.
 - **Leaving:** Disconnect offers "Bring everything back to this Mac" before deleting the Worker's data.
 
-## 9. Phases
+## 10. Phases
 
 | Phase | What | Shows it works |
 |---|---|---|
 | **K0** · done | One agent in a Durable Object, Telegram by webhook, reminders with the Mac off | `trial` on the account |
-| **K1** · agents from the app | Settings › Cloud connect and deploy (13 5.2), `RegistryDO`, the gateway, CloudLink, badges; new agents in the cloud; Move to cloud / this Mac | An agent made in the app answers on Telegram with the Mac off, and its chat shows in the app |
-| **K2** · capabilities anywhere | Web search and fetch, remote connectors with OAuth from the Worker, approvals as Telegram buttons, tools with `where` | "What's on my calendar tomorrow?" on Telegram, answered from Google Calendar, with the Mac off |
-| **K3** · the Mac Bridge | The outbound socket, Mac apps and local MCP through it, `needs your Mac` | A cloud agent adds an Apple Reminder while the Mac is on, and says it will when it's off |
-| **K4** · chats in the cloud | `ConversationDO`, the location chip for chats and notebooks, Move to cloud | A chat started on the Mac continues from Telegram with the Mac off |
-| **K5** · the cloud browser | Browser Run, the same `browser_*` tools, Live View hand-offs (app and phone), profiles | An agent checks an order on a site you signed in to from your phone |
+| **K1** · agents from the Mac app | Settings › Cloud connect and deploy (13 5.2), `RegistryDO`, the gateway, CloudLink, badges; new agents in the cloud; Move to cloud / this Mac | An agent made in the app runs its automations with the Mac off, and its conversation shows in the Mac app |
+| **K2** · the phone app | Pairing, device tokens, the conversation list and transcript, the composer and its tray (approvals, questions), push notifications | With the Mac off, you write to a cloud agent from the phone, it answers, and its reminder arrives as a notification |
+| **K2b** · capabilities anywhere | Web search and fetch, remote connectors with OAuth from the Worker, tools with `where` | "What's on my calendar tomorrow?" from the phone, answered from Google Calendar, with the Mac off |
+| **K3** · the Mac Bridge | The outbound socket, Mac apps and local MCP through it, `needs your Mac`; the phone sees Mac items through it | A cloud agent adds an Apple Reminder while the Mac is on, and says it will when it's off; the phone opens a Mac chat |
+| **K4** · chats in the cloud | `ConversationDO`, the location chip for chats and notebooks, Move to cloud | A chat started on the Mac continues from the phone with the Mac off |
+| **K5** · the cloud browser | Browser Run, the same `browser_*` tools, Live View hand-offs (Mac app and phone app), profiles | An agent checks an order on a site you signed in to from your phone |
 | **K6** · Build in the cloud | Containers, clone, branch, PR; Continue in cloud / here | A Build session started at the Mac finishes in the cloud and opens a PR |
-| **Later** | A cloud desktop; the iOS app over the same gateway; WhatsApp (13 5.5) | |
+| **Channels** (add-ons, any time after K1) | Telegram's approval buttons and `/pause`; WhatsApp (13 5.5); Slack; email | An agent other people write to on WhatsApp or Slack |
+| **Later** | A cloud desktop; a web app over the same gateway | |
 
-K1 and K2 are what make "agents run in the cloud" true. K4 and K6 make "choose where a session runs" true.
+K1 makes "agents run in the cloud" true and K2 makes it usable away from the Mac; K4 and K6 make "choose where a
+session runs" true. Channels are independent of the rest.
 
-## 10. Questions for you
+## 11. Questions for you
 
 1. **New agents in the cloud by default once it's connected** (§3.3)? Or ask at creation each time?
 2. **Connector sign-ins:** a separate sign-in for the cloud (proposed, nothing leaves the Keychain), or copy the Mac's
    tokens up once?
 3. **Build in the cloud needs GitHub** (a remote to clone and a branch to push). Fine as a requirement?
 4. **Computer use only through your Mac** (§4.4), with a cloud desktop in Later?
-5. **The order of the phases:** K1 → K2 → K3 → K4 → K5 → K6 as proposed, or chats in the cloud (K4) earlier?
+5. **The order of the phases:** K1 → K2 (phone app) → K2b → K3 → K4 → K5 → K6 as proposed, or chats in the cloud (K4)
+   before the phone app, so the phone has more to show from day one?
+6. **The phone app is iPhone only** (SwiftUI, shared with the Mac), with a web app in Later? Push notifications need
+   an Apple developer account ($99 a year) and its APNs key.
 
-## 11. Not verified
+## 12. Not verified
 
 - Whether Browser Run keeps cookies across sessions, and its current paid limits (sources disagree).
 - Containers' current instance sizes and rates (sources disagree); the Sandbox SDK 1.0's git API (it changed).
 - Whether pi-mcp's client runs in workerd, or the Agents SDK's MCP client is needed.
 - pi-coding-agent inside a container, driven from a Durable Object, with its events relayed.
 - What resting saves on Durable Object billing (13's open item).
+- How much of the Mac app's SwiftUI (transcript, composer, models) builds for iOS as is.
 
 Sources (read 2026-11-19): [Browser Run changelog](https://developers.cloudflare.com/changelog/product/browser-run/),
 [Live View](https://developers.cloudflare.com/browser-run/features/live-view/),

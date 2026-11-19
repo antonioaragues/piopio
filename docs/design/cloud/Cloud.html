@@ -135,8 +135,8 @@ table.cap td.m { color:var(--fg2); }
 .live { border:.5px solid var(--line); border-radius:10px; overflow:hidden; margin:8px 0 10px; }
 .live .lb { background:var(--bubble); padding:6px 10px; color:var(--fg3); font-size:12px; display:flex; gap:8px; }
 .live .lp { height:110px; display:grid; place-items:center; color:var(--fg3); background:repeating-linear-gradient(135deg, transparent 0 10px, var(--track) 10px 11px); }
-.phone { width:300px; flex:none; border-radius:34px; background:var(--tg); box-shadow:0 0 0 8px #111, 0 20px 40px rgba(0,0,0,.2); overflow:hidden; }
-.phone .ph-top { background:var(--tgb); padding:16px 16px 10px; text-align:center; border-bottom:.5px solid var(--line); }
+.phone { width:300px; flex:none; border-radius:34px; background:var(--win); box-shadow:0 0 0 8px #111, 0 20px 40px rgba(0,0,0,.2); overflow:hidden; }
+.phone .ph-top { background:var(--win); padding:16px 16px 10px; text-align:center; border-bottom:.5px solid var(--line); }
 .phone .ph-top b { display:block; }
 .phone .ph-top span { color:var(--fg3); font-size:11.5px; }
 .phone .chat { padding:14px 12px 22px; display:flex; flex-direction:column; gap:8px; min-height:440px; }
@@ -146,6 +146,24 @@ table.cap td.m { color:var(--fg2); }
 .kb div { background:rgba(255,255,255,.6); border-radius:8px; text-align:center; padding:7px; font-weight:500; color:#2b6cb0; font-size:12.5px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bub.me { background:#2b5278; color:#ececea; } :root:not([data-theme="light"]) .kb div { background:rgba(255,255,255,.08); color:#8ab4f8; } }
 :root[data-theme="dark"] .bub.me { background:#2b5278; color:#ececea; } :root[data-theme="dark"] .kb div { background:rgba(255,255,255,.08); color:#8ab4f8; }
+.pmsg-u { align-self:flex-end; max-width:82%; background:var(--bubble); border-radius:12px; padding:8px 12px; font-size:13.5px; }
+.pmsg-a { font-size:13.5px; line-height:1.55; }
+.pproc { color:var(--fg3); font-size:12px; }
+.tray { background:var(--field); border:.5px solid var(--line); border-radius:16px; margin-top:auto; overflow:hidden; }
+.tray .tq { background:var(--win); border-bottom:.5px solid var(--line); padding:10px 12px; }
+.tray .tq .h { display:flex; gap:7px; align-items:center; font-weight:600; font-size:13px; }
+.tray .tq .m { color:var(--fg2); font-size:12px; margin:4px 0 8px; }
+.tray .tq .a { display:flex; justify-content:flex-end; gap:14px; align-items:center; color:var(--fg2); font-size:12.5px; }
+.tray .tf { padding:10px 12px; color:var(--fg3); font-size:13px; }
+.plist .pr { display:flex; gap:10px; padding:9px 2px; border-bottom:.5px solid var(--line); align-items:flex-start; }
+.plist .pr .t { font-weight:500; }
+.plist .pr .l { color:var(--fg3); font-size:12px; }
+.plist .pr .w { margin-left:auto; color:var(--fg3); font-size:12px; white-space:nowrap; }
+.plist h6 { font-size:11.5px; color:var(--fg3); font-weight:500; margin:14px 0 2px; }
+.push { background:rgba(240,240,237,.92); border-radius:16px; padding:10px 12px; box-shadow:0 6px 20px rgba(0,0,0,.15); font-size:12.5px; color:#1f1f1e; margin:10px 10px 0; }
+.push .ap { display:flex; justify-content:space-between; color:#6b6b67; font-size:11px; margin-bottom:2px; }
+.push .pa { display:flex; gap:6px; margin-top:8px; }
+.push .pa span { flex:1; text-align:center; background:rgba(0,0,0,.06); border-radius:9px; padding:6px; font-weight:500; }
 .col-left { flex:1; min-width:280px; max-width:560px; }
 @media (max-width: 900px) {
   .side, .info { display:none; }
@@ -161,11 +179,11 @@ table.cap td.m { color:var(--fg2); }
 <main>
 <header class="doc">
   <h1>The cloud: where things run, and what they can do there</h1>
-  <p>A mockup for review of spec 30 (docs/spec/30-cloud-target.md), in the grey style. Five places where the cloud shows in the app. Nothing here is built.</p>
+  <p>A mockup for review of spec 30 (docs/spec/30-cloud-target.md), in the grey style. Six places where the cloud shows: five in the Mac app, and the Piopio app on the phone. Nothing here is built.</p>
   <p>Grey ink, one black action per view, blue only for links and the needs-you dot, a plain <span class="mono">cloud</span> glyph instead of badges.</p>
 </header>
 <nav class="toc">
-  <a href="#a">A · Location chip</a><a href="#b">B · Build in the cloud</a><a href="#c">C · A cloud agent</a><a href="#d">D · Settings › Cloud</a><a href="#e">E · Hand-offs and approvals</a>
+  <a href="#a">A · Location chip</a><a href="#b">B · Build in the cloud</a><a href="#c">C · A cloud agent</a><a href="#d">D · Settings › Cloud</a><a href="#e">E · Hand-offs and approvals</a><a href="#f">F · The phone app</a>
 </nav>
 
 <!-- A -->
@@ -194,7 +212,7 @@ table.cap td.m { color:var(--fg2); }
         <div class="composer">
           <div class="menu" style="bottom:46px; left:96px;">
             <div class="mi"><span>▭</span><span class="n">This Mac</span><span class="d">Can use your files and Mac apps directly. Stops when the Mac sleeps.</span></div>
-            <div class="mi on"><span>☁︎</span><span class="n">Cloud</span><span class="ck">✓</span><span class="d">Keeps going with your Mac off. Reachable from Telegram. Mac apps only while the Mac is on.</span></div>
+            <div class="mi on"><span>☁︎</span><span class="n">Cloud</span><span class="ck">✓</span><span class="d">Keeps going with your Mac off. Reachable from the Piopio app on your phone. Mac apps only while the Mac is on.</span></div>
             <div class="sep"></div>
             <div class="foot">Your Cloudflare account · piopio-cloud</div>
           </div>
@@ -265,10 +283,10 @@ table.cap td.m { color:var(--fg2); }
       <div class="tb"><span class="t">Rita</span><span class="s">Cloud · keeps going with your Mac off</span><span class="rt"><span>Run now</span><span>ⓘ</span></span></div>
       <div class="body">
         <div class="col" style="align-items:stretch">
-          <div class="proc">From Telegram · 08:02</div>
+          <div class="proc">From your iPhone · 08:02</div>
           <div class="msg-u">Did my Amazon order ship? And add “pick up parcel” to my reminders</div>
           <div class="proc"><b>Used the cloud browser</b> · amazon.es › Your orders ›</div>
-          <div class="msg-a">It shipped yesterday and arrives Thursday. I can't add the reminder yet: Reminders is on your Mac, and it's off. I'll add it when your Mac is back, or I can remind you here on Telegram instead.</div>
+          <div class="msg-a">It shipped yesterday and arrives Thursday. I can't add the reminder yet: Reminders is on your Mac, and it's off. I'll add it when your Mac is back, or I can remind you here instead.</div>
           <div class="proc">Waiting for your Mac: add “pick up parcel” to Reminders · <span style="color:var(--accent)">Remind me here instead</span></div>
           <div class="spacer"></div>
           <div class="composer"><div class="ph" style="min-height:24px">Message Rita…</div><div class="bar"><span class="x">+</span><span style="margin-left:auto" class="x">Haiku 5.5</span><span class="send" style="margin-left:0">↑</span></div></div>
@@ -284,8 +302,8 @@ table.cap td.m { color:var(--fg2); }
           <div class="can">Reminders <span class="w away">· needs your Mac</span><span class="sw"></span></div>
           <div class="can">Use my Mac's apps <span class="w away">· needs your Mac</span><span class="sw off"></span></div>
           <h5>Reaches you in</h5>
-          <div class="can">Telegram · @piopioagentbot<span class="sw"></span></div>
-          <div class="can">Piopio<span class="sw"></span></div>
+          <div class="can">Piopio · Mac and iPhone<span class="sw"></span></div>
+          <div class="can">Telegram <span class="w">· add-on</span><span class="sw off"></span></div>
           <div class="ft">
             <div>Haiku 5.5 · Cloud · $0.31 this month</div>
             <div>Browser 0.4 h this month</div>
@@ -356,7 +374,7 @@ table.cap td.m { color:var(--fg2); }
 
 <!-- E -->
 <section class="screen" id="e">
-  <div class="label"><b>E</b><h2>Hand-offs and approvals from the cloud</h2><span>Needs you on the Mac, and Telegram on the phone</span></div>
+  <div class="label"><b>E</b><h2>Hand-offs and approvals from the cloud</h2><span>Needs you on the Mac, and the Piopio app on the phone</span></div>
   <div class="pair">
     <div class="col-left">
       <div class="card">
@@ -371,21 +389,60 @@ table.cap td.m { color:var(--fg2); }
         <div class="acts"><span>Deny</span><span class="btn">Allow ⌘↩</span></div>
       </div>
       <ul class="note" style="padding-left:18px">
-        <li>The same requests go to Telegram; the first answer wins, and the other side shows "Answered on Telegram".</li>
+        <li>The same requests reach the phone app (and a notification); the first answer wins, and the other side shows "Answered on your iPhone".</li>
         <li>Take over opens Live View in a pane beside the conversation, like the Mac browser's hand-off (22 §4.3).</li>
       </ul>
     </div>
     <div class="phone">
-      <div class="ph-top"><b>Rita</b><span>bot · in the cloud</span></div>
+      <div class="ph-top"><b>Rita</b><span>☁︎ Cloud · Piopio</span></div>
       <div class="chat">
-        <div class="bub me">Did my Amazon order ship?</div>
-        <div class="bub">amazon.es wants you to sign in before I can look. Tap below, sign in, and tap Done.</div>
-        <div class="kb"><div>Sign in here</div><div>Not now</div></div>
-        <div class="bub me">Done</div>
-        <div class="bub">It shipped yesterday and arrives Thursday.</div>
-        <div class="bub">Add “Dentist · Thu 27 Nov, 10:00” to your calendar?</div>
-        <div class="kb"><div>Approve</div><div>Deny</div></div>
+        <div class="pmsg-u">Did my Amazon order ship?</div>
+        <div class="pproc">Used the cloud browser · amazon.es ›</div>
+        <div class="tray">
+          <div class="tq"><div class="h"><span class="bd"></span>Sign in to amazon.es</div><div class="m">Take over the cloud browser, sign in, then hand back. Rita won't see what you type.</div><div class="a"><span>Not now</span><span class="btn">Take over</span></div></div>
+          <div class="tf">Or tell Rita what to do instead…</div>
+        </div>
       </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li>On the phone the same tray sits in the composer; Take over opens Live View full screen.</li>
+    <li>Telegram, WhatsApp or Slack get the same buttons only if the agent has that channel and you chose to be asked there. They're add-ons, never the main way in.</li>
+  </ul>
+</section>
+<section class="screen" id="f">
+  <div class="label"><b>F</b><h2>The Piopio app on your phone</h2><span>Home with the Mac off, and a notification</span></div>
+  <div class="pair">
+    <div class="phone">
+      <div class="ph-top"><b>Piopio</b><span>Mac off · cloud on</span></div>
+      <div class="chat plist" style="gap:0">
+        <h6>Needs you</h6>
+        <div class="pr"><span class="bd" style="margin-top:6px"></span><div><div class="t">Add the dentist to your calendar?</div><div class="l">☁︎ Morning briefing · Google Calendar</div></div></div>
+        <h6>Agents</h6>
+        <div class="pr"><div><div class="t">Rita</div><div class="l">It shipped yesterday and arrives Thursday.</div></div><span class="w">☁︎ 08:03</span></div>
+        <div class="pr"><div><div class="t">Morning briefing</div><div class="l">Next run tomorrow at 8:00</div></div><span class="w">☁︎</span></div>
+        <div class="pr"><div><div class="t">Bookkeeper</div><div class="l">On your Mac · off</div></div><span class="w">▭</span></div>
+        <h6>Chats</h6>
+        <div class="pr"><div><div class="t">Trip to Lisbon</div><div class="l">Check-in opens Friday at 10:00.</div></div><span class="w">☁︎ Tue</span></div>
+        <div class="pr"><div><div class="t">Kitchen budget</div><div class="l">On your Mac · off · read only</div></div><span class="w">▭</span></div>
+        <h6>Projects</h6>
+        <div class="pr"><div><div class="t">piopio · Telegram approvals</div><div class="l">PR ready for review · 6 files</div></div><span class="w">☁︎ 1h</span></div>
+        <div style="margin-top:14px; color:var(--fg2); font-size:13px; text-align:center">New chat</div>
+      </div>
+    </div>
+    <div class="phone" style="background:linear-gradient(160deg,#c9d3dc,#e6e2da)">
+      <div style="text-align:center; padding:26px 0 8px; color:#1f1f1e"><div style="font-size:12px">Thursday 20 November</div><div style="font-size:52px; font-weight:300; line-height:1.1">8:01</div></div>
+      <div class="push"><div class="ap"><span>PIOPIO · Morning briefing</span><span>now</span></div><b>Add an event to your calendar?</b><div>Dentist · Thu 27 Nov, 10:00–10:45</div><div class="pa"><span>Deny</span><span>Allow</span></div></div>
+      <div class="push"><div class="ap"><span>PIOPIO · Rita</span><span>7:30</span></div><b>Reminder</b><div>Time to drink a glass of water.</div></div>
+      <div style="height:300px"></div>
+    </div>
+    <div class="col-left">
+      <ul class="note" style="padding-left:18px; margin-top:0">
+        <li>The phone shows everything; cloud items (☁︎) are live, Mac items (▭) are reached through the Mac while it's on, and read-only with "On your Mac · off" when it isn't.</li>
+        <li>New chats from the phone start in the cloud.</li>
+        <li>Notifications come from your Worker through Apple's push service; an approval can be answered from the notification.</li>
+        <li>Pairing: Settings › Cloud › Add a phone shows a QR code on the Mac.</li>
+      </ul>
     </div>
   </div>
 </section>
