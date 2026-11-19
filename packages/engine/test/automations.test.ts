@@ -2,6 +2,8 @@ import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
+import { Automations } from "../src/automations/service.js";
+import { nameOf } from "../src/automations/model.js";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
 import { TestClient } from "./client.js";
@@ -62,6 +64,9 @@ test("Piopio makes automations in a project by asking; a file, a URL and Run now
 		["time", "piopio", "Every Monday at 09:00", "Piopio in Market", "A conversation in Market", true],
 		["folder", "piopio", `When a file appears or changes in ${inbox}`, "Piopio in Market", "A conversation in Market", true],
 	]);
+	// The tool call carries its card, so the app draws it (A3: in a real conversation it fell back to a plain tool card).
+	const made = await until(() => client.call("sessions.open", { ref: piopio }).then((x) => x.items as { kind: string; tool?: string; details?: { type: string; automation?: { id: string } } }[]), (xs) => xs.filter((i) => i.tool === "automate" && i.details).length === 2);
+	expect(made.filter((i) => i.tool === "automate").map((i) => [i.details?.type, i.details?.automation?.id])).toEqual(set.map((a) => ["automation", a.id]));
 	// Opening one clears its "New" badge.
 	const got = (await client.call("automations.get", { id: set[0]!.id })) as { automation: A; summary: { when: string; runsOn: string } };
 	expect(got.summary).toMatchObject({ when: "Every Monday at 09:00", runsOn: "This Mac, only while it's awake" });
@@ -117,6 +122,8 @@ test("an agent makes its own automations by asking: they run as it, in a run of 
 	await expect(client.call("automations.add", { runsAs: ref.id, project: created.project.id, prompt: "File it" })).rejects.toThrow(/Only Piopio works in a project/);
 	await expect(client.call("automations.add", { runsAs: "piopio", result: "telegram", prompt: "Tell me" })).rejects.toThrow(/Piopio has no channels/);
 	await expect(client.call("automations.add", { runsAs: "piopio", when: "2020-01-01T09:00", prompt: "Too late" })).rejects.toThrow(/passed/);
+	// An email automation with no mailbox connected would never fire (A3): it says to connect one first.
+	await expect(client.call("automations.add", { runsAs: "piopio", on: "email", from: "orders@", prompt: "Pass it on" })).rejects.toThrow(/No mailbox is connected/);
 	expect(await list(client, { runsAs: ref.id })).toHaveLength(1);
 }, 60_000);
 
@@ -181,3 +188,64 @@ test("project routines from before become automations; their webhook URLs still 
 	await client.call("automations.dismissMigrationReport", {});
 	expect(((await client.call("automations.migrationReport", {})) as { report?: string }).report).toBeUndefined();
 }, 40_000);
+
+test("an agent's run that needs your OK waits, named after its automation, or is skipped; a contact's name reaches them", async () => {
+	const { client } = await start();
+	const { ref } = await client.call("agents.create", { name: "Rita", owner: "Toño", instructions: "Help Toño.", model: { provider: "faux", id: "faux-1" } });
+	const got = await client.call("agents.get", { ref });
+	const def = got.definition as Record<string, unknown> & { contacts: object[] };
+	const definition = { ...def, tools: { builtin: ["memory", "send_message"] }, contacts: [...def.contacts, { id: "lucia", name: "Lucía", role: "contact" }], policies: { requireApproval: ["send_message:to_non_owner"] } };
+	expect(await client.call("agents.save", { ref, definition, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+	// The model writes the name, as a real one did in A3; the rule and the send both find Lucía.
+	const { automation } = (await client.call("automations.add", { runsAs: ref.id, on: "webhook", name: "Café Norte orders", prompt: call("send_message", { to: "Lucía", text: "60 croissants for Friday" }) })) as { automation: A };
+
+	await client.call("automations.run", { id: automation.id });
+	const [waiting] = await until(() => runs(client, automation.id), (r) => r[0]?.status === "waiting");
+	expect(waiting!.summary).toMatch(/^Waiting for your OK: Send to Lucía/);
+	const box = (await client.call("inbox.list", {})) as { items: { kind: string; title: string; approval?: { approvalId: string; args: { to: string } } }[] };
+	const asked = box.items.find((i) => i.kind === "approval")!;
+	expect(asked).toMatchObject({ title: "Café Norte orders · needs your OK", approval: { args: { to: "lucia" } } });
+	await client.call("agents.decide", { ref, approvalId: asked.approval!.approvalId, approve: true });
+	await until(() => runs(client, automation.id), (r) => r[0]?.status === "done");
+	const sent = (await client.call("sessions.open", { ref: { ...ref, conversationId: "person:lucia" } })).items as { kind: string; parts?: { text: string }[] }[];
+	expect(sent.filter((i) => i.kind === "assistant").map((i) => i.parts?.[0]?.text)).toEqual(["60 croissants for Friday"]);
+
+	// Set to skip: the run ends skipped, says why, and keeps what it cost.
+	await client.call("automations.update", { id: automation.id, approval: "skip" });
+	await client.call("automations.run", { id: automation.id });
+	const [skipped] = await until(() => runs(client, automation.id), (r) => r.length === 2 && r[0]!.status === "skipped" && (r[0] as { costUsd?: number }).costUsd !== undefined);
+	expect(skipped!.summary).toMatch(/^Skipped: it needed your OK/);
+}, 60_000);
+
+test("a fire due when the engine starts waits for the app to unlock the keys", async () => {
+	const home = mkdtempSync(join(tmpdir(), "piopio-auto-ready-"));
+	let unlock!: () => void;
+	const fired: string[] = [];
+	const service = new Automations({
+		file: join(home, "automations.json"),
+		runsFile: join(home, "automation-runs.json"),
+		log: () => {},
+		agent: () => undefined,
+		project: () => undefined,
+		runAgent: async () => ({ runId: "r", conversationId: "c", status: "done" }),
+		runPiopio: async (a) => (fired.push(a.id), "ses_1"),
+		ready: () => new Promise<void>((resolve) => (unlock = resolve)),
+		changed: () => {},
+		watchesChanged: () => {},
+	});
+	const a = service.add({ runsAs: "piopio", when: "0 9 * * 1", prompt: "Weekly brief" }, "you");
+	a.next = Date.now() - 60_000;
+	service.start();
+	await new Promise((r) => setTimeout(r, 200));
+	expect(fired).toEqual([]);
+	unlock();
+	await until(() => fired, (f) => f.length === 1);
+	expect(fired).toEqual([a.id]);
+	service.stop();
+});
+
+test("a webhook's {{body}} isn't part of its name", () => {
+	expect(nameOf("A new order came in from the shop form: {{body}}. Tell Toño in one line.")).toBe("A new order came in from the shop form");
+	expect(nameOf("{{body}}")).toBe("Automation");
+	expect(nameOf("Write the weekly brief.")).toBe("Write the weekly brief");
+});

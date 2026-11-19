@@ -661,6 +661,69 @@
 											]
 										}
 									}
+								},
+								{
+									"type": "object",
+									"required": [
+										"type",
+										"automation"
+									],
+									"properties": {
+										"type": {
+											"type": "string",
+											"const": "automation"
+										},
+										"automation": {
+											"type": "object",
+											"required": [
+												"id",
+												"name",
+												"when",
+												"runsAs",
+												"does",
+												"tellsYou",
+												"runsOn"
+											],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"name": {
+													"type": "string"
+												},
+												"when": {
+													"type": "string",
+													"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+												},
+												"runsAs": {
+													"type": "string",
+													"description": "“Rita”, “Piopio in shop”"
+												},
+												"does": {
+													"type": "string"
+												},
+												"tellsYou": {
+													"type": "string",
+													"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+												},
+												"runsOn": {
+													"type": "string",
+													"description": "“This Mac, only while it's awake”"
+												},
+												"url": {
+													"type": "string",
+													"description": "webhook: where to POST"
+												},
+												"next": {
+													"type": "number",
+													"description": "time: the next run, epoch ms"
+												}
+											}
+										},
+										"changed": {
+											"type": "boolean"
+										}
+									}
 								}
 							]
 						},
@@ -789,6 +852,22 @@
 								},
 								"costUsd": {
 									"type": "number"
+								},
+								"automation": {
+									"type": "object",
+									"required": [
+										"id",
+										"name"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string"
+										}
+									},
+									"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 								}
 							}
 						}
@@ -1237,6 +1316,69 @@
 														]
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"automation"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "automation"
+													},
+													"automation": {
+														"type": "object",
+														"required": [
+															"id",
+															"name",
+															"when",
+															"runsAs",
+															"does",
+															"tellsYou",
+															"runsOn"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															},
+															"when": {
+																"type": "string",
+																"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+															},
+															"runsAs": {
+																"type": "string",
+																"description": "“Rita”, “Piopio in shop”"
+															},
+															"does": {
+																"type": "string"
+															},
+															"tellsYou": {
+																"type": "string",
+																"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+															},
+															"runsOn": {
+																"type": "string",
+																"description": "“This Mac, only while it's awake”"
+															},
+															"url": {
+																"type": "string",
+																"description": "webhook: where to POST"
+															},
+															"next": {
+																"type": "number",
+																"description": "time: the next run, epoch ms"
+															}
+														}
+													},
+													"changed": {
+														"type": "boolean"
+													}
+												}
 											}
 										]
 									},
@@ -1438,6 +1580,10 @@
 										{
 											"type": "string",
 											"const": "setup"
+										},
+										{
+											"type": "string",
+											"const": "automation"
 										}
 									]
 								},
@@ -1446,6 +1592,53 @@
 								},
 								"detail": {
 									"type": "string"
+								},
+								"automation": {
+									"type": "object",
+									"required": [
+										"id",
+										"name",
+										"when",
+										"runsAs",
+										"does",
+										"tellsYou",
+										"runsOn"
+									],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string"
+										},
+										"when": {
+											"type": "string",
+											"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+										},
+										"runsAs": {
+											"type": "string",
+											"description": "“Rita”, “Piopio in shop”"
+										},
+										"does": {
+											"type": "string"
+										},
+										"tellsYou": {
+											"type": "string",
+											"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+										},
+										"runsOn": {
+											"type": "string",
+											"description": "“This Mac, only while it's awake”"
+										},
+										"url": {
+											"type": "string",
+											"description": "webhook: where to POST"
+										},
+										"next": {
+											"type": "number",
+											"description": "time: the next run, epoch ms"
+										}
+									}
 								}
 							}
 						},
@@ -2632,6 +2825,69 @@
 															]
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"automation"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "automation"
+														},
+														"automation": {
+															"type": "object",
+															"required": [
+																"id",
+																"name",
+																"when",
+																"runsAs",
+																"does",
+																"tellsYou",
+																"runsOn"
+															],
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																},
+																"when": {
+																	"type": "string",
+																	"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																},
+																"runsAs": {
+																	"type": "string",
+																	"description": "“Rita”, “Piopio in shop”"
+																},
+																"does": {
+																	"type": "string"
+																},
+																"tellsYou": {
+																	"type": "string",
+																	"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																},
+																"runsOn": {
+																	"type": "string",
+																	"description": "“This Mac, only while it's awake”"
+																},
+																"url": {
+																	"type": "string",
+																	"description": "webhook: where to POST"
+																},
+																"next": {
+																	"type": "number",
+																	"description": "time: the next run, epoch ms"
+																}
+															}
+														},
+														"changed": {
+															"type": "boolean"
+														}
+													}
 												}
 											]
 										},
@@ -2760,6 +3016,22 @@
 												},
 												"costUsd": {
 													"type": "number"
+												},
+												"automation": {
+													"type": "object",
+													"required": [
+														"id",
+														"name"
+													],
+													"properties": {
+														"id": {
+															"type": "string"
+														},
+														"name": {
+															"type": "string"
+														}
+													},
+													"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 												}
 											}
 										}
@@ -3208,6 +3480,69 @@
 																		]
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"automation"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "automation"
+																	},
+																	"automation": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name",
+																			"when",
+																			"runsAs",
+																			"does",
+																			"tellsYou",
+																			"runsOn"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"when": {
+																				"type": "string",
+																				"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																			},
+																			"runsAs": {
+																				"type": "string",
+																				"description": "“Rita”, “Piopio in shop”"
+																			},
+																			"does": {
+																				"type": "string"
+																			},
+																			"tellsYou": {
+																				"type": "string",
+																				"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																			},
+																			"runsOn": {
+																				"type": "string",
+																				"description": "“This Mac, only while it's awake”"
+																			},
+																			"url": {
+																				"type": "string",
+																				"description": "webhook: where to POST"
+																			},
+																			"next": {
+																				"type": "number",
+																				"description": "time: the next run, epoch ms"
+																			}
+																		}
+																	},
+																	"changed": {
+																		"type": "boolean"
+																	}
+																}
 															}
 														]
 													},
@@ -3409,6 +3744,10 @@
 														{
 															"type": "string",
 															"const": "setup"
+														},
+														{
+															"type": "string",
+															"const": "automation"
 														}
 													]
 												},
@@ -3417,6 +3756,53 @@
 												},
 												"detail": {
 													"type": "string"
+												},
+												"automation": {
+													"type": "object",
+													"required": [
+														"id",
+														"name",
+														"when",
+														"runsAs",
+														"does",
+														"tellsYou",
+														"runsOn"
+													],
+													"properties": {
+														"id": {
+															"type": "string"
+														},
+														"name": {
+															"type": "string"
+														},
+														"when": {
+															"type": "string",
+															"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+														},
+														"runsAs": {
+															"type": "string",
+															"description": "“Rita”, “Piopio in shop”"
+														},
+														"does": {
+															"type": "string"
+														},
+														"tellsYou": {
+															"type": "string",
+															"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+														},
+														"runsOn": {
+															"type": "string",
+															"description": "“This Mac, only while it's awake”"
+														},
+														"url": {
+															"type": "string",
+															"description": "webhook: where to POST"
+														},
+														"next": {
+															"type": "number",
+															"description": "time: the next run, epoch ms"
+														}
+													}
 												}
 											}
 										},
@@ -4256,6 +4642,69 @@
 															]
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"automation"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "automation"
+														},
+														"automation": {
+															"type": "object",
+															"required": [
+																"id",
+																"name",
+																"when",
+																"runsAs",
+																"does",
+																"tellsYou",
+																"runsOn"
+															],
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																},
+																"when": {
+																	"type": "string",
+																	"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																},
+																"runsAs": {
+																	"type": "string",
+																	"description": "“Rita”, “Piopio in shop”"
+																},
+																"does": {
+																	"type": "string"
+																},
+																"tellsYou": {
+																	"type": "string",
+																	"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																},
+																"runsOn": {
+																	"type": "string",
+																	"description": "“This Mac, only while it's awake”"
+																},
+																"url": {
+																	"type": "string",
+																	"description": "webhook: where to POST"
+																},
+																"next": {
+																	"type": "number",
+																	"description": "time: the next run, epoch ms"
+																}
+															}
+														},
+														"changed": {
+															"type": "boolean"
+														}
+													}
 												}
 											]
 										},
@@ -4384,6 +4833,22 @@
 												},
 												"costUsd": {
 													"type": "number"
+												},
+												"automation": {
+													"type": "object",
+													"required": [
+														"id",
+														"name"
+													],
+													"properties": {
+														"id": {
+															"type": "string"
+														},
+														"name": {
+															"type": "string"
+														}
+													},
+													"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 												}
 											}
 										}
@@ -4832,6 +5297,69 @@
 																		]
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"automation"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "automation"
+																	},
+																	"automation": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name",
+																			"when",
+																			"runsAs",
+																			"does",
+																			"tellsYou",
+																			"runsOn"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"when": {
+																				"type": "string",
+																				"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																			},
+																			"runsAs": {
+																				"type": "string",
+																				"description": "“Rita”, “Piopio in shop”"
+																			},
+																			"does": {
+																				"type": "string"
+																			},
+																			"tellsYou": {
+																				"type": "string",
+																				"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																			},
+																			"runsOn": {
+																				"type": "string",
+																				"description": "“This Mac, only while it's awake”"
+																			},
+																			"url": {
+																				"type": "string",
+																				"description": "webhook: where to POST"
+																			},
+																			"next": {
+																				"type": "number",
+																				"description": "time: the next run, epoch ms"
+																			}
+																		}
+																	},
+																	"changed": {
+																		"type": "boolean"
+																	}
+																}
 															}
 														]
 													},
@@ -5033,6 +5561,10 @@
 														{
 															"type": "string",
 															"const": "setup"
+														},
+														{
+															"type": "string",
+															"const": "automation"
 														}
 													]
 												},
@@ -5041,6 +5573,53 @@
 												},
 												"detail": {
 													"type": "string"
+												},
+												"automation": {
+													"type": "object",
+													"required": [
+														"id",
+														"name",
+														"when",
+														"runsAs",
+														"does",
+														"tellsYou",
+														"runsOn"
+													],
+													"properties": {
+														"id": {
+															"type": "string"
+														},
+														"name": {
+															"type": "string"
+														},
+														"when": {
+															"type": "string",
+															"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+														},
+														"runsAs": {
+															"type": "string",
+															"description": "“Rita”, “Piopio in shop”"
+														},
+														"does": {
+															"type": "string"
+														},
+														"tellsYou": {
+															"type": "string",
+															"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+														},
+														"runsOn": {
+															"type": "string",
+															"description": "“This Mac, only while it's awake”"
+														},
+														"url": {
+															"type": "string",
+															"description": "webhook: where to POST"
+														},
+														"next": {
+															"type": "number",
+															"description": "time: the next run, epoch ms"
+														}
+													}
 												}
 											}
 										},
@@ -5860,6 +6439,69 @@
 															]
 														}
 													}
+												},
+												{
+													"type": "object",
+													"required": [
+														"type",
+														"automation"
+													],
+													"properties": {
+														"type": {
+															"type": "string",
+															"const": "automation"
+														},
+														"automation": {
+															"type": "object",
+															"required": [
+																"id",
+																"name",
+																"when",
+																"runsAs",
+																"does",
+																"tellsYou",
+																"runsOn"
+															],
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																},
+																"when": {
+																	"type": "string",
+																	"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																},
+																"runsAs": {
+																	"type": "string",
+																	"description": "“Rita”, “Piopio in shop”"
+																},
+																"does": {
+																	"type": "string"
+																},
+																"tellsYou": {
+																	"type": "string",
+																	"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																},
+																"runsOn": {
+																	"type": "string",
+																	"description": "“This Mac, only while it's awake”"
+																},
+																"url": {
+																	"type": "string",
+																	"description": "webhook: where to POST"
+																},
+																"next": {
+																	"type": "number",
+																	"description": "time: the next run, epoch ms"
+																}
+															}
+														},
+														"changed": {
+															"type": "boolean"
+														}
+													}
 												}
 											]
 										},
@@ -5988,6 +6630,22 @@
 												},
 												"costUsd": {
 													"type": "number"
+												},
+												"automation": {
+													"type": "object",
+													"required": [
+														"id",
+														"name"
+													],
+													"properties": {
+														"id": {
+															"type": "string"
+														},
+														"name": {
+															"type": "string"
+														}
+													},
+													"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 												}
 											}
 										}
@@ -6436,6 +7094,69 @@
 																		]
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"automation"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "automation"
+																	},
+																	"automation": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name",
+																			"when",
+																			"runsAs",
+																			"does",
+																			"tellsYou",
+																			"runsOn"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"when": {
+																				"type": "string",
+																				"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																			},
+																			"runsAs": {
+																				"type": "string",
+																				"description": "“Rita”, “Piopio in shop”"
+																			},
+																			"does": {
+																				"type": "string"
+																			},
+																			"tellsYou": {
+																				"type": "string",
+																				"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																			},
+																			"runsOn": {
+																				"type": "string",
+																				"description": "“This Mac, only while it's awake”"
+																			},
+																			"url": {
+																				"type": "string",
+																				"description": "webhook: where to POST"
+																			},
+																			"next": {
+																				"type": "number",
+																				"description": "time: the next run, epoch ms"
+																			}
+																		}
+																	},
+																	"changed": {
+																		"type": "boolean"
+																	}
+																}
 															}
 														]
 													},
@@ -6637,6 +7358,10 @@
 														{
 															"type": "string",
 															"const": "setup"
+														},
+														{
+															"type": "string",
+															"const": "automation"
 														}
 													]
 												},
@@ -6645,6 +7370,53 @@
 												},
 												"detail": {
 													"type": "string"
+												},
+												"automation": {
+													"type": "object",
+													"required": [
+														"id",
+														"name",
+														"when",
+														"runsAs",
+														"does",
+														"tellsYou",
+														"runsOn"
+													],
+													"properties": {
+														"id": {
+															"type": "string"
+														},
+														"name": {
+															"type": "string"
+														},
+														"when": {
+															"type": "string",
+															"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+														},
+														"runsAs": {
+															"type": "string",
+															"description": "“Rita”, “Piopio in shop”"
+														},
+														"does": {
+															"type": "string"
+														},
+														"tellsYou": {
+															"type": "string",
+															"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+														},
+														"runsOn": {
+															"type": "string",
+															"description": "“This Mac, only while it's awake”"
+														},
+														"url": {
+															"type": "string",
+															"description": "webhook: where to POST"
+														},
+														"next": {
+															"type": "number",
+															"description": "time: the next run, epoch ms"
+														}
+													}
 												}
 											}
 										},
@@ -7885,6 +8657,69 @@
 																		]
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"automation"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "automation"
+																	},
+																	"automation": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name",
+																			"when",
+																			"runsAs",
+																			"does",
+																			"tellsYou",
+																			"runsOn"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"when": {
+																				"type": "string",
+																				"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																			},
+																			"runsAs": {
+																				"type": "string",
+																				"description": "“Rita”, “Piopio in shop”"
+																			},
+																			"does": {
+																				"type": "string"
+																			},
+																			"tellsYou": {
+																				"type": "string",
+																				"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																			},
+																			"runsOn": {
+																				"type": "string",
+																				"description": "“This Mac, only while it's awake”"
+																			},
+																			"url": {
+																				"type": "string",
+																				"description": "webhook: where to POST"
+																			},
+																			"next": {
+																				"type": "number",
+																				"description": "time: the next run, epoch ms"
+																			}
+																		}
+																	},
+																	"changed": {
+																		"type": "boolean"
+																	}
+																}
 															}
 														]
 													},
@@ -8013,6 +8848,22 @@
 															},
 															"costUsd": {
 																"type": "number"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	}
+																},
+																"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 															}
 														}
 													}
@@ -8461,6 +9312,69 @@
 																					]
 																				}
 																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"automation"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "automation"
+																				},
+																				"automation": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name",
+																						"when",
+																						"runsAs",
+																						"does",
+																						"tellsYou",
+																						"runsOn"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						},
+																						"when": {
+																							"type": "string",
+																							"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																						},
+																						"runsAs": {
+																							"type": "string",
+																							"description": "“Rita”, “Piopio in shop”"
+																						},
+																						"does": {
+																							"type": "string"
+																						},
+																						"tellsYou": {
+																							"type": "string",
+																							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																						},
+																						"runsOn": {
+																							"type": "string",
+																							"description": "“This Mac, only while it's awake”"
+																						},
+																						"url": {
+																							"type": "string",
+																							"description": "webhook: where to POST"
+																						},
+																						"next": {
+																							"type": "number",
+																							"description": "time: the next run, epoch ms"
+																						}
+																					}
+																				},
+																				"changed": {
+																					"type": "boolean"
+																				}
+																			}
 																		}
 																	]
 																},
@@ -8662,6 +9576,10 @@
 																	{
 																		"type": "string",
 																		"const": "setup"
+																	},
+																	{
+																		"type": "string",
+																		"const": "automation"
 																	}
 																]
 															},
@@ -8670,6 +9588,53 @@
 															},
 															"detail": {
 																"type": "string"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name",
+																	"when",
+																	"runsAs",
+																	"does",
+																	"tellsYou",
+																	"runsOn"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"when": {
+																		"type": "string",
+																		"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																	},
+																	"runsAs": {
+																		"type": "string",
+																		"description": "“Rita”, “Piopio in shop”"
+																	},
+																	"does": {
+																		"type": "string"
+																	},
+																	"tellsYou": {
+																		"type": "string",
+																		"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																	},
+																	"runsOn": {
+																		"type": "string",
+																		"description": "“This Mac, only while it's awake”"
+																	},
+																	"url": {
+																		"type": "string",
+																		"description": "webhook: where to POST"
+																	},
+																	"next": {
+																		"type": "number",
+																		"description": "time: the next run, epoch ms"
+																	}
+																}
 															}
 														}
 													},
@@ -9891,6 +10856,69 @@
 														]
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"automation"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "automation"
+													},
+													"automation": {
+														"type": "object",
+														"required": [
+															"id",
+															"name",
+															"when",
+															"runsAs",
+															"does",
+															"tellsYou",
+															"runsOn"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															},
+															"when": {
+																"type": "string",
+																"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+															},
+															"runsAs": {
+																"type": "string",
+																"description": "“Rita”, “Piopio in shop”"
+															},
+															"does": {
+																"type": "string"
+															},
+															"tellsYou": {
+																"type": "string",
+																"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+															},
+															"runsOn": {
+																"type": "string",
+																"description": "“This Mac, only while it's awake”"
+															},
+															"url": {
+																"type": "string",
+																"description": "webhook: where to POST"
+															},
+															"next": {
+																"type": "number",
+																"description": "time: the next run, epoch ms"
+															}
+														}
+													},
+													"changed": {
+														"type": "boolean"
+													}
+												}
 											}
 										]
 									},
@@ -10019,6 +11047,22 @@
 											},
 											"costUsd": {
 												"type": "number"
+											},
+											"automation": {
+												"type": "object",
+												"required": [
+													"id",
+													"name"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													}
+												},
+												"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 											}
 										}
 									}
@@ -10467,6 +11511,69 @@
 																	]
 																}
 															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"automation"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "automation"
+																},
+																"automation": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"name",
+																		"when",
+																		"runsAs",
+																		"does",
+																		"tellsYou",
+																		"runsOn"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"name": {
+																			"type": "string"
+																		},
+																		"when": {
+																			"type": "string",
+																			"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																		},
+																		"runsAs": {
+																			"type": "string",
+																			"description": "“Rita”, “Piopio in shop”"
+																		},
+																		"does": {
+																			"type": "string"
+																		},
+																		"tellsYou": {
+																			"type": "string",
+																			"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																		},
+																		"runsOn": {
+																			"type": "string",
+																			"description": "“This Mac, only while it's awake”"
+																		},
+																		"url": {
+																			"type": "string",
+																			"description": "webhook: where to POST"
+																		},
+																		"next": {
+																			"type": "number",
+																			"description": "time: the next run, epoch ms"
+																		}
+																	}
+																},
+																"changed": {
+																	"type": "boolean"
+																}
+															}
 														}
 													]
 												},
@@ -10668,6 +11775,10 @@
 													{
 														"type": "string",
 														"const": "setup"
+													},
+													{
+														"type": "string",
+														"const": "automation"
 													}
 												]
 											},
@@ -10676,6 +11787,53 @@
 											},
 											"detail": {
 												"type": "string"
+											},
+											"automation": {
+												"type": "object",
+												"required": [
+													"id",
+													"name",
+													"when",
+													"runsAs",
+													"does",
+													"tellsYou",
+													"runsOn"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"when": {
+														"type": "string",
+														"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+													},
+													"runsAs": {
+														"type": "string",
+														"description": "“Rita”, “Piopio in shop”"
+													},
+													"does": {
+														"type": "string"
+													},
+													"tellsYou": {
+														"type": "string",
+														"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+													},
+													"runsOn": {
+														"type": "string",
+														"description": "“This Mac, only while it's awake”"
+													},
+													"url": {
+														"type": "string",
+														"description": "webhook: where to POST"
+													},
+													"next": {
+														"type": "number",
+														"description": "time: the next run, epoch ms"
+													}
+												}
 											}
 										}
 									},
@@ -12385,6 +13543,69 @@
 																		]
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"automation"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "automation"
+																	},
+																	"automation": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name",
+																			"when",
+																			"runsAs",
+																			"does",
+																			"tellsYou",
+																			"runsOn"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"when": {
+																				"type": "string",
+																				"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																			},
+																			"runsAs": {
+																				"type": "string",
+																				"description": "“Rita”, “Piopio in shop”"
+																			},
+																			"does": {
+																				"type": "string"
+																			},
+																			"tellsYou": {
+																				"type": "string",
+																				"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																			},
+																			"runsOn": {
+																				"type": "string",
+																				"description": "“This Mac, only while it's awake”"
+																			},
+																			"url": {
+																				"type": "string",
+																				"description": "webhook: where to POST"
+																			},
+																			"next": {
+																				"type": "number",
+																				"description": "time: the next run, epoch ms"
+																			}
+																		}
+																	},
+																	"changed": {
+																		"type": "boolean"
+																	}
+																}
 															}
 														]
 													},
@@ -12513,6 +13734,22 @@
 															},
 															"costUsd": {
 																"type": "number"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	}
+																},
+																"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 															}
 														}
 													}
@@ -12961,6 +14198,69 @@
 																					]
 																				}
 																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"automation"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "automation"
+																				},
+																				"automation": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name",
+																						"when",
+																						"runsAs",
+																						"does",
+																						"tellsYou",
+																						"runsOn"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						},
+																						"when": {
+																							"type": "string",
+																							"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																						},
+																						"runsAs": {
+																							"type": "string",
+																							"description": "“Rita”, “Piopio in shop”"
+																						},
+																						"does": {
+																							"type": "string"
+																						},
+																						"tellsYou": {
+																							"type": "string",
+																							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																						},
+																						"runsOn": {
+																							"type": "string",
+																							"description": "“This Mac, only while it's awake”"
+																						},
+																						"url": {
+																							"type": "string",
+																							"description": "webhook: where to POST"
+																						},
+																						"next": {
+																							"type": "number",
+																							"description": "time: the next run, epoch ms"
+																						}
+																					}
+																				},
+																				"changed": {
+																					"type": "boolean"
+																				}
+																			}
 																		}
 																	]
 																},
@@ -13162,6 +14462,10 @@
 																	{
 																		"type": "string",
 																		"const": "setup"
+																	},
+																	{
+																		"type": "string",
+																		"const": "automation"
 																	}
 																]
 															},
@@ -13170,6 +14474,53 @@
 															},
 															"detail": {
 																"type": "string"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name",
+																	"when",
+																	"runsAs",
+																	"does",
+																	"tellsYou",
+																	"runsOn"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"when": {
+																		"type": "string",
+																		"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																	},
+																	"runsAs": {
+																		"type": "string",
+																		"description": "“Rita”, “Piopio in shop”"
+																	},
+																	"does": {
+																		"type": "string"
+																	},
+																	"tellsYou": {
+																		"type": "string",
+																		"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																	},
+																	"runsOn": {
+																		"type": "string",
+																		"description": "“This Mac, only while it's awake”"
+																	},
+																	"url": {
+																		"type": "string",
+																		"description": "webhook: where to POST"
+																	},
+																	"next": {
+																		"type": "number",
+																		"description": "time: the next run, epoch ms"
+																	}
+																}
 															}
 														}
 													},
@@ -14009,6 +15360,69 @@
 																		]
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"automation"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "automation"
+																	},
+																	"automation": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name",
+																			"when",
+																			"runsAs",
+																			"does",
+																			"tellsYou",
+																			"runsOn"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"when": {
+																				"type": "string",
+																				"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																			},
+																			"runsAs": {
+																				"type": "string",
+																				"description": "“Rita”, “Piopio in shop”"
+																			},
+																			"does": {
+																				"type": "string"
+																			},
+																			"tellsYou": {
+																				"type": "string",
+																				"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																			},
+																			"runsOn": {
+																				"type": "string",
+																				"description": "“This Mac, only while it's awake”"
+																			},
+																			"url": {
+																				"type": "string",
+																				"description": "webhook: where to POST"
+																			},
+																			"next": {
+																				"type": "number",
+																				"description": "time: the next run, epoch ms"
+																			}
+																		}
+																	},
+																	"changed": {
+																		"type": "boolean"
+																	}
+																}
 															}
 														]
 													},
@@ -14137,6 +15551,22 @@
 															},
 															"costUsd": {
 																"type": "number"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	}
+																},
+																"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 															}
 														}
 													}
@@ -14585,6 +16015,69 @@
 																					]
 																				}
 																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"automation"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "automation"
+																				},
+																				"automation": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name",
+																						"when",
+																						"runsAs",
+																						"does",
+																						"tellsYou",
+																						"runsOn"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						},
+																						"when": {
+																							"type": "string",
+																							"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																						},
+																						"runsAs": {
+																							"type": "string",
+																							"description": "“Rita”, “Piopio in shop”"
+																						},
+																						"does": {
+																							"type": "string"
+																						},
+																						"tellsYou": {
+																							"type": "string",
+																							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																						},
+																						"runsOn": {
+																							"type": "string",
+																							"description": "“This Mac, only while it's awake”"
+																						},
+																						"url": {
+																							"type": "string",
+																							"description": "webhook: where to POST"
+																						},
+																						"next": {
+																							"type": "number",
+																							"description": "time: the next run, epoch ms"
+																						}
+																					}
+																				},
+																				"changed": {
+																					"type": "boolean"
+																				}
+																			}
 																		}
 																	]
 																},
@@ -14786,6 +16279,10 @@
 																	{
 																		"type": "string",
 																		"const": "setup"
+																	},
+																	{
+																		"type": "string",
+																		"const": "automation"
 																	}
 																]
 															},
@@ -14794,6 +16291,53 @@
 															},
 															"detail": {
 																"type": "string"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name",
+																	"when",
+																	"runsAs",
+																	"does",
+																	"tellsYou",
+																	"runsOn"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"when": {
+																		"type": "string",
+																		"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																	},
+																	"runsAs": {
+																		"type": "string",
+																		"description": "“Rita”, “Piopio in shop”"
+																	},
+																	"does": {
+																		"type": "string"
+																	},
+																	"tellsYou": {
+																		"type": "string",
+																		"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																	},
+																	"runsOn": {
+																		"type": "string",
+																		"description": "“This Mac, only while it's awake”"
+																	},
+																	"url": {
+																		"type": "string",
+																		"description": "webhook: where to POST"
+																	},
+																	"next": {
+																		"type": "number",
+																		"description": "time: the next run, epoch ms"
+																	}
+																}
 															}
 														}
 													},
@@ -15613,6 +17157,69 @@
 																		]
 																	}
 																}
+															},
+															{
+																"type": "object",
+																"required": [
+																	"type",
+																	"automation"
+																],
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"const": "automation"
+																	},
+																	"automation": {
+																		"type": "object",
+																		"required": [
+																			"id",
+																			"name",
+																			"when",
+																			"runsAs",
+																			"does",
+																			"tellsYou",
+																			"runsOn"
+																		],
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"when": {
+																				"type": "string",
+																				"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																			},
+																			"runsAs": {
+																				"type": "string",
+																				"description": "“Rita”, “Piopio in shop”"
+																			},
+																			"does": {
+																				"type": "string"
+																			},
+																			"tellsYou": {
+																				"type": "string",
+																				"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																			},
+																			"runsOn": {
+																				"type": "string",
+																				"description": "“This Mac, only while it's awake”"
+																			},
+																			"url": {
+																				"type": "string",
+																				"description": "webhook: where to POST"
+																			},
+																			"next": {
+																				"type": "number",
+																				"description": "time: the next run, epoch ms"
+																			}
+																		}
+																	},
+																	"changed": {
+																		"type": "boolean"
+																	}
+																}
 															}
 														]
 													},
@@ -15741,6 +17348,22 @@
 															},
 															"costUsd": {
 																"type": "number"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	}
+																},
+																"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 															}
 														}
 													}
@@ -16189,6 +17812,69 @@
 																					]
 																				}
 																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"automation"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "automation"
+																				},
+																				"automation": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name",
+																						"when",
+																						"runsAs",
+																						"does",
+																						"tellsYou",
+																						"runsOn"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						},
+																						"when": {
+																							"type": "string",
+																							"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																						},
+																						"runsAs": {
+																							"type": "string",
+																							"description": "“Rita”, “Piopio in shop”"
+																						},
+																						"does": {
+																							"type": "string"
+																						},
+																						"tellsYou": {
+																							"type": "string",
+																							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																						},
+																						"runsOn": {
+																							"type": "string",
+																							"description": "“This Mac, only while it's awake”"
+																						},
+																						"url": {
+																							"type": "string",
+																							"description": "webhook: where to POST"
+																						},
+																						"next": {
+																							"type": "number",
+																							"description": "time: the next run, epoch ms"
+																						}
+																					}
+																				},
+																				"changed": {
+																					"type": "boolean"
+																				}
+																			}
 																		}
 																	]
 																},
@@ -16390,6 +18076,10 @@
 																	{
 																		"type": "string",
 																		"const": "setup"
+																	},
+																	{
+																		"type": "string",
+																		"const": "automation"
 																	}
 																]
 															},
@@ -16398,6 +18088,53 @@
 															},
 															"detail": {
 																"type": "string"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name",
+																	"when",
+																	"runsAs",
+																	"does",
+																	"tellsYou",
+																	"runsOn"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"when": {
+																		"type": "string",
+																		"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																	},
+																	"runsAs": {
+																		"type": "string",
+																		"description": "“Rita”, “Piopio in shop”"
+																	},
+																	"does": {
+																		"type": "string"
+																	},
+																	"tellsYou": {
+																		"type": "string",
+																		"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																	},
+																	"runsOn": {
+																		"type": "string",
+																		"description": "“This Mac, only while it's awake”"
+																	},
+																	"url": {
+																		"type": "string",
+																		"description": "webhook: where to POST"
+																	},
+																	"next": {
+																		"type": "number",
+																		"description": "time: the next run, epoch ms"
+																	}
+																}
 															}
 														}
 													},
@@ -17638,6 +19375,69 @@
 																					]
 																				}
 																			}
+																		},
+																		{
+																			"type": "object",
+																			"required": [
+																				"type",
+																				"automation"
+																			],
+																			"properties": {
+																				"type": {
+																					"type": "string",
+																					"const": "automation"
+																				},
+																				"automation": {
+																					"type": "object",
+																					"required": [
+																						"id",
+																						"name",
+																						"when",
+																						"runsAs",
+																						"does",
+																						"tellsYou",
+																						"runsOn"
+																					],
+																					"properties": {
+																						"id": {
+																							"type": "string"
+																						},
+																						"name": {
+																							"type": "string"
+																						},
+																						"when": {
+																							"type": "string",
+																							"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																						},
+																						"runsAs": {
+																							"type": "string",
+																							"description": "“Rita”, “Piopio in shop”"
+																						},
+																						"does": {
+																							"type": "string"
+																						},
+																						"tellsYou": {
+																							"type": "string",
+																							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																						},
+																						"runsOn": {
+																							"type": "string",
+																							"description": "“This Mac, only while it's awake”"
+																						},
+																						"url": {
+																							"type": "string",
+																							"description": "webhook: where to POST"
+																						},
+																						"next": {
+																							"type": "number",
+																							"description": "time: the next run, epoch ms"
+																						}
+																					}
+																				},
+																				"changed": {
+																					"type": "boolean"
+																				}
+																			}
 																		}
 																	]
 																},
@@ -17766,6 +19566,22 @@
 																		},
 																		"costUsd": {
 																			"type": "number"
+																		},
+																		"automation": {
+																			"type": "object",
+																			"required": [
+																				"id",
+																				"name"
+																			],
+																			"properties": {
+																				"id": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				}
+																			},
+																			"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 																		}
 																	}
 																}
@@ -18214,6 +20030,69 @@
 																								]
 																							}
 																						}
+																					},
+																					{
+																						"type": "object",
+																						"required": [
+																							"type",
+																							"automation"
+																						],
+																						"properties": {
+																							"type": {
+																								"type": "string",
+																								"const": "automation"
+																							},
+																							"automation": {
+																								"type": "object",
+																								"required": [
+																									"id",
+																									"name",
+																									"when",
+																									"runsAs",
+																									"does",
+																									"tellsYou",
+																									"runsOn"
+																								],
+																								"properties": {
+																									"id": {
+																										"type": "string"
+																									},
+																									"name": {
+																										"type": "string"
+																									},
+																									"when": {
+																										"type": "string",
+																										"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																									},
+																									"runsAs": {
+																										"type": "string",
+																										"description": "“Rita”, “Piopio in shop”"
+																									},
+																									"does": {
+																										"type": "string"
+																									},
+																									"tellsYou": {
+																										"type": "string",
+																										"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																									},
+																									"runsOn": {
+																										"type": "string",
+																										"description": "“This Mac, only while it's awake”"
+																									},
+																									"url": {
+																										"type": "string",
+																										"description": "webhook: where to POST"
+																									},
+																									"next": {
+																										"type": "number",
+																										"description": "time: the next run, epoch ms"
+																									}
+																								}
+																							},
+																							"changed": {
+																								"type": "boolean"
+																							}
+																						}
 																					}
 																				]
 																			},
@@ -18415,6 +20294,10 @@
 																				{
 																					"type": "string",
 																					"const": "setup"
+																				},
+																				{
+																					"type": "string",
+																					"const": "automation"
 																				}
 																			]
 																		},
@@ -18423,6 +20306,53 @@
 																		},
 																		"detail": {
 																			"type": "string"
+																		},
+																		"automation": {
+																			"type": "object",
+																			"required": [
+																				"id",
+																				"name",
+																				"when",
+																				"runsAs",
+																				"does",
+																				"tellsYou",
+																				"runsOn"
+																			],
+																			"properties": {
+																				"id": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"when": {
+																					"type": "string",
+																					"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																				},
+																				"runsAs": {
+																					"type": "string",
+																					"description": "“Rita”, “Piopio in shop”"
+																				},
+																				"does": {
+																					"type": "string"
+																				},
+																				"tellsYou": {
+																					"type": "string",
+																					"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																				},
+																				"runsOn": {
+																					"type": "string",
+																					"description": "“This Mac, only while it's awake”"
+																				},
+																				"url": {
+																					"type": "string",
+																					"description": "webhook: where to POST"
+																				},
+																				"next": {
+																					"type": "number",
+																					"description": "time: the next run, epoch ms"
+																				}
+																			}
 																		}
 																	}
 																},
@@ -21249,6 +23179,69 @@
 														]
 													}
 												}
+											},
+											{
+												"type": "object",
+												"required": [
+													"type",
+													"automation"
+												],
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "automation"
+													},
+													"automation": {
+														"type": "object",
+														"required": [
+															"id",
+															"name",
+															"when",
+															"runsAs",
+															"does",
+															"tellsYou",
+															"runsOn"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															},
+															"when": {
+																"type": "string",
+																"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+															},
+															"runsAs": {
+																"type": "string",
+																"description": "“Rita”, “Piopio in shop”"
+															},
+															"does": {
+																"type": "string"
+															},
+															"tellsYou": {
+																"type": "string",
+																"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+															},
+															"runsOn": {
+																"type": "string",
+																"description": "“This Mac, only while it's awake”"
+															},
+															"url": {
+																"type": "string",
+																"description": "webhook: where to POST"
+															},
+															"next": {
+																"type": "number",
+																"description": "time: the next run, epoch ms"
+															}
+														}
+													},
+													"changed": {
+														"type": "boolean"
+													}
+												}
 											}
 										]
 									},
@@ -21377,6 +23370,22 @@
 											},
 											"costUsd": {
 												"type": "number"
+											},
+											"automation": {
+												"type": "object",
+												"required": [
+													"id",
+													"name"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													}
+												},
+												"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 											}
 										}
 									}
@@ -21825,6 +23834,69 @@
 																	]
 																}
 															}
+														},
+														{
+															"type": "object",
+															"required": [
+																"type",
+																"automation"
+															],
+															"properties": {
+																"type": {
+																	"type": "string",
+																	"const": "automation"
+																},
+																"automation": {
+																	"type": "object",
+																	"required": [
+																		"id",
+																		"name",
+																		"when",
+																		"runsAs",
+																		"does",
+																		"tellsYou",
+																		"runsOn"
+																	],
+																	"properties": {
+																		"id": {
+																			"type": "string"
+																		},
+																		"name": {
+																			"type": "string"
+																		},
+																		"when": {
+																			"type": "string",
+																			"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																		},
+																		"runsAs": {
+																			"type": "string",
+																			"description": "“Rita”, “Piopio in shop”"
+																		},
+																		"does": {
+																			"type": "string"
+																		},
+																		"tellsYou": {
+																			"type": "string",
+																			"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																		},
+																		"runsOn": {
+																			"type": "string",
+																			"description": "“This Mac, only while it's awake”"
+																		},
+																		"url": {
+																			"type": "string",
+																			"description": "webhook: where to POST"
+																		},
+																		"next": {
+																			"type": "number",
+																			"description": "time: the next run, epoch ms"
+																		}
+																	}
+																},
+																"changed": {
+																	"type": "boolean"
+																}
+															}
 														}
 													]
 												},
@@ -22026,6 +24098,10 @@
 													{
 														"type": "string",
 														"const": "setup"
+													},
+													{
+														"type": "string",
+														"const": "automation"
 													}
 												]
 											},
@@ -22034,6 +24110,53 @@
 											},
 											"detail": {
 												"type": "string"
+											},
+											"automation": {
+												"type": "object",
+												"required": [
+													"id",
+													"name",
+													"when",
+													"runsAs",
+													"does",
+													"tellsYou",
+													"runsOn"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"when": {
+														"type": "string",
+														"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+													},
+													"runsAs": {
+														"type": "string",
+														"description": "“Rita”, “Piopio in shop”"
+													},
+													"does": {
+														"type": "string"
+													},
+													"tellsYou": {
+														"type": "string",
+														"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+													},
+													"runsOn": {
+														"type": "string",
+														"description": "“This Mac, only while it's awake”"
+													},
+													"url": {
+														"type": "string",
+														"description": "webhook: where to POST"
+													},
+													"next": {
+														"type": "number",
+														"description": "time: the next run, epoch ms"
+													}
+												}
 											}
 										}
 									},
@@ -23303,6 +25426,69 @@
 																]
 															}
 														}
+													},
+													{
+														"type": "object",
+														"required": [
+															"type",
+															"automation"
+														],
+														"properties": {
+															"type": {
+																"type": "string",
+																"const": "automation"
+															},
+															"automation": {
+																"type": "object",
+																"required": [
+																	"id",
+																	"name",
+																	"when",
+																	"runsAs",
+																	"does",
+																	"tellsYou",
+																	"runsOn"
+																],
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"when": {
+																		"type": "string",
+																		"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																	},
+																	"runsAs": {
+																		"type": "string",
+																		"description": "“Rita”, “Piopio in shop”"
+																	},
+																	"does": {
+																		"type": "string"
+																	},
+																	"tellsYou": {
+																		"type": "string",
+																		"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																	},
+																	"runsOn": {
+																		"type": "string",
+																		"description": "“This Mac, only while it's awake”"
+																	},
+																	"url": {
+																		"type": "string",
+																		"description": "webhook: where to POST"
+																	},
+																	"next": {
+																		"type": "number",
+																		"description": "time: the next run, epoch ms"
+																	}
+																}
+															},
+															"changed": {
+																"type": "boolean"
+															}
+														}
 													}
 												]
 											},
@@ -23431,6 +25617,22 @@
 													},
 													"costUsd": {
 														"type": "number"
+													},
+													"automation": {
+														"type": "object",
+														"required": [
+															"id",
+															"name"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															}
+														},
+														"description": "The automation that started it (docs/spec/27 §4): “From <name>”"
 													}
 												}
 											}
@@ -23879,6 +26081,69 @@
 																			]
 																		}
 																	}
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"type",
+																		"automation"
+																	],
+																	"properties": {
+																		"type": {
+																			"type": "string",
+																			"const": "automation"
+																		},
+																		"automation": {
+																			"type": "object",
+																			"required": [
+																				"id",
+																				"name",
+																				"when",
+																				"runsAs",
+																				"does",
+																				"tellsYou",
+																				"runsOn"
+																			],
+																			"properties": {
+																				"id": {
+																					"type": "string"
+																				},
+																				"name": {
+																					"type": "string"
+																				},
+																				"when": {
+																					"type": "string",
+																					"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+																				},
+																				"runsAs": {
+																					"type": "string",
+																					"description": "“Rita”, “Piopio in shop”"
+																				},
+																				"does": {
+																					"type": "string"
+																				},
+																				"tellsYou": {
+																					"type": "string",
+																					"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+																				},
+																				"runsOn": {
+																					"type": "string",
+																					"description": "“This Mac, only while it's awake”"
+																				},
+																				"url": {
+																					"type": "string",
+																					"description": "webhook: where to POST"
+																				},
+																				"next": {
+																					"type": "number",
+																					"description": "time: the next run, epoch ms"
+																				}
+																			}
+																		},
+																		"changed": {
+																			"type": "boolean"
+																		}
+																	}
 																}
 															]
 														},
@@ -24080,6 +26345,10 @@
 															{
 																"type": "string",
 																"const": "setup"
+															},
+															{
+																"type": "string",
+																"const": "automation"
 															}
 														]
 													},
@@ -24088,6 +26357,53 @@
 													},
 													"detail": {
 														"type": "string"
+													},
+													"automation": {
+														"type": "object",
+														"required": [
+															"id",
+															"name",
+															"when",
+															"runsAs",
+															"does",
+															"tellsYou",
+															"runsOn"
+														],
+														"properties": {
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															},
+															"when": {
+																"type": "string",
+																"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+															},
+															"runsAs": {
+																"type": "string",
+																"description": "“Rita”, “Piopio in shop”"
+															},
+															"does": {
+																"type": "string"
+															},
+															"tellsYou": {
+																"type": "string",
+																"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+															},
+															"runsOn": {
+																"type": "string",
+																"description": "“This Mac, only while it's awake”"
+															},
+															"url": {
+																"type": "string",
+																"description": "webhook: where to POST"
+															},
+															"next": {
+																"type": "number",
+																"description": "time: the next run, epoch ms"
+															}
+														}
 													}
 												}
 											},
@@ -31914,6 +34230,10 @@
 											{
 												"type": "string",
 												"const": "project"
+											},
+											{
+												"type": "string",
+												"const": "piopio"
 											}
 										]
 									},
@@ -31924,6 +34244,10 @@
 										"type": "string"
 									}
 								}
+							},
+							"automation": {
+								"type": "string",
+								"description": "The automation it belongs to (docs/spec/27)"
 							},
 							"state": {
 								"anyOf": [
@@ -31991,6 +34315,10 @@
 											{
 												"type": "string",
 												"const": "project"
+											},
+											{
+												"type": "string",
+												"const": "piopio"
 											}
 										]
 									},
@@ -32001,6 +34329,10 @@
 										"type": "string"
 									}
 								}
+							},
+							"automation": {
+								"type": "string",
+								"description": "The automation it belongs to (docs/spec/27)"
 							},
 							"text": {
 								"type": "string"
@@ -34784,37 +37116,48 @@
 			"type": "object",
 			"properties": {}
 		},
-		"routines.list.params": {
+		"automations.list.params": {
 			"type": "object",
-			"required": [
-				"project"
-			],
 			"properties": {
+				"runsAs": {
+					"type": "string"
+				},
 				"project": {
 					"type": "string"
 				}
 			}
 		},
-		"routines.list.result": {
+		"automations.list.result": {
 			"type": "object",
 			"required": [
-				"routines"
+				"automations"
 			],
 			"properties": {
-				"routines": {
+				"automations": {
 					"type": "array",
 					"items": {
 						"type": "object",
 						"required": [
 							"id",
+							"name",
 							"on",
+							"runsAs",
 							"prompt",
+							"result",
+							"approval",
+							"enabled",
 							"by",
 							"createdAt",
-							"runs"
+							"runCount",
+							"label",
+							"runnerName",
+							"resultLabel"
 						],
 						"properties": {
 							"id": {
+								"type": "string"
+							},
+							"name": {
 								"type": "string"
 							},
 							"on": {
@@ -34837,14 +37180,12 @@
 									}
 								]
 							},
-							"prompt": {
-								"type": "string"
-							},
 							"cron": {
 								"type": "string"
 							},
 							"at": {
-								"type": "number"
+								"type": "number",
+								"description": "time, once: epoch ms"
 							},
 							"tz": {
 								"type": "string"
@@ -34858,113 +37199,180 @@
 							"subject": {
 								"type": "string"
 							},
-							"by": {
+							"runsAs": {
+								"type": "string",
+								"description": "“piopio”, or an agent's id"
+							},
+							"project": {
+								"type": "string",
+								"description": "A project's id; only when Piopio runs it"
+							},
+							"prompt": {
+								"type": "string"
+							},
+							"result": {
 								"anyOf": [
 									{
 										"type": "string",
-										"const": "piopio"
+										"const": "chat"
 									},
 									{
 										"type": "string",
-										"const": "you"
+										"const": "telegram"
+									},
+									{
+										"type": "string",
+										"const": "conversation"
+									},
+									{
+										"type": "string",
+										"const": "quiet"
 									}
 								]
+							},
+							"deliverTo": {
+								"type": "string",
+								"description": "An agent's contact the result is for (default its owner)"
+							},
+							"approval": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "wait"
+									},
+									{
+										"type": "string",
+										"const": "skip"
+									}
+								]
+							},
+							"budgetPerRunUsd": {
+								"type": "number"
+							},
+							"enabled": {
+								"type": "boolean"
+							},
+							"by": {
+								"type": "string",
+								"description": "“you”, “piopio”, or the agent that made it"
 							},
 							"createdAt": {
 								"type": "string"
 							},
 							"next": {
 								"type": "number",
-								"description": "time: the next fire, epoch ms"
+								"description": "time: the next run, epoch ms"
 							},
 							"lastRun": {
 								"type": "string"
 							},
-							"runs": {
+							"runCount": {
 								"type": "number"
 							},
-							"lastConversation": {
-								"type": "string"
+							"fresh": {
+								"type": "boolean",
+								"description": "Not opened since it was made (the list's “New” badge)"
+							},
+							"aliases": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
 							},
 							"label": {
 								"type": "string",
 								"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
 							},
+							"runnerName": {
+								"type": "string",
+								"description": "“Piopio”, “Piopio in shop”, “Rita”"
+							},
+							"resultLabel": {
+								"type": "string",
+								"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+							},
 							"url": {
 								"type": "string",
 								"description": "webhook: where to POST"
+							},
+							"lastStatus": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "running"
+									},
+									{
+										"type": "string",
+										"const": "done"
+									},
+									{
+										"type": "string",
+										"const": "quiet"
+									},
+									{
+										"type": "string",
+										"const": "waiting"
+									},
+									{
+										"type": "string",
+										"const": "skipped"
+									},
+									{
+										"type": "string",
+										"const": "failed"
+									}
+								]
+							},
+							"lastSummary": {
+								"type": "string"
 							}
 						}
 					}
 				}
 			}
 		},
-		"routines.add.params": {
+		"automations.get.params": {
 			"type": "object",
 			"required": [
-				"project",
-				"on",
-				"prompt"
+				"id"
 			],
 			"properties": {
-				"project": {
-					"type": "string"
-				},
-				"on": {
-					"anyOf": [
-						{
-							"type": "string",
-							"const": "time"
-						},
-						{
-							"type": "string",
-							"const": "folder"
-						},
-						{
-							"type": "string",
-							"const": "email"
-						},
-						{
-							"type": "string",
-							"const": "webhook"
-						}
-					]
-				},
-				"prompt": {
-					"type": "string"
-				},
-				"when": {
-					"type": "string"
-				},
-				"folder": {
-					"type": "string"
-				},
-				"from": {
-					"type": "string"
-				},
-				"subject": {
+				"id": {
 					"type": "string"
 				}
 			}
 		},
-		"routines.add.result": {
+		"automations.get.result": {
 			"type": "object",
 			"required": [
-				"routine"
+				"automation",
+				"runs",
+				"summary"
 			],
 			"properties": {
-				"routine": {
+				"automation": {
 					"type": "object",
 					"required": [
 						"id",
+						"name",
 						"on",
+						"runsAs",
 						"prompt",
+						"result",
+						"approval",
+						"enabled",
 						"by",
 						"createdAt",
-						"runs"
+						"runCount",
+						"label",
+						"runnerName",
+						"resultLabel"
 					],
 					"properties": {
 						"id": {
+							"type": "string"
+						},
+						"name": {
 							"type": "string"
 						},
 						"on": {
@@ -34987,14 +37395,12 @@
 								}
 							]
 						},
-						"prompt": {
-							"type": "string"
-						},
 						"cron": {
 							"type": "string"
 						},
 						"at": {
-							"type": "number"
+							"type": "number",
+							"description": "time, once: epoch ms"
 						},
 						"tz": {
 							"type": "string"
@@ -35008,90 +37414,1139 @@
 						"subject": {
 							"type": "string"
 						},
-						"by": {
+						"runsAs": {
+							"type": "string",
+							"description": "“piopio”, or an agent's id"
+						},
+						"project": {
+							"type": "string",
+							"description": "A project's id; only when Piopio runs it"
+						},
+						"prompt": {
+							"type": "string"
+						},
+						"result": {
 							"anyOf": [
 								{
 									"type": "string",
-									"const": "piopio"
+									"const": "chat"
 								},
 								{
 									"type": "string",
-									"const": "you"
+									"const": "telegram"
+								},
+								{
+									"type": "string",
+									"const": "conversation"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
 								}
 							]
+						},
+						"deliverTo": {
+							"type": "string",
+							"description": "An agent's contact the result is for (default its owner)"
+						},
+						"approval": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "wait"
+								},
+								{
+									"type": "string",
+									"const": "skip"
+								}
+							]
+						},
+						"budgetPerRunUsd": {
+							"type": "number"
+						},
+						"enabled": {
+							"type": "boolean"
+						},
+						"by": {
+							"type": "string",
+							"description": "“you”, “piopio”, or the agent that made it"
 						},
 						"createdAt": {
 							"type": "string"
 						},
 						"next": {
 							"type": "number",
-							"description": "time: the next fire, epoch ms"
+							"description": "time: the next run, epoch ms"
 						},
 						"lastRun": {
 							"type": "string"
 						},
-						"runs": {
+						"runCount": {
 							"type": "number"
 						},
-						"lastConversation": {
-							"type": "string"
+						"fresh": {
+							"type": "boolean",
+							"description": "Not opened since it was made (the list's “New” badge)"
+						},
+						"aliases": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
 						},
 						"label": {
 							"type": "string",
 							"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
 						},
+						"runnerName": {
+							"type": "string",
+							"description": "“Piopio”, “Piopio in shop”, “Rita”"
+						},
+						"resultLabel": {
+							"type": "string",
+							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+						},
 						"url": {
 							"type": "string",
 							"description": "webhook: where to POST"
+						},
+						"lastStatus": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "running"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								},
+								{
+									"type": "string",
+									"const": "waiting"
+								},
+								{
+									"type": "string",
+									"const": "skipped"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								}
+							]
+						},
+						"lastSummary": {
+							"type": "string"
+						}
+					}
+				},
+				"runs": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"automation",
+							"firedAt",
+							"cause",
+							"status"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"automation": {
+								"type": "string"
+							},
+							"firedAt": {
+								"type": "string"
+							},
+							"cause": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "time"
+									},
+									{
+										"type": "string",
+										"const": "event"
+									},
+									{
+										"type": "string",
+										"const": "now"
+									}
+								]
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "running"
+									},
+									{
+										"type": "string",
+										"const": "done"
+									},
+									{
+										"type": "string",
+										"const": "quiet"
+									},
+									{
+										"type": "string",
+										"const": "waiting"
+									},
+									{
+										"type": "string",
+										"const": "skipped"
+									},
+									{
+										"type": "string",
+										"const": "failed"
+									}
+								]
+							},
+							"summary": {
+								"type": "string"
+							},
+							"costUsd": {
+								"type": "number"
+							},
+							"conversation": {
+								"type": "string"
+							},
+							"agent": {
+								"type": "string"
+							},
+							"agentRun": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"summary": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"when",
+						"runsAs",
+						"does",
+						"tellsYou",
+						"runsOn"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"when": {
+							"type": "string",
+							"description": "“Every Monday at 09:00”, “When an email from the bank arrives”"
+						},
+						"runsAs": {
+							"type": "string",
+							"description": "“Rita”, “Piopio in shop”"
+						},
+						"does": {
+							"type": "string"
+						},
+						"tellsYou": {
+							"type": "string",
+							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+						},
+						"runsOn": {
+							"type": "string",
+							"description": "“This Mac, only while it's awake”"
+						},
+						"url": {
+							"type": "string",
+							"description": "webhook: where to POST"
+						},
+						"next": {
+							"type": "number",
+							"description": "time: the next run, epoch ms"
 						}
 					}
 				}
 			}
 		},
-		"routines.remove.params": {
+		"automations.add.params": {
+			"allOf": [
+				{
+					"type": "object",
+					"properties": {
+						"name": {
+							"type": "string"
+						},
+						"on": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "time"
+								},
+								{
+									"type": "string",
+									"const": "folder"
+								},
+								{
+									"type": "string",
+									"const": "email"
+								},
+								{
+									"type": "string",
+									"const": "webhook"
+								}
+							]
+						},
+						"when": {
+							"type": "string",
+							"description": "time: a 5-field cron, or a local date-time once"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"from": {
+							"type": "string"
+						},
+						"subject": {
+							"type": "string"
+						},
+						"runsAs": {
+							"type": "string"
+						},
+						"project": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							]
+						},
+						"prompt": {
+							"type": "string"
+						},
+						"result": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "chat"
+								},
+								{
+									"type": "string",
+									"const": "telegram"
+								},
+								{
+									"type": "string",
+									"const": "conversation"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								}
+							]
+						},
+						"approval": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "wait"
+								},
+								{
+									"type": "string",
+									"const": "skip"
+								}
+							]
+						},
+						"budgetPerRunUsd": {
+							"anyOf": [
+								{
+									"type": "number"
+								},
+								{
+									"type": "null"
+								}
+							]
+						},
+						"enabled": {
+							"type": "boolean"
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": [
+						"prompt"
+					],
+					"properties": {
+						"prompt": {
+							"type": "string"
+						}
+					}
+				}
+			]
+		},
+		"automations.add.result": {
 			"type": "object",
 			"required": [
-				"project",
-				"routineId"
+				"automation"
 			],
 			"properties": {
-				"project": {
-					"type": "string"
+				"automation": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"on",
+						"runsAs",
+						"prompt",
+						"result",
+						"approval",
+						"enabled",
+						"by",
+						"createdAt",
+						"runCount",
+						"label",
+						"runnerName",
+						"resultLabel"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"on": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "time"
+								},
+								{
+									"type": "string",
+									"const": "folder"
+								},
+								{
+									"type": "string",
+									"const": "email"
+								},
+								{
+									"type": "string",
+									"const": "webhook"
+								}
+							]
+						},
+						"cron": {
+							"type": "string"
+						},
+						"at": {
+							"type": "number",
+							"description": "time, once: epoch ms"
+						},
+						"tz": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"from": {
+							"type": "string"
+						},
+						"subject": {
+							"type": "string"
+						},
+						"runsAs": {
+							"type": "string",
+							"description": "“piopio”, or an agent's id"
+						},
+						"project": {
+							"type": "string",
+							"description": "A project's id; only when Piopio runs it"
+						},
+						"prompt": {
+							"type": "string"
+						},
+						"result": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "chat"
+								},
+								{
+									"type": "string",
+									"const": "telegram"
+								},
+								{
+									"type": "string",
+									"const": "conversation"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								}
+							]
+						},
+						"deliverTo": {
+							"type": "string",
+							"description": "An agent's contact the result is for (default its owner)"
+						},
+						"approval": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "wait"
+								},
+								{
+									"type": "string",
+									"const": "skip"
+								}
+							]
+						},
+						"budgetPerRunUsd": {
+							"type": "number"
+						},
+						"enabled": {
+							"type": "boolean"
+						},
+						"by": {
+							"type": "string",
+							"description": "“you”, “piopio”, or the agent that made it"
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"next": {
+							"type": "number",
+							"description": "time: the next run, epoch ms"
+						},
+						"lastRun": {
+							"type": "string"
+						},
+						"runCount": {
+							"type": "number"
+						},
+						"fresh": {
+							"type": "boolean",
+							"description": "Not opened since it was made (the list's “New” badge)"
+						},
+						"aliases": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"label": {
+							"type": "string",
+							"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+						},
+						"runnerName": {
+							"type": "string",
+							"description": "“Piopio”, “Piopio in shop”, “Rita”"
+						},
+						"resultLabel": {
+							"type": "string",
+							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+						},
+						"url": {
+							"type": "string",
+							"description": "webhook: where to POST"
+						},
+						"lastStatus": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "running"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								},
+								{
+									"type": "string",
+									"const": "waiting"
+								},
+								{
+									"type": "string",
+									"const": "skipped"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								}
+							]
+						},
+						"lastSummary": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"automations.update.params": {
+			"allOf": [
+				{
+					"type": "object",
+					"required": [
+						"id"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						}
+					}
 				},
-				"routineId": {
+				{
+					"type": "object",
+					"properties": {
+						"name": {
+							"type": "string"
+						},
+						"on": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "time"
+								},
+								{
+									"type": "string",
+									"const": "folder"
+								},
+								{
+									"type": "string",
+									"const": "email"
+								},
+								{
+									"type": "string",
+									"const": "webhook"
+								}
+							]
+						},
+						"when": {
+							"type": "string",
+							"description": "time: a 5-field cron, or a local date-time once"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"from": {
+							"type": "string"
+						},
+						"subject": {
+							"type": "string"
+						},
+						"runsAs": {
+							"type": "string"
+						},
+						"project": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							]
+						},
+						"prompt": {
+							"type": "string"
+						},
+						"result": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "chat"
+								},
+								{
+									"type": "string",
+									"const": "telegram"
+								},
+								{
+									"type": "string",
+									"const": "conversation"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								}
+							]
+						},
+						"approval": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "wait"
+								},
+								{
+									"type": "string",
+									"const": "skip"
+								}
+							]
+						},
+						"budgetPerRunUsd": {
+							"anyOf": [
+								{
+									"type": "number"
+								},
+								{
+									"type": "null"
+								}
+							]
+						},
+						"enabled": {
+							"type": "boolean"
+						}
+					}
+				}
+			]
+		},
+		"automations.update.result": {
+			"type": "object",
+			"required": [
+				"automation"
+			],
+			"properties": {
+				"automation": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"on",
+						"runsAs",
+						"prompt",
+						"result",
+						"approval",
+						"enabled",
+						"by",
+						"createdAt",
+						"runCount",
+						"label",
+						"runnerName",
+						"resultLabel"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"on": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "time"
+								},
+								{
+									"type": "string",
+									"const": "folder"
+								},
+								{
+									"type": "string",
+									"const": "email"
+								},
+								{
+									"type": "string",
+									"const": "webhook"
+								}
+							]
+						},
+						"cron": {
+							"type": "string"
+						},
+						"at": {
+							"type": "number",
+							"description": "time, once: epoch ms"
+						},
+						"tz": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"from": {
+							"type": "string"
+						},
+						"subject": {
+							"type": "string"
+						},
+						"runsAs": {
+							"type": "string",
+							"description": "“piopio”, or an agent's id"
+						},
+						"project": {
+							"type": "string",
+							"description": "A project's id; only when Piopio runs it"
+						},
+						"prompt": {
+							"type": "string"
+						},
+						"result": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "chat"
+								},
+								{
+									"type": "string",
+									"const": "telegram"
+								},
+								{
+									"type": "string",
+									"const": "conversation"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								}
+							]
+						},
+						"deliverTo": {
+							"type": "string",
+							"description": "An agent's contact the result is for (default its owner)"
+						},
+						"approval": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "wait"
+								},
+								{
+									"type": "string",
+									"const": "skip"
+								}
+							]
+						},
+						"budgetPerRunUsd": {
+							"type": "number"
+						},
+						"enabled": {
+							"type": "boolean"
+						},
+						"by": {
+							"type": "string",
+							"description": "“you”, “piopio”, or the agent that made it"
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"next": {
+							"type": "number",
+							"description": "time: the next run, epoch ms"
+						},
+						"lastRun": {
+							"type": "string"
+						},
+						"runCount": {
+							"type": "number"
+						},
+						"fresh": {
+							"type": "boolean",
+							"description": "Not opened since it was made (the list's “New” badge)"
+						},
+						"aliases": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"label": {
+							"type": "string",
+							"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+						},
+						"runnerName": {
+							"type": "string",
+							"description": "“Piopio”, “Piopio in shop”, “Rita”"
+						},
+						"resultLabel": {
+							"type": "string",
+							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+						},
+						"url": {
+							"type": "string",
+							"description": "webhook: where to POST"
+						},
+						"lastStatus": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "running"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								},
+								{
+									"type": "string",
+									"const": "waiting"
+								},
+								{
+									"type": "string",
+									"const": "skipped"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								}
+							]
+						},
+						"lastSummary": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"automations.remove.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
 					"type": "string"
 				}
 			}
 		},
-		"routines.remove.result": {
+		"automations.remove.result": {
 			"type": "object",
 			"properties": {}
 		},
-		"routines.run.params": {
+		"automations.run.params": {
 			"type": "object",
 			"required": [
-				"project",
-				"routineId"
+				"id"
 			],
 			"properties": {
-				"project": {
-					"type": "string"
-				},
-				"routineId": {
+				"id": {
 					"type": "string"
 				}
 			}
 		},
-		"routines.run.result": {
+		"automations.run.result": {
 			"type": "object",
 			"required": [
-				"runId"
+				"run"
 			],
 			"properties": {
-				"runId": {
-					"type": "string"
+				"run": {
+					"type": "object",
+					"required": [
+						"id",
+						"automation",
+						"firedAt",
+						"cause",
+						"status"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"automation": {
+							"type": "string"
+						},
+						"firedAt": {
+							"type": "string"
+						},
+						"cause": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "time"
+								},
+								{
+									"type": "string",
+									"const": "event"
+								},
+								{
+									"type": "string",
+									"const": "now"
+								}
+							]
+						},
+						"status": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "running"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								},
+								{
+									"type": "string",
+									"const": "waiting"
+								},
+								{
+									"type": "string",
+									"const": "skipped"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								}
+							]
+						},
+						"summary": {
+							"type": "string"
+						},
+						"costUsd": {
+							"type": "number"
+						},
+						"conversation": {
+							"type": "string"
+						},
+						"agent": {
+							"type": "string"
+						},
+						"agentRun": {
+							"type": "string"
+						}
+					}
 				}
 			}
+		},
+		"automations.runs.params": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"limit": {
+					"type": "number"
+				}
+			}
+		},
+		"automations.runs.result": {
+			"type": "object",
+			"required": [
+				"runs"
+			],
+			"properties": {
+				"runs": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"automation",
+							"firedAt",
+							"cause",
+							"status"
+						],
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"automation": {
+								"type": "string"
+							},
+							"firedAt": {
+								"type": "string"
+							},
+							"cause": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "time"
+									},
+									{
+										"type": "string",
+										"const": "event"
+									},
+									{
+										"type": "string",
+										"const": "now"
+									}
+								]
+							},
+							"status": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "running"
+									},
+									{
+										"type": "string",
+										"const": "done"
+									},
+									{
+										"type": "string",
+										"const": "quiet"
+									},
+									{
+										"type": "string",
+										"const": "waiting"
+									},
+									{
+										"type": "string",
+										"const": "skipped"
+									},
+									{
+										"type": "string",
+										"const": "failed"
+									}
+								]
+							},
+							"summary": {
+								"type": "string"
+							},
+							"costUsd": {
+								"type": "number"
+							},
+							"conversation": {
+								"type": "string"
+							},
+							"agent": {
+								"type": "string"
+							},
+							"agentRun": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
+		},
+		"automations.migrationReport.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"automations.migrationReport.result": {
+			"type": "object",
+			"properties": {
+				"report": {
+					"type": "string",
+					"description": "Markdown"
+				}
+			}
+		},
+		"automations.dismissMigrationReport.params": {
+			"type": "object",
+			"properties": {}
+		},
+		"automations.dismissMigrationReport.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"agents.runs.params": {
 			"type": "object",
@@ -35178,6 +38633,10 @@
 									{
 										"type": "string",
 										"const": "manual"
+									},
+									{
+										"type": "string",
+										"const": "automation"
 									}
 								]
 							},

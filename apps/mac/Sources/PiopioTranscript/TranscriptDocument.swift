@@ -375,7 +375,7 @@ public final class TranscriptDocument {
         for id in documentIDs {
             guard let item = items.last(where: { $0.id == id }) else { continue }
             switch item {
-            case .tool(let t) where t.tool == "automate": replace(item)
+            case .tool(let t) where t.tool == "automate" || t.tool == "change_automation": replace(item)
             case .result(let r) where r.card.kind == "automation": replace(item)
             default: break
             }

@@ -2188,16 +2188,21 @@ export class Sessions {
 				...(this.agentLearn ? this.agentLearn : {}),
 				onStatus: () => void this.agentStatus(entry),
 				onApproval: (approval) => {
-					if (approval.status !== "pending") return;
 					void (async () => {
-						// An automation's run set to skip what needs your OK (docs/spec/27 AU8) is denied and ends as skipped.
 						const run = opened ? await opened.core.proactive.runOf(approval.conversationId) : undefined;
 						const a = run?.kind === "automation" ? automations?.find(run.source) : undefined;
+						// Answered: an automation's run that waited goes on (docs/spec/27 §5).
+						if (approval.status !== "pending") {
+							if (run && a) automations!.agentRunWaiting(id, run.id, undefined);
+							return;
+						}
+						// An automation's run set to skip what needs your OK (AU8) is denied and ends as skipped.
 						if (run && a?.approval === "skip") {
 							await opened!.core.safety.decide(approval.id, { approve: false, reason: "This automation skips runs that need your OK." }).catch(() => undefined);
 							automations!.skipped({ agent: id, agentRun: run.id }, `Skipped: it needed your OK (${approval.title})`);
 							return;
 						}
+						if (run && a) automations!.agentRunWaiting(id, run.id, approval.title);
 						this.onInbox?.({ count: this.inboxCount(), approval: { agent: entry.ref, agentName: entry.title, approvalId: approval.id, title: approval.title } });
 						this.telegram?.approval(id, approval.title);
 					})();

@@ -47,6 +47,20 @@ export type AssistantPart = Static<typeof AssistantPart>;
 export const ToolStatus = literals("pending_approval", "running", "done", "error", "interrupted", "denied");
 export type ToolStatus = Static<typeof ToolStatus>;
 
+/** An automation as its card shows it (docs/spec/27 §4): when, who runs it, what it does, where the result goes. */
+export const AutomationSummary = Type.Object({
+	id: Type.String(),
+	name: Type.String(),
+	when: Type.String({ description: "“Every Monday at 09:00”, “When an email from the bank arrives”" }),
+	runsAs: Type.String({ description: "“Rita”, “Piopio in shop”" }),
+	does: Type.String(),
+	tellsYou: Type.String({ description: "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”" }),
+	runsOn: Type.String({ description: "“This Mac, only while it's awake”" }),
+	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
+	next: Type.Optional(Type.Number({ description: "time: the next run, epoch ms" })),
+});
+export type AutomationSummary = Static<typeof AutomationSummary>;
+
 export const ToolDetails = Type.Union([
 	Type.Object({ type: Type.Literal("diff"), path: Type.String(), diff: Type.String() }),
 	Type.Object({ type: Type.Literal("file"), path: Type.String(), language: Type.Optional(Type.String()) }),
@@ -79,6 +93,8 @@ export const ToolDetails = Type.Union([
 		joined: Type.Optional(Type.Boolean({ description: "Brought in with @Name for this message" })),
 		status: Type.Optional(literals("replied", "no_reply", "failed")),
 	}),
+	/** Piopio made or changed an automation (docs/spec/27 §4): its card, with Open in Automations and Undo. */
+	Type.Object({ type: Type.Literal("automation"), automation: AutomationSummary, changed: Type.Optional(Type.Boolean()) }),
 ]);
 export type ToolDetails = Static<typeof ToolDetails>;
 
@@ -217,19 +233,6 @@ export const ApprovalItem = Type.Object({
 	/** "connector": a connected app's change in a chat (Allow / Deny, no editing; `sessions.decide`). Else an agent's. */
 	source: Type.Optional(Type.Literal("connector")),
 });
-/** An automation as its card shows it (docs/spec/27 §4): when, who runs it, what it does, where the result goes. */
-export const AutomationSummary = Type.Object({
-	id: Type.String(),
-	name: Type.String(),
-	when: Type.String({ description: "“Every Monday at 09:00”, “When an email from the bank arrives”" }),
-	runsAs: Type.String({ description: "“Rita”, “Piopio in shop”" }),
-	does: Type.String(),
-	tellsYou: Type.String({ description: "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”" }),
-	runsOn: Type.String({ description: "“This Mac, only while it's awake”" }),
-	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
-	next: Type.Optional(Type.Number({ description: "time: the next run, epoch ms" })),
-});
-export type AutomationSummary = Static<typeof AutomationSummary>;
 /** What an agent's tool changed, with Undo while it can be undone (06-agents §4.2 RC1–RC2). */
 export const ResultItem = Type.Object({
 	kind: Type.Literal("result"),

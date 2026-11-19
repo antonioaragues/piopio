@@ -29,8 +29,12 @@ export type AutomationsHost = {
 	session?(id: string): Promise<{ running: boolean; waiting: boolean; costUsd: number } | undefined>;
 	/** Stops a Piopio run's conversation (its budget, or a skip). */
 	stopSession?(id: string): Promise<void>;
+	/** How many mailboxes are connected (an email automation needs one to see anything). */
+	mailboxes?(): number;
 	/** A webhook automation's address. */
 	hookUrl?(id: string): string | undefined;
+	/** Resolves when runs can reach their model's key (the app is connected, or it waited long enough). */
+	ready?(): Promise<unknown>;
 	/** The list or a run changed (the app lists again). */
 	changed(): void;
 	/** Folder and email automations changed: the watchers start or stop theirs. */
@@ -258,6 +262,7 @@ export class Automations {
 					const from = (input.from ?? a.from ?? "").trim();
 					const subject = (input.subject ?? a.subject ?? "").trim();
 					if (!from && !subject) throw new EngineError("INVALID", "Say whose emails (from) or which subject to watch for.");
+					if (input.on === "email" && this.host.mailboxes?.() === 0) throw new EngineError("INVALID", "No mailbox is connected, so nothing would see that email. Tell the user to connect Gmail or Outlook in Settings › Connected apps, then ask again.");
 					if (from) a.from = from;
 					else delete a.from;
 					if (subject) a.subject = subject;
@@ -304,10 +309,31 @@ export class Automations {
 			if (run.status !== "running") this.early.set(`${agentId}/${run.id}`, run);
 			return;
 		}
-		if (r.status === "skipped" && run.status !== "running") return;
+		// A skipped run stays skipped, but what it cost to get there still counts (A3).
+		if (r.status === "skipped") {
+			if (run.costUsd !== undefined && run.costUsd !== r.costUsd) {
+				r.costUsd = run.costUsd;
+				this.saveRuns();
+				this.host.changed();
+			}
+			return;
+		}
 		r.status = run.status === "done" && run.sent === 0 ? "quiet" : run.status;
 		if (run.summary) r.summary = run.summary;
 		if (run.costUsd !== undefined) r.costUsd = run.costUsd;
+		this.saveRuns();
+		this.host.changed();
+	}
+
+	/** An agent's run waits for your OK (AU8, `wait`), or goes on once you answered: the run says so. */
+	agentRunWaiting(agentId: string, agentRun: string, waiting: string | undefined): void {
+		const r = this.runs.find((x) => x.agent === agentId && x.agentRun === agentRun);
+		if (!r || (r.status !== "running" && r.status !== "waiting")) return;
+		const status = waiting ? "waiting" : "running";
+		if (r.status === status) return;
+		r.status = status;
+		if (waiting) r.summary = `Waiting for your OK: ${waiting}`;
+		else delete r.summary;
 		this.saveRuns();
 		this.host.changed();
 	}
@@ -446,6 +472,8 @@ export class Automations {
 	private async tick(): Promise<void> {
 		const now = this.now();
 		const due = this.store.automations.filter((a) => a.enabled && a.next !== undefined && a.next <= now);
+		// Right after the engine starts, the app may not have handed over the keys yet: wait for it (at most a minute).
+		if (due.length) await this.host.ready?.();
 		for (const a of due) {
 			const at = a.next!;
 			a.next = nextOf(a, now);

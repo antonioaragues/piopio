@@ -12,7 +12,7 @@
  */
 import { awaitWithContext, type Context } from "@earendil-works/chord/context";
 import type { ConversationId, Harness, JsonObject } from "@earendil-works/pi-durable";
-import type { AgentDefinition, Contact } from "./definition.js";
+import { contactFor, type AgentDefinition, type Contact } from "./definition.js";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "cancelled";
 export type Approval = {
@@ -95,7 +95,8 @@ export interface SafetyHost {
 	read(): Promise<SafetyState>;
 	write(change: (state: SafetyState) => void): Promise<void>;
 	/** Who a conversation belongs to: a person, or a run (which acts for the owner). */
-	whose(conversationId: ConversationId | string): Promise<{ contact?: Contact; runId?: string; peerId?: string }>;
+	/** `runLabel`: the automation an automatic run belongs to, by name (docs/spec/27 §5). */
+	whose(conversationId: ConversationId | string): Promise<{ contact?: Contact; runId?: string; runLabel?: string; peerId?: string }>;
 	/** Writes a note into a person's conversation (the model reads it too, when `forModel` is given). */
 	note(contactId: string, text: string, forModel?: string): Promise<void>;
 	/** Stops every running turn and run. */
@@ -224,7 +225,12 @@ export class Safety {
 	async beforeTool(call: { id: string; name: string; arguments: unknown }, conversationId: ConversationId, context: Context): Promise<{ arguments?: JsonObject; block?: string } | undefined> {
 		const gate = await this.gate();
 		if (!gate.ok) return { block: `${gate.message} Nothing was done.` };
-		const args = (call.arguments ?? {}) as JsonObject;
+		let args = (call.arguments ?? {}) as JsonObject;
+		// A message to “Lucía” is to the contact lucia: rules and "Always allow" judge who it really goes to.
+		if (call.name === "send_message" && typeof args.to === "string") {
+			const contact = contactFor(this.def.contacts, args.to);
+			if (contact && contact.id !== args.to) args = { ...args, to: contact.id };
+		}
 		const who = await this.host.whose(conversationId);
 		const owner = this.owner;
 		// AS2: a contact can't reach other agents through this one.
@@ -258,7 +264,7 @@ export class Safety {
 				status: "pending",
 			};
 			await this.host.write((s) => void (s.approvals = [...(s.approvals ?? []), created].slice(-MAX_KEPT)));
-			await this.inbox({ kind: "approval", title: `Approval · ${created.tool}`, body: created.title, needsYou: true, approvalId: created.id, conversation: who.runId ? `run:${who.runId}` : who.peerId ? `agent:${who.peerId}` : `person:${who.contact?.id ?? "owner"}` });
+			await this.inbox({ kind: "approval", title: who.runLabel ? `${who.runLabel} · needs your OK` : `Approval · ${created.tool}`, body: created.title, needsYou: true, approvalId: created.id, conversation: who.runId ? `run:${who.runId}` : who.peerId ? `agent:${who.peerId}` : `person:${who.contact?.id ?? "owner"}` });
 			this.host.onApproval?.(created);
 			approval = created;
 		}

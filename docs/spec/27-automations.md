@@ -1,7 +1,7 @@
 # 27 · Automations: when work starts on its own
 
 Status: draft 2026-11-18, from a conversation with the user; A1 and A2 built 2026-11-18 (§10), A3 (a real-model
-trial) not done. It takes "when" away from agents
+trial) done 2026-11-19 (§11). It takes "when" away from agents
 and projects and makes it an object of its own. It changes 06 §6 (PR1–PR3, PR6, PR7's `schedule`), 19 S3 (watches),
 21 AD5 and 26 CL10 (routines with two owners). 26's model of agents (CL1–CL12) holds; this spec makes it simpler.
 The interaction is mocked up on a design canvas: a target-state board and a clickable prototype (agent chat →
@@ -259,5 +259,67 @@ project settings' link, Home lines that open their automation, and the migration
 **Checked:** engine tests (`automations.test.ts` and the updated agent, work, offers and agenda tests), the Swift
 tests, the app builds, and captures with the scripted model.
 
-**Not done:** A3 with real models; the budget stop for agents is checked before each tool call, not mid-answer; the
+**Not done:** the budget stop for agents is checked before each tool call, not mid-answer; the
 design pass from `docs/design/automations-brief.md` hasn't happened, so the screens follow the first mockup.
+
+## 11. A3, the real-model trial (2026-11-19)
+
+An isolated app copy (scratch data, your OpenRouter key from the Keychain), driven over the engine socket. Piopio ran
+on Claude Sonnet 5.5 in a small project (`shop`: a bakery's README and `orders.md`, Auto-edit). One agent, Rita, ran
+on Claude Haiku 5.5 with one contact (Lucía), `send_message:to_non_owner` needing approval, and an old-style webhook
+trigger in its definition. About **$0.18 in all**: $0.15 for the project conversation with Piopio, $0.03 for Rita's
+chat and every run, $0.001 of background requests.
+
+**What worked the first time:**
+
+| Request | What happened | Cost |
+|---|---|---|
+| To Rita: "every Monday at 8, a five-line brief for the week" | One `automate`: Rita, Mondays 08:00, Rita's chat, this Mac; the first run's date right. Run now wrote it in her chat with "From Monday week brief · wrote to you · $0.0008"; with no orders on file it said so instead of inventing them | $0.001 + $0.0008 |
+| To Piopio in `shop`: "every Monday at 7:30, write the week's plan into plan.md from orders.md, flag what's unconfirmed" | One `automate`: Piopio in shop, Mondays 07:30. Its run opened a conversation in the project with the `[Automation]` line and the budget, waited on an `ls` (Auto-edit asks), and once approved wrote a correct plan with the unconfirmed cake order flagged | $0.05 + $0.003 |
+| Rita's email automation, a send to Lucía needing approval, **wait** | The send waited in the Inbox; approved, it went, and the run ended done with its cost | $0.0008 |
+| The same, **skip** | The send was denied by itself; the run ended skipped with "Skipped: it needed your OK (Send to Lucía: …)" | — |
+| A fire missed while the engine was off | It ran once on start, as AU9 says (but failed, below) | — |
+| Rita's old webhook URL (`/hooks/<agent>/orders/<token>`) | Still fired her automation, through the alias the migration wrote; a wrong token got 403 | $0.0006 |
+| To Piopio: "every weekday at 9, have Rita check orders.md and ping me on Telegram" | Refused by the rule ("Rita isn't connected to Telegram"), and Piopio offered another way | — |
+
+**Fixed from the trial:**
+- **A fire missed while the Mac slept failed.** The engine fires what it missed the moment it starts, before the app
+  has connected to unlock the Keychain, so the run failed with "OpenRouter isn't connected". Due fires now wait for a
+  client that can hand over keys, up to a minute (`SecretBroker.whenConnected`, the host's `ready`). On the rebuilt
+  app the same fire waited, then ran.
+- **Piopio's card wasn't drawn.** The engine kept no `details` for `automate`, so in a real conversation with Piopio
+  the app fell back to a plain tool card: no Open in Automations, no Undo. `automate` and `change_automation` now carry
+  `{ type: "automation", automation }` (a new `ToolDetails` kind), and the app draws a change as "Changed · …".
+- **Agents didn't know their contacts.** Nothing in Rita's prompt said who she could message, so she asked who Lucía
+  was, then wrote `to: "Lucía"`. The approval was asked, granted, and the send then failed ("No contact “Lucía”"), so
+  you were asked a second time. Now the prompt lists the people `send_message` reaches (in your chat and in runs), and
+  `contactFor` accepts a name in any case or accents as well as an id, in the send and in the approval rules.
+- **Agents made automations for work only Piopio can do.** Asked to "have Piopio update orders.md in the shop project",
+  Rita made one that runs as Rita, who can't see the folder. AU5 held (she made nothing for Piopio), but the result
+  could never work. The tool text didn't stop Haiku; a line in the agent's prompt did: Rita now says that's Piopio's
+  and to ask it. Piopio's `automate` says the same from its side: asked to "have Rita go through orders.md here", it
+  made one run as Piopio in the project that reads the file and asks @Rita with its contents.
+- **An email automation with no mailbox was accepted.** Its card said "When an email from … arrives", and nothing would
+  ever see one. It's refused now, saying to connect Gmail or Outlook first.
+- **A waiting agent run said "running".** It's `waiting` now, with "Waiting for your OK: …", and back to running once
+  you answer. The Inbox item is named after the automation ("Café Norte order to Lucía · needs your OK") instead of
+  "Approval · send_message".
+- **A skipped run lost its cost.** What it spent before it was skipped is kept.
+- **A migrated webhook's name read "… shop form: . Tell…".** The name is now what comes before `{{body}}`.
+
+Checked: the TypeScript suites (232 engine tests), the Swift tests and the app build; on the rebuilt copy, the missed
+fire, Rita's contact by id, Rita declining Piopio's work, and Piopio running the Rita check itself.
+
+**Seen, not changed:**
+- No connected mailbox, so an email trigger was simulated: Run now, with the email in the prompt where the watcher
+  puts "What happened". A real Gmail or Outlook watch is still untested (12's OAuth apps).
+- Piopio chose "quiet" for the bake plan without being asked. It's defensible, since the result is a file.
+- An unattended Piopio run in an Auto-edit project waits on every command, even `ls`. That's AU8 (never more than the
+  project allows), but a run there may wait on things that look harmless. Read-only commands may deserve the
+  sandbox's pass, as in Build.
+- Run now adds "What happened: Run now, by the user." to the prompt. Harmless, though a little odd for a time
+  automation.
+- After an approval, an agent's chat with you stays busy until it's answered, so nothing else can be said there
+  meanwhile. That's 06's approval wait, not an automation's.
+- Migrated automations get no budget per run; new ones do ($0.25 or $0.50).
+

@@ -44,6 +44,11 @@ export function startDetails(tool: string, args: unknown): ToolDetails | undefin
 
 /** Details once the call finished. */
 export function endDetails(tool: string, args: unknown, result: PiToolResult | undefined, output: string | undefined, isError: boolean): ToolDetails | undefined {
+	if (tool === "automate" || tool === "change_automation") {
+		// The card the app draws for it (docs/spec/27 §4), from what the tool returned.
+		const d = (result?.details ?? {}) as { automation?: Extract<ToolDetails, { type: "automation" }>["automation"]; changed?: boolean };
+		return !isError && d.automation ? { type: "automation", automation: d.automation, ...(d.changed ? { changed: true } : {}) } : undefined;
+	}
 	const start = startDetails(tool, args);
 	if (!start) return undefined;
 	if (tool === "task") {

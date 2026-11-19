@@ -19,6 +19,23 @@ export const Contact = Type.Object({
 });
 export type Contact = Static<typeof Contact>;
 
+const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/^@/, "").trim().toLowerCase();
+
+/**
+ * The contact a model meant: its id, or its name in any case and with or without accents ("Lucía", "lucia"), or a
+ * first name only one contact has. Models write names; ids are what the definition keeps.
+ */
+export function contactFor(contacts: readonly Contact[], to: string): Contact | undefined {
+	const exact = contacts.find((c) => c.id === to);
+	if (exact) return exact;
+	const want = fold(to);
+	if (!want) return undefined;
+	const named = contacts.filter((c) => fold(c.id) === want || fold(c.name) === want);
+	if (named.length === 1) return named[0];
+	const first = contacts.filter((c) => fold(c.name).split(/\s+/)[0] === want);
+	return first.length === 1 ? first[0] : undefined;
+}
+
 export const Schedule = Type.Object({
 	id: Type.String({ pattern: "^[a-z0-9_-]+$" }),
 	cron: Type.String(),

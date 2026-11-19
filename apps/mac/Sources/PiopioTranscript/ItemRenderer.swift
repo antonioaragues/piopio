@@ -119,12 +119,13 @@ nonisolated struct ItemRenderer: Sendable {
             return sideOffer(t)
         case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat") && t.status == .done:
             return offerCard(t)
-        case .tool(let t) where t.tool == "automate" && t.status == .done:
-            // Piopio made an automation (docs/spec/27 §4): its card, Open in Automations and Undo.
+        case .tool(let t) where (t.tool == "automate" || t.tool == "change_automation") && t.status == .done:
+            // Piopio made or changed an automation (docs/spec/27 §4): its card, Open in Automations, and Undo for a new one.
             guard case .object(let details)? = t.details, case .object(let s)? = details["automation"], let id = s["id"]?.stringValue else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
             let summary = AutomationSummary(id: id, name: s["name"]?.stringValue ?? "Automation", when: s["when"]?.stringValue ?? "", runsAs: s["runsAs"]?.stringValue ?? "",
                                             does: s["does"]?.stringValue ?? "", tellsYou: s["tellsYou"]?.stringValue ?? "", runsOn: s["runsOn"]?.stringValue ?? "", url: s["url"]?.stringValue)
-            return automationCard(summary, undo: .removeAutomation(id: id))
+            let changed = t.tool == "change_automation"
+            return automationCard(summary, undo: changed ? nil : .removeAutomation(id: id), changed: changed)
         case .tool(let t) where t.tool == "side_propose" && t.status == .done:
             return sideProposal(t)
         case .tool(let t) where t.tool == "propose_plan":

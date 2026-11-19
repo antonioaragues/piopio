@@ -8,7 +8,7 @@
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
 import { defineTask, defineTool, type ConversationId, type Harness, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
-import { cronError, type AgentDefinition } from "./definition.js";
+import { contactFor, cronError, type AgentDefinition } from "./definition.js";
 import type { ResultCard, UndoKind } from "./safety.js";
 import { cronLabel, dayOf, inWindow, nextDay, nextFire, nextHeartbeat, windowEnd } from "./time.js";
 
@@ -439,7 +439,9 @@ export class Proactivity {
 	/** Sends now, or queues for after quiet hours or the daily limits (PR4, PR5), or until a pause ends (AS4). */
 	async send(to: string, text: string, from: string, urgent = false): Promise<{ status: "sent" | "queued"; until?: number; reason?: "quiet" | "limit" | "paused"; outboxId?: string }> {
 		const def = this.def;
-		if (!def.contacts.some((c) => c.id === to)) throw new Error(`No contact “${to}”. Contacts: ${def.contacts.map((c) => c.id).join(", ")}.`);
+		const contact = contactFor(def.contacts, to);
+		if (!contact) throw new Error(`No contact “${to}”. Contacts: ${def.contacts.map((c) => `${c.id} (${c.name})`).join(", ")}.`);
+		to = contact.id;
 		const now = this.host.now();
 		if (await this.host.paused?.()) return this.queue(to, text, from, now + PAUSED, "paused", urgent);
 		const quiet = def.policies?.quietHours;
@@ -729,7 +731,7 @@ export class Proactivity {
 		const automate = defineTool({
 			name: "automate",
 			description:
-				"Make an automation: work you'll do on your own, when nobody asks. A time (once or repeating), a new email, a file in a folder, or a URL other apps can call. Each time it fires you get the prompt in an automatic run. Use it when the owner asks for something regular or for later (\"every Monday at 9…\", \"remind me Thursday…\", \"when an invoice arrives…\"). It always runs as you.",
+				"Make an automation: work you'll do on your own, when nobody asks. A time (once or repeating), a new email, a file in a folder, or a URL other apps can call. Each time it fires you get the prompt in an automatic run. Use it when the owner asks for something regular or for later (\"every Monday at 9…\", \"remind me Thursday…\", \"when an invoice arrives…\"). It always runs as you, with your own tools, outside any project. Don't make one for work you can't do yourself: when the owner wants Piopio or another agent to do it, or wants a project's files read or changed, make nothing and tell them to ask Piopio (from Home, or in that project), which can.",
 			parameters: Type.Object({ ...trigger, prompt: Type.String({ description: "What to do then, in plain words" }), ...rest, to: Type.Optional(Type.String({ description: "Who it's for (a contact id). Default: the owner" })) }),
 			execute: async (args, api) => {
 				try {

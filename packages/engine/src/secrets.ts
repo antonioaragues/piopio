@@ -18,12 +18,14 @@ export class SecretBroker {
 	private cache = new Map<string, string>();
 	/** Writes made while no client could store them; flushed when one connects. */
 	private pending = new Map<string, string | null>();
+	private waiting: (() => void)[] = [];
 
 	constructor(private readonly env: NodeJS.ProcessEnv = process.env) {}
 
 	/** Registers a client able to answer `secrets.get` (and store secrets, given a writer); returns an unregister function. */
 	addRequester(requester: SecretRequester, writer?: SecretWriter): () => void {
 		this.requesters.push(requester);
+		for (const wake of this.waiting.splice(0)) wake();
 		if (writer) {
 			this.writers.push(writer);
 			void this.flush();
@@ -37,6 +39,24 @@ export class SecretBroker {
 	/** Whether any client can answer right now (a miss without one isn't an answer). */
 	get connected(): boolean {
 		return this.requesters.length > 0;
+	}
+
+	/**
+	 * Resolves once a client that can unlock the Keychain is connected, or after `timeoutMs` (true if one is). Work that
+	 * starts on its own right after the engine does (a fire missed while the Mac slept) waits for it, so it doesn't fail
+	 * for a key the app hasn't handed over yet.
+	 */
+	whenConnected(timeoutMs: number): Promise<boolean> {
+		if (this.connected) return Promise.resolve(true);
+		return new Promise((resolve) => {
+			const timer = setTimeout(() => {
+				this.waiting = this.waiting.filter((w) => w !== wake);
+				resolve(this.connected);
+			}, timeoutMs);
+			timer.unref?.();
+			const wake = () => (clearTimeout(timer), resolve(true));
+			this.waiting.push(wake);
+		});
 	}
 
 	/** Stores a secret in the client's Keychain; kept in memory (and retried) when no client can store it. */

@@ -124,7 +124,7 @@ export function automationsExtension(bridge: PiopioAutomationsBridge): Extension
 				name: "automate",
 				label: "New automation",
 				description:
-					"Make an automation: work that starts on its own, when nobody asks. A time (once or repeating), a new email, a file in a folder, or a URL other apps can call. Use it when the user asks for something regular or for later (\"every Monday at 9…\", \"when an invoice arrives…\"). Piopio runs it in a new conversation (in this project, when there is one); one of the user's agents can run it instead (runs_as), in its own chat. The user sees it in Automations and can undo it.",
+					"Make an automation: work that starts on its own, when nobody asks. A time (once or repeating), a new email, a file in a folder, or a URL other apps can call. Use it when the user asks for something regular or for later (\"every Monday at 9…\", \"when an invoice arrives…\"). Piopio runs it in a new conversation (in this project, when there is one); one of the user's agents can run it instead (runs_as), in its own chat. An agent has only its own tools and never works in a project: it can't read or change this project's files. For work on files here, run it as Piopio, and let its prompt ask @Agent for what only that agent knows. The user sees it in Automations and can undo it.",
 				promptSnippet: "automate: make work start on its own (a time, an email, a file, a URL)",
 				parameters: Type.Object({ ...shared, prompt: Type.String({ description: "What to do then, in plain words" }) }),
 				async execute(_id, p) {

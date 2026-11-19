@@ -140,7 +140,7 @@ export class AgentCore {
 				const peerId = await this.peers.peerOf(conversationId);
 				if (peerId) return { peerId, ...(this.owner ? { contact: this.owner } : {}) };
 				const run = await this.proactive.runOf(conversationId);
-				return run ? { runId: run.id, ...(this.owner ? { contact: this.owner } : {}) } : {};
+				return run ? { runId: run.id, ...(run.kind === "automation" && run.label ? { runLabel: run.label } : {}), ...(this.owner ? { contact: this.owner } : {}) } : {};
 			},
 			note: (contactId, text, forModel) => this.proactive.notice(text, contactId, forModel),
 			abortAll: () => this.abortAll(),
@@ -682,7 +682,18 @@ export class AgentCore {
 								? "\n\nYou're also on Telegram: the owner's messages there come to this same conversation, and your answers go back there."
 								: "\n\nIf the owner wants to talk with you on Telegram: they make a bot with @BotFather (/newbot) and paste the token it gives them in this chat. Piopio connects it and sends them a link; you never see the token.";
 					const interview = core.def.interview && contact?.role === "owner" ? `\n\n${core.options.automations ? INTERVIEW_PROMPT_AUTOMATIONS : INTERVIEW_PROMPT}` : "";
-					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
+					// Who send_message can reach, by id (docs/spec/27 A3: without it the agent asked who Lucía was).
+					const others = core.def.contacts.filter((c) => c.role !== "owner");
+					const people =
+						(contact?.role === "owner" || run) && others.length && core.def.tools.builtin.includes("send_message")
+							? `\n\nPeople you can message with send_message (to: their id): ${[owner, ...others].filter((c) => c !== undefined).map((c) => `${c.id} (${c.name}${c.role === "owner" ? ", your owner" : ""}${c.notes ? `: ${c.notes}` : ""})`).join("; ")}.`
+							: "";
+					// What an agent may automate (docs/spec/27 AU5–AU6; A3: asked for Piopio's project work, it made one for itself).
+					const automating =
+						contact?.role === "owner" && core.options.automations
+							? "\n\nAutomations you make always run as you, with only your own tools, outside any project: you can't read or change the files of Piopio's projects. When the owner wants Piopio or another agent to do something on its own, or wants a project's files changed, don't make an automation: tell them to ask Piopio, from Home or in that project."
+							: "";
+					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${people}${automating}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
 				}),
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;

@@ -126,7 +126,11 @@ export function nextOf(a: Pick<Automation, "on" | "cron" | "at" | "tz">, after: 
 
 /** A name from a prompt when none was given: its first words. */
 export function nameOf(prompt: string): string {
-	const line = prompt.trim().split("\n")[0]!.replace(/\s+/g, " ").replace(/[.!?:;,]+$/, "");
+	let line = prompt.trim().split("\n")[0]!.replace(/\s+/g, " ");
+	// A webhook's {{body}} isn't words: the name is what comes before it ("A new order came in from the shop form").
+	const cut = line.indexOf("{{");
+	if (cut > 0) line = line.slice(0, cut);
+	line = line.replace(/\{\{\w+\}\}/g, "").trim().replace(/[.!?:;,\s]+$/, "");
 	const short = line.length > 48 ? `${line.slice(0, 47).trimEnd()}…` : line;
 	return short ? short[0]!.toUpperCase() + short.slice(1) : "Automation";
 }
