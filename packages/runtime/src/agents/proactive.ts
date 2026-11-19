@@ -10,6 +10,7 @@ import { Type } from "typebox";
 import { defineTask, defineTool, type ConversationId, type Harness, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
 import { contactFor, cronError, type AgentDefinition } from "./definition.js";
 import type { ResultCard, UndoKind } from "./safety.js";
+import { passedText } from "../context/clock.js";
 import { cronLabel, dayOf, inWindow, nextDay, nextFire, nextHeartbeat, windowEnd } from "./time.js";
 
 export type RunKind = "schedule" | "heartbeat" | "reminder" | "trigger" | "manual" | "automation";
@@ -611,7 +612,7 @@ export class Proactivity {
 				else {
 					const at = parseLocal(args.when, self.tz);
 					if (at === undefined) return { output: [{ type: "text", text: "Give an ISO date-time (2026-10-23T09:00) or a cron (0 9 * * 1)." }], isError: true };
-					if (at <= now) return { output: [{ type: "text", text: "That moment has passed." }], isError: true };
+					if (at <= now) return { output: [{ type: "text", text: passedText(now, self.tz) }], isError: true };
 					reminder.at = at;
 				}
 				await self.host.write((s) => void (s.reminders = [...(s.reminders ?? []), reminder]));

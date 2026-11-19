@@ -4,7 +4,7 @@
  * works in one, where the result goes, what it may do while you're away, and its runs. These are the plain types and
  * the words for them; `service.ts` keeps, fires and watches them.
  */
-import { nextFire, parseLocal } from "@piopio/runtime";
+import { nextFire, parseLocal, passedText } from "@piopio/runtime";
 
 export type Trigger = "time" | "folder" | "email" | "webhook";
 /** Where a run's result goes (AU7). An agent: its chat with you, Telegram, or only if it needs you. Piopio: a conversation, or only if it needs you. */
@@ -113,7 +113,7 @@ export function parseWhen(when: string, tz: string, now: number): { cron: string
 	}
 	const at = parseLocal(text, tz);
 	if (at === undefined) return { error: "Give a 5-field cron (0 9 * * 1) or a date and time (2026-11-16T09:00)." };
-	if (at <= now) return { error: "That moment has passed." };
+	if (at <= now) return { error: passedText(now, tz) };
 	return { at };
 }
 

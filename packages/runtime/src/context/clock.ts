@@ -46,6 +46,20 @@ export function localDate(t: number, tz: string): string {
 	return `${p.year}-${String(month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
 }
 
+/** The local date and time of `t` in `tz`, as the time tools take it: "2026-11-19T09:34". */
+export function localDateTime(t: number, tz: string): string {
+	const p = Object.fromEntries(formatter(tz).formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+	return `${localDate(t, tz)}T${p.hour}:${p.minute}`;
+}
+
+/**
+ * Why a time was refused, with the time now: the model only sees the clock when a message starts something new
+ * (above), so "in 3 minutes" a few minutes later lands in the past (seen in the cloud trial, 2026-11-19).
+ */
+export function passedText(now: number, tz: string): string {
+	return `That moment has passed: it's now ${localDateTime(now, tz)} (${tz}). Give a later time.`;
+}
+
 /** "3 days", "2 hours", "25 minutes"; undefined under a minute. */
 export function formatGap(ms: number): string | undefined {
 	const minutes = Math.floor(ms / 60_000);

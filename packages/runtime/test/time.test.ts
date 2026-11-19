@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { dayOf, inWindow, nextDay, nextFire, nextHeartbeat, windowEnd } from "../src/agents/time.js";
+import { passedText } from "../src/context/clock.js";
 
 const at = (iso: string) => Date.parse(iso);
 const iso = (t: number) => new Date(t).toISOString();
@@ -24,4 +25,10 @@ describe("proactivity time", () => {
 		expect(dayOf(at("2026-10-21T23:30:00Z"), "Europe/Madrid")).toBe("2026-10-22");
 		expect(iso(nextDay(at("2026-10-21T10:20:00Z"), "UTC"))).toBe("2026-10-22T00:00:00.000Z");
 	});
+});
+
+test("a time that has passed is refused with the time now, in the agent's zone", () => {
+	const now = Date.UTC(2026, 10, 19, 9, 34);
+	expect(passedText(now, "UTC")).toBe("That moment has passed: it's now 2026-11-19T09:34 (UTC). Give a later time.");
+	expect(passedText(now, "Europe/Madrid")).toContain("2026-11-19T10:34 (Europe/Madrid)");
 });
