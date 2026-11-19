@@ -97,15 +97,20 @@ test("pasting a bot token connects Telegram from the cloud; the owner pairs, wri
 	// A stranger gets nothing but the canned line on /start; the owner pairs with the link's code.
 	expect((await post(secret, from(999, "/start"))).status).toBe(200);
 	await until(() => sent(999), (s) => s.length === 1);
-	expect((await post(secret, from(4242, `/start ${link[1]}`))).status).toBe(200);
-	const hello = await until(() => sent(4242), (s) => s.length === 1);
-	expect(hello[0]).toMatch(/running in the cloud/);
+	// Telegram opened the chat without the link's code: the bot asks for it, and the owner sends it on its own.
+	expect((await post(secret, from(4242, "/start"))).status).toBe(200);
+	const hint = await until(() => sent(4242), (s) => s.length === 1);
+	expect(hint[0]).toMatch(/send me the code/);
+	expect(hint[0]).not.toContain(link[1]);
+	expect((await post(secret, from(4242, link[1]!))).status).toBe(200);
+	const hello = await until(() => sent(4242), (s) => s.length === 2);
+	expect(hello[1]).toMatch(/running in the cloud/);
 
 	// The owner writes on Telegram: the turn is the owner's conversation, and the answer goes back to the chat.
 	const update = nextUpdate;
 	expect((await post(secret, from(4242, "hello from my phone"), update)).status).toBe(200);
-	const answers = await until(() => sent(4242), (s) => s.length === 2);
-	expect(answers[1]).toBe("Echo: hello from my phone");
+	const answers = await until(() => sent(4242), (s) => s.length === 3);
+	expect(answers[2]).toBe("Echo: hello from my phone");
 	expect(calls.some((x) => x.method === "sendChatAction" && x.body.chat_id === 4242)).toBe(true);
 	const mine = (await c.call("sessions.subscribe", { ref })).snapshot;
 	expect(JSON.stringify(mine.items)).toContain("hello from my phone");
@@ -113,5 +118,5 @@ test("pasting a bot token connects Telegram from the cloud; the owner pairs, wri
 	// Telegram retries an update it thinks failed: it's answered once.
 	expect((await post(secret, from(4242, "hello from my phone"), update)).status).toBe(200);
 	await new Promise((r) => setTimeout(r, 1500));
-	expect(sent(4242)).toHaveLength(2);
+	expect(sent(4242)).toHaveLength(3);
 }, 60_000);

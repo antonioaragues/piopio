@@ -92,7 +92,7 @@ export class CloudTelegram {
 		await this.host.save((def) => void (def.channels = { ...def.channels, telegram: { bot: "secret:TELEGRAM_BOT" } }));
 		const link = me.username ? `https://t.me/${me.username}?start=${code}` : undefined;
 		return link
-			? `Connected to @${me.username}, from the cloud. Open ${link} on your phone and tap Start: from then on I'll answer you there, even with your Mac off. The link works for an hour.`
+			? `Connected to @${me.username}, from the cloud. Open ${link} on your phone and tap Start: from then on I'll answer you there, even with your Mac off. If the chat opens without pairing, send me ${code} there. The link works for an hour.`
 			: `Connected, from the cloud. Send /start ${code} to the bot on Telegram within an hour.`;
 	}
 
@@ -165,8 +165,11 @@ export class CloudTelegram {
 	/** Someone the agent doesn't know: the owner pairing with the link, or a stranger (06 `unknownSenders`). */
 	private async unknown(state: State, bot: TelegramBot, message: TelegramMessage, text: string): Promise<void> {
 		const def = this.host.definition();
-		const code = /^\/start\s+(\S+)/.exec(text)?.[1];
-		if (code && state.pairing && code === state.pairing.code && Date.now() < state.pairing.until) {
+		// The link's code arrives as `/start <code>`; when Telegram opens the chat without it (the chat already existed, or
+		// the link went through a browser), the owner sends the code itself.
+		const code = /^\/start\s+(\S+)/.exec(text)?.[1] ?? (/^[0-9a-f]{12}$/i.test(text) ? text : undefined);
+		const pending = state.pairing && Date.now() < state.pairing.until ? state.pairing : undefined;
+		if (code && pending && code.toLowerCase() === pending.code) {
 			const chatId = String(message.chat.id);
 			await this.host.save((d) => {
 				const owner = d.contacts.find((c) => c.role === "owner");
@@ -183,7 +186,9 @@ export class CloudTelegram {
 			return;
 		}
 		const mode = def.policies?.unknownSenders ?? "ignore";
-		if (mode === "reply_canned" || text.startsWith("/start")) await bot.send(message.chat.id, `I'm ${def.name}, a personal agent. I only talk with the people my owner adds.`);
+		if (pending && text.startsWith("/start")) {
+			await bot.send(message.chat.id, `I'm ${def.name}, a personal agent. If you're my owner, send me the code from your pairing link (the part after start=).`);
+		} else if (mode === "reply_canned" || text.startsWith("/start")) await bot.send(message.chat.id, `I'm ${def.name}, a personal agent. I only talk with the people my owner adds.`);
 		if (mode === "ask_owner") {
 			const who = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(" ") || message.from?.username || "Someone";
 			await this.host.notice(`${who} wrote to me on Telegram (chat ${message.chat.id}): “${text.slice(0, 200)}”. Add them as a contact with that chat id if I should talk with them.`);
