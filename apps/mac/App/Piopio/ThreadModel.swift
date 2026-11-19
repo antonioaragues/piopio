@@ -292,6 +292,9 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .openAgentRun, object: id)
         case .openSession(let id):
             NotificationCenter.default.post(name: .selectBuildSession, object: id)
+        case .openFile(let path, _) where ref.kind == .thread:
+            // A chat has no files panel: the files it made open in the viewer sheet, as the files you sent do.
+            NotificationCenter.default.post(name: .viewFile, object: URL(fileURLWithPath: path))
         case .openFile(let path, let line):
             viewing = FileTarget(path: path, line: line)
         case .openAttachment(let stored):

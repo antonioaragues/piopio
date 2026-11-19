@@ -19,9 +19,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
 import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, SessionState, Snapshot } from "@piopio/protocol";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage, type ToolImageKeeper } from "../timeline/builder.js";
@@ -145,6 +145,8 @@ export class BuildRuntime implements Runtime {
 		private readonly chat?: ChatProfile,
 	) {
 		this.builder = new TimelineBuilder(ref);
+		// A branched chat has its own copy of the source chat's folder: its cards open the copy (chatsFolderCopy).
+		if (chat) this.builder.relocate = chatRelocate(cwd);
 		this.contextBreakdown = new ContextBreakdown(session);
 	}
 
@@ -1050,8 +1052,11 @@ function piBuiltins() {
 	];
 }
 
-/** pi's tools a chat doesn't get: it has no folder of the user's to look in or change (`read` stays, for skills). */
-const CHAT_OFF = ["bash", "powershell", "edit", "write", "grep", "find", "ls"];
+/**
+ * pi's tools a chat doesn't get: it has no folder of the user's to look in, and runs no commands. `read` stays, for
+ * skills; `write` and `edit` stay for the files it makes for you, in its own folder only (`chatFilesOnly`).
+ */
+const CHAT_OFF = ["bash", "powershell", "grep", "find", "ls"];
 
 /** `ask_user` and `notify_user`: a question waits on the session's question card, a notice is a note in the transcript. */
 function notifyBridge(o: BuildOpenOptions, broker: PromptBroker, runtime: () => BuildRuntime | undefined) {
@@ -1075,6 +1080,9 @@ function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () =>
 		chatPromptExtension(o.chat!.web),
 		...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
 		skillsOnlyRead(o.cwd, () => runtime()?.skillDirs() ?? []),
+		chatFilesOnly(o.cwd),
+		// The files it made, as cards to open or save (as Claude.ai's present_files).
+		presentExtension(),
 		...(o.browser ? [codingBrowserExtension(o.browser, (callId, signal) => (request) => card(callId, signal)({ ...request, always: `Always allow ${request.site}` }))] : []),
 		guardsExtension(),
 		chatProfileExtension(o.hub, o.webOptions, () => false),
@@ -1100,14 +1108,58 @@ function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () =>
 	];
 }
 
-/** `read` in a chat: a skill's files only (pi lists the skills for the model to read). */
+/** Where a chat's tool call points: `~/` expanded, relative to the chat's folder, symlinks resolved as far as they exist. */
+function chatPath(cwd: string, raw: string): string {
+	const logical = resolve(cwd, raw.startsWith("~/") ? join(homedir(), raw.slice(2)) : raw);
+	// A new file doesn't exist yet: resolve its nearest existing folder (the chat's folder, under a /var → /private/var link).
+	for (let dir = logical, rest = ""; ; rest = rest ? join(basename(dir), rest) : basename(dir), dir = dirname(dir)) {
+		if (existsSync(dir)) return rest ? join(realpathSync(dir), rest) : realpathSync(dir);
+		if (dirname(dir) === dir) return logical;
+	}
+}
+
+/**
+ * A file another chat made (`<scratch>/<other id>/<path>`), as this chat's copy of it when there is one: a branch
+ * copies the folder, and the source chat (and its folder) may be deleted later.
+ */
+export function chatRelocate(cwd: string): (path: string) => string {
+	const scratch = dirname(resolve(cwd));
+	return (path) => {
+		if (!path.startsWith(`${scratch}/`) || insideDir(path, resolve(cwd))) return path;
+		const rest = path.slice(scratch.length + 1).split("/").slice(1).join("/");
+		const copy = join(cwd, rest);
+		return rest && existsSync(copy) ? copy : path;
+	};
+}
+
+const insideDir = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`);
+
+/**
+ * `write` and `edit` in a chat: inside its own folder only (the engine's scratch folder for it, which goes with the
+ * chat). That's where the files it makes for you live; the user's own files stay out of reach, as before.
+ */
+function chatFilesOnly(cwd: string): ExtensionFactory {
+	return (pi) => {
+		pi.on("tool_call", (event) => {
+			if (event.toolName !== "write" && event.toolName !== "edit") return undefined;
+			const raw = String((event.input as { path?: unknown }).path ?? "");
+			const own = chatPath(cwd, ".");
+			return raw && insideDir(chatPath(cwd, raw), own)
+				? undefined
+				: { block: true, reason: "In a conversation without a project, files go in this conversation's own folder: use a plain file name, like report.md." };
+		});
+	};
+}
+
+/** `read` in a chat: a skill's files, and the files it made in its own folder (pi lists the skills for the model to read). */
 function skillsOnlyRead(cwd: string, dirs: () => readonly string[]): ExtensionFactory {
 	return (pi) => {
 		pi.on("tool_call", (event) => {
 			if (event.toolName !== "read") return undefined;
 			const raw = String((event.input as { path?: unknown }).path ?? "");
 			const path = resolve(cwd, raw.startsWith("~/") ? join(homedir(), raw.slice(2)) : raw);
-			return dirs().some((d) => path === d || path.startsWith(`${d}/`)) ? undefined : { block: true, reason: "In a conversation without a project, read opens a skill's files only." };
+			if (raw && insideDir(chatPath(cwd, raw), chatPath(cwd, "."))) return undefined;
+			return dirs().some((d) => path === d || path.startsWith(`${d}/`)) ? undefined : { block: true, reason: "In a conversation without a project, read opens a skill's files and the files you made here only." };
 		});
 	};
 }

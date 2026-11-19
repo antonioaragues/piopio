@@ -43,11 +43,19 @@ A free-standing conversation. Backed by **one pi-durable session** (`threads/<id
 - **T11** Export: Markdown, HTML, JSONL. Copy the conversation as Markdown. The same for every conversation, not only chats: see 08-app-shell §9.
 - **T12** Archive/delete. Deleting removes the SQLite file and the catalog entry.
 - **T13** "Move to Space": attach the thread as a new topic of a Space (copies history, then archives the original).
+- **T14** Files a chat makes (built 2026-11-20, as Claude.ai's file creation): a chat has a folder of its own (the
+  engine's `scratch/<id>`). It writes files there with `write` and `edit`, which refuse any other path, and hands them
+  over with `present_files`: a card per file that opens in the viewer sheet, with a save button (a copy, by default in
+  Downloads), a context menu (Open, Open in Default App, Save a Copy…, Show in Finder) and drag-out. `read` opens them
+  too, besides skills. The prompt says when: a file the user asks for, or something long they'll keep; short answers
+  stay in the chat. Text formats only (no commands, so no .docx or .xlsx yet). The folder goes with the chat; a branch
+  copies it, and its cards open the copy.
 
 ### 1.3 Later
 - "Move to cloud" (the thread runs on the Cloud Engine, reachable from iOS).
 - Artifacts/canvas side panel (HTML/markdown documents the model writes and edits). **2026-11-16:** replaced by visuals and HTML files, [25-visuals.md](25-visuals.md).
-- Sandboxed code execution tool (codemode/QuickJS locally).
+- Sandboxed code execution tool (codemode/QuickJS locally). With it, chats could make Word, Excel and PDF files in their
+  folder (T14), as Claude.ai does with its sandbox and document skills.
 - Voice input (on-device dictation) and TTS.
 
 ---

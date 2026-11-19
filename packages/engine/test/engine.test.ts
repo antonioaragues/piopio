@@ -308,6 +308,42 @@ describe("milestone 1.3", () => {
 		expect(existsSync(join(a.home, "attachments", branch.ref.id))).toBe(true);
 	});
 
+	test("a chat writes files in its own folder and hands them over; elsewhere is refused; a branch opens its own copy", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		const outside = join(mkdtempSync(join(tmpdir(), "piopio-out-")), "x.md");
+		const script = [
+			"write: zaragoza.md | # Zaragoza\\nA warm year.",
+			`call: present_files | ${JSON.stringify({ files: [{ path: "zaragoza.md", description: "The year in Zaragoza" }] })}`,
+			`write: ${outside} | nope`,
+			"write: ../escape.md | nope",
+		];
+		await a.client.call("sessions.submit", { ref, input: { text: script.join("\n") } });
+		let tools: { tool: string; status: string; output?: string; details?: unknown }[] = [];
+		for (let i = 0; i < 200 && tools.filter((t) => t.status === "done" || t.status === "error").length < 4; i++) {
+			await new Promise((r) => setTimeout(r, 50));
+			tools = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((x) => (x.kind === "tool" ? [x as never] : []));
+		}
+		const folder = join(a.home, "scratch", ref.id);
+		expect(readFileSync(join(folder, "zaragoza.md"), "utf8")).toBe("# Zaragoza\nA warm year.");
+		expect(tools.map((t) => [t.tool, t.status])).toEqual([["write", "done"], ["present_files", "done"], ["write", "error"], ["write", "error"]]);
+		expect(tools[1]!.details).toMatchObject({ type: "files", files: [{ name: "zaragoza.md", path: join(folder, "zaragoza.md"), description: "The year in Zaragoza", size: 23 }] });
+		expect(tools[2]!.output).toContain("this conversation's own folder");
+		expect(existsSync(outside)).toBe(false);
+		expect(existsSync(join(a.home, "scratch", "escape.md"))).toBe(false);
+
+		// A branch copies the folder and its card opens the copy, which outlives the source chat.
+		const done = await settled(a, ref);
+		const branch = await a.client.call("sessions.fork", { ref, itemId: done.items.at(-1)!.id });
+		await a.client.call("sessions.delete", { ref });
+		expect(existsSync(folder)).toBe(false);
+		const copy = join(a.home, "scratch", branch.ref.id, "zaragoza.md");
+		expect(readFileSync(copy, "utf8")).toBe("# Zaragoza\nA warm year.");
+		const card = ((await a.client.call("sessions.open", { ref: branch.ref })) as Snapshot).items.find((x) => x.kind === "tool" && x.tool === "present_files");
+		expect(card).toMatchObject({ details: { type: "files", files: [{ path: copy }] } });
+	});
+
 	test("images need a vision model", async () => {
 		const a = await start();
 		a.client.secrets["provider.openrouter.apiKey"] = "sk-or-test";
@@ -1568,7 +1604,7 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		expect(snap.items.find((i) => i.kind === "tool")).toMatchObject({ tool: "read", output: expect.stringContaining("Bon dia!") });
 		await a.client.call("sessions.submit", { ref, input: { text: `call: read | ${JSON.stringify({ path: join(pkg, "package.json") })}` } });
 		snap = await idleWith(a, ref, (s) => s.state.status === "idle" && s.items.filter((i) => i.kind === "tool").length === 2 && s.items.some((i) => i.kind === "tool" && i.status === "error"));
-		expect(snap.items.filter((i) => i.kind === "tool")[1]).toMatchObject({ tool: "read", status: "error", output: expect.stringContaining("a skill's files only") });
+		expect(snap.items.filter((i) => i.kind === "tool")[1]).toMatchObject({ tool: "read", status: "error", output: expect.stringContaining("a skill's files and the files you made here only") });
 		expect(texts(snap).filter(([kind]) => kind === "user").map(([, text]) => text)).toEqual(["/summarize report 50", expect.stringContaining("call: read"), expect.stringContaining("call: read")]);
 
 		const skill = installed!.resources.skills[0]!.path;

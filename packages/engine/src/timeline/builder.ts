@@ -2,7 +2,7 @@
  * Runtime-neutral timeline model. Adapters (pi SDK, pi-durable) translate upstream events into
  * calls on this builder. It keeps the current items and collects SessionEvents until flush().
  */
-import type { AssistantItem, AssistantPart, AttachmentInfo, BranchInfo, SessionEvent, SessionState, Snapshot, TimelineItem, ToolItem, Usage, ContainerRef, UserItem } from "@piopio/protocol";
+import type { AssistantItem, AssistantPart, AttachmentInfo, BranchInfo, SessionEvent, SessionState, Snapshot, TimelineItem, ToolDetails, ToolItem, Usage, ContainerRef, UserItem } from "@piopio/protocol";
 import { describeModelError } from "./errors.js";
 import { endDetails, startDetails, type PiToolResult } from "./tool-details.js";
 import { DENIED_PREFIX } from "@piopio/pi-extensions";
@@ -59,6 +59,8 @@ export type ToolImageKeeper = (callId: string, images: readonly { data: string; 
 export class TimelineBuilder {
 	/** Where tool images go; without it they show only as "[image]" in the output. */
 	keepImages?: ToolImageKeeper;
+	/** Where a handed-over file is now (a branched chat's copy of its folder); paths it doesn't know stay as they are. */
+	relocate?: (path: string) => string;
 	private items: TimelineItem[] = [];
 	private index = new Map<string, number>();
 	private pending: SessionEvent[] = [];
@@ -118,7 +120,7 @@ export class TimelineBuilder {
 					this.addImages(t, r.content);
 					t.status = r.isError ? failedStatus(t.output) : "done";
 					const details = endDetails(t.tool, t.args, { details: r.details }, t.output, Boolean(r.isError));
-					if (details) t.details = details;
+					if (details) t.details = this.relocated(details);
 					this.addTaskCost(t);
 					const inner = nestedItems(t, (r as { nestedCalls?: unknown }).nestedCalls);
 					if (inner.length) nested.set(t.id, inner);
@@ -316,13 +318,18 @@ export class TimelineBuilder {
 		this.addImages(item, result?.content);
 		item.status = isError ? failedStatus(item.output) : "done";
 		const details = endDetails(item.tool, item.args, result, item.output, isError);
-		if (details) item.details = details;
+		if (details) item.details = this.relocated(details);
 		if (this.addTaskCost(item)) this.pending.push({ type: "state", state: structuredClone(this.state) });
 		if (durationMs !== undefined) item.durationMs = durationMs;
 		this.pending.push({ type: "item.updated", item: structuredClone(item) });
 	}
 
 	// ── Internals ──────────────────────────────────────────────────────────
+
+	private relocated(details: ToolDetails): ToolDetails {
+		const move = this.relocate;
+		return move && details.type === "files" ? { ...details, files: details.files.map((f) => ({ ...f, path: move(f.path) })) } : details;
+	}
 
 	/** A tool's images (a screenshot it read), kept so the activity line can show them; named after the file read. */
 	private addImages(item: ToolItem, content: PiContentBlock[] | undefined): void {

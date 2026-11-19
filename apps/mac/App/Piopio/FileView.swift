@@ -477,7 +477,7 @@ struct FileViewerSheet: ViewModifier {
     }
 }
 
-/// A file in a sheet (files you sent): its name and size, Open with the default app, Reveal in Finder, Done.
+/// A file in a sheet (files you sent, files a chat made): its name and size, Reveal in Finder, Save a copy, Open with the default app, Done.
 struct FileSheet: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss
@@ -493,6 +493,8 @@ struct FileSheet: View {
                 Spacer()
                 Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: { Image(systemName: "folder") }
                     .buttonStyle(IconButtonStyle()).help("Reveal in Finder").accessibilityLabel("Reveal in Finder")
+                Button { FileSaving.saveCopy(of: url) } label: { Image(systemName: "arrow.down.circle") }
+                    .buttonStyle(IconButtonStyle()).help("Save a copy…").accessibilityLabel("Save a copy")
                 Button("Open") { NSWorkspace.shared.open(url) }.buttonStyle(PillStyle(compact: true)).help("Open in its default app")
                 Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.cancelAction)
             }

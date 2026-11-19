@@ -106,6 +106,8 @@ struct FileCardView: View {
                 if !file.missing {
                     Text(file.description == nil ? "Open" : model.kindLine)
                         .font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).fixedSize()
+                    // Room for the Save button drawn over the card.
+                    Color.clear.frame(width: 26, height: 26)
                 }
             }
             .padding(.horizontal, 11)
@@ -120,10 +122,55 @@ struct FileCardView: View {
         .onHover { hovering = $0 }
         .help(file.missing ? "Not found: \(model.shownPath)" : "Open \(model.shownPath)")
         .accessibilityLabel(file.missing ? "\(file.name), not found" : "Open \(file.name), \(model.kindLine)")
+        .overlay(alignment: .trailing) {
+            if !file.missing {
+                Button { FileSaving.saveCopy(of: url) } label: {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(Color(nsColor: DS.fg2))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 11)
+                .help("Save a copy…")
+                .accessibilityLabel("Save a copy of \(file.name)")
+            }
+        }
+        // Drag it to Finder, Mail or another app, as a downloaded file.
+        .onDrag { file.missing ? NSItemProvider() : (NSItemProvider(contentsOf: url) ?? NSItemProvider()) }
+        .contextMenu {
+            if !file.missing {
+                Button("Open") { open() }
+                Button("Open in Default App") { NSWorkspace.shared.open(url) }
+                Button("Save a Copy…") { FileSaving.saveCopy(of: url) }
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            }
+        }
     }
+
+    private var url: URL { URL(fileURLWithPath: file.path) }
 
     private func open() {
         guard !file.missing else { return }
         MainActor.assumeIsolated { model.onAction?(.openFile(path: file.path, line: nil)) }
+    }
+}
+
+/// "Save a copy…" for a file Piopio holds (one an agent or a chat made): a save panel in Downloads, then a copy there.
+public enum FileSaving {
+    @MainActor public static func saveCopy(of url: URL) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = url.lastPathComponent
+        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let target = panel.url, target.standardizedFileURL != url.standardizedFileURL else { return }
+        do {
+            // The panel already asked whether to replace a file that's there.
+            if FileManager.default.fileExists(atPath: target.path) { try FileManager.default.removeItem(at: target) }
+            try FileManager.default.copyItem(at: url, to: target)
+        } catch {
+            NSAlert(error: error).runModal()
+        }
     }
 }

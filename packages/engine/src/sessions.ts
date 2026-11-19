@@ -5,7 +5,7 @@
 import { browserCaller, type BrowserCall, type BrowserSites } from "./tools/browser-tools.js";
 import type { ConnectorHub } from "./connectors/hub.js";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
@@ -415,6 +415,8 @@ export class Sessions {
 		delete copy.file;
 		delete copy.continuedIn;
 		copy.cwd = this.scratch(copy.ref.id);
+		// The files the chat made, so the branch's cards open its own copies (BuildRuntime's chatRelocate).
+		if (source.cwd && resolve(source.cwd).startsWith(`${resolve(this.paths.scratchDir)}/`) && existsSync(source.cwd)) cpSync(source.cwd, copy.cwd, { recursive: true });
 		copyAttachments(this.paths.home, ref.id, copy.ref.id);
 		this.entries.set(copy.ref.id, copy);
 		this.save();
