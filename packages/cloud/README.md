@@ -17,7 +17,11 @@ The Cloud Engine: a Cloudflare Worker with `RegistryDO` + one `AgentDO` per agen
 | `scripts/deploy.ts` | Deploy with the Cloudflare REST API and an API token (no `wrangler deploy`). |
 | `test/` | Miniflare (workerd) tests of the built bundle with the faux model, the deploy script against a fake API, and an opt-in real OpenRouter test. |
 
-Refs on the socket are `{ kind: "agent", id: <agent id>, conversationId?: <pi session id, default "1"> }`. A socket serves one agent (the one in `?agent=`).
+Refs on the socket are `{ kind: "agent", id: <agent id>, conversationId?: "person:<contact id>" | "run:<run id>" }`, as
+on the Mac. With no `conversationId` it's the owner's conversation (`person:owner`), the one the agent's runs write
+to. A person's message goes through the agent as on the Mac: `/pause`, `/resume` and budget first, memory recalled
+before the turn and kept after it. A run's conversation is read-only. `agents.runs` lists runs, held messages and
+what's next. A socket serves one agent (the one in `?agent=`).
 
 ## Develop and test
 
@@ -163,14 +167,5 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
 
 ## Open items for Phase 5
 
-- **Socket turns skip the agent's people.** `sessions.submit` goes straight to the pi session in the ref (`"1"` by
-  default), not through `AgentCore` as a person's message (`core.conversation(owner)`, `beforeTurn`, `afterTurn`).
-  So the owner's socket conversation isn't the conversation the agent's runs write to, and memory isn't recalled or
-  kept for it. On the account, the reminder's message went to the owner's conversation, which the socket can't name.
-- **The template promises Mac apps.** The personal-assistant template lists Calendar, Reminders, Contacts, Notes,
-  Music and Shortcuts. In the cloud they don't exist, but the agent says it can use them. A cloud agent's tools should
-  be what the cloud can run.
-
 - One socket per agent (`?agent=`). The app wants one `/v1/ws` for all agents: terminate it in a gateway (Worker or `RegistryDO`) that fans out to `AgentDO`s over RPC.
-- `state.model` reports the default model, not each session's stored one.
 - Move `src/timeline/` to `packages/runtime`, and validate `session.events` against the protocol schema in tests.

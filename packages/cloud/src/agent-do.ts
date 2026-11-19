@@ -23,7 +23,10 @@ import { DurableViewMapper, type DurableView, type Entry } from "./timeline/pi-d
 
 export const CLOUD_VERSION = "0.0.0";
 
-type Subscription = { id: string; session: string; seq: number };
+/** `session`: pi's session id inside the object; `conversation`: what refs call it (`person:<id>`, `run:<id>`). */
+type Subscription = { id: string; session: string; conversation?: string; seq: number };
+/** Where a ref goes: pi's session, its public name, and the person who writes there (none for a run). */
+type Target = { session: string; conversation: string; contactId?: string };
 type ConnState = { authed?: boolean; subs?: Subscription[] };
 type Connection = ReturnType<WebSockets["getConnections"]> extends IterableIterator<infer C> ? C : never;
 type ErrorCode = "NOT_FOUND" | "BUSY" | "AUTH" | "INVALID" | "INTERNAL";
@@ -46,10 +49,10 @@ class SessionView {
 	) {}
 
 	/** The active transcript is read before the watch, so the watch's first value is as new or newer. */
-	static async open(agentId: string, session: string, pi: PiSession, model: ModelRef): Promise<SessionView> {
+	static async open(agentId: string, conversation: string, pi: PiSession, model: ModelRef): Promise<SessionView> {
 		const transcript = (await pi.messages()) as unknown as Entry[];
 		const watch = await pi.watch();
-		const builder = new TimelineBuilder({ kind: "agent", id: agentId, conversationId: session });
+		const builder = new TimelineBuilder({ kind: "agent", id: agentId, conversationId: conversation });
 		const mapper = new DurableViewMapper(builder);
 		mapper.load(transcript, watch.value as unknown as DurableView, false);
 		builder.setState({ model });
@@ -82,9 +85,10 @@ export class AgentDO extends DurableObject<Env> {
 	private hostReady?: Promise<AgentHost>;
 
 	readonly harness = new PiHarness({
-		harness: async ({ storage, context }) => {
+		// onWake hands pi's sleeping timers to the object's alarm, so a sleeping task doesn't pin it in memory.
+		harness: async ({ storage, context, onWake }) => {
 			const registry = createRegistry();
-			const pi = await Harness.open(storage, { models: await createCloudModels(this.env), registry }, context);
+			const pi = await Harness.open(storage, { models: await createCloudModels(this.env), registry, onWake }, context);
 			const model = defaultModel(this.env);
 			this.agentDef = (await this.ctx.storage.get<StoredAgent>(AGENT_KEY)) ?? defaultAgent(this.agentId, `${model.provider}:${model.id}`);
 			const host = new AgentHost(pi, () => this.agentDef!, this.ctx.storage, context, () => void this.wake.rearm().catch(() => undefined));
@@ -102,9 +106,7 @@ export class AgentDO extends DurableObject<Env> {
 		open: () => this.host !== undefined,
 		busy: async () => {
 			for (const connection of this.webSockets.getConnections<ConnState>()) if (connection.state?.subs?.length) return true;
-			const people = Object.values(await this.host!.core.people());
-			for (const id of [ROOT_SESSION, ...people]) if (await this.harness.session(id).busy()) return true;
-			return false;
+			return this.working();
 		},
 		rest: async () => {
 			this.hostReady = undefined;
@@ -116,6 +118,13 @@ export class AgentDO extends DurableObject<Env> {
 			await this.ctx.storage.put(RESTS_KEY, [...((await this.ctx.storage.get<number[]>(RESTS_KEY)) ?? []), Date.now()].slice(-10));
 		},
 	}, this.env.PIOPIO_TEST_WAKE_MS ? { settleMs: Number(this.env.PIOPIO_TEST_WAKE_MS), restThresholdMs: 2 * Number(this.env.PIOPIO_TEST_WAKE_MS) } : undefined);
+
+	/** Whether pi is answering anyone: a person's conversation, or the root session. */
+	private async working(): Promise<boolean> {
+		const people = Object.values(await this.host!.core.people());
+		for (const id of [ROOT_SESSION, ...people]) if (await this.harness.session(id).busy()) return true;
+		return false;
+	}
 
 	/** The agent, once pi is open and its tasks have started (after any wake). */
 	async agent(): Promise<AgentHost> {
@@ -168,7 +177,8 @@ export class AgentDO extends DurableObject<Env> {
 
 	/** Runs once per alarm invocation, after Lifecycle drove the due jobs (PiHarness wakes). */
 	async onAlarm(): Promise<void> {
-		await this.ctx.storage.put(LAST_ALARM_KEY, Date.now());
+		// The last few alarm times (tests read them: an alarm between an eviction and a reconnect resumed the work).
+		await this.ctx.storage.put(ALARMS_KEY, [...((await this.ctx.storage.get<number[]>(ALARMS_KEY)) ?? []), Date.now()].slice(-20));
 	}
 
 	async onRequest(request: Request): Promise<Response> {
@@ -180,8 +190,8 @@ export class AgentDO extends DurableObject<Env> {
 					instanceId: this.instanceId,
 					startedAt: this.startedAt,
 					alarm: await this.ctx.storage.getAlarm(),
-					lastAlarmAt: (await this.ctx.storage.get<number>(LAST_ALARM_KEY)) ?? null,
-					busy: await this.harness.session().busy(),
+					alarms: (await this.ctx.storage.get<number[]>(ALARMS_KEY)) ?? [],
+					busy: await (async () => (await this.agent(), this.working()))(),
 				});
 			}
 		}
@@ -293,8 +303,8 @@ export class AgentDO extends DurableObject<Env> {
 			}
 			case "sessions.subscribe": {
 				const p = params as Params<"sessions.subscribe">;
-				const session = this.sessionOf(p.ref);
-				const sub: Subscription = { id: `sub_${crypto.randomUUID().slice(0, 8)}`, session, seq: 0 };
+				const { session, conversation } = await this.target(p.ref);
+				const sub: Subscription = { id: `sub_${crypto.randomUUID().slice(0, 8)}`, session, conversation, seq: 0 };
 				const view = await this.attach(connection, sub);
 				connection.setState({ ...state, subs: [...(state.subs ?? []), sub] } satisfies ConnState);
 				return { subscriptionId: sub.id, snapshot: view.builder.snapshot() } satisfies Result<"sessions.subscribe">;
@@ -310,17 +320,18 @@ export class AgentDO extends DurableObject<Env> {
 			}
 			case "sessions.submit": {
 				const p = params as Params<"sessions.submit">;
-				const session = this.harness.session(this.sessionOf(p.ref));
-				const busy = await session.busy();
+				const target = await this.target(p.ref);
+				if (!target.contactId) throw new RpcError("INVALID", "A run's conversation is read-only.");
+				const busy = await this.harness.session(target.session).busy();
 				if (busy && p.whenBusy === "reject") throw new RpcError("BUSY", "The agent is busy.");
 				const whenBusy = p.whenBusy === "steer" ? "steer" : "followUp";
-				await session.submit(p.input.text, { whenBusy, ...(p.clientRequestId ? { operationId: p.clientRequestId } : {}) });
-				return { accepted: true, disposition: busy ? "queued" : "started" } satisfies Result<"sessions.submit">;
+				const started = await this.say(target, p.input.text, { whenBusy, ...(p.clientRequestId ? { operationId: p.clientRequestId } : {}) });
+				return { accepted: true, disposition: busy && started ? "queued" : "started" } satisfies Result<"sessions.submit">;
 			}
 			case "agents.runs": {
 				// The agent's runs, held messages and what's next (06 PR1), as the Mac's Runs tab reads them.
 				const p = params as Params<"agents.runs">;
-				this.sessionOf({ ...p.ref, conversationId: undefined });
+				this.ownAgent(p.ref);
 				const o = await (await this.agent()).core.proactive.overview();
 				const iso = (t: number | undefined) => (t === undefined ? undefined : new Date(t).toISOString());
 				return {
@@ -331,7 +342,7 @@ export class AgentDO extends DurableObject<Env> {
 			}
 			case "sessions.abort": {
 				const p = params as Params<"sessions.abort">;
-				await this.harness.session(this.sessionOf(p.ref)).abort();
+				await this.harness.session((await this.target(p.ref)).session).abort();
 				return {};
 			}
 			default:
@@ -341,16 +352,68 @@ export class AgentDO extends DurableObject<Env> {
 
 	// ── Subscriptions ─────────────────────────────────────────────────────
 
-	private sessionOf(ref: Params<"sessions.subscribe">["ref"]): string {
+	/** The agent's own model ("provider:id" in its definition), else the Worker's default. */
+	private modelRef(): ModelRef {
+		const id = this.agentDef?.definition.models.default;
+		const colon = id?.indexOf(":") ?? -1;
+		return id && colon > 0 ? { provider: id.slice(0, colon), id: id.slice(colon + 1) } : defaultModel(this.env);
+	}
+
+	private ownAgent(ref: Params<"sessions.subscribe">["ref"]): void {
 		if (ref.kind !== "agent" || ref.id !== this.agentId) throw new RpcError("NOT_FOUND", `This socket serves agent ${this.agentId}.`);
-		return ref.conversationId ?? ROOT_SESSION;
+	}
+
+	/**
+	 * Where a ref goes, as on the Mac: `person:<id>` is that person's conversation with the agent (the owner's when the
+	 * ref names none), the one its runs write to and its memory follows; `run:<id>` is an automatic run's, read-only.
+	 */
+	private async target(ref: Params<"sessions.subscribe">["ref"]): Promise<Target> {
+		this.ownAgent(ref);
+		const core = (await this.agent()).core;
+		const def = this.agentDef!.definition;
+		const owner = def.contacts.find((c) => c.role === "owner")?.id ?? "owner";
+		const conversation = ref.conversationId ?? `person:${owner}`;
+		if (conversation.startsWith("person:")) {
+			const contactId = conversation.slice("person:".length);
+			if (!core.contact(contactId)) throw new RpcError("NOT_FOUND", `${def.name} has no contact ${contactId}.`);
+			return { session: String((await core.conversation(contactId)).id), conversation, contactId };
+		}
+		if (conversation.startsWith("run:")) {
+			const run = (await core.proactive.overview()).runs.find((r) => r.id === conversation.slice("run:".length));
+			if (!run?.conversationId) throw new RpcError("NOT_FOUND", `No run ${conversation.slice("run:".length)}.`);
+			return { session: String(run.conversationId), conversation };
+		}
+		throw new RpcError("NOT_FOUND", "A conversation is person:<contact id> or run:<run id>.");
+	}
+
+	/**
+	 * A person's message, as the Mac's agent runtime takes it: /pause, /resume and messages while paused or out of
+	 * budget answer without a turn; otherwise memory is recalled before, and what was said is kept once it's answered.
+	 * False when no turn started.
+	 */
+	private async say(target: Target, text: string, options: { whenBusy: "followUp" | "steer"; operationId?: string }): Promise<boolean> {
+		const core = (await this.agent()).core;
+		const contactId = target.contactId!;
+		if (await core.intercept(contactId, text)) return false;
+		await core.beforeTurn(contactId, Number(target.session) as never, text).catch(() => undefined);
+		const receipt = await this.harness.submit(text, { session: target.session, ...options });
+		// The answer comes later; keeping it doesn't hold the reply. An eviction before then loses only this memory.
+		this.ctx.waitUntil(
+			(async () => {
+				const result = await this.harness.wait(receipt.operationId, { session: target.session });
+				await core.afterTurn(contactId, text, result.text ?? "", { ref: `${this.agentId}:${target.conversation}` });
+				await core.safety.checkBudget().catch(() => undefined);
+				await this.wake.rearm();
+			})().catch(() => undefined),
+		);
+		return true;
 	}
 
 	/** Opens (or reuses) the session's view and routes its events to `sub` on `connection`. */
 	private async attach(connection: Connection, sub: Subscription): Promise<SessionView> {
 		let opening = this.views.get(sub.session);
 		if (!opening) {
-			opening = SessionView.open(this.agentId, sub.session, this.harness.session(sub.session), defaultModel(this.env));
+			opening = SessionView.open(this.agentId, sub.conversation ?? sub.session, this.harness.session(sub.session), this.modelRef());
 			opening.catch(() => this.views.delete(sub.session));
 			this.views.set(sub.session, opening);
 		}
@@ -387,7 +450,7 @@ export class AgentDO extends DurableObject<Env> {
 	}
 }
 
-const LAST_ALARM_KEY = "piopio:lastAlarmAt";
+const ALARMS_KEY = "piopio:alarms";
 const AGENT_KEY = "piopio:agent";
 const RESTS_KEY = "piopio:rests";
 

@@ -40,7 +40,7 @@ async function call<T = Record<string, unknown>>(agent: string, route: string, b
 	return (await res.json()) as T;
 }
 
-const status = async (agent: string) => (await (await mf.dispatchFetch(`${base.href}__test/status?agent=${agent}`, owner)).json()) as { instanceId: string; alarm: number | null; lastAlarmAt: number | null };
+const status = async (agent: string) => (await (await mf.dispatchFetch(`${base.href}__test/status?agent=${agent}`, owner)).json()) as { instanceId: string; alarm: number | null; alarms: number[] };
 const evict = (agent: string) => mf.unsafeEvictDurableObject(config.name, "AgentDO", { name: agent, webSockets: "close" });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -113,6 +113,7 @@ describe("Piopio's agent in a Durable Object (spike S7)", () => {
 			await sleep(800);
 			const running = await status(agent);
 			expect(running.alarm).not.toBeNull();
+			const evictedAt = Date.now();
 			await evict(agent);
 
 			await sleep(Math.max(0, running.alarm! + 15_000 - Date.now()));
@@ -120,7 +121,8 @@ describe("Piopio's agent in a Durable Object (spike S7)", () => {
 			const result = await call<{ status: string; text: string }>(agent, "wait", { session, operationId });
 			expect(result.status).toBe("done");
 			expect(result.text).toBe(`Echo: ${long}`);
-			expect((await status(agent)).lastAlarmAt).toBeLessThan(lookedAt);
+			// An alarm ran between the eviction and our look: it finished the turn, not our call.
+			expect((await status(agent)).alarms.some((t) => t > evictedAt && t < lookedAt)).toBe(true);
 		},
 		90_000,
 	);

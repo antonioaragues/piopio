@@ -377,7 +377,8 @@ export class AgentCore {
 			...(builtin.includes("schedule") ? [] : this.options.automations ? [p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation] : [p.schedule, p.list, p.cancel, p.watch]),
 			// The web extension brings both tools when either is on: only the listed ones stay.
 			...(["web_search", "web_fetch"] as const).filter((t) => !builtin.includes(t)).map((name) => ({ name })),
-			...this.apple.filter((t) => !this.appleGroups.includes(APPLE_TOOLS.find((s) => s.name === t.name)!.group)),
+			// Mac apps only where a Mac serves them: in the cloud there's none, so none are offered (it said it could).
+			...(this.options.appTool ? this.apple.filter((t) => !this.appleGroups.includes(APPLE_TOOLS.find((s) => s.name === t.name)!.group)) : this.apple),
 			...(this.def.tools.agents?.length ? [] : [this.peers.tools.ask, this.peers.tools.tell]),
 		];
 		await harness.commit(async (tx) => {
@@ -673,7 +674,7 @@ export class AgentCore {
 						: contact.role === "owner"
 							? `\n\nYou are talking with ${contact.name}, your owner.`
 							: `\n\nYou are talking with ${contact.name}, one of ${owner?.name ?? "your owner"}'s contacts — not your owner. Don't share ${owner?.name ?? "the owner"}'s private information or other people's details with them.${contact.notes ? ` About ${contact.name}: ${contact.notes}` : ""}`;
-					const shortcuts = core.def.tools.shortcuts?.length ? `\n\nShortcuts you may run (shortcuts_run): ${core.def.tools.shortcuts.join(", ")}.` : "";
+					const shortcuts = core.def.tools.shortcuts?.length && core.options.appTool ? `\n\nShortcuts you may run (shortcuts_run): ${core.def.tools.shortcuts.join(", ")}.` : "";
 					// Telegram from the Mac (docs/spec/19 S4): how to connect it, or that it's connected.
 					const telegram =
 						contact?.role !== "owner"

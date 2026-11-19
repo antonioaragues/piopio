@@ -54,7 +54,7 @@ const idleAfter = (subscriptionId: string, after = 0) => (n: SessionEventsNotifi
 const texts = (s: Snapshot) => s.items.map((i) => [i.kind, i.kind === "user" ? i.text : i.kind === "assistant" ? i.parts.map((p) => p.text).join("") : ""]);
 
 const owner = { headers: { Authorization: `Bearer ${TOKEN}` } };
-const testStatus = async (agent: string) => (await (await mf.dispatchFetch(`${base.href}__test/status?agent=${agent}`, owner)).json()) as { instanceId: string; startedAt: number; alarm: number | null; lastAlarmAt: number | null; busy: boolean };
+const testStatus = async (agent: string) => (await (await mf.dispatchFetch(`${base.href}__test/status?agent=${agent}`, owner)).json()) as { instanceId: string; startedAt: number; alarm: number | null; alarms: number[]; busy: boolean };
 
 describe("Engine Protocol over WebSocket", () => {
 	test("rejects calls before engine.hello and bad owner tokens", async () => {
@@ -71,6 +71,24 @@ describe("Engine Protocol over WebSocket", () => {
 		const c = await connect("runs");
 		expect(await c.call("agents.runs", { ref: ref("runs") })).toEqual({ runs: [], outbox: [], upcoming: [] });
 		await expect(c.call("agents.runs", { ref: ref("someone-else") })).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
+	});
+
+	test("a socket conversation is a person's: the owner's by default, kept in its memory", async () => {
+		const agent = "people";
+		const c = await connect(agent);
+		const mine = await c.call("sessions.subscribe", { ref: ref(agent) });
+		expect(mine.snapshot.ref).toEqual({ kind: "agent", id: agent, conversationId: "person:owner" });
+		await expect(c.call("sessions.subscribe", { ref: { ...ref(agent), conversationId: "person:nobody" } })).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
+		await expect(c.call("sessions.subscribe", { ref: { ...ref(agent), conversationId: "1" } })).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
+		await expect(c.call("sessions.submit", { ref: { ...ref(agent), conversationId: "run:nope" }, input: { text: "hi" } })).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
+
+		await c.call("sessions.submit", { ref: { ...ref(agent), conversationId: "person:owner" }, input: { text: "My cat is called Miso" } });
+		await c.waitFor(idleAfter(mine.subscriptionId));
+		// What was said is kept for the owner once it's answered, as on the Mac.
+		const recalled = async () => (await (await mf.dispatchFetch(`${base.href}__test/agent/recall?agent=${agent}&q=Miso`, owner)).json()) as { hits: unknown[] };
+		const end = Date.now() + 10_000;
+		while ((await recalled()).hits.length === 0 && Date.now() < end) await new Promise((r) => setTimeout(r, 200));
+		expect((await recalled()).hits.length).toBeGreaterThan(0);
 	});
 
 	test("refuses plain HTTP on /v1/ws", async () => {
@@ -95,7 +113,7 @@ describe("Engine Protocol over WebSocket", () => {
 		const agent = "stream";
 		const a = await connect(agent);
 		const sub = await a.call("sessions.subscribe", { ref: ref(agent) });
-		expect(sub.snapshot).toMatchObject({ ref: { kind: "agent", id: agent, conversationId: "1" }, items: [], state: { status: "idle", model: { provider: "faux", id: "echo" } } });
+		expect(sub.snapshot).toMatchObject({ ref: { kind: "agent", id: agent, conversationId: "person:owner" }, items: [], state: { status: "idle", model: { provider: "faux", id: "echo" } } });
 
 		expect(await a.call("sessions.submit", { ref: ref(agent), input: { text: "hello from the cloud" } })).toEqual({ accepted: true, disposition: "started" });
 		await a.waitFor(idleAfter(sub.subscriptionId, 1));
@@ -165,6 +183,7 @@ describe("Engine Protocol over WebSocket", () => {
 			// The PiHarness wake job keeps an alarm armed (30 s heartbeat) while pi has live tasks.
 			expect(running.alarm).not.toBeNull();
 
+			const evictedAt = Date.now();
 			await mf.unsafeEvictDurableObject(config.name, "AgentDO", { name: agent, webSockets: "close" });
 			await c.closed;
 
@@ -182,9 +201,8 @@ describe("Engine Protocol over WebSocket", () => {
 			]);
 			// The answer was already complete on reconnect, and a new alarm ran in between: the alarm resumed it.
 			// (The run was awaited inside an alarm invocation; the eviction aborted it, so workerd retried that alarm.)
-			const { lastAlarmAt } = await testStatus(agent);
-			expect(lastAlarmAt).toBeGreaterThan(running.lastAlarmAt ?? 0);
-			expect(lastAlarmAt).toBeLessThan(reconnectAt);
+			const { alarms } = await testStatus(agent);
+			expect(alarms.some((t) => t > evictedAt && t < reconnectAt)).toBe(true);
 		},
 		90_000,
 	);
