@@ -317,6 +317,18 @@ export class AgentDO extends DurableObject<Env> {
 				await session.submit(p.input.text, { whenBusy, ...(p.clientRequestId ? { operationId: p.clientRequestId } : {}) });
 				return { accepted: true, disposition: busy ? "queued" : "started" } satisfies Result<"sessions.submit">;
 			}
+			case "agents.runs": {
+				// The agent's runs, held messages and what's next (06 PR1), as the Mac's Runs tab reads them.
+				const p = params as Params<"agents.runs">;
+				this.sessionOf({ ...p.ref, conversationId: undefined });
+				const o = await (await this.agent()).core.proactive.overview();
+				const iso = (t: number | undefined) => (t === undefined ? undefined : new Date(t).toISOString());
+				return {
+					runs: o.runs.map((r) => ({ id: r.id, kind: r.kind, source: r.source, prompt: r.prompt, firedAt: r.firedAt, status: r.status, sent: r.sent, ...(r.summary ? { summary: r.summary } : {}), ...(r.costUsd !== undefined ? { costUsd: r.costUsd } : {}) })),
+					outbox: o.outbox.map((m) => ({ id: m.id, to: m.to, text: m.text, notBefore: iso(m.notBefore)!, reason: m.reason })),
+					upcoming: o.upcoming.map((u) => ({ id: u.id, kind: u.kind, label: u.label, ...(u.next !== undefined ? { next: iso(u.next)! } : {}), ...(u.cron ? { cron: u.cron } : {}) })),
+				} satisfies Result<"agents.runs">;
+			}
 			case "sessions.abort": {
 				const p = params as Params<"sessions.abort">;
 				await this.harness.session(this.sessionOf(p.ref)).abort();
@@ -379,4 +391,4 @@ const LAST_ALARM_KEY = "piopio:lastAlarmAt";
 const AGENT_KEY = "piopio:agent";
 const RESTS_KEY = "piopio:rests";
 
-const SUPPORTED = new Set<string>(["engine.hello", "engine.status", "sessions.subscribe", "sessions.unsubscribe", "sessions.submit", "sessions.abort"]);
+const SUPPORTED = new Set<string>(["engine.hello", "engine.status", "sessions.subscribe", "sessions.unsubscribe", "sessions.submit", "sessions.abort", "agents.runs"]);

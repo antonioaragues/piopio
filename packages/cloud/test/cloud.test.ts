@@ -67,6 +67,12 @@ describe("Engine Protocol over WebSocket", () => {
 		await expect(c.call("sessions.list", {})).rejects.toThrow(/Unknown method/);
 	});
 
+	test("agents.runs: the agent's runs, held messages and what's next, only for this socket's agent", async () => {
+		const c = await connect("runs");
+		expect(await c.call("agents.runs", { ref: ref("runs") })).toEqual({ runs: [], outbox: [], upcoming: [] });
+		await expect(c.call("agents.runs", { ref: ref("someone-else") })).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
+	});
+
 	test("refuses plain HTTP on /v1/ws", async () => {
 		expect((await mf.dispatchFetch(`${base.href}v1/ws`, owner)).status).toBe(426);
 		expect((await mf.dispatchFetch(`${base.href}v1/health`)).status).toBe(200);
