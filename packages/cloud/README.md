@@ -78,7 +78,29 @@ What it does, all with `Authorization: Bearer <token>`:
 
 `--plan` prints the metadata and modules without calling the API. `--skip-build` reuses `dist/`. `PIOPIO_DEFAULT_MODEL=openrouter/<model>` is sent as a plain-text var.
 
-**Not yet run against a real account.** The request shapes are checked against a fake API (`test/deploy.test.ts`) and follow wrangler's own upload. The first real deploy is the remaining S4 step.
+**First run against a real account on 2026-11-19** (below). The request shapes are also checked against a fake API (`test/deploy.test.ts`).
+
+## On a real account (2026-11-19)
+
+The Worker deployed with `scripts/deploy.ts` and an "Edit Cloudflare Workers" token (free plan,
+`piopio-cloud.<subdomain>.workers.dev`), driven from the Mac over the socket.
+
+- **Deploy:** the first upload, the DO migration (`none → v1`), both secrets, workers.dev and the health check all
+  worked. A redeploy without secrets kept them, and kept the agent's state. Bundle: 3.86 MB, 680 KB gzipped.
+- **Who can reach it:** `/v1/health` answers 200. A socket with no token or a wrong one gets 401 at the Worker. The
+  test routes answer 404, and so do unknown paths. With the owner's token, `engine.hello` answers from `cloud:trial`.
+- **A real model:** Claude Haiku 5.5 through OpenRouter from inside the Durable Object answered in 1.6 s, for
+  $0.0009. The first attempt used an expired key, and the error came through as the answer's `error` with
+  OpenRouter's message.
+- **A reminder with nothing connected:** set for 09:38 UTC, it fired at **09:38:00.047**, ran, messaged the owner
+  (`sent: 1`) and cost $0.0004. No client was connected between setting it and reading the runs afterwards with
+  `agents.runs`, so the alarm woke the agent.
+- **Found and fixed:** "remind me in 3 minutes", sent six minutes after the first message, became a time already
+  past, because the model sees the clock only when a message starts something new. The tools now say what time it is
+  when they refuse one (`passedText`, in `@piopio/runtime`).
+
+**Not verified yet on the account:** a run longer than 15 minutes across alarms; what resting saves on duration
+billing (the dashboard's Durable Objects usage after a day); retry timing after a real eviction.
 
 ## What spike S4 learned
 
@@ -140,6 +162,14 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
   - with the S4 note, `unref`-less timers on Workers pin objects.
 
 ## Open items for Phase 5
+
+- **Socket turns skip the agent's people.** `sessions.submit` goes straight to the pi session in the ref (`"1"` by
+  default), not through `AgentCore` as a person's message (`core.conversation(owner)`, `beforeTurn`, `afterTurn`).
+  So the owner's socket conversation isn't the conversation the agent's runs write to, and memory isn't recalled or
+  kept for it. On the account, the reminder's message went to the owner's conversation, which the socket can't name.
+- **The template promises Mac apps.** The personal-assistant template lists Calendar, Reminders, Contacts, Notes,
+  Music and Shortcuts. In the cloud they don't exist, but the agent says it can use them. A cloud agent's tools should
+  be what the cloud can run.
 
 - One socket per agent (`?agent=`). The app wants one `/v1/ws` for all agents: terminate it in a gateway (Worker or `RegistryDO`) that fans out to `AgentDO`s over RPC.
 - `state.model` reports the default model, not each session's stored one.
