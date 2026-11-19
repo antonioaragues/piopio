@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piopio Cloud Mockup</title>
+<style>
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --bubble:#f0f0ed; --field:#ffffff; --track:rgba(0,0,0,.05); --seg:#fff; --inv:#1f1f1e; --invfg:#fff;
+  --accent:#2f6fde; --sel:rgba(0,0,0,.05); --page:#e9e9e6; --tg:#eef3f8; --tgb:#fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+    --bubble:#2b2b29; --field:#252524; --track:rgba(255,255,255,.06); --seg:#3a3a38; --inv:#ececea; --invfg:#1e1e1d;
+    --accent:#6ea0ff; --sel:rgba(255,255,255,.07); --page:#121211; --tg:#17212b; --tgb:#232e3c;
+  }
+}
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --bubble:#2b2b29; --field:#252524; --track:rgba(255,255,255,.06); --seg:#3a3a38; --inv:#ececea; --invfg:#1e1e1d;
+  --accent:#6ea0ff; --sel:rgba(255,255,255,.07); --page:#121211; --tg:#17212b; --tgb:#232e3c;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; -webkit-font-smoothing:antialiased; }
+main { max-width:1180px; margin:0 auto; padding:40px 16px 80px; }
+header.doc h1 { font-size:22px; font-weight:600; margin:0 0 6px; }
+header.doc p { color:var(--fg2); margin:0 0 4px; max-width:760px; }
+nav.toc { display:flex; gap:6px; flex-wrap:wrap; margin:18px 0 34px; }
+nav.toc a { color:var(--fg2); text-decoration:none; padding:3px 8px; border-radius:6px; }
+nav.toc a:hover { background:var(--sel); color:var(--fg); }
+section.screen { margin:0 0 56px; }
+.label { display:flex; gap:10px; align-items:baseline; margin:0 0 12px; }
+.label b { font-size:12px; color:var(--fg3); font-weight:600; }
+.label h2 { font-size:15px; margin:0; font-weight:600; }
+.label span { color:var(--fg2); }
+.note { color:var(--fg2); max-width:820px; margin:12px 0 0; }
+.note li { margin:3px 0; }
+.mono { font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:12px; }
+/* window */
+.win { background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 20px 50px rgba(0,0,0,.12); overflow:hidden; display:flex; min-height:520px; }
+.side { width:240px; flex:none; background:var(--side); border-right:.5px solid var(--line); display:flex; flex-direction:column; }
+.side .top { height:52px; display:flex; align-items:center; padding:0 14px; gap:7px; }
+.dot3 i { display:inline-block; width:12px; height:12px; border-radius:50%; background:var(--line); margin-right:6px; }
+.side .rows { padding:4px 8px; flex:1; }
+.side h4 { font-size:12px; color:var(--fg3); font-weight:500; margin:14px 8px 4px; display:flex; justify-content:space-between; }
+.row { display:flex; align-items:center; gap:9px; padding:5px 8px; border-radius:7px; color:var(--fg); white-space:nowrap; overflow:hidden; }
+.row.on { background:var(--sel); }
+.row .g { width:16px; text-align:center; color:var(--fg2); flex:none; }
+.row .r { margin-left:auto; color:var(--fg3); font-size:12px; }
+.side .foot { height:52px; border-top:.5px solid var(--line); display:flex; align-items:center; gap:9px; padding:0 14px; color:var(--fg2); font-size:12px; }
+.av { width:24px; height:24px; border-radius:50%; background:var(--bubble); flex:none; display:grid; place-items:center; font-size:11px; color:var(--fg2); }
+.content { flex:1; display:flex; flex-direction:column; min-width:0; }
+.tb { height:52px; display:flex; align-items:center; padding:0 18px; border-bottom:.5px solid var(--line); gap:10px; }
+.tb .t { font-weight:600; font-size:13.5px; }
+.tb .s { color:var(--fg3); font-size:12px; }
+.tb .rt { margin-left:auto; display:flex; gap:12px; color:var(--fg2); }
+.body { flex:1; display:flex; min-height:0; }
+.col { flex:1; padding:32px 36px; display:flex; flex-direction:column; align-items:center; min-width:0; }
+.col > * { width:100%; max-width:640px; }
+.msg-u { align-self:flex-end; max-width:80%; width:auto; background:var(--bubble); border-radius:12px; padding:9px 14px; font-size:14px; margin:0 0 16px; }
+.msg-a { font-size:14px; line-height:1.6; margin:0 0 14px; }
+.proc { color:var(--fg3); font-size:13px; margin:0 0 10px; }
+.proc b { font-weight:500; color:var(--fg2); }
+.spacer { flex:1; }
+/* composer */
+.composer { background:var(--field); border:.5px solid var(--line); border-radius:16px; box-shadow:0 2px 10px rgba(0,0,0,.04); padding:12px 14px; position:relative; }
+.composer .ph { color:var(--fg3); font-size:14px; min-height:40px; }
+.composer .bar { display:flex; align-items:center; gap:12px; color:var(--fg2); font-size:12.5px; }
+.composer .bar .x { padding:3px 6px; border-radius:6px; }
+.composer .bar .x.hov { background:var(--sel); color:var(--fg); }
+.send { width:28px; height:28px; border-radius:50%; background:var(--sel); margin-left:auto; display:grid; place-items:center; color:var(--fg3); }
+.menu { position:absolute; background:var(--field); border:.5px solid var(--line); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.12); padding:6px; width:330px; z-index:2; }
+.menu .mi { padding:7px 10px; border-radius:7px; display:grid; grid-template-columns:18px 1fr 14px; gap:2px 8px; }
+.menu .mi.on { background:var(--sel); }
+.menu .mi .n { font-weight:500; }
+.menu .mi .d { grid-column:2; color:var(--fg3); font-size:12px; }
+.menu .mi .ck { grid-column:3; grid-row:1; color:var(--fg); }
+.menu .sep { height:.5px; background:var(--line); margin:5px 8px; }
+.menu .foot { color:var(--fg3); font-size:12px; padding:6px 10px 4px; }
+/* sheet */
+.sheetwrap { flex:1; display:grid; place-items:center; background:rgba(0,0,0,.04); padding:30px; }
+.sheet { width:520px; max-width:100%; background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 20px 40px rgba(0,0,0,.15); padding:22px 24px; }
+.sheet h3 { margin:0 0 4px; font-size:15px; }
+.sheet .sub { color:var(--fg2); margin:0 0 16px; }
+.opt { display:grid; grid-template-columns:18px 1fr; gap:2px 10px; padding:10px 0; border-top:.5px solid var(--line); }
+.opt .rad { width:14px; height:14px; border-radius:50%; border:1.5px solid var(--fg3); margin-top:2px; }
+.opt.on .rad { border:4.5px solid var(--inv); }
+.opt .n { font-weight:500; }
+.opt .d { grid-column:2; color:var(--fg2); font-size:12.5px; }
+.opt .d .mono { color:var(--fg); }
+.actions { display:flex; justify-content:flex-end; align-items:center; gap:16px; margin-top:18px; color:var(--fg2); }
+.btn { background:var(--inv); color:var(--invfg); border-radius:8px; padding:6px 14px; font-weight:500; }
+/* info panel */
+.info { width:300px; flex:none; border-left:.5px solid var(--line); padding:20px 20px; overflow:hidden; }
+.info .nm { font-size:15px; font-weight:600; }
+.info .one { color:var(--fg2); margin:2px 0 14px; }
+.info h5 { font-size:12px; color:var(--fg3); font-weight:500; margin:16px 0 6px; display:flex; justify-content:space-between; }
+.info h5 a { color:var(--fg2); text-decoration:none; font-weight:400; }
+.can { display:flex; align-items:center; gap:8px; padding:4px 0; }
+.can .w { color:var(--fg3); font-size:12px; }
+.can .sw { margin-left:auto; width:26px; height:15px; border-radius:8px; background:var(--inv); position:relative; flex:none; }
+.can .sw::after { content:""; position:absolute; right:2px; top:2px; width:11px; height:11px; border-radius:50%; background:var(--invfg); }
+.can .sw.off { background:var(--track); }
+.can .sw.off::after { left:2px; right:auto; background:var(--seg); box-shadow:0 0 0 .5px var(--line); }
+.away { color:var(--fg3); }
+.info .ft { border-top:.5px solid var(--line); margin-top:18px; padding-top:12px; color:var(--fg2); font-size:12px; }
+.info .ft div { margin:3px 0; }
+/* settings */
+.set { flex:1; padding:28px 36px; overflow:hidden; }
+.set h3 { font-size:17px; margin:0 0 4px; }
+.set .sub { color:var(--fg2); margin:0 0 20px; }
+.grp { border-top:.5px solid var(--line); padding:14px 0; }
+.grp h5 { font-size:12px; color:var(--fg3); font-weight:500; margin:0 0 8px; }
+.kv { display:flex; gap:12px; padding:4px 0; }
+.kv .k { width:170px; color:var(--fg2); flex:none; }
+.kv .v a { color:var(--accent); text-decoration:none; }
+table.cap { width:100%; border-collapse:collapse; }
+table.cap th { text-align:left; font-weight:500; color:var(--fg3); font-size:12px; padding:4px 8px 6px 0; }
+table.cap td { padding:6px 8px 6px 0; border-top:.5px solid var(--line); vertical-align:top; }
+table.cap td.m { color:var(--fg2); }
+.usage { display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; }
+.usage div b { display:block; font-size:15px; font-weight:600; }
+.usage div span { color:var(--fg3); font-size:12px; }
+.ldot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--fg2); margin-right:6px; vertical-align:middle; }
+/* needs you + phone */
+.pair { display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap; }
+.card { background:var(--field); border:.5px solid var(--line); border-radius:12px; padding:14px 16px; margin:0 0 12px; }
+.card .h { display:flex; gap:8px; align-items:center; font-weight:600; }
+.bd { width:6px; height:6px; border-radius:50%; background:var(--accent); flex:none; }
+.card .from { margin-left:auto; color:var(--fg3); font-weight:400; font-size:12px; }
+.card p { margin:6px 0 10px; color:var(--fg2); }
+.card .acts { display:flex; gap:16px; justify-content:flex-end; align-items:center; color:var(--fg2); }
+.live { border:.5px solid var(--line); border-radius:10px; overflow:hidden; margin:8px 0 10px; }
+.live .lb { background:var(--bubble); padding:6px 10px; color:var(--fg3); font-size:12px; display:flex; gap:8px; }
+.live .lp { height:110px; display:grid; place-items:center; color:var(--fg3); background:repeating-linear-gradient(135deg, transparent 0 10px, var(--track) 10px 11px); }
+.phone { width:300px; flex:none; border-radius:34px; background:var(--tg); box-shadow:0 0 0 8px #111, 0 20px 40px rgba(0,0,0,.2); overflow:hidden; }
+.phone .ph-top { background:var(--tgb); padding:16px 16px 10px; text-align:center; border-bottom:.5px solid var(--line); }
+.phone .ph-top b { display:block; }
+.phone .ph-top span { color:var(--fg3); font-size:11.5px; }
+.phone .chat { padding:14px 12px 22px; display:flex; flex-direction:column; gap:8px; min-height:440px; }
+.bub { background:var(--tgb); border-radius:14px; padding:8px 11px; max-width:84%; font-size:13px; box-shadow:0 1px 1px rgba(0,0,0,.06); }
+.bub.me { align-self:flex-end; background:#dcf3c5; color:#1f1f1e; }
+.kb { display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:84%; }
+.kb div { background:rgba(255,255,255,.6); border-radius:8px; text-align:center; padding:7px; font-weight:500; color:#2b6cb0; font-size:12.5px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bub.me { background:#2b5278; color:#ececea; } :root:not([data-theme="light"]) .kb div { background:rgba(255,255,255,.08); color:#8ab4f8; } }
+:root[data-theme="dark"] .bub.me { background:#2b5278; color:#ececea; } :root[data-theme="dark"] .kb div { background:rgba(255,255,255,.08); color:#8ab4f8; }
+.col-left { flex:1; min-width:280px; max-width:560px; }
+@media (max-width: 900px) {
+  .side, .info { display:none; }
+  .col { padding:22px 16px; }
+  .set { padding:22px 16px; }
+  .usage { grid-template-columns:repeat(2, 1fr); }
+  .kv .k { width:120px; }
+  .menu { width:min(330px, 90vw); }
+}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <h1>The cloud: where things run, and what they can do there</h1>
+  <p>A mockup for review of spec 30 (docs/spec/30-cloud-target.md), in the grey style. Five places where the cloud shows in the app. Nothing here is built.</p>
+  <p>Grey ink, one black action per view, blue only for links and the needs-you dot, a plain <span class="mono">cloud</span> glyph instead of badges.</p>
+</header>
+<nav class="toc">
+  <a href="#a">A · Location chip</a><a href="#b">B · Build in the cloud</a><a href="#c">C · A cloud agent</a><a href="#d">D · Settings › Cloud</a><a href="#e">E · Hand-offs and approvals</a>
+</nav>
+
+<!-- A -->
+<section class="screen" id="a">
+  <div class="label"><b>A</b><h2>Where a chat runs: the location chip</h2><span>composer, new chat</span></div>
+  <div class="win">
+    <aside class="side">
+      <div class="top dot3"><i></i><i></i><i></i></div>
+      <div class="rows">
+        <div class="row"><span class="g">⌕</span>Search<span class="r">⌘K</span></div>
+        <div class="row"><span class="g">◎</span>Needs you<span class="r">1</span></div>
+        <h4>Agents <span>+</span></h4>
+        <div class="row"><span class="g">☺</span>Rita<span class="r">☁︎</span></div>
+        <div class="row"><span class="g">☺</span>Morning briefing<span class="r">☁︎</span></div>
+        <h4>Chats <span>+</span></h4>
+        <div class="row on"><span class="g">▢</span>New chat</div>
+        <div class="row"><span class="g">▢</span>Trip to Lisbon<span class="r">☁︎</span></div>
+        <div class="row"><span class="g">▢</span>Kitchen budget</div>
+      </div>
+      <div class="foot"><span class="av">T</span>Toño<span class="r" style="margin-left:auto">This Mac · reachable</span></div>
+    </aside>
+    <div class="content">
+      <div class="tb"><span class="t">New chat</span></div>
+      <div class="body"><div class="col">
+        <div class="spacer"></div>
+        <div class="composer">
+          <div class="menu" style="bottom:46px; left:96px;">
+            <div class="mi"><span>▭</span><span class="n">This Mac</span><span class="d">Can use your files and Mac apps directly. Stops when the Mac sleeps.</span></div>
+            <div class="mi on"><span>☁︎</span><span class="n">Cloud</span><span class="ck">✓</span><span class="d">Keeps going with your Mac off. Reachable from Telegram. Mac apps only while the Mac is on.</span></div>
+            <div class="sep"></div>
+            <div class="foot">Your Cloudflare account · piopio-cloud</div>
+          </div>
+          <div class="ph">Plan the Lisbon trip and remind me of the check-in…</div>
+          <div class="bar"><span class="x">+</span><span class="x hov">☁︎ Cloud</span><span class="x">Ask before changes</span><span style="margin-left:auto" class="x">Sonnet 5.5 · Medium</span><span class="send" style="margin-left:0">↑</span></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+  <ul class="note">
+    <li>The chip appears only once a cloud is connected. Plain text, no chevron, like the other selectors.</li>
+    <li>Cloud items carry a <span class="mono">☁︎</span> in <span class="mono">fg3</span> in the sidebar. The footer says whether this Mac is reachable from the cloud (the Mac Bridge).</li>
+    <li>A running chat moves with "Move to cloud" / "Bring back to this Mac" in its menu, after the turn ends.</li>
+  </ul>
+</section>
+
+<!-- B -->
+<section class="screen" id="b">
+  <div class="label"><b>B</b><h2>A Build session in the cloud</h2><span>new session in a project with a GitHub remote</span></div>
+  <div class="win">
+    <aside class="side">
+      <div class="top dot3"><i></i><i></i><i></i></div>
+      <div class="rows">
+        <h4>Projects <span>+</span></h4>
+        <div class="row on"><span class="g">▤</span>piopio</div>
+        <div class="row" style="padding-left:34px">Wire engine protocol</div>
+        <div class="row" style="padding-left:34px">Telegram approvals<span class="r">☁︎</span></div>
+        <div class="row"><span class="g">▤</span>atlas</div>
+      </div>
+      <div class="foot"><span class="av">T</span>Toño</div>
+    </aside>
+    <div class="content">
+      <div class="tb"><span class="t">piopio</span><span class="s">~/Proyectos/piopio · main</span></div>
+      <div class="sheetwrap">
+        <div class="sheet">
+          <h3>Where should this session work?</h3>
+          <p class="sub">“Add Approve / Deny buttons to Telegram approvals”</p>
+          <div class="opt"><span class="rad"></span><span class="n">This Mac, in your folder</span><span class="d">Changes land in <span class="mono">~/Proyectos/piopio</span> as it works.</span></div>
+          <div class="opt"><span class="rad"></span><span class="n">This Mac, in a separate copy</span><span class="d">Its own branch next to your folder; you merge it when it's done.</span></div>
+          <div class="opt on"><span class="rad"></span><span class="n">Cloud</span><span class="d">A cloud machine clones <span class="mono">antonioaragues/piopio</span> from <span class="mono">main</span>, works on <span class="mono">piopio/telegram-approvals</span> and opens a PR. Keeps going with your Mac off. About $0.02 an hour of work, plus the model.</span></div>
+          <div class="actions"><span>Cancel</span><span class="btn">Start in cloud</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li>Cloud is offered only when the project has a GitHub remote; otherwise the row is grey with "Needs a GitHub repo · Set up".</li>
+    <li>The machine's disk doesn't survive sleep, so everything lives in the branch: "Continue here" fetches it into a separate copy; "Continue in cloud" on a Mac session pushes the work in progress first.</li>
+    <li>The cost line is an estimate from the machine size; the session's inspector footer shows the real one.</li>
+  </ul>
+</section>
+
+<!-- C -->
+<section class="screen" id="c">
+  <div class="label"><b>C</b><h2>A cloud agent, with the Mac away</h2><span>agent conversation and info panel (13a)</span></div>
+  <div class="win">
+    <aside class="side">
+      <div class="top dot3"><i></i><i></i><i></i></div>
+      <div class="rows">
+        <h4>Agents <span>+</span></h4>
+        <div class="row on"><span class="g">☺</span>Rita<span class="r">☁︎</span></div>
+        <div class="row"><span class="g">☺</span>Morning briefing<span class="r">☁︎</span></div>
+        <div class="row"><span class="g">☺</span>Bookkeeper</div>
+      </div>
+      <div class="foot"><span class="av">T</span>Toño</div>
+    </aside>
+    <div class="content">
+      <div class="tb"><span class="t">Rita</span><span class="s">Cloud · keeps going with your Mac off</span><span class="rt"><span>Run now</span><span>ⓘ</span></span></div>
+      <div class="body">
+        <div class="col" style="align-items:stretch">
+          <div class="proc">From Telegram · 08:02</div>
+          <div class="msg-u">Did my Amazon order ship? And add “pick up parcel” to my reminders</div>
+          <div class="proc"><b>Used the cloud browser</b> · amazon.es › Your orders ›</div>
+          <div class="msg-a">It shipped yesterday and arrives Thursday. I can't add the reminder yet: Reminders is on your Mac, and it's off. I'll add it when your Mac is back, or I can remind you here on Telegram instead.</div>
+          <div class="proc">Waiting for your Mac: add “pick up parcel” to Reminders · <span style="color:var(--accent)">Remind me here instead</span></div>
+          <div class="spacer"></div>
+          <div class="composer"><div class="ph" style="min-height:24px">Message Rita…</div><div class="bar"><span class="x">+</span><span style="margin-left:auto" class="x">Haiku 5.5</span><span class="send" style="margin-left:0">↑</span></div></div>
+        </div>
+        <aside class="info">
+          <div class="nm">Rita</div>
+          <div class="one">Keeps my errands, orders and appointments in hand.</div>
+          <h5>Can <a href="#c">Edit</a></h5>
+          <div class="can">Memory<span class="sw"></span></div>
+          <div class="can">Search the web<span class="sw"></span></div>
+          <div class="can">Google Calendar <span class="w">· connector</span><span class="sw"></span></div>
+          <div class="can">Browse websites <span class="w">· cloud browser</span><span class="sw"></span></div>
+          <div class="can">Reminders <span class="w away">· needs your Mac</span><span class="sw"></span></div>
+          <div class="can">Use my Mac's apps <span class="w away">· needs your Mac</span><span class="sw off"></span></div>
+          <h5>Reaches you in</h5>
+          <div class="can">Telegram · @piopioagentbot<span class="sw"></span></div>
+          <div class="can">Piopio<span class="sw"></span></div>
+          <div class="ft">
+            <div>Haiku 5.5 · Cloud · $0.31 this month</div>
+            <div>Browser 0.4 h this month</div>
+            <div style="color:var(--fg2)">Move to this Mac</div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li>Each capability says where it runs only when that isn't plain: a connector, the cloud browser, or "needs your Mac" (grey) while the Mac is away.</li>
+    <li>A step that needs the Mac is parked as one grey line with a way out; it runs when the Mac reconnects, never silently later than a day.</li>
+    <li>Processing lines say where things ran ("Used the cloud browser"), with the page map and screenshot behind the ›.</li>
+  </ul>
+</section>
+
+<!-- D -->
+<section class="screen" id="d">
+  <div class="label"><b>D</b><h2>Settings › Cloud</h2><span>after connecting</span></div>
+  <div class="win">
+    <aside class="side">
+      <div class="top dot3"><i></i><i></i><i></i></div>
+      <div class="rows">
+        <div class="row">General</div><div class="row">Models</div><div class="row">Connectors</div><div class="row">Memory</div><div class="row">Browser</div>
+        <div class="row on">Cloud</div><div class="row">Channels</div>
+      </div>
+    </aside>
+    <div class="content">
+      <div class="set">
+        <h3>Cloud</h3>
+        <p class="sub">Your agents and the conversations you put here run in your Cloudflare account, with your Mac off.</p>
+        <div class="grp">
+          <div class="kv"><span class="k">Account</span><span class="v">Cloudflare · Workers Paid · <span class="mono">piopio-cloud.antonioaragues.workers.dev</span></span></div>
+          <div class="kv"><span class="k">This Mac</span><span class="v"><span class="ldot"></span>Reachable from the cloud: cloud agents can use Calendar, Reminders and your local tools while it's on</span></div>
+          <div class="kv"><span class="k">New agents</span><span class="v">Run in the cloud · <a href="#d">Change</a></span></div>
+          <div class="kv"><span class="k">Models up there</span><span class="v">OpenRouter · Anthropic · <a href="#d">Add a key</a></span></div>
+        </div>
+        <div class="grp">
+          <h5>What runs where</h5>
+          <table class="cap">
+            <tr><th>Capability</th><th>On this Mac</th><th>In the cloud</th></tr>
+            <tr><td>Web search and pages</td><td class="m">Yes</td><td class="m">Yes</td></tr>
+            <tr><td>Connectors</td><td class="m">All</td><td class="m">Google Calendar, Notion, GitHub · signed in separately · <a href="#d" style="color:var(--accent);text-decoration:none">Manage</a></td></tr>
+            <tr><td>Browser</td><td class="m">Built-in browser</td><td class="m">Cloud browser · sign-ins by hand-off</td></tr>
+            <tr><td>Code and files</td><td class="m">Your folders</td><td class="m">A cloud machine, on demand</td></tr>
+            <tr><td>Mac apps, computer use</td><td class="m">Yes</td><td class="m">Through this Mac, while it's on</td></tr>
+          </table>
+        </div>
+        <div class="grp">
+          <h5>This month</h5>
+          <div class="usage">
+            <div><b>$1.84</b><span>models</span></div>
+            <div><b>$0.00</b><span>Workers, in plan</span></div>
+            <div><b>2.1 h</b><span>browser, 10 h in plan</span></div>
+            <div><b>0.6 h</b><span>cloud machines</span></div>
+            <div><b>4</b><span>agents · 2 chats</span></div>
+          </div>
+        </div>
+        <div class="actions" style="justify-content:flex-start"><span>Bring everything back to this Mac…</span><span>Disconnect</span></div>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li>Connecting (before this page) is the one opt-in: it says what goes up, what it costs and what you get, then new agents default to the cloud.</li>
+    <li>No black button here: nothing on this page is the obvious next step.</li>
+  </ul>
+</section>
+
+<!-- E -->
+<section class="screen" id="e">
+  <div class="label"><b>E</b><h2>Hand-offs and approvals from the cloud</h2><span>Needs you on the Mac, and Telegram on the phone</span></div>
+  <div class="pair">
+    <div class="col-left">
+      <div class="card">
+        <div class="h"><span class="bd"></span>Sign in to amazon.es for Rita<span class="from">☁︎ Rita · cloud browser</span></div>
+        <p>She's checking your order and the site wants you to sign in. Take over, sign in, then hand back; she won't see what you type.</p>
+        <div class="live"><div class="lb"><span>Live view</span><span class="mono">amazon.es/ap/signin</span></div><div class="lp">the cloud browser's page</div></div>
+        <div class="acts"><span>Not now</span><span class="btn">Take over</span></div>
+      </div>
+      <div class="card">
+        <div class="h"><span class="bd"></span>Add an event to your calendar?<span class="from">☁︎ Morning briefing · Google Calendar</span></div>
+        <p><span class="mono">Dentist · Thu 27 Nov, 10:00–10:45</span></p>
+        <div class="acts"><span>Deny</span><span class="btn">Allow ⌘↩</span></div>
+      </div>
+      <ul class="note" style="padding-left:18px">
+        <li>The same requests go to Telegram; the first answer wins, and the other side shows "Answered on Telegram".</li>
+        <li>Take over opens Live View in a pane beside the conversation, like the Mac browser's hand-off (22 §4.3).</li>
+      </ul>
+    </div>
+    <div class="phone">
+      <div class="ph-top"><b>Rita</b><span>bot · in the cloud</span></div>
+      <div class="chat">
+        <div class="bub me">Did my Amazon order ship?</div>
+        <div class="bub">amazon.es wants you to sign in before I can look. Tap below, sign in, and tap Done.</div>
+        <div class="kb"><div>Sign in here</div><div>Not now</div></div>
+        <div class="bub me">Done</div>
+        <div class="bub">It shipped yesterday and arrives Thursday.</div>
+        <div class="bub">Add “Dentist · Thu 27 Nov, 10:00” to your calendar?</div>
+        <div class="kb"><div>Approve</div><div>Deny</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+</body>
+</html>
