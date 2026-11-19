@@ -534,7 +534,7 @@ export class BuildRuntime implements Runtime {
 		return { context: {
 			tokens: usage.tokens,
 			window: usage.contextWindow,
-			...(usage.tokens === null ? {} : { breakdown: this.contextBreakdown.read() }),
+			...(usage.tokens === null ? {} : { breakdown: this.contextBreakdown.read(usage.tokens) }),
 		} };
 	}
 

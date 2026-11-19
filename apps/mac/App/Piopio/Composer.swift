@@ -16,7 +16,6 @@ struct Composer: View {
     @Binding private var attachments: [PendingAttachment]
     @State private var attachError: String?
     @State private var dropTargeted = false
-    @State private var showingContext = false
     @FocusState private var focused: Bool
     /// Build: @-mention and /command suggestions shown above the box (docs/spec/05-build BR5).
     @State private var suggestions: [Suggestion] = []
@@ -65,14 +64,20 @@ struct Composer: View {
                 .padding(.horizontal, 16)
             }
             let contextFraction = thread.state?.context.map { ($0.tokens ?? 0) / max(1, $0.window) } ?? 0
-            if contextFraction >= 0.85 || showingContext {
+            if contextFraction >= 0.85 || thread.showContext {
                 HStack(spacing: 4) {
                     if contextFraction >= 0.85 {
                         Text("This conversation is at \(Int(min(1, contextFraction) * 100))% of its context.").foregroundStyle(Color.dsFg3)
+                        Button(thread.isCompactingContext ? "Compacting…" : "Compact now") { Task { await thread.compact() } }
+                            .buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                            .disabled(!thread.canCompact)
+                            .help("Summarize older messages and keep the most recent ones in context")
                     }
-                    Button("View context") { showingContext.toggle() }
+                    Button("View context") { thread.showContext.toggle() }
                         .buttonStyle(.plain).foregroundStyle(Color.accentColor)
-                        .popover(isPresented: $showingContext, arrowEdge: .bottom) { ContextPopover(thread: thread) }
+                        .popover(isPresented: Binding(get: { thread.showContext }, set: { thread.showContext = $0 }), arrowEdge: .bottom) {
+                            ContextPopover(thread: thread)
+                        }
                     Spacer()
                 }
                 .font(.system(size: 12.5))

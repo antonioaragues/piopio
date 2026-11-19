@@ -128,6 +128,12 @@ enum DebugAutomation {
                         await thread.send(edit)
                     }
                 }
+                // PIOPIO_DEMO_CONTEXT=1: open the context popover (snapshot it with PIOPIO_SNAPSHOT_WINDOW=popover).
+                if env["PIOPIO_DEMO_CONTEXT"] == "1" {
+                    await waitIdle(thread)
+                    for _ in 0..<300 where thread.isRunning { try? await Task.sleep(for: .milliseconds(100)) }
+                    thread.showContext = true
+                }
                 // PIOPIO_DEMO_MODEL_PICKER=1: open the model picker (snapshot it with PIOPIO_SNAPSHOT_WINDOW=popover).
                 if env["PIOPIO_DEMO_MODEL_PICKER"] == "1" {
                     await waitIdle(thread)

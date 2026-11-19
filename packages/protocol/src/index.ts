@@ -343,6 +343,7 @@ export type SessionStatus = Static<typeof SessionStatus>;
 export const QueuedInput = Type.Object({ id: Type.String(), mode: Type.Union([Type.Literal("steer"), Type.Literal("followUp")]), text: Type.Optional(Type.String()) });
 export type QueuedInput = Static<typeof QueuedInput>;
 
+/** What fills the context: pi's total spread over categories by their estimated shares, so they add up to `tokens`. */
 const ContextBreakdown = Type.Object({
 	source: literals("request", "session"),
 	groups: Type.Array(Type.Object({

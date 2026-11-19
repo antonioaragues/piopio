@@ -62,8 +62,12 @@ test("the context panel counts the prepared request and waits for new usage afte
 	const answered = (answer: string) => idle(a, ref, (s) => s.items.some((i) => i.kind === "assistant" && i.parts.some((p) => p.text === answer)));
 
 	await submit("Read the notes", [{ kind: "text", name: "attached.txt", text: "Attached text from the user." }]);
-	const first = (await answered("Initial answer.")).state.context?.breakdown;
+	const firstContext = (await answered("Initial answer.")).state.context;
+	const first = firstContext?.breakdown;
 	expect(first?.source).toBe("request");
+	// The categories add up to pi's total, give or take rounding.
+	const sum = first!.groups.reduce((n, g) => n + g.tokens, 0);
+	expect(Math.abs(sum - firstContext!.tokens!)).toBeLessThanOrEqual(first!.groups.flatMap((g) => g.parts).length);
 	expect(first?.groups).toEqual(expect.arrayContaining([
 		expect.objectContaining({ kind: "instructions", parts: expect.arrayContaining([expect.objectContaining({ label: "Project instructions (AGENTS.md)" })]) }),
 		expect.objectContaining({ kind: "tools", tokens: expect.any(Number) }),

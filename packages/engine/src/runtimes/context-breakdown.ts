@@ -78,7 +78,8 @@ function estimate(messages: Message[], base: Breakdown["groups"] = []): Breakdow
 				if (message.stopReason === "aborted" || message.stopReason === "error") break;
 				const calls = message.content.filter((part) => part.type === "toolCall");
 				for (const call of calls) add("toolUse", toolGroup(call.name), estimateTokens({ ...message, content: [call] }));
-				add("conversation", "Assistant messages", estimateTokens({ ...message, content: message.content.filter((part) => part.type !== "toolCall") }));
+				add("conversation", "Thinking", estimateTokens({ ...message, content: message.content.filter((part) => part.type === "thinking") }));
+				add("conversation", "Assistant messages", estimateTokens({ ...message, content: message.content.filter((part) => part.type !== "toolCall" && part.type !== "thinking") }));
 				break;
 			}
 			case "toolResult": add("toolUse", toolGroup(message.toolName), estimateTokens(message)); break;
@@ -95,6 +96,20 @@ function estimate(messages: Message[], base: Breakdown["groups"] = []): Breakdow
 		if (!values?.size) return [];
 		const parts = Array.from(values, ([label, tokens]) => ({ label, tokens })).sort((a, b) => b.tokens - a.tokens);
 		return [{ kind, tokens: parts.reduce((sum, part) => sum + part.tokens, 0), parts }];
+	});
+}
+
+/**
+ * Spread pi's total over the categories by their estimated shares. The estimates count characters (about 4 per token)
+ * and every earlier turn's thinking, while pi's total comes from the provider's usage, so they rarely add up on their own.
+ */
+export function scaleTo(groups: Breakdown["groups"], total: number): Breakdown["groups"] {
+	const sum = groups.reduce((n, group) => n + group.tokens, 0);
+	if (sum <= 0 || total <= 0) return groups;
+	const factor = total / sum;
+	return groups.map((group) => {
+		const parts = group.parts.map((part) => ({ label: part.label, tokens: Math.round(part.tokens * factor) }));
+		return { kind: group.kind, tokens: parts.reduce((n, part) => n + part.tokens, 0), parts };
 	});
 }
 
@@ -116,7 +131,8 @@ export class ContextBreakdown {
 		};
 	}
 
-	read(): Breakdown {
+	/** The breakdown of `total`, pi's count of the tokens in context. */
+	read(total: number): Breakdown {
 		const manager = this.session.sessionManager;
 		const projection = manager.buildSessionProjection();
 		const entries = manager.getBranch();
@@ -126,10 +142,10 @@ export class ContextBreakdown {
 		if (request && index !== undefined && request.boundary === this.boundary(entries)) {
 			const tail = projection.entries.filter((entry) => (positions.get(entry.sourceEntry.id) ?? -1) > index).flatMap((entry) => entry.messages);
 			if (!tail.some((message) => message.role === "system")) {
-				return { source: "request", groups: estimate(tail, request.groups) };
+				return { source: "request", groups: scaleTo(estimate(tail, request.groups), total) };
 			}
 		}
-		return { source: "session", groups: estimate(projection.messages) };
+		return { source: "session", groups: scaleTo(estimate(projection.messages), total) };
 	}
 
 	private boundary(entries: ReturnType<AgentSession["sessionManager"]["getBranch"]>): string | undefined {

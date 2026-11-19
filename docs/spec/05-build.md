@@ -69,7 +69,12 @@ All of them SHOULD also work in the pi CLI (graceful TUI fallback), so they can 
 - **BR4** **File viewer:** read-only, highlighted, with a quick-edit mode (small changes, saved via `projects.files.write`). "Open in <Editor>" (configured: Xcode, VS Code, Cursor, Zed, Sublime, …).
 - **BR5** **@-mentions** in the composer: fuzzy file/folder search (respects .gitignore). **/commands**: pi prompt templates, skills (`/skill:name`), and Piopio commands (`/plan`, `/compact`, `/model`, `/fork`, `/worktree`).
 - **BR6** Fork/branch navigation follows pi's session tree (`/tree` equivalent as a popover).
-- **BR7** Context meter: tokens used / model context window. Click → compact.
+- **BR7** Context meter: tokens used / model context window, in the inspector footer. Click → the **context popover**:
+  - The total (pi's count: the provider's last reported usage plus an estimate for what came after it), the window, the percentage and what's free, on one grey bar.
+  - **What fills it**, as rows that expand: Instructions (Piopio guidelines, AGENTS.md, skill listings, MCP server instructions), Tool definitions, Conversation (your messages, assistant messages, thinking, added background), Tool use (files, terminal, web and browser, apps and MCP), Your attachments, Summaries. The engine estimates each category by its characters and spreads pi's total over them by those shares, so the rows add up to the total; they're shares, not exact counts. They're counted on the request as it was sent to the model (after hidden tools and forced prompts), plus what came after it; after a reopen or a context rewrite, on the saved conversation.
+  - Right after a compaction the total is unknown until the next response, and the popover says so.
+  - **Compact…** (plain text), then a confirmation with Compact as the black action. Not while it answers, asks you something or already compacts.
+  - Past 85% the composer says "This conversation is at N% of its context" with **Compact now** (one click) and **View context** (the popover).
 
 ## 6. Approvals (decision B4)
 

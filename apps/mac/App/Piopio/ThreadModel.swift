@@ -50,6 +50,8 @@ final class ThreadModel {
     var errorDetail: String?
     /// Opens the composer's model picker ("Use another model" in error cards).
     var showModelPicker = false
+    /// Opens the context popover from the composer ("View context", or a capture).
+    var showContext = false
     /// Build: the checkpoint "Restore…" was clicked on (the session view confirms it).
     var restoring: CheckpointItem?
     /// A plan being edited before approval (its sheet), and one being sent back (the bar's note field).
@@ -439,6 +441,11 @@ final class ThreadModel {
     }
 
     private(set) var isCompactingContext = false
+
+    /// Compacting makes sense once there's context, and waits while it answers, asks you something or already compacts.
+    var canCompact: Bool {
+        (state?.context?.tokens ?? 0) > 0 && !isRunning && prompts.isEmpty && !isCompactingContext
+    }
 
     func compact() async {
         guard !isCompactingContext else { return }
