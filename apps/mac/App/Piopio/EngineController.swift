@@ -181,6 +181,10 @@ final class EngineController {
             await loadConnectors()
             status = .ready
             wasReady = true
+            // Chats open on screen across a restart or a dropped connection subscribe again on this one: their views
+            // stay where they are, so they wouldn't ask by themselves (2026-11-20: after Restart, sending worked and
+            // nothing came back).
+            for thread in Array(openThreads.values) { Task { await thread.reattach() } }
         } catch {
             status = .failed(String(describing: error))
         }
@@ -255,7 +259,7 @@ final class EngineController {
         }
     }
 
-    /// Starts over after the engine connection drops; open threads re-subscribe when their views reappear.
+    /// Starts over after the engine connection drops; open threads subscribe again once it's back (in `start`).
     private func connectionLost(_ lost: EngineClient) {
         guard !stopping, client === lost else { return }
         client = nil
@@ -263,7 +267,6 @@ final class EngineController {
         orphans = [:]
         let drafts = Array(openThreads.values)
         for t in drafts { t.close() }
-        openThreads = [:]
         if let p = process, !p.isRunning { process = nil }
         Task {
             for thread in drafts { try? await thread.flushDraft() }

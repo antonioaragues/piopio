@@ -90,6 +90,11 @@ test("connect, move up, talk through the Mac's engine, move back", async () => {
 	await client.call("sessions.subscribe", { ref: mine });
 	await client.call("sessions.submit", { ref: mine, input: { text: "Hello from the Mac" } });
 	await until(() => client.call<{ items: never[] }>("sessions.open", { ref: mine }).then((s) => text(s.items)), (s) => s.includes("Echo: Hello from the Mac"));
+	// Connecting again (Set Up Again) replaces the sockets: the subscription already open keeps getting answers
+	// (2026-11-20: after it, sending worked and nothing came back).
+	await client.call("cloud.connect", { url: base, token: TOKEN });
+	await client.call("sessions.submit", { ref: mine, input: { text: "After connecting again" } });
+	await client.waitFor((n) => JSON.stringify(n.events).includes("Echo: After connecting again"), 15_000);
 	const runs = await client.call<{ upcoming: { kind: string; cron?: string }[] }>("agents.runs", { ref });
 	expect(runs.upcoming).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "schedule", cron: "0 8 * * 1-5" })]));
 	// Pause, Run now and the Inbox reach it up there; its status shows in the catalog.
@@ -112,8 +117,8 @@ test("connect, move up, talk through the Mac's engine, move back", async () => {
 	// Back: memory, the schedule as an automation again, the parked folder one; the cloud's conversation as text.
 	const down = await client.call<{ lines: string[] }>("agents.move", { ref, to: "local" });
 	expect(down.lines[0]).toBe("Helper runs on this Mac again: it stops while your Mac sleeps or is off.");
-	// Memory comes back with what was said up there too (the message and its answer).
-	expect(down.lines).toEqual(expect.arrayContaining([expect.stringMatching(/saved as text in its folder/), "Memory: 3 records.", "Automations: 2 run on this Mac again."]));
+	// Memory comes back with what was said up there too (two messages and their answers).
+	expect(down.lines).toEqual(expect.arrayContaining([expect.stringMatching(/saved as text in its folder/), "Memory: 5 records.", "Automations: 2 run on this Mac again."]));
 	const back = (await client.call<{ automations: { runsAs: string; on: string; cron?: string }[] }>("automations.list", {})).automations.filter((a) => a.runsAs === ref.id);
 	expect(back.map((a) => a.on).sort()).toEqual(["folder", "time"]);
 	expect(back.find((a) => a.on === "time")?.cron).toBe("0 8 * * 1-5");

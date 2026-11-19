@@ -1122,7 +1122,7 @@ export class Sessions {
 		const key = `${ref.id}|${ref.conversationId ?? ""}`;
 		let view = this.cloudViews.get(key);
 		if (!view) {
-			view = CloudAgentView.open(this.cloudLink().agent(ref.id), ref);
+			view = CloudAgentView.open(this.cloudLink(), ref);
 			view.catch(() => this.cloudViews.delete(key));
 			this.cloudViews.set(key, view);
 		}

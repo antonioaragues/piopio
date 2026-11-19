@@ -67,6 +67,8 @@ export function cloudOrigin(raw: string): string {
 
 export class CloudLink {
 	private readonly sockets = new Map<string, AgentSocket>();
+	/** Open conversations to move to the new sockets after a (re)connect or a setup. */
+	private readonly resets = new Set<() => void>();
 	private readonly fetchImpl: Fetch;
 
 	constructor(
@@ -132,6 +134,8 @@ export class CloudLink {
 		await this.options.secrets.set(SECRET_CLOUD, token.trim());
 		const config: CloudConfig = { url, connectedAt: new Date().toISOString(), ...(version ? { version } : {}), ...(accountId ? { accountId } : {}) };
 		writeFileSync(this.options.file, JSON.stringify(config, null, "\t"));
+		// The old sockets are closed: what's open on them subscribes again through the new ones.
+		for (const reset of [...this.resets]) reset();
 		return { connected: true, url, reachable: true, ...(version ? { version } : {}), connectedAt: config.connectedAt, managed: Boolean(accountId), agents };
 	}
 
@@ -247,6 +251,12 @@ export class CloudLink {
 			this.sockets.set(id, socket);
 		}
 		return socket;
+	}
+
+	/** Runs after a new connection or setup replaced the sockets (open conversations subscribe again). */
+	onReset(listener: () => void): () => void {
+		this.resets.add(listener);
+		return () => this.resets.delete(listener);
 	}
 
 	/** Calls a method on one cloud agent's object. */
@@ -441,23 +451,34 @@ export function applyEvents(snapshot: Snapshot, events: readonly SessionEvent[])
 export class CloudAgentView implements Runtime {
 	private readonly emitter = new Emitter();
 	private subscriptionId?: string;
-	private readonly stopReconnect: () => void;
+	private socket: AgentSocket;
+	private stopReconnect: () => void;
+	private readonly stopReset: () => void;
 
 	private constructor(
 		readonly ref: ContainerRef,
-		private readonly socket: AgentSocket,
+		private readonly link: CloudLink,
 		private current: Snapshot,
 	) {
-		this.stopReconnect = socket.onReconnect(() => void this.resubscribe().catch(() => undefined));
+		this.socket = link.agent(ref.id);
+		this.stopReconnect = this.socket.onReconnect(() => void this.resubscribe().catch(() => undefined));
+		// A new connection or setup closed the old socket for good: take the new one (2026-11-20, Set Up Again).
+		this.stopReset = link.onReset(() => {
+			this.stopReconnect();
+			this.socket = this.link.agent(this.ref.id);
+			this.stopReconnect = this.socket.onReconnect(() => void this.resubscribe().catch(() => undefined));
+			void this.resubscribe().catch(() => undefined);
+		});
 	}
 
-	static async open(socket: AgentSocket, ref: ContainerRef): Promise<CloudAgentView> {
+	static async open(link: CloudLink, ref: ContainerRef): Promise<CloudAgentView> {
 		const placeholder: Snapshot = { ref, items: [], state: { status: "idle", queue: [], usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } } as unknown as Snapshot["state"] };
-		const view = new CloudAgentView(ref, socket, placeholder);
+		const view = new CloudAgentView(ref, link, placeholder);
 		try {
 			await view.resubscribe(false);
 		} catch (error) {
 			view.stopReconnect();
+			view.stopReset();
 			throw error;
 		}
 		return view;
@@ -500,6 +521,7 @@ export class CloudAgentView implements Runtime {
 
 	async close(): Promise<void> {
 		this.stopReconnect();
+		this.stopReset();
 		if (!this.subscriptionId) return;
 		this.socket.subscriptions.delete(this.subscriptionId);
 		await this.socket.call("sessions.unsubscribe", { subscriptionId: this.subscriptionId }).catch(() => undefined);

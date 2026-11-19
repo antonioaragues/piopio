@@ -135,6 +135,17 @@ final class ThreadModel {
         buffered = []
     }
 
+    /// On a new engine connection: subscribe again and load what the engine has now (only if it was open).
+    func reattach() async {
+        guard loaded || opening != nil else { return }
+        await opening?.value
+        subscriptionId = nil
+        buffered = []
+        loaded = false
+        opening = nil
+        await open()
+    }
+
     // Streaming sends a batch per token. Apply at most one batch per frame: the first at once,
     // then whatever piled up, with back-to-back deltas joined (one re-render of the open block, one refresh).
     @ObservationIgnored private var buffered: [SessionEvent] = []

@@ -355,6 +355,11 @@ approval is not (the test model can't call a tool), only that `agents.decide` re
   deletes the object's storage, the Agents SDK's own tables with it, and the SDK makes them once per instance. The
   object now restarts after retiring, so a later deploy lands in a fresh instance. `move.test.ts` sends a message after
   coming back up (it failed with the same error before the fix).
+- Then messages went up and were answered, but no answer showed (2026-11-20). Two holes: after Restart in Settings, a
+  chat left open on screen kept its subscription on the old engine connection (the app waited for its view to
+  reappear); and Set Up Again closed the cloud sockets under the open cloud conversations. Now the app subscribes its
+  open chats again once the engine is back, and open cloud conversations follow a new connection or setup
+  (`engine-move.test.ts` connects again with a chat open).
 
 **Not in K1 (next)**
 - A cloud agent's approval card in its chat (it shows in Needs you, not in the transcript: the cloud's timeline
