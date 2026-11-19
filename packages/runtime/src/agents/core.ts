@@ -103,6 +103,12 @@ export const INTERVIEW_PROMPT = `You were just created and don't have a job yet.
 - Then call set_up with a short name, a one-line description, an icon (one emoji) and your instructions: in the second person, with the standing details they told you.
 - Then set the routines it needs: schedule for times ("every weekday at 8"), watch for events (an email from someone, a file in a folder, a webhook). Say in one or two lines what you set up and when they'll hear from you.`;
 
+/** The same interview where nothing watches for events (the cloud): routines are times only. */
+export const INTERVIEW_PROMPT_TIMES = INTERVIEW_PROMPT.replace(
+	/- Then set the routines it needs:.*$/s,
+	"- Then set the routines it needs with schedule: times, like \"every weekday at 8\". Say in one or two lines what you set up and when they'll hear from you.",
+);
+
 /** The same interview where the host keeps automations (docs/spec/27): the last step makes them with automate. */
 export const INTERVIEW_PROMPT_AUTOMATIONS = INTERVIEW_PROMPT.replace(
 	/- Then set the routines it needs:.*$/s,
@@ -375,6 +381,9 @@ export class AgentCore {
 			// else the older schedule and watch tools.
 			...(this.options.automations ? [p.schedule, p.list, p.cancel, p.watch] : [p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation]),
 			...(builtin.includes("schedule") ? [] : this.options.automations ? [p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation] : [p.schedule, p.list, p.cancel, p.watch]),
+			// Event routines run only where the host watches (the Mac's mail, folders and webhooks): the cloud has none
+			// yet, and offering watch there made the agent promise to watch for emails and files.
+			...(this.options.onWatches ? [] : [p.watch]),
 			// The web extension brings both tools when either is on: only the listed ones stay.
 			...(["web_search", "web_fetch"] as const).filter((t) => !builtin.includes(t)).map((name) => ({ name })),
 			// Mac apps only where a Mac serves them: in the cloud there's none, so none are offered (it said it could).
@@ -682,7 +691,7 @@ export class AgentCore {
 							: core.def.channels?.telegram
 								? "\n\nYou're also on Telegram: the owner's messages there come to this same conversation, and your answers go back there."
 								: "\n\nIf the owner wants to talk with you on Telegram: they make a bot with @BotFather (/newbot) and paste the token it gives them in this chat. Piopio connects it and sends them a link; you never see the token.";
-					const interview = core.def.interview && contact?.role === "owner" ? `\n\n${core.options.automations ? INTERVIEW_PROMPT_AUTOMATIONS : INTERVIEW_PROMPT}` : "";
+					const interview = core.def.interview && contact?.role === "owner" ? `\n\n${core.options.automations ? INTERVIEW_PROMPT_AUTOMATIONS : core.options.onWatches ? INTERVIEW_PROMPT : INTERVIEW_PROMPT_TIMES}` : "";
 					// Who send_message can reach, by id (docs/spec/27 A3: without it the agent asked who Lucía was).
 					const others = core.def.contacts.filter((c) => c.role !== "owner");
 					const people =

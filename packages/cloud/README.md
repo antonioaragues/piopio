@@ -58,8 +58,8 @@ Then connect to `ws://localhost:8787/v1/ws?agent=dev` with the header `Authoriza
 - **Test routes stay in tests.** `/__test/*` exists only where `PIOPIO_TEST_HOOKS` is set, and needs the token even
   there. The deploy script sends only `PIOPIO_DEFAULT_MODEL` as a variable and refuses `PIOPIO_TEST_*` and
   `PIOPIO_FAUX_*`.
-- **Not yet:** channel webhooks (Telegram's come in 5.3) will be the first routes without the bearer. They are
-  checked by their own secrets (Telegram's secret-token header), not by `OWNER_TOKEN`.
+- **Channel webhooks:** `POST /v1/channels/telegram/<agent>` is the one route without the bearer, because Telegram
+  can't send it. It's checked by Telegram's secret-token header instead (see Telegram below).
 
 ## Deploy with an API token
 
@@ -178,7 +178,9 @@ An agent's bot is read by webhook, so it answers with the Mac off.
    `https://<worker>/v1/channels/telegram/<agent>` with a random secret, and the owner gets a note with a pairing link
    (`t.me/<bot>?start=<code>`, valid for an hour).
 2. **Pair:** opening the link and tapping Start sends `/start <code>`: that chat becomes the owner's
-   (`channels.telegram`), and Telegram their preferred channel.
+   (`channels.telegram`), and Telegram their preferred channel. When Telegram opens the chat with a bare `/start`
+   (the chat already existed, or the link went through a browser), the bot asks for the code, and the code sent on
+   its own pairs too.
 3. **Write:** a message from a known chat goes to that person's conversation, through the agent (memory, `/pause`,
    budget), with "typing…" while it works; the answer goes back to the chat. An answer still owed when the object is
    evicted is sent after the next wake.
@@ -189,6 +191,19 @@ An agent's bot is read by webhook, so it answers with the Mac off.
 refuses a request without Telegram's secret header, and the agent compares it in constant time with the one it set.
 Each update is handled once, by its id, because Telegram retries. Strangers get nothing (or a canned line on
 `/start`), unless the definition's `unknownSenders` says otherwise.
+
+**On the account (2026-11-19):** a new bot connected from the Mac's driver with the token pasted in the owner's
+conversation; the note gave the `t.me` link. Telegram opened the chat with a bare `/start` (no code), so the first try
+didn't pair: the owner sent `/start <code>` by hand, and the bot now asks for the code itself. Then:
+
+- **Answers:** "Hi" and "Who are you" from the phone were answered in the chat by Claude Haiku 5.5 from the cloud,
+  and both turns show in the owner's conversation.
+- **On its own:** a reminder set over the socket for 11:24 UTC fired at **11:24:00.002**, sent 1 message for
+  $0.0002, and **arrived on the phone**: the agent's message went to Telegram because it's the owner's preferred
+  channel, though the request came from the socket.
+- **Found and fixed:** asked who it was, the agent said it could watch for new emails and file changes. The cloud
+  has no mail, folders or webhook URLs, so `watch` is now offered only where the host runs watches (the Mac), and a
+  new agent's interview in the cloud sets routines by time only.
 
 **Not yet:** approvals as inline buttons, `/pause` answered in the chat, photos and voice notes (R2). A bot read by the
 cloud can't also be polled by the Mac: use a new bot for the cloud agent.
