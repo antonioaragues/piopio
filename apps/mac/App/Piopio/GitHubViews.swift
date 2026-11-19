@@ -109,7 +109,7 @@ struct PullRequestBlock: View {
             }
             .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-            .frame(maxWidth: 680)
+            .frame(maxWidth: 560)
             // While it's in view: now, then every minute (the engine polls every two for the conversation's sake).
             .task(id: "\(pr.number)\(pr.state)\(pr.checks ?? "")") {
                 while !Task.isCancelled {

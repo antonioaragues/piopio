@@ -7,11 +7,13 @@ import SwiftUI
 struct RootView: View {
     let engine: EngineController
     @AppStorage("sidebarItem") private var itemRaw = "home"
-    @AppStorage("sidebarWidth") private var sidebarWidth = 260.0
+    @AppStorage("sidebarWidth") private var sidebarWidth = 236.0
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
     /// The agent you had open last: the sidebar's Agents row opens it.
     @AppStorage("lastAgent") private var lastAgent = ""
     @State private var fullScreen = false
+    /// The page on screen lays out its own content cards (a conversation beside a flat panel).
+    @State private var pageOwnsCard = false
     @State private var availableWidth = 1280.0
     @State private var sidebarDragStart: Double?
     @State private var showOnboarding = false
@@ -34,9 +36,10 @@ struct RootView: View {
     var body: some View {
         HStack(spacing: 0) {
             if !sidebarCollapsed {
+            // On the window itself, with no line: the content card beside it does the separating.
             MainSidebar(engine: engine, item: itemBinding)
                 .frame(width: min(sidebarWidth, max(200, availableWidth * 0.28)))
-                .sidePanel(.trailing, background: .dsSide)
+                .frame(maxHeight: .infinity, alignment: .top)
                 .overlay(alignment: .trailing) {
                     Rectangle().fill(Color.clear).frame(width: 7).contentShape(Rectangle())
                         .gesture(DragGesture().onChanged { value in
@@ -49,19 +52,28 @@ struct RootView: View {
                 }
                 .transition(.move(edge: .leading))
             }
+            // The content (docs/design/card-layout): a card over the window, 8pt from its edges (the sidebar gives the
+            // air on the left). Conversations and the agents' column lay out their own cards beside flat panels.
             VStack(spacing: 0) {
-                if engine.isLost { EngineBanner(engine: engine) }
+                if engine.isLost { EngineBanner(engine: engine).padding(.bottom, CardLayout.margin) }
                 if let hidden = hiddenArea { HiddenAreaBar(area: hidden) }
-                if engine.isMaintaining { ProgressView("Saving or restoring Piopio data…").frame(maxWidth: .infinity, maxHeight: .infinity) }
-                else {
-                    content.id(engine.dataGeneration)
-                        .environment(\.composerSpace, composerSpace)
-                        .environment(\.startBack, { itemRaw = previousRaw })
+                Group {
+                    if engine.isMaintaining { ProgressView("Saving or restoring Piopio data…").frame(maxWidth: .infinity, maxHeight: .infinity) }
+                    else {
+                        content.id(engine.dataGeneration)
+                            .environment(\.composerSpace, composerSpace)
+                            .environment(\.startBack, { itemRaw = previousRaw })
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentCard(!pageOwnsCard)
+                .onPreferenceChange(OwnsContentCardKey.self) { pageOwnsCard = $0 }
             }
+            .padding([.top, .bottom, .trailing], CardLayout.margin)
+            .padding(.leading, sidebarCollapsed ? CardLayout.margin : 0)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(Color.dsWin)
+        .background(Color.dsSide)
         .overlay(alignment: .topLeading) {
             // In full screen there are no traffic lights to make room for.
             if sidebarCollapsed { SidebarToggle().frame(height: Shell.barHeight).padding(.leading, fullScreen ? 14 : 78) }
@@ -424,8 +436,6 @@ struct EngineBanner: View {
         .padding(.vertical, 10)
         .background(Color.dsFg2.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsFg2.opacity(0.35), lineWidth: 0.5))
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
     }
 }
 

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>body{margin:0;background:#E9E8E4;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,sans-serif;-webkit-font-smoothing:antialiased}a{color:#1F6FEB}a:hover{color:#174EA6}</style>
+</helmet>
+<section style="padding:56px;display:flex;flex-direction:column;gap:28px">
+  <div style="font-size:22px;font-weight:600;color:#222">Layout final — chat como tarjeta, paneles sobre el fondo, navegador en tarjeta</div>
+  <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+<!-- F1 -->
+    <div id="F1" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#222;color:#fff;font:600 13px ui-monospace,Menlo,monospace;padding:4px 8px;border-radius:6px">F1</span><span style="font-size:15px;color:#333;font-weight:600">Sin panel</span><span style="font-size:14px;color:#777">Estado base: sidebar + tarjeta de chat</span></div>
+      <div style="width:1040px;height:680px;border-radius:12px;overflow:hidden;display:flex;background:#F4F4F2;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 20px 50px rgba(0,0,0,.18)">
+        <div style="width:236px;display:flex;flex-direction:column;padding:14px 8px 10px;gap:2px;font-size:13px;color:#262625">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0 8px 14px"><div style="display:flex;gap:8px"><span style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></span><span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></span><span style="width:12px;height:12px;border-radius:50%;background:#28C840"></span></div><div style="display:flex;gap:12px"><span style="width:14px;height:12px;border:1.5px solid #888;border-radius:3px"></span><span style="width:12px;height:12px;border:1.5px solid #888;border-radius:3px"></span></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><span style="width:11px;height:11px;border:1.5px solid #777;border-radius:50%"></span><span style="flex:1">Search</span><span style="color:#999;font-size:12px">⌘K</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><span style="width:12px;height:11px;border:1.5px solid #777;border-radius:2px"></span><span style="flex:1">Home</span><span style="color:#999;font-size:12px">7</span></div>
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex;justify-content:space-between;padding:16px 8px 4px;color:#8A8A86;font-size:12px"><span>{{ g.title }}</span><span>+</span></div>
+            <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;background:{{ it.bg }}"><span style="width:12px;height:10px;border:1.5px solid #888;border-radius:{{ it.r }}"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.label }}</span><span style="color:#999;font-size:12px">{{ it.meta }}</span></div>
+            </sc-for>
+          </sc-for>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:8px"><span style="width:26px;height:26px;border-radius:50%;background:#E5E5E3;display:grid;place-items:center;font-size:12px;color:#555">A</span><div style="flex:1;display:flex;flex-direction:column"><span>Antonio</span><span style="font-size:11px;color:#8A8A86">This Mac · $0.00 today</span></div></div>
+        </div>
+        <div style="flex:1;margin:8px 8px 8px 0;background:#FCFCFB;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;overflow:hidden;position:relative">
+          <div style="height:48px;display:flex;align-items:center;gap:8px;padding:0 18px;font-size:13px"><b style="font-weight:600">hi</b><span style="color:#999">Chat · just now</span><span style="flex:1"></span><span style="color:#888;letter-spacing:2px">•••</span></div>
+          <div style="flex:1;padding:12px 0 0;display:flex;justify-content:center"><div style="width:560px;display:flex;flex-direction:column;gap:14px;font-size:14px;line-height:1.6;color:#262625">
+            <span style="color:#A2A29E;font-size:13px">Thought ›</span>
+            <p style="margin:0;text-wrap:pretty">Ya lo abrí en el navegador, y estas son las 3 primeras historias de Hacker News ahora mismo:</p>
+            <ol style="margin:0;padding-left:20px"><li><a href="#">Lovable apps expose passport details</a>: 546 puntos.</li><li><a href="#">SpaceX Catches the Starship</a>: 398 puntos.</li><li><a href="#">A Family Tree of Software Job Titles</a>: 162 puntos.</li></ol>
+            <p style="margin:0;text-wrap:pretty">Son las mismas tres que antes, con más puntos y comentarios.</p>
+            <div style="align-self:flex-end;background:#EDEDEC;border-radius:14px;padding:10px 14px;max-width:360px">Open news.ycombinator.com in the browser and tell me the top 3 stories</div>
+          </div></div>
+          <div style="display:flex;justify-content:center;padding:0 0 18px"><div style="width:560px;border-radius:14px;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.09),0 4px 14px rgba(0,0,0,.05);padding:12px 14px;display:flex;flex-direction:column;gap:14px;font-size:14px;color:#A2A29E"><span>Reply…</span><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px;color:#777">+</span><span style="flex:1"></span><span style="font-size:12px;color:#777">Sonnet 5.5</span><span style="width:26px;height:26px;border-radius:50%;background:#EDEDEC"></span></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    
+
+<!-- F2 -->
+    <div id="F2" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#222;color:#fff;font:600 13px ui-monospace,Menlo,monospace;padding:4px 8px;border-radius:6px">F2</span><span style="font-size:15px;color:#333;font-weight:600">Panel Summary</span><span style="font-size:14px;color:#777">Panel plano sobre el fondo de la ventana</span></div>
+      <div style="width:1240px;height:680px;border-radius:12px;overflow:hidden;display:flex;background:#F4F4F2;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 20px 50px rgba(0,0,0,.18)">
+        <div style="width:236px;flex:none;display:flex;flex-direction:column;padding:14px 8px 10px;gap:2px;font-size:13px;color:#262625">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0 8px 14px"><div style="display:flex;gap:8px"><span style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></span><span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></span><span style="width:12px;height:12px;border-radius:50%;background:#28C840"></span></div><div style="display:flex;gap:12px"><span style="width:14px;height:12px;border:1.5px solid #888;border-radius:3px"></span><span style="width:12px;height:12px;border:1.5px solid #888;border-radius:3px"></span></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><span style="width:11px;height:11px;border:1.5px solid #777;border-radius:50%"></span><span style="flex:1">Search</span><span style="color:#999;font-size:12px">⌘K</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><span style="width:12px;height:11px;border:1.5px solid #777;border-radius:2px"></span><span style="flex:1">Home</span><span style="color:#999;font-size:12px">7</span></div>
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex;justify-content:space-between;padding:16px 8px 4px;color:#8A8A86;font-size:12px"><span>{{ g.title }}</span><span>+</span></div>
+            <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;background:{{ it.bg }}"><span style="width:12px;height:10px;border:1.5px solid #888;border-radius:{{ it.r }}"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.label }}</span><span style="color:#999;font-size:12px">{{ it.meta }}</span></div>
+            </sc-for>
+          </sc-for>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:8px"><span style="width:26px;height:26px;border-radius:50%;background:#E5E5E3;display:grid;place-items:center;font-size:12px;color:#555">A</span><div style="flex:1;display:flex;flex-direction:column"><span>Antonio</span><span style="font-size:11px;color:#8A8A86">This Mac · $0.14 today</span></div></div>
+        </div>
+        <div style="flex:1;min-width:0;margin:8px 0 8px 0;background:#FCFCFB;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;overflow:hidden">
+          <div style="height:48px;display:flex;align-items:center;gap:8px;padding:0 14px 0 18px;font-size:13px"><b style="font-weight:600">hi</b><span style="color:#999">Chat · 4 minutes ago</span><span style="flex:1"></span><span style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center"><span style="width:13px;height:13px;border:1.5px solid #888;border-radius:50%"></span></span><span style="width:28px;height:28px;border-radius:7px;background:#EDEDEC;display:grid;place-items:center"><span style="width:14px;height:11px;border:1.5px solid #555;border-radius:2px"></span></span><span style="color:#888;letter-spacing:2px;padding-left:6px">•••</span></div>
+          <div style="flex:1;padding:12px 32px 0;display:flex;justify-content:center"><div style="max-width:520px;display:flex;flex-direction:column;gap:14px;font-size:14px;line-height:1.6;color:#262625">
+            <span style="color:#A2A29E;font-size:13px">Thought ›</span>
+            <p style="margin:0;text-wrap:pretty">Ya lo abrí en el navegador, y estas son las 3 primeras historias de Hacker News ahora mismo:</p>
+            <ol style="margin:0;padding-left:20px"><li><a href="#">Lovable apps expose passport details</a>: 546 puntos.</li><li><a href="#">SpaceX Catches the Starship</a>: 398 puntos.</li><li><a href="#">A Family Tree of Software Job Titles</a>: 162 puntos.</li></ol>
+            <p style="margin:0;text-wrap:pretty">Son las mismas tres que antes, con más puntos y comentarios.</p>
+            <div style="align-self:flex-end;background:#EDEDEC;border-radius:14px;padding:10px 14px;max-width:340px">Open news.ycombinator.com in the browser and tell me the top 3 stories</div>
+          </div></div>
+          <div style="display:flex;justify-content:center;padding:0 32px 18px"><div style="width:100%;max-width:520px;border-radius:14px;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.09),0 4px 14px rgba(0,0,0,.05);padding:12px 14px;display:flex;flex-direction:column;gap:14px;font-size:14px;color:#A2A29E"><span>Reply…</span><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px;color:#777">+</span><span style="flex:1"></span><span style="font-size:12px;color:#777">Sonnet 5.5</span><span style="width:26px;height:26px;border-radius:50%;background:#EDEDEC"></span></div></div></div>
+        </div>
+        <div style="width:252px;flex:none;display:flex;flex-direction:column;font-size:13px;color:#262625;padding:0 8px">
+          <div style="height:56px;display:flex;align-items:center;padding:0 10px"><b style="font-weight:600">Summary</b></div>
+          <div style="padding:0 10px 16px;display:flex;flex-direction:column;gap:8px"><span style="color:#8A8A86;font-size:12px">Context</span><div style="display:grid;grid-template-columns:56px 1fr;gap:6px 8px"><span style="color:#999">Read</span><div style="display:flex;flex-direction:column;gap:4px"><span>news.ycombinator.com</span><span>movistar.com</span><span>en.wikipedia.org/wiki/Porto</span></div></div></div>
+          <div style="padding:8px 10px 16px;display:flex;flex-direction:column;gap:8px"><span style="color:#8A8A86;font-size:12px">Setup</span><div style="display:grid;grid-template-columns:56px 1fr;gap:8px"><span style="color:#999">Uses</span><span>the web ›</span><span style="color:#999">Skills</span><span style="display:flex;gap:8px"><span style="color:#999">None</span><a href="#">Add skills…</a></span></div></div>
+          <div style="margin-top:auto;padding:16px 10px;display:flex;justify-content:space-between"><span style="color:#8A8A86">Cost</span><span>$0.49</span></div>
+        </div>
+      </div>
+    </div>
+
+
+<!-- F3 -->
+    <div id="F3" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#222;color:#fff;font:600 13px ui-monospace,Menlo,monospace;padding:4px 8px;border-radius:6px">F3</span><span style="font-size:15px;color:#333;font-weight:600">Panel Archivos</span><span style="font-size:14px;color:#777">Panel plano sobre el fondo de la ventana</span></div>
+      <div style="width:1240px;height:680px;border-radius:12px;overflow:hidden;display:flex;background:#F4F4F2;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 20px 50px rgba(0,0,0,.18)">
+        <div style="width:236px;flex:none;display:flex;flex-direction:column;padding:14px 8px 10px;gap:2px;font-size:13px;color:#262625">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0 8px 14px"><div style="display:flex;gap:8px"><span style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></span><span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></span><span style="width:12px;height:12px;border-radius:50%;background:#28C840"></span></div><div style="display:flex;gap:12px"><span style="width:14px;height:12px;border:1.5px solid #888;border-radius:3px"></span><span style="width:12px;height:12px;border:1.5px solid #888;border-radius:3px"></span></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><span style="width:11px;height:11px;border:1.5px solid #777;border-radius:50%"></span><span style="flex:1">Search</span><span style="color:#999;font-size:12px">⌘K</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><span style="width:12px;height:11px;border:1.5px solid #777;border-radius:2px"></span><span style="flex:1">Home</span><span style="color:#999;font-size:12px">7</span></div>
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex;justify-content:space-between;padding:16px 8px 4px;color:#8A8A86;font-size:12px"><span>{{ g.title }}</span><span>+</span></div>
+            <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;background:{{ it.bg }}"><span style="width:12px;height:10px;border:1.5px solid #888;border-radius:{{ it.r }}"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.label }}</span><span style="color:#999;font-size:12px">{{ it.meta }}</span></div>
+            </sc-for>
+          </sc-for>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:8px"><span style="width:26px;height:26px;border-radius:50%;background:#E5E5E3;display:grid;place-items:center;font-size:12px;color:#555">A</span><div style="flex:1;display:flex;flex-direction:column"><span>Antonio</span><span style="font-size:11px;color:#8A8A86">This Mac · $0.14 today</span></div></div>
+        </div>
+        <div style="flex:1;display:flex;gap:8px;padding:8px 8px 8px 0;min-width:0">
+          <div style="flex:1;min-width:0;background:#FCFCFB;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;overflow:hidden">
+            <div style="height:48px;display:flex;align-items:center;gap:8px;padding:0 14px 0 18px;font-size:13px"><b style="font-weight:600">hi</b><span style="color:#999">Chat · 4 minutes ago</span><span style="flex:1"></span><span style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center"><span style="width:13px;height:13px;border:1.5px solid #888;border-radius:50%"></span></span><span style="width:28px;height:28px;border-radius:7px;background:#EDEDEC;display:grid;place-items:center"><span style="width:14px;height:11px;border:1.5px solid #555;border-radius:2px"></span></span><span style="color:#888;letter-spacing:2px;padding-left:6px">•••</span></div>
+            <div style="flex:1;padding:12px 32px 0;display:flex;justify-content:center"><div style="max-width:520px;display:flex;flex-direction:column;gap:14px;font-size:14px;line-height:1.6;color:#262625">
+              <span style="color:#A2A29E;font-size:13px">Thought ›</span>
+              <p style="margin:0;text-wrap:pretty">Ya lo abrí en el navegador, y estas son las 3 primeras historias de Hacker News ahora mismo:</p>
+              <ol style="margin:0;padding-left:20px"><li><a href="#">Lovable apps expose passport details</a>: 546 puntos.</li><li><a href="#">SpaceX Catches the Starship</a>: 398 puntos.</li><li><a href="#">A Family Tree of Software Job Titles</a>: 162 puntos.</li></ol>
+              <p style="margin:0;text-wrap:pretty">Son las mismas tres que antes, con más puntos y comentarios.</p>
+              <div style="align-self:flex-end;background:#EDEDEC;border-radius:14px;padding:10px 14px;max-width:340px">Open news.ycombinator.com in the browser and tell me the top 3 stories</div>
+            </div></div>
+            <div style="display:flex;justify-content:center;padding:0 32px 18px"><div style="width:100%;max-width:520px;border-radius:14px;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.09),0 4px 14px rgba(0,0,0,.05);padding:12px 14px;display:flex;flex-direction:column;gap:14px;font-size:14px;color:#A2A29E"><span>Reply…</span><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px;color:#777">+</span><span style="flex:1"></span><span style="font-size:12px;color:#777">Sonnet 5.5</span><span style="width:26px;height:26px;border-radius:50%;background:#EDEDEC"></span></div></div></div>
+          </div>
+          <div style="width:280px;flex:none;background:transparent;display:flex;flex-direction:column;font-size:13px;color:#262625;overflow:hidden">
+            <div style="padding:10px 10px 0;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border-radius:8px;background:#E9E9E6;color:#A2A29E"><span style="flex:1">Filter files</span><span style="font-size:12px">⌘P</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;padding:2px;border-radius:8px;background:#E9E9E6;font-size:12px;text-align:center"><span style="padding:5px;border-radius:6px;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,.08)">All</span><span style="padding:5px;color:#6E6E6A">Touched 5</span></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:14px 18px 6px;color:#8A8A86;font-size:12px"><span>piopio</span><span>~/Proyectos</span></div>
+            <div style="display:flex;flex-direction:column;padding:0 8px;gap:1px">
+              <sc-for list="{{ files }}" as="fl" hint-placeholder-count="12">
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:6px;background:{{ fl.bg }}"><span style="width:8px;color:#A2A29E;font-size:10px">{{ fl.caret }}</span><span style="flex:1">{{ fl.name }}</span><span style="font-size:11px;font-weight:600;color:{{ fl.color }}">{{ fl.tag }}</span></div>
+              </sc-for>
+            </div>
+            <div style="margin-top:auto;padding:10px 18px;font-size:12px;color:#8A8A86;display:flex;gap:10px"><span><b style="color:#2E9D57;font-weight:600">N</b> new</span><span><b style="color:#D9822B;font-weight:600">M</b> changed</span><span><b style="color:#2F6FD6;font-weight:600">R</b> read</span></div>
+            <div style="padding:12px 18px;display:flex;align-items:center;gap:10px;border-top:1px solid rgba(0,0,0,.06);font-size:12px"><span style="width:44px;height:4px;border-radius:2px;background:#E2E2DF;position:relative;overflow:hidden"><span style="position:absolute;left:0;top:0;bottom:0;width:6px;background:#8A8A86"></span></span><span style="flex:1;color:#6E6E6A">120k of 1M</span><span>$0.11</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+<!-- F4 -->
+    <div id="F4" style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="background:#222;color:#fff;font:600 13px ui-monospace,Menlo,monospace;padding:4px 8px;border-radius:6px">F4</span><span style="font-size:15px;color:#333;font-weight:600">Panel Navegador</span><span style="font-size:14px;color:#777">Excepción: el navegador va en su propia tarjeta</span></div>
+      <div style="width:1400px;height:680px;border-radius:12px;overflow:hidden;display:flex;background:#F4F4F2;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 20px 50px rgba(0,0,0,.18)">
+        <div style="width:236px;flex:none;display:flex;flex-direction:column;padding:14px 8px 10px;gap:2px;font-size:13px;color:#262625">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0 8px 14px"><div style="display:flex;gap:8px"><span style="width:12px;height:12px;border-radius:50%;background:#FF5F57"></span><span style="width:12px;height:12px;border-radius:50%;background:#FEBC2E"></span><span style="width:12px;height:12px;border-radius:50%;background:#28C840"></span></div><div style="display:flex;gap:12px"><span style="width:14px;height:12px;border:1.5px solid #888;border-radius:3px"></span><span style="width:12px;height:12px;border:1.5px solid #888;border-radius:3px"></span></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><span style="width:11px;height:11px;border:1.5px solid #777;border-radius:50%"></span><span style="flex:1">Search</span><span style="color:#999;font-size:12px">⌘K</span></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px"><span style="width:12px;height:11px;border:1.5px solid #777;border-radius:2px"></span><span style="flex:1">Home</span><span style="color:#999;font-size:12px">7</span></div>
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex;justify-content:space-between;padding:16px 8px 4px;color:#8A8A86;font-size:12px"><span>{{ g.title }}</span><span>+</span></div>
+            <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;background:{{ it.bg }}"><span style="width:12px;height:10px;border:1.5px solid #888;border-radius:{{ it.r }}"></span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.label }}</span><span style="color:#999;font-size:12px">{{ it.meta }}</span></div>
+            </sc-for>
+          </sc-for>
+          <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:8px"><span style="width:26px;height:26px;border-radius:50%;background:#E5E5E3;display:grid;place-items:center;font-size:12px;color:#555">A</span><div style="flex:1;display:flex;flex-direction:column"><span>Antonio</span><span style="font-size:11px;color:#8A8A86">This Mac · $0.14 today</span></div></div>
+        </div>
+        <div style="flex:1;display:flex;gap:8px;padding:8px 8px 8px 0;min-width:0">
+          <div style="flex:1;min-width:0;background:#FCFCFB;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;overflow:hidden">
+            <div style="height:48px;display:flex;align-items:center;gap:8px;padding:0 14px 0 18px;font-size:13px"><b style="font-weight:600">hi</b><span style="color:#999">Chat · 4 minutes ago</span><span style="flex:1"></span><span style="width:28px;height:28px;border-radius:7px;display:grid;place-items:center"><span style="width:13px;height:13px;border:1.5px solid #888;border-radius:50%"></span></span><span style="width:28px;height:28px;border-radius:7px;background:#EDEDEC;display:grid;place-items:center"><span style="width:14px;height:11px;border:1.5px solid #555;border-radius:2px"></span></span><span style="color:#888;letter-spacing:2px;padding-left:6px">•••</span></div>
+            <div style="flex:1;padding:12px 32px 0;display:flex;justify-content:center"><div style="max-width:520px;display:flex;flex-direction:column;gap:14px;font-size:14px;line-height:1.6;color:#262625">
+              <span style="color:#A2A29E;font-size:13px">Thought ›</span>
+              <p style="margin:0;text-wrap:pretty">Ya lo abrí en el navegador, y estas son las 3 primeras historias de Hacker News ahora mismo:</p>
+              <ol style="margin:0;padding-left:20px"><li><a href="#">Lovable apps expose passport details</a>: 546 puntos.</li><li><a href="#">SpaceX Catches the Starship</a>: 398 puntos.</li><li><a href="#">A Family Tree of Software Job Titles</a>: 162 puntos.</li></ol>
+              <p style="margin:0;text-wrap:pretty">Son las mismas tres que antes, con más puntos y comentarios.</p>
+              <div style="align-self:flex-end;background:#EDEDEC;border-radius:14px;padding:10px 14px;max-width:340px">Open news.ycombinator.com in the browser and tell me the top 3 stories</div>
+            </div></div>
+            <div style="display:flex;justify-content:center;padding:0 32px 18px"><div style="width:100%;max-width:520px;border-radius:14px;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.09),0 4px 14px rgba(0,0,0,.05);padding:12px 14px;display:flex;flex-direction:column;gap:14px;font-size:14px;color:#A2A29E"><span>Reply…</span><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px;color:#777">+</span><span style="flex:1"></span><span style="font-size:12px;color:#777">Sonnet 5.5</span><span style="width:26px;height:26px;border-radius:50%;background:#EDEDEC"></span></div></div></div>
+          </div>
+          <div style="width:440px;flex:none;background:#FCFCFB;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.05);display:flex;flex-direction:column;font-size:13px;color:#262625;overflow:hidden">
+            <div style="height:48px;display:flex;align-items:center;gap:10px;padding:0 10px 0 14px">
+              <span style="color:#6E6E6A;font-size:15px">‹</span><span style="color:#C2C2BE;font-size:15px">›</span><span style="color:#6E6E6A;font-size:14px">↻</span>
+              <div style="flex:1;height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:8px;background:#F1F1EF;color:#6E6E6A;font-size:12px"><span style="width:9px;height:10px;border:1.5px solid #A2A29E;border-radius:2px"></span><span style="flex:1">news.ycombinator.com</span></div>
+              <span style="color:#888;letter-spacing:2px">•••</span><span style="color:#999;font-size:15px;padding:0 4px">×</span>
+            </div>
+            <div style="flex:1;margin:0 8px 8px;border-radius:7px;overflow:hidden;background:#F6F6EF;box-shadow:0 0 0 1px rgba(0,0,0,.06);display:flex;flex-direction:column;font-family:Verdana,Geneva,sans-serif;font-size:11px">
+              <div style="background:#FF6600;padding:4px 6px;display:flex;gap:8px;align-items:center"><span style="width:14px;height:14px;border:1px solid #fff;color:#fff;font-weight:700;display:grid;place-items:center;font-size:10px">Y</span><b>Hacker News</b><span>new | past | comments | ask | show | jobs</span></div>
+              <div style="padding:8px 8px;display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ hn }}" as="s" hint-placeholder-count="8">
+                  <div style="display:flex;gap:6px"><span style="color:#828282;width:16px;text-align:right">{{ s.n }}.</span><div style="display:flex;flex-direction:column;gap:2px"><span style="color:#000;font-size:12px">{{ s.t }}</span><span style="color:#828282;font-size:9px">{{ s.m }}</span></div></div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const mk = (label, meta = '', r = '2px', active = false) => ({
+      label, meta, r,
+      bg: active ? 'rgba(0,0,0,.065)' : 'transparent',
+      bgB: active ? '#FFFFFF' : 'transparent',
+      shB: active ? '0 1px 2px rgba(0,0,0,.08)' : 'none'
+    });
+    const F=(name,caret,tag,sel)=>({name,caret:caret?'›':'',tag:tag||'',color:tag==='M'?'#D9822B':tag==='N'?'#2E9D57':'#2F6FD6',bg:sel?'rgba(0,0,0,.055)':'transparent'});
+    return {
+      files:[F('.github',1),F('apps',1,'M'),F('docs',1),F('packages',1,'M'),F('scripts',1),F('.gitignore'),F('.node-version'),F('LICENSE'),F('package.json','','R',true),F('pnpm-lock.yaml'),F('pnpm-workspace.yaml'),F('README.md','','N'),F('tsconfig.base.json'),F('vitest.setup.ts')],
+      hn:[{n:1,t:'Lovable apps expose passport details',m:'546 points · 3 hours ago · 212 comments'},{n:2,t:'SpaceX Catches the Starship',m:'398 points · 5 hours ago · 301 comments'},{n:3,t:'A Family Tree of Software Job Titles',m:'162 points · 2 hours ago · 58 comments'},{n:4,t:'Show HN: A tiny SQLite-backed queue',m:'121 points · 4 hours ago · 33 comments'},{n:5,t:'The quiet death of the RSS reader',m:'98 points · 6 hours ago · 77 comments'},{n:6,t:'Porto’s tram network, mapped',m:'84 points · 1 hour ago · 12 comments'}],
+      groups: [
+        { title: 'Projects', items: [mk('RC bioinformatica'), mk('piopio', 'main')] },
+        { title: 'Agents', items: [mk('Family helper', 'Draft', '50%'), mk('Daily briefing', '•', '50%'), mk('Development team', '4', '50%')] },
+        { title: 'Conversations', items: [mk('hi', '', '5px', true), mk('quiero optimizar mi curriculum', '', '5px'), mk('nk', '', '5px'), mk('j', '', '5px'), mk('tedst', '', '5px')] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -929,10 +929,11 @@ extension Notification.Name {
 extension View {
     /// The composer's box (docs/design/grey): field fill, a 0.5pt hairline, radius 16, a faint shadow.
     func composerBox() -> some View {
+        // docs/design/card-layout: pure white over the card, a 1pt ring and a soft shadow below (0 4 14 · 5%).
         self
             .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.04), radius: 5, y: 2)
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.composer, style: .continuous).strokeBorder(Color(nsColor: DS.composerEdge), lineWidth: 1))
+            .shadow(color: .black.opacity(0.05), radius: 7, y: 4)
     }
 
     /// The start box (docs/design/home 3a): card fill, a 1pt line, radius 16, a hairline shadow and a soft one below.

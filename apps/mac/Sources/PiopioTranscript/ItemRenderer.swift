@@ -34,8 +34,8 @@ nonisolated struct ItemRenderer: Sendable {
     /// Automations undone from their card here: once gone they read "Undone … Redo" rather than "Removed".
     var undoneAutomations: Set<String> = []
 
-    /// Answers 15 / 1.6 (chat v3); Quick Chat keeps the compact 13.5.
-    private var bodySize: CGFloat { compact ? DS.transcriptSize : 15 }
+    /// Answers 14 (docs/design/card-layout); Quick Chat keeps the compact 13.5.
+    private var bodySize: CGFloat { compact ? DS.transcriptSize : 14 }
     private var body: NSFont { .systemFont(ofSize: bodySize) }
     private var mono: NSFont { .monospacedSystemFont(ofSize: 12, weight: .regular) }
     var small: NSFont { .systemFont(ofSize: 12) }

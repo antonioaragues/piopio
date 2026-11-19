@@ -25,7 +25,7 @@ struct ThreadView: View {
     private var summaryShown: Bool { (showSummary || Self.demoSummary) && !browserOpen }
     @State private var conversationWidth: Double = 1200
     /// The Browser's width as you last dragged it (every chat shares it).
-    @AppStorage("browserWidth") private var browserPreferred = 560.0
+    @AppStorage("browserWidth") private var browserPreferred = 440.0
     @State private var browserDragStart: Double?
 
     /// The widest the Browser may be: the chat keeps at least 380pt.
@@ -33,25 +33,29 @@ struct ThreadView: View {
     /// The Browser's width: yours, narrower when the window can't fit it.
     private var browserWidth: Double { min(max(320, browserPreferred), browserMax) }
 
+    /// The chat in its card, and one panel beside it (docs/design/card-layout): the Summary flat on the window, the
+    /// Browser in a card of its own.
     private var conversation: some View {
-        HStack(spacing: 0) {
-            chatColumn
+        HStack(spacing: CardLayout.margin) {
+            chatColumn.contentCard()
             // The Browser panel (docs/spec/22 §5): opens by itself when the model browses here.
             if browserOpen {
-                BrowserPanel(refID: summary.ref.id) { Task { await thread.stop() } }
+                BrowserPanel(refID: summary.ref.id, onStop: { Task { await thread.stop() } },
+                             onClose: { withAnimation(.easeOut(duration: 0.2)) { _ = BrowserCenter.shared.openPanels.remove(summary.ref.id) } })
                     .frame(width: browserWidth)
-                    .sidePanel()
+                    .contentCard()
                     .overlay(alignment: .leading) { browserResizeHandle }
-                    .transition(.move(edge: .trailing))
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if summaryShown {
                 ChatSummaryPanel(engine: engine, thread: thread, summary: summary)
-                    .frame(width: 290)
-                    .sidePanel()
+                    .frame(width: 252)
+                    .frame(maxHeight: .infinity, alignment: .top)
                     .transition(.move(edge: .trailing))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onGeometryChange(for: Double.self) { $0.size.width } action: { conversationWidth = $0 }
+        .ownsContentCard()
     }
 
     /// The Browser's leading edge: drag to resize it, between 320pt and what leaves the chat 380pt.
@@ -67,7 +71,7 @@ struct ThreadView: View {
                 browserPreferred = min(browserMax, max(320, browserWidth + (direction == .increment ? 40 : -40)))
             }
             .help("Drag to resize the browser")
-            .offset(x: -3)
+            .offset(x: -7)
     }
 
     private var chatColumn: some View {
@@ -86,9 +90,9 @@ struct ThreadView: View {
                         JumpToLatestButton { thread.scrollToLatest() }
                     }
                     SideConversations(engine: engine, parentId: summary.ref.id)
-                    Composer(engine: engine, thread: thread).frame(maxWidth: 680)
+                    Composer(engine: engine, thread: thread).frame(maxWidth: 560)
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 32)
                 .padding(.bottom, 20)
                 .modifier(SideOffers(engine: engine, ref: summary.ref, document: thread.document))
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in

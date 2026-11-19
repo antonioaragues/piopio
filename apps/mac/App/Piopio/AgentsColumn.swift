@@ -13,12 +13,15 @@ struct AgentsSplit<Page: View>: View {
     let selected: String?
     @ViewBuilder var page: Page
 
+    /// The column on the window beside the sidebar, the page in the content card (docs/design/card-layout).
     var body: some View {
         HStack(spacing: 0) {
             AgentsColumn(engine: engine, item: $item, selected: selected)
                 .frame(width: 264)
             page.frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentCard()
         }
+        .ownsContentCard()
     }
 }
 
@@ -64,7 +67,7 @@ struct AgentsColumn: View {
                     .textFieldStyle(.plain).font(.system(size: 13))
             }
             .padding(.horizontal, 10).frame(height: 30)
-            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
+            .background(Color.dsField, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
             .padding(.horizontal, 12).padding(.bottom, 10)
             ScrollView {
                 LazyVStack(spacing: 2) {
@@ -77,14 +80,7 @@ struct AgentsColumn: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: Self.columnFill))
-        .overlay(alignment: .trailing) { Rectangle().fill(Color.dsLine).frame(width: 0.5) }
         .task(id: engine.agents.map(\.updatedAt)) { await loadPreviews() }
-    }
-
-    /// #F8F8F6 · #1B1B1A: between the sidebar and the window.
-    static let columnFill = NSColor(name: nil) { a in
-        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(srgbRed: 0.106, green: 0.106, blue: 0.102, alpha: 1) : NSColor(srgbRed: 0.973, green: 0.973, blue: 0.965, alpha: 1)
     }
 
     private func loadPreviews() async {

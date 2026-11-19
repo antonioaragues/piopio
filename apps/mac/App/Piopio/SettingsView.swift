@@ -68,8 +68,9 @@ struct SettingsView: View {
             .padding(.top, 14)
             .padding(.horizontal, 8)
             .frame(width: 200)
-            .sidePanel(.trailing, background: .dsSide)
+            .frame(maxHeight: .infinity, alignment: .top)
 
+            // The pane in a content card over the window, as in the main window (docs/design/card-layout).
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     switch section {
@@ -91,9 +92,12 @@ struct SettingsView: View {
                 .padding(.vertical, 24)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentCard()
+            .padding([.top, .bottom, .trailing], CardLayout.margin)
         }
         .frame(width: 820, height: 560)
-        .background(Color.dsWin)
+        .background(Color.dsSide)
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .onAppear(perform: openRequested)

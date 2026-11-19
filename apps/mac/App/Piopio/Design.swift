@@ -10,6 +10,9 @@ extension Color {
     static let dsSeg = Color(nsColor: DS.seg)
     static let dsCard = Color(nsColor: DS.card)
     static let dsChip = Color(nsColor: DS.chip)
+    /// Fields on the window (outside the content card).
+    static let dsField = Color(nsColor: DS.field)
+    static let dsCardField = Color(nsColor: DS.cardField)
     static let dsPill = Color(nsColor: DS.pill)
     static let dsFg = Color(nsColor: DS.fg)
     static let dsFg2 = Color(nsColor: DS.fg2)
@@ -94,7 +97,42 @@ struct SidePanel: ViewModifier {
     }
 }
 
+/// A content card (docs/design/card-layout): the chat, the Browser and every page float over the window in a card,
+/// radius 10, fill `win`, a 1pt ring and a hairline shadow. `enabled: false` keeps the same view tree with no card
+/// (pages that lay out their own cards, beside flat panels).
+struct ContentCard: ViewModifier {
+    var enabled = true
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: enabled ? DS.Radius.contentCard : 0, style: .continuous)
+        content
+            .clipShape(shape)
+            .background {
+                shape.fill(enabled ? Color.dsWin : .clear)
+                    .shadow(color: .black.opacity(enabled ? 0.05 : 0), radius: 1.5, y: 1)
+            }
+            .overlay { shape.inset(by: -0.5).stroke(enabled ? Color(nsColor: DS.cardEdge) : .clear, lineWidth: 1).allowsHitTesting(false) }
+    }
+}
+
+/// Pages that put their own content cards on the window (a conversation and its side panel, the agents' column):
+/// the root view then doesn't wrap them in one.
+struct OwnsContentCardKey: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
+/// The gap between the window's edge and its cards, and between two cards.
+enum CardLayout {
+    static let margin: CGFloat = 8
+}
+
 extension View {
+    func contentCard(_ enabled: Bool = true) -> some View { modifier(ContentCard(enabled: enabled)) }
+
+    /// Says this page lays out its own content cards.
+    func ownsContentCard() -> some View { preference(key: OwnsContentCardKey.self, value: true) }
+
     /// A group of Settings rows (docs/design/grey 10e): hairlines above and below instead of a box; rows line up with the
     /// page's title.
     func settingsRows() -> some View {

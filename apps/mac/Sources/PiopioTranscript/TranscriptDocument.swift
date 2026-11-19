@@ -47,9 +47,9 @@ public final class TranscriptDocument {
             scrollView.contentInsets.bottom = bottomInset
         }
     }
-    /// Widest the reading column gets (docs/design chat v3: 680), with at least 40 on each side.
-    public var maxColumnWidth: CGFloat = 680
-    private let minimumInset: CGFloat = 40
+    /// Widest the reading column gets (docs/design/card-layout: 560), with at least 32 on each side.
+    public var maxColumnWidth: CGFloat = 560
+    private let minimumInset: CGFloat = 32
 
     /// "Ask next" (chat v3, 14e): suggestions after the last answer, as the document's last segment.
     public let askNext = AskNextModel()

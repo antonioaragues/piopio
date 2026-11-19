@@ -18,6 +18,9 @@ struct ChatSummaryPanel: View {
     var body: some View {
         let found = ChatResults(items: thread.document.items)
         VStack(alignment: .leading, spacing: 0) {
+            // The panel's title, level with the chat's toolbar (docs/design/card-layout F2).
+            Text("Summary").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
+                .padding(.horizontal, 16).frame(height: Shell.cardBarHeight)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     now

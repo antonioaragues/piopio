@@ -3,15 +3,25 @@ import AppKit
 /// Piopio design tokens (docs/design/README.md · "Design tokens"), light and dark.
 /// AppKit colors so both the TextKit transcript and SwiftUI (`Color(nsColor:)`) share them.
 public enum DS {
-    // MARK: Surfaces and text (docs/design/grey: grey ink, hairlines, no decoration)
+    // MARK: Surfaces and text (docs/design/grey: grey ink, hairlines, no decoration; docs/design/card-layout: the
+    // content floats in a card over the window)
+    /// The content card's fill (chat, browser, every page), and the content of windows without cards.
     public static let win = dynamic(rgb(0xFCFCFB), rgb(0x1E1E1D))
-    /// The sidebar's background, flush to the window edge.
+    /// The window under the cards: the sidebar and the flat side panels (Summary, Files, Inspector) sit on it.
     public static let side = dynamic(rgb(0xF4F4F2), rgb(0x191918))
+    /// A content card's edge: a 1pt ring (the window and the card are close, so the ring carries the separation).
+    public static let cardEdge = dynamic(NSColor.black.withAlphaComponent(0.06), NSColor.white.withAlphaComponent(0.07))
+    /// The composer's edge: a little stronger, since it floats over the card.
+    public static let composerEdge = dynamic(NSColor.black.withAlphaComponent(0.09), NSColor.white.withAlphaComponent(0.10))
+    /// Fields on the window (the Files filter): a step darker than the window, so they read without a line.
+    public static let field = dynamic(rgb(0xE9E9E6), rgb(0x252524))
+    /// Fields inside a card (the Browser's address).
+    public static let cardField = dynamic(rgb(0xF1F1EF), rgb(0x2A2A28))
     /// Fields and the cards that need you (approvals, questions), and the composer.
     public static let card = dynamic(.white, rgb(0x252524))
     /// Hover and selected rows, hover selectors, quiet fills.
     public static let chip = dynamic(NSColor.black.withAlphaComponent(0.06), NSColor.white.withAlphaComponent(0.07))
-    public static let bubble = dynamic(rgb(0xF0F0ED), rgb(0x2B2B29))
+    public static let bubble = dynamic(rgb(0xEDEDEC), rgb(0x2B2B29))
     /// A segmented control's track and its selected segment.
     public static let track = dynamic(NSColor.black.withAlphaComponent(0.05), NSColor.white.withAlphaComponent(0.06))
     public static let seg = dynamic(.white, rgb(0x3A3A38))
@@ -52,7 +62,9 @@ public enum DS {
     // MARK: Radii
     public enum Radius {
         public static let window: CGFloat = 12
-        public static let composer: CGFloat = 16
+        public static let composer: CGFloat = 14
+        /// The content cards (chat, browser, pages) over the window.
+        public static let contentCard: CGFloat = 10
         public static let quickChat: CGFloat = 14
         public static let panel: CGFloat = 12
         public static let card: CGFloat = 12

@@ -56,7 +56,7 @@ struct MainSidebar: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 10)
             }
-            Rectangle().fill(Color.dsLine).frame(height: 0.5)
+            // No line above the footer (docs/design/card-layout): the sidebar is the window itself.
             footer
         }
         .onChange(of: item) { _, _ in
@@ -102,7 +102,7 @@ struct MainSidebar: View {
         HStack(spacing: 10) {
             Text(String(HomeView.firstName.prefix(1)).uppercased())
                 .font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2)
-                .frame(width: 24, height: 24)
+                .frame(width: 26, height: 26)
                 .background(Color.dsChip, in: Circle())
             VStack(alignment: .leading, spacing: 1) {
                 Text(HomeView.firstName).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
@@ -114,7 +114,7 @@ struct MainSidebar: View {
                 .buttonStyle(IconButtonStyle()).help("Settings (⌘,)").accessibilityLabel("Settings")
         }
         .padding(.leading, 16).padding(.trailing, 10)
-        .frame(height: Shell.barHeight)
+        .frame(height: 52)
     }
 
     private var footerLine: String {

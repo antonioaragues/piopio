@@ -71,7 +71,7 @@ struct SideConversations: View {
             }
             .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-            .frame(maxWidth: 680)
+            .frame(maxWidth: 560)
         }
     }
 

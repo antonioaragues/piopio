@@ -79,7 +79,9 @@ struct BuildSessionView: View {
     private var project: ProjectInfo? { engine.projects.first { $0.path == (summary.projectPath ?? summary.cwd) } }
 
     var body: some View {
-        HStack(spacing: 0) {
+        // The session in its card, and the panel beside it (docs/design/card-layout): Files and the Inspector flat on
+        // the window, the Browser in a card of its own.
+        HStack(spacing: CardLayout.margin) {
             VStack(spacing: 0) {
                 if !reviewing { header }
                 if !reviewing, let side = summary.side { SideStartedBar(engine: engine, side: side) }
@@ -110,6 +112,7 @@ struct BuildSessionView: View {
                         .padding(.bottom, 8)
                 }
             }
+            .contentCard()
             if showInspector && !reviewing {
                 VStack(spacing: 0) {
                     switch inspectorTab {
@@ -118,7 +121,8 @@ struct BuildSessionView: View {
                             FilesPanel(engine: engine, session: session, summary: summary, cwd: cwd, filter: $filesFilter, preview: $previewing, mention: mention)
                         }
                     case .browser:
-                        BrowserPanel(refID: summary.ref.id) { Task { await session.stop() } }
+                        BrowserPanel(refID: summary.ref.id, onStop: { Task { await session.stop() } },
+                                     onClose: { withAnimation(.easeOut(duration: 0.2)) { showInspector = false } })
                     case .inspector:
                         InspectorPanel(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
                                        committing: $committing, onReview: review, onRead: {
@@ -128,10 +132,12 @@ struct BuildSessionView: View {
                                        })
                     }
                 }
-                .frame(width: inspectorTab == .browser ? 560 : 300)
-                .sidePanel()
+                .frame(width: inspectorTab == .browser ? 440 : inspectorTab == .files ? 280 : 300)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .contentCard(inspectorTab == .browser)
             }
         }
+        .ownsContentCard()
         // The model opened a page here: show the Browser view (docs/spec/22 §5).
         .onChange(of: BrowserCenter.shared.reveals[summary.ref.id]) { _, count in
             guard count != nil else { return }
@@ -214,9 +220,9 @@ struct BuildSessionView: View {
                 SideConversations(engine: engine, parentId: summary.ref.id)
                 // Its pull request (docs/spec/05-build G7): checks, comments, Fix CI and Address comments.
                 PullRequestBlock(engine: engine, summary: summary)
-                Composer(engine: engine, thread: session).frame(maxWidth: 680)
+                Composer(engine: engine, thread: session).frame(maxWidth: 560)
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 32)
             .padding(.bottom, 20)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                 session.document.bottomInset = height + 40

@@ -34,7 +34,7 @@ let lineSeparator = "\u{2028}"
 final class CardLayoutFragment: NSTextLayoutFragment {
     static let padding: CGFloat = 12
     static let bubblePadH: CGFloat = 14
-    static let bubblePadV: CGFloat = 9
+    static let bubblePadV: CGFloat = 10
     var card: CardStyle = .pills
 
     private var lines: [NSTextLineFragment] { textLineFragments.filter { $0.characterRange.length > 0 } }
@@ -99,7 +99,7 @@ final class CardLayoutFragment: NSTextLayoutFragment {
             context.setFillColor((tint ?? DS.line).cgColor)
             context.fill(CGRect(x: rect.minX, y: rect.minY, width: tint == nil ? 3 : 2, height: rect.height))
         case .user:
-            fill(context, rect, DS.bubble, radius: 12)
+            fill(context, rect, DS.bubble, radius: 14)
         case .note:
             break
         case .pills:

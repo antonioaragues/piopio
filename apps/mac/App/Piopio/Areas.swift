@@ -117,7 +117,8 @@ struct HiddenAreaBar: View {
         }
         .padding(.horizontal, 14).frame(height: 32)
         .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .padding(.horizontal, 16).padding(.top, 10)
+        // On the window above the content card.
+        .padding(.bottom, CardLayout.margin)
     }
 }
 

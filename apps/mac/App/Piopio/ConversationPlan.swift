@@ -30,7 +30,7 @@ struct ConversationPlan: View {
                     LandingCard(engine: engine, work: work, conversation: conversationId)
                 }
             }
-            .frame(maxWidth: 680)
+            .frame(maxWidth: 560)
         }
     }
 

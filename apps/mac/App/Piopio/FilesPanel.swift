@@ -68,9 +68,9 @@ struct FilesPanel: View {
                     .onSubmit { if let first = matches.first(where: { $0.kind == .file }) { preview = first.path } }
                 Text("⌘P").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
             }
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
+            .padding(.horizontal, 10).frame(height: 32)
+            // On the window (docs/design/card-layout F3): a step darker than it, no line.
+            .background(Color.dsField, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
             NeutralSegmented(selection: $filter, options: [(.all, "All"), (.touched, marks.isEmpty ? "Touched" : "Touched \(marks.count)")])
             HStack {
                 Text(URL(fileURLWithPath: cwd).lastPathComponent)

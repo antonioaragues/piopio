@@ -23,9 +23,12 @@ extension EnvironmentValues {
     }
 }
 
-/// The top bar's height, shared by the sidebar and every page toolbar.
+/// The top bar's height: the sidebar's row with the traffic lights. Page toolbars sit in the content card, 8pt down,
+/// and are `cardBarHeight` tall so their middle lines up with the traffic lights.
 enum Shell {
-    static let barHeight: CGFloat = 52
+    static let barHeight: CGFloat = 60
+    /// A page toolbar inside the content card (docs/design/card-layout).
+    static let cardBarHeight: CGFloat = barHeight - 2 * CardLayout.margin
     /// Where content starts when the sidebar is collapsed: past the traffic lights and the toggle.
     static let collapsedLeading: CGFloat = 112
 }
@@ -42,7 +45,7 @@ struct SidebarToggle: View {
     }
 }
 
-/// A page's toolbar (52): title 13.5 semibold and a 12 fg3 subtitle on one line, then icon-only ghost buttons on the
+/// A page's toolbar (44, in the content card): title 13.5 semibold and a 12 fg3 subtitle on one line, then icon-only ghost buttons on the
 /// right. With the sidebar collapsed it starts after the traffic lights and the toggle.
 struct PageHeader<Title: View, Actions: View>: View {
     @ViewBuilder var title: Title
@@ -55,9 +58,9 @@ struct PageHeader<Title: View, Actions: View>: View {
             Spacer(minLength: 12)
             actions
         }
-        .padding(.leading, control.collapsed ? (control.fullScreen ? 48 : Shell.collapsedLeading) : 20)
-        .padding(.trailing, 12)
-        .frame(height: Shell.barHeight)
+        .padding(.leading, control.collapsed ? (control.fullScreen ? 48 : Shell.collapsedLeading - CardLayout.margin) : 18)
+        .padding(.trailing, 10)
+        .frame(height: Shell.cardBarHeight)
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
     }
@@ -77,8 +80,8 @@ struct PageTitle: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
-            if !subtitle.isEmpty { Text(subtitle).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+            Text(name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
+            if !subtitle.isEmpty { Text(subtitle).font(.system(size: 13)).foregroundStyle(Color.dsFg3) }
         }
         .lineLimit(1)
     }

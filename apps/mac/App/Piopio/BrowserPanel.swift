@@ -1,3 +1,4 @@
+import PiopioTranscript
 import SwiftUI
 import WebKit
 
@@ -7,6 +8,8 @@ struct BrowserPanel: View {
     let refID: String
     /// Stops the conversation's turn (the bar's Stop): the model stops browsing and you have the page.
     var onStop: (() -> Void)?
+    /// Closes the panel (the toolbar's ×).
+    var onClose: (() -> Void)?
     @State private var address = ""
 
     var body: some View {
@@ -15,9 +18,11 @@ struct BrowserPanel: View {
             if session.tabs.count > 1 { tabStrip(session) }
             toolbar(session)
             drivingBar(session)
-            Divider()
             if let tab = session.current {
+                // The page inset in the Browser's card (docs/design/card-layout F4): radius 7 and a hairline.
                 BrowserWebView(tab: tab).id(ObjectIdentifier(tab))
+                    .overlay { RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color(nsColor: DS.cardEdge), lineWidth: 1).allowsHitTesting(false) }
+                    .padding([.horizontal, .bottom], 8)
             } else {
                 VStack(spacing: 6) {
                     Image(systemName: "globe").font(.system(size: 22)).foregroundStyle(Color.dsFg3)
@@ -83,15 +88,24 @@ struct BrowserPanel: View {
                 Image(systemName: tab?.isLoading == true ? "xmark" : "arrow.clockwise")
             }
             .buttonStyle(IconButtonStyle()).disabled(tab == nil).help(tab?.isLoading == true ? "Stop loading" : "Reload")
-            TextField("Address or search", text: $address)
-                .textFieldStyle(.plain).font(.system(size: 12))
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 6))
-                .onSubmit { session.go(address) }
+            HStack(spacing: 7) {
+                Image(systemName: tab?.url?.scheme == "https" ? "lock" : "globe").font(.system(size: 10)).foregroundStyle(Color.dsFg3)
+                TextField("Address or search", text: $address)
+                    .textFieldStyle(.plain).font(.system(size: 12))
+                    .onSubmit { session.go(address) }
+            }
+            .padding(.horizontal, 10).frame(height: 30)
+            .background(Color.dsCardField, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
+            .padding(.horizontal, 4)
             Button { session.newTab() } label: { Image(systemName: "plus") }
                 .buttonStyle(IconButtonStyle()).help("New tab")
+            if let onClose {
+                Button(action: onClose) { Image(systemName: "xmark").font(.system(size: 12)) }
+                    .buttonStyle(IconButtonStyle()).help("Close the browser").accessibilityLabel("Close browser")
+            }
         }
-        .padding(8)
+        .padding(.leading, 10).padding(.trailing, 8)
+        .frame(height: 48)
     }
 }
 
@@ -104,6 +118,10 @@ private struct BrowserWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let container = NSView()
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 7
+        container.layer?.cornerCurve = .continuous
+        container.layer?.masksToBounds = true
         attach(tab.view, to: container)
         return container
     }
