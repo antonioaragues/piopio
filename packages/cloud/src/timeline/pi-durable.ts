@@ -6,16 +6,34 @@
  * the last one to make the builder calls the events used to drive.
  */
 import { contentText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
+import type { TimelineItem } from "@piopio/protocol";
 
 
 export type Entry = { id: string | number; kind: string; model?: PiMessage[]; data?: unknown };
+
+/** An agent's own entries (@piopio/runtime's NOTICE_ENTRY and OUT_ENTRY): drawn as a note and as its message. */
+const NOTICE = "piopio.notice";
+const OUT = "piopio.channel-out";
+
+function agentItem(entry: Entry): TimelineItem | undefined {
+	const at = (t?: number) => new Date(t ?? Date.now()).toISOString();
+	if (entry.kind === NOTICE) {
+		const d = entry.data as { text: string; at?: string };
+		return { kind: "system", id: `notice:${entry.id}`, at: d.at ?? at(), level: "info", text: d.text };
+	}
+	if (entry.kind === OUT) {
+		const d = entry.data as { text: string; from: string; suggestions?: string[] };
+		return { kind: "assistant", id: String(entry.id), at: at(entry.model?.[0]?.timestamp as number | undefined), parts: [{ type: "text", text: d.text }], status: "done", outbound: { from: d.from, ...(d.suggestions?.length ? { suggestions: d.suggestions } : {}) } };
+	}
+	return undefined;
+}
 
 /** Flattens committed entries into messages, keeping the entry id for each. */
 export function messagesFromEntries(entries: readonly Entry[]): { messages: PiMessage[]; ids: string[] } {
 	const messages: PiMessage[] = [];
 	const ids: string[] = [];
 	for (const e of entries) {
-		if (e.kind === "pi.compaction") continue;
+		if (e.kind === "pi.compaction" || e.kind === NOTICE || e.kind === OUT) continue;
 		for (const [i, m] of (e.model ?? []).entries()) {
 			if (m.role !== "user" && m.role !== "assistant" && m.role !== "toolResult") continue;
 			messages.push(m);
@@ -87,8 +105,13 @@ export class DurableViewMapper {
 	 */
 	load(transcript: readonly Entry[], view: DurableView, emit: boolean): Entry[] {
 		const { messages, ids } = messagesFromEntries(transcript);
-		this.builder.reset(messages, (i) => ids[i]!, emit);
-		for (const e of transcript) this.note(e, true);
+		this.builder.reset(messages, (i) => ids[i]!, false);
+		for (const e of transcript) {
+			this.note(e, true);
+			const item = agentItem(e);
+			if (item) this.builder.place(item, false);
+		}
+		if (emit) this.builder.resnapshot();
 		const live = (view.docs["pi.live"] ?? {}) as Live;
 		if (live.runFailure) this.noticed.add(`run:${live.runFailure.taskId}`);
 		if (live.compactionFailure) this.noticed.add(`compaction:${live.compactionFailure.taskId}`);
@@ -186,6 +209,8 @@ export class DurableViewMapper {
 	private entry(entry: Entry): void {
 		const b = this.builder;
 		this.note(entry, false);
+		const own = agentItem(entry);
+		if (own) return void b.place(own);
 		if (entry.kind === "pi.compaction") {
 			const summary = (entry.data as { summary?: string } | undefined)?.summary;
 			if (summary) b.compaction(String(entry.id), summary);

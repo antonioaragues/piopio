@@ -16,6 +16,7 @@ import { DurableObject } from "cloudflare:workers";
 import { Value } from "typebox/value";
 import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js";
 import { sameSecret } from "./auth.js";
+import { CloudTelegram } from "./telegram.js";
 import type { Env } from "./env.js";
 import { createCloudModels, defaultModel } from "./models.js";
 import { TimelineBuilder } from "./timeline/builder.js";
@@ -91,7 +92,7 @@ export class AgentDO extends DurableObject<Env> {
 			const pi = await Harness.open(storage, { models: await createCloudModels(this.env), registry, onWake }, context);
 			const model = defaultModel(this.env);
 			this.agentDef = (await this.ctx.storage.get<StoredAgent>(AGENT_KEY)) ?? defaultAgent(this.agentId, `${model.provider}:${model.id}`);
-			const host = new AgentHost(pi, () => this.agentDef!, this.ctx.storage, context, () => void this.wake.rearm().catch(() => undefined));
+			const host = new AgentHost(pi, () => this.agentDef!, this.ctx.storage, context, () => void this.wake.rearm().catch(() => undefined), (to, text) => this.telegram.outbound(to, text));
 			registry.install(host.core.extension);
 			await host.core.configureAll();
 			this.host = host;
@@ -99,6 +100,31 @@ export class AgentDO extends DurableObject<Env> {
 		},
 		defaults: { model: defaultModel(this.env) },
 	});
+
+	/** The agent's Telegram bot, read by webhook (docs/spec/13 §5.3). */
+	readonly telegram: CloudTelegram = (() => {
+		const self = this;
+		return new CloudTelegram({
+			get agentId() {
+				return self.agentId;
+			},
+			storage: this.ctx.storage,
+			definition: () => self.agentDef!.definition,
+			save: async (change) => {
+				const next = structuredClone(self.agentDef!);
+				change(next.definition);
+				await self.ctx.storage.put(AGENT_KEY, next);
+				self.agentDef = next;
+				await self.host?.core.configureAll();
+			},
+			origin: () => self.ctx.storage.get<string>(ORIGIN_KEY),
+			say: (contactId, text) => self.target({ kind: "agent", id: self.agentId, conversationId: `person:${contactId}` }).then((t) => self.say(t, text, { whenBusy: "followUp" })),
+			answer: async (owed) => (await self.harness.wait(owed.operationId, { session: owed.session })).text,
+			notice: async (text) => (await self.agent()).core.proactive.notice(text),
+			waitUntil: (work) => self.ctx.waitUntil(work),
+			...(this.env.PIOPIO_TEST_TELEGRAM_API ? { api: this.env.PIOPIO_TEST_TELEGRAM_API } : {}),
+		});
+	})();
 
 	/** Wakes the object for the agent's schedules, reminders and held messages, and lets it rest in between. */
 	readonly wake = new AgentWake({
@@ -141,6 +167,8 @@ export class AgentDO extends DurableObject<Env> {
 		// Our own protocol on the socket: no Agents SDK identity/state frames.
 		protocol: false,
 		handlers: {
+			// The Worker's public address, for the webhooks it sets (Telegram's).
+			onConnect: (_connection, ctx) => this.ctx.storage.put(ORIGIN_KEY, new URL(ctx.request.url).origin),
 			onMessage: (connection, message) => this.onMessage(connection as Connection, message),
 			onClose: (connection) => this.dropSubscriptions(connection as Connection),
 		},
@@ -156,6 +184,7 @@ export class AgentDO extends DurableObject<Env> {
 	async onStart(): Promise<void> {
 		await this.agent();
 		await this.wake.rearm();
+		this.telegram.resume();
 		for (const connection of this.webSockets.getConnections<ConnState>()) {
 			const subs = connection.state?.subs ?? [];
 			const live: Subscription[] = [];
@@ -183,6 +212,10 @@ export class AgentDO extends DurableObject<Env> {
 
 	async onRequest(request: Request): Promise<Response> {
 		const url = new URL(request.url);
+		if (request.method === "POST" && url.pathname.startsWith("/v1/channels/telegram/")) {
+			await this.agent();
+			return this.telegram.webhook(request);
+		}
 		if (this.env.PIOPIO_TEST_HOOKS) {
 			if (url.pathname.startsWith("/__test/agent")) return this.agentTestRoute(url, request);
 			if (url.pathname === "/__test/status") {
@@ -326,7 +359,7 @@ export class AgentDO extends DurableObject<Env> {
 				if (busy && p.whenBusy === "reject") throw new RpcError("BUSY", "The agent is busy.");
 				const whenBusy = p.whenBusy === "steer" ? "steer" : "followUp";
 				const started = await this.say(target, p.input.text, { whenBusy, ...(p.clientRequestId ? { operationId: p.clientRequestId } : {}) });
-				return { accepted: true, disposition: busy && started ? "queued" : "started" } satisfies Result<"sessions.submit">;
+				return { accepted: true, disposition: busy && started !== undefined ? "queued" : "started" } satisfies Result<"sessions.submit">;
 			}
 			case "agents.runs": {
 				// The agent's runs, held messages and what's next (06 PR1), as the Mac's Runs tab reads them.
@@ -391,10 +424,16 @@ export class AgentDO extends DurableObject<Env> {
 	 * budget answer without a turn; otherwise memory is recalled before, and what was said is kept once it's answered.
 	 * False when no turn started.
 	 */
-	private async say(target: Target, text: string, options: { whenBusy: "followUp" | "steer"; operationId?: string }): Promise<boolean> {
+	private async say(target: Target, text: string, options: { whenBusy: "followUp" | "steer"; operationId?: string }): Promise<{ operationId: string; session: string } | undefined> {
 		const core = (await this.agent()).core;
 		const contactId = target.contactId!;
-		if (await core.intercept(contactId, text)) return false;
+		// The owner pasting a bot token connects Telegram; the token never reaches the model or the transcript.
+		const connected = await this.telegram.intercept(contactId, text);
+		if (connected) {
+			await core.proactive.notice(connected);
+			return undefined;
+		}
+		if (await core.intercept(contactId, text)) return undefined;
 		await core.beforeTurn(contactId, Number(target.session) as never, text).catch(() => undefined);
 		const receipt = await this.harness.submit(text, { session: target.session, ...options });
 		// The answer comes later; keeping it doesn't hold the reply. An eviction before then loses only this memory.
@@ -406,7 +445,7 @@ export class AgentDO extends DurableObject<Env> {
 				await this.wake.rearm();
 			})().catch(() => undefined),
 		);
-		return true;
+		return { operationId: receipt.operationId, session: target.session };
 	}
 
 	/** Opens (or reuses) the session's view and routes its events to `sub` on `connection`. */
@@ -451,6 +490,7 @@ export class AgentDO extends DurableObject<Env> {
 }
 
 const ALARMS_KEY = "piopio:alarms";
+const ORIGIN_KEY = "piopio:origin";
 const AGENT_KEY = "piopio:agent";
 const RESTS_KEY = "piopio:rests";
 

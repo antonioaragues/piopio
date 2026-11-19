@@ -14,3 +14,4 @@ export * from "./context/clock.js";
 export * from "./context/repeats.js";
 export * from "./context/spill.js";
 export * from "./context/extension.js";
+export * from "./channels/telegram.js";

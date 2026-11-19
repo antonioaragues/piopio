@@ -55,6 +55,8 @@ export class AgentHost {
 		storage: DurableObjectStorage,
 		context: Context,
 		onChange: () => void,
+		/** The agent sent someone a message on its own (a channel may deliver it). */
+		onOutbound?: (to: string, text: string) => void,
 	) {
 		this.memory = new BuiltinMemory(durableSql(storage), () => crypto.randomUUID());
 		this.core = new AgentCore({
@@ -66,6 +68,7 @@ export class AgentHost {
 			context,
 			onRun: onChange,
 			onStatus: onChange,
+			...(onOutbound ? { onOutbound: (to: string, text: string) => onOutbound(to, text) } : {}),
 		});
 	}
 

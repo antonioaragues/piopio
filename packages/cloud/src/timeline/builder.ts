@@ -77,6 +77,11 @@ export class TimelineBuilder {
 
 	// ── Whole-state ────────────────────────────────────────────────────────
 
+	/** Sends the whole timeline again (after a reset that didn't). */
+	resnapshot(): void {
+		this.pending.push({ type: "resnapshot", snapshot: this.snapshot() });
+	}
+
 	/** Rebuilds items from a transcript. `idOf(i, msg)` supplies stable ids. Emits `resnapshot`. */
 	reset(messages: readonly PiMessage[], idOf: (index: number, message: PiMessage) => string, emit = true): void {
 		this.items = [];
@@ -122,6 +127,24 @@ export class TimelineBuilder {
 		const item: TimelineItem = { kind: "user", id, at: iso(at), text };
 		this.push(item);
 		this.pending.push({ type: "item.added", item: structuredClone(item) });
+	}
+
+	/**
+	 * An item from an agent's own entries (a note, a message it sent on its own), where its time puts it: after
+	 * everything older. It may land before newer items when a transcript is loaded.
+	 */
+	place(item: TimelineItem, emit = true): void {
+		if (this.index.has(item.id)) return;
+		const at = Date.parse(item.at);
+		const i = this.items.findIndex((x) => Date.parse(x.at) > at);
+		const before = i < 0 ? undefined : this.items[i]!.id;
+		if (i < 0) this.push(item);
+		else {
+			this.items.splice(i, 0, item);
+			this.index.clear();
+			this.items.forEach((x, n) => this.index.set(x.id, n));
+		}
+		if (emit) this.pending.push({ type: "item.added", item: structuredClone(item), ...(before ? { before } : {}) });
 	}
 
 	system(id: string, level: "info" | "warn" | "error", text: string): void {

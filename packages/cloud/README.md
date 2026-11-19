@@ -12,6 +12,7 @@ The Cloud Engine: a Cloudflare Worker with `RegistryDO` + one `AgentDO` per agen
 | `src/auth.ts` | The owner check at the Worker: `Authorization: Bearer <OWNER_TOKEN>`, compared in constant time; no `OWNER_TOKEN` → everything is refused (503). |
 | `src/agent.ts` | (S7) `AgentHost`: `AgentCore` on the harness pi opened, memory on the object's SQLite. `AgentWake`: the Lifecycle job that wakes the agent for its schedules and lets it rest in between. |
 | `src/agent-do.ts` | `AgentDO`: a plain `DurableObject` with `Lifecycle.install(this).use(PiHarness).use(WebSockets)`. JSON-RPC over the socket: `engine.hello`, `engine.status`, `sessions.subscribe` / `unsubscribe` / `submit` / `abort`, and `session.events` notifications. |
+| `src/telegram.ts` | (5.3) The agent's bot by webhook: connect by pasting the token, pair the owner with a `/start` link, a person's message and its answer, messages the agent sends on its own. The Bot API client is `@piopio/runtime`'s, shared with the Mac. |
 | `src/models.ts` | pi-ai `Models`: OpenRouter (key from the `OPENROUTER_API_KEY` secret), or the faux echo model when `PIOPIO_FAUX_MODEL` is set. |
 | `src/timeline/` | **Copied** from `packages/engine/src/timeline/` (builder + pi-durable adapter). Should move to `packages/runtime` so both engines share one copy. |
 | `scripts/deploy.ts` | Deploy with the Cloudflare REST API and an API token (no `wrangler deploy`). |
@@ -167,6 +168,30 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
 - **Upstream asks:**
   - a "next timer" from pi-durable's scheduler would make the wake generic instead of knowing our tasks;
   - with the S4 note, `unref`-less timers on Workers pin objects.
+
+## Telegram from the cloud (5.3)
+
+An agent's bot is read by webhook, so it answers with the Mac off.
+
+1. **Connect:** the owner pastes the @BotFather token in their conversation with the cloud agent. It's caught before
+   the model or the transcript sees it, checked with `getMe`, and kept in the object's storage. The webhook is set to
+   `https://<worker>/v1/channels/telegram/<agent>` with a random secret, and the owner gets a note with a pairing link
+   (`t.me/<bot>?start=<code>`, valid for an hour).
+2. **Pair:** opening the link and tapping Start sends `/start <code>`: that chat becomes the owner's
+   (`channels.telegram`), and Telegram their preferred channel.
+3. **Write:** a message from a known chat goes to that person's conversation, through the agent (memory, `/pause`,
+   budget), with "typing…" while it works; the answer goes back to the chat. An answer still owed when the object is
+   evicted is sent after the next wake.
+4. **On its own:** what the agent sends a person whose preferred channel is Telegram (a reminder, a run's message)
+   goes there.
+
+**Who can reach it:** the webhook route is the one route without the owner's token: Telegram can't send it. The Worker
+refuses a request without Telegram's secret header, and the agent compares it in constant time with the one it set.
+Each update is handled once, by its id, because Telegram retries. Strangers get nothing (or a canned line on
+`/start`), unless the definition's `unknownSenders` says otherwise.
+
+**Not yet:** approvals as inline buttons, `/pause` answered in the chat, photos and voice notes (R2). A bot read by the
+cloud can't also be polled by the Mac: use a new bot for the cloud agent.
 
 ## Open items for Phase 5
 
