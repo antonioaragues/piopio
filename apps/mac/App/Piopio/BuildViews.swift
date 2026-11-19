@@ -328,17 +328,12 @@ struct BuildSessionView: View {
             }
     }
 
-    /// The toolbar (docs/design/session-panel): the title (it opens the session tree) and "project · branch", then the
+    /// The toolbar (docs/design/session-panel): the title and "project · branch", then the
     /// views as icons (Summary, Changes, Files, Terminal), a divider and ··· (with Open in <editor>). Git lives in Summary's branch
     /// row. Status and cost aren't here: status is in the sidebar, cost in the column's footer.
     private var header: some View {
         PageHeader {
-            Button { session.showTree = true } label: { PageTitle(name: summary.title, subtitle: subtitle) }
-                .buttonStyle(.plain)
-                .help("The session tree")
-                .popover(isPresented: Binding(get: { session.showTree }, set: { session.showTree = $0 }), arrowEdge: .bottom) {
-                    SessionTreePopover(session: session)
-                }
+            PageTitle(name: summary.title, subtitle: subtitle)
         } actions: {
             HStack(spacing: 2) {
                 viewButton(.inspector)
@@ -353,7 +348,6 @@ struct BuildSessionView: View {
             }
             ToolbarDivider()
             Menu {
-                Button("Session Tree") { session.showTree = true }
                 Button("Review All Changes") { review(nil) }
                 if summary.pr == nil, git?.status?.repo == true { Button("Create Pull Request…") { creatingPR = true } }
                 if let cwd = summary.cwd {
@@ -886,56 +880,6 @@ extension Notification.Name {
     static let newBuildSession = Notification.Name("piopio.newBuildSession")
     /// Object: a session id. Opens its commit sheet (automation).
     static let showCommit = Notification.Name("piopio.showCommit")
-}
-
-/// pi's session tree as your messages (BR6). Picking one goes back to just before it and puts its text in the
-/// composer, so sending starts a new branch; the old branch stays in the tree.
-struct SessionTreePopover: View {
-    let session: ThreadModel
-    @State private var nodes: [TreeNode]?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Session tree").font(.system(size: 13, weight: .semibold))
-            Text("Go back to one of your messages to try something else. The current path stays in the tree.")
-                .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
-            if let nodes {
-                if nodes.isEmpty { Text("No messages yet.").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 1) {
-                        ForEach(nodes) { node in
-                            Button {
-                                session.showTree = false
-                                Task { await session.navigate(to: node) }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Circle().fill(node.current ? Color.accentColor : Color.dsFg3.opacity(0.5)).frame(width: 6, height: 6)
-                                    Text(node.text).font(.system(size: 12.5)).foregroundStyle(node.current ? Color.dsFg : Color.dsFg2).lineLimit(1)
-                                    Spacer(minLength: 6)
-                                    if node.branches > 1 { Text("\(node.branches) branches").font(.system(size: 10.5)).foregroundStyle(Color.dsFg3) }
-                                }
-                                .padding(.leading, CGFloat(node.depth) * 14 + 6)
-                                .padding(.trailing, 6)
-                                .frame(height: 26)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(session.isRunning)
-                        }
-                    }
-                }
-                // A popover takes its content's ideal size, and a ScrollView has almost none: give the list the
-                // height of its rows, up to 360, so the popover grows to fit them.
-                .frame(height: min(CGFloat(nodes.count) * 27, 360))
-            } else {
-                ProgressView().controlSize(.small)
-            }
-        }
-        .padding(14)
-        .frame(width: 380)
-        .fixedSize(horizontal: false, vertical: true)
-        .task { nodes = await session.tree() }
-    }
 }
 
 /// The project has its own pi resources (.pi extensions, MCP servers, settings, prompts or skills) and no trust

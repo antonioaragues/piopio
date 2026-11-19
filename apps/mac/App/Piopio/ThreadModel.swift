@@ -395,13 +395,12 @@ final class ThreadModel {
     }
 
     /// `"default"` returns to the model's default.
-    // MARK: Composer, plan mode and tree (Build)
+    // MARK: Composer and plan mode (Build)
 
-    /// Text to put in the composer (a message brought back from the session tree, terminal output).
+    /// Text to put in the composer (terminal output).
     var draft: String?
     /// The file shown in the viewer (BR4).
     var viewing: FileTarget?
-    var showTree = false
     var planMode: Bool { state?.planMode ?? false }
     var todos: [Todo] { state?.todos ?? [] }
     /// The session's folder (a worktree for worktree sessions).
@@ -433,22 +432,6 @@ final class ThreadModel {
     func files(matching query: String) async -> [FileMatch] {
         guard let client = engine?.client, let cwd else { return [] }
         return (try? await client.call("projects.files", FilesParams(cwd: cwd, query: query, limit: 12), as: FilesResult.self).files) ?? []
-    }
-
-    func tree() async -> [TreeNode] {
-        guard let client = engine?.client else { return [] }
-        return (try? await client.call("sessions.tree", RefParams(ref: ref), as: TreeResult.self).nodes) ?? []
-    }
-
-    func navigate(to node: TreeNode) async {
-        guard let client = engine?.client else { return }
-        do {
-            let result = try await client.call("sessions.navigate", NavigateParams(ref: ref, entryId: node.entryId), as: NavigateResult.self)
-            if let text = result.editorText { draft = text }
-            error = nil
-        } catch {
-            report(error)
-        }
     }
 
     // MARK: Checkpoints and changes (Build)

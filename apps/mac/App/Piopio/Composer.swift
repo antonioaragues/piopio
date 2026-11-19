@@ -697,7 +697,6 @@ struct BuiltInCommand: Hashable {
         BuiltInCommand(name: "plan", summary: "Plan mode on or off: explore and propose a plan before changing anything"),
         BuiltInCommand(name: "compact", summary: "Summarize older messages to free context"),
         BuiltInCommand(name: "model", summary: "Choose the model for this session"),
-        BuiltInCommand(name: "tree", summary: "Go back to an earlier message (the session tree)"),
         BuiltInCommand(name: "review", summary: "Review this session's changes"),
         BuiltInCommand(name: "commit", summary: "Commit changes"),
         BuiltInCommand(name: "new", summary: "New session, on a branch or a worktree"),
@@ -709,7 +708,6 @@ struct BuiltInCommand: Hashable {
         case "plan": Task { await thread.setPlanMode(!thread.planMode) }
         case "compact": Task { await thread.compact() }
         case "model": thread.showModelPicker = true
-        case "tree": thread.showTree = true
         case "review": NotificationCenter.default.post(name: .showReview, object: thread.ref.id)
         case "commit": NotificationCenter.default.post(name: .showCommit, object: thread.ref.id)
         case "new": NotificationCenter.default.post(name: .newThread, object: nil)
