@@ -19,9 +19,11 @@ export class WsClient {
 		);
 	}
 
-	static connect(url: string): Promise<WsClient> {
+	/** `token`: the owner's, sent at the upgrade as `Authorization: Bearer …` (the Worker checks it there). */
+	static connect(url: string, token?: string): Promise<WsClient> {
 		return new Promise((resolve, reject) => {
-			const ws = new WebSocket(url);
+			// Node's WebSocket (undici) takes headers in its init; browsers' doesn't, which is fine: clients are engines.
+			const ws = token ? new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } } as unknown as string[]) : new WebSocket(url);
 			ws.addEventListener("open", () => resolve(new WsClient(ws)), { once: true });
 			ws.addEventListener("error", () => reject(new Error(`cannot connect to ${url}`)), { once: true });
 		});

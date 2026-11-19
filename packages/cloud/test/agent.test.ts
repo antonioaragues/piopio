@@ -32,13 +32,15 @@ afterAll(async () => {
 	await mf?.dispose();
 });
 
+const owner = { headers: { Authorization: "Bearer t" } };
+
 async function call<T = Record<string, unknown>>(agent: string, route: string, body?: unknown): Promise<T> {
-	const res = await mf.dispatchFetch(`${base.href}__test/agent/${route}${route.includes("?") ? "&" : "?"}agent=${agent}`, body === undefined ? {} : { method: "POST", body: JSON.stringify(body) });
+	const res = await mf.dispatchFetch(`${base.href}__test/agent/${route}${route.includes("?") ? "&" : "?"}agent=${agent}`, body === undefined ? owner : { ...owner, method: "POST", body: JSON.stringify(body) });
 	if (!res.ok) throw new Error(`${route}: ${res.status} ${await res.text()}`);
 	return (await res.json()) as T;
 }
 
-const status = async (agent: string) => (await (await mf.dispatchFetch(`${base.href}__test/status?agent=${agent}`)).json()) as { instanceId: string; alarm: number | null; lastAlarmAt: number | null };
+const status = async (agent: string) => (await (await mf.dispatchFetch(`${base.href}__test/status?agent=${agent}`, owner)).json()) as { instanceId: string; alarm: number | null; lastAlarmAt: number | null };
 const evict = (agent: string) => mf.unsafeEvictDurableObject(config.name, "AgentDO", { name: agent, webSockets: "close" });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

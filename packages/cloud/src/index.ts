@@ -1,8 +1,10 @@
 /**
- * Worker `piopio-cloud` (spike S4 subset): routes `GET /v1/ws?agent=<id>` to that agent's AgentDO.
- * Auth happens inside the socket (`engine.hello` with the owner token).
+ * Worker `piopio-cloud`: routes `GET /v1/ws?agent=<id>` to that agent's AgentDO.
+ * Everything but `/v1/health` needs the owner's token (`Authorization: Bearer …`) before it reaches an object;
+ * `engine.hello` checks it again inside the socket.
  */
 import { CLOUD_VERSION } from "./agent-do.js";
+import { ownerOnly } from "./auth.js";
 import type { Env } from "./env.js";
 
 export { AgentDO } from "./agent-do.js";
@@ -14,14 +16,18 @@ export default {
 		const url = new URL(request.url);
 		if (url.pathname === "/v1/health") return Response.json({ ok: true, version: CLOUD_VERSION });
 
+		const ws = url.pathname === "/v1/ws";
+		// Test routes exist only where PIOPIO_TEST_HOOKS is set (tests; the deploy script never sends it), and even
+		// there they need the owner's token.
+		const test = Boolean(env.PIOPIO_TEST_HOOKS) && url.pathname.startsWith("/__test/");
+		if (!ws && !test) return new Response("Not found", { status: 404 });
+
+		const refused = await ownerOnly(request, env.OWNER_TOKEN);
+		if (refused) return refused;
+
 		const agent = url.searchParams.get("agent") ?? "default";
 		if (!AGENT_ID.test(agent)) return new Response("Bad agent id", { status: 400 });
-
-		if (url.pathname === "/v1/ws") {
-			if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Expected a WebSocket upgrade", { status: 426 });
-			return env.AGENT.getByName(agent).fetch(request);
-		}
-		if (env.PIOPIO_TEST_HOOKS && url.pathname.startsWith("/__test/")) return env.AGENT.getByName(agent).fetch(request);
-		return new Response("Not found", { status: 404 });
+		if (ws && request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Expected a WebSocket upgrade", { status: 426 });
+		return env.AGENT.getByName(agent).fetch(request);
 	},
 } satisfies ExportedHandler<Env>;

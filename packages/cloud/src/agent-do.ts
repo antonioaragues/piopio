@@ -15,6 +15,7 @@ import { WebSockets } from "agents/websockets";
 import { DurableObject } from "cloudflare:workers";
 import { Value } from "typebox/value";
 import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js";
+import { sameSecret } from "./auth.js";
 import type { Env } from "./env.js";
 import { createCloudModels, defaultModel } from "./models.js";
 import { TimelineBuilder } from "./timeline/builder.js";
@@ -379,10 +380,3 @@ const AGENT_KEY = "piopio:agent";
 const RESTS_KEY = "piopio:rests";
 
 const SUPPORTED = new Set<string>(["engine.hello", "engine.status", "sessions.subscribe", "sessions.unsubscribe", "sessions.submit", "sessions.abort"]);
-
-/** Constant-time comparison of two secrets (via their SHA-256 digests, so lengths may differ). */
-async function sameSecret(a: string, b: string): Promise<boolean> {
-	const enc = new TextEncoder();
-	const [da, db] = await Promise.all([crypto.subtle.digest("SHA-256", enc.encode(a)), crypto.subtle.digest("SHA-256", enc.encode(b))]);
-	return crypto.subtle.timingSafeEqual(da, db);
-}

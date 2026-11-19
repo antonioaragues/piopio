@@ -1,7 +1,7 @@
 /** The token deploy script against a fake Cloudflare API (no network, no account). */
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { CloudflareApi, deploy, pendingMigrations, readBundle, type WranglerConfig } from "../scripts/deploy.ts";
+import { CloudflareApi, deploy, pendingMigrations, readBundle, scriptMetadata, type WranglerConfig } from "../scripts/deploy.ts";
 
 const config = JSON.parse(readFileSync(new URL("../wrangler.json", import.meta.url), "utf8")) as WranglerConfig;
 
@@ -76,6 +76,14 @@ test("redeploy at the same migration tag sends no migrations", async () => {
 	expect(metadata.migrations).toBeUndefined();
 	expect(metadata.bindings).toContainEqual({ type: "plain_text", name: "PIOPIO_DEFAULT_MODEL", text: "openrouter/x" });
 	expect(calls.some((c) => c.url.endsWith("/secrets"))).toBe(false);
+});
+
+test("a first deploy needs an owner token, and dev-only variables never go up", async () => {
+	const { calls, fetchImpl } = fakeCloudflare();
+	await expect(deploy({ api: new CloudflareApi("tok", "acc", fetchImpl), config, bundle, secrets: { OPENROUTER_API_KEY: "k" }, vars: {}, fetchImpl })).rejects.toThrow(/first deploy needs OWNER_TOKEN/);
+	expect(calls.map((c) => c.method)).toEqual(["GET"]);
+	expect(() => scriptMetadata(config, "index.js", undefined, { PIOPIO_TEST_HOOKS: "1" })).toThrow(/must never be deployed/);
+	expect(() => scriptMetadata(config, "index.js", undefined, { PIOPIO_FAUX_MODEL: "1" })).toThrow(/must never be deployed/);
 });
 
 test("API errors surface Cloudflare's messages", async () => {

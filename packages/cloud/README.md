@@ -8,7 +8,8 @@ The Cloud Engine: a Cloudflare Worker with `RegistryDO` + one `AgentDO` per agen
 
 | Path | What |
 |---|---|
-| `src/index.ts` | Worker `piopio-cloud`. `GET /v1/ws?agent=<id>` → that agent's `AgentDO`. `GET /v1/health`. |
+| `src/index.ts` | Worker `piopio-cloud`. `GET /v1/ws?agent=<id>` → that agent's `AgentDO`, only with the owner's token. `GET /v1/health` is the one open route. |
+| `src/auth.ts` | The owner check at the Worker: `Authorization: Bearer <OWNER_TOKEN>`, compared in constant time; no `OWNER_TOKEN` → everything is refused (503). |
 | `src/agent.ts` | (S7) `AgentHost`: `AgentCore` on the harness pi opened, memory on the object's SQLite. `AgentWake`: the Lifecycle job that wakes the agent for its schedules and lets it rest in between. |
 | `src/agent-do.ts` | `AgentDO`: a plain `DurableObject` with `Lifecycle.install(this).use(PiHarness).use(WebSockets)`. JSON-RPC over the socket: `engine.hello`, `engine.status`, `sessions.subscribe` / `unsubscribe` / `submit` / `abort`, and `session.events` notifications. |
 | `src/models.ts` | pi-ai `Models`: OpenRouter (key from the `OPENROUTER_API_KEY` secret), or the faux echo model when `PIOPIO_FAUX_MODEL` is set. |
@@ -38,7 +39,22 @@ Local server with the faux model:
 cd packages/cloud && npx wrangler dev --var OWNER_TOKEN:dev --var PIOPIO_FAUX_MODEL:1
 ```
 
-Then connect to `ws://localhost:8787/v1/ws?agent=dev` and send `engine.hello` with `token: "dev"`.
+Then connect to `ws://localhost:8787/v1/ws?agent=dev` with the header `Authorization: Bearer dev`, and send
+`engine.hello` with `token: "dev"`.
+
+## Who can reach it
+
+- **Only the owner, from the first byte.** Every route but `/v1/health` needs `Authorization: Bearer <OWNER_TOKEN>`
+  at the Worker, before the request reaches a Durable Object. A WebSocket upgrade without it gets 401, so a stranger
+  with the URL can't wake an agent or create objects for made-up agent ids. `engine.hello` checks the same token
+  again inside the socket. Browsers can't set that header on a WebSocket; the clients are engines (Node), which can.
+- **No token, no service.** A Worker without `OWNER_TOKEN` answers 503 to everything. The deploy script refuses a
+  first deploy without one.
+- **Test routes stay in tests.** `/__test/*` exists only where `PIOPIO_TEST_HOOKS` is set, and needs the token even
+  there. The deploy script sends only `PIOPIO_DEFAULT_MODEL` as a variable and refuses `PIOPIO_TEST_*` and
+  `PIOPIO_FAUX_*`.
+- **Not yet:** channel webhooks (Telegram's come in 5.3) will be the first routes without the bearer. They are
+  checked by their own secrets (Telegram's secret-token header), not by `OWNER_TOKEN`.
 
 ## Deploy with an API token
 
@@ -125,7 +141,6 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
 
 ## Open items for Phase 5
 
-- WebSocket upgrades are accepted before auth (auth is `engine.hello` inside the socket), so anyone can open a socket and wake an object. Check the owner bearer at the Worker (`Authorization` header) before upgrading.
 - One socket per agent (`?agent=`). The app wants one `/v1/ws` for all agents: terminate it in a gateway (Worker or `RegistryDO`) that fans out to `AgentDO`s over RPC.
 - `state.model` reports the default model, not each session's stored one.
 - Move `src/timeline/` to `packages/runtime`, and validate `session.events` against the protocol schema in tests.

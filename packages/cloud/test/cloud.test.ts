@@ -40,7 +40,7 @@ afterAll(async () => {
 const wsUrl = (agent: string) => `${base.href.replace(/^http/, "ws")}v1/ws?agent=${agent}`;
 
 async function connect(agent: string, hello = true): Promise<WsClient> {
-	const client = await WsClient.connect(wsUrl(agent));
+	const client = await WsClient.connect(wsUrl(agent), TOKEN);
 	clients.push(client);
 	if (hello) await client.call("engine.hello", { token: TOKEN, client: "test", protocolVersion: "1.0" });
 	return client;
@@ -53,7 +53,8 @@ const idleAfter = (subscriptionId: string, after = 0) => (n: SessionEventsNotifi
 
 const texts = (s: Snapshot) => s.items.map((i) => [i.kind, i.kind === "user" ? i.text : i.kind === "assistant" ? i.parts.map((p) => p.text).join("") : ""]);
 
-const testStatus = async (agent: string) => (await (await mf.dispatchFetch(`${base.href}__test/status?agent=${agent}`)).json()) as { instanceId: string; startedAt: number; alarm: number | null; lastAlarmAt: number | null; busy: boolean };
+const owner = { headers: { Authorization: `Bearer ${TOKEN}` } };
+const testStatus = async (agent: string) => (await (await mf.dispatchFetch(`${base.href}__test/status?agent=${agent}`, owner)).json()) as { instanceId: string; startedAt: number; alarm: number | null; lastAlarmAt: number | null; busy: boolean };
 
 describe("Engine Protocol over WebSocket", () => {
 	test("rejects calls before engine.hello and bad owner tokens", async () => {
@@ -67,8 +68,21 @@ describe("Engine Protocol over WebSocket", () => {
 	});
 
 	test("refuses plain HTTP on /v1/ws", async () => {
-		expect((await mf.dispatchFetch(`${base.href}v1/ws`)).status).toBe(426);
+		expect((await mf.dispatchFetch(`${base.href}v1/ws`, owner)).status).toBe(426);
 		expect((await mf.dispatchFetch(`${base.href}v1/health`)).status).toBe(200);
+	});
+
+	test("nothing reaches an object without the owner's token, not even the upgrade", async () => {
+		const upgrade = (token?: string) => mf.dispatchFetch(`${base.href}v1/ws?agent=stranger`, { headers: { Upgrade: "websocket", ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+		const none = await upgrade();
+		expect([none.status, none.headers.get("WWW-Authenticate")]).toEqual([401, 'Bearer realm="piopio-cloud"']);
+		expect((await upgrade("nope")).status).toBe(401);
+		await expect(WsClient.connect(wsUrl("stranger"))).rejects.toThrow(/cannot connect/);
+		await expect(WsClient.connect(wsUrl("stranger"), "nope")).rejects.toThrow(/cannot connect/);
+		// Test routes need it too, and unknown paths say nothing.
+		expect((await mf.dispatchFetch(`${base.href}__test/status?agent=stranger`)).status).toBe(401);
+		expect((await mf.dispatchFetch(`${base.href}v1/anything`, owner)).status).toBe(404);
+		expect((await mf.dispatchFetch(`${base.href}__test/status?agent=stranger`, owner)).status).toBe(200);
 	});
 
 	test("streams an answer; a reconnect gets a fresh snapshot", async () => {

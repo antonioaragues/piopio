@@ -30,7 +30,7 @@ test.skipIf(!key)(
 		try {
 			const base = await mf.ready;
 			const ref = { kind: "agent", id: "openrouter" };
-			const c = await WsClient.connect(`${base.href.replace(/^http/, "ws")}v1/ws?agent=openrouter`);
+			const c = await WsClient.connect(`${base.href.replace(/^http/, "ws")}v1/ws?agent=openrouter`, "t");
 			await c.call("engine.hello", { token: "t", client: "test", protocolVersion: "1.0" });
 			const sub = await c.call("sessions.subscribe", { ref });
 			await c.call("sessions.submit", { ref, input: { text: "Reply with the single word: pong" } });

@@ -51,7 +51,12 @@ export function pendingMigrations(config: WranglerConfig, deployedTag: string | 
 export type Module = { name: string; contentType: string; body: Uint8Array };
 
 /** Script metadata for `PUT /workers/scripts/:name` (multipart part `metadata`). */
+/** Variables that only tests and `wrangler dev` may set: test routes, the faux model, test timings. */
+const DEV_ONLY = /^PIOPIO_(TEST_|FAUX_)/;
+
 export function scriptMetadata(config: WranglerConfig, mainModule: string, migrations: Migrations | undefined, vars: Record<string, string>) {
+	const devOnly = Object.keys(vars).filter((v) => DEV_ONLY.test(v));
+	if (devOnly.length) throw new Error(`${devOnly.join(", ")} must never be deployed: they turn on test routes or a fake model.`);
 	return {
 		main_module: mainModule,
 		compatibility_date: config.compatibility_date,
@@ -129,6 +134,8 @@ export async function deploy(options: DeployOptions): Promise<string> {
 
 	const service = await api.call<{ default_environment?: { script?: { migration_tag?: string } } }>("GET", `/workers/services/${name}`, undefined, true);
 	const deployedTag = service?.default_environment?.script?.migration_tag;
+	// The Worker refuses everything without an owner token, so a first deploy without one would be no use.
+	if (!service && !secrets.OWNER_TOKEN) throw new Error("A first deploy needs OWNER_TOKEN (for example: OWNER_TOKEN=\"$(openssl rand -hex 32)\"). Keep it: the Mac connects with it.");
 	const migrations = pendingMigrations(config, deployedTag);
 	log(`Uploading ${name} (${bundle.modules.length} modules; migrations ${migrations ? `${deployedTag ?? "none"} → ${migrations.new_tag}` : "up to date"})`);
 
