@@ -16,7 +16,7 @@ The Cloud Engine: a Cloudflare Worker with `RegistryDO` + one `AgentDO` per agen
 | `src/telegram.ts` | (5.3) The agent's bot by webhook: connect by pasting the token, pair the owner with a `/start` link, a person's message and its answer, messages the agent sends on its own. The Bot API client is `@piopio/runtime`'s, shared with the Mac. |
 | `src/models.ts` | pi-ai `Models`: OpenRouter (key from the `OPENROUTER_API_KEY` secret), or the faux echo model when `PIOPIO_FAUX_MODEL` is set. |
 | `src/timeline/` | **Copied** from `packages/engine/src/timeline/` (builder + pi-durable adapter). Should move to `packages/runtime` so both engines share one copy. |
-| `scripts/deploy.ts` | Deploy with the Cloudflare REST API and an API token (no `wrangler deploy`). |
+| `scripts/deploy.ts` | Deploy by hand with the Cloudflare REST API and an API token (no `wrangler deploy`). The steps live in the engine (`packages/engine/src/cloud-deploy.ts`), which deploys from Settings. |
 | `test/` | Miniflare (workerd) tests of the built bundle with the faux model, the deploy script against a fake API, and an opt-in real OpenRouter test. `move.test.ts` and `engine-move.test.ts` (K1): deploy, export and retire on the object, and the real engine (from source) moving an agent up and back. |
 
 Refs on the socket are `{ kind: "agent", id: <agent id>, conversationId?: "person:<contact id>" | "run:<run id>" }`, as
@@ -63,6 +63,10 @@ Then connect to `ws://localhost:8787/v1/ws?agent=dev` with the header `Authoriza
   can't send it. It's checked by Telegram's secret-token header instead (see Telegram below).
 
 ## Deploy with an API token
+
+**From the app (2026-11-19):** Settings › This Mac & cloud › Connect takes one Cloudflare API token and does all of
+this itself (the engine's `src/cloud-deploy.ts`, with the Worker bundled next to the engine as `cloud-worker/`),
+making the owner token and sending the Mac's OpenRouter key. The script below is the same steps by hand.
 
 1. In the Cloudflare dashboard, create an API token with **Account › Workers Scripts › Edit** for your account. Note the account id.
 2. Make sure the account has a workers.dev subdomain (Workers & Pages shows it; first-time accounts pick one there).

@@ -2,7 +2,7 @@
 # Puts the engine and the pinned Node runtime inside a built Piopio.app (Xcode build phase, Release builds).
 #   scripts/bundle-engine.sh <Piopio.app> <version>
 #     Contents/Helpers/node            Node (scripts/fetch-node.sh)
-#     Contents/Resources/engine/…      the bundled engine (packages/engine/scripts/bundle.mjs)
+#     Contents/Resources/engine/…      the bundled engine (packages/engine/scripts/bundle.mjs), with cloud-worker/
 # Signing happens afterwards: Xcode signs ad hoc, scripts/release.sh re-signs for distribution.
 set -euo pipefail
 app="${1:?usage: bundle-engine.sh <Piopio.app> <version>}"
@@ -13,6 +13,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 node="$("$root/scripts/fetch-node.sh")"
 (cd "$root" && corepack pnpm --filter "@piopio/engine..." build >/dev/null)
+# Piopio's Worker, which the engine deploys to your Cloudflare account (cloud-worker/ next to the engine).
+(cd "$root" && corepack pnpm --filter @piopio/cloud build >/dev/null)
 node "$root/packages/engine/scripts/bundle.mjs" "$app/Contents/Resources/engine" "$version" >/dev/null
 cp "$(dirname "$node")/../LICENSE" "$app/Contents/Resources/engine/NODE-LICENSE"
 mkdir -p "$app/Contents/Helpers"

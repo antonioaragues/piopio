@@ -10,7 +10,7 @@ they do not establish that every provider, OS permission flow or production serv
 | Local Agents | Definitions, conversations, memory, schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
 | Distribution | Bundled engine/Node, release scripts, background engine and update infrastructure | Developer ID/notarization/Gatekeeper validation and public distribution |
-| Cloud | The Worker on a real account (owner token, a real model, alarms, Telegram by webhook); K1: Settings › This Mac & cloud connects it, agents move up and back with memory and automations, their conversations through the Mac's engine (docs/spec/30 §13) | K1 on the account (the Worker there needs a redeploy); a real approval from a cloud agent; deploy from the app; chats and the phone app (K2–K3); real billing and long runs |
+| Cloud | The Worker on a real account (owner token, a real model, alarms, Telegram by webhook); K1: Settings › This Mac & cloud deploys it with one Cloudflare token, agents move up and back with memory and automations, their conversations through the Mac's engine (docs/spec/30 §13) | K1 on the account (the Worker there needs a redeploy); a real approval from a cloud agent; deploy from the app; chats and the phone app (K2–K3); real billing and long runs |
 
 ## Automated checks
 

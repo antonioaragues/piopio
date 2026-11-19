@@ -331,7 +331,16 @@ private struct CloudCard: View {
                         Text(line(cloud)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
                     }
                     Spacer()
+                    if busy { ProgressView().controlSize(.small) }
                     if cloud?.connected == true {
+                        // Piopio deployed it: Update puts this version's Worker and your current OpenRouter key there.
+                        if cloud?.managed == true {
+                            Button("Update") { update() }.buttonStyle(PillStyle(compact: true)).disabled(busy)
+                                .help("Upload this version of Piopio's Worker and your current OpenRouter key. Agents up there stay as they are.")
+                        } else {
+                            Button("Set Up Again…") { connecting = true }.buttonStyle(PillStyle(compact: true)).disabled(busy)
+                                .help("Connect with a Cloudflare token, so Piopio can update it and its model key. On the same account, agents up there stay.")
+                        }
                         Button("Disconnect") { disconnect() }.buttonStyle(PillStyle(compact: true)).disabled(busy)
                     } else {
                         Button("Connect…") { connecting = true }.buttonStyle(PillStyle(kind: .primary, compact: true))
@@ -376,6 +385,15 @@ private struct CloudCard: View {
         return date.formatted(date: .abbreviated, time: .omitted)
     }
 
+    private func update() {
+        busy = true
+        error = nil
+        Task {
+            defer { busy = false }
+            do { try await engine.updateCloud() } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+        }
+    }
+
     private func disconnect() {
         busy = true
         error = nil
@@ -386,38 +404,93 @@ private struct CloudCard: View {
     }
 }
 
-/// Connect your cloud: what goes there, what it costs, and the Worker's address and owner token.
+/// Connect your cloud (docs/spec/30 §3.3): what goes there and what it costs, then one Cloudflare API token. Piopio
+/// deploys its Worker to that account, makes the owner token itself and gives it your OpenRouter key. A Worker you
+/// deployed by hand still connects by address and owner token, under Advanced.
 private struct CloudConnectSheet: View {
     let engine: EngineController
     let done: () -> Void
+    @State private var apiToken = ""
+    @State private var accounts: [CloudSetupResult.Account]?
+    @State private var account: String?
+    @State private var advanced = false
     @State private var url = ""
-    @State private var token = ""
+    @State private var ownerToken = ""
     @State private var busy = false
     @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Connect your cloud").font(.system(size: 15, weight: .semibold))
             VStack(alignment: .leading, spacing: 6) {
                 point("checkmark.circle", "Agents you put there answer and run their automations with your Mac off.")
-                point("tray.full", "Their conversations, memory and channel messages are kept in your Cloudflare account.")
+                point("tray.full", "It runs in your own Cloudflare account. Their conversations and memory are kept there.")
+                point("key", "Cloud agents use your OpenRouter key, which Piopio gives your cloud.")
                 point("creditcard", "The free plan is enough to try. For daily use, Workers Paid is $5 a month.")
             }
-            Text("Paste the address and owner token of the Worker you deployed (packages/cloud, node scripts/deploy.ts). The token is kept in your Keychain.")
-                .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
-            TextField("https://piopio-cloud.<you>.workers.dev", text: $url).textFieldStyle(.roundedBorder)
-            SecureField("Owner token", text: $token).textFieldStyle(.roundedBorder)
+            if advanced { byHand } else { withToken }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsWarn).fixedSize(horizontal: false, vertical: true) }
             HStack {
-                if busy { ProgressView().controlSize(.small) }
+                Button(advanced ? "Use a Cloudflare token instead" : "Advanced: a Worker you deployed") { advanced.toggle(); error = nil }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
                 Spacer()
+                if busy {
+                    ProgressView().controlSize(.small)
+                    if !advanced { Text("Setting up your cloud…").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
+                }
                 Button("Cancel", action: done).keyboardShortcut(.cancelAction)
-                Button("Connect", action: connect).keyboardShortcut(.defaultAction)
-                    .disabled(busy || url.trimmingCharacters(in: .whitespaces).isEmpty || token.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Connect", action: connect).keyboardShortcut(.defaultAction).disabled(busy || !ready)
             }
         }
         .padding(20)
-        .frame(width: 480)
+        .frame(width: 500)
+    }
+
+    /// Step 1: make a token in Cloudflare (a template does it); step 2: paste it. Then pick the account if there are several.
+    private var withToken: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("1").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2).frame(width: 16)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("In Cloudflare, create an API token from the template “Edit Cloudflare Workers”. No account yet? Sign up there first; it's free.")
+                        .font(.system(size: 12.5)).fixedSize(horizontal: false, vertical: true)
+                    Button("Open Cloudflare") { NSWorkspace.shared.open(URL(string: "https://dash.cloudflare.com/profile/api-tokens")!) }
+                        .buttonStyle(PillStyle(compact: true))
+                }
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("2").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2).frame(width: 16)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Paste it here. Piopio keeps it in your Keychain, to update your cloud later.").font(.system(size: 12.5)).fixedSize(horizontal: false, vertical: true)
+                    SecureField("Cloudflare API token", text: $apiToken).textFieldStyle(.roundedBorder)
+                        .onChange(of: apiToken) { _, _ in accounts = nil; account = nil }
+                }
+            }
+            if let accounts {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("3").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2).frame(width: 16)
+                    Picker("Account", selection: $account) {
+                        Text("Choose…").tag(String?.none)
+                        ForEach(accounts) { a in Text(a.name).tag(Optional(a.id)) }
+                    }
+                    .fixedSize()
+                }
+            }
+        }
+    }
+
+    private var byHand: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("The address and owner token of a Worker you deployed yourself (packages/cloud, node scripts/deploy.ts). Piopio can't update this one for you.")
+                .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+            TextField("https://piopio-cloud.<you>.workers.dev", text: $url).textFieldStyle(.roundedBorder)
+            SecureField("Owner token", text: $ownerToken).textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var ready: Bool {
+        if advanced { return !url.trimmingCharacters(in: .whitespaces).isEmpty && !ownerToken.trimmingCharacters(in: .whitespaces).isEmpty }
+        return !apiToken.trimmingCharacters(in: .whitespaces).isEmpty && (accounts == nil || account != nil)
     }
 
     private func point(_ symbol: String, _ text: String) -> some View {
@@ -433,8 +506,14 @@ private struct CloudConnectSheet: View {
         Task {
             defer { busy = false }
             do {
-                try await engine.connectCloud(url: url, token: token)
-                done()
+                if advanced {
+                    try await engine.connectCloud(url: url, token: ownerToken)
+                    done()
+                } else if let several = try await engine.setupCloud(apiToken: apiToken, accountId: account) {
+                    accounts = several
+                } else {
+                    done()
+                }
             } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
         }
     }

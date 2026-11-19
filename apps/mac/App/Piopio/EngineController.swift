@@ -658,6 +658,20 @@ final class EngineController {
         cloud = try await client.call("cloud.connect", CloudConnectParams(url: url, token: token), as: CloudStatus.self)
     }
 
+    /// Connect with a Cloudflare token: Piopio deploys its Worker (accounts to pick from when there are several).
+    func setupCloud(apiToken: String, accountId: String? = nil) async throws -> [CloudSetupResult.Account]? {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let result = try await client.call("cloud.setup", CloudSetupParams(apiToken: apiToken, accountId: accountId), as: CloudSetupResult.self)
+        if let status = result.status { cloud = status; try? await refreshCatalog() }
+        return result.accounts
+    }
+
+    /// The Worker again from this Piopio, with the current OpenRouter key.
+    func updateCloud() async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        cloud = try await client.call("cloud.update", Empty(), as: CloudStatus.self)
+    }
+
     func disconnectCloud() async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         _ = try await client.call("cloud.disconnect", Empty(), as: Empty.self)
@@ -668,6 +682,8 @@ final class EngineController {
     func moveAgent(_ ref: ContainerRef, to place: String) async throws -> [String] {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let lines = try await client.call("agents.move", AgentMoveParams(ref: ContainerRef(kind: .agent, id: ref.id), to: place), as: AgentMoveResult.self).lines
+        // Its open conversations followed the copy that stopped: new models subscribe to where it runs now.
+        forget(ref.id)
         try? await refreshCatalog()
         await loadCloud()
         return lines

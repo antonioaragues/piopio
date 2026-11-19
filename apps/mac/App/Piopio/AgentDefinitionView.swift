@@ -116,7 +116,7 @@ struct AgentDefinitionView: View {
 
     // MARK: Bars
 
-    /// Saved, or how many changes wait; Revert and Save ⌘S. It sits above the groups, small, on the right.
+    /// Saved, or how many changes wait with Revert and Save ⌘S. It sits above the groups, small, on the right.
     private var saveBar: some View {
         HStack(spacing: 10) {
             Spacer()
@@ -126,11 +126,11 @@ struct AgentDefinitionView: View {
             } else if let at = loaded?.history.first?.at {
                 Text("Saved \(BuildSessionView.relative(at))").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
-            if dirty {
+            // Revert and Save only when there's something to save: a disabled Save next to "Saved" read as a glitch.
+            if dirty || saving {
                 Button("Revert") { Task { await load() } }.buttonStyle(PillStyle(compact: true)).disabled(saving)
+                Button(saving ? "Saving…" : "Save ⌘S") { save() }.buttonStyle(PillStyle(kind: .primary, compact: true)).keyboardShortcut("s").disabled(saving)
             }
-            Button(saving ? "Saving…" : "Save ⌘S") { save() }.buttonStyle(PillStyle(kind: .primary, compact: true)).keyboardShortcut("s").disabled(!dirty || saving)
-                .opacity(dirty ? 1 : 0.45)
         }
         .frame(height: 30)
     }

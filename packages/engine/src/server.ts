@@ -97,7 +97,7 @@ export type EngineOptions = {
 	/** Telegram's API (tests: a fake one) and how long a poll waits. */
 	telegram?: { fetch?: typeof fetch; pollSeconds?: number; retryMs?: number };
 	/** Tests: how the engine reaches your cloud (a fake fetch, a WebSocket to Miniflare). */
-	cloud?: { fetch?: typeof fetch; webSocket?: (url: string, token: string) => WebSocket };
+	cloud?: { fetch?: typeof fetch; webSocket?: (url: string, token: string) => WebSocket; workerDir?: string; healthRetryMs?: number };
 	log?: (line: string) => void;
 };
 
@@ -1281,6 +1281,14 @@ export class Engine {
 			}
 			case "cloud.status":
 				return (await this.cloud.status()) satisfies Result<"cloud.status">;
+			case "cloud.setup": {
+				const p = params as Params<"cloud.setup">;
+				const r = await this.cloud.setup(p.apiToken, p.accountId);
+				if (r.status) void this.sessions.refreshCloudAgents();
+				return r satisfies Result<"cloud.setup">;
+			}
+			case "cloud.update":
+				return (await this.cloud.update()) satisfies Result<"cloud.update">;
 			case "cloud.connect": {
 				const p = params as Params<"cloud.connect">;
 				return (await this.cloud.connect(p.url, p.token)) satisfies Result<"cloud.connect">;

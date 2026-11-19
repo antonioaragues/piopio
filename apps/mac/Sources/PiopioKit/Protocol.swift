@@ -1867,12 +1867,24 @@ public struct CloudStatus: Decodable, Sendable, Hashable {
     public var version: String?
     public var error: String?
     public var connectedAt: String?
+    /// Piopio deployed it with your Cloudflare token, so it can update it.
+    public var managed: Bool?
     public var agents: [Agent]
     public init(connected: Bool, agents: [Agent]) { self.connected = connected; self.agents = agents }
 }
 public struct CloudConnectParams: Encodable, Sendable {
     public var url: String; public var token: String
     public init(url: String, token: String) { self.url = url; self.token = token }
+}
+/// Connect with a Cloudflare API token: Piopio deploys its Worker. With several accounts and none picked, `accounts`.
+public struct CloudSetupParams: Encodable, Sendable {
+    public var apiToken: String; public var accountId: String?
+    public init(apiToken: String, accountId: String? = nil) { self.apiToken = apiToken; self.accountId = accountId }
+}
+public struct CloudSetupResult: Decodable, Sendable {
+    public struct Account: Decodable, Sendable, Hashable, Identifiable { public var id: String; public var name: String }
+    public var status: CloudStatus?
+    public var accounts: [Account]?
 }
 /// Moves an agent to your cloud ("cloud") or back to this Mac ("local"); `lines` says what moved.
 public struct AgentMoveParams: Encodable, Sendable {

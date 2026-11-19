@@ -577,6 +577,8 @@ export const CloudStatus = Type.Object({
 	version: Type.Optional(Type.String()),
 	error: Type.Optional(Type.String()),
 	connectedAt: Type.Optional(Type.String()),
+	/** Piopio deployed it with your Cloudflare token, so it can update it (`cloud.update`). */
+	managed: Type.Optional(Type.Boolean()),
 	/** The agents the Worker's registry lists. */
 	agents: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), deployedAt: Type.String() })),
 });
@@ -1841,6 +1843,16 @@ export const methods = {
 	"agents.retire": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({}) },
 	/** Your cloud (Settings › This Mac & cloud, docs/spec/30 K1): connected or not, and what's up there. */
 	"cloud.status": { params: Type.Object({}), result: CloudStatus },
+	/**
+	 * Connect with a Cloudflare API token: Piopio deploys its Worker to your account, makes the owner token itself and
+	 * gives it your OpenRouter key. With several accounts and no `accountId`, it returns `accounts` to pick from.
+	 */
+	"cloud.setup": {
+		params: Type.Object({ apiToken: Type.String(), accountId: Type.Optional(Type.String()) }),
+		result: Type.Object({ status: Type.Optional(CloudStatus), accounts: Type.Optional(Type.Array(Type.Object({ id: Type.String(), name: Type.String() }))) }),
+	},
+	/** The Worker again from this Piopio, with your current OpenRouter key (a cloud Piopio deployed itself). */
+	"cloud.update": { params: Type.Object({}), result: CloudStatus },
 	/** Connects to a Worker already deployed: its address and owner token (checked before anything is saved). */
 	"cloud.connect": { params: Type.Object({ url: Type.String(), token: Type.String() }), result: CloudStatus },
 	/** Forgets the cloud on this Mac. Refused while agents run there (move them back first). */

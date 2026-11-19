@@ -10,8 +10,9 @@
 //   <outDir>/codemode-worker.js  pi's codemode script worker (resolved next to main.js)
 //   <outDir>/pi/                 pi-coding-agent's package.json, README, docs and examples (PI_PACKAGE_DIR)
 //   <outDir>/node_modules/…      the .wasm files pi resolves with require.resolve
+//   <outDir>/cloud-worker/       Piopio's Worker (packages/cloud/dist + wrangler.json), which Settings deploys
 import { build } from "esbuild";
-import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -75,4 +76,10 @@ for (const [root, files] of [
 	const target = join(out, "node_modules", root.slice(root.lastIndexOf("node_modules/") + "node_modules/".length));
 	for (const file of files) cpSync(join(root, file), join(target, file));
 }
+// Piopio's Worker, deployed to your Cloudflare account from Settings › This Mac & cloud (docs/spec/30 K1).
+const cloud = resolve(engineDir, "../cloud");
+if (!existsSync(join(cloud, "dist/index.js"))) throw new Error("packages/cloud/dist is missing: corepack pnpm --filter @piopio/cloud build");
+mkdirSync(join(out, "cloud-worker"), { recursive: true });
+for (const file of readdirSync(join(cloud, "dist"))) if (/\.(js|mjs|wasm)$/.test(file)) cpSync(join(cloud, "dist", file), join(out, "cloud-worker", file));
+cpSync(join(cloud, "wrangler.json"), join(out, "cloud-worker", "wrangler.json"));
 console.log(out);

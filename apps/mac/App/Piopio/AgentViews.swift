@@ -125,6 +125,8 @@ struct AgentPage: View {
     @State private var moving = false
     @State private var moved: [String]?
     @State private var noCloud = false
+    /// Run now failed: why.
+    @State private var problem: String?
 
     /// Chat first, Setup for later (docs/spec/21 D3, design 2a). "Activity" is gone: runs are lines in the chat.
     enum Tab: String, CaseIterable { case chat = "Chat", activity = "Activity", setup = "Setup" }
@@ -176,6 +178,9 @@ struct AgentPage: View {
         .alert(inCloud ? "In your cloud" : "On this Mac", isPresented: Binding(get: { moved != nil }, set: { if !$0 { moved = nil } })) {
             Button("OK") { moved = nil }
         } message: { Text((moved ?? []).joined(separator: "\n\n")) }
+        .alert("Couldn't run it now", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
+            Button("OK") { problem = nil }
+        } message: { Text(problem ?? "") }
         .alert("Keep it always on", isPresented: $noCloud) {
             Button("Open Settings") { ToolChoices.openSettings("This Mac & cloud") }
             Button("Not Now", role: .cancel) {}
@@ -311,6 +316,7 @@ struct AgentPage: View {
                     .buttonStyle(.plain)
                     .help("Open Automations, showing \(summary.title)'s")
                 }
+                placeButton
                 moreMenu
             }
             HStack(spacing: 22) {
@@ -324,6 +330,27 @@ struct AgentPage: View {
         .contentShape(Rectangle())
         .gesture(WindowDragGesture())
         .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+    }
+
+    /// Where it runs, in the header (docs/spec/30 §3.3): "Keep it always on" sends it to your cloud; once there, "Always
+    /// on" says so and offers the way back.
+    @ViewBuilder private var placeButton: some View {
+        if inCloud {
+            Menu {
+                Button("Move to This Mac…") { confirmingMove = true }
+            } label: {
+                Label("Always on", systemImage: "cloud.fill").font(.system(size: 12.5, weight: .medium))
+            }
+            .menuStyle(.button).buttonStyle(PillStyle(compact: true)).menuIndicator(.hidden).fixedSize()
+            .disabled(moving)
+            .help("In your cloud: it answers and runs its automations with your Mac off")
+        } else if summary.agent?.draft != true {
+            Button { if engine.cloudConnected { confirmingMove = true } else { noCloud = true } } label: {
+                Label("Keep it always on", systemImage: "cloud").font(.system(size: 12.5, weight: .medium))
+            }
+            .buttonStyle(PillStyle(compact: true)).disabled(moving)
+            .help("Move it to your cloud, so it keeps going with your Mac off")
+        }
     }
 
     /// "Watches Acme, Brightly and Northwind · Claude Sonnet", or a new agent's question while it learns its job.
@@ -348,13 +375,8 @@ struct AgentPage: View {
     /// Run now, pause, its other conversations, Finder.
     private var moreMenu: some View {
         Menu {
-            Button("Run Now", action: runNow)
-            // Where it runs (docs/spec/30 §3.3): up to your cloud, always on; or back to this Mac.
-            if inCloud {
-                Button("Move to This Mac…") { confirmingMove = true }.disabled(moving)
-            } else {
-                Button("Keep It Always On…") { if engine.cloudConnected { confirmingMove = true } else { noCloud = true } }.disabled(moving || summary.agent?.draft == true)
-            }
+            // Not while it's working: a run now would queue behind what it's doing.
+            Button("Run Now", action: runNow).disabled(engine.liveStatus[summary.ref.key] == .running)
             if let status = summary.agent?.status {
                 Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
             }
@@ -389,12 +411,16 @@ struct AgentPage: View {
 
     private func runNow() {
         Task {
-            // Its next automation (docs/spec/27), else its usual check.
+            // Its next automation (docs/spec/27), else its usual check. What goes wrong is said, not swallowed.
             let mine = engine.automations.filter { $0.runsAs == summary.ref.id }
-            if let first = mine.filter({ $0.next != nil }).min(by: { ($0.next ?? 0) < ($1.next ?? 0) }) ?? mine.first {
-                _ = try? await engine.runAutomation(first.id)
-            } else {
-                _ = try? await engine.agentRunNow(summary.ref, scheduleId: nil, prompt: "Run your usual check now.")
+            do {
+                if let first = mine.filter({ $0.next != nil }).min(by: { ($0.next ?? 0) < ($1.next ?? 0) }) ?? mine.first {
+                    _ = try await engine.runAutomation(first.id)
+                } else {
+                    _ = try await engine.agentRunNow(summary.ref, scheduleId: nil, prompt: "Run your usual check now.")
+                }
+            } catch {
+                problem = (error as? EngineError)?.message ?? error.localizedDescription
             }
             conversation = nil
             tab = .chat
@@ -440,7 +466,8 @@ struct AgentChat: View {
                     .padding(.bottom, 20)
             }
         }
-        .task(id: ref.key) { await thread.open() }
+        // Keyed by the model too: after a move to or from the cloud the app makes a new one, which must open.
+        .task(id: "\(ref.key)#\(ObjectIdentifier(thread).hashValue)") { await thread.open() }
         .id(ref.key)
     }
 }

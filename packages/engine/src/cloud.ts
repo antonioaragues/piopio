@@ -7,17 +7,43 @@
  * One socket per cloud agent, opened when something needs it and reopened after a drop (the views subscribe again
  * and send a fresh snapshot). The gateway with one socket for everything (30 §8) waits for the phone app (K3).
  */
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { SECRET_OPENROUTER } from "@piopio/protocol";
 import type { CloudStatus, ContainerRef, MethodName, ModelRef, Params, Result, SessionEvent, Snapshot } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 import type { Runtime, SubmitOptions } from "./runtimes/runtime.js";
 import { Emitter } from "./runtimes/runtime.js";
 import type { SecretBroker } from "./secrets.js";
+import { CloudflareApi, deploy, readBundle, type WranglerConfig } from "./cloud-deploy.js";
 
 /** The Keychain item for the Worker's owner token. */
 export const SECRET_CLOUD = "CLOUD_OWNER_TOKEN";
+/** The Keychain item for the Cloudflare API token Piopio deployed with (to update the Worker later). */
+export const SECRET_CLOUDFLARE = "CLOUD_CLOUDFLARE_TOKEN";
 
-export type CloudConfig = { url: string; connectedAt: string; version?: string };
+/** `accountId`: set when Piopio deployed the Worker itself (Connect with a Cloudflare token), so it can update it. */
+export type CloudConfig = { url: string; connectedAt: string; version?: string; accountId?: string };
+
+const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
+const hex = (bytes: number) => randomBytes(bytes).toString("hex");
+
+/**
+ * Piopio's Worker as built: `index.js` (and any other modules) plus `wrangler.json` (its bindings and migrations).
+ * In the app it's next to the engine (`cloud-worker/`); in the repo, packages/cloud/dist.
+ */
+export function findWorker(explicit?: string): { dir: string; config: WranglerConfig } {
+	const here = dirname(fileURLToPath(import.meta.url));
+	const candidates = [explicit, process.env.PIOPIO_CLOUD_WORKER, join(here, "cloud-worker"), join(here, "../../cloud/dist")].filter((d): d is string => Boolean(d));
+	for (const dir of candidates) {
+		if (!existsSync(join(dir, "index.js"))) continue;
+		const configFile = [join(dir, "wrangler.json"), join(dirname(dir), "wrangler.json")].find((f) => existsSync(f));
+		if (configFile) return { dir, config: JSON.parse(readFileSync(configFile, "utf8")) as WranglerConfig };
+	}
+	throw new EngineError("INTERNAL", "Piopio's Worker isn't in this build. In the repo: corepack pnpm --filter @piopio/cloud build.");
+}
 
 type Fetch = typeof fetch;
 type Socket = WebSocket;
@@ -49,6 +75,10 @@ export class CloudLink {
 			file: string;
 			secrets: SecretBroker;
 			fetch?: Fetch;
+			/** Tests: where Piopio's built Worker is (default: next to the engine, or packages/cloud/dist). */
+			workerDir?: string;
+			/** Tests: shorter waits for a new Worker's first health check. */
+			healthRetryMs?: number;
 			/** Tests: a WebSocket that takes `{ headers }` (Node's does). */
 			webSocket?: (url: string, token: string) => Socket;
 			log?: (line: string) => void;
@@ -94,20 +124,103 @@ export class CloudLink {
 		return { ...(version ? { version } : {}), agents };
 	}
 
-	async connect(rawUrl: string, token: string): Promise<CloudStatus> {
+	async connect(rawUrl: string, token: string, accountId?: string): Promise<CloudStatus> {
 		const url = cloudOrigin(rawUrl);
 		if (!token.trim()) throw new EngineError("INVALID", "Paste the Worker's owner token (OWNER_TOKEN when it was deployed).");
 		const { version, agents } = await this.check(url, token.trim());
+		this.close();
 		await this.options.secrets.set(SECRET_CLOUD, token.trim());
-		const config: CloudConfig = { url, connectedAt: new Date().toISOString(), ...(version ? { version } : {}) };
+		const config: CloudConfig = { url, connectedAt: new Date().toISOString(), ...(version ? { version } : {}), ...(accountId ? { accountId } : {}) };
 		writeFileSync(this.options.file, JSON.stringify(config, null, "\t"));
-		return { connected: true, url, reachable: true, ...(version ? { version } : {}), connectedAt: config.connectedAt, agents };
+		return { connected: true, url, reachable: true, ...(version ? { version } : {}), connectedAt: config.connectedAt, managed: Boolean(accountId), agents };
+	}
+
+	/**
+	 * Connect with a Cloudflare API token (docs/spec/30 §3.3): Piopio uploads its Worker to your account, makes the
+	 * owner token itself (kept in the Keychain, never shown) and gives the Worker your OpenRouter key, so cloud agents
+	 * have a model. With several accounts and none picked, it returns them to choose from. Running it again on the same
+	 * account updates the Worker in place: its agents, their memory and conversations stay.
+	 */
+	async setup(apiToken: string, accountId?: string, log?: (line: string) => void): Promise<{ status?: CloudStatus; accounts?: { id: string; name: string }[] }> {
+		const token = apiToken.trim();
+		if (!token) throw new EngineError("INVALID", "Paste the API token you made in Cloudflare.");
+		const accounts = await this.accounts(token);
+		if (!accountId) {
+			if (accounts.length === 0) throw new EngineError("INVALID", "That token can't see any Cloudflare account. Make it from the “Edit Cloudflare Workers” template, with your account included.");
+			if (accounts.length > 1) return { accounts };
+			accountId = accounts[0]!.id;
+		} else if (accounts.length && !accounts.some((a) => a.id === accountId)) throw new EngineError("INVALID", "That token can't reach this account.");
+		const key = await this.modelKey();
+		const owner = hex(32);
+		const url = await this.deployWorker(token, accountId, { OWNER_TOKEN: owner, OPENROUTER_API_KEY: key }, log);
+		await this.options.secrets.set(SECRET_CLOUDFLARE, token);
+		return { status: await this.connect(url, owner, accountId) };
+	}
+
+	/**
+	 * The Worker again, from this version of Piopio, with your current OpenRouter key (after a Piopio update, or when
+	 * the key changed or expired). Only for a cloud Piopio deployed itself.
+	 */
+	async update(log?: (line: string) => void): Promise<CloudStatus> {
+		const config = this.config();
+		if (!config) throw new EngineError("INVALID", "No cloud is connected.");
+		const token = await this.options.secrets.get(SECRET_CLOUDFLARE, "Update your cloud");
+		if (!config.accountId || !token) throw new EngineError("INVALID", "This cloud was connected by its address and owner token, so Piopio can't update it. Connect it with a Cloudflare token instead (same account: its agents stay).");
+		await this.deployWorker(token, config.accountId, { OPENROUTER_API_KEY: await this.modelKey() }, log);
+		this.close();
+		return this.status();
+	}
+
+	/** Cloud agents use OpenRouter (the Worker can't use a subscription on this Mac): the key the Mac has. */
+	private async modelKey(): Promise<string> {
+		// From the Keychain now, not a copy from earlier: an update is often for a key that changed.
+		this.options.secrets.forget(SECRET_OPENROUTER);
+		const key = await this.options.secrets.get(SECRET_OPENROUTER, "Give your cloud a model");
+		if (!key) throw new EngineError("INVALID", "Cloud agents use OpenRouter. Add your OpenRouter key in Settings › Models first.");
+		return key;
+	}
+
+	private async accounts(token: string): Promise<{ id: string; name: string }[]> {
+		let res: Response;
+		try {
+			res = await this.fetchImpl(`${CLOUDFLARE_API}/accounts?per_page=50`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
+		} catch (error) {
+			throw new EngineError("ENGINE_UNAVAILABLE", `Cloudflare didn't answer (${(error as Error).message}).`);
+		}
+		const json = (await res.json().catch(() => ({}))) as { success?: boolean; result?: { id: string; name: string }[]; errors?: { message: string }[] };
+		if (res.status === 401 || res.status === 403) throw new EngineError("AUTH", "Cloudflare refused that token. Make a new one from the “Edit Cloudflare Workers” template and paste it.");
+		if (!res.ok || json.success === false) throw new EngineError("ENGINE_UNAVAILABLE", `Cloudflare: ${json.errors?.map((e) => e.message).join("; ") || res.statusText}`);
+		return (json.result ?? []).map((a) => ({ id: a.id, name: a.name }));
+	}
+
+	private async deployWorker(token: string, accountId: string, secrets: { OWNER_TOKEN?: string; OPENROUTER_API_KEY?: string }, log?: (line: string) => void): Promise<string> {
+		const { dir, config } = findWorker(this.options.workerDir);
+		try {
+			return await deploy({
+				api: new CloudflareApi(token, accountId, this.fetchImpl),
+				config,
+				bundle: readBundle(dir),
+				secrets,
+				vars: {},
+				fetchImpl: this.fetchImpl,
+				subdomain: () => `piopio-${hex(3)}`,
+				...(this.options.healthRetryMs !== undefined ? { retryMs: this.options.healthRetryMs } : {}),
+				log: (line) => {
+					this.options.log?.(`Cloud: ${line}`);
+					log?.(line);
+				},
+			});
+		} catch (error) {
+			const message = (error as Error).message;
+			if (/\((401|403)\)/.test(message)) throw new EngineError("AUTH", `Cloudflare refused part of the deploy: ${message}. The token needs the “Edit Cloudflare Workers” template's permissions.`);
+			throw new EngineError("ENGINE_UNAVAILABLE", message);
+		}
 	}
 
 	async status(): Promise<CloudStatus> {
 		const config = this.config();
 		if (!config) return { connected: false, agents: [] };
-		const base = { connected: true, url: config.url, connectedAt: config.connectedAt };
+		const base = { connected: true, url: config.url, connectedAt: config.connectedAt, managed: Boolean(config.accountId) };
 		try {
 			const { version, agents } = await this.check(config.url, await this.token());
 			return { ...base, reachable: true, ...(version ? { version } : {}), agents };
@@ -120,6 +233,7 @@ export class CloudLink {
 		this.close();
 		rmSync(this.options.file, { force: true });
 		await this.options.secrets.delete(SECRET_CLOUD);
+		await this.options.secrets.delete(SECRET_CLOUDFLARE);
 	}
 
 	/** The socket to one cloud agent's object, opened on first use. */

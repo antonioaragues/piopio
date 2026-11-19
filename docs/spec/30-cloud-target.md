@@ -287,11 +287,18 @@ on the account:** the Worker there predates K1 and needs a redeploy (`node scrip
 registry's migration `v1 → v2`).
 
 **What you do**
-- **Settings › This Mac & cloud › Cloud › Connect…**: the Worker's address and owner token (kept in the Keychain).
-  Both are checked before anything is saved (`/v1/health`, then `/v1/agents` with the token). The card then shows
-  whether it answers, its version and the agents up there; **Disconnect** is refused while an agent runs there.
-- **An agent's ⋯ menu › Keep It Always On…** (or **Move to This Mac…**), with a confirmation that says what moves.
-  Without a cloud, it explains and opens Settings. The result says what moved and what didn't, in lines.
+- **Settings › This Mac & cloud › Cloud › Connect…** (changed the same evening, after the user's first try): one
+  Cloudflare API token, made in the dashboard from the "Edit Cloudflare Workers" template (an Open Cloudflare button
+  goes there). Piopio deploys its own Worker to that account (`cloud.setup`), makes the owner token itself (Keychain
+  only, never shown), gives the Worker the Mac's OpenRouter key, makes the account's workers.dev name if it has none,
+  and connects. With several accounts it asks which. Running it again on the same account updates the Worker in place:
+  its agents stay. The card then shows whether it answers and the agents up there; **Update** uploads this version's
+  Worker and the current OpenRouter key (`cloud.update`); **Disconnect** is refused while an agent runs there.
+- **Advanced:** a Worker you deployed by hand connects by its address and owner token, as first built. Piopio can't
+  update that one; **Set Up Again…** connects it with a token instead.
+- **The agent's header: Keep it always on** (a pill beside ⋯), or **Always on** once it's up there, whose menu has
+  Move to This Mac. A confirmation says what moves; without a cloud, it explains and opens Settings. The result says
+  what moved and what didn't, in lines.
 - **New agent › Runs on**: `This Mac` or `Cloud` once a cloud is connected. It's made on the Mac and sent up (CT1).
 - **Badges:** a `cloud` glyph by the name in the sidebar, the Agents list and the agent's header, and "Cloud" in its
   line under the name.
@@ -336,11 +343,20 @@ Automations: Automations refuses a new one for a cloud agent (or turning one on,
 ask the agent, which keeps its own up there as schedules and reminders. Run now and pause are checked in workerd; an
 approval is not (the test model can't call a tool), only that `agents.decide` reaches the object.
 
+**Found on the account (2026-11-19, the user's first try):** the chat showed nothing and Run now did nothing.
+- The Worker's OpenRouter key, set by the morning's deploy, had expired: every answer was a 401. One-step setup and
+  Update send the Mac's current key, so the Worker's key no longer lives apart from the Mac's.
+- The app kept listening to the agent's Mac copy after the move (its conversation model was made before), so the
+  cloud's answers never showed. A move now drops the agent's open conversation models and they subscribe again.
+- Run now's error was swallowed; it's said now, and Run now is off while the agent is working.
+- The engine running in the background still had the code from before the evening's changes: after updating Piopio's
+  engine, Restart it in Settings › This Mac & cloud.
+
 **Not in K1 (next)**
 - A cloud agent's approval card in its chat (it shows in Needs you, not in the transcript: the cloud's timeline
   doesn't draw approval items yet); its memory view and the trace.
-- Connect by Cloudflare API token, with the app deploying the bundled Worker (13 §5.2's setup). Today the Worker is
-  deployed with `scripts/deploy.ts` and connected by address and token.
+- Signing in to Cloudflare in a browser instead of pasting a token: Cloudflare has no OAuth for apps like Piopio
+  (wrangler's login is its own client), so a token from a template is the simplest path for now.
 - The definition the cloud agent changes itself (its interview, a Telegram pairing) shows on the Mac only when it moves
   back; an edit on the Mac in between replaces it.
 - Attachments in a cloud agent's chat.
