@@ -583,6 +583,10 @@ export class AgentDO extends DurableObject<Env> {
 		await this.ctx.storage.deleteAll();
 		await this.ctx.storage.put(RETIRED_KEY, new Date().toISOString());
 		this.agentDef = undefined;
+		// deleteAll also dropped the tables the Agents SDK made when this instance started (cf_agents_jobs, …), and
+		// it remembers having made them: a deploy into this same instance would fail on the first message. So the
+		// object restarts once the answer is out, and the next request starts a fresh instance that makes them again.
+		setTimeout(() => this.ctx.abort("Retired: restarting with empty storage"), 50);
 		return {};
 	}
 

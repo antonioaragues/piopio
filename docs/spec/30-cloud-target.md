@@ -351,6 +351,10 @@ approval is not (the test model can't call a tool), only that `agents.decide` re
 - Run now's error was swallowed; it's said now, and Run now is off while the agent is working.
 - The engine running in the background still had the code from before the evening's changes: after updating Piopio's
   engine, Restart it in Settings › This Mac & cloud.
+- Back to the Mac and up again, the first message failed with "no such table: cf_agents_jobs" (2026-11-20). Retiring
+  deletes the object's storage, the Agents SDK's own tables with it, and the SDK makes them once per instance. The
+  object now restarts after retiring, so a later deploy lands in a fresh instance. `move.test.ts` sends a message after
+  coming back up (it failed with the same error before the fix).
 
 **Not in K1 (next)**
 - A cloud agent's approval card in its chat (it shows in Needs you, not in the transcript: the cloud's timeline

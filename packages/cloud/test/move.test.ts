@@ -116,11 +116,20 @@ describe("moving an agent between the Mac and the cloud (K1)", () => {
 		expect(await registry()).toEqual([]);
 		await expect(c.call("agents.runs", { ref })).rejects.toThrow(/moved back to the Mac/);
 
-		// Deployed again later, it starts fresh: nothing from before the move back.
-		const again = await c.call<{ lines: string[] }>("agents.deploy", { ref, definition: made.definition, instructions: made.instructions });
+		// Deployed again later, it starts fresh: nothing from before the move back. The object restarted after retiring
+		// (its storage, the SDK's tables included, was deleted), so this is a new socket to a new instance.
+		await c.closed;
+		const c2 = await connect(id);
+		const again = await c2.call<{ lines: string[] }>("agents.deploy", { ref, definition: made.definition, instructions: made.instructions });
 		expect(again.lines).toEqual([]);
-		const fresh = await c.call<{ memory: unknown[]; reminders: unknown[] }>("agents.export", { ref });
+		const fresh = await c2.call<{ memory: unknown[]; reminders: unknown[] }>("agents.export", { ref });
 		expect(fresh).toMatchObject({ memory: [], reminders: [] });
 		expect((await registry()).map((a) => a.id)).toEqual([id]);
+
+		// And it answers: the first message after coming back up (2026-11-20: "no such table: cf_agents_jobs").
+		const sub = await c2.call<{ subscriptionId: string }>("sessions.subscribe", { ref });
+		await c2.call("sessions.submit", { ref, input: { text: "Back again" } });
+		const answered = await c2.waitFor((n) => n.subscriptionId === sub.subscriptionId && JSON.stringify(n.events).includes("Echo: Back again"));
+		expect(JSON.stringify(answered.events)).not.toContain("SQLITE_ERROR");
 	});
 });
