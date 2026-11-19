@@ -924,13 +924,16 @@ struct SessionTreePopover: View {
                         }
                     }
                 }
-                .frame(maxHeight: 360)
+                // A popover takes its content's ideal size, and a ScrollView has almost none: give the list the
+                // height of its rows, up to 360, so the popover grows to fit them.
+                .frame(height: min(CGFloat(nodes.count) * 27, 360))
             } else {
                 ProgressView().controlSize(.small)
             }
         }
         .padding(14)
         .frame(width: 380)
+        .fixedSize(horizontal: false, vertical: true)
         .task { nodes = await session.tree() }
     }
 }
