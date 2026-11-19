@@ -1161,6 +1161,10 @@ export class Engine {
 				this.automations.remove(p.id);
 				return {} satisfies Result<"automations.remove">;
 			}
+			case "automations.restore": {
+				const p = params as Params<"automations.restore">;
+				return { automation: this.automationView(this.automations.restoreRemoved(p.id)) } satisfies Result<"automations.restore">;
+			}
 			case "automations.run": {
 				const p = params as Params<"automations.run">;
 				const run = await this.automations.fire(p.id, "now", "Run now, by the user.");

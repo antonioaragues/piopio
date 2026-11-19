@@ -26,7 +26,7 @@ extension NSAttributedString.Key {
 
 public enum CardStyle: String, Sendable { case code, quote, table, user, errorCard, link, note, pills, divider, approval }
 
-enum PillStyle: String { case primary, secondary, file, code, button }
+enum PillStyle: String { case primary, secondary, file, code, button, tag }
 
 let lineSeparator = "\u{2028}"
 
@@ -167,6 +167,15 @@ final class CardLayoutFragment: NSTextLayoutFragment {
                     let pad: CGFloat = 3
                     let chip = CGRect(x: rect.minX + 1, y: baseline - font.ascender - pad, width: rect.width - 2, height: font.ascender - font.descender + pad * 2)
                     fill(context, chip, DS.chip, radius: 5)
+                case .tag:
+                    // A soft capsule label (an automation's run: "From Daily price check · 08:00"): the bubble grey,
+                    // sized from the label's font; its thin spaces are the padding.
+                    let font = paragraph.attribute(.font, at: start, effectiveRange: nil) as? NSFont ?? .systemFont(ofSize: 11.5)
+                    let baseline = b.minY + line.glyphOrigin.y + point.y
+                    let pad: CGFloat = 3
+                    let h = font.ascender - font.descender + pad * 2
+                    let tag = CGRect(x: rect.minX + 2, y: baseline - font.ascender - pad, width: rect.width - 4, height: h)
+                    fill(context, tag, DS.bubble, radius: h / 2)
                 }
             }
         }

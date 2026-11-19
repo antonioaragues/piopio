@@ -36,3 +36,62 @@ struct SidebarAvatar: View {
     }
 }
 
+
+/// An agent's tile (docs/design/automations, agents and automations handoff): its initial, or its glyph, in its hue's
+/// ink on a soft tint of it. Rounded square; the radius grows with the size (40 → 13, 64 → 20).
+struct AgentTile: View {
+    let id: String
+    let name: String
+    var glyph: String?
+    var size: CGFloat = 40
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * (size >= 30 ? 0.32 : 0.3), style: .continuous)
+        shape.fill(AgentHue.soft(id))
+            .frame(width: size, height: size)
+            .overlay {
+                if let glyph, !glyph.isEmpty {
+                    AvatarGlyph(avatar: glyph, size: size * 0.5, color: AgentHue.ink(id))
+                } else {
+                    Text(String(name.prefix(1)).uppercased())
+                        .font(.system(size: size * (size < 30 ? 0.48 : 0.4), weight: .semibold))
+                        .foregroundStyle(AgentHue.ink(id))
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// Who runs an automation: Piopio's chick on its yolk, or the agent's tile.
+struct RunnerTile: View {
+    let engine: EngineController
+    let runsAs: String
+    var size: CGFloat = 22
+
+    var body: some View {
+        if let agent = engine.agents.first(where: { $0.ref.id == runsAs }) {
+            AgentTile(id: agent.ref.id, name: agent.title, glyph: agent.agent?.avatar, size: size)
+        } else if runsAs == "piopio" {
+            Chick(size: size)
+        } else {
+            AgentTile(id: runsAs, name: "?", size: size)
+        }
+    }
+}
+
+extension AgentHue {
+    /// The tile's fill: a pale tint of the hue (oklch 0.91 0.06 h in the handoff), darker in dark mode.
+    static func soft(_ id: String) -> Color { Color(nsColor: mix(id, light: (NSColor.white, 0.6), dark: (NSColor(srgbRed: 0.145, green: 0.145, blue: 0.141, alpha: 1), 0.6))) }
+    /// The tile's initial: the hue, deep (oklch 0.45 0.13 h), lighter in dark mode.
+    static func ink(_ id: String) -> Color { Color(nsColor: mix(id, light: (NSColor.black, 0.42), dark: (NSColor.white, 0.30))) }
+
+    private static func mix(_ id: String, light: (NSColor, CGFloat), dark: (NSColor, CGFloat)) -> NSColor {
+        let (r, g, b) = AgentPalette.rgb[AgentPalette.index(id)]
+        let hue = NSColor(srgbRed: r, green: g, blue: b, alpha: 1)
+        return NSColor(name: nil) { a in
+            let isDark = a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let (with, amount) = isDark ? dark : light
+            return hue.blended(withFraction: amount, of: with) ?? hue
+        }
+    }
+}

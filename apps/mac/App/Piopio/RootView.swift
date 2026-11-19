@@ -9,6 +9,8 @@ struct RootView: View {
     @AppStorage("sidebarItem") private var itemRaw = "home"
     @AppStorage("sidebarWidth") private var sidebarWidth = 260.0
     @AppStorage("sidebarCollapsed") private var sidebarCollapsed = false
+    /// The agent you had open last: the sidebar's Agents row opens it.
+    @AppStorage("lastAgent") private var lastAgent = ""
     @State private var fullScreen = false
     @State private var availableWidth = 1280.0
     @State private var sidebarDragStart: Double?
@@ -136,7 +138,7 @@ struct RootView: View {
             case .build: itemRaw = SidebarItem.index(.projects).raw
             case .chat: itemRaw = SidebarItem.home.raw
             case .agents:
-                if let id = UserDefaults.standard.string(forKey: "agentSelection"), engine.agents.contains(where: { $0.ref.id == id }) { itemRaw = SidebarItem.agent(id).raw } else { itemRaw = SidebarItem.index(.agents).raw }
+                if let id = UserDefaults.standard.string(forKey: "agentSelection") ?? UserDefaults.standard.string(forKey: "lastAgent"), engine.agents.contains(where: { $0.ref.id == id }) { itemRaw = SidebarItem.agent(id).raw } else { itemRaw = SidebarItem.index(.agents).raw }
             }
         }
         .onChange(of: engine.status) { _, status in
@@ -213,7 +215,12 @@ struct RootView: View {
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.agents):
-            AgentsIndex(engine: engine, item: itemBinding)
+            // The Agents row opens the agent you had open last (the handoff's "keep sidebar" model), or the first.
+            if let summary = engine.agents.first(where: { $0.ref.id == lastAgent }) ?? engine.agents.first {
+                AgentsSplit(engine: engine, item: itemBinding, selected: summary.ref.id) {
+                    AgentPage(engine: engine, summary: summary, selection: agentSelection).id(summary.ref.id)
+                }
+            }
         case .index(.chats) where engine.threads.isEmpty:
             ChatFirstRun(engine: engine, item: itemBinding)
         case .index(let section):
@@ -234,8 +241,11 @@ struct RootView: View {
             }
         case .agent(let id):
             if let summary = engine.agents.first(where: { $0.ref.id == id }) {
-                AgentPage(engine: engine, summary: summary, selection: agentSelection)
-                    .id(id)
+                AgentsSplit(engine: engine, item: itemBinding, selected: id) {
+                    AgentPage(engine: engine, summary: summary, selection: agentSelection).id(id)
+                }
+                .onAppear { lastAgent = id }
+                .onChange(of: id) { _, now in lastAgent = now }
             } else {
                 missing
             }
@@ -254,6 +264,10 @@ struct RootView: View {
                 }
                 // Its first conversation: the start page with the new project chosen.
                 else { startConversation(target: "project:" + project.id) }
+            }
+        case .start(.agent) where !engine.agents.isEmpty:
+            AgentsSplit(engine: engine, item: itemBinding, selected: nil) {
+                StartView(engine: engine, kind: .agent, item: itemBinding)
             }
         case .start(let kind):
             StartView(engine: engine, kind: kind, item: itemBinding)

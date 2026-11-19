@@ -73,6 +73,8 @@ export class Automations {
 	private stopped = false;
 	/** Agent runs that settled before `fire` recorded them (a fast run), by "<agent>/<run>". */
 	private readonly early = new Map<string, { id: string; status: "running" | "done" | "failed" | "skipped"; summary?: string; sent: number; costUsd?: number }>();
+	/** Removed while the engine runs, by id: a card's Redo brings one back (`restoreRemoved`). Not kept on disk. */
+	private readonly removed = new Map<string, Automation>();
 
 	constructor(private readonly host: AutomationsHost) {
 		this.store = { automations: [], fired: [], ...readJson<Partial<Store>>(host.file) };
@@ -165,8 +167,19 @@ export class Automations {
 	remove(id: string): Automation {
 		const a = this.get(id);
 		this.store.automations = this.store.automations.filter((x) => x.id !== id);
+		this.removed.set(id, structuredClone(a));
 		this.saved(a.on !== "time");
 		return a;
+	}
+
+	/** Redo of an Undo (a creation card): the one removed with this id comes back as it was. */
+	restoreRemoved(id: string): Automation {
+		if (this.find(id)) return this.get(id);
+		const a = this.removed.get(id);
+		if (!a) throw new EngineError("NOT_FOUND", "It can't come back any more. Ask again to make it.");
+		const back = this.restore(a);
+		this.removed.delete(id);
+		return back;
 	}
 
 	/** Undo of a removal or a change: it comes back as it was (a once whose moment has passed doesn't). */

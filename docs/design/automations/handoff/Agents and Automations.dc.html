@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>body{margin:0;background:#E6E6E2;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased;color:#1F1F1E}a{color:#2F6FEB;text-decoration:none}a:hover{color:#1F5AD0}</style></helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:16px;padding:28px 24px 48px;box-sizing:border-box">
+<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:12px;align-items:center">
+  <span style="color:#6B6B67;margin-right:6px">Handoff screens:</span>
+  <sc-for list="{{ strip }}" as="s" hint-placeholder-count="7"><div onClick="{{ s.onClick }}" style="padding:5px 11px;border-radius:99px;cursor:pointer;background:{{ s.bg }};color:{{ s.fg }}">{{ s.label }}</div></sc-for>
+</div>
+<div style="width:1360px;height:880px;flex:none;display:flex;background:#FCFCFB;border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 24px 60px rgba(0,0,0,.14);font-size:13px">
+
+  <div style="width:250px;flex:none;background:#F4F4F2;border-right:1px solid rgba(0,0,0,.09);display:flex;flex-direction:column">
+    <div style="display:flex;gap:7px;padding:18px 18px 16px"><span style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></span><span style="width:11px;height:11px;border-radius:50%;background:#febc2e"></span><span style="width:11px;height:11px;border-radius:50%;background:#28c840"></span></div>
+    <div style="flex:1;overflow:auto;padding:0 10px;display:flex;flex-direction:column;gap:1px">
+      <div style="padding:6px 10px;display:flex;justify-content:space-between;color:#1F1F1E"><span>Search</span><span style="color:#9B9B96">⌘K</span></div>
+      <div style="padding:6px 10px;border-radius:7px">Home</div>
+      <div onClick="{{ goAgents }}" style="padding:6px 10px;border-radius:7px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:{{ navAgentsBg }}"><span>Agents</span><span style="font-size:11px;color:#6B6B67;font-variant-numeric:tabular-nums">2</span></div>
+      <div onClick="{{ goList }}" style="padding:6px 10px;border-radius:7px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:{{ navListBg }}"><span>Automations</span><span style="font-size:11px;color:#6B6B67;font-variant-numeric:tabular-nums">{{ autoCount }}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:16px 10px 5px;color:#9B9B96;font-size:12px"><span>Agents</span><span>+</span></div>
+      <sc-for list="{{ sideAgents }}" as="a" hint-placeholder-count="2">
+        <div onClick="{{ a.onClick }}" style="padding:5px 10px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:9px;background:{{ a.rowBg }}">
+          <span style="width:22px;height:22px;border-radius:7px;background:{{ a.bg }};color:{{ a.fg }};font-size:11px;font-weight:650;display:grid;place-items:center">{{ a.initial }}</span><span style="flex:1">{{ a.name }}</span><span style="font-size:11px;color:#9B9B96">{{ a.channel }}</span>
+        </div>
+      </sc-for>
+      <div style="display:flex;justify-content:space-between;padding:16px 10px 5px;color:#9B9B96;font-size:12px"><span>Projects</span><span>+</span></div>
+      <sc-for list="{{ sideProjects }}" as="p" hint-placeholder-count="2"><div onClick="{{ p.onClick }}" style="padding:5px 10px;border-radius:7px;cursor:pointer;background:{{ p.rowBg }}">{{ p.name }}</div></sc-for>
+      <div style="padding:16px 10px 5px;color:#9B9B96;font-size:12px">Conversations</div>
+      <div style="padding:5px 10px">Trip to Lisbon ideas</div>
+      <div style="padding:5px 10px">Explain this contract</div>
+    </div>
+    <div style="padding:12px 18px;display:flex;gap:9px;align-items:center;border-top:1px solid rgba(0,0,0,.09)"><span style="width:26px;height:26px;border-radius:50%;background:#EAEAE6;display:grid;place-items:center;font-size:11px">A</span><div><div>Antonio</div><div style="font-size:11px;color:#9B9B96">This Mac · $0.04 today</div></div></div>
+  </div>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;position:relative">
+
+  <sc-if value="{{ isList }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;overflow:auto;padding:44px 56px;display:flex;flex-direction:column;gap:22px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
+        <div style="display:flex;flex-direction:column;gap:5px"><div style="font-size:28px;font-weight:700;letter-spacing:-.02em">Automations</div><div style="color:#6B6B67;font-size:14px;max-width:560px;text-wrap:pretty">Work that runs when nobody started it. Ask Piopio or any agent to set one up, or make one here.</div></div>
+        <div style="padding:8px 14px;border-radius:8px;border:1px solid rgba(0,0,0,.14);background:#fff;white-space:nowrap">New automation</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ chips }}" as="c" hint-placeholder-count="4"><div onClick="{{ c.onClick }}" style="display:flex;align-items:center;gap:6px;padding:4px 11px 4px {{ c.padL }};border-radius:99px;cursor:pointer;background:{{ c.bg }};color:{{ c.fg }}"><sc-if value="{{ c.hasAv }}"><span style="width:18px;height:18px;border-radius:6px;background:{{ c.avBg }};color:{{ c.avFg }};font-size:10px;font-weight:650;display:grid;place-items:center">{{ c.avI }}</span></sc-if>{{ c.label }}</div></sc-for>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:7px;color:#6B6B67;font-size:12px"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.72 0.14 150)"></span>Runs on this Mac, only while it's awake</div>
+      </div>
+      <sc-if value="{{ showEmpty }}">
+        <div style="margin-top:30px;align-self:center;max-width:520px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+          <div style="font-size:18px;font-weight:650">Nothing runs on its own yet</div>
+          <div style="color:#6B6B67;line-height:1.5">Ask Piopio or any of your agents in plain words. They set it up and it shows here.</div>
+          <div style="display:flex;flex-direction:column;gap:8px;width:100%">
+            <div style="padding:11px 14px;border-radius:12px;background:#F0F0ED;text-align:left">“Every weekday at 8, check competitor prices and tell me only what changed.”</div>
+            <div style="padding:11px 14px;border-radius:12px;background:#F0F0ED;text-align:left">“When an email with an invoice arrives, file it in Invoices.”</div>
+          </div>
+          <div style="color:#9B9B96;font-size:12px">Or use <span style="color:#1F1F1E">New automation</span> above.</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ showRows }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:22px">
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr) 40px;gap:16px;padding:0 14px 7px;font-size:11.5px;color:#9B9B96;border-bottom:1px solid rgba(0,0,0,.09)"><span style="color:{{ g.color }};font-weight:600">{{ g.title }}</span><span>Runs as</span><span>Tells you</span><span>Last or next run</span><span></span></div>
+              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                <div onClick="{{ r.onOpen }}" style="display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr) 40px;gap:16px;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;border-radius:8px" style-hover="background:#F4F4F2">
+                  <div style="min-width:0;opacity:{{ r.opacity }};display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:7px;align-items:center"><span style="font-weight:600;font-size:14px">{{ r.name }}</span><sc-if value="{{ r.isNew }}"><span style="font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:5px;background:#2F6FEB;color:#fff">New</span></sc-if></div><div style="color:#6B6B67;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.when }}</div></div>
+                  <div style="display:flex;gap:8px;align-items:center;min-width:0;opacity:{{ r.opacity }}"><span style="flex:none;width:22px;height:22px;border-radius:7px;background:{{ r.avBg }};color:{{ r.avFg }};font-size:11px;font-weight:650;display:grid;place-items:center">{{ r.avI }}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.whoName }}</span></div>
+                  <div style="color:#6B6B67;opacity:{{ r.opacity }}">{{ r.tells }}</div>
+                  <div style="color:{{ r.lastColor }};opacity:{{ r.opacity }}">{{ r.last }}</div>
+                  <div onClick="{{ r.onToggle }}" style="width:34px;height:20px;border-radius:99px;background:{{ r.swBg }};position:relative;cursor:pointer"><span style="position:absolute;top:2px;left:{{ r.swX }};width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)"></span></div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAuto }}">
+    <div style="flex:1;display:flex;min-height:0">
+      <div style="flex:1;min-width:0;overflow:auto;padding:22px 52px 40px;display:flex;flex-direction:column;gap:26px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span onClick="{{ goList }}" style="color:#6B6B67;cursor:pointer">‹ Automations</span><div onClick="{{ runNow }}" style="padding:7px 14px;border-radius:8px;background:#1F1F1E;color:#fff;cursor:pointer">Run now</div></div>
+        <div style="display:flex;align-items:center;gap:14px"><span style="font-size:28px;font-weight:700;letter-spacing:-.02em;flex:1;opacity:{{ curOpacity }}">{{ cur.name }}</span><span style="color:#6B6B67;font-size:12px">{{ curOnLabel }}</span><div onClick="{{ toggleCur }}" style="width:40px;height:24px;border-radius:99px;background:{{ curSwBg }};position:relative;cursor:pointer"><span style="position:absolute;top:2px;left:{{ curSwX }};width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)"></span></div></div>
+
+        <div style="padding:22px 24px;border-radius:16px;background:#fff;border:1px solid rgba(0,0,0,.09);display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:23px;line-height:1.6;letter-spacing:-.01em;text-wrap:pretty">
+            <b style="font-weight:650">{{ s.when }}</b>, ask
+            <span style="position:relative;display:inline-block">
+              <span onClick="{{ openWho }}" style="color:#2F6FEB;cursor:pointer;border-bottom:1.5px dotted rgba(47,111,235,.5);border-radius:3px;background:{{ whoHl }};padding:0 2px">{{ s.who }}</span>
+              <sc-if value="{{ popWho }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:20;width:300px;padding:6px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.09),0 12px 32px rgba(0,0,0,.14);font-size:13px;line-height:1.35;letter-spacing:0;display:flex;flex-direction:column;gap:2px">
+                <div style="padding:6px 10px 4px;color:#9B9B96;font-size:11.5px">Who runs it</div>
+                <sc-for list="{{ whoOpts }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onClick }}" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;cursor:pointer" style-hover="background:#F4F4F2"><span style="flex:none;width:26px;height:26px;border-radius:8px;background:{{ o.avBg }};color:{{ o.avFg }};font-size:12px;font-weight:650;display:grid;place-items:center">{{ o.avI }}</span><div style="flex:1"><div style="font-weight:550">{{ o.label }}</div><div style="color:#9B9B96;font-size:12px">{{ o.sub }}</div></div><span style="color:#2F6FEB">{{ o.check }}</span></div></sc-for>
+              </div></sc-if>
+            </span>
+            to <b style="font-weight:650">{{ s.what }}</b>,
+            <span style="position:relative;display:inline-block">
+              <span onClick="{{ openWhere }}" style="color:{{ whereColor }};cursor:pointer;border-bottom:1.5px dotted {{ whereLine }};border-radius:3px;background:{{ whereHl }};padding:0 2px">{{ s.where }}</span>
+              <sc-if value="{{ popWhere }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:20;width:300px;padding:6px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.09),0 12px 32px rgba(0,0,0,.14);font-size:13px;line-height:1.35;letter-spacing:0;display:flex;flex-direction:column;gap:2px">
+                <div style="padding:6px 10px 4px;color:#9B9B96;font-size:11.5px">Where it works</div>
+                <sc-if value="{{ whereNote }}"><div style="padding:6px 10px 10px;color:#6B6B67;line-height:1.45">{{ whereNote }}</div></sc-if>
+                <sc-for list="{{ whereOpts }}" as="o" hint-placeholder-count="0"><div onClick="{{ o.onClick }}" style="display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;cursor:pointer" style-hover="background:#F4F4F2"><span>{{ o.label }}</span><span style="color:#2F6FEB">{{ o.check }}</span></div></sc-for>
+              </div></sc-if>
+            </span>
+            and
+            <span style="position:relative;display:inline-block">
+              <span onClick="{{ openResult }}" style="color:#2F6FEB;cursor:pointer;border-bottom:1.5px dotted rgba(47,111,235,.5);border-radius:3px;background:{{ resultHl }};padding:0 2px">{{ s.result }}</span>
+              <sc-if value="{{ popResult }}"><div style="position:absolute;top:calc(100% + 6px);left:0;z-index:20;width:310px;padding:6px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.09),0 12px 32px rgba(0,0,0,.14);font-size:13px;line-height:1.35;letter-spacing:0;display:flex;flex-direction:column;gap:2px">
+                <div style="padding:6px 10px 4px;color:#9B9B96;font-size:11.5px">Where the result goes</div>
+                <sc-for list="{{ resultOpts }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.onClick }}" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;cursor:pointer" style-hover="background:#F4F4F2"><div style="flex:1"><div style="font-weight:550">{{ o.label }}</div><div style="color:#9B9B96;font-size:12px">{{ o.sub }}</div></div><span style="color:#2F6FEB">{{ o.check }}</span></div></sc-for>
+                <sc-if value="{{ resultNote }}"><div style="margin-top:4px;padding:8px 10px;border-top:1px solid rgba(0,0,0,.07);color:#9B9B96;font-size:12px;line-height:1.4">{{ resultNote }}</div></sc-if>
+              </div></sc-if>
+            </span>.
+          </div>
+          <div style="color:#9B9B96;font-size:12px">Blue words are choices. To change when or what, edit the prompt below or ask {{ cur.whoShort }}.</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:600">What it's told</div><div style="padding:12px 14px;border-radius:10px;background:#fff;border:1px solid rgba(0,0,0,.09);line-height:1.5;color:#1F1F1E;min-height:44px">{{ cur.prompt }}</div></div>
+
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="font-weight:600">While you're away</div>
+          <div style="display:grid;grid-template-columns:160px minmax(0,1fr);gap:14px 20px;align-items:start">
+            <div style="color:#6B6B67;padding-top:9px">If it needs your OK</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><sc-for list="{{ approvalOpts }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.onClick }}" style="padding:10px 12px;border-radius:10px;cursor:pointer;background:#fff;border:1.5px solid {{ o.border }};display:flex;flex-direction:column;gap:2px"><span style="font-weight:550">{{ o.label }}</span><span style="color:#9B9B96;font-size:12px">{{ o.sub }}</span></div></sc-for></div>
+            <div style="color:#6B6B67;padding-top:6px">Budget per run</div>
+            <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;gap:6px"><sc-for list="{{ budgetOpts }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.onClick }}" style="padding:5px 12px;border-radius:99px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};font-variant-numeric:tabular-nums">{{ o.label }}</div></sc-for></div><span style="color:#9B9B96;font-size:12px">It stops and tells you before going over.</span></div>
+            <div style="color:#6B6B67">It may use</div>
+            <div style="line-height:1.5">{{ mayUse }} <span onClick="{{ mayUseGo }}" style="color:#2F6FEB;cursor:pointer">{{ mayUseLink }}</span><div style="color:#9B9B96;font-size:12px">Never more than {{ cur.whoShort }} already has.</div></div>
+            <div style="color:#6B6B67">Runs on</div>
+            <div style="line-height:1.5">This Mac, only while it's awake.<div style="color:#9B9B96;font-size:12px">If your Mac is asleep at run time, it runs as soon as it wakes.</div></div>
+          </div>
+        </div>
+        <div onClick="{{ deleteCur }}" style="align-self:flex-start;color:oklch(0.55 0.18 25);cursor:pointer;padding-top:6px">Delete automation</div>
+      </div>
+      <div style="width:300px;flex:none;border-left:1px solid rgba(0,0,0,.09);background:#F7F7F5;overflow:auto;padding:24px 18px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-weight:600">Runs</div>
+        <sc-if value="{{ noRuns }}"><div style="padding:14px;border-radius:12px;border:1px dashed rgba(0,0,0,.15);display:flex;flex-direction:column;gap:4px"><span style="color:#6B6B67">No runs yet.</span><span style="font-weight:600">First run: {{ cur.next }}</span></div></sc-if>
+        <sc-for list="{{ runs }}" as="r" hint-placeholder-count="3"><div style="padding:11px 12px;border-radius:12px;background:#fff;border:1px solid rgba(0,0,0,.07);display:flex;flex-direction:column;gap:4px;cursor:pointer" style-hover="border-color:rgba(0,0,0,.18)"><div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:{{ r.color }};font-weight:550">{{ r.when }}</span><span style="color:#9B9B96;font-variant-numeric:tabular-nums">{{ r.cost }}</span></div><div style="line-height:1.4;color:#1F1F1E">{{ r.what }}</div><span style="font-size:12px;color:#2F6FEB">Open conversation ›</span></div></sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAgent }}">
+   <div style="flex:1;display:flex;min-height:0">
+    <div style="width:264px;flex:none;background:#F8F8F6;border-right:1px solid rgba(0,0,0,.09);display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:22px 16px 12px"><span style="font-size:20px;font-weight:700;letter-spacing:-.02em">Agents</span><span title="New agent" style="width:28px;height:28px;border-radius:8px;background:#1F1F1E;color:#fff;display:grid;place-items:center;font-size:16px;cursor:pointer">+</span></div>
+      <div style="margin:0 12px 10px;padding:7px 10px;border-radius:8px;background:#EFEFEC;color:#9B9B96">Search agents</div>
+      <div style="flex:1;overflow:auto;padding:0 8px;display:flex;flex-direction:column;gap:2px">
+        <sc-for list="{{ roster }}" as="a" hint-placeholder-count="2">
+          <div onClick="{{ a.onClick }}" style="display:flex;gap:11px;align-items:center;padding:9px 10px;border-radius:11px;cursor:pointer;background:{{ a.rowBg }}">
+            <div style="flex:none;width:40px;height:40px;border-radius:13px;background:{{ a.bg }};color:{{ a.fg }};display:grid;place-items:center;font-weight:650;font-size:16px">{{ a.initial }}</div>
+            <div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:2px"><div style="display:flex;justify-content:space-between;gap:6px"><span style="font-weight:600">{{ a.name }}</span><span style="font-size:11px;color:#9B9B96;white-space:nowrap">{{ a.time }}</span></div><div style="color:#6B6B67;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.preview }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="padding:24px 40px 0;border-bottom:1px solid rgba(0,0,0,.09);display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;gap:16px;align-items:center">
+        <div style="width:64px;height:64px;border-radius:20px;background:{{ ag.bg }};color:{{ ag.fg }};display:grid;place-items:center;font-size:26px;font-weight:650">{{ ag.initial }}</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:24px;font-weight:700;letter-spacing:-.02em">{{ ag.name }}</span><span style="color:#6B6B67">{{ ag.line }} · {{ ag.model }}</span></div>
+        <span onClick="{{ agAutosGo }}" style="color:#2F6FEB;cursor:pointer;padding:6px 10px;border-radius:8px;background:rgba(47,111,235,.08)">{{ agAutosLink }}</span>
+      </div>
+      <div style="display:flex;gap:22px"><sc-for list="{{ agTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="padding-bottom:10px;cursor:pointer;font-weight:{{ t.w }};color:{{ t.c }};border-bottom:2px solid {{ t.line }}">{{ t.label }}</div></sc-for></div>
+    </div>
+    <sc-if value="{{ isChat }}">
+      <div style="flex:1;overflow:auto;padding:24px 0;display:flex;flex-direction:column;align-items:center">
+        <div style="width:100%;max-width:720px;padding:0 32px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px">
+          <sc-if value="{{ isRita }}">
+            <div style="display:flex;flex-direction:column;gap:6px;max-width:85%">
+              <span onClick="{{ openPrice }}" style="align-self:flex-start;font-size:11.5px;color:#6B6B67;padding:3px 9px;border-radius:99px;background:#F0F0ED;cursor:pointer" style-hover="color:#2F6FEB">From <b style="font-weight:600">Daily price check</b> · 08:00</span>
+              <div style="line-height:1.55">Brightly dropped its Pro plan from $24 to $18 a month overnight. Acme and Northwind didn't change. Want me to look at how this compares with yours?</div>
+            </div>
+            <div style="align-self:flex-end;max-width:70%;padding:10px 14px;border-radius:16px;background:#F0F0ED;line-height:1.5">Every Monday at 9, send me a summary of what competitors shipped last week, on Telegram.</div>
+            <div style="line-height:1.55">Done. I'll send it to you on Telegram every Monday morning.</div>
+            <sc-if value="{{ cardLive }}" hint-placeholder-val="{{ true }}">
+              <div style="width:440px;border-radius:14px;background:#fff;border:1px solid rgba(0,0,0,.1);box-shadow:0 2px 8px rgba(0,0,0,.04);overflow:hidden">
+                <div style="padding:14px 16px 12px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid rgba(0,0,0,.07)"><span style="font-size:11.5px;color:#2F6FEB;font-weight:600">New automation</span><span style="font-size:16px;font-weight:650">Weekly competitor brief</span></div>
+                <div style="padding:12px 16px;display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px 12px;line-height:1.4">
+                  <span style="color:#9B9B96">When</span><span>Every Monday at 09:00</span>
+                  <span style="color:#9B9B96">Runs as</span><span>Rita</span>
+                  <span style="color:#9B9B96">Does</span><span>Summarises what competitors shipped last week</span>
+                  <span style="color:#9B9B96">Tells you</span><span>On Telegram</span>
+                </div>
+                <div style="padding:9px 16px;background:#F7F7F5;color:#6B6B67;font-size:12px;display:flex;gap:7px;align-items:center"><span style="width:6px;height:6px;border-radius:50%;background:oklch(0.72 0.14 150)"></span>Runs on this Mac, only while it's awake · first run Mon 23 Nov</div>
+                <div style="padding:10px 12px;display:flex;gap:8px;border-top:1px solid rgba(0,0,0,.07)"><div onClick="{{ openWeekly }}" style="padding:7px 12px;border-radius:8px;background:#1F1F1E;color:#fff;cursor:pointer">Open in Automations</div><div onClick="{{ undo }}" style="padding:7px 12px;border-radius:8px;border:1px solid rgba(0,0,0,.14);cursor:pointer">Undo</div></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ cardUndone }}"><div style="align-self:flex-start;display:flex;gap:10px;align-items:center;padding:9px 14px;border-radius:10px;background:#F0F0ED;color:#6B6B67">Undone. Weekly competitor brief won't run. <span onClick="{{ redo }}" style="color:#2F6FEB;cursor:pointer">Redo</span></div></sc-if>
+          </sc-if>
+          <sc-if value="{{ isCoach }}">
+            <div style="display:flex;flex-direction:column;gap:6px;max-width:85%"><span style="align-self:flex-start;font-size:11.5px;color:#6B6B67;padding:3px 9px;border-radius:99px;background:#F0F0ED">From <b style="font-weight:600">Morning summary</b> · Thu 12 Nov, 07:30</span><div style="line-height:1.55">Morning. Three meetings today, the first at 10. Rain after 15:00. Top task: send the Q4 numbers to Marta.</div></div>
+            <div style="align-self:flex-end;max-width:70%;padding:10px 14px;border-radius:16px;background:#F0F0ED;line-height:1.5">I'm on holiday until the 30th, pause the mornings</div>
+            <div style="line-height:1.55">Paused Morning summary. Ask me to turn it back on when you're back.</div>
+          </sc-if>
+        </div>
+      </div>
+      <div style="padding:12px 0 22px;display:flex;justify-content:center"><div style="width:100%;max-width:720px;padding:0 32px;box-sizing:border-box"><div style="padding:12px 14px;border-radius:14px;background:#fff;border:1px solid rgba(0,0,0,.12);color:#9B9B96;display:flex;justify-content:space-between;align-items:center">Message {{ ag.name }}<span style="width:26px;height:26px;border-radius:50%;background:#1F1F1E;color:#fff;display:grid;place-items:center">↑</span></div></div></div>
+    </sc-if>
+    <sc-if value="{{ isSetup }}">
+      <div style="flex:1;overflow:auto;padding:28px 40px 40px;display:flex;flex-direction:column;align-items:center">
+        <div style="width:100%;max-width:720px;display:flex;flex-direction:column;gap:22px">
+          <div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:600">Who it is</div>
+            <div style="border-radius:12px;background:#fff;border:1px solid rgba(0,0,0,.09)">
+              <div style="padding:12px 14px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid rgba(0,0,0,.06)"><span style="color:#9B9B96;font-size:12px">Instructions</span><span style="line-height:1.5">{{ ag.instructions }}</span></div>
+              <div style="padding:12px 14px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,.06)"><span style="color:#6B6B67">Model</span><span>{{ ag.model }}</span></div>
+              <div style="padding:12px 14px;display:flex;justify-content:space-between"><span style="color:#6B6B67">Memory</span><span>{{ ag.memory }} · <span style="color:#2F6FEB">View</span></span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:600">What it can use</div>
+            <div style="border-radius:12px;background:#fff;border:1px solid rgba(0,0,0,.09)">
+              <div style="padding:12px 14px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,.06)"><span style="color:#6B6B67">Tools</span><span>{{ ag.tools }}</span></div>
+              <div style="padding:12px 14px;display:flex;justify-content:space-between"><span style="color:#6B6B67">Data</span><span>{{ ag.data }}</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:600">Where you reach it</div>
+            <div style="border-radius:12px;background:#fff;border:1px solid rgba(0,0,0,.09)">
+              <div style="padding:12px 14px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,.06)"><span>Piopio</span><span style="color:#9B9B96">Always</span></div>
+              <div style="padding:12px 14px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,.06)"><span>Telegram</span><span style="color:oklch(0.5 0.12 150)">Connected · {{ ag.handle }}</span></div>
+              <div style="padding:12px 14px;display:flex;justify-content:space-between;color:#9B9B96"><span>Slack, WhatsApp</span><span>Later</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px"><div style="font-weight:600">Limits</div>
+            <div style="border-radius:12px;background:#fff;border:1px solid rgba(0,0,0,.09)">
+              <div style="padding:12px 14px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,.06)"><span style="color:#6B6B67">Without asking</span><span>Search and read the web</span></div>
+              <div style="padding:12px 14px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,.06)"><span style="color:#6B6B67">Quiet hours</span><span>22:00 – 07:00</span></div>
+              <div style="padding:12px 14px;display:flex;justify-content:space-between"><span style="color:#6B6B67">Budget</span><span>$10 a month</span></div>
+            </div>
+          </div>
+          <div style="padding:16px 18px;border-radius:14px;background:#F4F4F2;display:flex;flex-direction:column;gap:12px">
+            <div style="line-height:1.5;color:#1F1F1E">{{ agAutoSentence }} <span style="color:#6B6B67">When they run is set in Automations, not here. You can also just ask {{ ag.name }}.</span></div>
+            <sc-for list="{{ agAutoRows }}" as="r" hint-placeholder-count="2"><div onClick="{{ r.onOpen }}" style="display:flex;justify-content:space-between;padding:9px 12px;border-radius:9px;background:#fff;cursor:pointer;opacity:{{ r.opacity }}"><span style="font-weight:550">{{ r.name }}</span><span style="color:#6B6B67">{{ r.when }}</span></div></sc-for>
+            <span onClick="{{ agAutosGo }}" style="color:#2F6FEB;cursor:pointer;align-self:flex-start">Open Automations ›</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    </div>
+   </div>
+  </sc-if>
+
+  </div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    screen: 'automations', autoId: 'weekly', agentId: 'rita', agentTab: 'chat', projectId: 'shop', filter: 'all', pop: null, empty: false, undone: false, waiting: true,
+    autos: [
+      { id: 'weekly', name: 'Weekly competitor brief', when: 'Every Monday at 09:00', runner: 'rita', project: null, result: 'channel', what: 'summarise what competitors shipped last week', prompt: 'Summarise what Acme, Brightly and Northwind shipped last week. Lead with anything that affects our pricing. Keep it under 10 lines.', on: true, isNew: true, last: 'Next: Mon 23 Nov, 09:00', next: 'Mon 23 Nov, 09:00', status: 'ok', approval: 'wait', budget: 0.25, runs: [] },
+      { id: 'price', name: 'Daily price check', when: 'Every day at 08:00', runner: 'rita', project: null, result: 'chat', what: 'check competitor prices and tell me only what changed', prompt: 'Check the pricing pages of Acme, Brightly and Northwind. If anything changed since yesterday, tell me what and by how much. Otherwise stay quiet.', on: true, last: 'Today 08:00 · sent a message', next: 'Tomorrow 08:00', status: 'ok', approval: 'wait', budget: 0.10, runs: [['Today 08:00', 'Brightly dropped Pro to $18. Sent you a message.', '$0.04'], ['Tue 08:00', 'No changes. Stayed quiet.', '$0.02'], ['Mon 08:00', 'Acme added a yearly plan. Sent you a message.', '$0.05']] },
+      { id: 'monday', name: 'Monday plan', when: 'Every Monday at 09:30', runner: 'piopio', project: 'shop', result: 'conversation', what: 'plan the week from open issues and NOTES.md', prompt: 'Read the open issues and NOTES.md. Propose a plan for this week: three priorities, what to drop, and anything blocked.', on: true, last: 'Mon 16 Nov · $0.11', next: 'Mon 23 Nov, 09:30', status: 'ok', approval: 'wait', budget: 0.25, runs: [['Mon 16 Nov', 'Started a conversation in shop with a 3-item plan.', '$0.11'], ['Mon 9 Nov', 'Started a conversation in shop with a 4-item plan.', '$0.09']] },
+      { id: 'invoices', name: 'File new invoices', when: 'When an email with an invoice arrives', runner: 'piopio', project: null, result: 'quiet', what: 'save the invoice to Invoices and add it to the spreadsheet', prompt: 'Save the attached invoice PDF to ~/Documents/Invoices and add a line to Invoices 2026.numbers with date, vendor and amount.', on: true, last: 'Tue · waited for your approval', next: 'When the next invoice arrives', status: 'waiting', approval: 'wait', budget: 0.10, runs: [['Tue 14:12', 'Wanted to file a Hetzner invoice (€48.20). Waiting for your approval.', '$0.03', 1], ['Thu 12 Nov', 'Filed a Figma invoice ($15). Stayed quiet.', '$0.02']] },
+      { id: 'morning', name: 'Morning summary', when: 'Weekdays at 07:30', runner: 'coach', project: null, result: 'channel', what: 'send me my calendar, the weather and my top 3 tasks', prompt: 'Send me today\u2019s calendar, the weather in Madrid and my top 3 tasks. Short.', on: false, last: 'Paused since Thu 12 Nov', next: 'Paused', status: 'ok', approval: 'skip', budget: 0.10, runs: [['Thu 12 Nov', 'Sent the summary on Telegram.', '$0.02']] },
+    ],
+  };
+  agents() {
+    const t = h => ({ bg: `oklch(0.91 0.06 ${h})`, fg: `oklch(0.45 0.13 ${h})` });
+    return {
+      piopio: { key: 'piopio', name: 'Piopio', initial: 'P', bg: '#1F1F1E', fg: '#fff', line: 'Works in your projects. No channels.' },
+      rita: { key: 'rita', name: 'Rita', initial: 'R', ...t(25), channel: 'Telegram', line: 'Watches Acme, Brightly and Northwind', model: 'Claude Sonnet', instructions: 'You watch our competitors: Acme, Brightly and Northwind. Be brief and factual. Flag anything that affects our pricing.', memory: '14 things learned', tools: 'Web search, read web pages', data: 'Competitors.csv', handle: '@rita_piopio_bot' },
+      coach: { key: 'coach', name: 'Coach', initial: 'C', ...t(150), channel: 'Telegram', line: 'Sends your morning summary', model: 'Claude Haiku', instructions: 'Help me start the day. Keep it short, kind and practical.', memory: '6 things learned', tools: 'Calendar, weather', data: 'Tasks', handle: '@coach_piopio_bot' },
+    };
+  }
+  upd(id, fn) { this.setState(s => ({ autos: s.autos.map(a => a.id === id ? fn({ ...a }) : a) })); }
+  renderVals() {
+    const st = this.state, A = this.agents(), ACC = '#2F6FEB';
+    const set = o => () => this.setState({ pop: null, ...o });
+    const autos = st.autos.filter(a => !(a.id === 'weekly' && st.undone));
+    const open = id => () => { this.setState({ screen: 'automation', autoId: id, pop: null }); this.upd(id, a => ({ ...a, isNew: false })); };
+    const whoName = a => a.runner === 'piopio' ? (a.project ? `Piopio in ${a.project}` : 'Piopio') : A[a.runner].name;
+    const tells = a => a.result === 'quiet' ? 'Only if it needs you' : a.result === 'chat' ? `${A[a.runner].name}'s chat` : a.result === 'channel' ? 'Telegram' : a.project ? `A conversation in ${a.project}` : 'A new conversation';
+    const sw = on => ({ swBg: on ? ACC : '#D6D6D2', swX: on ? '16px' : '2px' });
+    const av = k => ({ avBg: A[k].bg, avFg: A[k].fg, avI: A[k].initial });
+    const f = st.filter;
+    const pass = a => f === 'all' || a.runner === f || (f.startsWith('proj:') && a.project === f.slice(5));
+    const row = a => ({ ...a, ...av(a.runner), ...sw(a.on), whoName: whoName(a), tells: tells(a), isNew: !!a.isNew, opacity: a.on ? 1 : 0.45, lastColor: a.status === 'waiting' && st.waiting ? 'oklch(0.5 0.12 65)' : '#6B6B67', last: a.status === 'waiting' && !st.waiting ? 'Tue · approved' : a.last, onOpen: open(a.id), onToggle: e => { e.stopPropagation(); this.upd(a.id, x => ({ ...x, on: !x.on, last: !x.on ? `Next: ${x.next === 'Paused' ? 'Mon 23 Nov, 07:30' : x.next}` : 'Paused just now' })); } });
+    const vis = autos.filter(pass);
+    const groups = [
+      { title: 'Needs you', color: 'oklch(0.5 0.12 65)', rows: vis.filter(a => a.on && a.status === 'waiting' && st.waiting).map(row) },
+      { title: 'On', color: '#1F1F1E', rows: vis.filter(a => a.on && !(a.status === 'waiting' && st.waiting)).map(row) },
+      { title: 'Paused', color: '#9B9B96', rows: vis.filter(a => !a.on).map(row) },
+    ].filter(g => g.rows.length);
+    const chipDefs = [['all', 'All', null], ['piopio', 'Piopio', 'piopio'], ['rita', 'Rita', 'rita'], ['coach', 'Coach', 'coach']];
+    if (f.startsWith('proj:')) chipDefs.push([f, `In ${f.slice(5)}  ×`, null]);
+    const chips = chipDefs.map(([id, label, k]) => ({ label, hasAv: !!k, ...(k ? av(k) : {}), padL: k ? '4px' : '11px', bg: f === id ? '#1F1F1E' : '#EFEFEC', fg: f === id ? '#fff' : '#1F1F1E', onClick: set({ filter: f === id && id.startsWith('proj:') ? 'all' : id }) }));
+
+    const cur = autos.find(a => a.id === st.autoId) || autos[0];
+    const isAgentRunner = cur.runner !== 'piopio';
+    const rName = A[cur.runner].name;
+    const resultPhrase = { chat: `post it in ${rName}'s chat`, channel: 'tell me on Telegram', quiet: 'stay quiet unless it needs me', conversation: cur.project ? `start a conversation in ${cur.project}` : 'start a conversation' }[cur.result];
+    const s = { when: cur.when, who: rName, what: cur.what, where: cur.project ? `in ${cur.project}` : 'without a project', result: resultPhrase };
+    const togglePop = k => () => this.setState(x => ({ pop: x.pop === k ? null : k }));
+    const setRunner = k => () => { this.setState({ pop: null }); this.upd(cur.id, a => { a.runner = k; if (k !== 'piopio') { a.project = null; if (a.result === 'conversation') a.result = 'chat'; } else if (a.result === 'chat' || a.result === 'channel') a.result = 'conversation'; return a; }); };
+    const setF = (k, v) => () => { this.setState({ pop: null }); this.upd(cur.id, a => ({ ...a, [k]: v })); };
+    const hl = k => st.pop === k ? 'rgba(47,111,235,.1)' : 'transparent';
+    const whoOpts = ['piopio', 'rita', 'coach'].map(k => ({ label: A[k].name, sub: A[k].line, ...av(k), check: cur.runner === k ? '✓' : '', onClick: setRunner(k) }));
+    const whereOpts = isAgentRunner ? [] : [[null, 'Without a project'], ['shop', 'In shop'], ['Competitor research', 'In Competitor research']].map(([v, label]) => ({ label, check: cur.project === v ? '✓' : '', onClick: setF('project', v) }));
+    const resultOpts = (isAgentRunner
+      ? [['chat', `Post in ${rName}'s chat`, 'The default'], ['channel', 'Tell me on Telegram', `One of ${rName}'s channels`], ['quiet', 'Stay quiet unless it needs me', 'You only hear about problems']]
+      : [['conversation', cur.project ? `Start a conversation in ${cur.project}` : 'Start a conversation', 'The default'], ['quiet', 'Stay quiet unless it needs me', 'You only hear about problems']]
+    ).map(([v, label, sub]) => ({ label, sub, check: cur.result === v ? '✓' : '', onClick: setF('result', v) }));
+    const approvalOpts = [['wait', 'Wait for me', 'Shows in Home, under Waiting on you'], ['skip', 'Skip this run', 'Tries again next time']].map(([v, label, sub]) => ({ label, sub, border: cur.approval === v ? ACC : 'rgba(0,0,0,.09)', onClick: setF('approval', v) }));
+    const budgetOpts = [0.1, 0.25, 0.5, 1].map(v => ({ label: '$' + v.toFixed(2), bg: cur.budget === v ? '#1F1F1E' : '#EFEFEC', fg: cur.budget === v ? '#fff' : '#1F1F1E', onClick: setF('budget', v) }));
+    const runs = cur.runs.map(([when, what, cost, w]) => ({ when, what, cost, color: w && st.waiting ? 'oklch(0.5 0.12 65)' : w === 2 ? ACC : '#1F1F1E' }));
+    const curSw = sw(cur.on);
+
+    const ag = A[st.agentId] || A.rita;
+    const agAutos = autos.filter(a => a.runner === ag.key);
+    const n = agAutos.length;
+    const agTabs = [['chat', 'Chat'], ['setup', 'Setup']].map(([id, label]) => ({ label, w: st.agentTab === id ? 600 : 400, c: st.agentTab === id ? '#1F1F1E' : '#6B6B67', line: st.agentTab === id ? '#1F1F1E' : 'transparent', onClick: set({ agentTab: id }) }));
+    const sideAgents = ['rita', 'coach'].map(k => ({ ...A[k], rowBg: 'transparent', onClick: set({ screen: 'agent', agentId: k, agentTab: 'chat' }) }));
+    const pv = { rita: ['08:00', 'Brightly dropped its Pro plan from $24 to $18…'], coach: ['Thu', 'Paused Morning summary. Ask me to turn it…'] };
+    const roster = ['rita', 'coach'].map(k => ({ ...A[k], time: pv[k][0], preview: pv[k][1], rowBg: st.agentId === k ? '#EAEAE6' : 'transparent', onClick: set({ agentId: k }) }));
+    const projs = { shop: { name: 'shop', path: '~/code/shop' }, research: { name: 'Competitor research', path: '~/Documents/Competitor research' } };
+    const proj = projs[st.projectId];
+    const projN = autos.filter(a => a.project === proj.name).length;
+    const sideProjects = Object.entries(projs).map(([k, p]) => ({ name: p.name, rowBg: 'transparent', onClick: set({ screen: 'automations', filter: 'proj:' + p.name, empty: false }) }));
+
+    const sc = st.screen;
+    const strip = [
+      ['Automations', { screen: 'automations', empty: false, filter: 'all' }, sc === 'automations' && !st.empty],
+      ['Automation page', { screen: 'automation', autoId: 'weekly' }, sc === 'automation'], ['Creation card in chat', { screen: 'agent', agentId: 'rita', agentTab: 'chat' }, sc === 'agent' && st.agentTab === 'chat'],
+      ['Agent Setup', { screen: 'agent', agentId: 'rita', agentTab: 'setup' }, sc === 'agent' && st.agentTab === 'setup'],
+      ['Automations empty state', { screen: 'automations', empty: true }, sc === 'automations' && st.empty],
+    ].map(([label, o, on]) => ({ label, bg: on ? '#1F1F1E' : 'rgba(0,0,0,.06)', fg: on ? '#fff' : '#1F1F1E', onClick: set({ ...o, ...(o.screen !== 'automations' ? { empty: false } : {}) }) }));
+
+    const line = (t, id, what) => ({ t, name: (autos.find(a => a.id === id) || {}).name || 'Weekly competitor brief', what, onClick: open(id) });
+    return {
+      strip, sideAgents, sideProjects, roster, navAgentsBg: sc === 'agent' ? '#EAEAE6' : 'transparent', goAgents: set({ screen: 'agent', agentTab: st.agentTab }),
+      autoCount: autos.filter(a => a.on).length,
+      navHomeBg: sc === 'home' ? '#EAEAE6' : 'transparent', navListBg: sc === 'automations' || sc === 'automation' ? '#EAEAE6' : 'transparent',
+      goHome: set({ screen: 'home' }), goList: set({ screen: 'automations' }),
+      isList: sc === 'automations', isAuto: sc === 'automation', isAgent: sc === 'agent', isHome: sc === 'home', isProject: sc === 'project',
+      chips, groups, showEmpty: st.empty, showRows: !st.empty,
+      cur: { ...cur, whoShort: rName }, s, curOpacity: cur.on ? 1 : 0.5, curOnLabel: cur.on ? 'On' : 'Paused', curSwBg: cur.on ? ACC : '#D6D6D2', curSwX: cur.on ? '18px' : '2px', toggleCur: () => this.upd(cur.id, a => ({ ...a, on: !a.on })),
+      openWho: togglePop('who'), openWhere: togglePop('where'), openResult: togglePop('result'),
+      popWho: st.pop === 'who', popWhere: st.pop === 'where', popResult: st.pop === 'result',
+      whoHl: hl('who'), whereHl: hl('where'), resultHl: hl('result'),
+      whereColor: isAgentRunner ? '#9B9B96' : ACC, whereLine: isAgentRunner ? 'rgba(0,0,0,.2)' : 'rgba(47,111,235,.5)',
+      whoOpts, whereOpts, resultOpts,
+      whereNote: isAgentRunner ? `Only Piopio works in a project. ${rName} always works without one. To use a project, have Piopio run this.` : '',
+      resultNote: isAgentRunner ? '' : 'Piopio has no channels. To get results on Telegram, have one of your agents run this.',
+      approvalOpts, budgetOpts,
+      mayUse: isAgentRunner ? `${rName}'s tools: ${A[cur.runner].tools.toLowerCase()}.` : cur.project ? `${cur.project}'s permissions: read and edit files, ask before running commands.` : 'Piopio\u2019s tools: web search and the files you share with it.',
+      mayUseLink: isAgentRunner ? `${rName}'s Setup ›` : cur.project ? 'Project settings ›' : '',
+      mayUseGo: isAgentRunner ? set({ screen: 'agent', agentId: cur.runner, agentTab: 'setup' }) : set({ screen: 'automations', filter: 'proj:' + cur.project, empty: false }),
+      runs, noRuns: runs.length === 0,
+      runNow: () => this.upd(cur.id, a => ({ ...a, runs: [['Just now', 'Running…', '—', 2], ...a.runs] })),
+      deleteCur: () => { this.setState(x => ({ screen: 'automations', autos: x.autos.filter(a => a.id !== cur.id) })); },
+      ag, agTabs, isChat: st.agentTab === 'chat', isSetup: st.agentTab === 'setup', isRita: ag.key === 'rita', isCoach: ag.key === 'coach',
+      agAutosLink: n === 1 ? '1 automation ›' : `${n} automations ›`, agAutosGo: set({ screen: 'automations', filter: ag.key, empty: false }),
+      agAutoSentence: n ? `${ag.name} runs ${n === 1 ? '1 automation' : n + ' automations'}.` : `${ag.name} doesn't run any automations.`,
+      agAutoRows: agAutos.map(a => ({ name: a.name, when: a.on ? a.when : 'Paused', opacity: a.on ? 1 : 0.5, onOpen: open(a.id) })),
+      cardLive: !st.undone, cardUndone: st.undone, undo: () => this.setState({ undone: true }), redo: () => this.setState({ undone: false }),
+      openWeekly: open('weekly'), openPrice: open('price'), openInvoices: open('invoices'),
+      waiting: st.waiting, approve: () => this.setState({ waiting: false }),
+      today: [line('08:00', 'price', 'Rita sent you a message: Brightly dropped Pro to $18.'), line('Any time', 'invoices', 'runs when the next invoice email arrives.'), line('Mon', 'weekly', 'first run, 09:00 on Telegram.')],
+      away: [line('Tue', 'invoices', 'Piopio waited for your approval.'), line('Mon', 'monday', 'Piopio started a conversation in shop · $0.11'), line('Mon', 'price', 'Rita: Acme added a yearly plan.')],
+      proj, projHas: projN > 0, projNone: projN === 0, projLink: projN === 1 ? '1 automation works here' : `${projN} automations work here`, projGo: set({ screen: 'automations', filter: 'proj:' + proj.name, empty: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

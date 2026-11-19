@@ -1697,6 +1697,8 @@ export const methods = {
 	"automations.add": { params: Type.Intersect([AutomationChange, Type.Object({ prompt: Type.String() })]), result: Type.Object({ automation: Automation }) },
 	"automations.update": { params: Type.Intersect([Type.Object({ id: Type.String() }), AutomationChange]), result: Type.Object({ automation: Automation }) },
 	"automations.remove": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
+	/** Redo after Undo (a creation card): one removed since the engine started comes back as it was. */
+	"automations.restore": { params: Type.Object({ id: Type.String() }), result: Type.Object({ automation: Automation }) },
 	/** Run now: a run even while it's paused. */
 	"automations.run": { params: Type.Object({ id: Type.String() }), result: Type.Object({ run: AutomationRun }) },
 	"automations.runs": { params: Type.Object({ id: Type.Optional(Type.String()), limit: Type.Optional(Type.Number()) }), result: Type.Object({ runs: Type.Array(AutomationRun) }) },

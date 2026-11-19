@@ -93,6 +93,11 @@ test("Piopio makes automations in a project by asking; a file, a URL and Run now
 	expect((await fetch(hook.url!, { method: "POST", body: "again" })).status).toBeGreaterThanOrEqual(400);
 	await client.call("automations.remove", { id: set[1]!.id });
 	expect((await list(client, { project })).map((a) => a.on)).toEqual(["time", "webhook"]);
+	// Redo (a card's Undo, then Redo): it comes back as it was, once.
+	const back = (await client.call("automations.restore", { id: set[1]!.id })) as { automation: A };
+	expect(back.automation).toMatchObject({ id: set[1]!.id, on: "folder", prompt: "Summarize the new report" });
+	expect((await list(client, { project })).map((a) => a.on).sort()).toEqual(["folder", "time", "webhook"]);
+	await client.call("automations.remove", { id: set[1]!.id });
 }, 60_000);
 
 test("an agent makes its own automations by asking: they run as it, in a run of its own, and the rules keep it to itself", async () => {

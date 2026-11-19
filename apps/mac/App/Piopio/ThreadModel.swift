@@ -309,6 +309,12 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automation(id).raw)
         case .removeAutomation(let id):
             Task { do { try await engine?.removeAutomation(id) } catch { report(error) } }
+        case .restoreAutomation(let id):
+            Task { do { try await engine?.restoreAutomation(id) } catch { report(error) } }
+        case .undoAutomation(let id, let undoId):
+            // The document turns it into one of these first; kept for completeness.
+            if let undoId { Task { do { try await engine?.undo(ref, undoId: undoId) } catch { report(error) } } }
+            else { Task { do { try await engine?.removeAutomation(id) } catch { report(error) } } }
         case .quote(let text):
             // Select and ask: the fragment as a Markdown quote, above what's already in the composer.
             draft = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }.joined(separator: "\n") + "\n\n"

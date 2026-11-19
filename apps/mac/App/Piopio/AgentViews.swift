@@ -114,7 +114,7 @@ struct AgentPage: View {
     @State private var runs: AgentRunsResult?
     @State private var def: AgentDef?
     @State private var instructions = ""
-    /// The Setup section a glance cell opens.
+    /// The Setup section to open at.
     @State private var setupSection: String?
     /// Agents whose identity card you've answered (ids, comma-separated).
     @AppStorage("agentIntroSeen") private var introSeen = ""
@@ -136,8 +136,6 @@ struct AgentPage: View {
                     tab = .chat
                 }
             default:
-                // A draft has nothing to glance at yet: just its question (design 5a-1).
-                if summary.agent?.draft != true { glance }
                 if let conversation { backBar(conversation) }
                 chat
             }
@@ -231,193 +229,98 @@ struct AgentPage: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 
-    /// Avatar, name and its one line; Chat | Setup, Run now and the rest in a menu (design 2a).
+    /// Who it is, at the top of its page (the agents and automations handoff, screen 1): its tile, its name, "what it's
+    /// for · its model", a link to its automations, and Chat · Setup. Run now, pause and the rest are in ⋯.
     private var header: some View {
-        PageHeader {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center, spacing: 16) {
                 if summary.agent?.draft == true {
                     // Not anyone yet: a dashed outline until it sets itself up.
-                    RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.dsFg3, style: StrokeStyle(lineWidth: 1, dash: [3, 2])).frame(width: 22, height: 22)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.dsFg3, style: StrokeStyle(lineWidth: 1, dash: [4, 3])).frame(width: 64, height: 64)
                 } else {
-                    SidebarAvatar(id: summary.ref.id, name: summary.title, glyph: summary.agent?.avatar, size: 22)
-                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(AgentHue.color(summary.ref.id).opacity(alive ? 0.18 : 0)).padding(-6))
-                        .scaleEffect(alive ? 1.12 : 1)
+                    AgentTile(id: summary.ref.id, name: summary.title, glyph: summary.agent?.avatar, size: 64)
+                        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(AgentHue.color(summary.ref.id).opacity(alive ? 0.22 : 0)).padding(-8))
+                        .scaleEffect(alive ? 1.08 : 1)
                 }
-                Text(summary.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)
-                if summary.agent?.draft == true, let q = AgentQuickReplies.question(engine.thread(summary.ref).document.items) {
-                    Text(q).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-                }
-                if let line = summary.agent?.description ?? def?.description, !line.isEmpty {
-                    Text(line).font(.system(size: 13)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                }
-                if summary.agent?.status?.paused == true {
-                    Text("Paused").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6).padding(.vertical, 1).background(Color.dsChip, in: Capsule())
-                }
-            }
-        } actions: {
-            if summary.agent?.invalid == true {
-                Button("Setup has errors") { tab = .setup }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-            }
-            // Its automations (docs/spec/27 AU3): they live in Automations; the header leads there.
-            let count = engine.automations.filter { $0.runsAs == summary.ref.id }.count
-            if count > 0 {
-                Button("\(count) automation\(count == 1 ? "" : "s") ›") { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automations(summary.ref.id).raw) }
-                    .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
-            }
-            NeutralSegmented(selection: Binding(get: { tab == .setup ? "setup" : "chat" }, set: { tab = $0 == "setup" ? .setup : .chat }), options: [("chat", "Chat"), ("setup", "Setup")])
-                .frame(width: 150)
-            Button("Run now", action: runNow).buttonStyle(PillStyle(compact: true)).help("Run its next automation now, or its usual check")
-            Menu {
-                if let status = summary.agent?.status {
-                    Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
-                    Divider()
-                }
-                let others = people.filter { $0.role != "owner" }
-                if !others.isEmpty {
-                    Menu("Conversations") {
-                        Button("Yours") { conversation = nil; tab = .chat }
-                        ForEach(others) { p in Button(p.role == "agent" ? "\(p.name) (agent)" : p.name) { conversation = p.conversationId; tab = .chat } }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(summary.title).font(.system(size: 24, weight: .bold)).tracking(-0.5).foregroundStyle(Color.dsFg).lineLimit(1)
+                        if summary.agent?.status?.paused == true {
+                            Text("Paused").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6).padding(.vertical, 1).background(Color.dsChip, in: Capsule())
+                        }
                     }
-                    Divider()
+                    Text(identityLine).font(.system(size: 13)).foregroundStyle(Color.dsFg2).lineLimit(1)
                 }
-                Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
-            } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
-                .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-                .help("Pause, conversations, Finder")
+                Spacer(minLength: 12)
+                if summary.agent?.invalid == true {
+                    Button("Setup has errors") { tab = .setup }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                }
+                // Its automations (docs/spec/27 AU3): they live in Automations; the header leads there.
+                let count = engine.automations.filter { $0.runsAs == summary.ref.id }.count
+                if count > 0 {
+                    Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automations(summary.ref.id).raw) } label: {
+                        Text("\(count) automation\(count == 1 ? "" : "s") ›").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open Automations, showing \(summary.title)'s")
+                }
+                moreMenu
+            }
+            HStack(spacing: 22) {
+                tabButton(.chat)
+                tabButton(.setup)
+            }
         }
-    }
-
-    // MARK: Glance
-
-    /// Four things at a glance (design 2a): when it acts next, what it can do, where it reaches you, what it spends.
-    /// Each opens its section in Setup.
-    private var glance: some View {
-        HStack(spacing: 0) {
-            automationsCell
-            divider
-            cell("Can", section: "What it can use") { Text(canLine).lineLimit(1) }
-            divider
-            cell("Reaches you", section: "Who it talks to") { reachesLine }
-            divider
-            cell("This month", section: "Limits") { spendLine }
-        }
-        .frame(height: 58)
-        .overlay(alignment: .top) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+        .padding(.top, 24)
+        .padding(.leading, 40).padding(.trailing, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .gesture(WindowDragGesture())
         .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 
-    private var divider: some View { Rectangle().fill(Color.dsLine).frame(width: 0.5) }
+    /// "Watches Acme, Brightly and Northwind · Claude Sonnet", or a new agent's question while it learns its job.
+    private var identityLine: String {
+        if summary.agent?.draft == true { return AgentQuickReplies.question(engine.thread(summary.ref).document.items) ?? "Learning its job" }
+        let model = engine.model(modelRef(summary.agent?.model)).map(ModelChip.short) ?? summary.agent?.model
+        return [summary.agent?.description ?? def?.description, model].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
+    }
 
-    private func cell<V: View>(_ label: String, section: String, @ViewBuilder value: () -> V) -> some View {
-        Button {
-            setupSection = section
-            tab = .setup
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(label).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                value().font(.system(size: 13)).foregroundStyle(Color.dsFg)
-            }
-            .padding(.horizontal, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+    private func tabButton(_ t: Tab) -> some View {
+        let on = tab == t || (t == .chat && tab == .activity)
+        return Button { tab = t } label: {
+            Text(t.rawValue).font(.system(size: 13, weight: on ? .semibold : .regular)).foregroundStyle(on ? Color.dsFg : Color.dsFg2)
+                .padding(.bottom, 10)
+                .overlay(alignment: .bottom) { if on { Rectangle().fill(Color.dsFg).frame(height: 2) } }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Change it in Setup")
+        .keyboardShortcut(t == .chat ? "1" : "2", modifiers: [.command, .option])
     }
 
-    /// Its automations (docs/spec/27 AU3): the next one, or how many; it opens them in Automations.
-    private var automationsCell: some View {
-        let mine = engine.automations.filter { $0.runsAs == summary.ref.id && $0.enabled }
-        let next = mine.filter { $0.next != nil }.min { ($0.next ?? 0) < ($1.next ?? 0) }
-        return Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automations(summary.ref.id).raw) } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Next").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                Group {
-                    if summary.agent?.status?.paused == true {
-                        Text("Paused").foregroundStyle(Color.dsFg2)
-                    } else if let next, let at = next.next {
-                        Text("\(MainSidebar.when(AutomationText.date(at)).capitalizedFirst)\(Text(" · \(next.name)").foregroundStyle(Color.dsFg3))").lineLimit(1)
-                    } else if !mine.isEmpty {
-                        Text(mine.count == 1 ? "When something happens" : "\(mine.count) automations").foregroundStyle(Color.dsFg2)
-                    } else {
-                        Text("Only when you ask").foregroundStyle(Color.dsFg2)
-                    }
-                }
-                .font(.system(size: 13))
+    /// Run now, pause, its other conversations, Finder.
+    private var moreMenu: some View {
+        Menu {
+            Button("Run Now", action: runNow)
+            if let status = summary.agent?.status {
+                Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
             }
-            .padding(.horizontal, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Its automations")
-    }
-
-    /// "Tomorrow 8:00 · weekdays", "When an email arrives", "Nothing scheduled".
-    @ViewBuilder private var nextLine: some View {
-        let timed = (runs?.upcoming ?? []).filter { $0.next != nil }.sorted { ($0.next ?? "") < ($1.next ?? "") }
-        if summary.agent?.status?.paused == true {
-            Text("Paused").foregroundStyle(Color.dsFg2)
-        } else if let first = timed.first, let next = first.next {
-            let schedule = def?.schedules?.first { $0.id == first.id }
-            (Text(HomeView.at(next).replacingOccurrences(of: " at ", with: " ")) + Text((schedule?.cron ?? first.cron).flatMap(Self.cadence).map { " · \($0)" } ?? "").foregroundStyle(Color.dsFg3))
-                .lineLimit(1)
-        } else if let next = summary.agent?.status?.nextRun {
-            Text(HomeView.at(next)).lineLimit(1)
-        } else if (runs?.upcoming ?? []).contains(where: { $0.kind == "watch" }) {
-            Text("When something happens").foregroundStyle(Color.dsFg2)
-        } else {
-            Text("Only when you ask").foregroundStyle(Color.dsFg2)
-        }
-    }
-
-    /// "weekdays", "every day", "Mondays": how often a cron fires, in a word or two.
-    static func cadence(_ cron: String) -> String? {
-        let f = cron.split(separator: " ").map(String.init)
-        guard f.count == 5, f[2] == "*", f[3] == "*" else { return nil }
-        switch f[4] {
-        case "*": return "every day"
-        case "1-5": return "weekdays"
-        case "0,6", "6,0": return "weekends"
-        default:
-            let names = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"]
-            return Int(f[4]).map { names[$0 % 7] }
-        }
-    }
-
-    /// "Web · Memory · Message you".
-    private var canLine: String {
-        guard let def else { return "…" }
-        var out: [String] = []
-        let tools = Set(def.tools.builtin)
-        if tools.contains("web_search") || tools.contains("web_fetch") { out.append("Web") }
-        if tools.contains("memory") { out.append("Memory") }
-        if tools.contains("send_message") { out.append("Message you") }
-        for app in def.tools.apple ?? [] { out.append(app.capitalized) }
-        return out.isEmpty ? "Only talk" : out.joined(separator: " · ")
-    }
-
-    /// "In Piopio · Add Telegram", or "In Piopio · Telegram".
-    private var reachesLine: some View {
-        let telegram = def?.channels?["telegram"] != nil
-        return (Text("In Piopio") + Text(telegram ? " · Telegram" : " · Add Telegram").foregroundStyle(telegram ? Color.dsFg : Color.accentColor)).lineLimit(1)
-    }
-
-    /// "$0.05 of $15", with a bar.
-    private var spendLine: some View {
-        let status = summary.agent?.status
-        let spent = status?.spendUsd ?? 0
-        let budget = status?.budgetUsd
-        return HStack(spacing: 8) {
-            Text(budget.map { "\(MainSidebar.money(spent)) of \(MainSidebar.money($0))" } ?? MainSidebar.money(spent)).lineLimit(1)
-            if let budget, budget > 0 {
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.dsChip)
-                    Capsule().fill(spent / budget >= 0.8 ? Color.dsAmber : Color.accentColor).frame(width: 80 * min(1, spent / budget))
+            Divider()
+            let others = people.filter { $0.role != "owner" }
+            if !others.isEmpty {
+                Menu("Conversations") {
+                    Button("Yours") { conversation = nil; tab = .chat }
+                    ForEach(others) { p in Button(p.role == "agent" ? "\(p.name) (agent)" : p.name) { conversation = p.conversationId; tab = .chat } }
                 }
-                .frame(width: 80, height: 4)
+                Divider()
             }
-        }
+            Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
+        } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
+            .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
+            .help("Run now, pause, conversations, Finder")
     }
 
     private func runNow() {

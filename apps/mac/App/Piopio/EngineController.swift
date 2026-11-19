@@ -806,6 +806,15 @@ final class EngineController {
         await loadAutomations()
     }
 
+    /// Redo after a card's Undo: it comes back as it was (while the engine still has it).
+    @discardableResult
+    func restoreAutomation(_ id: String) async throws -> Automation {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let back = try await client.call("automations.restore", AutomationIdParams(id: id), as: AutomationResult.self).automation
+        await loadAutomations()
+        return back
+    }
+
     /// Run now, even while it's paused.
     func runAutomation(_ id: String) async throws -> AutomationRun {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }

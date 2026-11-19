@@ -27,6 +27,46 @@ enum DebugAutomation {
         _ = try? await client.call("memory.add", MemoryAddParams(provider: "builtin", bank: "\(ref.id)/shared", text: "The family calendar is the shared one called Home"), as: Empty.self)
     }
 
+    private static func seedAutomations(_ engine: EngineController, screen: String) async {
+        let select = { (item: SidebarItem) in NotificationCenter.default.post(name: .selectItem, object: item.raw) }
+        if screen == "empty" { select(.automations(nil)); return }
+        guard let rita = try? await engine.createAgent(name: "Rita", template: nil, avatar: "", instructions: "Watch what Acme, Brightly and Northwind ship and what they charge. Tell me what changed, briefly.", schedule: .none),
+              let coach = try? await engine.createAgent(name: "Coach", template: nil, avatar: "", instructions: "Keep me to my training plan.", schedule: .none) else { return }
+        for (ref, line) in [(rita, "Watches Acme, Brightly and Northwind"), (coach, "Keeps you to your training plan")] {
+            if let got = await engine.agentDefinition(ref), var def = AgentDef(got.definition) {
+                def.description = line
+                _ = try? await engine.saveAgent(ref, definition: def.json, instructions: got.instructions, message: "One line")
+            }
+        }
+        try? await engine.refreshCatalog()
+        let folder = FileManager.default.temporaryDirectory.appending(path: "Invoices").path
+        try? FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        _ = try? await engine.addAutomation(AutomationChange(name: "Daily price check", when: "0 8 * * *", runsAs: rita.id, prompt: "call: send_message | {\"to\":\"owner\",\"text\":\"Brightly dropped its Pro plan from $24 to $18 a month overnight. Acme and Northwind didn't change.\"}", result: "chat"))
+        _ = try? await engine.addAutomation(AutomationChange(name: "File new invoices", on: "folder", folder: folder, runsAs: "piopio", prompt: "Read the new invoice, file it under its supplier and tell me the total.", result: "quiet"))
+        if let morning = try? await engine.addAutomation(AutomationChange(name: "Morning summary", when: "30 7 * * 1-5", runsAs: coach.id, prompt: "Summarise today's training and what I ate yesterday.", result: "chat")) {
+            _ = try? await engine.updateAutomation(morning.id, AutomationChange(enabled: false))
+        }
+        // The price check runs once: its message in Rita's chat carries "From Daily price check".
+        if let check = engine.automations.first(where: { $0.name == "Daily price check" }) { _ = try? await engine.runAutomation(check.id) }
+        try? await Task.sleep(for: .seconds(2))
+        // Rita makes one in her chat: the creation card ("from": only the run's message, with its label).
+        if screen == "from" { UserDefaults.standard.set("Chat", forKey: "agentTab"); select(.agent(rita.id)); return }
+        let owner = engine.thread(rita)
+        await owner.open()
+        await owner.send("call: automate | {\"when\":\"0 9 * * 1\",\"name\":\"Weekly competitor brief\",\"prompt\":\"Summarise what competitors shipped last week. Lead with anything that affects our pricing. Keep it under 10 lines.\"}")
+        for _ in 0..<60 {
+            try? await Task.sleep(for: .milliseconds(100))
+            if owner.state?.status == .idle { break }
+        }
+        await engine.loadAutomations()
+        switch screen {
+        case "page": if let a = engine.automations.first(where: { $0.name == "Weekly competitor brief" }) { select(.automation(a.id)) }
+        case "chat": UserDefaults.standard.set("Chat", forKey: "agentTab"); select(.agent(rita.id))
+        case "setup": UserDefaults.standard.set("Setup", forKey: "agentTab"); select(.agent(rita.id))
+        default: select(.automations(nil))
+        }
+    }
+
     static func run(engine: EngineController) {
         let env = ProcessInfo.processInfo.environment
         if let path = env["PIOPIO_RECOVERY_REPORT"] {
@@ -199,6 +239,12 @@ enum DebugAutomation {
                 try? await Task.sleep(for: .seconds(1))
                 ThreadModel.openSettings()
             }
+        }
+        // PIOPIO_DEMO_AUTOMATIONS=list|page|chat|setup|empty: two agents (Rita, Coach) and a few automations, one made in
+        // Rita's chat (its card) and one run that wrote to her (its "From" label), then that screen (the agents and
+        // automations handoff's captures).
+        if let screen = env["PIOPIO_DEMO_AUTOMATIONS"], engine.status == .ready {
+            Task { await seedAutomations(engine, screen: screen) }
         }
         // PIOPIO_DEMO_AGENT=<template>: a new agent "Coach"; PIOPIO_DEMO_AGENT_MESSAGES: messages to it ("||");
         // PIOPIO_DEMO_AGENT_CONTACT=<name>: add that contact and write as them once; PIOPIO_DEMO_AGENT_TAB: the tab to show.

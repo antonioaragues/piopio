@@ -31,6 +31,8 @@ nonisolated struct ItemRenderer: Sendable {
     /// The automations that exist now (docs/spec/27); nil until the app says. A card for one that's gone reads
     /// "Removed".
     var automations: Set<String>?
+    /// Automations undone from their card here: once gone they read "Undone … Redo" rather than "Removed".
+    var undoneAutomations: Set<String> = []
 
     /// Answers 15 / 1.6 (chat v3); Quick Chat keeps the compact 13.5.
     private var bodySize: CGFloat { compact ? DS.transcriptSize : 15 }
@@ -124,8 +126,9 @@ nonisolated struct ItemRenderer: Sendable {
             guard case .object(let details)? = t.details, case .object(let s)? = details["automation"], let id = s["id"]?.stringValue else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
             let summary = AutomationSummary(id: id, name: s["name"]?.stringValue ?? "Automation", when: s["when"]?.stringValue ?? "", runsAs: s["runsAs"]?.stringValue ?? "",
                                             does: s["does"]?.stringValue ?? "", tellsYou: s["tellsYou"]?.stringValue ?? "", runsOn: s["runsOn"]?.stringValue ?? "", url: s["url"]?.stringValue)
-            let changed = t.tool == "change_automation"
-            return automationCard(summary, undo: changed ? nil : .removeAutomation(id: id), changed: changed)
+            var withNext = summary
+            if case .number(let next)? = s["next"] { withNext.next = next }
+            return automationCard(withNext, undoId: nil, changed: t.tool == "change_automation")
         case .tool(let t) where t.tool == "side_propose" && t.status == .done:
             return sideProposal(t)
         case .tool(let t) where t.tool == "propose_plan":
@@ -148,6 +151,22 @@ nonisolated struct ItemRenderer: Sendable {
             // its last answer, and "Open" shows the run's own conversation.
             let run = s.run!
             let when = Self.date(s.at).map { Self.dayAndTime($0) } ?? ""
+            if let origin = run.automation, !compact {
+                // An automation's run (the handoff's screen 2): "From Daily price check · 08:00" over what it wrote; it
+                // opens the automation. A run that didn't write says how it went under it.
+                let out = NSMutableAttributedString(attributedString: originTag(origin, when: when))
+                guard !(run.status == "done" && run.sent > 0) else { return out }
+                let outcome = s.text.components(separatedBy: " · ").dropFirst().joined(separator: " · ")
+                guard let summary = run.summary, !summary.isEmpty, run.status != "running" else {
+                    out.append(note(outcome.capitalizedFirstLetter, dot: run.status == "failed" ? DS.amber : nil))
+                    return out
+                }
+                let card = DisclosureCard(kind: .thinking, title: outcome.capitalizedFirstLetter, body: summary)
+                card.action = ("Open", .openSession("run:\(run.id)"))
+                card.failed = run.status == "failed"
+                out.append(thinkingCard(card))
+                return out
+            }
             let title = when.isEmpty ? s.text : "\(when) · \(s.text)"
             guard let summary = run.summary, !summary.isEmpty, run.status != "running" else { return note(title, dot: run.status == "failed" ? DS.amber : nil) }
             let card = DisclosureCard(kind: .thinking, title: title, body: summary)
@@ -196,26 +215,40 @@ nonisolated struct ItemRenderer: Sendable {
         return actionCard(title: title, meta: a.tool, secondary: [deny, CardButton(title: "Edit…", action: .editApproval(approvalId: a.approvalId))], primary: allow)
     }
 
-    /// An automation made in the conversation (docs/spec/27 §4): what it is in four lines, Open in Automations and
-    /// Undo. Once it's gone (undone, or removed in Automations) a grey line says so.
-    func automationCard(_ s: AutomationSummary, undo: TranscriptAction?, changed: Bool = false) -> NSAttributedString {
-        if let known = automations, !known.contains(s.id) { return note("Removed · \(s.name)") }
-        if compact { return note("\(changed ? "Changed" : "New automation") · \(s.name)") }
-        var lines: [(text: String, color: NSColor)] = [("\(s.when) · runs as \(s.runsAs)", DS.fg2)]
-        if !s.does.isEmpty { lines.append((s.does, DS.fg2)) }
-        lines.append(("Tells you: \(s.tellsYou) · \(s.runsOn)", DS.fg3))
-        if let url = s.url { lines.append(("Its address: \(url)", DS.fg3)) }
-        return actionCard(title: "\(changed ? "Changed" : "New automation") · \(s.name)", lines: lines,
-                          secondary: undo.map { [CardButton(title: "Undo", action: $0)] } ?? [],
-                          primary: CardButton(title: "Open in Automations", action: .openAutomation(id: s.id)))
+    /// "From **Daily price check** · 08:00": a soft capsule above a message an automation sent; it opens the automation.
+    func originTag(_ origin: SystemItem.Run.Origin, when: String) -> NSAttributedString {
+        let time = when.hasPrefix("Today ") ? String(when.dropFirst(6)) : when
+        let link = TranscriptAction.openAutomation(id: origin.id).url
+        let base: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11.5), .foregroundColor: DS.fg2, .link: link, .piopioPill: PillStyle.tag.rawValue, .toolTip: "Open \(origin.name) in Automations"]
+        let m = NSMutableAttributedString(string: "\u{2009}\u{2009}\u{2009}From ", attributes: base)
+        var bold = base
+        bold[.font] = NSFont.systemFont(ofSize: 11.5, weight: .semibold)
+        m.append(NSAttributedString(string: origin.name, attributes: bold))
+        m.append(NSAttributedString(string: (time.isEmpty ? "" : " · \(time)") + "\u{2009}\u{2009}\u{2009}", attributes: base))
+        m.append(NSAttributedString(string: "\n"))
+        let p = NSMutableParagraphStyle()
+        p.paragraphSpacingBefore = 10
+        p.paragraphSpacing = 4
+        p.minimumLineHeight = 22
+        m.addAttribute(.paragraphStyle, value: p, range: NSRange(location: 0, length: m.length))
+        return m
+    }
+
+    /// An automation made in the conversation (docs/spec/27 §4, the handoff's creation card): its name, When · Runs as ·
+    /// Does · Tells you, where it runs, Open in Automations and Undo. Once it's gone (undone, or removed in Automations)
+    /// one line says so, with Redo.
+    func automationCard(_ s: AutomationSummary, undoId: String?, changed: Bool = false, undone: Bool = false) -> NSAttributedString {
+        let gone = automations.map { !$0.contains(s.id) } ?? false
+        if compact { return note(gone ? "Removed · \(s.name)" : "\(changed ? "Changed" : "New automation") · \(s.name)") }
+        let state: AutomationCardModel.State = !gone ? .live : (undone || undoneAutomations.contains(s.id)) ? .undone : .removed
+        return attachmentParagraph(AutomationCardAttachment(model: AutomationCardModel(summary: s, changed: changed, state: state, undoId: undoId)), spacing: 14)
     }
 
     /// What a tool changed (06-agents §4.2 RC1): the change, and Undo while it can be undone.
     private func resultCard(_ r: ResultItem) -> NSAttributedString {
         // An agent's automation (docs/spec/27 §4): the same card as Piopio's, with the agent's own Undo.
         if r.card.kind == "automation", let s = r.card.automation {
-            if r.undo?.status == .undone { return note("Undone · \(r.card.title)") }
-            return automationCard(s, undo: r.undo?.status == .available ? .undoChange(undoId: r.undo!.id) : nil, changed: r.card.title.hasPrefix("Changed"))
+            return automationCard(s, undoId: r.undo?.status == .available ? r.undo!.id : nil, changed: r.card.title.hasPrefix("Changed"), undone: r.undo?.status == .undone)
         }
         let icon = switch r.card.kind { case "reminder": "◷"; case "message": "✉︎"; default: "✎" }
         let undone = r.undo?.status == .undone
@@ -1221,3 +1254,8 @@ public enum ModelNames {
     }
 }
 
+
+extension String {
+    /// "nothing new" → "Nothing new".
+    var capitalizedFirstLetter: String { isEmpty ? self : prefix(1).uppercased() + dropFirst() }
+}

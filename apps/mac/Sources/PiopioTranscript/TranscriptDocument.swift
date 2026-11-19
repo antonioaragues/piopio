@@ -168,6 +168,12 @@ public final class TranscriptDocument {
             NSPasteboard.general.setString(text, forType: .string)
             return
         }
+        if case .undoAutomation(let id, let undoId) = action {
+            // Its card then reads "Undone … Redo" (docs/spec/27 §4), not "Removed".
+            renderer.undoneAutomations.insert(id)
+            onAction?(undoId.map { .undoChange(undoId: $0) } ?? .removeAutomation(id: id))
+            return
+        }
         onAction?(action)
     }
 
@@ -786,6 +792,7 @@ public final class TranscriptDocument {
             (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
             (value as? DisclosureAttachment)?.card.onAction = { [weak self] action in self?.handle(action) }
             (value as? FileCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
+            (value as? AutomationCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             (value as? SideOfferAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             if let visual = (value as? VisualAttachment)?.model {
                 visual.onAction = { [weak self] action in self?.handle(action) }

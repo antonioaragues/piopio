@@ -3,10 +3,11 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The Setup tab (docs/spec/21 D3, design 2c): a form over agent.json and instructions.md, ordered by questions (What it
-/// does · What it can use · Who it talks to · What it knows · Limits · Automations), with them on the left and "History ·
-/// View as file" at its foot. Saving validates first; errors show at the top with their path. Each save is a commit in
-/// the folder's git history.
+/// The Setup tab (docs/spec/27 AU3, the agents and automations handoff, screen 3): who the agent is, never when it acts.
+/// One centered column of four groups (Who it is · What it can use · Where you reach it · Limits), then a block on its
+/// automations, which live in Automations, and History · View as file at its foot. It's a form over agent.json and
+/// instructions.md: saving validates first, errors show at the top with their path, and each save is a commit in the
+/// folder's git history.
 struct AgentDefinitionView: View {
     let engine: EngineController
     let summary: SessionSummary
@@ -26,77 +27,64 @@ struct AgentDefinitionView: View {
     @State private var saving = false
     @State private var pickingModel = false
     @State private var jump: String?
+    @State private var showingMemory = false
+    /// Facts it learned with you (the owner's partition), for "14 things learned".
+    @State private var learned: Int?
 
     private var dirty: Bool { def != original || instructions != originalInstructions || (editingJSON && raw != rawText(original)) }
 
-    private static let groups = ["What it does", "What it can use", "Who it talks to", "What it knows", "Limits", "Automations"]
+    /// Older section names (glance cells, the identity card, captures) land on the group that holds them now.
+    private static func group(_ name: String) -> String {
+        switch name {
+        case "What it does", "What it knows": "Who it is"
+        case "Who it talks to": "Where you reach it"
+        default: name
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            saveBar
-            HStack(alignment: .top, spacing: 28) {
-                jumpList
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 22) {
-                            if !errors.isEmpty { errorBox }
-                            if editingJSON {
-                                TextEditor(text: $raw)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .frame(minHeight: 480)
-                                    .padding(6)
-                                    .settingsRows()
-                            } else if def != nil {
-                                VStack(alignment: .leading, spacing: 22) {
-                                    question("What it does")
-                                    instructionsGroup
-                                    modelGroup
-                                }
-                                .id("What it does")
-                                VStack(alignment: .leading, spacing: 22) {
-                                    question("What it can use", "One list for every tool. Choose, per tool, whether it asks you first.")
-                                    toolsGroup
-                                }
-                                .id("What it can use")
-                                VStack(alignment: .leading, spacing: 22) {
-                                    question("Who it talks to")
-                                    channelsGroup
-                                    peopleGroup
-                                }
-                                .id("Who it talks to")
-                                VStack(alignment: .leading, spacing: 22) {
-                                    question("What it knows")
-                                    memoryGroup
-                                }
-                                .id("What it knows")
-                                VStack(alignment: .leading, spacing: 22) {
-                                    question("Limits")
-                                    limitsGroup
-                                }
-                                .id("Limits")
-                                VStack(alignment: .leading, spacing: 22) {
-                                    question("Automations")
-                                    automationsGroup
-                                }
-                                .id("Automations")
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        saveBar
+                        if !errors.isEmpty { errorBox }
+                        if editingJSON {
+                            TextEditor(text: $raw)
+                                .font(.system(size: 12, design: .monospaced))
+                                .frame(minHeight: 480)
+                                .padding(6)
+                                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous).strokeBorder(Color.dsLine))
+                        } else if def != nil {
+                            whoGroup.id("Who it is")
+                            toolsGroup.id("What it can use")
+                            VStack(alignment: .leading, spacing: 22) {
+                                channelsGroup
+                                peopleGroup
                             }
-                            historyGroup.id("History")
+                            .id("Where you reach it")
+                            limitsGroup.id("Limits")
+                            automationsBlock.id("Automations")
                         }
-                        .padding(.vertical, 20)
-                        .padding(.trailing, 28)
-                        .frame(maxWidth: 760, alignment: .leading)
+                        historyGroup.id("History")
+                        footerLinks
                     }
-                    .onChange(of: jump) { _, target in
-                        if let target { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(target, anchor: .top) } }
-                    }
+                    .padding(.horizontal, 40)
+                    .padding(.top, 16).padding(.bottom, 40)
+                    .frame(maxWidth: 800)
+                    .frame(maxWidth: .infinity)
+                }
+                .onChange(of: jump) { _, target in
+                    if let target { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.group(target), anchor: .top) } }
                 }
             }
-            .padding(.leading, 28)
         }
         .task(id: summary.ref.id) {
             await load()
             runs = await engine.agentRuns(summary.ref)
             if let section { jump = nil; DispatchQueue.main.async { jump = section } }
+            await countLearned()
         }
         .onChange(of: section) { _, s in if let s { jump = nil; DispatchQueue.main.async { jump = s } } }
         .popover(isPresented: $pickingModel) {
@@ -105,24 +93,46 @@ struct AgentDefinitionView: View {
                 pickingModel = false
             }
         }
+        .sheet(isPresented: $showingMemory) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("What \(summary.title) remembers").font(.system(size: 15, weight: .semibold))
+                    Spacer()
+                    Button("Done") { showingMemory = false; Task { await countLearned() } }.buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 16).padding(.top, 16)
+                AgentMemoryView(engine: engine, summary: summary)
+            }
+            .frame(width: 640, height: 520)
+            .background(Color.dsWin)
+        }
+    }
+
+    private func countLearned() async {
+        guard let info = await engine.agentMemory(summary.ref), let owner = info.partitions.first(where: { $0.id == "owner" }) ?? info.partitions.first else { return }
+        let list = await engine.memoryList(provider: info.provider, bank: owner.bank)
+        learned = list?.records.filter { $0.kind != "message" }.count
     }
 
     // MARK: Bars
 
+    /// Saved, or how many changes wait; Revert and Save ⌘S. It sits above the groups, small, on the right.
     private var saveBar: some View {
         HStack(spacing: 10) {
             Spacer()
             if dirty {
-                Circle().fill(Color.dsAmber).frame(width: 6, height: 6)
-                Text("\(changeCount) unsaved change\(changeCount == 1 ? "" : "s")").font(.system(size: 12)).foregroundStyle(Color.dsAmber)
+                Circle().fill(Color.dsWarn).frame(width: 6, height: 6)
+                Text("\(changeCount) unsaved change\(changeCount == 1 ? "" : "s")").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
             } else if let at = loaded?.history.first?.at {
                 Text("Saved \(BuildSessionView.relative(at))").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
-            Button("Revert") { Task { await load() } }.buttonStyle(PillStyle(compact: true)).disabled(!dirty || saving)
+            if dirty {
+                Button("Revert") { Task { await load() } }.buttonStyle(PillStyle(compact: true)).disabled(saving)
+            }
             Button(saving ? "Saving…" : "Save ⌘S") { save() }.buttonStyle(PillStyle(kind: .primary, compact: true)).keyboardShortcut("s").disabled(!dirty || saving)
+                .opacity(dirty ? 1 : 0.45)
         }
-        .padding(.horizontal, 28)
-        .frame(height: 44)
+        .frame(height: 30)
     }
 
     /// Roughly how many things changed (top-level fields, plus the instructions).
@@ -133,31 +143,17 @@ struct AgentDefinitionView: View {
         return keys.filter { x[$0] != y[$0] }.count + (instructions != originalInstructions ? 1 : 0)
     }
 
-    private var jumpList: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(Self.groups, id: \.self) { g in
-                Button { editingJSON = false; jump = nil; DispatchQueue.main.async { jump = g } } label: {
-                    Text(g).font(.system(size: 13, weight: jump == g ? .semibold : .regular)).foregroundStyle(Color.dsFg)
-                        .padding(.horizontal, 10).frame(height: 28).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(jump == g ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+    /// "History · View as file" at the foot.
+    private var footerLinks: some View {
+        HStack(spacing: 6) {
+            Button(editingJSON ? "Back to the form" : "View as file") {
+                if editingJSON, let parsed = parse(raw) { def = parsed } else if !editingJSON { raw = rawText(def) }
+                editingJSON.toggle()
             }
-            Spacer()
-            HStack(spacing: 6) {
-                Button("History") { editingJSON = false; jump = nil; DispatchQueue.main.async { jump = "History" } }
-                Text("·")
-                Button(editingJSON ? "Back to the form" : "View as file") {
-                    if editingJSON, let parsed = parse(raw) { def = parsed } else if !editingJSON { raw = rawText(def) }
-                    editingJSON.toggle()
-                }
-            }
-            .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-            .padding(.horizontal, 10).padding(.bottom, 18)
+            Text("·")
+            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
         }
-        .frame(width: 180)
-        .padding(.top, 20)
+        .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
     }
 
     private var errorBox: some View {
@@ -172,44 +168,46 @@ struct AgentDefinitionView: View {
         .background(Color.dsFg2.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    // MARK: Questions
-
-    private func question(_ title: String, _ subtitle: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Color.dsFg)
-            if let subtitle { Text(subtitle).font(.system(size: 13)).foregroundStyle(Color.dsFg2) }
-        }
-        .padding(.top, 8)
-    }
-
-    /// Its automations (docs/spec/27 AU3): when it acts is set in Automations, not here. Each one opens there; more
-    /// come by asking it.
-    private var automationsGroup: some View {
+    /// Its automations, at the end (docs/spec/27 AU3, the handoff's closing block): how many, that they're set in
+    /// Automations and not here, one row each (dimmed while paused), and Open Automations ›.
+    private var automationsBlock: some View {
         let mine = engine.automations.filter { $0.runsAs == summary.ref.id }
-        return SetupGroup("Automations", footer: "When \(summary.title) acts on its own is set in Automations, not here. You can also just ask \(summary.title).") {
-            ForEach(mine) { a in
-                Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automation(a.id).raw) } label: {
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(a.name).font(.system(size: 13)).foregroundStyle(a.enabled ? Color.dsFg : Color.dsFg3)
-                            Text("\(a.label) · \(a.resultLabel)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+        let name = summary.title
+        return VStack(alignment: .leading, spacing: 12) {
+            if mine.isEmpty {
+                (Text("\(name) doesn't run any automations. ").foregroundStyle(Color.dsFg) + Text("When it acts on its own is set in Automations. You can just ask \(name): “every morning at 8, …”").foregroundStyle(Color.dsFg2))
+                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+            } else {
+                (Text("\(name) runs \(mine.count) automation\(mine.count == 1 ? "" : "s"). ").fontWeight(.semibold).foregroundStyle(Color.dsFg) + Text("When they run is set in Automations, not here. You can also just ask \(name).").foregroundStyle(Color.dsFg2))
+                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 6) {
+                    ForEach(mine) { a in
+                        Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automation(a.id).raw) } label: {
+                            HStack(spacing: 10) {
+                                Text(a.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg).lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text(a.enabled ? a.label : "Paused · \(a.label)").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 9)
+                            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .opacity(a.enabled ? 1 : 0.5)
+                            .contentShape(Rectangle())
                         }
-                        Spacer()
-                        Text(AutomationText.status(a)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 9)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
-            HStack(spacing: 14) {
-                Button(mine.isEmpty ? "Ask \(summary.title) for one" : "Ask for another") { askInChat("Every morning at 8, ") }
-                Button("Open Automations ›") { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automations(summary.ref.id).raw) }
+            HStack(spacing: 16) {
+                if !mine.isEmpty {
+                    Button("Open Automations ›") { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.automations(summary.ref.id).raw) }
+                }
+                Button(mine.isEmpty ? "Ask \(name) for one" : "Ask for another") { askInChat("Every morning at 8, ") }
             }
             .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.accentColor)
-            .padding(.horizontal, 14).frame(height: 40, alignment: .leading)
         }
+        .padding(.horizontal, 18).padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.dsSide, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     /// One tool (or app) and whether it may use it: Off · Asks · Allowed (design 2c), in place of one approval mode.
@@ -228,7 +226,7 @@ struct AgentDefinitionView: View {
     ]
 
     private var toolsGroup: some View {
-        SetupGroup("Tools", footer: "Mac apps are served by Piopio while it's open; macOS asks once per app. Changes can be undone.") {
+        SetupGroup("What it can use", footer: "For each tool, whether it asks you first. Mac apps are served by Piopio while it's open; macOS asks once per app.", card: true) {
             ForEach(Self.toolChoices, id: \.title) { c in
                 SetupRow(c.title, subtitle: c.detail.isEmpty ? nil : c.detail) {
                     NeutralSegmented(selection: Binding(get: { level(c) }, set: { setLevel(c, $0) }), options: [("off", "Off"), ("asks", "Asks"), ("allowed", "Allowed")])
@@ -276,46 +274,51 @@ struct AgentDefinitionView: View {
         def = d
     }
 
-    /// Where it reaches you: Piopio, and Telegram once connected (connecting is a token pasted in its chat).
+    /// Where you reach it: Piopio always; Telegram once connected (connecting is a token pasted in its chat); Slack and
+    /// WhatsApp later.
     private var channelsGroup: some View {
-        SetupGroup("Channels") {
-            SetupRow("In Piopio", subtitle: "Its chat here, and notifications") { Text("Always").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+        SetupGroup("Where you reach it", card: true) {
+            SetupRow("Piopio", subtitle: "Its chat here, and notifications") { Text("Always").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
             if def?.channels?["telegram"] != nil {
-                SetupRow("Telegram", subtitle: "Messages reach you there too") { Text("Connected").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
+                SetupRow("Telegram", subtitle: "Messages reach you there too") { Text("Connected").font(.system(size: 12.5)).foregroundStyle(Color.dsGreen) }
             } else {
                 SetupRow("Telegram", subtitle: "Make a bot with @BotFather, then paste its token in this agent's chat") {
-                    Button("Add Telegram") { askInChat("") }.buttonStyle(PillStyle(compact: true))
+                    Button("Connect…") { askInChat("") }.buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
                 }
             }
+            SetupRow("Slack, WhatsApp") { Text("Later").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3) }
+                .foregroundStyle(Color.dsFg3)
         }
     }
 
     // MARK: Groups
 
-    private var instructionsGroup: some View {
-        SetupGroup("Who it is and what it does", trailing: "Markdown · \(instructions.count / 4) tokens") {
+    /// Who it is: name and icon, its one line, its instructions, its model, and what it remembers.
+    private var whoGroup: some View {
+        SetupGroup("Who it is", card: true) {
             SetupRow("Name") {
                 HStack(spacing: 6) {
                     AvatarPicker(avatar: optional(\.avatar))
                     TextField("Name", text: bind(\.name)).textFieldStyle(.roundedBorder).frame(width: 220)
                 }
             }
-            SetupRow("One line", subtitle: "Shown under its name") {
-                TextField("What it does", text: optional(\.description)).textFieldStyle(.roundedBorder).frame(width: 300)
+            SetupRow("What it's for", subtitle: "Shown under its name") {
+                TextField("Watches Acme, Brightly and Northwind", text: optional(\.description)).textFieldStyle(.roundedBorder).frame(width: 300)
             }
-            ZStack(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Instructions").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    Spacer()
+                    Text("Markdown · \(instructions.count / 4) tokens").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                }
                 TextEditor(text: $instructions)
-                    .font(.system(size: 13.5))
+                    .font(.system(size: 13)).lineSpacing(3)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 140)
-                    .padding(10)
+                    .padding(.horizontal, -5)
                     .background(instructions != originalInstructions ? Color(nsColor: DS.addbg).opacity(0.5) : .clear)
             }
-        }
-    }
-
-    private var modelGroup: some View {
-        SetupGroup("Model") {
+            .padding(.horizontal, 14).padding(.vertical, 12)
             SetupRow("Model") {
                 Button { pickingModel = true } label: {
                     HStack(spacing: 4) {
@@ -331,11 +334,19 @@ struct AgentDefinitionView: View {
                 }
                 .labelsHidden().fixedSize()
             }
+            SetupRow("Memory") {
+                HStack(spacing: 4) {
+                    Text(learned.map { $0 == 0 ? "Nothing learned yet" : "\($0) thing\($0 == 1 ? "" : "s") learned" } ?? "…").foregroundStyle(Color.dsFg)
+                    Text("·").foregroundStyle(Color.dsFg3)
+                    Button("View") { showingMemory = true }.buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                }
+                .font(.system(size: 12.5))
+            }
         }
     }
 
     private var peopleGroup: some View {
-        SetupGroup("People and agents", footer: "The owner is who the agent works for; contacts only see their own memory.") {
+        SetupGroup("People it talks to", footer: "The owner is who the agent works for; contacts only see their own memory.", card: true) {
             ForEach(Array((def?.contacts ?? []).enumerated()), id: \.offset) { i, _ in
                 HStack(spacing: 6) {
                     TextField("Name", text: contactBinding(i, \.name)).textFieldStyle(.roundedBorder).frame(width: 140)
@@ -384,7 +395,7 @@ struct AgentDefinitionView: View {
     }
 
     private var limitsGroup: some View {
-        SetupGroup("Limits") {
+        SetupGroup("Limits", card: true) {
             SetupRow("Quiet hours", subtitle: "Messages wait until they end; urgent ones don't") {
                 TextField("22:30-07:30", text: policy(\.quietHours)).textFieldStyle(.roundedBorder).frame(width: 110)
             }
@@ -392,7 +403,7 @@ struct AgentDefinitionView: View {
                 TextField(TimeZone.current.identifier, text: Binding(get: { def?.timezone ?? "" }, set: { def?.timezone = $0.isEmpty ? nil : $0 }))
                     .textFieldStyle(.roundedBorder).frame(width: 180)
             }
-            SetupRow("Monthly budget", subtitle: "It pauses itself when it's used up") {
+            SetupRow("Monthly budget", subtitle: "It pauses itself when it's used up\(summary.agent?.status.map { " · \(MainSidebar.money($0.spendUsd)) spent this month" } ?? "")") {
                 TextField("15", text: Binding(get: { def?.policies?.budgetUsdPerMonth.map { String(format: "%g", $0) } ?? "" }, set: { v in var p = def?.policies ?? .init(); p.budgetUsdPerMonth = Double(v); def?.policies = p }))
                     .textFieldStyle(.roundedBorder).frame(width: 70)
             }
@@ -419,14 +430,8 @@ struct AgentDefinitionView: View {
         }
     }
 
-    private var memoryGroup: some View {
-        SetupGroup("Memory") {
-            AgentMemoryView(engine: engine, summary: summary).frame(height: 380)
-        }
-    }
-
     private var historyGroup: some View {
-        SetupGroup("History", trailing: loaded?.folder) {
+        SetupGroup("History", trailing: loaded?.folder, card: true) {
             ForEach(loaded?.history ?? [], id: \.self) { c in
                 HStack {
                     Text(c.message).font(.system(size: 13))
@@ -515,12 +520,15 @@ struct SetupGroup<Content: View>: View {
     let title: String
     var trailing: String?
     var footer: String?
+    /// A white card with a hairline border (the agents and automations handoff), not hairlines above and below.
+    var card = false
     @ViewBuilder var content: Content
 
-    init(_ title: String, trailing: String? = nil, footer: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ title: String, trailing: String? = nil, footer: String? = nil, card: Bool = false, @ViewBuilder content: () -> Content) {
         self.title = title
         self.trailing = trailing
         self.footer = footer
+        self.card = card
         self.content = content()
     }
 
@@ -539,8 +547,23 @@ struct SetupGroup<Content: View>: View {
                     }
                 }
             }
-            .settingsRows()
-            if let footer { Text(footer).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
+            .modifier(GroupChrome(card: card))
+            if let footer { Text(footer).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true) }
+        }
+    }
+}
+
+/// A group's rows: in a white card, or between hairlines (Settings).
+private struct GroupChrome: ViewModifier {
+    let card: Bool
+    func body(content: Content) -> some View {
+        if card {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.dsCard, in: RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous).strokeBorder(Color.dsLine))
+        } else {
+            content.settingsRows()
         }
     }
 }

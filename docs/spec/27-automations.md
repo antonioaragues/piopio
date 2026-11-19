@@ -1,7 +1,7 @@
 # 27 · Automations: when work starts on its own
 
 Status: draft 2026-11-18, from a conversation with the user; A1 and A2 built 2026-11-18 (§10), A3 (a real-model
-trial) done 2026-11-19 (§11). It takes "when" away from agents
+trial) done 2026-11-19 (§11), the design pass built 2026-11-19 (§12). It takes "when" away from agents
 and projects and makes it an object of its own. It changes 06 §6 (PR1–PR3, PR6, PR7's `schedule`), 19 S3 (watches),
 21 AD5 and 26 CL10 (routines with two owners). 26's model of agents (CL1–CL12) holds; this spec makes it simpler.
 The interaction is mocked up on a design canvas: a target-state board and a clickable prototype (agent chat →
@@ -259,8 +259,8 @@ project settings' link, Home lines that open their automation, and the migration
 **Checked:** engine tests (`automations.test.ts` and the updated agent, work, offers and agenda tests), the Swift
 tests, the app builds, and captures with the scripted model.
 
-**Not done:** the budget stop for agents is checked before each tool call, not mid-answer; the
-design pass from `docs/design/automations-brief.md` hasn't happened, so the screens follow the first mockup.
+**Not done:** the budget stop for agents is checked before each tool call, not mid-answer. (The design pass followed
+on 2026-11-19, §12.)
 
 ## 11. A3, the real-model trial (2026-11-19)
 
@@ -323,3 +323,15 @@ fire, Rita's contact by id, Rita declining Piopio's work, and Piopio running the
   meanwhile. That's 06's approval wait, not an automation's.
 - Migrated automations get no budget per run; new ones do ($0.25 or $0.50).
 
+## 12. The design pass (2026-11-19)
+
+The Claude Design handoff for this brief is in `docs/design/automations/handoff`, and what the app built from it, with
+captures, is in `docs/design/automations/IMPLEMENTATION.md`. In short: the Agents row opens a list column beside the
+agent's page; the agent's header is a large tile, its name, what it's for and its model, "N automations ›" and Chat ·
+Setup; Setup is four groups and a closing block on its automations; the Automations list groups Needs you · On ·
+Paused; an automation's page reads as the sentence with popovers and keeps its runs in a column; the creation card
+has its own layout with Undo and Redo; and a run's message carries "From <automation> · 08:00".
+
+Where the handoff and the specs differ, the specs hold: no per-agent rows in the sidebar (18 CF10), and Piopio's
+trigger editor stays, opened from the time in the sentence (the handoff has no time picker in v1). Redo needed one
+engine call, `automations.restore`, which brings back an automation removed since the engine started.

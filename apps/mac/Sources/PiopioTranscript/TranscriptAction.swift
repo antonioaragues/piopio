@@ -51,6 +51,10 @@ public enum TranscriptAction: Equatable, Sendable {
     /// no undo record of its own).
     case openAutomation(id: String)
     case removeAutomation(id: String)
+    /// The card's Undo: its own undo record (an agent's) or removal; the card then reads "Undone … Redo".
+    case undoAutomation(id: String, undoId: String?)
+    /// Redo: the automation removed by Undo comes back as it was.
+    case restoreAutomation(id: String)
     public enum PlanAnswer: String, Sendable { case approve, edit, revise }
 
     static let scheme = "piopio-action"
@@ -88,6 +92,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case .offer(let kind, let id): c.host = "offer"; c.queryItems = [URLQueryItem(name: "kind", value: kind), URLQueryItem(name: "call", value: id)]
         case .openAutomation(let id): c.host = "automation"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .removeAutomation(let id): c.host = "remove-automation"; c.queryItems = [URLQueryItem(name: "id", value: id)]
+        case .undoAutomation(let id, let undoId): c.host = "undo-automation"; c.queryItems = [URLQueryItem(name: "id", value: id)] + (undoId.map { [URLQueryItem(name: "undo", value: $0)] } ?? [])
+        case .restoreAutomation(let id): c.host = "restore-automation"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         }
         return c.url!
     }
@@ -125,6 +131,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case "offer": guard let kind = q("kind"), let id = q("call") else { return nil }; self = .offer(kind: kind, callId: id)
         case "automation": guard let id = q("id") else { return nil }; self = .openAutomation(id: id)
         case "remove-automation": guard let id = q("id") else { return nil }; self = .removeAutomation(id: id)
+        case "undo-automation": guard let id = q("id") else { return nil }; self = .undoAutomation(id: id, undoId: q("undo"))
+        case "restore-automation": guard let id = q("id") else { return nil }; self = .restoreAutomation(id: id)
         default: return nil
         }
     }

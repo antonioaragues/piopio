@@ -38326,6 +38326,218 @@
 			"type": "object",
 			"properties": {}
 		},
+		"automations.restore.params": {
+			"type": "object",
+			"required": [
+				"id"
+			],
+			"properties": {
+				"id": {
+					"type": "string"
+				}
+			}
+		},
+		"automations.restore.result": {
+			"type": "object",
+			"required": [
+				"automation"
+			],
+			"properties": {
+				"automation": {
+					"type": "object",
+					"required": [
+						"id",
+						"name",
+						"on",
+						"runsAs",
+						"prompt",
+						"result",
+						"approval",
+						"enabled",
+						"by",
+						"createdAt",
+						"runCount",
+						"label",
+						"runnerName",
+						"resultLabel"
+					],
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"on": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "time"
+								},
+								{
+									"type": "string",
+									"const": "folder"
+								},
+								{
+									"type": "string",
+									"const": "email"
+								},
+								{
+									"type": "string",
+									"const": "webhook"
+								}
+							]
+						},
+						"cron": {
+							"type": "string"
+						},
+						"at": {
+							"type": "number",
+							"description": "time, once: epoch ms"
+						},
+						"tz": {
+							"type": "string"
+						},
+						"folder": {
+							"type": "string"
+						},
+						"from": {
+							"type": "string"
+						},
+						"subject": {
+							"type": "string"
+						},
+						"runsAs": {
+							"type": "string",
+							"description": "“piopio”, or an agent's id"
+						},
+						"project": {
+							"type": "string",
+							"description": "A project's id; only when Piopio runs it"
+						},
+						"prompt": {
+							"type": "string"
+						},
+						"result": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "chat"
+								},
+								{
+									"type": "string",
+									"const": "telegram"
+								},
+								{
+									"type": "string",
+									"const": "conversation"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								}
+							]
+						},
+						"deliverTo": {
+							"type": "string",
+							"description": "An agent's contact the result is for (default its owner)"
+						},
+						"approval": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "wait"
+								},
+								{
+									"type": "string",
+									"const": "skip"
+								}
+							]
+						},
+						"budgetPerRunUsd": {
+							"type": "number"
+						},
+						"enabled": {
+							"type": "boolean"
+						},
+						"by": {
+							"type": "string",
+							"description": "“you”, “piopio”, or the agent that made it"
+						},
+						"createdAt": {
+							"type": "string"
+						},
+						"next": {
+							"type": "number",
+							"description": "time: the next run, epoch ms"
+						},
+						"lastRun": {
+							"type": "string"
+						},
+						"runCount": {
+							"type": "number"
+						},
+						"fresh": {
+							"type": "boolean",
+							"description": "Not opened since it was made (the list's “New” badge)"
+						},
+						"aliases": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"label": {
+							"type": "string",
+							"description": "“Every Monday at 09:00”, “When a file appears in ~/Inbox”"
+						},
+						"runnerName": {
+							"type": "string",
+							"description": "“Piopio”, “Piopio in shop”, “Rita”"
+						},
+						"resultLabel": {
+							"type": "string",
+							"description": "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”"
+						},
+						"url": {
+							"type": "string",
+							"description": "webhook: where to POST"
+						},
+						"lastStatus": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "running"
+								},
+								{
+									"type": "string",
+									"const": "done"
+								},
+								{
+									"type": "string",
+									"const": "quiet"
+								},
+								{
+									"type": "string",
+									"const": "waiting"
+								},
+								{
+									"type": "string",
+									"const": "skipped"
+								},
+								{
+									"type": "string",
+									"const": "failed"
+								}
+							]
+						},
+						"lastSummary": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
 		"automations.run.params": {
 			"type": "object",
 			"required": [
