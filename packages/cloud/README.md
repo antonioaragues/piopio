@@ -103,6 +103,9 @@ The Worker deployed with `scripts/deploy.ts` and an "Edit Cloudflare Workers" to
   past, because the model sees the clock only when a message starts something new. The tools now say what time it is
   when they refuse one (`passedText`, in `@piopio/runtime`).
 
+- **After the fixes (same day):** the owner's conversation over the socket showed the 09:38 reminder's message, and
+  the agent listed only memory, messages and schedules among its tools, no Mac apps.
+
 **Not verified yet on the account:** a run longer than 15 minutes across alarms; what resting saves on duration
 billing (the dashboard's Durable Objects usage after a day); retry timing after a real eviction.
 
@@ -168,4 +171,6 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
 ## Open items for Phase 5
 
 - One socket per agent (`?agent=`). The app wants one `/v1/ws` for all agents: terminate it in a gateway (Worker or `RegistryDO`) that fans out to `AgentDO`s over RPC.
-- Move `src/timeline/` to `packages/runtime`, and validate `session.events` against the protocol schema in tests.
+- Move `src/timeline/` to `packages/runtime`, and validate `session.events` against the protocol schema in tests. The
+  copy here is older than the Mac's: a message the agent sent on its own shows as a user item with
+  "(… sent this message on its own …)", where the Mac shows the agent's outbound message.
