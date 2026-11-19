@@ -434,6 +434,8 @@ struct MainSidebar: View {
             Button("Rename…") { newTitle = s.title; renaming = s }
             pinButton(.session(s.ref.id))
             Divider()
+            ExportMenuItems(engine: engine, ref: s.ref)
+            Divider()
             Button("Move to Trash", role: .destructive) {
                 if selected { item = .home }
                 Task { await engine.delete(s.ref) }
@@ -540,6 +542,8 @@ struct MainSidebar: View {
             pinButton(.agent(agent.ref.id))
             Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: agent.agent?.folder ?? "")]) }
             Divider()
+            ExportMenuItems(engine: engine, ref: agent.ref, noun: "Chat")
+            Divider()
             Button("Delete Agent…", role: .destructive) {
                 let alert = NSAlert()
                 alert.messageText = "Delete “\(agent.title)”?"
@@ -604,6 +608,7 @@ struct MainSidebar: View {
             pinButton(.chat(thread.ref.id))
             Divider()
             ContinueInMenu(engine: engine, ref: thread.ref) { Text("Continue in") }
+            ExportMenuItems(engine: engine, ref: thread.ref)
             Divider()
             Button("Delete", role: .destructive) {
                 if selected { item = .home }

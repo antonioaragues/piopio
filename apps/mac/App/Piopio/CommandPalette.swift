@@ -9,6 +9,8 @@ struct CommandPalette: View {
 
     let engine: EngineController
     let thread: ThreadModel?
+    /// The conversation on screen, in any area, and what to call it ("Chat", "Session", "Agent"): Copy and Export take it.
+    var conversation: (ref: ContainerRef, noun: String)?
     let close: () -> Void
     let newThread: () -> Void
     let openThread: (String, String?) -> Void // thread id, item to reveal
@@ -212,9 +214,14 @@ struct CommandPalette: View {
             rows += [
                 Row(id: "c:model", icon: "cpu", title: "Change Model…", trailing: "Thread") { mode = .models; query = "" },
                 Row(id: "c:web", icon: "globe", title: thread.webEnabled ? "Turn Off Web Search" : "Turn On Web Search", trailing: "Thread") { Task { await thread.setWeb(!thread.webEnabled) }; close() },
-                Row(id: "c:copy", icon: "doc.on.doc", title: "Copy Thread as Markdown", trailing: "Thread") { Task { await thread.copyAsMarkdown() }; close() },
-                Row(id: "c:export-md", icon: "square.and.arrow.up", title: "Export Thread as Markdown…", trailing: "Thread") { close(); Task { await thread.export(.markdown) } },
-                Row(id: "c:export-html", icon: "square.and.arrow.up", title: "Export Thread as HTML…", trailing: "Thread") { close(); Task { await thread.export(.html) } },
+            ]
+        }
+        if let (ref, noun) = conversation {
+            rows += [
+                Row(id: "c:export-md", icon: "square.and.arrow.up", title: "Export \(noun) as Markdown…", trailing: noun) { close(); run { try await ConversationExport.save(engine, ref, .markdown) } },
+                Row(id: "c:export-html", icon: "square.and.arrow.up", title: "Export \(noun) as HTML…", trailing: noun) { close(); run { try await ConversationExport.save(engine, ref, .html) } },
+                Row(id: "c:export-jsonl", icon: "square.and.arrow.up", title: "Export \(noun) as JSONL…", trailing: noun) { close(); run { try await ConversationExport.save(engine, ref, .jsonl) } },
+                Row(id: "c:copy", icon: "doc.on.doc", title: "Copy \(noun) as Markdown", trailing: noun) { close(); run { try await ConversationExport.copy(engine, ref) } },
             ]
         }
         return rows

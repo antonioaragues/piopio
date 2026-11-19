@@ -1738,7 +1738,12 @@ public struct ExportParams: Encodable, Sendable {
     public var ref: ContainerRef; public var format: Format
     public init(ref: ContainerRef, format: Format) { self.ref = ref; self.format = format }
 }
-public struct ExportResult: Decodable, Sendable { public var filename: String; public var mimeType: String; public var content: String }
+public struct ExportResult: Decodable, Sendable {
+    public var filename: String; public var mimeType: String; public var content: String
+    /// The visuals the export shows, by tool call, so they can be drawn without the conversation open.
+    public var visuals: [Visual]?
+    public struct Visual: Decodable, Sendable { public var callId: String; public var title: String; public var html: String }
+}
 public struct RenameParams: Encodable, Sendable {
     public var ref: ContainerRef
     public var title: String

@@ -40,7 +40,7 @@ A free-standing conversation. Backed by **one pi-durable session** (`threads/<id
   - MCP tools from servers enabled for Chat (07-shared §4).
   - `memory`: read/write global memory (if enabled, 07-shared §5).
 - **T10** Cost/usage per message (hover) and per thread (header).
-- **T11** Export: Markdown, HTML, JSONL. Copy the conversation as Markdown.
+- **T11** Export: Markdown, HTML, JSONL. Copy the conversation as Markdown. The same for every conversation, not only chats: see 08-app-shell §9.
 - **T12** Archive/delete. Deleting removes the SQLite file and the catalog entry.
 - **T13** "Move to Space": attach the thread as a new topic of a Space (copies history, then archives the original).
 

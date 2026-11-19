@@ -1075,7 +1075,8 @@ export const methods = {
 	},
 	"sessions.export": {
 		params: Type.Object({ ref: ContainerRef, format: literals("markdown", "html", "jsonl") }),
-		result: Type.Object({ filename: Type.String(), mimeType: Type.String(), content: Type.String() }),
+		/** `visuals`: the ones the export shows, by tool call, so the app can draw them without the conversation open. */
+		result: Type.Object({ filename: Type.String(), mimeType: Type.String(), content: Type.String(), visuals: Type.Optional(Type.Array(Type.Object({ callId: Type.String(), title: Type.String(), html: Type.String() }))) }),
 	},
 	"sessions.configure": {
 		/** `toolsOff` replaces the conversation's list (see SessionSummary.toolsOff). */

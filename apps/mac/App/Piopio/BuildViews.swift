@@ -360,11 +360,13 @@ struct BuildSessionView: View {
                     }
                 }
                 Divider()
+                ExportMenuItems(engine: engine, ref: summary.ref)
+                Divider()
                 Button("Turn into an Agent…") { run { try await engine.turnIntoAgent(summary.ref) } }
             } label: { Image(systemName: "ellipsis") }
                 .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
                 .accessibilityLabel("More")
-                .help("Session tree, review, open in an editor or Finder")
+                .help("Session tree, review, open in an editor or Finder, export")
             Button("") { show(.inspector) }.keyboardShortcut("i", modifiers: .command).hidden().frame(width: 0)
             Button("") {
                 if showInspector && inspectorTab == .files { NotificationCenter.default.post(name: .focusFileFilter, object: nil) } else { show(.files) }

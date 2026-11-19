@@ -355,6 +355,7 @@ describe("milestone 1.3", () => {
 		const md = await a.client.call("sessions.export", { ref, format: "markdown" });
 		expect(md).toMatchObject({ filename: "Hello world.md", mimeType: "text/markdown" });
 		expect(md.content).toContain("## You\n\nHello **world**");
+		expect(md.content).toMatch(/^# Hello world\n\n\*Chat · faux\/faux-1 · Exported from Piopio on \d{4}-\d\d-\d\d\*/);
 		expect(md.content).toContain("## Assistant (faux/faux-1)\n\nEcho: Hello **world**");
 		const html = await a.client.call("sessions.export", { ref, format: "html" });
 		expect(html.content).toContain("<strong>world</strong>");
@@ -376,6 +377,8 @@ test("New project makes a folder with AGENTS.md and NOTES.md, in Auto-edit (docs
 	// Its conversations run in the folder; removing the project leaves the folder.
 	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: project.path });
 	expect(((await a.client.call("sessions.list", { kind: "build" })).sessions as { ref: { id: string }; approvalMode?: string }[]).find((x) => x.ref.id === ref.id)?.approvalMode).toBe("auto_edit");
+	// A Build session exports like a chat, and says which project it's in.
+	expect((await a.client.call("sessions.export", { ref, format: "markdown" })).content).toContain("*Build session in Kitchen renovation · Exported from Piopio on ");
 	await a.client.call("projects.remove", { id: project.id });
 	expect(existsSync(join(project.path, "NOTES.md"))).toBe(true);
 });

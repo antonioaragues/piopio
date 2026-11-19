@@ -409,9 +409,27 @@ export class Sessions {
 		return copy.ref;
 	}
 
+	/**
+	 * Any conversation: a chat, a Build session, an agent's chat with you, a contact, another agent, or one of its runs.
+	 * The header says which; an agent's answers carry its name.
+	 */
 	async export(ref: ContainerRef, format: ExportFormat) {
 		const entry = this.entry(ref);
-		return exportTranscript(entry.title, (await this.runtime(ref)).snapshot().items, format);
+		const items = (await this.runtime(ref)).snapshot().items;
+		const conversation = ref.conversationId;
+		let title = entry.title;
+		let what = entry.ref.kind === "thread" ? "Chat" : entry.ref.kind === "build" ? "Build session" : "Agent";
+		const folder = entry.projectPath ?? entry.cwd;
+		if (entry.ref.kind === "build" && folder) what += ` in ${basename(folder)}`;
+		if (entry.ref.kind === "agent" && conversation?.startsWith("run:")) {
+			const run = (await this.agentRuns(entry.ref)).runs.find((r) => r.id === conversation.slice(4));
+			title = `${entry.title} › Run ${run ? localMinute(run.firedAt) : conversation.slice(4)}`;
+			what = "Agent run";
+		} else if (entry.ref.kind === "agent" && conversation) {
+			title = this.search.destination(`${ref.id}/${conversation}`)?.title ?? title;
+			what = conversation.startsWith("agent:") ? "Between agents" : "Agent conversation";
+		}
+		return exportTranscript(title, items, format, { what, ...(entry.ref.kind === "agent" ? { speaker: entry.title } : {}) });
 	}
 
 	/**
@@ -2472,3 +2490,9 @@ export function parseFollowUps(list: string): string[] | undefined {
 	}
 }
 
+/** "2026-11-20 08:00" in this Mac's time zone. */
+function localMinute(iso: string): string {
+	const d = new Date(iso);
+	const two = (n: number) => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
+}

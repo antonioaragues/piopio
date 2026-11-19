@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piopio Export Options</title>
+<style>
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --bubble:#f0f0ed; --field:#ffffff; --track:rgba(0,0,0,.05); --seg:#fff; --inv:#1f1f1e; --invfg:#fff;
+  --accent:#2f6fde; --sel:rgba(0,0,0,.05); --page:#e9e9e6; --hl:#2f6fde; --hlfg:#fff; --code:#f2f2f0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+    --bubble:#2b2b29; --field:#252524; --track:rgba(255,255,255,.06); --seg:#3a3a38; --inv:#ececea; --invfg:#1e1e1d;
+    --accent:#6ea0ff; --sel:rgba(255,255,255,.07); --page:#121211; --hl:#3d6fd1; --hlfg:#fff; --code:#232322;
+  }
+}
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --bubble:#2b2b29; --field:#252524; --track:rgba(255,255,255,.06); --seg:#3a3a38; --inv:#ececea; --invfg:#1e1e1d;
+  --accent:#6ea0ff; --sel:rgba(255,255,255,.07); --page:#121211; --hl:#3d6fd1; --hlfg:#fff; --code:#232322;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; -webkit-font-smoothing:antialiased; }
+main { max-width:1180px; margin:0 auto; padding:40px 16px 80px; }
+header.doc { position:relative; }
+header.doc h1 { font-size:22px; font-weight:600; margin:0 0 6px; }
+header.doc p { color:var(--fg2); margin:0 0 4px; max-width:760px; }
+.theme { position:absolute; right:0; top:0; background:var(--field); border:.5px solid var(--line); border-radius:8px; color:var(--fg2); padding:4px 10px; font:inherit; cursor:pointer; }
+nav.toc { display:flex; gap:6px; flex-wrap:wrap; margin:18px 0 34px; }
+nav.toc a { color:var(--fg2); text-decoration:none; padding:3px 8px; border-radius:6px; }
+nav.toc a:hover { background:var(--sel); color:var(--fg); }
+section.screen { margin:0 0 60px; }
+.label { display:flex; gap:10px; align-items:baseline; margin:0 0 6px; flex-wrap:wrap; }
+.label b { font-size:12px; color:var(--fg3); font-weight:600; }
+.label h2 { font-size:15px; margin:0; font-weight:600; }
+.label span { color:var(--fg2); }
+.lead { color:var(--fg2); max-width:820px; margin:0 0 16px; }
+.note { color:var(--fg2); max-width:820px; margin:12px 0 0; padding-left:18px; }
+.note li { margin:3px 0; }
+.mono { font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:12px; }
+
+/* option cards */
+.opts { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:18px; }
+.opts.two { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+.opts.four { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+.oc { display:flex; flex-direction:column; gap:10px; min-width:0; }
+.oc .oh { display:flex; align-items:baseline; gap:8px; }
+.oc .oh b { font-size:12px; color:var(--fg3); }
+.oc .oh h3 { margin:0; font-size:13.5px; font-weight:600; }
+.tag { margin-left:auto; font-size:11px; font-weight:600; color:var(--invfg); background:var(--inv); border-radius:5px; padding:1px 7px; white-space:nowrap; }
+.pc { margin:0; padding-left:16px; color:var(--fg2); font-size:12.5px; }
+.pc li { margin:2px 0; }
+.pc li.plus::marker { content:"+  "; color:var(--fg); }
+.pc li.minus::marker { content:"–  "; color:var(--fg3); }
+
+/* window crop */
+.win { background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 14px 36px rgba(0,0,0,.10); overflow:hidden; display:flex; flex-direction:column; position:relative; min-height:330px; }
+.tb { height:46px; display:flex; align-items:center; padding:0 14px; border-bottom:.5px solid var(--line); gap:10px; flex:none; }
+.tb .t { font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tb .s { color:var(--fg3); font-size:12px; white-space:nowrap; }
+.tb .rt { margin-left:auto; display:flex; gap:6px; color:var(--fg2); align-items:center; flex:none; }
+.ib { width:26px; height:24px; border-radius:6px; display:grid; place-items:center; color:var(--fg2); font-size:13px; }
+.ib.on { background:var(--sel); color:var(--fg); }
+.dv { width:.5px; height:16px; background:var(--line); margin:0 2px; }
+.body { flex:1; padding:22px 22px; color:var(--fg3); }
+.ln { height:9px; border-radius:5px; background:var(--track); margin:0 0 9px; }
+.ln.u { width:46%; margin-left:auto; height:28px; border-radius:10px; background:var(--bubble); margin-bottom:16px; }
+
+/* menus */
+.menu { position:absolute; background:var(--field); border:.5px solid var(--line); border-radius:9px; box-shadow:0 10px 30px rgba(0,0,0,.14); padding:5px; min-width:212px; z-index:3; font-size:13px; }
+.mi { display:flex; align-items:center; gap:8px; padding:3.5px 9px; border-radius:5px; white-space:nowrap; color:var(--fg); }
+.mi.on { background:var(--hl); color:var(--hlfg); }
+.mi .k { margin-left:auto; color:var(--fg3); padding-left:18px; font-size:12px; }
+.mi.on .k { color:var(--hlfg); opacity:.85; }
+.mi.dim { color:var(--fg3); }
+.mi.new { position:relative; }
+.mi.new::after { content:"new"; font-size:10px; font-weight:600; color:var(--accent); margin-left:auto; padding-left:14px; }
+.mi.on.new::after { color:var(--hlfg); }
+.sep { height:.5px; background:var(--line); margin:4px 8px; }
+
+/* sidebar crop */
+.sidecrop { display:flex; flex:1; }
+.side { width:200px; flex:none; background:var(--side); border-right:.5px solid var(--line); padding:12px 8px; }
+.side h4 { font-size:12px; color:var(--fg3); font-weight:500; margin:10px 8px 4px; }
+.row { display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:7px; white-space:nowrap; overflow:hidden; }
+.row.on { background:var(--sel); }
+.row.ctx { box-shadow:inset 0 0 0 1.5px var(--hl); }
+.row .g { width:14px; text-align:center; color:var(--fg2); flex:none; }
+
+/* palette */
+.pal { position:absolute; left:50%; top:26px; transform:translateX(-50%); width:min(440px, 92%); background:var(--field); border:.5px solid var(--line); border-radius:12px; box-shadow:0 16px 40px rgba(0,0,0,.18); overflow:hidden; z-index:3; }
+.pal .q { padding:11px 14px; border-bottom:.5px solid var(--line); font-size:14px; }
+.pal .q span { color:var(--fg3); }
+.pal .pr { display:flex; gap:10px; align-items:center; padding:7px 14px; }
+.pal .pr.on { background:var(--sel); }
+.pal .pr .tr { margin-left:auto; color:var(--fg3); font-size:12px; }
+
+/* sheets */
+.dim { position:absolute; inset:46px 0 0 0; background:rgba(0,0,0,.05); }
+.sheet { position:absolute; left:50%; top:62px; transform:translateX(-50%); width:min(430px, 94%); background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 18px 40px rgba(0,0,0,.18); padding:18px 20px; z-index:3; }
+.sheet h3 { margin:0 0 3px; font-size:14px; }
+.sheet .sub { color:var(--fg2); margin:0 0 12px; font-size:12.5px; }
+.fld { display:flex; align-items:center; gap:10px; padding:5px 0; }
+.fld .k { width:76px; text-align:right; color:var(--fg2); flex:none; }
+.inp { flex:1; background:var(--field); border:.5px solid var(--line); border-radius:6px; padding:3px 8px; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.pop { background:var(--field); border:.5px solid var(--line); border-radius:6px; padding:3px 8px; display:inline-flex; gap:14px; align-items:center; }
+.pop::after { content:"⌄"; color:var(--fg3); }
+.ck { display:flex; gap:8px; align-items:flex-start; padding:3px 0; }
+.box { width:13px; height:13px; border-radius:3.5px; border:1px solid var(--fg3); flex:none; margin-top:2px; }
+.box.on { background:var(--inv); border-color:var(--inv); position:relative; }
+.box.on::after { content:""; position:absolute; left:3.5px; top:1px; width:3px; height:6px; border:solid var(--invfg); border-width:0 1.5px 1.5px 0; transform:rotate(45deg); }
+.ck .d { color:var(--fg3); font-size:12px; }
+.ck .r { margin-left:auto; color:var(--fg3); font-size:12px; white-space:nowrap; }
+.actions { display:flex; justify-content:flex-end; align-items:center; gap:14px; margin-top:14px; color:var(--fg2); }
+.btn { background:var(--inv); color:var(--invfg); border-radius:7px; padding:4px 13px; font-weight:500; }
+.grpl { font-size:11.5px; color:var(--fg3); margin:8px 0 2px; }
+.acc { border-top:.5px solid var(--line); margin-top:8px; padding-top:8px; }
+
+/* files */
+.files { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px; }
+.file { background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 10px 26px rgba(0,0,0,.08); overflow:hidden; }
+.file .fh { padding:9px 14px; border-bottom:.5px solid var(--line); display:flex; gap:8px; color:var(--fg2); font-size:12px; }
+.file .fh b { color:var(--fg); font-weight:600; }
+.file pre { margin:0; padding:14px 16px; font:12px/1.6 ui-monospace, "SF Mono", Menlo, monospace; white-space:pre-wrap; word-break:break-word; color:var(--fg); }
+.file pre i { font-style:normal; color:var(--fg3); }
+.file pre em { font-style:normal; background:rgba(47,111,222,.13); border-radius:3px; }
+.tree { font:12px/1.7 ui-monospace, "SF Mono", Menlo, monospace; color:var(--fg2); background:var(--code); border-radius:8px; padding:10px 12px; margin-top:10px; }
+
+@media (max-width: 900px) {
+  .opts, .opts.two, .opts.four, .files { grid-template-columns:1fr; }
+  .theme { position:static; margin-top:10px; }
+}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <button class="theme" type="button" onclick="toggleTheme()">Light / Dark</button>
+  <h1>Export, the same in every conversation</h1>
+  <p>Review mockup, 2026-11-19, in the grey style. Nothing here is built. Today export lives only in a chat's ⋯ menu and
+     the command palette, while the engine's <span class="mono">sessions.export</span> already takes any conversation.</p>
+  <p>Three decisions to make (1–3), then what stays the same whichever you pick (4–5).</p>
+</header>
+<nav class="toc">
+  <a href="#d1">1 · Menu shape</a>
+  <a href="#d2">2 · Agents</a>
+  <a href="#d3">3 · Projects</a>
+  <a href="#where">4 · Where it appears</a>
+  <a href="#file">5 · What the file says</a>
+</nav>
+
+<!-- 1 -->
+<section class="screen" id="d1">
+  <div class="label"><b>1</b><h2>How the formats are offered</h2><span>a chat's ⋯ menu, open</span></div>
+  <p class="lead">The same menu then goes everywhere in section 4. Copy as Markdown stays one click in all three options.</p>
+  <div class="opts">
+    <div class="oc">
+      <div class="oh"><b>A</b><h3>Export ▸ submenu</h3><span class="tag">Recommended</span></div>
+      <div class="win">
+        <div class="tb"><span class="t">Trip to Lisbon</span><span class="rt"><span class="ib">▤</span><span class="ib">◍</span><span class="dv"></span><span class="ib on">⋯</span></span></div>
+        <div class="body"><div class="ln u"></div><div class="ln"></div><div class="ln" style="width:80%"></div></div>
+        <div class="menu" style="right:118px; top:40px; min-width:178px">
+          <div class="mi">Copy as Markdown</div>
+          <div class="mi on">Export<span class="k">›</span></div>
+          <div class="sep"></div>
+          <div class="mi">Cost…</div>
+          <div class="sep"></div>
+          <div class="mi">Turn into an Agent…</div>
+        </div>
+        <div class="menu" style="right:8px; top:66px; min-width:118px">
+          <div class="mi">Markdown…</div>
+          <div class="mi">HTML…</div>
+          <div class="mi">JSONL…</div>
+        </div>
+      </div>
+      <ul class="pc">
+        <li class="plus">Adds one row to each ⋯ menu, which matters in Build and agents, whose menus are already long.</li>
+        <li class="plus">The format is chosen before the save panel opens, like Safari's Export.</li>
+        <li class="minus">One more hover than today in chats.</li>
+      </ul>
+    </div>
+
+    <div class="oc">
+      <div class="oh"><b>B</b><h3>Flat, as today</h3></div>
+      <div class="win">
+        <div class="tb"><span class="t">Trip to Lisbon</span><span class="rt"><span class="ib">▤</span><span class="ib">◍</span><span class="dv"></span><span class="ib on">⋯</span></span></div>
+        <div class="body"><div class="ln u"></div><div class="ln"></div><div class="ln" style="width:80%"></div></div>
+        <div class="menu" style="right:8px; top:40px">
+          <div class="mi">Copy as Markdown</div>
+          <div class="sep"></div>
+          <div class="mi">Export as Markdown…</div>
+          <div class="mi on">Export as HTML…</div>
+          <div class="mi">Export as JSONL…</div>
+          <div class="sep"></div>
+          <div class="mi">Cost…</div>
+          <div class="sep"></div>
+          <div class="mi">Turn into an Agent…</div>
+        </div>
+      </div>
+      <ul class="pc">
+        <li class="plus">No change in chats; one click to each format.</li>
+        <li class="minus">Four rows in every ⋯ menu. The Build menu would grow to 12 rows, the sidebar's right-click menus to 7.</li>
+      </ul>
+    </div>
+
+    <div class="oc">
+      <div class="oh"><b>C</b><h3>One “Export…”, format in the save panel</h3></div>
+      <div class="win">
+        <div class="tb"><span class="t">Trip to Lisbon</span><span class="rt"><span class="ib">▤</span><span class="ib">◍</span><span class="dv"></span><span class="ib on">⋯</span></span></div>
+        <div class="dim"></div>
+        <div class="sheet">
+          <div class="fld"><span class="k">Save As:</span><span class="inp">Trip to Lisbon.html</span></div>
+          <div class="fld"><span class="k">Where:</span><span class="pop">Documents</span></div>
+          <div class="acc">
+            <div class="fld"><span class="k">Format:</span><span class="pop">HTML</span></div>
+            <div class="fld"><span class="k"></span><div>
+              <div class="ck"><span class="box on"></span><span>Thinking</span></div>
+              <div class="ck"><span class="box on"></span><span>Tool calls</span></div>
+            </div></div>
+          </div>
+          <div class="actions"><span>Cancel</span><span class="btn">Export</span></div>
+        </div>
+      </div>
+      <ul class="pc">
+        <li class="plus">One row everywhere; room for options (leave out thinking or tool calls).</li>
+        <li class="minus">A custom save panel to build and keep; the options only fit Markdown and HTML.</li>
+        <li class="minus">Nobody has asked for the options yet.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="screen" id="d2">
+  <div class="label"><b>2</b><h2>Agents: which conversations</h2><span>an agent's page, ⋯ menu</span></div>
+  <p class="lead">An agent has your chat, each contact's conversation, conversations with other agents, and one per run.</p>
+  <div class="opts two">
+    <div class="oc">
+      <div class="oh"><b>A</b><h3>The conversation on screen</h3><span class="tag">Recommended</span></div>
+      <div class="win">
+        <div class="tb"><span class="t">Morning briefing</span><span class="s">Run · today 08:00</span><span class="rt"><span class="ib on">⋯</span></span></div>
+        <div class="body"><div class="ln" style="width:60%"></div><div class="ln"></div><div class="ln" style="width:70%"></div></div>
+        <div class="menu" style="right:118px; top:40px">
+          <div class="mi">Run Now</div>
+          <div class="mi">Pause</div>
+          <div class="sep"></div>
+          <div class="mi">Conversations<span class="k">›</span></div>
+          <div class="sep"></div>
+          <div class="mi new">Copy as Markdown</div>
+          <div class="mi on new">Export This Run<span class="k">›</span></div>
+          <div class="sep"></div>
+          <div class="mi">Reveal Definition in Finder</div>
+        </div>
+        <div class="menu" style="right:8px; top:170px; min-width:110px">
+          <div class="mi">Markdown…</div>
+          <div class="mi">HTML…</div>
+          <div class="mi">JSONL…</div>
+        </div>
+      </div>
+      <ul class="pc">
+        <li class="plus">What you see is what you get. The label follows the view: Export Chat, Export Conversation with Marta, Export This Run.</li>
+        <li class="minus">Ten runs means ten exports.</li>
+      </ul>
+    </div>
+
+    <div class="oc">
+      <div class="oh"><b>B</b><h3>A, plus “Export All Conversations…”</h3></div>
+      <div class="win">
+        <div class="tb"><span class="t">Morning briefing</span><span class="rt"><span class="ib on">⋯</span></span></div>
+        <div class="dim"></div>
+        <div class="sheet" style="top:56px">
+          <h3>Export Morning briefing’s conversations</h3>
+          <p class="sub">One file each, in a folder you choose.</p>
+          <div class="ck"><span class="box on"></span><span>Your chat</span><span class="r">42 messages</span></div>
+          <div class="ck"><span class="box on"></span><span>With Marta</span><span class="r">8 messages</span></div>
+          <div class="ck"><span class="box"></span><span>With Rita (agent)</span><span class="r">5 messages</span></div>
+          <div class="ck"><span class="box on"></span><span>Runs</span><span class="r">14 · last 30 days ⌄</span></div>
+          <div class="fld" style="margin-top:6px"><span class="k" style="width:auto">Format:</span><span class="pop">Markdown</span></div>
+          <div class="actions"><span>Cancel</span><span class="btn">Choose Folder…</span></div>
+        </div>
+      </div>
+      <ul class="pc">
+        <li class="plus">One step to keep or hand over everything an agent did.</li>
+        <li class="minus">A new sheet and a folder layout to maintain; Settings › Backup already keeps everything.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="screen" id="d3">
+  <div class="label"><b>3</b><h2>Projects: many conversations at once</h2><span>a project's row in the sidebar</span></div>
+  <div class="opts two">
+    <div class="oc">
+      <div class="oh"><b>A</b><h3>Not now: one conversation at a time</h3><span class="tag">Recommended</span></div>
+      <div class="win">
+        <div class="sidecrop">
+          <div class="side">
+            <h4>Projects</h4>
+            <div class="row ctx"><span class="g">▸</span>piopio</div>
+            <div class="row" style="padding-left:28px">Telegram approvals</div>
+            <div class="row" style="padding-left:28px">Export everywhere</div>
+            <div class="row"><span class="g">▸</span>kitchen-site</div>
+          </div>
+          <div class="body"></div>
+        </div>
+        <div class="menu" style="left:150px; top:36px">
+          <div class="mi">New Conversation</div>
+          <div class="mi">Project Settings…</div>
+          <div class="mi">Board</div>
+          <div class="mi">Pin</div>
+          <div class="mi">Reveal in Finder</div>
+          <div class="sep"></div>
+          <div class="mi">Remove from Piopio</div>
+        </div>
+      </div>
+      <ul class="pc">
+        <li class="plus">No change to the project's menu; each conversation row has Export (section 4).</li>
+        <li class="minus">Handing over a whole project's history means one export per conversation.</li>
+      </ul>
+    </div>
+
+    <div class="oc">
+      <div class="oh"><b>B</b><h3>“Export Conversations…” on the project</h3></div>
+      <div class="win">
+        <div class="tb"><span class="t">piopio</span><span class="rt"><span class="ib on">⋯</span></span></div>
+        <div class="dim"></div>
+        <div class="sheet" style="top:56px">
+          <h3>Export piopio’s conversations</h3>
+          <p class="sub">One file each, and an index.md that lists them.</p>
+          <div class="ck"><span class="box on"></span><span>Telegram approvals</span><span class="r">today</span></div>
+          <div class="ck"><span class="box on"></span><span>Export everywhere</span><span class="r">today</span></div>
+          <div class="ck"><span class="box"></span><span>Fix the cost popover</span><span class="r">12 Nov</span></div>
+          <div class="ck"><span class="box"></span><span class="d">and 31 more</span></div>
+          <div class="tree">piopio conversations/<br>&nbsp; index.md<br>&nbsp; Telegram approvals.md<br>&nbsp; Export everywhere.md</div>
+          <div class="actions"><span>Cancel</span><span class="btn">Choose Folder…</span></div>
+        </div>
+      </div>
+      <ul class="pc">
+        <li class="plus">Shares the sheet with 2B, so both cost about the same as one.</li>
+        <li class="minus">Build sessions are already pi JSONL files on disk, which the pi CLI reads.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="screen" id="where">
+  <div class="label"><b>4</b><h2>Where it appears</h2><span>with 1A; the same rows in every place</span></div>
+  <p class="lead">One <span class="mono">ExportMenu(ref:)</span> view, so the rows and their order never drift apart. Side conversations and automation runs open as chats, sessions or agent conversations, so they get it too.</p>
+  <div class="opts four">
+    <div class="oc">
+      <div class="oh"><b>4a</b><h3>A Build session’s ⋯</h3></div>
+      <div class="win">
+        <div class="tb"><span class="t">Export everywhere</span><span class="s">piopio · main</span><span class="rt"><span class="ib">▤</span><span class="ib">◫</span><span class="ib">⌘</span><span class="dv"></span><span class="ib on">⋯</span></span></div>
+        <div class="body"><div class="ln u"></div><div class="ln"></div><div class="ln" style="width:75%"></div></div>
+        <div class="menu" style="right:118px; top:40px">
+          <div class="mi">Session Tree</div>
+          <div class="mi">Review All Changes</div>
+          <div class="mi">Create Pull Request…</div>
+          <div class="sep"></div>
+          <div class="mi">Open in Xcode</div>
+          <div class="mi">Reveal in Finder</div>
+          <div class="mi">Copy Path</div>
+          <div class="sep"></div>
+          <div class="mi new">Copy as Markdown</div>
+          <div class="mi on new">Export<span class="k">›</span></div>
+          <div class="sep"></div>
+          <div class="mi">Turn into an Agent…</div>
+        </div>
+        <div class="menu" style="right:8px; top:232px; min-width:110px">
+          <div class="mi">Markdown…</div>
+          <div class="mi">HTML…</div>
+          <div class="mi">JSONL…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="oc">
+      <div class="oh"><b>4b</b><h3>Right-click a row in the sidebar</h3></div>
+      <div class="win">
+        <div class="sidecrop">
+          <div class="side">
+            <h4>Agents</h4>
+            <div class="row"><span class="g">☺</span>Morning briefing</div>
+            <h4>Chats</h4>
+            <div class="row ctx"><span class="g">▢</span>Trip to Lisbon</div>
+            <div class="row"><span class="g">▢</span>Kitchen budget</div>
+            <h4>piopio</h4>
+            <div class="row"><span class="g">◇</span>Export everywhere</div>
+          </div>
+          <div class="body"></div>
+        </div>
+        <div class="menu" style="left:160px; top:96px; min-width:180px">
+          <div class="mi">Rename…</div>
+          <div class="mi">Pin</div>
+          <div class="sep"></div>
+          <div class="mi">Continue in<span class="k">›</span></div>
+          <div class="mi new">Copy as Markdown</div>
+          <div class="mi on new">Export<span class="k">›</span></div>
+          <div class="sep"></div>
+          <div class="mi">Delete</div>
+        </div>
+      </div>
+      <ul class="note" style="margin-top:0">
+        <li>Chats, sessions and agents (an agent's row exports your chat with it). It works without opening the conversation.</li>
+      </ul>
+    </div>
+
+    <div class="oc">
+      <div class="oh"><b>4c</b><h3>Command palette, in any conversation</h3></div>
+      <div class="win">
+        <div class="tb"><span class="t">Export everywhere</span><span class="s">piopio · main</span></div>
+        <div class="body"><div class="ln u"></div><div class="ln"></div></div>
+        <div class="pal">
+          <div class="q">expo<span>|</span></div>
+          <div class="pr on"><span>⇪</span>Export Session as Markdown…<span class="tr">Session</span></div>
+          <div class="pr"><span>⇪</span>Export Session as HTML…<span class="tr">Session</span></div>
+          <div class="pr"><span>⇪</span>Export Session as JSONL…<span class="tr">Session</span></div>
+          <div class="pr"><span>⧉</span>Copy Session as Markdown<span class="tr">Session</span></div>
+        </div>
+      </div>
+      <ul class="note" style="margin-top:0">
+        <li>“Thread” becomes Chat, Session or Agent; JSONL joins Markdown and HTML.</li>
+      </ul>
+    </div>
+
+    <div class="oc">
+      <div class="oh"><b>4d</b><h3>Not unified on purpose</h3></div>
+      <div class="win" style="min-height:0">
+        <div class="body" style="color:var(--fg2)">
+          <div class="ck"><span>Settings › Memory › <b>Export built-in memory</b></span></div>
+          <div class="ck d" style="margin:-2px 0 8px">Facts and messages, not a conversation.</div>
+          <div class="ck"><span>Settings › Backup &amp; costs › <b>Back Up…</b></span></div>
+          <div class="ck d" style="margin:-2px 0 8px">Everything, to restore on a Mac, not to read.</div>
+          <div class="ck"><span>Usage › <b>CSV</b></span></div>
+          <div class="ck d" style="margin:-2px 0 0">Numbers, not text.</div>
+        </div>
+      </div>
+      <ul class="note" style="margin-top:0">
+        <li>These keep their own buttons and names.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="screen" id="file">
+  <div class="label"><b>5</b><h2>What the file says</h2><span>an agent's run, exported as Markdown</span></div>
+  <p class="lead">Today's exporter was written for chats: it drops messages between agents, result cards, approvals and checkpoints, and has no header. Visuals also come out blank when the conversation isn't open, so the engine will send them with the export.</p>
+  <div class="files">
+    <div class="file">
+      <div class="fh"><b>Today</b><span>Morning briefing › Run 8f2c.md</span></div>
+<pre># Morning briefing › Run 8f2c
+
+## Assistant (sonnet-5.5)
+
+Good morning. Three things today.
+
+&gt; **calendar_list** {"from":"2026-11-20"} — done
+
+&gt; **send_message** {"to":"telegram"…} — done
+</pre>
+    </div>
+    <div class="file">
+      <div class="fh"><b>Proposed</b><span>Morning briefing — Run 20 Nov 08:00.md</span></div>
+<pre># Morning briefing — Run 20 Nov 08:00
+
+<em><i>Agent run · Every weekday at 08:00 · Sonnet 5.5</i></em>
+<em><i>Exported from Piopio on 20 Nov 2026</i></em>
+
+## Morning briefing
+
+Good morning. Three things today.
+
+&gt; **calendar_list** {"from":"2026-11-20"} — done
+
+<em>## Rita (agent) → Morning briefing</em>
+<em></em>
+<em>The dentist moved to 10:00.</em>
+
+<em>&gt; **Asked you:** Add an event to your calendar?</em>
+<em>&gt; You allowed it.</em>
+
+<em>&gt; **Reminder set:** Dentist · Thu 27 Nov, 10:00</em>
+
+&gt; **send_message** {"to":"telegram"…} — done
+</pre>
+    </div>
+  </div>
+  <ul class="note">
+    <li>Highlighted lines are new. The speaker is the agent's name instead of “Assistant”; a Build session's header names the project and branch.</li>
+    <li>Filenames say what was exported; one without a title is “Conversation”, not “Thread”.</li>
+  </ul>
+</section>
+</main>
+<script>
+function toggleTheme() {
+  var r = document.documentElement;
+  var dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark";
+}
+</script>
+</body>
+</html>

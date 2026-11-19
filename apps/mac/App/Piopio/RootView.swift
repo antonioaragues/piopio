@@ -75,7 +75,7 @@ struct RootView: View {
             if let mode = palette, engine.status == .ready {
                 ZStack(alignment: .top) {
                     Color.black.opacity(0.08).ignoresSafeArea().onTapGesture { palette = nil }
-                    CommandPalette(engine: engine, thread: selectedThread, close: { palette = nil }, newThread: newChat, openThread: open(_:item:), openResult: openSearch, mode: mode, query: paletteQuery)
+                    CommandPalette(engine: engine, thread: selectedThread, conversation: shownConversation, close: { palette = nil }, newThread: newChat, openThread: open(_:item:), openResult: openSearch, mode: mode, query: paletteQuery)
                         .padding(.top, 96)
                 }
             }
@@ -297,6 +297,16 @@ struct RootView: View {
 
     private var agentSelection: Binding<String?> {
         Binding(get: { if case .agent(let id) = item { id } else { nil } }, set: { id in itemRaw = (id.map { SidebarItem.agent($0) } ?? .home).raw })
+    }
+
+    /// The conversation on screen, for the palette's Copy and Export (docs/design/export 4c). An agent's is your chat.
+    private var shownConversation: (ref: ContainerRef, noun: String)? {
+        switch item {
+        case .chat(let id): (ContainerRef(kind: .thread, id: id), "Chat")
+        case .session(let id): (ContainerRef(kind: .build, id: id), "Session")
+        case .agent(let id): (ContainerRef(kind: .agent, id: id), "Agent Chat")
+        default: nil
+        }
     }
 
     private var selectedThread: ThreadModel? {

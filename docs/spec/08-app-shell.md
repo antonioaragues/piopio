@@ -50,3 +50,24 @@
 - PiopioKit (client, protocol types, stores) MUST be platform-neutral Swift (no AppKit in the package). AppKit bridges live in the app target.
 - The transcript's attributed-string builder and TextKit 2 layout fragments are platform-neutral (TextKit 2 exists in UIKit), and only the text-view wrapper differs per platform.
 - The cloud engine's direct WebSocket API (03-engine-protocol §1) is what iOS will use.
+
+## 9. Export (built 2026-11-19)
+Every conversation exports the same way: a chat, a Build session, an agent's chat with you, a contact's conversation
+with it, a conversation between agents, and a run. Options reviewed in [docs/design/export](../design/export/Export.html);
+the user chose 1A · 2A · 3A.
+- **EX1 Same rows everywhere.** Copy as Markdown, then an **Export ▸** submenu with Markdown…, HTML… and JSONL…. One
+  view (`ExportMenuItems`) draws them in a chat's, a Build session's and an agent's ⋯ menu and in the right-click menu
+  of chat, session and agent rows in the sidebar. The command palette offers Export as Markdown, HTML and JSONL, and
+  Copy, for the conversation on screen in any area, named Chat, Session or Agent Chat.
+- **EX2 Agents export what's on screen.** In an agent's ⋯ menu the submenu says which conversation: Export Chat, Export
+  Conversation with <name>, Export This Run. An agent's sidebar row exports your chat with it. There is no export of
+  all of an agent's conversations, and none of a whole project. Settings › Backup keeps everything.
+- **EX3 The file says what it is.** Under the title is a line with what was exported ("Chat", "Build session in
+  piopio", "Agent run", "Between agents"), the models used and the date. An agent's answers are under its name. Items
+  that chats don't have come out too: an agent's folded steps (thinking and tool calls), messages between agents and
+  their replies, approvals and how you answered, result cards (with "(undone)"), and Build checkpoints. A run's file is
+  called "<agent> › Run <date time>". An untitled export is "Conversation".
+- **EX4 It works without the conversation open.** `sessions.export` also returns the visuals the export shows
+  (`visuals: [{callId, title, html}]`), and the app draws them in their markers' places (docs/spec/25 §16).
+- Not part of this: memory export (Settings › Memory), backup (Settings › Backup & costs) and the usage CSV keep their
+  own buttons.

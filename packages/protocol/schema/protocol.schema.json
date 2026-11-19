@@ -27516,6 +27516,28 @@
 				},
 				"content": {
 					"type": "string"
+				},
+				"visuals": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"callId",
+							"title",
+							"html"
+						],
+						"properties": {
+							"callId": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							},
+							"html": {
+								"type": "string"
+							}
+						}
+					}
 				}
 			}
 		},

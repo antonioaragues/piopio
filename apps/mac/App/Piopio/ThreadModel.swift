@@ -231,41 +231,6 @@ final class ThreadModel {
         await call("sessions.configure", ConfigureParams(ref: ref, toolsOff: ids))
     }
 
-    /// Asks where to save, then writes the export.
-    func export(_ format: ExportParams.Format) async {
-        guard let client = engine?.client else { return }
-        do {
-            let result = try await client.call("sessions.export", ExportParams(ref: ref, format: format), as: ExportResult.self)
-            let panel = NSSavePanel()
-            panel.nameFieldStringValue = result.filename
-            panel.canCreateDirectories = true
-            guard panel.runModal() == .OK, let url = panel.url else { return }
-            // Visuals (docs/spec/25 §8): the engine leaves a marker; they're drawn here, a frame in HTML, a picture in Markdown.
-            var content = result.content
-            if format != .jsonl { content = await VisualExport.fill(content, html: format == .html) { [weak self] id in self?.visualSource(id) } }
-            try content.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
-            report(error)
-        }
-    }
-
-    func copyAsMarkdown() async {
-        guard let client = engine?.client,
-              let result = try? await client.call("sessions.export", ExportParams(ref: ref, format: .markdown), as: ExportResult.self) else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(VisualExport.strip(result.content), forType: .string)
-    }
-
-    /// A visual in this conversation, by its tool call: its title and HTML.
-    private func visualSource(_ callId: String) -> (title: String, html: String)? {
-        for item in document.items.reversed() {
-            if case .tool(let t) = item, t.callId == callId, let html = t.args?["html"]?.stringValue {
-                return (t.args?["title"]?.stringValue ?? "Visual", html)
-            }
-        }
-        return nil
-    }
-
     func cancelEditing() { editing = nil }
 
     func beginEditing(_ itemId: String, original: String) { editing = (itemId, original) }

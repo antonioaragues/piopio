@@ -129,11 +129,7 @@ struct ThreadView: View {
             moveMenu
             ToolbarDivider()
             Menu {
-                Button("Copy as Markdown") { Task { await thread.copyAsMarkdown() } }
-                Divider()
-                Button("Export as Markdown…") { Task { await thread.export(.markdown) } }
-                Button("Export as HTML…") { Task { await thread.export(.html) } }
-                Button("Export as JSONL…") { Task { await thread.export(.jsonl) } }
+                ExportMenuItems(engine: engine, ref: summary.ref)
                 Divider()
                 Button("Cost…") { showCosts = true }
                 Divider()

@@ -317,10 +317,24 @@ struct AgentPage: View {
                 }
                 Divider()
             }
+            ExportMenuItems(engine: engine, ref: shownRef, noun: shownNoun)
+            Divider()
             Button("Reveal Definition in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: summary.agent?.folder ?? "")]) }
         } label: { Image(systemName: "ellipsis").accessibilityLabel("More") }
             .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
-            .help("Run now, pause, conversations, Finder")
+            .help("Run now, pause, conversations, export, Finder")
+    }
+
+    /// The conversation on screen, which Export takes (docs/design/export 2A): yours, a contact's, another agent's, a run.
+    private var shownRef: ContainerRef {
+        guard let conversation else { return summary.ref }
+        return ContainerRef(kind: .agent, id: summary.ref.id, conversationId: conversation)
+    }
+
+    private var shownNoun: String {
+        guard let conversation else { return "Chat" }
+        if conversation.hasPrefix("run:") { return "This Run" }
+        return people.first { $0.conversationId == conversation }.map { "Conversation with \($0.name)" } ?? "Conversation"
     }
 
     private func runNow() {
