@@ -85,6 +85,22 @@ describe("moving an agent between the Mac and the cloud (K1)", () => {
 		const runs = await c.call<{ upcoming: { kind: string; label: string }[] }>("agents.runs", { ref });
 		expect(runs.upcoming.map((u) => u.kind)).toContain("reminder");
 
+		// Run now, pause and the Inbox, as the Mac's engine asks for them (K1's gaps).
+		const { runId } = await c.call<{ runId: string }>("agents.runNow", { ref, prompt: "Check the plants" });
+		const ran = async () => (await c.call<{ runs: { id: string; status: string; prompt: string }[] }>("agents.runs", { ref })).runs.find((r) => r.id === runId);
+		for (let i = 0; i < 100 && (await ran())?.status === "running"; i++) await new Promise((r) => setTimeout(r, 50));
+		expect(await ran()).toMatchObject({ prompt: "Check the plants", status: "done" });
+		await expect(c.call("agents.runNow", { ref })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		expect(await c.call("agents.status", { ref })).toMatchObject({ paused: false, inbox: 0, nextRun: new Date(at).toISOString() });
+		await c.call("agents.pause", { ref, paused: true });
+		expect(await c.call("agents.status", { ref })).toMatchObject({ paused: true });
+		expect(await c.call<{ nextRun?: string }>("agents.status", { ref })).not.toHaveProperty("nextRun");
+		await c.call("agents.pause", { ref, paused: false });
+		const inbox = await c.call<{ items: { agent: { id: string }; kind: string }[] }>("inbox.list", {});
+		expect(inbox.items.every((i) => i.agent.id === id)).toBe(true);
+		await c.call("inbox.read", { items: inbox.items.map((i) => ({ agentId: id, id: (i as unknown as { id: string }).id })) });
+		await expect(c.call("agents.decide", { ref, approvalId: "nope", approve: true })).rejects.toMatchObject({ data: { code: "INVALID" } });
+
 		const exported = await c.call<{ definition: { name: string }; instructions: string; memory: { text: string; pinned?: boolean; tags?: string[] }[]; reminders: { id: string }[] }>("agents.export", { ref });
 		expect(exported.definition.name).toBe("Helper");
 		expect(exported.instructions).toBe(made.instructions);

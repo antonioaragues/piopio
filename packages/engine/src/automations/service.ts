@@ -11,7 +11,8 @@ import { EngineError } from "../models.js";
 import type { AutomationSummary } from "@piopio/runtime";
 import { DEFAULT_BUDGET, nameOf, nextOf, parseWhen, PIOPIO, resultLabel, systemZone, whenLabel, type Automation, type AutomationRun, type ResultTo, type RunStatus, type Trigger } from "./model.js";
 
-export type AgentInfo = { id: string; name: string; telegram: boolean };
+/** `cloud`: it runs in your cloud (docs/spec/30 K1), which keeps its own automations. */
+export type AgentInfo = { id: string; name: string; telegram: boolean; cloud?: boolean };
 
 export type AutomationsHost = {
 	file: string;
@@ -214,6 +215,8 @@ export class Automations {
 		const piopio = a.runsAs === PIOPIO;
 		const agent = piopio ? undefined : this.host.agent(a.runsAs);
 		if (!piopio && !agent) throw new EngineError("INVALID", `No agent “${a.runsAs}”. Run it as Piopio or as one of your agents.`);
+		// A cloud agent's automations live up there, as its schedules and reminders: it makes them itself.
+		if (agent?.cloud && (input.runsAs !== undefined || trigger || input.enabled === true)) throw new EngineError("INVALID", `${agent.name} runs in your cloud, which keeps its own automations. Ask it in its chat (“every weekday at 8, …”), or move it to this Mac first.`);
 		if (input.project !== undefined) {
 			if (input.project) a.project = input.project;
 			else delete a.project;

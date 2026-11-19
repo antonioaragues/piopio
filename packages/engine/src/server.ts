@@ -109,6 +109,7 @@ export class Engine {
 	readonly id = randomUUID();
 	readonly secrets = new SecretBroker();
 	cloud!: CloudLink;
+	private cloudTick?: NodeJS.Timeout;
 	private readonly logins: LoginFlows;
 	readonly hub: ModelHub;
 	readonly connectors: ConnectorHub;
@@ -260,7 +261,7 @@ export class Engine {
 			log: this.log,
 			agent: (id) => {
 				const a = this.sessions.agentList().find((x) => x.id === id);
-				return a ? { id: a.id, name: a.name, telegram: Boolean(a.definition.channels?.telegram) } : undefined;
+				return a ? { id: a.id, name: a.name, telegram: Boolean(a.definition.channels?.telegram), ...(this.sessions.isCloud(a.id) ? { cloud: true } : {}) } : undefined;
 			},
 			project: (id) => {
 				try {
@@ -408,6 +409,10 @@ export class Engine {
 		// Automations' clock: what was due while the engine was off runs once (docs/spec/27 AU9).
 		this.automations.start();
 		void this.sessions.startAgents(this.log);
+		// Cloud agents' status (paused, spend, Inbox) and their approvals' notifications, every minute (docs/spec/30 K1).
+		this.cloudTick = setInterval(() => void this.sessions.refreshCloudAgents(), 60_000);
+		this.cloudTick.unref?.();
+		void this.sessions.refreshCloudAgents();
 		void this.work.resume().catch((error: unknown) => this.log(`Work: ${(error as Error).message}`));
 		// Open pull requests: what happens on them goes to the conversation that owns them (docs/spec/17 §5).
 		this.prTimer = setInterval(() => void this.sessions.pollPrs().catch((error: unknown) => this.log(`Pull requests: ${(error as Error).message}`)), this.options.github?.pollMs ?? 120_000);
@@ -574,6 +579,7 @@ export class Engine {
 	}
 
 	async stop(): Promise<void> {
+		clearInterval(this.cloudTick);
 		this.cloud?.close();
 		this.telegram?.stop();
 		this.watchers?.stop();
@@ -1200,6 +1206,7 @@ export class Engine {
 			}
 			case "agents.runNow": {
 				const p = params as Params<"agents.runNow">;
+				if (this.sessions.isCloud(p.ref.id)) return (await this.sessions.cloudAgentCall(p.ref.id, "agents.runNow", { ...p, ref: { kind: "agent", id: p.ref.id } })) satisfies Result<"agents.runNow">;
 				const run = await (await this.sessions.agent(p.ref)).runNow(p.scheduleId, p.prompt, p.trial ?? false);
 				return { runId: run.id } satisfies Result<"agents.runNow">;
 			}
@@ -1211,6 +1218,7 @@ export class Engine {
 			}
 			case "agents.decide": {
 				const p = params as Params<"agents.decide">;
+				if (this.sessions.isCloud(p.ref.id)) return (await this.sessions.cloudAgentCall(p.ref.id, "agents.decide", { ...p, ref: { kind: "agent", id: p.ref.id } })) satisfies Result<"agents.decide">;
 				const runtime = await this.sessions.agent(p.ref);
 				try {
 					const a = await runtime.core.safety.decide(p.approvalId, { approve: p.approve, ...(p.args && typeof p.args === "object" ? { args: p.args as never } : {}), ...(p.always ? { always: true } : {}), ...(p.reason ? { reason: p.reason } : {}) });
@@ -1221,6 +1229,7 @@ export class Engine {
 			}
 			case "agents.undo": {
 				const p = params as Params<"agents.undo">;
+				if (this.sessions.isCloud(p.ref.id)) return (await this.sessions.cloudAgentCall(p.ref.id, "agents.undo", { ...p, ref: { kind: "agent", id: p.ref.id } })) satisfies Result<"agents.undo">;
 				const runtime = await this.sessions.agent(p.ref);
 				try {
 					await runtime.core.safety.undo(p.undoId);
@@ -1231,6 +1240,7 @@ export class Engine {
 			}
 			case "agents.pause": {
 				const p = params as Params<"agents.pause">;
+				if (this.sessions.isCloud(p.ref.id)) return (await this.sessions.cloudAgentCall(p.ref.id, "agents.pause", { ...p, ref: { kind: "agent", id: p.ref.id } })) satisfies Result<"agents.pause">;
 				await (await this.sessions.agent(p.ref)).core.safety.setPaused(p.paused);
 				return {} satisfies Result<"agents.pause">;
 			}

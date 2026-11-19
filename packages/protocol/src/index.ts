@@ -1832,6 +1832,11 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({ definition: Type.Unknown(), instructions: Type.String(), memory: Type.Array(CloudMemory), reminders: Type.Array(Type.Unknown()), telegram: Type.Optional(Type.Object({ token: Type.String() })) }),
 	},
+	/** The cloud engine: paused, this month's spend and budget, Inbox items waiting, and what fires next (the catalog's `agent.status`). */
+	"agents.status": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({ paused: Type.Boolean(), spendUsd: Type.Number(), budgetUsd: Type.Optional(Type.Number()), inbox: Type.Number(), nextRun: Type.Optional(Type.String()) }),
+	},
 	/** The cloud engine: the agent stops there and its data is deleted (after `agents.export` was saved on the Mac). */
 	"agents.retire": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({}) },
 	/** Your cloud (Settings › This Mac & cloud, docs/spec/30 K1): connected or not, and what's up there. */

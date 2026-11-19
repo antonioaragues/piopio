@@ -323,14 +323,22 @@ registry's migration `v1 → v2`).
 - **Engine:** `CloudLink` (`packages/engine/src/cloud.ts`) with one socket **per cloud agent**, opened on use and
   reopened after a drop (the open conversations subscribe again and send a fresh snapshot). A cloud agent's catalog
   entry has `cloud`; `sessions.*` for it go to `CloudAgentView`, which keeps the cloud's snapshot in step. Runs,
-  conversations and definition edits are forwarded; the rest (Run now, pause, approvals, Inbox, trace) says it
-  isn't available in the cloud yet.
+  conversations, definition edits, Run now, pause, approvals and Undo are forwarded (the same methods, on its
+  socket); the Inbox merges the cloud agents' own. Their status (paused, spend, Inbox count, next run) is read every
+  minute and after anything you do to them, and an approval they ask for notifies once. The trace and memory views
+  aren't forwarded yet.
 - **Decided while building:** the gateway with one socket for everything (§8) waits for K3, where the phone needs it;
   for the Mac's engine, one socket per agent is simpler and enough.
 
+**Added the same evening:** Run now, pause and resume, approvals, Undo, the Inbox, and spend against the budget for
+cloud agents (`agents.runNow`, `pause`, `decide`, `undo`, `status`, `inbox.list`, `inbox.read` on the object).
+Automations: Automations refuses a new one for a cloud agent (or turning one on, or changing its trigger) and says to
+ask the agent, which keeps its own up there as schedules and reminders. Run now and pause are checked in workerd; an
+approval is not (the test model can't call a tool), only that `agents.decide` reaches the object.
+
 **Not in K1 (next)**
-- Run now, pause and resume, approvals and the Inbox, budgets and spend for cloud agents; automations you add on the
-  Mac for a cloud agent (they'd fail to run: make them by asking the agent).
+- A cloud agent's approval card in its chat (it shows in Needs you, not in the transcript: the cloud's timeline
+  doesn't draw approval items yet); its memory view and the trace.
 - Connect by Cloudflare API token, with the app deploying the bundled Worker (13 §5.2's setup). Today the Worker is
   deployed with `scripts/deploy.ts` and connected by address and token.
 - The definition the cloud agent changes itself (its interview, a Telegram pairing) shows on the Mac only when it moves

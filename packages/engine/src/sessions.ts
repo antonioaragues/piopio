@@ -50,7 +50,7 @@ import type { Automations } from "./automations/service.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
 import { migrateChat } from "./migrate-chats.js";
-import type { CloudMemory, SessionEvent } from "@piopio/protocol";
+import type { CloudMemory, Params, Result, SessionEvent } from "@piopio/protocol";
 import { CloudAgentView, type CloudLink } from "./cloud.js";
 import type { SecretBroker } from "./secrets.js";
 import { TelegramChannels as TelegramSecrets } from "./channels/manager.js";
@@ -1064,6 +1064,52 @@ export class Sessions {
 		return Boolean(this.entries.get(id)?.cloud);
 	}
 
+	/** Approvals already announced from the cloud, by agent (so each notifies once). */
+	private cloudApprovals = new Map<string, Set<string>>();
+
+	/**
+	 * A cloud agent's status into the catalog (paused, spend, Inbox, next run), as `agentStatus` does for the Mac's,
+	 * and a notification for each approval it asks for. The engine calls it every minute and after anything you do to it.
+	 */
+	async refreshCloudAgent(id: string): Promise<void> {
+		const entry = this.entries.get(id);
+		if (!entry?.cloud || !entry.agent || !this.cloud?.connected) return;
+		const ref: ContainerRef = { kind: "agent", id };
+		const status = await this.cloud.call(id, "agents.status", { ref }).catch(() => undefined);
+		if (!status || !this.entries.get(id)?.cloud) return;
+		const changed = JSON.stringify(status) !== JSON.stringify(entry.agent.status);
+		entry.agent.status = status;
+		if (changed) {
+			this.save();
+			this.changed(entry);
+		}
+		let fresh: { approvalId: string; title: string } | undefined;
+		if (status.inbox > 0) {
+			const inbox = await this.cloud.call(id, "inbox.list", {}).catch(() => undefined);
+			const seen = this.cloudApprovals.get(id) ?? new Set<string>();
+			for (const item of inbox?.items ?? []) {
+				const a = item.approval;
+				if (!a || a.status !== "pending" || seen.has(a.approvalId)) continue;
+				seen.add(a.approvalId);
+				fresh ??= { approvalId: a.approvalId, title: a.title };
+			}
+			this.cloudApprovals.set(id, seen);
+		}
+		this.onInbox?.({ count: this.inboxCount(), ...(fresh ? { approval: { agent: ref, agentName: entry.title, ...fresh } } : {}) });
+	}
+
+	/** Every cloud agent's status (the engine's minute tick). */
+	async refreshCloudAgents(): Promise<void> {
+		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent" && e.cloud)) await this.refreshCloudAgent(entry.ref.id).catch(() => undefined);
+	}
+
+	/** Calls a cloud agent's object, then reads its status again (Run now, pause, an approval, Undo). */
+	async cloudAgentCall<M extends "agents.runNow" | "agents.pause" | "agents.decide" | "agents.undo">(id: string, method: M, params: Params<M>): Promise<Result<M>> {
+		const result = await this.cloudLink().call(id, method, params);
+		await this.refreshCloudAgent(id);
+		return result;
+	}
+
 	private cloudLink(): CloudLink {
 		if (!this.cloud?.connected) throw new EngineError("INVALID", "No cloud is connected. Connect one in Settings › This Mac & cloud.");
 		return this.cloud;
@@ -1176,6 +1222,7 @@ export class Sessions {
 		this.save();
 		this.changed(entry);
 		await this.telegram?.sync();
+		await this.refreshCloudAgent(id);
 		return [`${entry.title} runs in your cloud now: it keeps going with your Mac off.`, ...lines];
 	}
 
@@ -1228,6 +1275,7 @@ export class Sessions {
 		}
 
 		await cloud.call(id, "agents.retire", { ref });
+		this.cloudApprovals.delete(id);
 		await this.closeCloudViews(id);
 		cloud.drop(id);
 		delete entry.cloud;
@@ -1459,6 +1507,11 @@ export class Sessions {
 				});
 			}
 		}
+		// Agents in your cloud keep their own Inbox (docs/spec/30 K1); one that can't be reached right now shows none.
+		for (const entry of [...this.entries.values()].filter((e) => e.ref.kind === "agent" && e.cloud)) {
+			const theirs = await this.cloud?.call(entry.ref.id, "inbox.list", {}).catch(() => undefined);
+			if (theirs) items.push(...theirs.items.map((i) => ({ ...i, agent: entry.ref, agentName: entry.title })));
+		}
 		items.sort((a, b) => b.at.localeCompare(a.at));
 		return { count: this.inboxCount(), items };
 	}
@@ -1466,7 +1519,12 @@ export class Sessions {
 	async inboxRead(items: readonly { agentId: string; id: string }[]): Promise<void> {
 		const byAgent = new Map<string, string[]>();
 		for (const i of items) byAgent.set(i.agentId, [...(byAgent.get(i.agentId) ?? []), i.id]);
-		for (const [agentId, ids] of byAgent) await (await this.agent({ kind: "agent", id: agentId })).core.safety.markRead(ids);
+		for (const [agentId, ids] of byAgent) {
+			if (this.isCloud(agentId)) {
+				await this.cloudLink().call(agentId, "inbox.read", { items: ids.map((id) => ({ agentId, id })) });
+				await this.refreshCloudAgent(agentId);
+			} else await (await this.agent({ kind: "agent", id: agentId })).core.safety.markRead(ids);
+		}
 	}
 
 	/** A webhook trigger (hooks.ts): the agent must exist and have it. */

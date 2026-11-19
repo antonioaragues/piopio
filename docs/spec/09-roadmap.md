@@ -41,8 +41,9 @@ from Later to Now.
 
 **Now**
 1. **Cloud K1 on the account** (30 §13, built 2026-11-19 and checked in workerd): redeploy the Worker, connect it from
-   Settings, move a real agent up and leave the Mac off for a day. Then K1's gaps: Run now, pause, approvals and the
-   Inbox for cloud agents, and connecting by Cloudflare token with the app deploying the Worker.
+   Settings, move a real agent up and leave the Mac off for a day. Run now, pause, approvals and the Inbox reach
+   cloud agents (built the same evening). Left: approval cards in a cloud agent's chat, its memory view and trace, and
+   connecting by Cloudflare token with the app deploying the Worker.
 2. **Track A** beside it: do the day's real work in Piopio and tick the acceptance boxes as they pass. What breaks goes
    ahead of new features.
 

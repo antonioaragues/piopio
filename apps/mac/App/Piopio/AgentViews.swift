@@ -348,14 +348,14 @@ struct AgentPage: View {
     /// Run now, pause, its other conversations, Finder.
     private var moreMenu: some View {
         Menu {
-            Button("Run Now", action: runNow).disabled(inCloud)
+            Button("Run Now", action: runNow)
             // Where it runs (docs/spec/30 §3.3): up to your cloud, always on; or back to this Mac.
             if inCloud {
                 Button("Move to This Mac…") { confirmingMove = true }.disabled(moving)
             } else {
                 Button("Keep It Always On…") { if engine.cloudConnected { confirmingMove = true } else { noCloud = true } }.disabled(moving || summary.agent?.draft == true)
             }
-            if !inCloud, let status = summary.agent?.status {
+            if let status = summary.agent?.status {
                 Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
             }
             Divider()

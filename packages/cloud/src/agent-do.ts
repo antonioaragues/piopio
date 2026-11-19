@@ -14,7 +14,7 @@ import { Lifecycle } from "agents/lifecycle";
 import { WebSockets } from "agents/websockets";
 import { DurableObject } from "cloudflare:workers";
 import { Value } from "typebox/value";
-import { validate, type AgentDefinition, type MemoryRecord, type Reminder } from "@piopio/runtime";
+import { alwaysLabel, validate, type AgentDefinition, type MemoryRecord, type Reminder } from "@piopio/runtime";
 import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js";
 import { sameSecret } from "./auth.js";
 import { CloudTelegram } from "./telegram.js";
@@ -378,6 +378,66 @@ export class AgentDO extends DurableObject<Env> {
 					upcoming: o.upcoming.map((u) => ({ id: u.id, kind: u.kind, label: u.label, ...(u.next !== undefined ? { next: iso(u.next)! } : {}), ...(u.cron ? { cron: u.cron } : {}) })),
 				} satisfies Result<"agents.runs">;
 			}
+			case "agents.runNow": {
+				// Run now (06 §6): a schedule of its definition, or any prompt.
+				const p = params as Params<"agents.runNow">;
+				this.ownAgent(p.ref);
+				const core = (await this.agent()).core;
+				let run;
+				if (p.scheduleId) {
+					const s = (this.agentDef!.definition.schedules ?? []).find((x) => x.id === p.scheduleId);
+					if (!s) throw new RpcError("NOT_FOUND", `No schedule “${p.scheduleId}”.`);
+					run = await core.proactive.startRun("manual", p.trial ? "trial" : s.id, s.prompt, s.deliverTo);
+				} else {
+					if (!p.prompt?.trim()) throw new RpcError("INVALID", "Give a schedule or a prompt.");
+					run = await core.proactive.startRun("manual", p.trial ? "trial" : "manual", p.prompt.trim());
+				}
+				await this.wake.rearm().catch(() => undefined);
+				return { runId: run.id } satisfies Result<"agents.runNow">;
+			}
+			case "agents.pause": {
+				const p = params as Params<"agents.pause">;
+				this.ownAgent(p.ref);
+				await (await this.agent()).core.safety.setPaused(p.paused);
+				await this.wake.rearm().catch(() => undefined);
+				return {} satisfies Result<"agents.pause">;
+			}
+			case "agents.decide": {
+				const p = params as Params<"agents.decide">;
+				this.ownAgent(p.ref);
+				try {
+					const a = await (await this.agent()).core.safety.decide(p.approvalId, { approve: p.approve, ...(p.args && typeof p.args === "object" ? { args: p.args as never } : {}), ...(p.always ? { always: true } : {}), ...(p.reason ? { reason: p.reason } : {}) });
+					return { status: a.status } satisfies Result<"agents.decide">;
+				} catch (error) {
+					throw new RpcError("INVALID", (error as Error).message);
+				}
+			}
+			case "agents.undo": {
+				const p = params as Params<"agents.undo">;
+				this.ownAgent(p.ref);
+				try {
+					await (await this.agent()).core.safety.undo(p.undoId);
+				} catch (error) {
+					throw new RpcError("INVALID", (error as Error).message);
+				}
+				return {} satisfies Result<"agents.undo">;
+			}
+			case "agents.status": {
+				const p = params as Params<"agents.status">;
+				this.ownAgent(p.ref);
+				const host = await this.agent();
+				const safety = await host.core.safety.status();
+				const next = (await host.core.proactive.overview()).upcoming.map((u) => u.next).filter((n): n is number => typeof n === "number").sort((a, b) => a - b)[0];
+				return { ...safety, ...(next && !safety.paused ? { nextRun: new Date(next).toISOString() } : {}) } satisfies Result<"agents.status">;
+			}
+			case "inbox.list":
+				return this.inbox();
+			case "inbox.read": {
+				const p = params as Params<"inbox.read">;
+				const mine = p.items.filter((i) => i.agentId === this.agentId).map((i) => i.id);
+				if (mine.length) await (await this.agent()).core.safety.markRead(mine);
+				return {} satisfies Result<"inbox.read">;
+			}
 			case "agents.deploy":
 				return this.deploy(params as Params<"agents.deploy">);
 			case "agents.export":
@@ -400,6 +460,50 @@ export class AgentDO extends DurableObject<Env> {
 			default:
 				throw new RpcError("NOT_FOUND", `Unknown method ${method}`);
 		}
+	}
+
+	/** This agent's Inbox (06 §12), shaped as the Mac's `inbox.list` so the Mac's engine merges it with its own. */
+	private async inbox(): Promise<Result<"inbox.list">> {
+		const core = (await this.agent()).core;
+		const def = this.agentDef!.definition;
+		const ref = { kind: "agent" as const, id: this.agentId };
+		const items: Result<"inbox.list">["items"] = [];
+		for (const e of await core.safety.entries()) {
+			const a = e.approval;
+			items.push({
+				id: e.id,
+				agent: ref,
+				agentName: def.name,
+				...(def.avatar ? { avatar: def.avatar } : {}),
+				kind: e.kind,
+				at: e.at,
+				title: e.title,
+				body: e.body,
+				needsYou: e.needsYou && (a ? true : !e.read),
+				read: e.read ?? false,
+				...(e.conversation ? { conversationId: e.conversation } : {}),
+				...(a
+					? {
+							approval: {
+								kind: "approval" as const,
+								id: `approval:${a.id}`,
+								at: a.requestedAt,
+								approvalId: a.id,
+								tool: a.tool,
+								title: a.title,
+								args: a.args,
+								status: a.status,
+								...(a.editedArgs ? { editedArgs: a.editedArgs } : {}),
+								...(a.reason ? { reason: a.reason } : {}),
+								expiresAt: new Date(a.expiresAt).toISOString(),
+								always: alwaysLabel(a.key, def),
+							},
+						}
+					: {}),
+			});
+		}
+		items.sort((x, y) => y.at.localeCompare(x.at));
+		return { count: (await core.safety.status()).inbox, items };
 	}
 
 	// ── Moving between the Mac and the cloud (docs/spec/30 §3.2, K1) ───────
@@ -595,4 +699,4 @@ const RESTS_KEY = "piopio:rests";
 /** Set when the agent moved back to the Mac (everything else was deleted). */
 const RETIRED_KEY = "piopio:retired";
 
-const SUPPORTED = new Set<string>(["engine.hello", "engine.status", "sessions.subscribe", "sessions.unsubscribe", "sessions.submit", "sessions.abort", "agents.runs", "agents.conversations", "agents.deploy", "agents.export", "agents.retire"]);
+const SUPPORTED = new Set<string>(["engine.hello", "engine.status", "sessions.subscribe", "sessions.unsubscribe", "sessions.submit", "sessions.abort", "agents.runs", "agents.conversations", "agents.deploy", "agents.export", "agents.retire", "agents.runNow", "agents.pause", "agents.decide", "agents.undo", "agents.status", "inbox.list", "inbox.read"]);

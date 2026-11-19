@@ -92,7 +92,19 @@ test("connect, move up, talk through the Mac's engine, move back", async () => {
 	await until(() => client.call<{ items: never[] }>("sessions.open", { ref: mine }).then((s) => text(s.items)), (s) => s.includes("Echo: Hello from the Mac"));
 	const runs = await client.call<{ upcoming: { kind: string; cron?: string }[] }>("agents.runs", { ref });
 	expect(runs.upcoming).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "schedule", cron: "0 8 * * 1-5" })]));
-	await expect(client.call("agents.pause", { ref, paused: true })).rejects.toThrow(/runs in your cloud/);
+	// Pause, Run now and the Inbox reach it up there; its status shows in the catalog.
+	await client.call("agents.pause", { ref, paused: true });
+	const agentOf = async () => (await client.call<{ sessions: { ref: { id: string }; agent?: { status?: { paused: boolean } } }[] }>("sessions.list", { kind: "agent" })).sessions.find((s) => s.ref.id === ref.id)?.agent;
+	expect((await agentOf())?.status?.paused).toBe(true);
+	await client.call("agents.pause", { ref, paused: false });
+	expect((await agentOf())?.status?.paused).toBe(false);
+	const { runId } = await client.call<{ runId: string }>("agents.runNow", { ref, prompt: "Run your usual check now." });
+	await until(() => client.call<{ runs: { id: string; status: string }[] }>("agents.runs", { ref }), (r) => r.runs.some((x) => x.id === runId && x.status === "done"));
+	const run = await until(() => client.call<{ items: never[] }>("sessions.open", { ref: { ...ref, conversationId: `run:${runId}` } }).then((s) => text(s.items)), (s) => s.includes("Echo:"));
+	expect(run).toContain("Run your usual check now.");
+	expect((await client.call<{ items: { agent: { id: string } }[] }>("inbox.list")).items.filter((i) => i.agent.id === ref.id)).toEqual(expect.any(Array));
+	// Automations for it are its own, up there: the Mac's list refuses one.
+	await expect(client.call("automations.add", { runsAs: ref.id, when: "0 9 * * *", prompt: "Stretch" })).rejects.toThrow(/runs in your cloud, which keeps its own automations/);
 
 	// Disconnecting is refused while it's up there.
 	await expect(client.call("cloud.disconnect")).rejects.toThrow(/Helper runs in your cloud/);
