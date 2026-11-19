@@ -90,7 +90,7 @@ struct ThreadView: View {
                         JumpToLatestButton { thread.scrollToLatest() }
                     }
                     SideConversations(engine: engine, parentId: summary.ref.id)
-                    Composer(engine: engine, thread: thread).frame(maxWidth: 560)
+                    Composer(engine: engine, thread: thread).frame(maxWidth: DS.column)
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 20)

@@ -3,6 +3,9 @@ import AppKit
 /// Piopio design tokens (docs/design/README.md · "Design tokens"), light and dark.
 /// AppKit colors so both the TextKit transcript and SwiftUI (`Color(nsColor:)`) share them.
 public enum DS {
+    /// The reading column's widest (docs/design/card-layout): answers, the composer and the trays above it.
+    public static let column: CGFloat = 720
+
     // MARK: Surfaces and text (docs/design/grey: grey ink, hairlines, no decoration; docs/design/card-layout: the
     // content floats in a card over the window)
     /// The content card's fill (chat, browser, every page), and the content of windows without cards.

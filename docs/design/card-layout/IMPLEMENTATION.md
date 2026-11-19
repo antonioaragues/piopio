@@ -23,7 +23,7 @@ sidebar and the content with a **card** that floats over the window. Built on 20
   in a card. The Files filter is 32pt on `field`, with no line.
 - **Agents**: the agents' column sits on the window (no fill, no line) and the agent's page is in a card.
 - **Settings window**: the same: the section list on the window, the pane in a card.
-- **Reading column and composer**: 560 wide, answers 14pt, 32pt sides; the composer is white with a 1pt ring and a
+- **Reading column and composer**: 720 wide (`DS.column`; 560 until 2026-11-20, too narrow next to Claude's ~768), answers 14pt, 32pt sides; the composer is white with a 1pt ring and a
   soft shadow (0 4 14, 5%). Your bubble is #EDEDEC, radius 14, 14×10 padding.
 
 ## Deliberate differences

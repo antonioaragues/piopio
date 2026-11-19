@@ -186,8 +186,8 @@ private func expectConsistent(_ doc: TranscriptDocument) {
 
 @MainActor @Test func columnRecentersWhenTheViewNarrows() async throws {
     let doc = await loaded([user("1", "hi"), answer("2", "hello")])
-    // The column is 680 wide, centered, with at least 40 on each side (of the clip view, which leaves room for a scroller).
-    func expected() -> CGFloat { max(40, (doc.scrollView.contentView.bounds.width - 680) / 2) }
+    // The column is `DS.column` wide, centered, with at least 32 on each side (of the clip view, which leaves room for a scroller).
+    func expected() -> CGFloat { max(32, (doc.scrollView.contentView.bounds.width - DS.column) / 2) }
     for width in [1400.0, 1000.0, 600.0] {
         doc.scrollView.frame = NSRect(x: 0, y: 0, width: width, height: 800)
         for _ in 0..<50 where abs(doc.textView.textContainerInset.width - expected()) > 0.5 { try await Task.sleep(for: .milliseconds(10)) }

@@ -47,8 +47,8 @@ public final class TranscriptDocument {
             scrollView.contentInsets.bottom = bottomInset
         }
     }
-    /// Widest the reading column gets (docs/design/card-layout: 560), with at least 32 on each side.
-    public var maxColumnWidth: CGFloat = 560
+    /// Widest the reading column gets (`DS.column`), with at least 32 on each side.
+    public var maxColumnWidth: CGFloat = DS.column
     private let minimumInset: CGFloat = 32
 
     /// "Ask next" (chat v3, 14e): suggestions after the last answer, as the document's last segment.
@@ -544,7 +544,7 @@ public final class TranscriptDocument {
         guard width > 0 else { return }
         let inset = max(minimumInset, (width - maxColumnWidth) / 2)
         let column = width - 2 * inset
-        // The width, not the column: past 680 the column stays the same while its insets change.
+        // The width, not the column: past the widest column it stays the same while its insets change.
         guard force || abs(width - laidOutWidth) > 0.5 else { return }
         laidOutWidth = width
         columnWidth = column

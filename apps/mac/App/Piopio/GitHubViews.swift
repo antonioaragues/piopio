@@ -1,5 +1,6 @@
 import AppKit
 import PiopioKit
+import PiopioTranscript
 import SwiftUI
 
 // GitHub in the app (docs/spec/05-build G4–G8): Create PR from a conversation or the Board, the pull request above
@@ -109,7 +110,7 @@ struct PullRequestBlock: View {
             }
             .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-            .frame(maxWidth: 560)
+            .frame(maxWidth: DS.column)
             // While it's in view: now, then every minute (the engine polls every two for the conversation's sake).
             .task(id: "\(pr.number)\(pr.state)\(pr.checks ?? "")") {
                 while !Task.isCancelled {

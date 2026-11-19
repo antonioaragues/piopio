@@ -461,7 +461,7 @@ struct AgentChat: View {
                 // Answers to tap while a new agent learns its job (docs/spec/21 D4).
                 if simulated == nil, ref.conversationId == nil { AgentQuickReplies(thread: thread).padding(.horizontal, 40) }
                 Composer(engine: engine, thread: thread)
-                    .frame(maxWidth: 560)
+                    .frame(maxWidth: DS.column)
                     .padding(.horizontal, 32)
                     .padding(.bottom, 20)
             }

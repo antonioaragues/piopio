@@ -220,7 +220,7 @@ struct BuildSessionView: View {
                 SideConversations(engine: engine, parentId: summary.ref.id)
                 // Its pull request (docs/spec/05-build G7): checks, comments, Fix CI and Address comments.
                 PullRequestBlock(engine: engine, summary: summary)
-                Composer(engine: engine, thread: session).frame(maxWidth: 560)
+                Composer(engine: engine, thread: session).frame(maxWidth: DS.column)
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 20)

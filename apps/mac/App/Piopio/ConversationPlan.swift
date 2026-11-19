@@ -1,5 +1,6 @@
 import AppKit
 import PiopioKit
+import PiopioTranscript
 import SwiftUI
 
 // A conversation with its tasks at work (docs/spec/21 D6, 26 §5): the plan as one live block above the composer (a
@@ -30,7 +31,7 @@ struct ConversationPlan: View {
                     LandingCard(engine: engine, work: work, conversation: conversationId)
                 }
             }
-            .frame(maxWidth: 560)
+            .frame(maxWidth: DS.column)
         }
     }
 

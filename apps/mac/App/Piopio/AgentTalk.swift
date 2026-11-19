@@ -27,7 +27,7 @@ struct AgentQuickReplies: View {
                     }
                     .padding(.horizontal, 2)
                 }
-                .frame(maxWidth: 560)
+                .frame(maxWidth: DS.column)
             }
         }
     }
