@@ -124,8 +124,22 @@ final class ThreadModel {
                 self.pendingReveal = nil
                 document.reveal(pendingReveal)
             }
+            if openFailed { openFailed = false; error = nil; errorIsAuth = false }
         } catch {
-            self.error = String(describing: error)
+            // A failed open isn't final: the next `open()` tries again, and one that failed for a missing provider
+            // (a Build session needs its model's credential) tries again by itself once providers change.
+            opening = nil
+            openFailed = true
+            report(error)
+            if errorIsAuth { openWhenProvidersChange(engine) }
+        }
+    }
+
+    @ObservationIgnored private var openFailed = false
+
+    private func openWhenProvidersChange(_ engine: EngineController) {
+        withObservationTracking { _ = engine.providers } onChange: { [weak self] in
+            Task { @MainActor in await self?.open() }
         }
     }
 
