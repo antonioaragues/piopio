@@ -132,4 +132,17 @@ describe("moving an agent between the Mac and the cloud (K1)", () => {
 		const answered = await c2.waitFor((n) => n.subscriptionId === sub.subscriptionId && JSON.stringify(n.events).includes("Echo: Back again"));
 		expect(JSON.stringify(answered.events)).not.toContain("SQLITE_ERROR");
 	});
+
+	test("a conversation names the agent's own model, saved as a bare OpenRouter id", async () => {
+		// The Mac saves OpenRouter models without a provider ("deepseek/…"); the Worker once read that as no model and
+		// named its default (Haiku) in the composer while the agent answered with its own (2026-11-20).
+		const id = "agt_modeltest";
+		const made = newDefinition({ id, slug: "pinpin", name: "Pinpin", owner: "Ana", model: "deepseek/deepseek-v4.1-flash-1017", template: "personal-assistant" });
+		const c = await connect(id);
+		const ref = { kind: "agent" as const, id };
+		await c.call("agents.deploy", { ref, definition: made.definition, instructions: made.instructions });
+		const { snapshot } = await c.call<{ snapshot: { state: { model?: { provider: string; id: string } } } }>("sessions.subscribe", { ref });
+		expect(snapshot.state.model).toEqual({ provider: "openrouter", id: "deepseek/deepseek-v4.1-flash-1017" });
+		await c.call("agents.retire", { ref });
+	});
 });

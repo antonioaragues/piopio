@@ -14,7 +14,7 @@ import { Lifecycle } from "agents/lifecycle";
 import { WebSockets } from "agents/websockets";
 import { DurableObject } from "cloudflare:workers";
 import { Value } from "typebox/value";
-import { alwaysLabel, validate, type AgentDefinition, type MemoryRecord, type Reminder } from "@piopio/runtime";
+import { alwaysLabel, modelOf, validate, type AgentDefinition, type MemoryRecord, type Reminder } from "@piopio/runtime";
 import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js";
 import { sameSecret } from "./auth.js";
 import { CloudTelegram } from "./telegram.js";
@@ -592,11 +592,16 @@ export class AgentDO extends DurableObject<Env> {
 
 	// ── Subscriptions ─────────────────────────────────────────────────────
 
-	/** The agent's own model ("provider:id" in its definition), else the Worker's default. */
+	/**
+	 * The agent's own model, read as the runtime runs it ("provider:id", or a bare OpenRouter id as the Mac saves them),
+	 * else the Worker's default. A bare id once read as no model, so the composer named the default (Haiku) while the
+	 * agent answered with its own.
+	 */
 	private modelRef(): ModelRef {
 		const id = this.agentDef?.definition.models.default;
-		const colon = id?.indexOf(":") ?? -1;
-		return id && colon > 0 ? { provider: id.slice(0, colon), id: id.slice(colon + 1) } : defaultModel(this.env);
+		if (!id) return defaultModel(this.env);
+		const { provider, modelId } = modelOf(id);
+		return { provider, id: modelId };
 	}
 
 	private ownAgent(ref: Params<"sessions.subscribe">["ref"]): void {
