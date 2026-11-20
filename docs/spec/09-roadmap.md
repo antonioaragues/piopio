@@ -25,6 +25,7 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 | **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8 and 17 DP5, built 2026-11-17); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
 | **G · Memory** | 14 | M0–M3 | **M4** past chats, **M5** project lessons, **M6** Hindsight |
 | **H · Small things** | Backlog below | Most of batch 1 and 2 | Voice input (D5), a composer that keeps formatting (D7), web search visible everywhere (D12), Q2 worktree wording, Q3 context files, Q4 where things run, F1 3D |
+| **I · Build parity** | 05, 22 §6, 31 | Most of Claude Code's and Codex's surface (approvals, sandbox, plan, `/goal`, rewind, worktrees, diff review, PR loop, MCP, subagents); 31 A1 | **PAR1–PAR12** below (added 2026-11-20) |
 
 ### Proposed order
 
@@ -51,6 +52,8 @@ from Later to Now.
 3. **Cloud K2** (chats in the cloud), then **K3** (the iPhone app; needs the Apple developer account for push).
 4. **Browser W4** (22, WebKit in the app; decided 2026-11-15). **W1 and W2 built 2026-11-15** (22 §14–15): the model
    reads pages and, asking per site, clicks and types in a Browser panel; the interim Playwright browser is gone.
+5. **Build parity PAR2–PAR4** (proposed 2026-11-20, below): background processes, the project preview, agent code
+   review. PAR1 is Track A.
 
 **Later** (each waits for something)
 - **Cloud K4–K7 and WhatsApp** (30 §10): after K3.
@@ -63,6 +66,30 @@ from Later to Now.
 
 **Parked** (no spec work until something above is done): image generation, voice, MCP Apps, the connector
 marketplace, concept → 3D, rooms and side-by-side agents, cloud sandboxes, the iOS companion.
+
+### Track I · Build parity with Claude Code and Codex (2026-11-20)
+
+From the user's question "what does Piopio lack to have a Build experience on par with Claude Code or Codex?",
+answered from the specs, status.md and the code on 2026-11-20. Most of the surface exists; what's missing is
+validation, the agent checking its own work, long-running processes and cloud/parallel work. IDs are PAR1–PAR12, so they don't collide with the backlog's B, S and D.
+
+| ID | Gap | Where it stands | Size |
+|---|---|---|---|
+| **PAR1** | **Proven by real use.** Daily real-model work on Piopio in Piopio and a large repository: long sessions, compaction, big diffs, transcript speed | Track A; status.md's Build acceptance is open | Use, not building |
+| **PAR2** | **Background processes.** Start a command that keeps running (dev server, watcher, long test run), read its output later, stop it; the turn doesn't block. Shown in the transcript and the terminal drawer | Nothing in the engine or extensions | Medium |
+| **PAR3** | **Project web preview.** The pane runs the project's dev server, opens its `localhost` in a profile of its own, `browser_console` / `browser_requests` / `browser_eval` | Designed in 22 §6 (B10), not built | Medium; wants PAR2 |
+| **PAR4** | **Agent code review.** Review the session's diff, a branch or a PR (correctness first), findings as cards with file and line that become follow-ups; also someone else's PR | "PR review mode" in 05 §8 Later; `review.ts` only judges commands (AP6) | Medium |
+| **PAR5** | **Diagnostics.** The project's compiler/type errors after an edit (LSP or the project's own check command), fed back to the agent | Not built; the agent only sees errors when it runs a build | Medium |
+| **PAR6** | **User hooks.** Before/after a tool and when a turn ends, run a command (format after edits, block a pattern), set in Settings or the project's `.pi/` | `hooks.ts` is webhook triggers for agents; pi extensions could do it, no UI | Small–medium |
+| **PAR7** | **GitHub loop, the rest.** Issue → session ("Work on #42"); an automatic fix loop for failing CI and comments (Act mode exists, one follow-up at a time); the OAuth device flow (G4) | 05 §8 Later; G4 waits on Piopio's OAuth App | Medium |
+| **PAR8** | **Coding agents, the rest.** 31 A2 (Piopio's tools over MCP, switching mid-conversation) and A3 (Codex and Antigravity over ACP) | A1 built 2026-11-20; Codex not installed on this Mac | Per 31 §7 |
+| **PAR9** | **iOS Simulator.** Build, launch, screenshot and tap a Swift app from a session | 05 §10 Later | Medium |
+| **PAR10** | **Cloud and parallel tasks.** Run a session on a remote machine from the GitHub repo, several at once, start and follow from the phone; "try N versions, pick one" over worktrees | 30 K7 and K3 | Large; after K2–K3 |
+| **PAR11** | **Headless mode.** Run a Build prompt from a script or CI without the app (like `claude -p` / `codex exec`) | Only the pi CLI, without Piopio's settings, approvals or sandbox | Small–medium |
+| **PAR12** | **Smaller items.** `/init` that writes AGENTS.md (and Q3, how context files load); create and edit skills (D9) and custom subagents; a sandbox option with the network off, and `edit`/`write` under the same confinement | Open | Small each |
+
+**Proposed order:** PAR1 all along (what breaks goes first), then PAR2 → PAR3 (together they close run → see → fix),
+then PAR4. PAR5–PAR7 when daily use asks for them; PAR8 per spec 31; PAR10 after cloud K2–K3.
 
 ### Only you can do
 - Register Piopio's Google and Microsoft OAuth apps (12, C1's "not done yet").
