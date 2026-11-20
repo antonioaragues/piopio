@@ -135,7 +135,11 @@ final class ThreadModel {
         }
     }
 
-    @ObservationIgnored private var openFailed = false
+    /// The error is from opening the conversation (it opens by itself once that's fixed), not from sending.
+    private(set) var openFailed = false
+
+    /// The composer notice's ✕.
+    func dismissError() { error = nil; errorIsAuth = false }
 
     private func openWhenProvidersChange(_ engine: EngineController) {
         withObservationTracking { _ = engine.providers } onChange: { [weak self] in
@@ -398,7 +402,9 @@ final class ThreadModel {
     private func report(_ error: Error) {
         if let e = error as? EngineError {
             errorIsAuth = e.code == "AUTH"
-            self.error = errorIsAuth ? "Connect a model provider in Settings › Models to continue." : e.message
+            // "OpenRouter isn't connected. Connect it in Settings › Models.": the notice's Open Settings says the rest.
+            let first = e.message.components(separatedBy: ". ").first.map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 }
+            self.error = errorIsAuth ? (first ?? "Connect a model provider in Settings › Models") : e.message
         } else {
             errorIsAuth = false
             self.error = error.localizedDescription

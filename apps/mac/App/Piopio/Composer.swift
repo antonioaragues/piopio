@@ -51,33 +51,10 @@ struct Composer: View {
                 }
                 .padding(.horizontal, 16)
             }
-            if let attachError {
-                Text(attachError).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.horizontal, 16)
-            }
-            if let error = thread.error {
-                HStack {
-                    Text(error).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                    Spacer()
-                    if !text.isEmpty { Button("Retry") { Task { await thread.retrySend() } }.buttonStyle(PillStyle(compact: true)).disabled(thread.isSubmitting) }
-                    if thread.errorIsAuth { Button("Open Settings") { ThreadModel.openSettings() }.buttonStyle(PillStyle(compact: true)) }
-                }
-                .padding(.horizontal, 16)
-            }
-            let contextFraction = thread.state?.context.map { ($0.tokens ?? 0) / max(1, $0.window) } ?? 0
-            if contextFraction >= 0.85 || thread.showContext {
+            // The context popover opened from elsewhere (a capture, the toolbar) while the context notice isn't showing.
+            if thread.showContext, notice?.id != "context" {
                 HStack(spacing: 4) {
-                    if contextFraction >= 0.85 {
-                        Text("This conversation is at \(Int(min(1, contextFraction) * 100))% of its context.").foregroundStyle(Color.dsFg3)
-                        Button(thread.isCompactingContext ? "Compacting…" : "Compact now") { Task { await thread.compact() } }
-                            .buttonStyle(.plain).foregroundStyle(Color.accentColor)
-                            .disabled(!thread.canCompact)
-                            .help("Summarize older messages and keep the most recent ones in context")
-                    }
-                    Button("View context") { thread.showContext.toggle() }
-                        .buttonStyle(.plain).foregroundStyle(Color.accentColor)
-                        .popover(isPresented: Binding(get: { thread.showContext }, set: { thread.showContext = $0 }), arrowEdge: .bottom) {
-                            ContextPopover(thread: thread)
-                        }
+                    viewContextButton
                     Spacer()
                 }
                 .font(.system(size: 12.5))
@@ -113,6 +90,47 @@ struct Composer: View {
             if new.contains(where: { !old.contains($0) }) { trayCollapsed = false }
             if new.isEmpty { trayIndex = 0; trayCollapsed = false }
         }
+    }
+
+    // MARK: Notice
+
+    @State private var contextNoticeDismissed = false
+
+    private var contextFraction: Double { thread.state?.context.map { ($0.tokens ?? 0) / max(1, $0.window) } ?? 0 }
+
+    /// The one notice the box shows: what failed, then a file that couldn't be attached, then a context almost full.
+    private var notice: ComposerNotice? {
+        if let error = thread.error {
+            let auth = thread.errorIsAuth, opening = thread.openFailed, typed = !text.isEmpty
+            return ComposerNotice(
+                id: "error", symbol: auth ? "key" : "exclamationmark.triangle", title: error,
+                detail: opening ? (auth ? "this conversation opens once it's connected" : nil) : typed ? "your message is kept" : nil,
+                primary: auth ? .init(title: "Open Settings") { ThreadModel.openSettings() }
+                    : typed && !opening && !thread.isSubmitting ? .init(title: "Retry") { Task { await thread.retrySend() } } : nil,
+                secondary: auth && !opening ? .init(title: "Use another model") { thread.showModelPicker = true } : nil,
+                dismiss: opening ? nil : { thread.dismissError() })
+        }
+        if let attachError {
+            return ComposerNotice(id: "attach", symbol: "paperclip", title: attachError, dismiss: { self.attachError = nil })
+        }
+        if contextFraction >= 0.85, !contextNoticeDismissed {
+            return ComposerNotice(
+                id: "context", tone: .info, symbol: "gauge.with.dots.needle.67percent",
+                title: "\(Int(min(1, contextFraction) * 100))% of context used",
+                detail: thread.isCompactingContext ? "compacting…" : nil,
+                primary: thread.canCompact && !thread.isCompactingContext ? .init(title: "Compact now") { Task { await thread.compact() } } : nil,
+                dismiss: { contextNoticeDismissed = true })
+        }
+        return nil
+    }
+
+    private var viewContextButton: some View {
+        Button("View context") { thread.showContext.toggle() }
+            .buttonStyle(.plain).foregroundStyle(Color.accentColor)
+            .fixedSize()
+            .popover(isPresented: Binding(get: { thread.showContext }, set: { thread.showContext = $0 }), arrowEdge: .bottom) {
+                ContextPopover(thread: thread)
+            }
     }
 
     // MARK: Tray
@@ -208,6 +226,10 @@ struct Composer: View {
 
     private var box: some View {
         VStack(spacing: 0) {
+            if let notice {
+                ComposerNoticeStrip(notice: notice) { if notice.id == "context" { viewContextButton.font(.system(size: 12)) } }
+                    .id(notice.id)
+            }
             if let prompt = shownPrompt { tray(prompt) }
             field
         }
@@ -537,7 +559,10 @@ struct ModelChip: View {
     var body: some View {
         Button { thread.showModelPicker = true } label: {
             HStack(spacing: 4) {
-                Text(engine.model(thread.state?.model).map { Self.label($0, engine: engine) } ?? thread.state?.model?.id ?? "Model")
+                // A conversation that couldn't open for a missing provider (the notice above says which).
+                if thread.state == nil, thread.errorIsAuth { Text("Model needed").foregroundStyle(Color.dsWarn) } else {
+                    Text(engine.model(thread.state?.model).map { Self.label($0, engine: engine) } ?? thread.state?.model?.id ?? "Model")
+                }
                 if thread.supportsThinking, let level = ThinkingLevel.title(thread.state?.thinking) { Text(level.lowercased()).foregroundStyle(Color.dsFg3) }
             }
         }

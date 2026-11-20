@@ -751,7 +751,8 @@ private struct ChatStart: View {
         let thread = engine.thread(ref)
         await thread.open()
         guard await thread.send(message, attachments: attachments.map(\.attachment)) else {
-            error = (thread.error ?? "Couldn't send.") + " Your message is kept; try again."
+            let failed = thread.error ?? "Couldn't send"
+            error = (failed.hasSuffix(".") ? failed : failed + ".") + " Your message is kept; try again."
             return
         }
         try? await engine.refreshCatalog()

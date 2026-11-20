@@ -510,8 +510,12 @@ struct AskBox: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            VStack(spacing: 0) {
+            // What went wrong, glued to the top of the box (docs/design/grey "Composer notice").
+            if let sendError {
+                ComposerNoticeStrip(notice: ComposerNotice(id: "send", symbol: "exclamationmark.triangle", title: sendError, dismiss: { self.sendError = nil }))
+            }
             VStack(alignment: .leading, spacing: 14) {
-                if let sendError { Text(sendError).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                 TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(Color.dsFg3), axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 15))
@@ -545,6 +549,7 @@ struct AskBox: View {
             .padding(.top, 16)
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
+            }
             .askBoxCard()
             // Sending moves this box into the conversation's composer (the same morph the start pages used).
             .composerMorph()
