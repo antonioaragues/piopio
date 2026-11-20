@@ -118,7 +118,7 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
 | **A1** | Claude Code runs Build sessions and chats: picker section, composer, approvals in the tray, modes, model switch inside the agent, resume after restart, titles from the agent, Settings › Models section | A Build session on Claude Code edits a file after you allow it, and reopens after a restart with its history |
 | **A2** | Piopio's tools through MCP (CA8); switching to and from an agent mid-conversation with a summary (CA7); thinking level as the agent's effort | A Claude Code conversation remembers something in Piopio's memory and switches back to Piopio's agent |
 | **A3** | `AcpRuntime`: Antigravity CLI (`agy acp`) and Codex | A Build session on Antigravity CLI with your Google plan edits a file |
-| **A4** | Agents and automations on a coding agent (CA9), after a decision on unattended runs | — |
+| **A4** | Agents and automations on a coding agent (CA9). **Left for later (2026-11-21, with the user):** an unattended run spends the plan the user codes with by day, and Piopio can't see how much is left until it fails; running a CLI on a schedule against a personal plan is the case providers are likeliest to rule out (read their terms first); and what makes agents and automations useful (memory, channels, approvals while away) already works on any model. If it's ever needed: an automation that leaves a conversation ready on the agent, for the user to start | Later |
 
 ## 8. Open questions
 
