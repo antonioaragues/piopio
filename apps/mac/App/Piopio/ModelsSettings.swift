@@ -50,7 +50,9 @@ struct ModelsPane: View {
     @State private var onDevice: OnDeviceStatus?
     @AppStorage("dismissedLocalServers") private var dismissedRaw = ""
 
-    private var connected: [ProviderInfo] { engine.providers.filter { $0.isConnected || $0.status == .connecting } }
+    private var connected: [ProviderInfo] { engine.providers.filter { !$0.isAgent && ($0.isConnected || $0.status == .connecting) } }
+    /// Coding agents on this Mac, found or not (docs/spec/31 §5).
+    private var agents: [ProviderInfo] { engine.providers.filter(\.isAgent) }
     private var dismissed: Set<String> { Set(dismissedRaw.split(separator: "\n").map(String.init)) }
     /// Found on this Mac, not added, not dismissed.
     private var banner: EndpointsDetectResult.Found? {
@@ -62,7 +64,7 @@ struct ModelsPane: View {
         Group {
             if let id = detail, let provider = engine.providers.first(where: { $0.id == id }) {
                 ProviderDetailView(engine: engine, provider: provider, back: { detail = nil })
-            } else if connected.isEmpty, !engine.providers.isEmpty {
+            } else if connected.isEmpty, !engine.providers.isEmpty, !agents.contains(where: { $0.status == .connected }) {
                 empty
             } else {
                 page
@@ -120,6 +122,21 @@ struct ModelsPane: View {
                 }
             }
 
+            if !agents.isEmpty {
+                HStack {
+                    Text("Agents on this Mac").font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Text("Each runs a whole conversation on your own plan").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                }
+                .padding(.top, 22).padding(.bottom, 7)
+                ListCard {
+                    ForEach(Array(agents.enumerated()), id: \.element.id) { i, p in
+                        CodingAgentRow(provider: p)
+                        if i < agents.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 62) }
+                    }
+                }
+            }
+
             if let found = banner {
                 DetectedBanner(found: found, add: { addDetected(found) }, dismiss: { dismissedRaw = (Array(dismissed) + [found.baseUrl]).joined(separator: "\n") })
                     .padding(.top, 14)
@@ -168,7 +185,8 @@ struct ModelsPane: View {
     private var subtitle: String {
         let count = connected.count
         let models = engine.models.filter { $0.provider != "faux" }.count
-        var parts = ["\(count) provider\(count == 1 ? "" : "s")", "\(models) model\(models == 1 ? "" : "s")"]
+        let ready = agents.filter { $0.status == .connected }.count
+        var parts = ["\(count) provider\(count == 1 ? "" : "s")"] + (ready > 0 ? ["\(ready) agent\(ready == 1 ? "" : "s")"] : []) + ["\(models) model\(models == 1 ? "" : "s")"]
         if let month = engine.usage?.monthUsd, month > 0 { parts.append("\(MainSidebar.money(month)) this month") }
         return parts.joined(separator: " · ")
     }
@@ -192,7 +210,7 @@ struct ModelsPane: View {
                 }
                 .buttonStyle(PillStyle(compact: true))
                 .popover(isPresented: Binding(get: { picking == role }, set: { if !$0 { picking = nil } })) {
-                    ModelPicker(engine: engine, selected: engine.model(for: role), role: role) { m in engine.setModel(m, for: role); picking = nil }
+                    ModelPicker(engine: engine, selected: engine.model(for: role), role: role, agents: role == .build || role == .chat) { m in engine.setModel(m, for: role); picking = nil }
                 }
             }
             .padding(.horizontal, 14).frame(minHeight: 46)
@@ -324,6 +342,61 @@ private struct ConnectedProviderRow: View {
             Text(value).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
             Text(caption).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
         }
+    }
+}
+
+/// A coding agent found on this Mac (docs/spec/31 §5): version, sign-in and plan; how to install it or sign in when it
+/// can't run a conversation yet. Its sign-in is its own (in Terminal); Piopio stores nothing for it.
+private struct CodingAgentRow: View {
+    let provider: ProviderInfo
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProviderGlyph(provider: provider, size: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(provider.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)
+                    Circle().fill(provider.status == .needsAttention ? Color.dsAmber : Color.dsFg3).frame(width: 7, height: 7)
+                }
+                Text(line).font(.system(size: 12)).foregroundStyle(provider.status == .needsAttention ? Color.dsAmber : Color.dsFg3).lineLimit(1)
+            }
+            Spacer(minLength: 12)
+            if provider.status == .connected {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("Plan").font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
+                    Text("your own").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                }
+            } else if let command {
+                Button(copied ? "Copied" : "Copy \(command.label)") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(command.text, forType: .string)
+                    copied = true
+                }
+                .buttonStyle(PillStyle(compact: true))
+                .help(command.text)
+            }
+        }
+        .padding(.horizontal, 14).frame(minHeight: 62)
+    }
+
+    private var line: String {
+        let version = provider.agent?.version?.replacingOccurrences(of: " (Claude Code)", with: "")
+        switch provider.status {
+        case .connected:
+            return [version, provider.billing, "\(provider.models) models"].compactMap { $0 }.joined(separator: " · ")
+        case .needsAttention:
+            return provider.message ?? "Signed out"
+        default:
+            return "Not installed · install it, then sign in once in Terminal"
+        }
+    }
+
+    /// What to run in Terminal: install it, or sign in.
+    private var command: (label: String, text: String)? {
+        guard let agent = provider.agent else { return nil }
+        if provider.status == .notConnected { return ("install command", agent.install) }
+        return ("sign-in command", agent.signIn)
     }
 }
 
@@ -773,7 +846,7 @@ struct AddProviderSheet: View {
 
     enum Category: String, CaseIterable { case suggested = "Suggested", cloud = "Cloud APIs", subscription = "Subscriptions", platform = "Cloud platforms", local = "Local & self-hosted" }
 
-    private var catalog: [ProviderInfo] { engine.providers.filter { $0.endpoint == nil } }
+    private var catalog: [ProviderInfo] { engine.providers.filter { $0.endpoint == nil && !$0.isAgent } }
 
     var body: some View {
         Group {

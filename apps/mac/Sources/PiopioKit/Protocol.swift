@@ -1482,7 +1482,10 @@ public struct ModelInfo: Codable, Sendable, Hashable, Identifiable {
     public var providerName: String?
     /// Who bills for it: "ChatGPT subscription", "OpenRouter credits", "OpenAI API billing".
     public var billing: String?
+    /// A model inside a coding agent (Claude Code), which runs the whole conversation (docs/spec/31).
+    public var agent: Bool?
     public var ref: ModelRef { ModelRef(provider: provider, id: id) }
+    public var isAgent: Bool { agent == true }
 }
 
 // MARK: Model providers (docs/spec/10-model-providers)
@@ -1524,6 +1527,14 @@ public struct ProviderInfo: Decodable, Sendable, Hashable, Identifiable {
     public var hiddenModels: Int?
     public var sampleModels: [String]?
     public var endpoint: Endpoint?
+    /// A coding agent on this Mac (docs/spec/31): where it is, its version, sign-in, and the commands to install it and sign in.
+    public struct Agent: Decodable, Sendable, Hashable {
+        public var path, version: String?
+        public var signedIn: Bool
+        public var install, signIn: String
+    }
+    public var agent: Agent?
+    public var isAgent: Bool { kind == "agent" }
     public var isConnected: Bool { status == .connected || status == .needsAttention }
 }
 public struct EndpointCheckParams: Encodable, Sendable {

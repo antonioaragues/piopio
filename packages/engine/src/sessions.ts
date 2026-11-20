@@ -17,6 +17,8 @@ import { attachmentsDir, copyAttachments, deleteAttachments, toolImageKeeper } f
 import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, git as runGit, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
+import { ClaudeCodeRuntime } from "./runtimes/claude-code.js";
+import { CLAUDE_CODE_NAME, isCodingAgent } from "./coding-agents.js";
 import { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
@@ -59,6 +61,8 @@ type CatalogEntry = SessionSummary & {
 	thinking?: string;
 	file?: string;
 	sessionFile?: string;
+	/** A conversation run by a coding agent (docs/spec/31): Piopio's copy of its transcript. */
+	agentFile?: string;
 	/** Chats moved from pi-durable (2026-11-15): the old SQLite file, kept until the chat is deleted. */
 	migratedFrom?: string;
 	/** Original CLI file for recovered history; avoid importing a duplicate after restore. */
@@ -233,6 +237,20 @@ export class Sessions {
 			if (list.length) entry.toolsOff = list;
 			else delete entry.toolsOff;
 		}
+		let replaced = false;
+		if (change.model && this.open.has(ref.id)) {
+			const runtime = await this.runtime(ref);
+			const onAgent = runtime instanceof ClaudeCodeRuntime;
+			if (onAgent !== isCodingAgent(change.model.provider)) {
+				// Piopio's agent ⇄ a coding agent (docs/spec/31 CA7): only before the first message, in phase A1.
+				if (runtime.snapshot().items.some((i) => i.kind === "user")) {
+					throw new EngineError("INVALID", onAgent ? `This conversation runs in ${CLAUDE_CODE_NAME}. Start a new conversation to use another model.` : `Start a new conversation to use ${CLAUDE_CODE_NAME}: it runs a conversation from its first message.`);
+				}
+				this.open.delete(ref.id);
+				await runtime.close().catch(() => undefined);
+				replaced = true;
+			}
+		}
 		if (this.open.has(ref.id)) await (await this.runtime(ref)).configure(change);
 		if (change.web !== undefined) entry.web = change.web;
 		if (change.model) entry.model = change.model;
@@ -240,7 +258,14 @@ export class Sessions {
 		else if (change.thinking) entry.thinking = change.thinking;
 		this.save();
 		this.changed(entry);
+		if (replaced) {
+			await this.runtime(ref);
+			this.onRuntimeReplaced?.(ref);
+		}
 	}
+
+	/** A conversation's runtime was replaced (the server moves its subscriptions to the new one). */
+	onRuntimeReplaced?: (ref: ContainerRef) => void;
 
 	rename(ref: ContainerRef, title: string): void {
 		const entry = this.entry(ref);
@@ -457,6 +482,8 @@ export class Sessions {
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
 		for (const old of [entry.file, entry.migratedFrom]) if (old) for (const suffix of ["", "-wal", "-shm"]) rmSync(old + suffix, { force: true });
+		// A coding agent's conversation: Piopio's copy of its transcript (the agent keeps its own session).
+		if (entry.agentFile) rmSync(entry.agentFile, { force: true });
 		if (entry.ref.kind === "thread") {
 			// A chat's files are Piopio's own (chatsDir, scratchDir): they go, as a chat's history always did.
 			if (entry.sessionFile) rmSync(entry.sessionFile, { force: true });
@@ -2292,7 +2319,7 @@ export class Sessions {
 
 	async respond(ref: ContainerRef, promptId: string, response: PromptResponse): Promise<void> {
 		const runtime = await this.runtime(ref);
-		if (!(runtime instanceof BuildRuntime)) throw new EngineError("INVALID", "Only Build sessions ask for approval.");
+		if (!(runtime instanceof BuildRuntime) && !(runtime instanceof ClaudeCodeRuntime)) throw new EngineError("INVALID", "Only Build sessions ask for approval.");
 		runtime.respond(promptId, response);
 	}
 
@@ -2512,6 +2539,7 @@ export class Sessions {
 			await this.handOverToAutomations(id, agent).catch((error: unknown) => this.log(`Automations: couldn't move ${entry.title}'s schedules: ${(error as Error).message}`));
 			return agent;
 		}
+		if (isCodingAgent(model.provider)) return this.openCodingAgent(entry, model);
 		if (entry.ref.kind === "thread") return this.openChat(entry, model);
 		const runtime = await BuildRuntime.open({
 			ref: entry.ref,
@@ -2627,7 +2655,7 @@ export class Sessions {
 	 */
 	private async conversationModel(entry: CatalogEntry): Promise<ModelRef> {
 		const model = entry.model ?? this.hub.defaultModel;
-		if (model.provider === "faux") return model;
+		if (model.provider === "faux" || isCodingAgent(model.provider)) return model;
 		const connected = await this.hub.connected();
 		if (connected.size === 0 || connected.has(model.provider)) return model;
 		const file = entry.sessionFile;
@@ -2684,6 +2712,32 @@ export class Sessions {
 
 	private aboutMeSdk?: ReturnType<typeof aboutMeSdkExtension>;
 
+	/**
+	 * A conversation run by Claude Code (docs/spec/31): in the project's folder, or a chat's own folder. Its transcript
+	 * is Piopio's copy next to the chats' sessions.
+	 */
+	private async openCodingAgent(entry: CatalogEntry, model: ModelRef): Promise<Runtime> {
+		const chat = entry.ref.kind === "thread";
+		const cwd = entry.cwd && existsSync(entry.cwd) ? entry.cwd : this.scratch(entry.ref.id);
+		if (entry.cwd !== cwd) entry.cwd = cwd;
+		if (!entry.agentFile) {
+			entry.agentFile = join(this.paths.chatsDir, "agents", `${entry.ref.id}.json`);
+			this.save();
+		}
+		return ClaudeCodeRuntime.open({
+			ref: entry.ref,
+			cwd,
+			model,
+			...(entry.thinking ? { thinking: entry.thinking } : {}),
+			file: entry.agentFile,
+			agent: this.hub.claudeCode,
+			approvalMode: () => entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? cwd),
+			...(chat ? { chat: true } : {}),
+			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
+			onAttention: (_kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind: "waiting", message }),
+		});
+	}
+
 	private save(): void {
 		const tmp = `${this.paths.catalogIndex}.tmp`;
 		writeFileSync(tmp, JSON.stringify([...this.entries.values()], null, "\t"));
@@ -2691,7 +2745,7 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, agentFile: _af, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, ...rest }: CatalogEntry): SessionSummary {
 	// Proposals go after a week (docs/spec/24 §3).
 	if (rest.sideProposals) {
 		const live = rest.sideProposals.filter((p) => Date.parse(p.expiresAt) > Date.now());

@@ -398,7 +398,10 @@ struct BuildSessionView: View {
     private var subtitle: String {
         let name = project?.name ?? URL(fileURLWithPath: summary.cwd ?? "").lastPathComponent
         let branch = git?.status?.branch ?? summary.worktree?.branch ?? project?.branch
-        return branch.map { "\(name) · \($0)" } ?? (git?.status?.repo == false ? "\(name) · no git" : name)
+        let place = branch.map { "\(name) · \($0)" } ?? (git?.status?.repo == false ? "\(name) · no git" : name)
+        // A coding agent runs it (docs/spec/31 CA3).
+        if let m = engine.model(summary.model), m.isAgent { return "\(place) · runs in \(ModelPicker.providerTag(m))" }
+        return place
     }
 
     static func relative(_ iso: String) -> String {

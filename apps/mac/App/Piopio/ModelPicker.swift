@@ -12,6 +12,12 @@ struct ModelPicker: View {
     var role: EngineController.ModelRole = .chat
     /// Shown between the list and Manage providers (the composer's Thinking control).
     var accessory: AnyView?
+    /// Coding agents' models (Claude Code runs the whole conversation, docs/spec/31): only where a conversation starts or
+    /// continues (the composer, start pages, the Build and chat defaults), not for agents, Quick Chat or background work.
+    var agents = false
+    /// A conversation with messages can't move between Piopio's agent and a coding agent yet (CA7): the other kind's
+    /// rows say so and can't be picked.
+    var keepRunner = false
     let onPick: (ModelRef) -> Void
     @State private var query = ""
     @State private var showVariants = false
@@ -97,11 +103,12 @@ struct ModelPicker: View {
     private func row(_ model: ModelInfo, in section: String) -> some View {
         let key = "\(section)|\(model.provider)/\(model.id)"
         let isSelected = selected?.provider == model.provider && selected?.id == model.id
+        let blocked = isBlocked(model)
         return Button { pick(model) } label: {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(Self.shortName(model)).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                    Text(line(model)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    Text(blocked ? "Start a new conversation to switch" : line(model)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if isSelected { Image(systemName: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2) }
@@ -110,8 +117,10 @@ struct ModelPicker: View {
             .frame(height: 42)
             .background(isSelected || highlighted == key ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
             .contentShape(Rectangle())
+            .opacity(blocked ? 0.5 : 1)
         }
         .buttonStyle(.plain)
+        .disabled(blocked)
         .id(key)
         .help("\(model.id)\n\(Self.price(model)) per million tokens, input / output · \(Self.context(model)) context")
         .onHover { if $0 { highlighted = key } }
@@ -138,9 +147,18 @@ struct ModelPicker: View {
 
     // MARK: Data
 
+    /// The selected model runs in a coding agent.
+    private var selectedIsAgent: Bool {
+        guard let selected else { return false }
+        return engine.models.first { $0.ref == selected }?.isAgent ?? (selected.provider == "claude-code")
+    }
+
+    private func isBlocked(_ m: ModelInfo) -> Bool { keepRunner && selected != nil && m.isAgent != selectedIsAgent }
+
     private var matching: [ModelInfo] {
         let terms = query.lowercased().split(separator: " ")
         return engine.models.filter { m in
+            guard agents || !m.isAgent else { return false }
             let traits = (Self.isFree(m) ? "free " : "") + (m.supports.vision ? "vision images " : "") + (m.supports.reasoning ? "reasoning thinking " : "")
             let hay = "\(m.name) \(m.id) \(m.provider) \(m.providerName ?? "") \(m.billing ?? "") \(traits)".lowercased()
             return terms.allSatisfy { hay.contains($0) }
@@ -159,14 +177,18 @@ struct ModelPicker: View {
         let recents = (selected.map { ["\($0.provider)/\($0.id)"] } ?? []) + recent
         let order = ["openrouter", "faux", "openai", "openai-api"]
         let groups = Dictionary(grouping: listed, by: \.provider)
-        return groups.keys.sorted { (order.firstIndex(of: $0) ?? 9, $0) < (order.firstIndex(of: $1) ?? 9, $1) }.map { provider in
+        // Coding agents come after the model providers.
+        let rank = { (p: String) in groups[p]?.first?.isAgent == true ? 20 : order.firstIndex(of: p) ?? 9 }
+        return groups.keys.sorted { (rank($0), $0) < (rank($1), $1) }.map { provider in
             let models = groups[provider]!.sorted { a, b in
                 let ra = query.isEmpty ? recents.firstIndex(of: "\(a.provider)/\(a.id)") ?? 99 : 99, rb = query.isEmpty ? recents.firstIndex(of: "\(b.provider)/\(b.id)") ?? 99 : 99
                 if ra != rb { return ra < rb }
                 let ma = Self.makerRank(a), mb = Self.makerRank(b)
                 return ma != mb ? ma < mb : Self.shortName(a) < Self.shortName(b)
             }
-            return Section(id: "provider:\(provider)", title: Self.providerTag(models[0]), models: models)
+            // "Claude Code · Claude Pro plan": the agent runs the conversation, and the plan pays (docs/spec/31 §5).
+            let title = models[0].isAgent ? [Self.providerTag(models[0]), models[0].billing].compactMap { $0 }.joined(separator: " · ") : Self.providerTag(models[0])
+            return Section(id: "provider:\(provider)", title: title, models: models)
         }
     }
 
@@ -203,6 +225,7 @@ struct ModelPicker: View {
 
     /// "Anthropic: Claude Haiku 5.5" → "Anthropic"; otherwise the id's vendor ("anthropic/…") or the provider.
     static func maker(_ m: ModelInfo) -> String {
+        if m.isAgent { return "Runs in \(m.providerName ?? "the agent")" }
         if m.provider.hasPrefix("custom-") { return m.providerName ?? "Custom" }
         if m.provider == "openai" || m.provider == "openai-api" { return "OpenAI" }
         if let colon = m.name.firstIndex(of: ":") { return String(m.name[..<colon]).trimmingCharacters(in: .whitespaces) }
@@ -229,7 +252,7 @@ struct ModelPicker: View {
 
     /// "$" under $2, "$$" under $15, "$$$" above, per million output tokens; "Plan" when a subscription pays.
     static func tier(_ m: ModelInfo) -> String {
-        if m.billing?.contains("subscription") == true { return "Plan" }
+        if m.isAgent || m.billing?.contains("subscription") == true { return "Plan" }
         if m.billing == "Your server" || m.billing == "On this Mac" { return "Yours" }
         if isFree(m) { return "Free" }
         return m.pricing.output < 2 ? "$" : m.pricing.output < 15 ? "$$" : "$$$"

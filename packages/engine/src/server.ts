@@ -138,6 +138,8 @@ export class Engine {
 	private server?: Server;
 	private token = "";
 	private subscriptions = new Map<string, () => void>();
+	/** Subscriptions by conversation, so they follow it when its runtime is replaced (a switch to or from a coding agent, docs/spec/31). */
+	private rebinders = new Map<string, { refId: string; rebind: () => Promise<void> }>();
 	private authed = new Set<RpcConnection>();
 	/** Resolves when older threads are indexed for search (tests wait on it). */
 	backfill: Promise<number> = Promise.resolve(0);
@@ -289,6 +291,9 @@ export class Engine {
 		this.sessions.automations = this.automations;
 		this.sessions.log = this.log;
 		this.sessions.onAutomationsMigrated = (lines) => this.appendAutomationReport(lines);
+		this.sessions.onRuntimeReplaced = (ref) => {
+			for (const r of this.rebinders.values()) if (r.refId === ref.id) void r.rebind().catch(() => undefined);
+		};
 		// Folders and connected mail for automations that wait for them (docs/spec/27 §5); webhooks go through hooks.
 		this.watchers = new AgentWatchers({
 			watches: async () => this.automations.watches(),
@@ -724,14 +729,31 @@ export class Engine {
 				const first = steps ? { ...snapshot, items: steps.snapshot(snapshot.items) } : snapshot;
 				// A notification per token is a JSON line and a main-thread hop on the Mac per token: deltas go out a frame at a time.
 				const batcher = new DeltaBatcher((events) => conn.notify("session.events", { subscriptionId, seq: ++seq, events }));
-				const unsubscribe = runtime.onEvents((events) => {
-					batcher.push(steps ? steps.events(events, () => runtime.snapshot().items) : events);
+				let current = runtime;
+				let unsubscribe = runtime.onEvents((events) => {
+					batcher.push(steps ? steps.events(events, () => current.snapshot().items) : events);
 				});
 				const off = () => {
 					unsubscribe();
 					batcher.dispose();
+					this.rebinders.delete(subscriptionId);
 				};
 				this.subscriptions.set(subscriptionId, off);
+				// The conversation's runtime was replaced: listen to the new one, starting from its snapshot.
+				if (!p.ref.conversationId) {
+					this.rebinders.set(subscriptionId, {
+						refId: p.ref.id,
+						rebind: async () => {
+							const next = await this.sessions.runtime(p.ref);
+							if (next === current || !this.subscriptions.has(subscriptionId)) return;
+							unsubscribe();
+							current = next;
+							const snap = next.snapshot();
+							batcher.push([{ type: "resnapshot", snapshot: steps ? { ...snap, items: steps.snapshot(snap.items) } : snap }]);
+							unsubscribe = next.onEvents((events) => batcher.push(steps ? steps.events(events, () => current.snapshot().items) : events));
+						},
+					});
+				}
 				owned.add(subscriptionId);
 				return { subscriptionId, snapshot: first } satisfies Result<"sessions.subscribe">;
 			}

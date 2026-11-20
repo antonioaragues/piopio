@@ -188,6 +188,8 @@ struct ThreadView: View {
     private var subtitle: String {
         let place = "Chat"
         var parts = [place, BuildSessionView.relative(summary.updatedAt)]
+        // A coding agent runs it (docs/spec/31 CA3).
+        if let m = engine.model(thread.state?.model ?? summary.model), m.isAgent { parts.append("runs in \(ModelPicker.providerTag(m))") }
         let files = thread.attachmentCount
         if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
         if thread.state?.status == .running { parts.append("answering…") }

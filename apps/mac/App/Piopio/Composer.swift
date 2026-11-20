@@ -364,6 +364,11 @@ struct Composer: View {
             let draft = engine.agents.first { $0.ref.id == thread.ref.id }?.agent?.draft == true
             return draft ? "In your own words…" : "Reply, or ask it to change how it works…"
         }
+        // A coding agent runs this conversation (docs/spec/31 CA3).
+        if let m = engine.model(thread.state?.model), m.isAgent {
+            let agent = ModelPicker.providerTag(m)
+            return thread.document.lastItem != nil ? "Reply to \(agent)…" : "Message \(agent)…"
+        }
         if thread.document.lastItem != nil { return "Reply…" }
         if isBuild, engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.profile == .chat { return "Ask about these files, @mention one, or search the web…" }
         return isBuild ? "Ask, @mention files, or /command…" : "Message…"
@@ -571,7 +576,7 @@ struct ModelChip: View {
         .buttonStyle(ComposerChipStyle())
         .help("Model and thinking")
         .popover(isPresented: Binding(get: { thread.showModelPicker }, set: { thread.showModelPicker = $0 }), arrowEdge: .top) {
-            ModelPicker(engine: engine, selected: thread.state?.model, accessory: thread.supportsThinking ? AnyView(thinking) : nil) { model in
+            ModelPicker(engine: engine, selected: thread.state?.model, accessory: thread.supportsThinking ? AnyView(thinking) : nil, agents: thread.ref.kind == .thread || thread.ref.kind == .build, keepRunner: thread.document.lastItem != nil) { model in
                 thread.showModelPicker = false
                 Task { await thread.setModel(model) }
             }
@@ -612,6 +617,8 @@ struct ModelChip: View {
     /// the selected model's provider is always visible).
     static func label(_ m: ModelInfo, engine: EngineController) -> String {
         let name = short(m).replacingOccurrences(of: "Claude ", with: "")
+        // A coding agent runs the conversation: it's named first, always (docs/spec/31 CA3).
+        if m.isAgent { return "\(ModelPicker.providerTag(m)) · \(name)" }
         return Set(engine.models.map(\.provider)).subtracting(["faux"]).count > 1 ? "\(name) · \(ModelPicker.providerTag(m))" : name
     }
 }

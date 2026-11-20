@@ -1,0 +1,300 @@
+<title>Coding Agents in Piopio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one reading column (720) of proposal text, with mockups drawn in Piopio's grey-ink tokens set into it. */
+:root {
+  --win: #FCFCFB; --side: #F4F4F2; --card: #FFFFFF; --field: #E9E9E6; --bubble: #EDEDEC;
+  --chip: rgba(0,0,0,.06); --track: rgba(0,0,0,.05); --seg: #FFFFFF;
+  --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --line: rgba(0,0,0,.08); --edge: rgba(0,0,0,.09);
+  --inv: #1F1F1E; --invfg: #FFFFFF; --accent: #2F6FEB; --warn: #B7791F; --page: #EFEFEC;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --win: #1E1E1D; --side: #191918; --card: #252524; --field: #252524; --bubble: #2B2B29;
+  --chip: rgba(255,255,255,.07); --track: rgba(255,255,255,.06); --seg: #3A3A38;
+  --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --line: rgba(255,255,255,.09); --edge: rgba(255,255,255,.10);
+  --inv: #ECECEA; --invfg: #1E1E1D; --accent: #5B8DEF; --warn: #D69E2E; --page: #141413; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --win: #1E1E1D; --side: #191918; --card: #252524; --field: #252524; --bubble: #2B2B29;
+  --chip: rgba(255,255,255,.07); --track: rgba(255,255,255,.06); --seg: #3A3A38;
+  --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --line: rgba(255,255,255,.09); --edge: rgba(255,255,255,.10);
+  --inv: #ECECEA; --invfg: #1E1E1D; --accent: #5B8DEF; --warn: #D69E2E; --page: #141413; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--page); color: var(--fg); font: 15px/1.6 var(--ui); -webkit-font-smoothing: antialiased }
+.wrap { max-width: 760px; margin: 0 auto; padding-block: 48px 96px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+h1 { font-size: 30px; line-height: 1.15; letter-spacing: -.02em; margin: 0 0 8px; text-wrap: balance }
+h2 { font-size: 19px; letter-spacing: -.01em; margin: 56px 0 8px; text-wrap: balance }
+h3 { font-size: 15px; margin: 28px 0 6px }
+p, li { color: var(--fg); max-width: 66ch }
+.lede { color: var(--fg2); font-size: 16.5px; margin: 0 }
+.meta { color: var(--fg3); font-size: 13px; margin: 0 0 28px }
+.muted { color: var(--fg2) }
+code, .mono { font-family: var(--mono); font-size: .88em }
+a { color: var(--accent); text-decoration: none } a:hover { text-decoration: underline }
+ul { padding-left: 20px } li { margin: 4px 0 }
+.caption { color: var(--fg3); font-size: 12.5px; margin: 10px 2px 0 }
+
+/* Decision box: the one thing the page argues */
+.thesis { background: var(--win); border: .5px solid var(--line); border-radius: 12px; padding: 18px 20px; margin: 28px 0 0 }
+.thesis strong { display: block; margin-bottom: 4px }
+
+/* Tables */
+.tbl { overflow-x: auto; margin-top: 12px; border: .5px solid var(--line); border-radius: 12px; background: var(--win) }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 560px }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: .5px solid var(--line) }
+tr:last-child td { border-bottom: 0 }
+th { font-size: 12px; font-weight: 600; color: var(--fg3) }
+td:first-child { font-weight: 600; white-space: nowrap }
+.yes { color: var(--fg) } .no { color: var(--fg3) }
+
+/* ───── Mockup surfaces (Piopio grey ink) ───── */
+.stage { margin-top: 16px; background: var(--side); border-radius: 12px; padding: 22px; box-shadow: 0 1px 0 var(--line) inset, 0 0 0 .5px var(--line);
+  overflow-x: auto; font-size: 13px; line-height: 1.45 }
+.stage-inner { min-width: 520px }
+.cardwin { background: var(--win); border-radius: 10px; box-shadow: 0 0 0 1px var(--edge) }
+.bar { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: .5px solid var(--line) }
+.bar b { font-size: 13.5px } .bar .sub { color: var(--fg3); font-size: 12px }
+.bar .sp { flex: 1 }
+.ico { width: 16px; height: 16px; display: inline-block; color: var(--fg2); flex: none }
+.ico svg { width: 16px; height: 16px; display: block }
+
+.transcript { padding: 20px 28px 8px; display: grid; gap: 12px }
+.user { justify-self: end; background: var(--bubble); border-radius: 12px; padding: 8px 13px; max-width: 80% }
+.process { color: var(--fg3); font-size: 12.5px }
+.answer { font-size: 14px; line-height: 1.6 }
+.foot { color: var(--fg3); font-size: 12px; display: flex; gap: 10px; align-items: center }
+.sysline { color: var(--fg3); font-size: 12.5px; text-align: center; display: flex; align-items: center; gap: 10px }
+.sysline::before, .sysline::after { content: ""; flex: 1; height: .5px; background: var(--line) }
+.sysline a { color: var(--accent) }
+
+.composer { margin: 8px auto 16px; width: calc(100% - 56px); max-width: 560px; background: var(--card); border-radius: 16px;
+  box-shadow: 0 0 0 .5px var(--edge), 0 2px 10px rgba(0,0,0,.04); overflow: hidden }
+.notice { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--win); border-bottom: .5px solid var(--line); font-size: 12.5px }
+.notice .t { color: var(--fg) } .notice .d { color: var(--fg3) } .notice .x { margin-left: auto; color: var(--fg3) }
+.tray { background: var(--win); border-bottom: .5px solid var(--line); padding: 10px 14px; display: grid; gap: 8px }
+.tray .row { display: flex; align-items: center; gap: 8px }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none }
+.cmd { font-family: var(--mono); font-size: 12px; background: var(--bubble); border-radius: 8px; padding: 7px 10px }
+.btn-inv { background: var(--inv); color: var(--invfg); border-radius: 8px; padding: 4px 10px; font-weight: 500; font-size: 12.5px }
+.ph { padding: 12px 14px 4px; color: var(--fg3); font-size: 14px }
+.cbar { display: flex; align-items: center; gap: 4px; padding: 6px 10px 10px; color: var(--fg2); font-size: 12.5px }
+.sel { padding: 3px 6px; border-radius: 6px } .sel.hover { background: var(--chip) }
+.who { color: var(--fg) }
+.send { width: 28px; height: 28px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; color: var(--fg3); margin-left: 4px }
+
+/* Picker menu */
+.menu { width: 380px; background: var(--card); border-radius: 12px; box-shadow: 0 0 0 .5px var(--edge), 0 10px 30px rgba(0,0,0,.12); padding: 6px }
+.search { padding: 8px 10px 10px; color: var(--fg3); border-bottom: .5px solid var(--line); margin: 0 -6px 4px; padding-left: 16px }
+.ghead { display: flex; justify-content: space-between; color: var(--fg3); font-size: 12px; padding: 8px 10px 3px }
+.mrow { border-radius: 7px; padding: 6px 10px; display: flex; align-items: center; gap: 10px }
+.mrow.on { background: var(--chip) }
+.mrow .n { color: var(--fg) } .mrow .s { color: var(--fg3); font-size: 12px }
+.mrow .ck { margin-left: auto; color: var(--fg2) }
+.mfoot { border-top: .5px solid var(--line); margin: 6px -6px -6px; padding: 9px 16px; display: flex; justify-content: space-between; font-size: 12px }
+.mfoot a { color: var(--accent) } .mfoot span { color: var(--fg3) }
+.seg { display: inline-flex; background: var(--track); border-radius: 7px; padding: 2px; font-size: 11.5px; color: var(--fg2) }
+.seg i { font-style: normal; padding: 2px 8px; border-radius: 5px } .seg i.on { background: var(--seg); color: var(--fg); box-shadow: 0 0 0 .5px var(--line) }
+
+/* Settings */
+.set { padding: 22px 26px 26px }
+.set h4 { font-size: 13px; margin: 18px 0 8px; display: flex; justify-content: space-between; font-weight: 600 }
+.set h4 span { font-weight: 400; color: var(--fg3); font-size: 12px }
+.group { background: var(--card); border-radius: 12px; box-shadow: 0 0 0 .5px var(--line) }
+.srow { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: .5px solid var(--line) }
+.srow:last-child { border-bottom: 0 }
+.tile { width: 30px; height: 30px; border-radius: 8px; background: var(--bubble); display: grid; place-items: center; font-size: 10.5px; font-weight: 700; color: var(--fg2); flex: none }
+.srow .n { font-weight: 600; font-size: 13.5px } .srow .s { color: var(--fg3); font-size: 12px }
+.srow .r { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--fg2); font-size: 12.5px }
+.toggle { width: 30px; height: 18px; border-radius: 9px; background: var(--inv); position: relative; flex: none }
+.toggle::after { content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--invfg); top: 2px; right: 2px }
+.toggle.off { background: var(--track) } .toggle.off::after { right: auto; left: 2px; background: var(--seg); box-shadow: 0 0 0 .5px var(--line) }
+.status { width: 6px; height: 6px; border-radius: 50%; background: #3BA55C; display: inline-block; margin-left: 6px; vertical-align: 2px }
+.status.grey { background: var(--fg3) }
+
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
+@media (max-width: 640px) { .pair { grid-template-columns: 1fr } h1 { font-size: 25px } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <h1>Coding agents in Piopio</h1>
+  <p class="lede">Claude Code, Codex and Gemini CLI as things you pick in the model picker. When you pick one, it runs the whole conversation on your own plan, and Piopio stays the window around it.</p>
+  <p class="meta">Proposal and mockups · 20 Nov 2026 · nothing built yet · all model names and numbers are sample data</p>
+
+  <div class="thesis">
+    <strong>The rule: a conversation runs on Piopio's agent or on one of yours. It's one choice, made in the picker.</strong>
+    <span class="muted">Picking “Gemini 3 Pro · Gemini CLI” doesn't put a pi model in front of Gemini. Gemini CLI receives your messages, runs its own tools and answers. Piopio draws the transcript, asks you for approvals, keeps checkpoints, and gives the agent its own tools (memory, connectors, browser) through MCP. The current <code>task</code> handoff to Claude Code or Codex stays for conversations that run on Piopio's agent.</span>
+  </div>
+
+  <h2>What T3 Code does</h2>
+  <p>T3 Code is a control panel for agents and has no agent of its own. “It is a local control plane for those agents, not a new model or a hosted coding agent.”</p>
+  <ul>
+    <li><strong>Every provider is a CLI run as a subprocess.</strong> An adapter per provider turns its protocol into T3's events. Codex runs through <code>codex app-server</code>, Claude Code through the Claude Agent SDK, and Antigravity, Grok and others through ACP. The provider's own loop and tools do the work.</li>
+    <li><strong>It uses your own sign-in.</strong> T3 doesn't sell tokens. You sign in with each CLI (<code>claude auth login</code>, <code>codex login</code>). If a binary isn't on the PATH, you set its path under Settings › Providers.</li>
+    <li><strong>Settings › Providers</strong> shows each provider's installed version, sign-in state, plan and an on/off switch. Each has its own binary path, arguments and environment, and you can add a second instance for another account.</li>
+    <li><strong>The picker groups models by provider</strong> and includes reasoning level and a Fast switch. You can switch provider in the middle of a thread. The thread marks where the change happened, the context carries over, and the old provider's tool calls and reasoning stay behind.</li>
+    <li><strong>The composer</strong> holds model, reasoning, permission mode (Supervised, Auto-accept edits, Auto, Full access) and plan mode. Modes a provider doesn't support fall back to Supervised. Approvals show inline with Approve and Decline.</li>
+  </ul>
+  <p class="muted">Gemini isn't on T3's built-in list. Google's agent there is Antigravity. Sources: <a href="https://raw.githubusercontent.com/pingdotgg/t3code/main/README.md">README</a>, <a href="https://raw.githubusercontent.com/pingdotgg/t3code/main/AGENTS.md">AGENTS.md</a>, <a href="https://flaviocopes.com/t3-code">Flavio Copes' deep dive</a>. T3 is in 0.1.x beta, so details change quickly.</p>
+
+  <h2>Where Piopio is different</h2>
+  <p>T3 is only a shell around other people's agents. Piopio already has its own agent, with memory, connectors, the browser, computer use, side conversations, agents and automations. So the question isn't whether to replace it. The question is how both kinds share one picker, one transcript and one approval tray. The answer is the same in each case: <strong>the conversation keeps every Piopio surface, and the agent changes underneath it.</strong></p>
+
+  <!-- ───── Mockup 1: picker ───── -->
+  <h2>1 · The picker</h2>
+  <p>Agents get their own groups below the model providers. Each row shows the model and the agent that runs it. The billing line says whose plan pays for it.</p>
+  <div class="stage"><div class="stage-inner" style="display:flex;justify-content:center">
+    <div class="menu">
+      <div class="search">Search models and agents</div>
+      <div class="ghead"><span>OpenRouter</span><span>credits</span></div>
+      <div class="mrow"><div><div class="n">Claude Opus 5.5</div><div class="s">Piopio's agent · $$$ · reads images</div></div></div>
+      <div class="mrow"><div><div class="n">DeepSeek V4</div><div class="s">Piopio's agent · $ · default</div></div></div>
+
+      <div class="ghead" style="margin-top:6px"><span>Gemini CLI · runs the conversation</span><span>Google AI plan</span></div>
+      <div class="mrow on"><div><div class="n">Gemini 3 Pro</div><div class="s">Gemini CLI 0.27 on this Mac · Plan</div></div><span class="ck">✓</span></div>
+      <div class="mrow"><div><div class="n">Gemini 3 Flash</div><div class="s">Gemini CLI 0.27 on this Mac · Plan</div></div></div>
+
+      <div class="ghead" style="margin-top:6px"><span>Claude Code · runs the conversation</span><span>Claude plan</span></div>
+      <div class="mrow"><div><div class="n">Opus 5.5</div><div class="s">Claude Code 2.1 on this Mac · Plan</div></div></div>
+      <div class="mrow"><div><div class="n">Sonnet 5.5</div><div class="s">Claude Code 2.1 on this Mac · Plan</div></div></div>
+
+      <div class="ghead" style="margin-top:6px"><span>Thinking</span><span class="seg"><i>Off</i><i>Low</i><i class="on">Medium</i><i>High</i></span></div>
+      <div class="mfoot"><a href="#settings">Manage providers and agents</a><span>⌘↩ sets as default</span></div>
+    </div>
+  </div></div>
+  <p class="caption">Codex doesn't appear because it isn't installed on this Mac. Thinking shows only the levels the selected agent accepts, and hides itself when the agent takes none.</p>
+
+  <!-- ───── Mockup 2: conversation on Gemini CLI ───── -->
+  <h2>2 · A conversation that runs on Gemini CLI</h2>
+  <p>You can tell what's running from three places, without adding badges: the toolbar subtitle, the composer placeholder, and the model selector, which names the agent first. The first time, a notice strip says once what this means.</p>
+  <div class="stage"><div class="stage-inner">
+    <div class="cardwin">
+      <div class="bar"><b>Fix the flaky upload test</b><span class="sub">piopio · runs in Gemini CLI</span><span class="sp"></span>
+        <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg></span>
+        <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 4.5h4l1.2 1.5H14v6.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg></span>
+      </div>
+      <div class="transcript">
+        <div class="user">The upload test fails about one run in five. Find out why and fix it.</div>
+        <div class="process">Thought for 9s ›</div>
+        <div class="process">Read 3 files, ran <span class="mono">npm test -- upload</span> 5 times ›</div>
+        <div class="answer">The test reads the temp folder before the write stream has closed. It passes when the disk is fast. I'll wait for <span class="mono">finish</span> before the assertion and run it 20 times to confirm.</div>
+        <div class="foot"><span>Gemini 3 Pro · Gemini CLI · 41s</span></div>
+      </div>
+      <div class="composer">
+        <div class="tray">
+          <div class="row"><span class="dot"></span><b>Gemini CLI wants to edit a file</b><span style="margin-left:auto;color:var(--fg3);font-size:12px">upload.test.ts · +3 −1</span></div>
+          <div class="cmd">await once(stream, "finish")</div>
+          <div class="row" style="color:var(--fg2);font-size:12.5px"><span>Deny</span><span>Allow edits in this folder</span><span style="margin-left:auto" class="btn-inv">Allow ⌘↩</span></div>
+        </div>
+        <div class="ph">Or tell Gemini CLI what to do instead…</div>
+        <div class="cbar">
+          <span class="sel">+</span><span class="sel">Ask before edits</span>
+          <span style="flex:1"></span>
+          <span class="sel hover"><span class="who">Gemini CLI</span> · Gemini 3 Pro</span>
+          <span class="send">↑</span>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <p class="caption">The approval comes from the agent itself (an ACP <span class="mono">request_permission</span>) and lands in the same composer tray as Piopio's own. The modes map onto the agent's: Read only → plan, Ask before edits → default, Auto-edit → auto_edit, Full → yolo.</p>
+
+  <div class="pair" style="margin-top:14px">
+    <div class="stage" style="margin:0"><div style="min-width:0">
+      <div class="composer" style="width:100%;margin:0">
+        <div class="notice"><span class="ico" style="color:var(--fg3)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.01"/></svg></span>
+          <span><span class="t">Gemini CLI runs this conversation</span><span class="d"> · uses your Google plan; Piopio's memory and connectors come with it as tools</span></span><span class="x">✕</span></div>
+        <div class="ph">Message Gemini CLI…</div>
+        <div class="cbar"><span class="sel">+</span><span class="sel">Ask before edits</span><span style="flex:1"></span><span class="sel"><span class="who">Gemini CLI</span> · Gemini 3 Pro</span><span class="send">↑</span></div>
+      </div>
+    </div></div>
+    <div class="stage" style="margin:0"><div style="min-width:0">
+      <div class="composer" style="width:100%;margin:0">
+        <div class="notice"><span class="ico" style="color:var(--warn)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M8 2.5l6 11H2z"/><path d="M8 7v3M8 12v.01"/></svg></span>
+          <span><span class="t">Gemini CLI is signed out</span><span class="d"> · nothing was sent</span></span>
+          <span style="margin-left:auto" class="btn-inv">Sign in</span><span style="color:var(--fg2);font-size:12px">Use another model</span></div>
+        <div class="ph">Message Gemini CLI…</div>
+        <div class="cbar"><span class="sel">+</span><span class="sel">Ask before edits</span><span style="flex:1"></span><span class="sel" style="color:var(--warn)">Gemini CLI · sign in</span><span class="send">↑</span></div>
+      </div>
+    </div></div>
+  </div>
+  <p class="caption">Left: the first message in a conversation that runs on an agent (it can be dismissed and is shown once per agent). Right: the existing composer notice, used for an agent that's missing or signed out. Sign in opens Terminal with <span class="mono">gemini</span>, because each CLI handles its own sign-in.</p>
+
+  <!-- ───── Mockup 3: switching ───── -->
+  <h2>3 · Switching mid-conversation</h2>
+  <p>Switching is allowed, as in T3. Each agent keeps its own session, so the new one starts from a summary and the turns so far. The switch is shown as a line in the transcript, not as a dialog.</p>
+  <div class="stage"><div class="stage-inner">
+    <div class="cardwin"><div class="transcript" style="padding-bottom:20px">
+      <div class="answer" style="color:var(--fg2)">…so the export works for one file, but folders still time out.</div>
+      <div class="foot"><span>DeepSeek V4 · OpenRouter · 8s</span></div>
+      <div class="sysline"><span>Now running in <b style="color:var(--fg2);font-weight:500">Gemini CLI</b> · it starts from a summary of the 14 messages above · <a href="#">Undo</a></span></div>
+      <div class="user">Take it from here and fix the folder case.</div>
+      <div class="process">Read 6 files, ran 2 commands ›</div>
+      <div class="foot"><span>Gemini 3 Pro · Gemini CLI · 1m 12s</span></div>
+      <div class="sysline"><span>Back on <b style="color:var(--fg2);font-weight:500">Piopio's agent</b> · Gemini CLI's tool calls stay in its session; its answers are in the summary</span></div>
+    </div></div>
+  </div></div>
+  <p class="caption">Switching while a turn runs works the way it does today: the change applies from the next message on.</p>
+
+  <!-- ───── Mockup 4: settings ───── -->
+  <h2 id="settings">4 · Settings › Models</h2>
+  <p>Agents are a section of their own on the same page, because they come from this Mac and not from an account Piopio holds. Piopio stores no key for them: each CLI keeps its own sign-in.</p>
+  <div class="stage"><div class="stage-inner">
+    <div class="cardwin set">
+      <div style="display:flex;align-items:baseline;gap:10px"><b style="font-size:20px;letter-spacing:-.02em">Models</b><span style="color:var(--fg2);font-size:12.5px">1 provider · 2 agents · $0.47 this month</span><span style="margin-left:auto" class="btn-inv">+ Add provider</span></div>
+      <h4>Connected</h4>
+      <div class="group">
+        <div class="srow"><span class="tile">OR</span><div><div class="n">OpenRouter<span class="status"></span></div><div class="s">Cloud · API key · 396 models</div></div><div class="r">$0.47 ›</div></div>
+      </div>
+      <h4>Agents on this Mac <span>Each runs a whole conversation on its own plan</span></h4>
+      <div class="group">
+        <div class="srow"><span class="tile">G</span><div><div class="n">Gemini CLI<span class="status"></span></div><div class="s">0.27.3 · signed in with Google · /opt/homebrew/bin/gemini</div></div><div class="r">Plan<span class="toggle"></span>›</div></div>
+        <div class="srow"><span class="tile">CC</span><div><div class="n">Claude Code<span class="status"></span></div><div class="s">2.1.319 · signed in · Claude plan</div></div><div class="r">Plan<span class="toggle"></span>›</div></div>
+        <div class="srow"><span class="tile">CX</span><div><div class="n">Codex<span class="status grey"></span></div><div class="s">Not installed · npm i -g @openai/codex, then codex login</div></div><div class="r"><span style="color:var(--accent)">How to install</span><span class="toggle off"></span></div></div>
+      </div>
+      <h4>Default model <span>Any chat can still switch</span></h4>
+      <div class="group">
+        <div class="srow"><div class="n" style="font-weight:500">Build sessions</div><div class="r"><span class="sel hover">Gemini CLI · Gemini 3 Pro</span></div></div>
+        <div class="srow"><div class="n" style="font-weight:500">Chats and notebooks</div><div class="r"><span class="sel hover">DeepSeek V4 <span style="color:var(--fg3)">· OpenRouter</span></span></div></div>
+        <div class="srow"><div class="n" style="font-weight:500">New agents</div><div class="r"><span style="color:var(--fg3)">DeepSeek V4 · OpenRouter</span></div></div>
+      </div>
+    </div>
+  </div></div>
+  <p class="caption">An agent's page (›) has the binary path, extra arguments, the version check, “Open Terminal to sign in”, and whether it may also be used as a <span class="mono">task</span> helper from Piopio's agent. An agent's default can be set for Build and Chats. New agents (automations) stay on models for now; see below.</p>
+
+  <h2>How it all fits together</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Piopio feature</th><th>On Piopio's agent (pi)</th><th>On Claude Code · Codex · Gemini CLI</th></tr></thead>
+    <tbody>
+      <tr><td>Transcript</td><td class="yes">As today</td><td class="yes">Same items. Messages, thoughts, tool calls and plans come from ACP updates</td></tr>
+      <tr><td>Approvals and modes</td><td class="yes">Piopio's approvals</td><td class="yes">The agent asks and Piopio's tray answers. Modes map onto the agent's own</td></tr>
+      <tr><td>Checkpoints, diff, review</td><td class="yes">As today</td><td class="yes">Same. Piopio snapshots the folder with git around each turn, whoever edits</td></tr>
+      <tr><td>Memory, connectors, browser, computer use, earlier conversations</td><td class="yes">Built-in tools</td><td class="yes">The same tools through an MCP server that Piopio passes when the session starts</td></tr>
+      <tr><td>Titles, follow-ups, commit messages</td><td class="yes">Utility model</td><td class="yes">Asked from the same agent as a one-off question. No other provider needed</td></tr>
+      <tr><td>Thinking level</td><td class="yes">Off · Low · Medium · High</td><td class="yes">What the agent accepts (Codex: reasoning effort). Hidden otherwise</td></tr>
+      <tr><td>Edit a message, regenerate, branch</td><td class="yes">Yes</td><td class="no">Not offered. These are already optional in <span class="mono">Runtime</span></td></tr>
+      <tr><td>Side conversations</td><td class="yes">Yes</td><td class="yes">They start on the conversation's agent</td></tr>
+      <tr><td>Cost</td><td class="yes">Credits, $</td><td class="yes">“Plan”. Claude Code's reported cost shows as information, not spending (as AP7 does now)</td></tr>
+      <tr><td>Agents and automations</td><td class="yes">Yes</td><td class="no">Later. Unattended scheduled runs on a personal plan need their own decision (limits, terms, who approves)</td></tr>
+      <tr><td><span class="mono">task</span> handoff</td><td class="yes">Can hand off to Claude Code or Codex (today), and Gemini CLI</td><td class="no">Each agent uses its own subagents</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Under the hood</h2>
+  <ul>
+    <li><strong>One new runtime, <span class="mono">AcpRuntime</span>.</strong> The engine already has a <span class="mono">Runtime</span> interface “whatever harness backs it” (<span class="mono">runtimes/runtime.ts</span>). An ACP client implements it once for all three: Gemini CLI speaks ACP natively (<span class="mono">gemini --experimental-acp</span>, present in the 0.27.3 on this Mac), Claude Code through Zed's <span class="mono">claude-agent-acp</span> adapter, and Codex through <span class="mono">codex-acp</span>. Any other ACP agent (OpenCode, Kiro…) can be added later without new code.</li>
+    <li><strong>Model refs don't change shape:</strong> <span class="mono">{ provider: "agent:gemini", id: "gemini-3-pro" }</span>. <span class="mono">sessions.ts</span> picks <span class="mono">AcpRuntime</span> when the provider starts with <span class="mono">agent:</span>. Reopening a conversation calls the agent's <span class="mono">session/load</span>.</li>
+    <li><strong>Detection reuses <span class="mono">external-agents.ts</span></strong> (it already finds <span class="mono">claude</span> and <span class="mono">codex</span> on the short app PATH), plus <span class="mono">gemini</span>, the version and the sign-in state. <span class="mono">providers.list</span> returns them as a new kind, “agent”.</li>
+    <li><strong>Piopio's tools as MCP:</strong> a small stdio MCP server inside the engine exposes memory, connectors, browser and computer use. It's passed in <span class="mono">session/new</span>, so an agent conversation keeps them.</li>
+  </ul>
+
+  <h2>Open questions</h2>
+  <ul>
+    <li>Bundle the Claude and Codex ACP adapters with the app, or install them on first use? (Gemini needs nothing.)</li>
+    <li>Plan limits: when the agent hits its plan's limit, show a notice with “Use another model”. Never move to credits without asking (spec 29).</li>
+    <li>Terms: Piopio drives the CLI you installed and signed in to, the way Zed and T3 do, and never reads or reuses its tokens. Worth reading each provider's current terms before shipping.</li>
+    <li>Notebooks: the organizer that inserts headings is Piopio's own. Does it keep running on a model while the conversation runs on an agent, or is it off there?</li>
+  </ul>
+</div>

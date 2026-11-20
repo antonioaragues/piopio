@@ -640,6 +640,8 @@ export const ModelInfo = Type.Object({
 	providerName: Type.Optional(Type.String()),
 	/** Who bills for it: "ChatGPT subscription", "OpenRouter credits", "OpenAI API billing" (docs/spec/10 FR2). */
 	billing: Type.Optional(Type.String()),
+	/** A model inside a coding agent (Claude Code), which runs the whole conversation (docs/spec/31). */
+	agent: Type.Optional(Type.Boolean()),
 });
 export type ModelInfo = Static<typeof ModelInfo>;
 
@@ -668,8 +670,10 @@ export const ProviderInfo = Type.Object({
 			contextWindow: Type.Optional(Type.Number()),
 		}),
 	),
-	/** Catalog (Add provider sheet): cloud API, subscription or cloud platform. */
-	kind: Type.Optional(literals("cloud", "subscription", "platform", "custom")),
+	/** Catalog (Add provider sheet): cloud API, subscription or cloud platform; "agent": a coding agent on this Mac (docs/spec/31). */
+	kind: Type.Optional(literals("cloud", "subscription", "platform", "custom", "agent")),
+	/** A coding agent: where it is, its version, whether it's signed in, and the commands to install it and sign in. */
+	agent: Type.Optional(Type.Object({ path: Type.Optional(Type.String()), version: Type.Optional(Type.String()), signedIn: Type.Boolean(), install: Type.String(), signIn: Type.String() })),
 	/** The "Popular" card's one line. */
 	popular: Type.Optional(Type.String()),
 	/** Where to create a key. */

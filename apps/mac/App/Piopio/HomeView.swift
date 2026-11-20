@@ -537,7 +537,7 @@ struct AskBox: View {
                         Button { showModels = true } label: { Text(modelLabel) }
                             .buttonStyle(ComposerChipStyle(muted: true))
                             .popover(isPresented: $showModels, arrowEdge: .bottom) {
-                                ModelPicker(engine: engine, selected: model ?? defaultModel, role: project != nil ? .build : .chat) { m in model = m; showModels = false }
+                                ModelPicker(engine: engine, selected: model ?? defaultModel, role: project != nil ? .build : .chat, agents: true) { m in model = m; showModels = false }
                             }
                     }
                     SendButton(enabled: !sending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, size: 30, action: send)

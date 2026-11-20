@@ -15,6 +15,7 @@ import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, type End
 import { billingLabel, connectMethods, FEATURED, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, UTILITY_MODEL, verifyKey } from "./providers.js";
 import type { SecretBroker } from "./secrets.js";
 import { OpenRouterLive } from "./openrouter-live.js";
+import { CLAUDE_CODE, ClaudeCodeAgent } from "./coding-agents.js";
 
 export const DEFAULT_MODEL: ModelRef = { provider: "openrouter", id: "anthropic/claude-haiku-5.5" };
 
@@ -38,14 +39,23 @@ export class ModelHub {
 	private connectedIds = new Set<string>();
 
 	readonly onDevice: OnDeviceModel;
+	/** The user's Claude Code, which can run a whole conversation (docs/spec/31). Off in tests unless faked. */
+	readonly claudeCode: ClaudeCodeAgent;
+	private readonly agentsOn: boolean;
+	/** Claude Code was found signed in at the last listing, for the synchronous default model. */
+	private claudeCodeReady = false;
 	/** The user's choice (Settings › Models); the server connects it to the settings file. Unset: automatic. */
 	utilityChoice: () => UtilityChoice | undefined = () => undefined;
 
 	constructor(
 		private readonly secrets: SecretBroker,
-		private readonly options: { faux?: boolean; home?: string; onDevice?: OnDeviceModel } = {},
+		private readonly options: { faux?: boolean; home?: string; onDevice?: OnDeviceModel; claudeCode?: ClaudeCodeAgent } = {},
 	) {
 		this.onDevice = options.onDevice ?? new OnDeviceModel();
+		// The real Claude Code is looked for except in faux runs (tests, captures), which get the pretend one on request.
+		const fake = process.env.PIOPIO_FAKE_CLAUDE_CODE === "1";
+		this.agentsOn = Boolean(options.claudeCode) || fake || !options.faux;
+		this.claudeCode = options.claudeCode ?? new ClaudeCodeAgent({ fake });
 		this.credentials = new KeychainCredentialStore(secrets, options.home ? join(options.home, "credentials.json") : undefined);
 		this.endpoints = new Endpoints(options.home ? join(options.home, "endpoints.json") : undefined);
 		this.extraCosts = new ExtraCosts(options.home ? join(options.home, "extra-costs.db") : undefined);
@@ -106,6 +116,8 @@ export class ModelHub {
 	/** The model new sessions start with: OpenRouter's default when it's connected, else a connected provider's. */
 	get defaultModel(): ModelRef {
 		if (this.faux) return { provider: "faux", id: this.faux.getModel().id };
+		// Only Claude Code on this Mac: it runs new conversations (docs/spec/31 CA5).
+		if (this.connectedIds.size === 0 && this.claudeCodeReady) return { provider: CLAUDE_CODE, id: "opus" };
 		if (this.connectedIds.size === 0 || this.connectedIds.has("openrouter")) return DEFAULT_MODEL;
 		const provider = FEATURED.find((id) => this.connectedIds.has(id)) ?? [...this.connectedIds][0]!;
 		return { provider, id: PREFERRED_MODEL[provider] ?? this.runtime?.getModels(provider)[0]?.id ?? DEFAULT_MODEL.id };
@@ -153,7 +165,24 @@ export class ModelHub {
 			const available = await rt.getAvailable(id).catch(() => rt.getModels(id));
 			out.push(...available.filter((m) => !hidden.has(m.id)).map((m) => toInfo(m, provider.name, billing)));
 		}
+		out.push(...(await this.agentModels()));
 		return out;
+	}
+
+	/** Claude Code's models, when it's on this Mac and signed in. */
+	private async agentModels(): Promise<ModelInfo[]> {
+		if (!this.agentsOn) return [];
+		const models = await this.claudeCode.modelInfos().catch(() => []);
+		this.claudeCodeReady = models.length > 0;
+		return models;
+	}
+
+	/** Coding agents on this Mac, found or not (Settings › Models › Agents on this Mac). */
+	async listAgents(): Promise<ProviderInfo[]> {
+		if (!this.agentsOn) return [];
+		const info = await this.claudeCode.providerInfo().catch(() => undefined);
+		this.claudeCodeReady = info?.status === "connected";
+		return info ? [info] : [];
 	}
 
 	/** Every provider pi knows, featured first, with how it's connected (FR1). */
@@ -163,7 +192,7 @@ export class ModelHub {
 		const providers = rt.getProviders().filter((p) => p.id !== "faux" && p.id !== "openai-codex" && !this.endpoints.get(p.id) && connectMethods(p).length > 0);
 		const rank = (id: string) => (FEATURED.includes(id) ? FEATURED.indexOf(id) : FEATURED.length);
 		providers.sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
-		const out: ProviderInfo[] = [];
+		const out: ProviderInfo[] = [...(await this.listAgents())];
 		for (const p of providers) {
 			const credential = ids.has(p.id) ? await this.credentials.read(p.id).catch(() => undefined) : undefined;
 			const problem = this.problems.get(p.id);
@@ -373,6 +402,11 @@ export class ModelHub {
 		const choice = request.choice ?? this.utilityChoice() ?? "auto";
 		if (choice === "off") return undefined;
 		if (choice === "on_device") return this.onDeviceUtility(systemPrompt, prompt, scope);
+		// A conversation on Claude Code asks Claude Code (docs/spec/31 CA5): no other provider needed.
+		if (choice === "auto" && request.model?.provider === CLAUDE_CODE) {
+			const text = await this.claudeCode.complete(systemPrompt, prompt).catch(() => undefined);
+			return text ?? this.onDeviceUtility(systemPrompt, prompt, scope);
+		}
 		const ref = choice === "auto" ? await this.automaticUtility(request.model) : choice;
 		if (!ref) return this.onDeviceUtility(systemPrompt, prompt, scope);
 		// A picked model whose provider was disconnected: skipped (titles and the like are optional work).
