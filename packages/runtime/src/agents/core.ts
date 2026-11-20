@@ -115,6 +115,30 @@ export const INTERVIEW_PROMPT_AUTOMATIONS = INTERVIEW_PROMPT.replace(
 	"- Then make the automations it needs with automate: a time (\"every weekday at 8\"), or an event (an email from someone, a file in a folder, a URL). Say in one or two lines what you set up and when they'll hear from you.",
 );
 
+/**
+ * The switches in the agent's Setup › What it can use, as the Mac app names them (AgentDefinitionView.toolChoices).
+ * Asked for something one of the off ones does, the agent said it couldn't and sent the owner elsewhere; told which
+ * switch it is, it can say what to turn on.
+ */
+const SETUP_SWITCHES: { title: string; does: string; builtin?: string; apple?: string }[] = [
+	{ title: "Search and read the web", does: "search the web and read pages", builtin: "web_search" },
+	{ title: "Remember things", does: "remember things between conversations", builtin: "memory" },
+	{ title: "Send messages", does: "message the owner or people you know on your own", builtin: "send_message" },
+	{ title: "Make its own automations", does: "do work on your own later or regularly (every day at 3, when an email arrives…), reminders included", builtin: "schedule" },
+	{ title: "Reminders", does: "read and add Apple Reminders", apple: "reminders" },
+	{ title: "Calendar", does: "read Calendar events and free time", apple: "calendar" },
+	{ title: "Contacts", does: "look people up in Contacts", apple: "contacts" },
+	{ title: "Notes", does: "search, read and write Apple Notes", apple: "notes" },
+	{ title: "Music", does: "play and control Music", apple: "music" },
+];
+
+/** What the owner has switched off in Setup, for the prompt: so a request for one gets "turn on X", not "I can't". */
+export function offSwitchesNote(def: Pick<AgentDefinition, "tools">, where: { mac: boolean }): string {
+	const off = SETUP_SWITCHES.filter((s) => (s.builtin ? !def.tools.builtin.includes(s.builtin as never) : where.mac && !(def.tools.apple ?? []).includes(s.apple as never)));
+	if (!off.length) return "";
+	return `\n\nSwitched off in your Setup (What it can use), so you don't have these tools: ${off.map((s) => `“${s.title}” (${s.does})`).join("; ")}. When the owner asks for something one of these does, don't send them elsewhere or settle for less: say in a line that they can turn on “Title” in your Setup tab, then ask again; and do the part you can now.`;
+}
+
 /** An entry in a person's conversation: what the agent learned after a quiet moment, with Undo (M2). */
 export const LEARN_ENTRY = "piopio.learned";
 /** Learn after this many exchanges even if the conversation isn't quiet yet. */
@@ -700,10 +724,11 @@ export class AgentCore {
 							: "";
 					// What an agent may automate (docs/spec/27 AU5–AU6; A3: asked for Piopio's project work, it made one for itself).
 					const automating =
-						contact?.role === "owner" && core.options.automations
+						contact?.role === "owner" && core.options.automations && core.def.tools.builtin.includes("schedule")
 							? "\n\nAutomations you make always run as you, with only your own tools, outside any project: you can't read or change the files of Piopio's projects. When the owner wants Piopio or another agent to do something on its own, or wants a project's files changed, don't make an automation: tell them to ask Piopio, from Home or in that project."
 							: "";
-					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${people}${automating}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
+					const switchedOff = contact?.role === "owner" ? offSwitchesNote(core.def, { mac: Boolean(core.options.appTool) }) : "";
+					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${people}${automating}${switchedOff}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
 				}),
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;

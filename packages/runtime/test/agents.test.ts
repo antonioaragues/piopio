@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { cronError, newDefinition, partitionsFor, TEMPLATES, validate } from "../src/index.js";
+import { cronError, newDefinition, offSwitchesNote, partitionsFor, TEMPLATES, validate } from "../src/index.js";
 
 describe("agent definitions", () => {
 	test("every template makes a valid definition", () => {
@@ -44,6 +44,18 @@ describe("agent definitions", () => {
 		expect(cronError("0 8 * * 1-5")).toBeUndefined();
 		expect(cronError("*/15 9-17 * * mon")).toBe("The day of week field “mon” isn't valid.");
 		expect(cronError("0 8 * *")).toContain("five fields");
+	});
+
+	test("the prompt names the Setup switches that are off, so a request for one gets “turn it on”", () => {
+		const tools = { builtin: ["web_search", "web_fetch", "memory", "send_message"] as const, apple: ["calendar"] as const };
+		const mac = offSwitchesNote({ tools: { builtin: [...tools.builtin], apple: [...tools.apple] } }, { mac: true });
+		expect(mac).toContain("“Make its own automations”");
+		expect(mac).toContain("“Reminders”");
+		expect(mac).not.toContain("“Calendar”");
+		expect(mac).not.toContain("“Remember things”");
+		// Without a Mac there are no Apple apps to turn on.
+		expect(offSwitchesNote({ tools: { builtin: [...tools.builtin] } }, { mac: false })).not.toContain("“Reminders”");
+		expect(offSwitchesNote({ tools: { builtin: [...tools.builtin, "schedule"] } }, { mac: false })).toBe("");
 	});
 
 	test("partitions keep contacts apart", () => {
